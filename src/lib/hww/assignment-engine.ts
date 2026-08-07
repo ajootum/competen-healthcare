@@ -182,7 +182,11 @@ export async function loadAssignmentContext(admin: any, hospitalId: string | nul
     pids.length ? soft(admin.from("op_acuity_assessments").select("patient_id, score, assessed_at").in("patient_id", pids).order("assessed_at", { ascending: false }).limit(400)) : Promise.resolve({ data: [] }),
     pids.length ? soft(admin.from("op_workload_assessments").select("patient_id, percentage, assessed_at").in("patient_id", pids).order("assessed_at", { ascending: false }).limit(400)) : Promise.resolve({ data: [] }),
     soft(admin.from("op_staffing_standards").select("target_ratio, role").eq("hospital_id", shift.hospital_id).eq("shift_type", shift.shift_type).limit(20)),
-    ...staff.map(s => checkDeploymentReadiness(admin, s.profiles.id).catch(() => ({ blocked: false, criticalFailures: 0, expiredCount: 0 }))),
+    // ⚠ THIS CATCH USED TO HARD-CODE `blocked: false` — clearing a nurse the engine had failed to check, which
+    // is the one answer it has no basis for. The allocator reads `blocked` at line ~213 to decide who is
+    // assignable, so a thrown read silently made an unverified nurse eligible. Failing to `blocked: true`
+    // under-allocates instead, which the next run recovers.
+    ...staff.map(s => checkDeploymentReadiness(admin, s.profiles.id).catch(() => ({ blocked: true, unavailable: true, criticalFailures: 0, expiredCount: 0 }))),
   ]);
 
   const latestBy = (rows: any[], field: string) => {

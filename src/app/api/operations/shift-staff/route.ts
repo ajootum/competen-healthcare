@@ -33,7 +33,12 @@ export async function POST(req: Request) {
     { onConflict: "shift_id,staff_id" },
   ).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: readiness.blocked ? "deploy_staff_override" : "deploy_staff", entity_type: "op_shift", entity_id: b.shift_id, hospital_id: shift.hospital_id, new_value: { staff_id: b.staff_id, role: b.role, readiness_override: readiness.blocked || undefined, critical_failures: readiness.criticalFailures || undefined, expired: readiness.expiredCount || undefined } });
+  // ⚠ AN UNVERIFIED DEPLOYMENT MUST NOT LOG AS A CLEAN ONE. While checkDeploymentReadiness answered
+  // `blocked: false` for a record it could not read, this line wrote `action: "deploy_staff"` with
+  // `readiness_override: undefined` — so the audit trail, months later, showed a deployment that had passed
+  // the COMP-027 gate when in fact the gate never ran. A third action keeps the three cases distinguishable:
+  // checked-and-clear, checked-and-overridden, and never-checked.
+  await admin.from("audit_log").insert({ trace_id: c.traceId, actor_id: c.userId, action: readiness.unavailable ? "deploy_staff_unverified" : readiness.blocked ? "deploy_staff_override" : "deploy_staff", entity_type: "op_shift", entity_id: b.shift_id, hospital_id: shift.hospital_id, new_value: { staff_id: b.staff_id, role: b.role, readiness_override: readiness.blocked || undefined, readiness_unavailable: readiness.unavailable || undefined, critical_failures: readiness.criticalFailures || undefined, expired: readiness.expiredCount || undefined } });
 
   // Cross-workspace: a governed override past the COMP-027 readiness gate must reach the Competency Office's
   // remediation loop. Emit shift.assignment.changed → the delivery consumer opens remediation for the worker.
