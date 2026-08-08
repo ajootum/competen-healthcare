@@ -175,7 +175,12 @@ export async function POST(req: NextRequest) {
       encounterId: str(body.encounterId), basis: String(body.basis ?? ""),
       rateValue: num(body.rateValue), fixedDose: num(body.fixedDose),
       doseUnit: str(body.doseUnit), dosesPerDay: num(body.dosesPerDay),
-      overrideReason: str(body.overrideReason), ...base,
+      overrideReason: str(body.overrideReason),
+      // ⚠ THE RULING OF 2026-08-08. `str` trims and turns a blank into null, so the space bar cannot
+      // reach the engine as a decision -- the engine refuses it in a sentence and 259's btrim check
+      // refuses it again behind that. Free text, deliberately: see migration 259 on why a dropdown here
+      // would be a list of excuses with the one that mattered always missing.
+      weightDecision: str(body.weightDecision), ...base,
     });
     return r.ok ? NextResponse.json(r.data) : fail(r);
   }

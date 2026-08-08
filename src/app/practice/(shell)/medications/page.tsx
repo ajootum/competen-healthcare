@@ -310,7 +310,10 @@ function Timeline({ timeline }: { timeline: Awaited<ReturnType<typeof medication
               <li key={c.id}>
                 <span className="block text-[11px] font-semibold text-gray-800">
                   {DOSE_BASIS_LABEL[c.basis] ?? c.basis} ·{" "}
-                  {c.perDose !== null ? `${c.perDose} ${c.doseUnit} per dose` : c.dailyTotal !== null ? `${c.dailyTotal} ${c.doseUnit} per day` : "no figure"}
+                  {c.perDose !== null ? `${c.perDose} ${c.doseUnit} per dose`
+                    : c.dailyTotal !== null ? `${c.dailyTotal} ${c.doseUnit} per day`
+                      : c.weightDecision ? "No dose figure — a decision was recorded instead"
+                        : "no figure"}
                   <span className="ml-1 font-normal text-gray-500">({String(c.calculatedAt).slice(0, 10)})</span>
                 </span>
                 {/* ⚠ THE WORKING, EVERY STEP, AS IT WAS SHOWN. MED s3's "transparent calculation display"
@@ -324,6 +327,17 @@ function Timeline({ timeline }: { timeline: Awaited<ReturnType<typeof medication
                   Weight at the time: {c.weightState.replace(/_/g, " ")}
                   {c.weightKg !== null ? ` · ${c.weightKg} kg from ${String(c.weightEffectiveAt ?? "").slice(0, 10)}` : ""}
                 </span>
+                {/* ⚠ PRINTED WHEREVER THE FIGURE IS PRINTED. Migration 259: "a dose printed without the
+                    reasoning that produced it is exactly what this column prevents." A reader six months
+                    later must see, in the same place, that a judgement was recorded and not that a step
+                    was skipped. */}
+                {c.weightDecision && (
+                  <span className="mt-1 block rounded bg-amber-50 px-2 py-1 text-[10px] text-amber-900">
+                    No weight was recorded, and the prescriber recorded this decision:{" "}
+                    <span className="font-semibold">&ldquo;{c.weightDecision}&rdquo;</span> No dose was
+                    computed by this product.
+                  </span>
+                )}
                 {/* ⚠ FROZEN ON THE ROW, NOT RECONSTRUCTED. A prescription printed from this record can
                     always say what nobody checked at the moment it was decided. */}
                 <span className={`mt-1 block text-[10px] font-semibold text-slate-600`}>

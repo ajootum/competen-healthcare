@@ -459,6 +459,181 @@ export function weightLine(input: {
   };
 }
 
+// ── THE RECORDED WEIGHT DECISION ─────────────────────────────────────────────────────────────────────
+//
+// The user's ruling of 2026-08-08: "Permit dosing only on a weight recorded in the same session. If there
+// is no weight, prompt the practitioner to make a decision and RECORD the decision."
+//
+// ⚠ REFUSING OUTRIGHT WAS CONSIDERED AND REJECTED, AND THE REASON IS THE WHOLE SHAPE OF THIS FILE'S
+// WORDING. A prescriber who cannot get an answer out of the product works the dose out on paper, and then
+// the decision has happened anyway with nothing recording that it did. The product loses the reasoning
+// and the patient keeps the risk. So the prescriber proceeds, and the judgement that let them proceed is
+// written down beside it, in words, on the same row -- migrations 259 and 265, and the same shape as s14's
+// booking override and migration 238's outcome = 'other'.
+//
+// ⚠ AND NO NUMBER IS INVENTED BY LETTING THEM PROCEED. There is still nothing to multiply. What is
+// recorded is the decision and what it was based on -- never a weight this product did not measure.
+
+/**
+ * The two weight states in which there is no number to work from, so the DECISION is what gets recorded.
+ *
+ * ⚠ THESE ARE THE TWO 259's CONSTRAINT NAMES, AND `unreadable` IS NOT AN OVERSIGHT ON EITHER SIDE.
+ * `absent` means no weight was ever recorded. `unreadable` means the read failed. From the prescriber's
+ * chair there is no number in either case -- but they are NOT the same sentence, and the two headlines
+ * below say which happened, because a read that failed may succeed on a retry and a weight that was never
+ * taken will not.
+ *
+ * ⚠ `stale`, `implausible` and `age_unjudged` are DELIBERATELY NOT HERE. In each of those a weight
+ * EXISTS. The first two already put an override-reason field in front of the prescriber, and the third is
+ * deliberately ungated -- see the gate in calculateDose.
+ */
+export const WEIGHT_STATES_NEEDING_DECISION = ["absent", "unreadable"] as const;
+
+/**
+ * ⚠ FREE TEXT, AND NOT A DROPDOWN, WHICH IS MIGRATION 259's OWN REASONING AND NOT A STYLE PREFERENCE.
+ * The reasons are not enumerable in advance -- a parent-reported weight, an estimate from age, a figure
+ * from last month's card, a child who could not be weighed. A closed vocabulary would be a list of
+ * excuses to pick from, and the one that mattered would always be missing.
+ */
+export const WEIGHT_DECISION_ASK =
+  "You may still prescribe. Say in one sentence what you are working from -- a parent-reported weight, an "
+  + "estimate from age, a figure on last month's card, a child who could not be weighed. It is recorded on "
+  + "this calculation and on the practice override register, and it travels with the prescription. NO DOSE "
+  + "FIGURE IS PRODUCED: this product will not multiply by a weight it did not record, so what is kept is "
+  + "your decision and what it was based on.";
+
+/** The headline that says WHICH of the two happened. A failed read is not an absent weight. */
+export function weightDecisionHeadline(state: string): string {
+  return state === "unreadable"
+    ? "This patient's weight COULD NOT BE READ. That is not the same as no weight having been recorded, "
+      + "and the next step differs: a read that failed may succeed on a retry."
+    : "NO WEIGHT HAS EVER BEEN RECORDED for this patient.";
+}
+
+/** The one sentence the engine refuses with, and the one the prescribing screen prints. Same words. */
+export const weightDecisionPrompt = (state: string): string =>
+  `${weightDecisionHeadline(state)} ${WEIGHT_DECISION_ASK}`;
+
+/**
+ * ⚠ THE ASYMMETRY, AND IT IS THE POINT RATHER THAN AN EXCEPTION TO IT.
+ *
+ * A decision may stand in for a missing MEASUREMENT -- a weight nobody could take, a height nobody
+ * recorded. It cannot stand in for the ARITHMETIC. A mg/m2 dose with no surface area is not a dose made
+ * on a stated judgement, it is a blank, so migration 265 kept bsa_m2 required for mg_per_m2 even with a
+ * decision. This message therefore does NOT mention the decision at all: blaming a missing justification
+ * for a missing measurement would send the prescriber to write one, and it would change nothing.
+ */
+export const BSA_NEEDS_MEASUREMENTS =
+  "A body surface area dose is computed from a recorded weight and a recorded height, and at least one of "
+  + "them is missing. Record both, or prescribe on a basis that does not need a surface area. This one "
+  + "cannot be recorded without a surface area, because a mg/m2 dose with no surface area is not a dose -- "
+  + "it is a blank.";
+
+// ── AND WHO IT IS FOR: THE USER'S NARROWING OF 2026-08-08 ────────────────────────────────────────────
+//
+//   "This needs to apply to only a child <18 years. and that is okay to proceed."
+//
+// ⚠ THE ADULT BRANCH IS THE STATUS QUO ANTE AND NEEDS NO NEW JUSTIFICATION. Before migration 265 a
+// weight-based dose with no weight was refused outright, for everybody. That refusal survives here,
+// unchanged, for patients of 18 and over. It is the conservative branch.
+//
+// ⚠ AND IT MUST NOT MENTION A DECISION, A JUSTIFICATION, OR WORDS TO TYPE. Showing an adult prescriber a
+// door that is not there is worse than a plain refusal: they write the words, the record refuses them
+// anyway, and the next refusal they meet is one they have learned to argue with.
+
+/** Under this, in completed years, the recorded-decision path is offered. At or over it, it is not. */
+export const CHILD_AGE_LIMIT_YEARS = 18;
+
+/**
+ * ⚠ DERIVED AT THE MOMENT OF CALCULATION AND NEVER STORED. Doctrine 8: an age written into a row is
+ * wrong the day after it is written, and a dose gate driven by a stale age is wrong in the direction
+ * that matters -- a patient who was 17 when the row was written is not 17 forever.
+ */
+export type AgeVerdict = {
+  state: "child" | "adult" | "unknown";
+  /** Completed years. Null when nothing states an age -- NEVER 0, which is a newborn. */
+  years: number | null;
+  text: string;
+  /**
+   * ⚠ TRUE FOR `child` AND FOR `unknown`, AND THE SECOND ONE IS THE DELIBERATE PART.
+   *
+   * An unrecorded or unreadable date of birth is NOT an adult. Refusing on an unknown age pushes the
+   * prescriber to work the dose out on paper, where nothing records that a decision was taken at all --
+   * the exact harm this whole feature exists to prevent. A failed read is a third state everywhere else
+   * in this engine and it is a third state here.
+   */
+  decisionPathOffered: boolean;
+};
+
+/**
+ * Completed years between two ISO dates.
+ *
+ * ⚠ NOT (today.year - birth.year), AND NOT A DIVISION BY 365.25 EITHER. A birthday that has not yet come
+ * round this year makes the patient a year younger than the subtraction says, and on a threshold of
+ * exactly 18 that is the difference between the decision path being offered and refused. The
+ * milliseconds-over-365.25 form used elsewhere in this codebase drifts across leap years and is wrong on
+ * the birthday itself -- tolerable for an age band on a summary screen, not for a gate.
+ */
+export function completedYears(birthDate: string, today: string): number | null {
+  const b = birthDate.slice(0, 10).split("-").map(Number);
+  const t = today.slice(0, 10).split("-").map(Number);
+  if (b.length !== 3 || t.length !== 3 || b.some(n => !Number.isFinite(n)) || t.some(n => !Number.isFinite(n)))
+    return null;
+  return t[0] - b[0] - (t[1] < b[1] || (t[1] === b[1] && t[2] < b[2]) ? 1 : 0);
+}
+
+export function ageLine(input: {
+  birthDate: string | null;
+  /** practice_patient.age_estimate_years, for the patients who do not know a date. */
+  ageEstimateYears: number | null;
+  today: string;
+  unavailable: boolean;
+}): AgeVerdict {
+  if (input.unavailable)
+    return {
+      state: "unknown", years: null, decisionPathOffered: true,
+      text: "This patient's record could not be read, so their age is not known here. That is NOT the same"
+        + " as this patient being an adult, and this record does not treat it as one.",
+    };
+
+  const years = input.birthDate
+    ? completedYears(input.birthDate, input.today)
+    : (input.ageEstimateYears !== null && Number.isFinite(input.ageEstimateYears)
+      ? Math.floor(input.ageEstimateYears) : null);
+
+  if (years === null)
+    return {
+      state: "unknown", years: null, decisionPathOffered: true,
+      text: "No date of birth and no age estimate are recorded for this patient, so nothing here states"
+        + " whether they are a child. An unknown age is not an adult.",
+    };
+
+  if (years < CHILD_AGE_LIMIT_YEARS)
+    return {
+      state: "child", years, decisionPathOffered: true,
+      text: `This patient is ${years} year${years === 1 ? "" : "s"} old${input.birthDate ? "" : " by the recorded estimate"}.`,
+    };
+
+  return {
+    state: "adult", years, decisionPathOffered: false,
+    text: `This patient is ${years} year${years === 1 ? "" : "s"} old${input.birthDate ? "" : " by the recorded estimate"}.`,
+  };
+}
+
+/**
+ * The refusal an adult prescriber meets, and it is exactly what this engine said before migration 265.
+ *
+ * ⚠ NOT ONE WORD ABOUT A DECISION, A JUSTIFICATION, OR ANYTHING TO WRITE. There is no second road here
+ * and the sentence must not imply one.
+ */
+export const ADULT_NO_WEIGHT_REFUSED =
+  "Record a weight for this patient, or prescribe on a basis that does not depend on one.";
+
+/** Supplied where there IS a weight, so there is nothing for it to stand in for. Never silently dropped. */
+export const WEIGHT_DECISION_NOT_APPLICABLE =
+  "A recorded weight decision stands in for a weight this product does not have. This patient has one, so "
+  + "there is nothing for it to stand in for and it has NOT been stored.";
+
 /**
  * MED s7's "Review intervals" and "Monitoring reminders", as a verdict rather than a stored flag.
  *

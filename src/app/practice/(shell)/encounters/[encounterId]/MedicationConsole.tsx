@@ -6,6 +6,8 @@ import Link from "next/link";
 import {
   DOSE_BASES, MEDICATION_SOURCES, MEDICATION_STATUS_CHIP, MEDICATION_STATUS_LABEL,
   WEIGHT_TONE, NOT_CHECKED_TONE, NOT_CHECKED_LABEL, doseSafetyNotice,
+  WEIGHT_STATES_NEEDING_DECISION, weightDecisionHeadline, WEIGHT_DECISION_ASK,
+  BSA_NEEDS_MEASUREMENTS, ADULT_NO_WEIGHT_REFUSED,
 } from "@/lib/practice/medication-constants";
 import { NotCheckedPanel } from "../../patients/[patientId]/MedicationPanel";
 import type { PatientMedications, DoseCalculationResult } from "@/lib/practice/medication";
@@ -35,6 +37,18 @@ import type { PatientMedications, DoseCalculationResult } from "@/lib/practice/m
 //     dependent paediatric dose requires a usable dosing weight." A prescriber should know the weight is
 //     three months old before they type a rate, not when the server refuses them.
 //
+//  5. WITH NO WEIGHT, THE SCREEN ASKS FOR A DECISION -- AND STILL PRODUCES NO NUMBER. The user's ruling
+//     of 2026-08-08. Refusing outright was considered and rejected: a prescriber who cannot get an answer
+//     out of the product works the dose out on paper, and then the decision has happened anyway with
+//     nothing recording that it did. So the prompt appears, the words are recorded on the calculation and
+//     on the override register, and NO FIGURE IS INVENTED -- the field asks what the prescriber is
+//     working from, never for a weight to multiply by.
+//
+// ⚠ AND THE SCREEN NEVER OFFERS A ROAD THAT ENDS IN A REFUSAL IT COULD HAVE PREDICTED. mg/m2 with no
+// weight cannot be recorded at all -- migration 265 keeps bsa_m2 required, because a decision may stand
+// in for a missing measurement but not for the arithmetic -- so that combination is explained and the
+// button is disabled, rather than asking for a decision and then throwing it away.
+//
 // ⚠ TYPE-ONLY IMPORT FROM THE ENGINE -- see the note in ParameterCollection.tsx.
 
 const CARD = "mt-4 rounded-xl border border-gray-200 bg-white p-4";
@@ -59,10 +73,10 @@ export default function MedicationConsole({ record, patientId, encounterId, canR
     genericName: "", brandName: "", strengthText: "", doseText: "", route: "", frequency: "",
     frequencyPerDay: "", durationText: "", indication: "", source: "practitioner",
   });
-  const [calc, setCalc] = useState({ basis: "mg_per_kg", rateValue: "", fixedDose: "", doseUnit: "mg", dosesPerDay: "", overrideReason: "" });
+  const [calc, setCalc] = useState({ basis: "mg_per_kg", rateValue: "", fixedDose: "", doseUnit: "mg", dosesPerDay: "", overrideReason: "", weightDecision: "" });
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
-  const setC = (k: keyof typeof calc) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+  const setC = (k: keyof typeof calc) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setCalc(c => ({ ...c, [k]: e.target.value }));
 
   async function post(action: string, payload: Record<string, unknown>): Promise<Record<string, unknown> | null> {
@@ -83,6 +97,18 @@ export default function MedicationConsole({ record, patientId, encounterId, canR
   const weightTone = WEIGHT_TONE[record.weight.state] ?? { chip: NOT_CHECKED_TONE, mark: "–", label: NOT_CHECKED_LABEL };
   const needsWeight = calc.basis === "mg_per_kg" || calc.basis === "mg_per_kg_per_day" || calc.basis === "mg_per_m2";
   const overrideOffered = needsWeight && (record.weight.state === "stale" || record.weight.state === "implausible");
+  // ⚠ THE SAME TWO STATES THE ENGINE AND MIGRATION 259 USE, IMPORTED RATHER THAN RETYPED. A screen with
+  // its own copy of this list is a screen that stops asking the day a sixth weight state is added.
+  const noWeightAtAll = needsWeight
+    && (WEIGHT_STATES_NEEDING_DECISION as readonly string[]).includes(record.weight.state);
+  // mg/m2 with no weight cannot be recorded by anybody, decision or not. Explained, never asked for.
+  const bsaImpossible = noWeightAtAll && calc.basis === "mg_per_m2";
+  // ⚠ THE USER'S NARROWING OF 2026-08-08: the decision path is for children only, and for patients whose
+  // age nothing states. The screen reads the SAME verdict the engine gates on -- a screen with its own
+  // age arithmetic is a screen that offers a door the server closes.
+  const adultNoWeight = noWeightAtAll && !bsaImpossible && !record.age.decisionPathOffered;
+  const decisionRequired = noWeightAtAll && !bsaImpossible && record.age.decisionPathOffered;
+  const decisionMissing = decisionRequired && !calc.weightDecision.trim();
 
   return (
     <section className={CARD}>
@@ -196,46 +222,117 @@ export default function MedicationConsole({ record, patientId, encounterId, canR
               </label>
             )}
 
-            <button className={`${BTN} mt-2`} disabled={busy}
+            {/* ⚠ THE ROAD THAT ENDS NOWHERE, CLOSED BEFORE IT IS WALKED. No decision field is drawn here,
+                because writing one would not produce a row: a surface area is arithmetic, not a
+                judgement, and there is nothing to compute it from. */}
+            {bsaImpossible && (
+              <div className="mt-2 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2">
+                <p className="text-[11px] font-bold text-[var(--cmp-text-warning)]">
+                  A body surface area dose cannot be recorded for this patient.
+                </p>
+                <p className="mt-1 text-[11px] text-gray-700">{record.weight.text}</p>
+                <p className="mt-1 text-[11px] text-gray-700">{BSA_NEEDS_MEASUREMENTS}</p>
+              </div>
+            )}
+
+            {/* ⚠ THE ADULT BRANCH, AND IT OFFERS NOTHING TO TYPE. The user's narrowing of 2026-08-08
+                confines the recorded decision to children. For an adult this is the refusal that stood
+                before migration 265, and naming the other road -- even to rule it out -- would teach a
+                prescriber that a form of words exists which gets a number out of this product. */}
+            {adultNoWeight && (
+              <div className="mt-2 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2">
+                <p className="text-[11px] font-bold text-[var(--cmp-text-warning)]">
+                  A weight-based dose cannot be worked out for this patient.
+                </p>
+                <p className="mt-1 text-[11px] text-gray-700">{record.weight.text}</p>
+                <p className="mt-1 text-[11px] text-gray-700">{ADULT_NO_WEIGHT_REFUSED}</p>
+              </div>
+            )}
+
+            {/* ⚠ THE PROMPT THE RULING OF 2026-08-08 ASKS FOR. It appears ONLY when the basis is a
+                function of weight AND there is no weight to work from -- never on a fixed dose, whose
+                patients have mostly never been weighed and for whom nothing is wrong.
+
+                ⚠ FREE TEXT AND A TEXTAREA, NOT A DROPDOWN. Migration 259's reasoning: the reasons are not
+                enumerable in advance, and a closed list would be excuses to pick from with the one that
+                mattered always missing. */}
+            {decisionRequired && (
+              <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+                <p className="text-[11px] font-bold text-amber-900">{weightDecisionHeadline(record.weight.state)}</p>
+                <p className="mt-1 text-[11px] text-gray-700">{WEIGHT_DECISION_ASK}</p>
+                <label className="mt-2 block">
+                  <span className={LABEL}>What are you prescribing on</span>
+                  <textarea className={`${input} min-h-[56px]`} value={calc.weightDecision} onChange={setC("weightDecision")}
+                    placeholder="In your own words — for example: mother reports 12 kg weighed at the health centre last week; no scale here today." />
+                </label>
+              </div>
+            )}
+
+            <button className={`${BTN} mt-2`} disabled={busy || bsaImpossible || adultNoWeight || decisionMissing}
               onClick={async () => {
                 const body = await post("calculateDose", {
                   patientId, encounterId, basis: calc.basis,
                   rateValue: calc.rateValue || null, fixedDose: calc.fixedDose || null,
                   doseUnit: calc.doseUnit || "mg", dosesPerDay: calc.dosesPerDay || null,
                   overrideReason: calc.overrideReason || null,
+                  // ⚠ SENT ONLY WHERE IT MEANS SOMETHING. The engine REFUSES a decision supplied against a
+                  // weight that exists rather than dropping it, so a sticky form field must not leak into
+                  // the next patient's prescription.
+                  weightDecision: decisionRequired ? (calc.weightDecision || null) : null,
                 });
                 if (body) setDose(body as unknown as DoseCalculationResult);
               }}>
-              {busy ? "Working…" : "Calculate"}
+              {busy ? "Working…" : decisionRequired ? "Record this decision" : "Calculate"}
             </button>
+            {decisionMissing && (
+              <p className="mt-1 text-[10px] text-amber-800">
+                There is nothing to record until you have said what you are prescribing on. The decision is
+                the record here &mdash; no figure is produced.
+              </p>
+            )}
 
             {/* ⚠ THE FIGURE, ITS WORKING AND ITS NOTICE ARE ONE BLOCK. Nothing renders the number alone. */}
             {dose && (
               <div className="mt-3 rounded-lg bg-gray-50 p-3">
+                {/* ⚠ "no figure" IS A SENTENCE HERE, NOT A DASH. With a recorded decision both numbers are
+                    null BY DESIGN, and a screen that printed a blank would read as a calculation that
+                    failed rather than one this product declined to invent. */}
                 <p className="text-[13px] font-bold text-gray-900">
-                  {dose.perDose !== null ? `${dose.perDose} ${dose.unit} per dose` : dose.dailyTotal !== null ? `${dose.dailyTotal} ${dose.unit} per day` : "no figure"}
+                  {dose.perDose !== null ? `${dose.perDose} ${dose.unit} per dose`
+                    : dose.dailyTotal !== null ? `${dose.dailyTotal} ${dose.unit} per day`
+                      : dose.weightDecision ? "No dose figure — a decision was recorded instead"
+                        : "no figure"}
                 </p>
                 <ol className="mt-1 flex flex-col gap-0.5">
                   {dose.working.map((w, i) => <li key={i} className="font-mono text-[10px] text-gray-700">{w}</li>)}
                 </ol>
+                {dose.weightDecision && (
+                  <p className="mt-1 text-[10px] font-semibold text-amber-800">
+                    Recorded on this calculation and on the practice override register: &ldquo;{dose.weightDecision}&rdquo;
+                    {" "}Any dose you give is yours, not one this product worked out.
+                  </p>
+                )}
                 {dose.overridden && (
                   <p className="mt-1 text-[10px] font-semibold text-rose-700">
                     Recorded as a safety override: this was calculated on a weight the record flagged.
                   </p>
                 )}
-                {dose.id === null && (
-                  <p className="mt-1 text-[10px] font-semibold text-amber-700">
-                    This calculation was NOT saved &mdash; the medication store is not in this deployment.
-                    The arithmetic above is correct, but nothing has recorded that you were shown it.
-                  </p>
+                {/* ⚠ THE REASON, NOT A GUESS AT IT. This used to assert the store was missing whatever
+                    had actually gone wrong, which would send somebody hunting for an applied migration. */}
+                {dose.notStored && (
+                  <p className="mt-1 text-[10px] font-semibold text-amber-700">{dose.notStored}</p>
                 )}
                 <p className="mt-2 rounded bg-white px-2 py-1.5 text-[10px] text-slate-600">{doseSafetyNotice()}</p>
-                <button className={`${QUIET} mt-2`} onClick={() => setForm(f => ({
-                  ...f,
-                  doseText: f.doseText || (dose.perDose !== null ? `${dose.perDose} ${dose.unit}` : `${dose.dailyTotal} ${dose.unit} per day`),
-                }))}>
-                  Use this as the dose
-                </button>
+                {/* ⚠ OFFERED ONLY WHEN THERE IS A FIGURE TO CARRY. With both totals null this button used
+                    to write the literal string "null mg per day" into the dose on the prescription. */}
+                {(dose.perDose !== null || dose.dailyTotal !== null) && (
+                  <button className={`${QUIET} mt-2`} onClick={() => setForm(f => ({
+                    ...f,
+                    doseText: f.doseText || (dose.perDose !== null ? `${dose.perDose} ${dose.unit}` : `${dose.dailyTotal} ${dose.unit} per day`),
+                  }))}>
+                    Use this as the dose
+                  </button>
+                )}
               </div>
             )}
           </div>

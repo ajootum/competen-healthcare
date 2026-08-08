@@ -7,7 +7,10 @@ import { plausibilityLine, dueLine } from "@/lib/practice/parameters-constants";
 import {
   CAP_MED_VIEW, CAP_MED_RECORD, CAP_MED_OVERRIDE,
   MEDICATION_STATUS_CODES, MEDICATION_SOURCE_CODES, MEDICATION_EVENT_TYPE_CODES,
-  DOSE_BASIS_CODES, BASES_NEEDING_WEIGHT, BASES_NEEDING_HEIGHT, SOURCES_NEEDING_VERIFICATION,
+  DOSE_BASIS_CODES, DOSE_BASIS_LABEL, BASES_NEEDING_WEIGHT, BASES_NEEDING_HEIGHT,
+  SOURCES_NEEDING_VERIFICATION,
+  WEIGHT_STATES_NEEDING_DECISION, weightDecisionPrompt, BSA_NEEDS_MEASUREMENTS,
+  WEIGHT_DECISION_NOT_APPLICABLE, ageLine, ADULT_NO_WEIGHT_REFUSED, type AgeVerdict,
   WEIGHT_PARAMETER_CODE, HEIGHT_PARAMETER_CODE,
   DEFERRED_SAFETY_CHECKS, DEFERRED_CHECK_KEYS, MEDICATION_REFUSALS,
   MEDICATION_LIST_BOUNDARY, LEGACY_TREATMENT_REASON, TIMELINE_BOUNDARY,
@@ -90,13 +93,24 @@ import {
 //
 //
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
-// ⚠ THE MIGRATION THIS FILE IS WRITTEN AGAINST HAS NOT BEEN APPLIED.
+// ⚠ THE MIGRATION BELOW HAS SINCE BEEN APPLIED, AND TWO OF ITS CONSTRAINTS HAVE SINCE BEEN REPLACED.
+// DO NOT PASTE THIS BLOCK INTO A DATABASE AS IT STANDS -- it would re-add the older constraints.
 //
-// The latest applied migration is 256. The DDL below is what this engine needs and it is NOT written
-// into supabase/migrations by this build -- another agent holds that directory. Until it lands,
-// medicationStorePresence() ASKS THE DATABASE, every read reports `state: "absent"` with the migration
-// named, and every write returns STORE_ABSENT with a 503. NO CODE CHANGES WHEN IT LANDS. This is
-// knowledge.ts's pattern, which is patient-access.ts's ACCESS_PROFILE_STORE_ABSENT pattern before it.
+//   258-practice-medication.sql   applied. It is the DDL below, verbatim.
+//   259-dose-weight-decision.sql  applied. ADDS practice_medication_dose_calculation.weight_decision and
+//                                 requires it when a weight-based basis meets an absent or unreadable
+//                                 weight.
+//   265-dose-decision-reachable.sql  applied. REPLACES practice_medication_dose_needs_weight and
+//                                 practice_medication_dose_needs_bsa, both quoted below in their 258
+//                                 form with a warning beside them. 258 and 259 contradicted each other:
+//                                 258 refused the very rows 259 required a decision for, so the column
+//                                 was unreachable from the day it was added.
+//
+// WHEN IT WAS UNAPPLIED, this header said so and no code changed when it landed, because
+// medicationStorePresence() ASKS THE DATABASE rather than assuming: every read reports `state: "absent"`
+// with the migration named and every write returns STORE_ABSENT with a 503. That is knowledge.ts's
+// pattern, which is patient-access.ts's ACCESS_PROFILE_STORE_ABSENT pattern before it, and it is still
+// live -- which is the only reason this paragraph could be corrected without touching an engine.
 //
 // House rules obeyed below, each one paid for: ASCII only, plain idempotent statements, no plpgsql, no
 // do-blocks, RLS on every table, `notify pgrst, 'reload schema'` last, and NO SEMICOLON ANYWHERE EXCEPT
@@ -414,6 +428,20 @@ import {
 // --
 // -- A weight-based basis with no weight is not a calculation, it is a guess. The engine refuses first
 // -- and returns the reason. This refuses second, against every future caller.
+// --
+// -- WARNING: BOTH CONSTRAINTS BELOW WERE REPLACED BY MIGRATION 265 AND ARE KEPT HERE AS WRITTEN RATHER
+// -- THAN EDITED IN PLACE, because this block is the record of what 258 applied. The live rules are 265's
+// -- and each carries a third disjunct. In one sentence each:
+// --
+// --   needs_weight  now also permits a row with NO weight_kg when weight_decision is present and
+// --                 non-blank by btrim. That is the user's ruling of 2026-08-08. The engine still
+// --                 computes NOTHING in that case -- there is nothing to multiply -- so the row carries
+// --                 the decision, the reasoning and no figure.
+// --   needs_bsa     now also permits bsa_m2 with a decision and no weight_kg or height_cm, and bsa_m2
+// --                 ITSELF REMAINS REQUIRED. A decision stands in for a missing MEASUREMENT, never for
+// --                 the arithmetic. calculateDose refuses mg_per_m2 with no weight BEFORE asking for a
+// --                 decision, so nobody is asked to write words that would change nothing.
+// --
 // alter table practice_medication_dose_calculation
 //   drop constraint if exists practice_medication_dose_needs_weight;
 // alter table practice_medication_dose_calculation
@@ -681,6 +709,38 @@ export async function dosingWeight(
   };
 }
 
+/**
+ * Is this patient a child, for the user's narrowing of 2026-08-08 ("only a child <18 years")?
+ *
+ * ⚠ DERIVED HERE, AT THE MOMENT OF THE CALCULATION, AND NEVER STORED. `today` is a parameter so the
+ * harness can stand on either side of a birthday without waiting a year for one.
+ *
+ * ⚠ AND A FAILED READ RETURNS `unknown`, WHICH OFFERS THE DECISION PATH. Three states, as everywhere
+ * else in this engine: a child, an adult, and a patient nothing here can age. Reading the third as an
+ * adult would refuse the prescriber outright on the strength of a query that did not run, and they would
+ * do the sum on paper -- which is the harm the whole feature exists to prevent.
+ *
+ * ⚠ age_estimate_years IS READ AS WELL AS birth_date, and that is one column beyond the ruling's words.
+ * Practices register patients who do not know a date, and the estimate is the age this record holds for
+ * them. Using it can only ever turn an `unknown` into a `child` or an `adult` -- it cannot turn a child
+ * into an adult, because a birth date, when there is one, always wins.
+ */
+export async function dosingAge(
+  admin: any, ctx: WorkspaceContext, patientId: string, today = todayIso(),
+): Promise<AgeVerdict> {
+  const { data, error } = await admin.from("practice_patient")
+    .select("id, birth_date, age_estimate_years")
+    .eq("id", patientId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  // ⚠ A PATIENT WHO IS NOT THERE IS NOT AN ADULT EITHER. Both branches land on `unknown`.
+  if (error || !data)
+    return ageLine({ birthDate: null, ageEstimateYears: null, today, unavailable: true });
+  return ageLine({
+    birthDate: (data.birth_date as string | null) ?? null,
+    ageEstimateYears: (data.age_estimate_years as number | null) ?? null,
+    today, unavailable: false,
+  });
+}
+
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // MED s2 + s6 + RECONCILIATION -- ONE PATIENT'S RECORD
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -749,6 +809,11 @@ export type PatientMedications = {
   reconciliation: ReconciliationVerdict;
   /** LCP s9's weight verdict, on the patient rather than on one prescription. */
   weight: WeightVerdict;
+  /**
+   * ⚠ THE SAME VERDICT THE DOSE GATE USES, SO THE SCREEN CANNOT OFFER A DOOR THE ENGINE WILL REFUSE.
+   * The user's narrowing of 2026-08-08: the recorded-decision path is for children only.
+   */
+  age: AgeVerdict;
   /** Displayed, never matched. See DEFERRED_SAFETY_CHECKS.allergy. */
   allergies: Panel<{ id: string; substance: string; severity: string | null; reaction: string | null }>;
   allergyNotice: string;
@@ -801,6 +866,9 @@ export async function patientMedications(
     active: [] as MedicationRow[], past: [] as MedicationRow[],
     legacy: loaded<LegacyTreatment>([]),
     weight: weightLine({ valueKg: null, effectiveAt: null, plausibility: null, due: null, daysOverdue: null, today, unavailable: true }),
+    // ⚠ THE BASE PAYLOAD'S AGE IS `unknown`, NOT `adult`. A caller who never got past a permission check
+    // must not be handed a verdict that reads as a decided fact about the patient.
+    age: ageLine({ birthDate: null, ageEstimateYears: null, today, unavailable: true }),
     allergies: loaded<{ id: string; substance: string; severity: string | null; reaction: string | null }>([]),
     allergyNotice: allergyDisplayNotice(),
     boundary: MEDICATION_LIST_BOUNDARY,
@@ -819,7 +887,7 @@ export async function patientMedications(
   // ⚠ THE LEGACY HALF, THE ALLERGIES AND THE WEIGHT ARE READ EVEN WHEN THE MEDICATION STORE IS ABSENT.
   // They live in tables that DO exist, they are the honest content of the screen until the migration
   // lands, and hiding them would make a half-built module look like an empty patient.
-  const [legacyRes, allergyRes, weightRes] = await Promise.all([
+  const [legacyRes, allergyRes, weightRes, ageRes] = await Promise.all([
     admin.from("practice_treatment")
       .select("id, label, dose, route, frequency, duration, status, encounter_id, created_at")
       .eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId).eq("treatment_type", "medication")
@@ -828,6 +896,7 @@ export async function patientMedications(
       .select("id, substance, severity, reaction")
       .eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId).limit(50),
     dosingWeight(admin, ctx, patientId, today),
+    dosingAge(admin, ctx, patientId, today),
   ]);
 
   const legacyRows = (legacyRes.error ? [] : (legacyRes.data ?? [])) as any[];
@@ -854,7 +923,7 @@ export async function patientMedications(
     return {
       ...base, permitted: true, unavailable: false, detail: null,
       storeState: "absent", storeNotice: STORE_ABSENT_NOTICE,
-      legacy, allergies, weight: weightRes.verdict,
+      legacy, allergies, weight: weightRes.verdict, age: ageRes,
       // ⚠ NOT "reconciled". With no store there is nothing to reconcile INTO, and every legacy row is
       // uncarried by definition. reconciliationLine is given the true numbers and answers accordingly.
       reconciliation: reconciliationLine({
@@ -867,7 +936,7 @@ export async function patientMedications(
     return {
       ...base, permitted: true, unavailable: true,
       detail: `the medication record could not be read: ${error.message}`,
-      storeState: "failed", legacy, allergies, weight: weightRes.verdict,
+      storeState: "failed", legacy, allergies, weight: weightRes.verdict, age: ageRes,
       reconciliation: reconciliationLine({ unverified: 0, legacyOnly: 0, total: 0, everReviewed: false, unavailable: true }),
     };
   }
@@ -885,7 +954,7 @@ export async function patientMedications(
     active: mapped.filter(m => m.current.inUse),
     past: mapped.filter(m => !m.current.inUse),
     legacy: legacyUncarried,
-    allergies, weight: weightRes.verdict,
+    allergies, weight: weightRes.verdict, age: ageRes,
     reconciliation: reconciliationLine({
       unverified,
       legacyOnly: legacyUncarried.unavailable ? 0 : legacyUncarried.items.length,
@@ -943,6 +1012,13 @@ export type DoseCalculationRow = {
   /** ⚠ EVERY STEP, AS IT WAS SHOWN AT THE TIME. Never recomputed. */
   working: string[];
   weightState: string;
+  /**
+   * ⚠ THE PRESCRIBER'S OWN WORDS WHEN THERE WAS NO WEIGHT, AND IT IS PRINTED WHEREVER THE FIGURE IS.
+   * Migration 259: "a dose printed without the reasoning that produced it is exactly what this column
+   * prevents." A reader who can see perDose is null must be able to see, in the same place, that a
+   * judgement was recorded rather than a step being skipped.
+   */
+  weightDecision: string | null;
   /** ⚠ FROZEN ON THE ROW. What nobody checked, at the moment this dose was decided. */
   safetyChecksNotRun: string[];
   calculatedAt: string;
@@ -957,6 +1033,10 @@ const readCalculation = (c: any): DoseCalculationRow => ({
   formula: c.formula,
   working: String(c.working ?? "").split("\n").filter(Boolean),
   weightState: c.weight_state,
+  // ⚠ btrim ON READ TOO. 259's constraint uses btrim, so a blank cannot be stored -- but a row written
+  // before that constraint, or by a future caller with the constraint dropped, must not render as an
+  // empty quotation mark that looks like a decision nobody can read.
+  weightDecision: String(c.weight_decision ?? "").trim() || null,
   safetyChecksNotRun: (c.safety_checks_not_run ?? []) as string[],
   calculatedAt: c.calculated_at,
 });
@@ -1422,8 +1502,20 @@ export type DoseCalculationInput = {
   fixedDose?: number | null;
   doseUnit?: string | null;
   dosesPerDay?: number | null;
-  /** ⚠ Only honoured with medication.override, and only when the weight is absent or stale. */
+  /** ⚠ Only honoured with medication.override, and only when the weight is STALE or IMPLAUSIBLE. */
   overrideReason?: string | null;
+  /**
+   * The user's ruling of 2026-08-08, in one field: what the prescriber decided when there was no weight.
+   *
+   * ⚠ THIS IS NOT A WEIGHT AND MUST NEVER BECOME ONE. It is free text that is stored and printed, never
+   * parsed. Nothing multiplies by it. `weightKg` still comes from a recorded measurement and from nowhere
+   * else -- a dose computed from a number a prescriber typed under pressure is the worst output this
+   * codebase could produce, and it is the one this field is most likely to be mistaken for.
+   *
+   * ⚠ Only honoured with medication.override, and only when the weight is ABSENT or UNREADABLE. Supplied
+   * anywhere else it is REFUSED rather than dropped -- see WEIGHT_DECISION_NOT_APPLICABLE.
+   */
+  weightDecision?: string | null;
   actorId: string; correlationId: string;
 };
 
@@ -1441,9 +1533,67 @@ export type DoseCalculationResult = {
   notChecked: typeof DEFERRED_SAFETY_CHECKS;
   /** ⚠ ALWAYS PRESENT. The sentence that must be printed beside the figure. */
   safetyNotice: string;
-  /** True when a practitioner overrode an absent or stale weight to get this number. */
+  /** True when a practitioner overrode a STALE or IMPLAUSIBLE weight to get this number. */
   overridden: boolean;
+  /**
+   * The prescriber's own words, when there was no weight at all and they proceeded anyway.
+   *
+   * ⚠ WHEN THIS IS SET, perDose AND dailyTotal ARE NULL AND THAT IS THE DESIGN, not a failure. Nothing
+   * was multiplied. The row exists so the decision is on the record beside the prescription rather than
+   * only in the prescriber's head.
+   */
+  weightDecision: string | null;
+  /**
+   * ⚠ NULL WHEN THE ROW WAS STORED, AND A SENTENCE SAYING WHY WHEN IT WAS NOT. Never an empty string.
+   * `id === null` alone said only that something went wrong, and the screen guessed at which thing.
+   */
+  notStored: string | null;
 };
+
+/**
+ * The "working" of a calculation that DELIBERATELY DID NOT HAPPEN, for the recorded-decision path.
+ *
+ * ⚠ IT IS NOT EMPTY AND IT IS NOT A BLANK ROW, for the same reason doseArithmetic returns working for a
+ * fixed dose: a record that showed five lines of working for three regimens and nothing for the fourth
+ * would read as a step somebody skipped. Saying WHY no arithmetic was performed IS the working, and the
+ * `working text not null check (char_length(btrim(working)) > 0)` column exists to make that impossible
+ * to omit.
+ *
+ * ⚠ NOTHING HERE MULTIPLIES BY ANYTHING, AND THE RATE IS ECHOED AS TYPED RATHER THAN APPLIED. The rate is
+ * part of what the prescriber intended and belongs on the record, but a figure derived from it and a
+ * weight nobody measured would be exactly the fabricated dose this whole engine refuses.
+ */
+function decisionWorking(input: {
+  basis: DoseBasis; rate: number | null; unit: string; weightText: string; decision: string;
+  /** ⚠ WHY THIS PATH WAS OPEN AT ALL, frozen into the working. See the note on the age line below. */
+  ageText: string; ageState: AgeVerdict["state"];
+}): {
+  ok: true; perDose: null; dailyTotal: null; unit: string;
+  formula: string; working: string[]; sentence: string; bsaM2: null;
+} {
+  const label = DOSE_BASIS_LABEL[input.basis] ?? input.basis;
+  return {
+    ok: true, perDose: null, dailyTotal: null, unit: input.unit, bsaM2: null,
+    formula: "no calculation performed -- there was no recorded weight to multiply",
+    working: [
+      `Basis chosen: ${label}.`,
+      input.rate !== null && Number.isFinite(input.rate)
+        ? `Rate as typed: ${input.rate} ${input.unit}/kg. It was NOT applied to anything.`
+        : `No rate was typed, and none was needed: nothing was multiplied.`,
+      input.weightText,
+      // ⚠ THE AGE IS IN THE WORKING BECAUSE IT IS PART OF WHY THIS ROW EXISTS. This path is open to
+      // children only, and to patients whose age nothing states -- a reader six months later must be able
+      // to see which of those two it was, without recomputing an age from a birth date that has moved on.
+      input.ageState === "unknown"
+        ? `${input.ageText} This record offers this path when an age is unknown, because refusing on a query that did not run would send the prescriber to work the dose out where nothing records it.`
+        : `${input.ageText} This path is offered for patients under 18.`,
+      `NO ARITHMETIC WAS PERFORMED. This product does not compute a dose from a weight it did not record, so no figure is produced here.`,
+      `The prescriber recorded this decision instead: ${input.decision}`,
+      `Any dose given was decided by the prescriber. It is not a figure this product produced, and none of the deferred safety checks below was run against it.`,
+    ],
+    sentence: `No dose figure was computed: no weight was recorded. The prescriber's decision is recorded instead -- ${input.decision}`,
+  };
+}
 
 /**
  * MED s3. Arithmetic on a weight this record can cite, with every step returned, and NO SAFETY CLAIM.
@@ -1452,10 +1602,12 @@ export type DoseCalculationResult = {
  *
  *   1. It will not compute a weight-based dose without a recorded weight. LCP s9: "A weight-dependent
  *      paediatric dose requires a usable dosing weight." A dose from an assumed weight is the worst
- *      output this codebase could produce.
- *   2. It will not proceed past an ABSENT or STALE weight without medication.override AND a reason. That
+ *      output this codebase could produce. ⚠ AND THE RULING OF 2026-08-08 DOES NOT SOFTEN THIS ONE. With
+ *      no weight the prescriber may proceed, and STILL NO FIGURE IS COMPUTED -- what gets recorded is the
+ *      decision and what it was based on. See the gate below.
+ *   2. It will not proceed past a flagged or missing weight without medication.override AND words. That
  *      is MED s5's "practitioner override with justification", given the only home it has in this build,
- *      and the reason lands in the append-only timeline where a register can be read off it.
+ *      and the words land in the append-only timeline where a register can be read off it.
  *   3. It will not claim anything about the dose it produces. safety_checks_not_run is written onto the
  *      immutable row with a cardinality >= 1 constraint behind it, so a stored calculation can always
  *      say what nobody checked at the time.
@@ -1483,12 +1635,38 @@ export async function calculateDose(
     : null;
 
   const overrideReason = trim(input.overrideReason);
+  const decisionText = trim(input.weightDecision);
+  const unit = trim(input.doseUnit) || "mg";
+  // ⚠ ONLY WHEN THE BASIS IS A FUNCTION OF WEIGHT. `fixed` needs no weight and MUST NEVER BE ASKED TO
+  // JUSTIFY NOT HAVING ONE -- most patients on a fixed dose have never been weighed, and a prompt that
+  // fires when nothing is wrong is a prompt people learn to dismiss without reading.
+  const noWeightToWorkFrom =
+    needsWeight && (WEIGHT_STATES_NEEDING_DECISION as readonly string[]).includes(weight.state);
   let overridden = false;
-  // ⚠ THE GATE, AND IT IS ON THE WEIGHT STATE RATHER THAN ON A GENERIC "HAS WARNINGS". `absent` cannot
-  // be overridden into a number at all -- there is nothing to multiply. `stale` and `implausible` can,
-  // by a practitioner, with a reason. `age_unjudged` is NOT gated: nothing said the weight was out of
-  // date, so demanding an override for it would train people to type a reason for every prescription
-  // and would make the real overrides invisible in the register.
+
+  // ⚠ SUPPLIED WHERE IT MEANS NOTHING, IT IS REFUSED RATHER THAN DROPPED. A prescriber who wrote a
+  // clinical justification and had it silently discarded is the silent-write class this codebase has paid
+  // for twice. The refusal says where the words belong instead.
+  //
+  // ⚠ AND THE TWO REASONS IT CAN BE INAPPLICABLE ARE NOT THE SAME SENTENCE. A fixed dose does not depend
+  // on a weight AT ALL, and for it the weight verdict above is a synthetic blank whose text reads "no
+  // weight is recorded" -- printing that beside "this patient has one" would be a flat contradiction on
+  // the commonest prescription this product writes. Found by breaking the gate and reading the message
+  // the broken build produced, which is the only reason it is not still there.
+  if (decisionText && !noWeightToWorkFrom)
+    return fail(422, "WEIGHT_DECISION_NOT_APPLICABLE", !needsWeight
+      ? "A fixed dose does not depend on the patient's weight, so there is nothing for a weight decision"
+        + " to stand in for and it has NOT been stored. If the reasoning matters, record it on the"
+        + " medication itself."
+      : `${WEIGHT_DECISION_NOT_APPLICABLE} ${weight.text}`
+        + (weight.state === "stale" || weight.state === "implausible"
+          ? " To prescribe on this weight anyway, put your reasoning in the override reason instead."
+          : ""));
+
+  // ⚠ THE GATE, AND IT IS ON THE WEIGHT STATE RATHER THAN ON A GENERIC "HAS WARNINGS". `stale` and
+  // `implausible` can be prescribed on by a practitioner, with a reason. `age_unjudged` is NOT gated:
+  // nothing said the weight was out of date, so demanding an override for it would train people to type a
+  // reason for every prescription and would make the real overrides invisible in the register.
   if (needsWeight && (weight.state === "stale" || weight.state === "implausible")) {
     if (!hasCapability(ctx, CAP_MED_OVERRIDE))
       return fail(403, "OVERRIDE_REQUIRED", `${weight.text} Prescribing on it needs medication.override.`);
@@ -1497,15 +1675,69 @@ export async function calculateDose(
     overridden = true;
   }
 
-  const arithmetic = doseArithmetic({
-    basis,
-    dosePerUnit: input.rateValue ?? null,
-    fixedDose: input.fixedDose ?? null,
-    weightKg: weight.usable ? weightMeasurement.value : null,
-    heightCm: height?.value ?? null,
-    dosesPerDay: input.dosesPerDay ?? null,
-    unit: input.doseUnit ?? "mg",
-  });
+  // ⚠ THE SECOND HALF OF THE SAME GATE, AND THE SENTENCE THAT USED TO STAND HERE WAS RIGHT WHEN IT WAS
+  // WRITTEN. It said: "`absent` cannot be overridden into a number at all -- there is nothing to
+  // multiply." There is STILL nothing to multiply, and this branch does not invent one. What changed is
+  // the user's ruling of 2026-08-08 and migrations 259/265 behind it: refusing outright sent the
+  // prescriber to work the dose out on paper, and then the decision happened anyway with nothing
+  // recording that it did. So the prescriber proceeds, NO FIGURE IS PRODUCED, and the judgement that let
+  // them proceed is written onto the same immutable row as the prescription it justified.
+  //
+  // ⚠ AND IT IS FOR CHILDREN ONLY -- the user's narrowing of 2026-08-08, "only a child <18 years". An
+  // adult meets the refusal this engine gave before migration 265, unchanged, which is the conservative
+  // branch and the one that needs no new justification. An age nobody recorded is NOT an adult.
+  let age: AgeVerdict | null = null;
+  if (noWeightToWorkFrom) {
+    // ⚠ BSA FIRST, AND IT NEVER MENTIONS THE DECISION. A decision may stand in for a missing MEASUREMENT.
+    // It cannot stand in for the ARITHMETIC -- migration 265 kept bsa_m2 required for mg_per_m2 even with
+    // a decision, because a mg/m2 dose with no surface area is a blank rather than a stated judgement.
+    // Asking for a decision here and then refusing the row anyway would be a refusal this code could have
+    // predicted, so it is refused BEFORE anybody is asked to write anything.
+    if (basis === "mg_per_m2")
+      return fail(422, "CANNOT_CALCULATE", `${weight.text} ${BSA_NEEDS_MEASUREMENTS}`);
+
+    // ⚠ THE AGE IS READ ONLY HERE, IN THE ONE BRANCH THAT TURNS ON IT. Every other prescription pays
+    // nothing for a query it does not need.
+    age = await dosingAge(admin, ctx, input.patientId, today);
+    // ⚠ NOT ONE WORD ABOUT A DECISION IN THIS MESSAGE, AND THAT IS THE POINT OF IT. There is no second
+    // road for an adult. Naming one -- even to say it does not apply -- teaches a prescriber that a form
+    // of words exists which gets a number out of the product, and the next refusal is one they argue
+    // with. This is the sentence the engine gave before 265, and the age is not recited either: it would
+    // read as "if they were younger, there would be another way", which is the same door by implication.
+    if (!age.decisionPathOffered)
+      return fail(422, "CANNOT_CALCULATE", `${weight.text} ${ADULT_NO_WEIGHT_REFUSED}`);
+
+    if (!hasCapability(ctx, CAP_MED_OVERRIDE))
+      return fail(403, "OVERRIDE_REQUIRED",
+        `${weight.text} Prescribing without a recorded weight needs medication.override.`);
+    // ⚠ THE ENGINE REFUSES A BLANK IN A SENTENCE, BEFORE THE DATABASE REFUSES IT WITH A CONSTRAINT NAME.
+    // 259's check uses btrim, so " " would be refused either way -- but 23514 with a constraint name is
+    // not a thing to put in front of a prescriber, and trim() here means the space bar cannot satisfy a
+    // clinical-safety requirement in the one layer a screen actually talks to.
+    if (!decisionText)
+      return fail(422, "WEIGHT_DECISION_REQUIRED", weightDecisionPrompt(weight.state));
+  }
+
+  // ⚠ THE ARITHMETIC IS SKIPPED ENTIRELY ON THE DECISION PATH, rather than run and allowed to fail. Its
+  // refusal ("no usable weight is recorded...") is the correct answer to a different question -- it is
+  // what a caller with no decision should see -- and printing it beside a recorded decision would read as
+  // though the product had tried and failed, when in fact it declined to guess.
+  const arithmetic = noWeightToWorkFrom
+    ? decisionWorking({
+      basis, rate: input.rateValue ?? null, unit, weightText: weight.text, decision: decisionText,
+      // ⚠ NON-NULL HERE BY CONSTRUCTION: the branch above returns for every age that is not offered the
+      // path, so a decision row can never be written without an age verdict behind it.
+      ageText: age?.text ?? "", ageState: age?.state ?? "unknown",
+    })
+    : doseArithmetic({
+      basis,
+      dosePerUnit: input.rateValue ?? null,
+      fixedDose: input.fixedDose ?? null,
+      weightKg: weight.usable ? weightMeasurement.value : null,
+      heightCm: height?.value ?? null,
+      dosesPerDay: input.dosesPerDay ?? null,
+      unit,
+    });
   if (!arithmetic.ok) return fail(422, "CANNOT_CALCULATE", arithmetic.message);
 
   const result: DoseCalculationResult = {
@@ -1514,6 +1746,8 @@ export async function calculateDose(
     formula: arithmetic.formula, working: arithmetic.working, sentence: arithmetic.sentence,
     weight, bsaM2: arithmetic.bsaM2,
     notChecked: DEFERRED_SAFETY_CHECKS, safetyNotice: doseSafetyNotice(), overridden,
+    weightDecision: noWeightToWorkFrom ? decisionText : null,
+    notStored: null,
   };
 
   const { data, error } = await admin.from(MEDICATION_DOSE_TABLE).insert({
@@ -1521,6 +1755,10 @@ export async function calculateDose(
     medication_id: input.medicationId ?? null, encounter_id: input.encounterId ?? null,
     basis, rate_value: input.rateValue ?? null, dose_unit: arithmetic.unit,
     doses_per_day: input.dosesPerDay ?? null,
+    // ⚠ THE RULING OF 2026-08-08 ON THE ROW ITSELF, and 259's comment says why it is here and not only in
+    // practice_medication_event: an event in another table can be printed apart from the prescription it
+    // justified, and a dose printed without the reasoning that produced it is what this column prevents.
+    weight_decision: result.weightDecision,
     weight_kg: weight.usable ? weightMeasurement.value : null,
     weight_measurement_id: weightMeasurement.measurementId,
     weight_effective_at: weightMeasurement.effectiveAt,
@@ -1540,17 +1778,37 @@ export async function calculateDose(
   // ⚠ THE ARITHMETIC IS RETURNED EVEN IF IT COULD NOT BE STORED, AND THE PAYLOAD SAYS SO. A prescriber
   // who asked for a number and got a database error instead would do the multiplication on paper. What
   // must not happen is the number being returned as though it had been recorded.
+  //
+  // ⚠ AND THE ERROR IS NO LONGER DISCARDED. Both branches used to return the same silent `id: null`, so a
+  // constraint refusal -- 259's blank-decision check among them -- reached the screen as "the medication
+  // store is not in this deployment", which is a sentence about a DIFFERENT deployment problem and would
+  // have sent somebody to look for a missing migration that is present. `notStored` carries the reason
+  // and the two cases now say different things, because they ARE different things.
   if (error && isMissingTable(error))
-    return { ok: true, data: { ...result, id: null } };
-  if (error) return { ok: true, data: { ...result, id: null } };
+    return { ok: true, data: { ...result, id: null, notStored: STORE_ABSENT_NOTICE } };
+  if (error)
+    return {
+      ok: true,
+      data: {
+        ...result, id: null,
+        notStored: `This calculation was NOT recorded. The database refused the write: ${error.message}`
+          + `${error.code ? ` (${error.code})` : ""}. The working above is what you were shown, but nothing has recorded that you were shown it.`,
+      },
+    };
   result.id = data.id;
 
-  if (overridden && input.medicationId) {
+  // ⚠ ONE REGISTER, TWO ROADS TO IT. Prescribing on a flagged weight and prescribing with NO weight are
+  // both "a clinical act that must leave a trace" in the words of the event table's own header, and MED
+  // s5's register is where the trace lives. Keeping the decision out of it would have left the practice
+  // override list saying "nobody has prescribed on an absent or stale weight" while somebody had.
+  const registerReason = overridden ? overrideReason : result.weightDecision;
+  if (registerReason && input.medicationId) {
     const { error: evErr } = await admin.from(MEDICATION_EVENT_TABLE).insert({
       workspace_id: ctx.workspaceId, medication_id: input.medicationId, patient_id: input.patientId,
       encounter_id: input.encounterId ?? null, event_type: "safety_override",
-      previous: { weightState: weight.state }, next: { calculationId: data.id },
-      reason: overrideReason,
+      previous: { weightState: weight.state },
+      next: { calculationId: data.id, decisionRecorded: !!result.weightDecision, doseComputed: result.perDose !== null || result.dailyTotal !== null },
+      reason: registerReason,
       narrative: weight.text,
       created_by: input.actorId,
     });
@@ -1561,7 +1819,11 @@ export async function calculateDose(
     workspaceId: ctx.workspaceId, actorId: input.actorId, eventType: "practice.medication.dose_calculated",
     payload: {
       calculationId: data.id, patientId: input.patientId, basis,
-      weightState: weight.state, overridden, checksNotRun: DEFERRED_CHECK_KEYS.length,
+      weightState: weight.state, overridden,
+      // ⚠ WHETHER, NOT WHAT. The decision itself is a clinical sentence and lives on the calculation and
+      // on the timeline. The audit log records that one was taken, so a register can be counted off it.
+      weightDecisionRecorded: !!result.weightDecision,
+      checksNotRun: DEFERRED_CHECK_KEYS.length,
     },
     correlationId: input.correlationId,
   });
