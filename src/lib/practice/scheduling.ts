@@ -5,7 +5,7 @@ import { resolveBookingRule } from "@/lib/practice/availability-config";
 // CPR-V5-007 s7.7. ⚠ No cycle: practice-sessions reaches 11 modules and this one is not among them,
 // checked rather than assumed. It is imported so the per-session walk-in limit has ONE resolver shared
 // with the screen that reports it.
-import { walkInAllowance } from "@/lib/practice/practice-sessions";
+import { walkInAllowance, sessionBookingModeAt } from "@/lib/practice/practice-sessions";
 import { bookingBlock } from "@/lib/practice/lifecycle-constants";
 
 // PEN-001 Appointment & Scheduling Engine -- the business rules, separated from every UI that uses them
@@ -98,12 +98,20 @@ const LIVE_STATUSES = ["REQUESTED", "CONFIRMED", "ARRIVED"];
  * override that produced nothing. Naming the codes already lifted suppresses THOSE TWO CHECKS ONLY and
  * lets everything after them run: an override of the notice period must never become an override of the
  * double-booking check. Callers that pass nothing are unchanged in every respect.
+ *
+ * ⚠ `channel` IS OPTIONAL AND ONLY ONE VALUE OF IT CHANGES ANYTHING. s4.3's booking_mode says whether
+ * PATIENTS may book a session; it says nothing about whether the practice may. So the check below is
+ * CHANNEL-AWARE by construction: `patient_self` needs a patient-facing session, every other channel --
+ * and every caller that passes no channel at all -- is untouched. A blanket check here would refuse a
+ * practitioner booking into their own internal clinic, which is most of what a diary is for.
  */
 export async function checkPlacement(admin: any, args: {
   workspaceId: string; startMs: number; endMs: number;
   locationId: string | null; appointmentType: string; allowOverlap: boolean;
   excludeAppointmentId?: string;
   windowOverridden?: string[];
+  /** s7.3's booking channel. Only `patient_self` is treated differently -- see the header. */
+  channel?: string | null;
 }): Promise<EngineResult<{ locationName: string | null }>> {
   // ── CPR-LIFE-001 s2 AND s10: AN ARCHIVED, SUSPENDED OR CLOSED PRACTICE TAKES NO BOOKINGS ─────────
   //
@@ -142,6 +150,51 @@ export async function checkPlacement(admin: any, args: {
     if (!loc) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
     if (!loc.active) return { ok: false, status: 422, code: "LOCATION_CLOSED", message: `${loc.name} is closed` };
     here = loc;
+  }
+
+  // ── CPR-V5-007 s4.3 AND s8: MAY A PATIENT BOOK INTO THIS SESSION AT ALL? ─────────────────────────
+  //
+  // ⚠ THIS IS THE CONTROL, AND bookableSlots' FILTER IS THE CONVENIENCE. The offering read stopped
+  // showing times inside a session marked internal-only in the same change that added this; that stops an
+  // honest patient choosing one, and it stops nothing else. A request that never came from the page --
+  // a replayed body, an old link, anything typed at the API -- meets this instead, which is the
+  // difference between "only valid options are visible" and a rule. This codebase learned that
+  // distinction from "only free times are shown", and migration 255 exists because it was not enough.
+  //
+  // ⚠ patient_self ONLY. A practitioner, a staff delegate, a follow-up and a walk-in all book into
+  // internal sessions legitimately and constantly, and callers that name no channel (bookAppointment,
+  // rescheduleAppointment, registration's book-on-register) are unchanged in every respect.
+  //
+  // ⚠ AND IT IS NOT PART OF s14's WINDOW OVERRIDE. `lifted` suppresses LEAD_TIME and BEYOND_HORIZON only
+  // and this refusal never consults it, exactly as the session walk-in limit below does not. An override
+  // of a notice period must never become an override of WHO MAY BOOK -- the reason it sits here, above
+  // the window checks, rather than among them.
+  //
+  // ⚠ AN UNGOVERNED TIME IS NOT REFUSED. See sessionBookingModeAt's header: a one-off session carries no
+  // template and is governed by the booking page's own visible types, which resolveBookingPage already
+  // checked. Refusing here would close the extra Saturday a practice opened by hand.
+  if (args.channel === "patient_self") {
+    const modes = await sessionBookingModeAt(admin, {
+      workspaceId: args.workspaceId, locationId: args.locationId ?? null, startMs: args.startMs,
+    });
+    // ⚠ A FAILED READ IS NOT AN OPEN SESSION. Refusing here is what stops a database wobble opening a
+    // ward round to strangers -- the same direction SESSION_WALK_IN_UNREADABLE takes below.
+    if (modes.state !== "ok")
+      return {
+        ok: false, status: 503, code: "SESSION_BOOKING_MODE_UNREADABLE",
+        message: `this booking was not made because it could not be checked whether this session is open to patients: ${modes.reason}`,
+      };
+    if (modes.value.governed && !modes.value.patientFacing) {
+      // NAMES THE SESSION AND CARRIES ITS OWN CODE, for the reason SESSION_WALK_IN_LIMIT does: a caller
+      // that cannot tell this apart from PRACTICE_NOT_BOOKABLE would send somebody to reopen a whole
+      // practice when one session's mode is what is shut. And the patient-facing message says only that
+      // the time is not offered -- how the practice has arranged its week is not a stranger's business.
+      const s = modes.value.governing[0];
+      return {
+        ok: false, status: 409, code: "SESSION_NOT_PATIENT_BOOKABLE",
+        message: `${s.name} is not open to patient booking, so that time cannot be booked from the booking page. This is that session's own booking mode, not your practice's booking rules.`,
+      };
+    }
   }
 
   // ── CPR-SET-002 BOOKING RULES ────────────────────────────────────────────────────────────────────

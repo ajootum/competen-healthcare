@@ -4,7 +4,7 @@ import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
 import { sessionConflict, hhmm } from "@/lib/practice/availability-config";
 import {
   SESSION_ACTIVITY_TYPES, BOOKING_MODES, BOOKING_MODES_LIVE, SESSION_APPOINTMENT_TYPES,
-  suggestSessionName, type BookingMode,
+  isPatientFacingMode, suggestSessionName, type BookingMode,
 } from "@/lib/practice/practice-session-constants";
 import { WALK_IN_NOT_CONFIGURABLE, WALK_IN_ENFORCEMENT_NOTE } from "@/lib/practice/recall-constants";
 
@@ -1114,6 +1114,112 @@ export async function walkInAllowance(admin: any, args: {
     value: {
       session, used: session.usedIds.length, sessionLimit: session.sessionLimit,
       full: session.sessionLimit !== null && session.usedIds.length >= session.sessionLimit,
+    },
+  };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// s4.3's `booking_mode`, ASKED OF ONE INSTANT -- THE ONE QUESTION checkPlacement ASKS ABOUT WHO MAY BOOK.
+//
+// ⚠ THE DEFECT THIS EXISTS TO CLOSE. Migration 240 has stored booking_mode since Phase 1 and NOTHING AT
+// BOOKING TIME HAS EVER READ IT. A practitioner who set a Tuesday ward round to `internal` had made a
+// statement no engine consulted: bookableSlots() did not filter on it and checkPlacement() did not check
+// it, so a crafted patient request could land inside a session marked internal-only. That is the same
+// class as the per-session walk-in limit above -- a column added for a rule, and then never read.
+//
+// ⚠ IT ANSWERS "WHICH SESSIONS GOVERN THIS TIME", NOT "MAY THIS BOOKING PROCEED". The channel is the
+// caller's question and it is decided in scheduling.ts, once, because a practitioner books into internal
+// sessions constantly and legitimately. A resolver that returned a verdict would invite a second caller
+// to apply it to every channel, which would stop a practice using its own diary.
+//
+// ⚠ SEVERAL SESSIONS MAY GOVERN ONE INSTANT and the answer is a DISJUNCTION. An internal ward round and a
+// public clinic may both cover 09:00 -- and if any session covering the time is open to patients, the
+// practice has opened that time to patients. Refusing because some OTHER session also covers it would
+// close a clinic nobody closed.
+//
+// ⚠ AND "NOTHING GOVERNS IT" IS ITS OWN ANSWER, NOT A REFUSAL. A one-off extra session carries no
+// template, and bookableSlots offers those under the booking page's own visible types rather than under a
+// session's mode. An engine that refused ungoverned time would invent a rule nobody wrote -- and would
+// refuse the extra Saturday a practice opened by hand. Both halves say so plainly.
+//
+// ⚠ EXCEPTIONS ARE NOT CONSULTED, deliberately and like walkInPolicy above. Leave and closure REMOVE the
+// day's slots at generation time; they say nothing about whether the pattern admits patients. A session
+// on leave still answers "internal" here, and there is no slot to book into anyway.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+export type GoverningSession = {
+  id: string;
+  name: string;
+  /** migration 240's stored value, defaulted the way the column defaults. */
+  bookingMode: BookingMode;
+  patientFacing: boolean;
+};
+
+export type SessionBookingModeAt = {
+  /** Every active session whose weekday, minutes, effective window and place cover the instant. */
+  governing: GoverningSession[];
+  /** False when nothing governs the instant at all -- which is NOT the same as "nothing admits a patient". */
+  governed: boolean;
+  /** True when at least one governing session admits a patient. See the disjunction note above. */
+  patientFacing: boolean;
+};
+
+export async function sessionBookingModeAt(admin: any, args: {
+  workspaceId: string; locationId: string | null; startMs: number;
+}): Promise<Reading<SessionBookingModeAt>> {
+  const { data: ws, error: wsErr } = await admin.from("practice_workspace")
+    .select("timezone").eq("id", args.workspaceId).maybeSingle();
+  if (wsErr) return { state: "unreadable", reason: `this practice's timezone could not be read: ${wsErr.message}` };
+  const timezone = (ws?.timezone as string) || "UTC";
+
+  // THE PRACTICE'S OWN DAY for the instant, not the server's -- the same reason walkInAllowance gives.
+  const date = practiceToday(timezone, new Date(args.startMs));
+  const weekday = ((new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
+
+  const { data: rows, error } = await admin.from("practice_availability_template")
+    // ACTIVE ONLY, matching the generator: a suspended session generates nothing, so it governs nothing.
+    .select("id, session_name, weekday, starts_minute, ends_minute, location_id, activity_type, booking_mode, effective_from, effective_to")
+    .eq("workspace_id", args.workspaceId).eq("status", "active").eq("weekday", weekday);
+  // ⚠ NEITHER ROWS NOR AN ERROR IS NOT AN EMPTY WEEK. The caller refuses on `unreadable`, because a mode
+  // that silently stopped applying when a query failed is the fail-open direction this file has been
+  // bitten by twice already.
+  if (error || rows == null)
+    return { state: "unreadable", reason: `this practice's sessions could not be read: ${error?.message ?? "neither rows nor an error"}` };
+
+  const dayStartMs = Date.parse(zonedDayRange(date, timezone).startIso);
+  const minute = Math.floor((args.startMs - dayStartMs) / 60000);
+
+  const governing: GoverningSession[] = ((rows ?? []) as any[])
+    // The pattern only applies inside its own effective window -- a session that ended in March governs
+    // nothing in April, and treating it as governing would refuse a booking on a rule that has lapsed.
+    .filter(t => (!t.effective_from || String(t.effective_from) <= date)
+      && (!t.effective_to || String(t.effective_to) >= date))
+    // Half-open [start, end), the same boundary migration 255's range and walkInPolicy both use: under a
+    // closed end a 10:00 booking would be governed by both the 08:00-10:00 and the 10:00-12:00 session.
+    .filter(t => minute >= (t.starts_minute as number) && minute < (t.ends_minute as number))
+    // A session with no location is not location-scoped, so it governs anywhere. One that names a place
+    // governs only bookings at that place -- the same test walkInAllowance applies.
+    .filter(t => (t.location_id ?? null) === null || (t.location_id as string) === args.locationId)
+    .map(t => {
+      const bookingMode = ((t.booking_mode as string | null) ?? "none") as BookingMode;
+      return {
+        id: t.id as string,
+        name: (t.session_name as string | null) ?? suggestSessionName({
+          locationName: null,
+          activityType: (t.activity_type as string | null) ?? null,
+          weekday: t.weekday as number,
+        }),
+        bookingMode,
+        patientFacing: isPatientFacingMode(bookingMode),
+      };
+    });
+
+  return {
+    state: "ok",
+    value: {
+      governing,
+      governed: governing.length > 0,
+      patientFacing: governing.some(s => s.patientFacing),
     },
   };
 }

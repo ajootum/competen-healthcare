@@ -8,6 +8,7 @@ import {
   issuePatientSession, checkPatientSession, normaliseDestination, type Reading,
 } from "@/lib/practice/patient-session";
 import { PUBLISH_STATES_LIVE } from "@/lib/practice/publish-constants";
+import { isPatientFacingMode } from "@/lib/practice/practice-session-constants";
 import type { WorkspaceContext } from "@/lib/practice/access";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -572,6 +573,33 @@ export async function bookableSlots(admin: any, args: {
   const offersType = new Set(((typeLinks ?? []) as any[])
     .filter(l => l.appointment_type === args.appointmentType).map(l => String(l.template_id)));
 
+  // ── ⚠ WHICH SESSIONS ARE OPEN TO PATIENTS AT ALL (s4.3's booking_mode) ─────────────────────────
+  //
+  // ⚠ THIS FILTER WAS ABSENT AND THE COLUMN WAS DECIDING NOTHING HERE. Migration 240 has stored
+  // booking_mode since Phase 1, and this function did not read it -- so a session a practitioner had
+  // marked `internal` or `none` still generated OPEN slots, and those slots were offered to strangers on
+  // a public page. A practitioner who had said "not patients" was being ignored by the one screen the
+  // setting exists for.
+  //
+  // ⚠ AND IT IS THE CONVENIENCE, NOT THE CONTROL. checkPlacement refuses the same booking on the same
+  // ground for the same channel, so a request that never came from this page is stopped whether or not
+  // it was ever offered one. Removing this filter would make the page rude; removing that check would
+  // make the rule fictional.
+  //
+  // ⚠ isPatientFacingMode IS THE SAME EXPRESSION patient-access.ts USES THREE TIMES -- the complement of
+  // BOOKING_MODES_LIVE -- imported rather than restated as `["link_only","public"]`. A fourth spelling
+  // of "patient-bookable" is a fourth thing to forget when a fifth mode is added.
+  //
+  // ⚠ A SLOT WITH NO TEMPLATE IS UNTOUCHED, exactly as it is by the type link above: a one-off extra
+  // session or a stretch of extended hours has no session to carry a mode, and is governed by the
+  // booking page's own visible types, which the practice did choose and which were checked above.
+  const { data: modeRows, error: modeErr } = await admin.from("practice_availability_template")
+    .select("id, booking_mode").eq("workspace_id", p.workspaceId).eq("status", "active");
+  if (modeErr || modeRows == null)
+    return { ok: false, status: 503, code: "READ_FAILED", message: `it could not be read which of this practice's sessions are open to patients: ${modeErr?.message ?? "neither rows nor an error"}` };
+  const openToPatients = new Set(((modeRows ?? []) as any[])
+    .filter(t => isPatientFacingMode(t.booking_mode as string | null)).map(t => String(t.id)));
+
   // ── WHAT IS ALREADY TAKEN. Four columns, and the reason is in the header. ───────────────────────
   const { data: apptRows, error: apptErr } = await admin.from("practice_appointment")
     .select("scheduled_at, duration_minutes")
@@ -601,6 +629,9 @@ export async function bookableSlots(admin: any, args: {
 
     const templateId = (slot.generated_from_template_id as string | null) ?? null;
     if (templateId && !offersType.has(templateId)) continue;
+    // s4.3's booking_mode. See the section above -- and note this drops the slot silently, like every
+    // other test in this loop, because a patient is told what IS offerable and never why something is not.
+    if (templateId && !openToPatients.has(templateId)) continue;
 
     const rule = await resolveBookingRule(admin, p.workspaceId, slotLocation, args.appointmentType);
     const earliest = now + rule.leadTimeMinutes * 60000;
@@ -957,6 +988,12 @@ async function mineOrRefuse(admin: any, args: { handle: string; token: string; r
  * ⚠ AND THEN THE WRITE GOES THROUGH rescheduleAppointment, WITH NO allowOverlap. Every guard that engine
  * carries -- the terminal states, ARRIVED, the past-day check, checkPlacement, the record version -- runs
  * unchanged, and migration 255 has the last word on the slot.
+ *
+ * ⚠ s4.3's booking_mode IS HONOURED ON THIS PATH THROUGH THE bookableSlots CALL BELOW, WHICH IS A
+ * SERVER-SIDE RE-RUN AND NOT A UI FILTER -- the caller names a time and this recomputes whether it would
+ * ever have been offered. rescheduleAppointment carries no channel, so checkPlacement's own
+ * patient_self check is not reached here; that is stated rather than implied, because the two halves are
+ * not the same guard and a reader is entitled to know which one is standing on this path.
  */
 export async function rescheduleManagedBooking(admin: any, args: {
   handle: string; token: string; reference: string;

@@ -1276,6 +1276,12 @@ export async function bookUnderRules(
     // booking. It is told the codes and NOTHING ELSE: the double-book, the travel conflict, the closed
     // location and the walk-in limit all still run, and all still stop the booking.
     windowOverridden: overridden,
+    // ⚠ THE CHANNEL, SO s4.3's booking_mode CAN BE HONOURED WHERE IT IS ENFORCED RATHER THAN WHERE IT IS
+    // DISPLAYED. checkPlacement refuses a `patient_self` booking into a session the practitioner marked
+    // internal-only, and leaves every other channel exactly as it was -- a practice books into its own
+    // internal sessions constantly. Passing the channel is the whole of what this engine contributes:
+    // the rule itself belongs in the one function all four booking paths come through.
+    channel: args.channel,
   });
   if (!placed.ok) return placed;
 

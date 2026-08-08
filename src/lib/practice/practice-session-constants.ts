@@ -67,9 +67,45 @@ export const BOOKING_MODES = [
 
 export type BookingMode = (typeof BOOKING_MODES)[number]["code"];
 
-/** The modes Phase 1 can honour. Anything else is stored, shown, and said to be unreachable. */
+/**
+ * ⚠ THE MODES THAT NEED NO PATIENT-FACING SURFACE -- i.e. the INTERNAL ones. Read the name carefully.
+ *
+ * It was documented as "the modes Phase 1 can honour", and while Phase 4 was unbuilt those were the same
+ * set. They are not the same set any more: `link_only` and `public` are honoured now, and this list has
+ * deliberately NOT grown to include them.
+ *
+ * ⚠ THE REASON IS THAT THREE READERS DEPEND ON THE COMPLEMENT MEANING "PATIENT-BOOKABLE".
+ * patient-access.ts derives NO_BOOKABLE_SESSION, sessionsOpenedToPatients and the SESSION_BOOKABLE
+ * publish check from `!BOOKING_MODES_LIVE.includes(mode)`. Adding the patient-facing modes here would
+ * make every one of them silently answer "no session is open to patients" for a practice whose sessions
+ * are all open to patients -- a wrong nought on the screen that decides whether a page may publish.
+ *
+ * So the membership is unchanged and the DOCUMENTATION is what moved. `phase` on each mode is history:
+ * which release first honoured it, not what is honoured today.
+ */
 export const BOOKING_MODES_LIVE: BookingMode[] = BOOKING_MODES
   .filter(m => m.phase === 1).map(m => m.code);
+
+/**
+ * ⚠ THE MODES THAT ADMIT A PATIENT, DEFINED AS THE COMPLEMENT OF THE LIST ABOVE RATHER THAN AS A PAIR.
+ *
+ * `link_only` and `public` today. It is written as `!BOOKING_MODES_LIVE.includes(...)` -- the very
+ * expression patient-access.ts already applies three times for NO_BOOKABLE_SESSION,
+ * sessionsOpenedToPatients and the SESSION_BOOKABLE publish check -- so there is ONE definition of
+ * "patient-bookable" in this product and a fourth reader cannot drift from the other three.
+ *
+ * ⚠ AND IT IS WHY BOOKING_MODES_LIVE's MEMBERSHIP MUST NOT MOVE. Adding the patient-facing modes to that
+ * list to express "these are honoured now" would empty this one, and the three readers above would
+ * silently answer "no session is open to patients" for a practice whose sessions are all open. The
+ * documentation on BOOKING_MODES_LIVE moved for exactly that reason; the membership did not, and this
+ * constant is what a reader asking "may a patient book this session" should use instead.
+ */
+export const BOOKING_MODES_PATIENT_FACING: BookingMode[] = BOOKING_MODES
+  .map(m => m.code).filter(c => !BOOKING_MODES_LIVE.includes(c));
+
+/** Whether a stored `booking_mode` admits a patient at all. An unknown mode is NOT patient-facing. */
+export const isPatientFacingMode = (code: string | null | undefined): boolean =>
+  BOOKING_MODES_PATIENT_FACING.includes((code ?? "none") as BookingMode);
 
 export const bookingModeLabel = (code: string) =>
   BOOKING_MODES.find(m => m.code === code)?.label ?? code;
