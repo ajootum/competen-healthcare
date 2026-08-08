@@ -6,7 +6,9 @@ import { hasCapability } from "@/lib/practice/access";
 import { getEncounter, patientTimeline, LOCKED_STATUSES } from "@/lib/practice/encounters";
 import { encounterExtras } from "@/lib/practice/encounter-workspace";
 import { patientSnapshot } from "@/lib/practice/longitudinal";
-import { ENCOUNTER_STATUS_CHIP, ENCOUNTER_STATUS_LABEL } from "@/lib/practice/encounter-workspace-constants";
+import {
+  ENCOUNTER_STATUS_CHIP, ENCOUNTER_STATUS_LABEL, weightPrompt,
+} from "@/lib/practice/encounter-workspace-constants";
 import { listTemplates, noteHistory, listDocuments } from "@/lib/practice/documentation";
 import { listPhrases, listAttachments, myDrafts } from "@/lib/practice/documentation-tools";
 import { listFollowUps, listIntervals } from "@/lib/practice/follow-ups";
@@ -15,21 +17,45 @@ import { logAccess } from "@/lib/practice/privacy";
 import { formatDayTime } from "@/lib/datetime";
 import EncounterConsole from "./EncounterConsole";
 import ContextPanel from "./ContextPanel";
+import SafetySnapshot from "./SafetySnapshot";
 import { encounterParameters } from "@/lib/practice/parameters";
 import ParameterCollection from "./ParameterCollection";
 import { patientMedications } from "@/lib/practice/medication";
 import MedicationConsole from "./MedicationConsole";
 
-// /practice/encounters/{id} -- CPR-ENC-002's three-panel encounter screen.
+// /practice/encounters/{id} -- CPR-ENC-003's Clinical Decision Workspace.
 //
-//   LEFT    context that was INHERITED, never asked for: session, location, type, source, practitioner,
-//           and the patient snapshot -- problems, treatments, allergies, blood group.
-//   MAIN    the eight-tab workspace (EncounterConsole).
-//   RIGHT   this encounter's procedures, its timeline, and s6's eight quick actions.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// WHAT THIS SCREEN IS NOW, AND WHAT IT WAS.
 //
-// THE PRIOR VISIT IS ON THIS SCREEN rather than behind a tab because the single most common clinical
-// question in a follow-up is "what did we do last time", and a click away is a click too many
-// mid-consultation.
+// CPR-ENC-003 s1: "a Clinical Decision Workspace rather than a documentation form". The user's words
+// after walking through a real encounter were that it was not intuitive and did not follow human-factors
+// principles, and the diagnosis was ORDER rather than content: everything the consultation needed was on
+// the screen, and nothing said what to do first.
+//
+// The order was: patient strip, then a full-width clinical parameters panel, then a full-width medication
+// console with a permanently-open dose calculator and a ten-field prescribing form, and only THEN a
+// three-column layout whose left column opened with the session and location and whose centre was an
+// eight-tab notebook. A prescriber met a dose calculator before the screen had asked why the patient was
+// there, and read the allergy line below the fold.
+//
+// It is now s2's five-step flow, top to bottom, in one scrolling page (s5):
+//
+//   HEADER            identity, status, and what has been signed          -- this file
+//   SAFETY SNAPSHOT   weight, allergies, medication, problems, vitals     -- SafetySnapshot.tsx
+//   ACTION BAR        the state table, including Finish                   -- EncounterConsole.tsx
+//   ① why is the patient here      ② clinical impression
+//   ③ clinical decisions           ④ next plan                            -- EncounterConsole.tsx
+//   RIGHT COLUMN      patient summary, previous visits, timeline          -- this file + ContextPanel
+//
+// ⚠ NO CAPTURE PATH WAS REMOVED. The parameters panel and the prescribing console are the same
+// components, unedited, passed into the flow as slots. Every field that could be filled in before can be
+// filled in now, and practice-encounter-workspace-harness.ts asserts the inventory directly.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+//
+//   THE PREVIOUS VISIT IS ON THIS SCREEN rather than behind a tab because the single most common clinical
+//   question in a follow-up is "what did we do last time", and a click away is a click too many
+//   mid-consultation.
 //
 // ⚠ THE "FIRST RECORDED ENCOUNTER" SENTENCE LIVES IN THIS FILE ON PURPOSE. It is the strongest claim on
 // the screen -- read during a consultation, by somebody deciding how much history to take -- and a
@@ -124,9 +150,34 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
   // "this patient is on nothing".
   const medicationRecord = await patientMedications(admin, shell.ctx, encounter.patient_id);
 
+  // ── THE WEIGHT PROMPT (the user's requirement and ruling of 2026-08-08) ────────────────────────────
+  //
+  // "Ensure that the weight is part of the data we collect", and "do not make it required, but prompt
+  // for it". ⚠ NOTHING BELOW GATES ANYTHING. weightPrompt() returns `blocking: false` as a literal type
+  // and this page uses the result only to choose words.
+  //
+  // ⚠ AND THE THIRD STATE IS THE POINT. `activated` is null when the collection could not be READ, false
+  // when this practice has not switched the weight parameter on, and true otherwise. A practice that has
+  // not activated it must not be shown an empty weight field, because an empty field reads as a patient
+  // nobody weighed rather than as a product nobody configured. The user activated `weight` about an hour
+  // before this was written and it was the first activation row ever to exist on this platform, so the
+  // un-activated practice is the ordinary case and not the edge one.
+  const weightEntry = parameterCollection.permitted && !parameterCollection.unavailable
+    ? [...parameterCollection.priority, ...parameterCollection.optional, ...parameterCollection.additions]
+      .find(p => p.code === "weight") ?? null
+    : null;
+  const weightPromptState = weightPrompt({
+    activated: parameterCollection.unavailable || !parameterCollection.permitted ? null : weightEntry !== null,
+    recordedThisEncounter: weightEntry?.recordedThisEncounter != null,
+  });
+
   return (
     <div className="max-w-[1400px]">
-      {/* ── The patient strip (CPR-ENC-002's header) ────────────────────────────────────────────── */}
+      {/* ── The patient banner (CPR-ENC-003 s3's header) ──────────────────────────────────────────
+          ⚠ NO PHOTO. The comp draws a patient photograph beside the name; there is no image column and
+          no file storage in this product, and the refusal is already recorded in
+          registration-workspace.ts. A placeholder avatar next to a name is an identity affordance that
+          verifies nothing, on the one screen where identity matters most. */}
       <div className="rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
@@ -145,13 +196,22 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
               {" · "}{String(encounter.entry_pathway).replace(/_/g, " ")}
               {" · started "}{formatDayTime(encounter.started_at)}
             </p>
-            {/* Hospital numbers (CPR-ENC-003 s3's "multiple hospital identifiers"). */}
-            {snapshot.identifiers.items.length > 0 && (
-              <ul className="mt-1.5 flex flex-wrap gap-1">
+            {/* The identifiers (CPR-ENC-003 s3's "multiple hospital identifiers"). ⚠ THE TYPE IS
+                LABELLED ABOVE THE VALUE rather than trailing it in nine-pixel grey: the comp draws
+                "Practice ID" and "Hospital No." as titled fields, and a bare code with a whispered
+                label is a code somebody reads out as the wrong one. */}
+            {snapshot.identifiers.unavailable ? (
+              <p className="mt-1.5 text-[11px] font-semibold text-[var(--cmp-text-critical)]">
+                The patient&rsquo;s identifiers could not be read.
+              </p>
+            ) : snapshot.identifiers.items.length > 0 && (
+              <ul className="mt-1.5 flex flex-wrap gap-2">
                 {snapshot.identifiers.items.map(i => (
-                  <li key={i.id} className="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-mono text-gray-600">
-                    {i.value}
-                    <span className="ml-1 font-sans text-[9px] uppercase text-gray-400">{i.type.replace(/_/g, " ")}</span>
+                  <li key={i.id} className="rounded bg-gray-100 px-2 py-1">
+                    <span className="block text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+                      {i.type.replace(/_/g, " ")}
+                    </span>
+                    <span className="block font-mono text-[12px] text-gray-800">{i.value}</span>
                   </li>
                 ))}
               </ul>
@@ -184,72 +244,96 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
         </div>
       )}
 
-      {/* ══ CPR-LCP-001 s10.3 -- ABOVE THE THREE PANELS, AND THAT IS THE SPECIFICATION.
-          "Only due, required and contextually relevant parameters shown first." A weight that is overdue
-          is worth less at the bottom of a page than a note tab is; putting it first is the whole content
-          of "shown first". ═════════════════════════════════════════════════════════════════════════ */}
-      <div className="mt-4">
-        <ParameterCollection collection={parameterCollection} locked={locked} />
-        {/* CPR-MED-001 s3 and s2, immediately under the parameters -- because the weight the calculator
-            multiplies is collected in the panel above, and a prescriber should be able to record it and
-            then use it without leaving the consultation (s9's "minimal-click workflow"). */}
-        <MedicationConsole
-          record={medicationRecord}
-          patientId={encounter.patient_id}
-          encounterId={encounter.id}
-          canRecord={hasCapability(shell.ctx, "medication.record")}
-          locked={locked}
-        />
-      </div>
+      {/* ══ CPR-ENC-003 s3: "Safety Snapshot immediately below header" ═════════════════════════════
+          ⚠ THIS IS THE SINGLE BIGGEST INFORMATION-ARCHITECTURE MOVE ON THE SCREEN. The allergy line --
+          the most safety-critical sentence here -- used to sit in a 280px left column BELOW six lines of
+          inherited administrative context. Session, location and entry pathway occupied the place the
+          eye lands; allergies, weight and current medication were below the fold. That is the wrong way
+          round on a surface somebody prescribes from. ══════════════════════════════════════════════ */}
+      <SafetySnapshot
+        snapshot={snapshot}
+        collection={parameterCollection}
+        medication={medicationRecord}
+        encounterId={encounter.id}
+        locked={locked}
+      />
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[280px_1fr]">
-        {/* ══ LEFT CONTEXT PANEL ═══════════════════════════════════════════════════════════════ */}
-        <div className="flex flex-col gap-3">
-          <ContextPanel
-            snapshot={snapshot}
-            encounter={encounter}
-            sessionTitle={sessionRow?.title ?? null}
-            sessionUnavailable={sessionUnavailable}
-            facility={sessionRow?.practice_facility?.name ?? sessionRow?.practice_location?.name ?? null}
-            practitionerName={(practitioner as any)?.data?.full_name ?? null}
-          />
-
-          <section className="rounded-xl border border-gray-200 bg-white p-3.5">
-            <h2 className="text-[13px] font-bold text-gray-900">Previous visits</h2>
-            {/* ⚠ "THIS IS THE FIRST RECORDED ENCOUNTER" IS THE STRONGEST CLAIM ON THIS PAGE, and it is
-                read DURING a consultation, by somebody deciding how much history to take. A failed
-                timeline read used to produce exactly that sentence. */}
-            {timeline.unavailable ? (
-              <p className="mt-2 rounded-lg bg-[var(--cmp-surface-critical)] px-3 py-2 text-[12px] text-[var(--cmp-text-critical)]">
-                Previous visits could not be read. Do <strong>not</strong> take this as a first visit.
-              </p>
-            ) : priors.length === 0 ? (
-              <p className="mt-2 text-[12px] text-gray-400">This is the first recorded encounter for this patient.</p>
-            ) : (
-              <ul className="mt-2 flex flex-col gap-2">
-                {priors.map(p => (
-                  <li key={p.id} className="border-l-2 border-gray-100 pl-2">
-                    <Link href={`/practice/encounters/${p.id}`} className="text-[12px] font-semibold text-gray-800 hover:underline">
-                      {String(p.started_at).slice(0, 10)}
-                    </Link>
-                    <span className="ml-1.5 text-[10px] text-gray-400">{p.status}</span>
-                    {p.reason_for_visit && <p className="text-[11px] text-gray-600">{p.reason_for_visit}</p>}
-                    {timeline.diagnosesUnavailable ? (
-                      <p className="text-[11px] text-[var(--cmp-text-critical)]">Diagnoses could not be read.</p>
-                    ) : (timeline.diagnosesByEncounter[p.id] ?? []).map((d: any, i: number) => (
-                      <p key={i} className="text-[11px] text-gray-500">
-                        {d.is_primary ? "▪ " : "· "}{d.label} <span className="text-gray-400">({d.certainty})</span>
-                      </p>
-                    ))}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
-
-        {/* ══ MAIN WORKSPACE + RIGHT ACTIONS ═══════════════════════════════════════════════════ */}
+      {/* ══ THE CONSULTATION ════════════════════════════════════════════════════════════════════
+            ⚠ THE PARAMETERS PANEL AND THE PRESCRIBING CONSOLE ARE PASSED IN AS SLOTS rather than
+            stacked above this workspace, which is where they used to be. Neither component was edited.
+            CPR-LCP-001 s10.3's "shown first" is honoured by their position INSIDE the flow --
+            measurements immediately after "why is the patient here", prescribing inside "clinical
+            decisions" -- rather than by being first on the page, which put a dose calculator above the
+            reason for the visit. CPR-MED-001 s9's minimal-click workflow is preserved and shortened: the
+            weight is recorded in the safety snapshot at the top, and the console that multiplies by it
+            links straight back to that field. */}
         <EncounterConsole
+          measurements={<ParameterCollection collection={parameterCollection} locked={locked} />}
+          medication={
+            <MedicationConsole
+              record={medicationRecord}
+              patientId={encounter.patient_id}
+              encounterId={encounter.id}
+              canRecord={hasCapability(shell.ctx, "medication.record")}
+              locked={locked}
+            />
+          }
+          weightPrompt={weightPromptState}
+          sidebar={
+            /* ══ s3's RIGHT COLUMN, AUTHORED HERE AND RENDERED THERE ═══════════════════════════
+               ⚠ THE "FIRST RECORDED ENCOUNTER" CLAIM MUST STAY IN THIS FILE. practice-encounters-
+               harness.ts source-checks that the sentence sits behind a timeline.unavailable guard in
+               page.tsx; authoring it in a child component would leave that assertion passing against a
+               file that no longer contains the claim. It is a server-rendered slot, not a move.
+
+               ⚠ THE AI ASSISTANT IS NOT HERE, AND THAT IS DELIBERATE. The assistant engine exists and
+               is reachable at /practice/assistant, but nothing on this screen is wired to it. A panel
+               headed "AI Assistant", with the comp's "Suggest with AI" and "Voice to AI" buttons,
+               would be an affordance for a capability this screen does not have. */
+            <>
+              <ContextPanel
+                snapshot={snapshot}
+                encounter={encounter}
+                sessionTitle={sessionRow?.title ?? null}
+                sessionUnavailable={sessionUnavailable}
+                facility={sessionRow?.practice_facility?.name ?? null}
+                practitionerName={(practitioner as any)?.data?.full_name ?? null}
+              />
+
+              <section className="rounded-xl border border-gray-200 bg-white p-3.5">
+                <h2 className="text-[13px] font-bold text-gray-900">Previous visits</h2>
+                {/* ⚠ "THIS IS THE FIRST RECORDED ENCOUNTER" IS THE STRONGEST CLAIM ON THIS PAGE, and it
+                    is read DURING a consultation, by somebody deciding how much history to take. A
+                    failed timeline read used to produce exactly that sentence. */}
+                {timeline.unavailable ? (
+                  <p className="mt-2 rounded-lg bg-[var(--cmp-surface-critical)] px-3 py-2 text-[12px] text-[var(--cmp-text-critical)]">
+                    Previous visits could not be read. Do <strong>not</strong> take this as a first visit.
+                  </p>
+                ) : priors.length === 0 ? (
+                  <p className="mt-2 text-[12px] text-gray-400">This is the first recorded encounter for this patient.</p>
+                ) : (
+                  <ul className="mt-2 flex flex-col gap-2">
+                    {priors.map(p => (
+                      <li key={p.id} className="border-l-2 border-gray-100 pl-2">
+                        <Link href={`/practice/encounters/${p.id}`} className="text-[12px] font-semibold text-gray-800 hover:underline">
+                          {String(p.started_at).slice(0, 10)}
+                        </Link>
+                        <span className="ml-1.5 text-[10px] text-gray-400">{p.status}</span>
+                        {p.reason_for_visit && <p className="text-[11px] text-gray-600">{p.reason_for_visit}</p>}
+                        {timeline.diagnosesUnavailable ? (
+                          <p className="text-[11px] text-[var(--cmp-text-critical)]">Diagnoses could not be read.</p>
+                        ) : (timeline.diagnosesByEncounter[p.id] ?? []).map((d: any, i: number) => (
+                          <p key={i} className="text-[11px] text-gray-500">
+                            {d.is_primary ? "▪ " : "· "}{d.label} <span className="text-gray-400">({d.certainty})</span>
+                          </p>
+                        ))}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </>
+          }
           encounterId={encounter.id}
           status={encounter.status}
           reasonForVisit={encounter.reason_for_visit}
@@ -283,7 +367,6 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
           warnings={extras.warnings}
           statusHistory={history}
         />
-      </div>
     </div>
   );
 }

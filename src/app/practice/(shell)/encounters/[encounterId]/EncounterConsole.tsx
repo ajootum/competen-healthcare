@@ -11,8 +11,8 @@ import {
 } from "@/lib/practice/procedure-constants";
 import {
   ENCOUNTER_TABS, QUICK_ACTIONS, QUICK_ACTION_ICON, ENCOUNTER_OUTCOMES, OUTCOME_SWATCH,
-  INVESTIGATION_CHIP, REFERRAL_CHIP, REFERRAL_STATUSES,
-  type EncounterWarning,
+  INVESTIGATION_CHIP, REFERRAL_CHIP, REFERRAL_STATUSES, CLINICAL_FLOW_BLOCKS, DECISION_CARDS,
+  type EncounterWarning, type WeightPromptState,
 } from "@/lib/practice/encounter-workspace-constants";
 import Dictation from "@/components/practice/Dictation";
 import DocumentationTools from "./DocumentationTools";
@@ -68,12 +68,18 @@ const NOTE_LABEL: Record<string, string> = {
   narrative: "Narrative — free text",
 };
 
-/** The comp's Overview headings, and the segment each one IS. Not a copy of it -- the same row. */
-const OVERVIEW_SEGMENTS: [string, string, string][] = [
-  ["assessment", "Clinical summary / Impression", "What you make of it."],
+/**
+ * The comp's Overview headings, and the segment each one IS. Not a copy of it -- the same row.
+ *
+ * ⚠ CPR-ENC-003 SPLIT THESE ACROSS TWO OF THE FOUR BLOCKS rather than adding a field. `assessment` and
+ * `objective` are step 2 (Clinical impression); `plan` is step 4 (Next plan). The rows are unchanged --
+ * s7's "no duplicate documentation" means the flow may re-LABEL a segment, never re-ask for it.
+ */
+const IMPRESSION_SEGMENTS: [string, string, string][] = [
+  ["assessment", "Clinical impression", "What you think is going on."],
   ["objective", "Key findings (optional)", "Examination findings worth carrying forward."],
-  ["plan", "Next steps / Plan", "What happens after today."],
 ];
+const PLAN_SEGMENT: [string, string, string] = ["plan", "Next steps / Plan", "What happens after today."];
 
 const TREATMENT_TYPES = [
   ["medication", "Medication"], ["investigation", "Investigation"], ["procedure", "Procedure"],
@@ -96,6 +102,29 @@ export default function EncounterConsole(props: {
   outcome: string | null; outcomeNote: string | null;
   warnings: EncounterWarning[];
   statusHistory: any[];
+  // ── CPR-ENC-003 s2/s3 SLOTS ────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ RENDERED ELEMENTS PASSED FROM THE SERVER PAGE, NOT COMPONENTS IMPORTED HERE. Both panels were
+  // full-width blocks stacked ABOVE this workspace, which is why the screen had no evident order: a
+  // prescriber met a ten-field medication form and a dose calculator before the screen had asked why the
+  // patient was there. s3 says specialist workflows do not expand the encounter, and s2 puts them inside
+  // the flow. Taking them as slots moves them into the flow WITHOUT touching either file -- and
+  // MedicationConsole in particular is pinned expression-by-expression by two harnesses, so not touching
+  // it is not laziness, it is the safe way to move it.
+  measurements: React.ReactNode;
+  medication: React.ReactNode;
+  /**
+   * s3's right column: patient summary and previous visits, authored in page.tsx because the
+   * "first recorded encounter" claim is source-checked THERE and must not move.
+   *
+   * ⚠ IT IS PASSED IN SO THE SCREEN HAS TWO COLUMNS AND NOT THREE. Before this the page put a 280px
+   * context column beside this component, and this component then split ITSELF into a workspace and a
+   * 290px action column -- so a consultation was read across three vertical strips, one of which was
+   * dedicated to the session the encounter was opened from. s3 names two columns.
+   */
+  sidebar: React.ReactNode;
+  /** The weight prompt, decided by weightPrompt() on the server. ⚠ Never a gate -- see that function. */
+  weightPrompt: { state: WeightPromptState; text: string; blocking: false };
 }) {
   const locked = LOCKED_STATUSES.includes(props.status) || props.status === "CANCELLED";
   const editable = props.canEdit && !locked;
@@ -134,6 +163,10 @@ export default function EncounterConsole(props: {
   const [reviewSummary, setReviewSummary] = useState("");
   const [ref, setRef] = useState({ referredTo: "", reason: "" });
   const [encOutcomeNote, setEncOutcomeNote] = useState(props.outcomeNote ?? "");
+  // CPR-ENC-003 s5's "progressive disclosure for complex tasks". The prescribing console is the one
+  // genuinely complex workflow on this screen and it is CLOSED until asked for -- most consultations
+  // prescribe nothing, and every one of them used to pay for the calculator in vertical space.
+  const [openMed, setOpenMed] = useState(false);
 
   // ── CPR-130 AUTOSAVE ──────────────────────────────────────────────────────────────────────────────
   //
@@ -335,6 +368,104 @@ export default function EncounterConsole(props: {
     "task.manage": props.canTask,
   };
 
+  /**
+   * CPR-ENC-003 s2's numbered block. The step number is drawn because the complaint that produced this
+   * work was that the screen had no evident order -- a numbered heading tells somebody arriving
+   * mid-consultation where they are, and an unnumbered one does not.
+   */
+  const block = (key: string, children: React.ReactNode) => {
+    const b = CLINICAL_FLOW_BLOCKS.find(x => x.key === key)!;
+    return (
+      <section id={`block-${b.key}`} className={`${CARD} scroll-mt-4`}>
+        <div className="flex items-baseline gap-2.5">
+          <span aria-hidden
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--cp-primary)] text-[11px] font-bold text-white">
+            {b.step}
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-[14px] font-bold text-gray-900">{b.title}</h2>
+            <p className="text-[10.5px] text-gray-400">{b.hint}</p>
+          </div>
+        </div>
+        <div className="mt-3">{children}</div>
+      </section>
+    );
+  };
+
+  /** One SOAP segment drawn as an editable field under a flow heading. The row is the same row. */
+  const segment = ([seg, heading, hint]: [string, string, string]) => (
+    <section key={seg}>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-[12.5px] font-bold text-gray-900">{heading}</h3>
+        {editable && (
+          <Dictation label="Dictate" onText={text => {
+            setBodies(b => ({ ...b, [seg]: `${b[seg]}${b[seg] && !b[seg].endsWith(" ") ? " " : ""}${text}` }));
+            setSaved(s => ({ ...s, [seg]: false }));
+            setDictated(d => ({ ...d, [seg]: true }));
+          }} />
+        )}
+      </div>
+      <p className="text-[10px] text-gray-400">{hint} Saved into the <code>{seg}</code> segment of the note.</p>
+      <textarea aria-label={heading} rows={3} disabled={!editable}
+        value={bodies[seg]}
+        onChange={ev => { setBodies(b => ({ ...b, [seg]: ev.target.value })); setSaved(s => ({ ...s, [seg]: false })); }}
+        className={`${input} mt-1 resize-y disabled:bg-gray-50 disabled:text-gray-500`} />
+      {editable && (
+        <div className="mt-1 flex items-center gap-2">
+          <button type="button" disabled={busy} onClick={() => saveNote(seg)} className={QUIET_BTN}>Save</button>
+          {saved[seg] && <span className="text-[10px] text-[var(--cmp-text-success)]">saved</span>}
+          {draftAt[seg] && !saved[seg] && (
+            <span className="text-[10px] text-gray-400">draft kept {draftAt[seg]} &mdash; not in the record yet</span>
+          )}
+        </div>
+      )}
+    </section>
+  );
+
+  /**
+   * CPR-ENC-003 s3's Clinical Decisions card, resolved against what this encounter actually holds.
+   *
+   * ⚠ EVERY `detail` BELOW COMES FROM A READ THAT HAPPENED. Two of the six -- investigations and
+   * referrals -- arrive as Panels that know whether their query FAILED, and those two say so instead of
+   * printing nought. The other four are plain arrays from getEncounter, where an empty array really is
+   * an empty list. The distinction is drawn here rather than smoothed over, because "None added" and
+   * "could not be read" send a practitioner to two different places.
+   */
+  const cardOf = (c: typeof DECISION_CARDS[number]) => {
+    const NONE = "text-gray-400";
+    const SOME = "text-gray-700";
+    const FAILED = "text-[var(--cmp-text-critical)] font-semibold";
+    const count = (n: number, word: string) =>
+      n === 0 ? { detail: "None added", tone: NONE } : { detail: `${n} ${word}${n === 1 ? "" : "s"}`, tone: SOME };
+    const panel = (p: { permitted: boolean; unavailable: boolean; items: unknown[] }, word: string) =>
+      !p.permitted ? { detail: "Not permitted", tone: NONE }
+        : p.unavailable ? { detail: "Could not be read", tone: FAILED }
+          : count(p.items.length, word);
+
+    const body =
+      c.key === "diagnosis" ? count(props.diagnoses.length, "recorded")
+        : c.key === "procedure" ? count(props.procedures.filter(p => p.encounter_id === props.encounterId).length, "done today")
+          : c.key === "investigation" ? panel(props.investigations, "requested")
+            : c.key === "referral" ? panel(props.referrals, "made")
+              : c.key === "treatment" ? count(props.treatments.length, "recorded")
+                // ⚠ THE MEDICATION CARD COUNTS NOTHING, ON PURPOSE. The prescribing console writes to
+                // the PATIENT's medication record (practice_medication), not to this encounter's
+                // treatment rows, so any figure here would be counting a different table from the one
+                // the card opens. It says what the click does instead.
+                : { detail: openMed ? "Open below" : "Open the prescribing console", tone: SOME };
+
+    return {
+      key: c.key, label: c.label, icon: QUICK_ACTION_ICON[`add_${c.key}`] ?? "▸",
+      ...body,
+      onOpen: () => {
+        setNotice(null);
+        if (c.key === "medication") { setOpenMed(true); return; }
+        if (c.key === "referral") { document.getElementById("referrals")?.scrollIntoView({ block: "center" }); return; }
+        setTab(c.tab);
+      },
+    };
+  };
+
   // A small helper so every list gets the same three states without each one inventing its own words.
   const panelState = (p: { permitted: boolean; unavailable: boolean }, what: string, empty: string) =>
     !p.permitted ? <p className="mt-2 rounded-lg bg-gray-50 px-2.5 py-2 text-[11px] text-gray-500">You cannot see {what} here. Nothing was read.</p>
@@ -342,12 +473,51 @@ export default function EncounterConsole(props: {
         : <p className="mt-2 text-[12px] text-gray-400">{empty}</p>;
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[1fr_290px]">
-      {/* ══ MAIN WORKSPACE ═══════════════════════════════════════════════════════════════════════ */}
+    <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_320px]">
+      {/* ══ CENTRE: CPR-ENC-003 s3's FOUR COGNITIVE BLOCKS ═══════════════════════════════════════ */}
       <div className="flex flex-col gap-4">
         {notice && (
           <p className={`rounded-lg px-3 py-2 text-[12px] ${notice.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{notice.text}</p>
         )}
+
+        {/* ══ THE ACTION BAR, AT THE TOP ═══════════════════════════════════════════════════════════
+            CPR-ENC-003 s3: "Header: patient banner, encounter status, autosave, Finish Encounter."
+
+            ⚠ IT MOVED FROM THE FOOT OF THE PAGE TO THE HEAD OF IT, and that is a human-factors change
+            rather than a cosmetic one. Finishing is the most frequent action on this screen and it sat
+            below every form on it, so the commonest task ended in a scroll past nine sections of things
+            the practitioner had already decided not to do. s7's acceptance criterion is a routine
+            follow-up completable in under 45 seconds; a scroll to the exit is most of that budget.
+
+            ⚠ AND IT IS STILL THE STATE TABLE. What renders is ENCOUNTER_TRANSITIONS[status] mapped
+            through actionFor -- the same table the engine checks and the database CHECK constrains.
+            Moving it did not give it a second list of buttons to drift from. */}
+        <section className={`${CARD} flex flex-wrap items-center gap-2`}>
+          <h2 className="text-[13px] font-bold text-gray-900">This encounter</h2>
+          {targets.length === 0 ? (
+            <p className="text-[12px] text-gray-400">Closed. No further transitions are possible.</p>
+          ) : (
+            <div className="ml-auto flex gap-1.5 flex-wrap">
+              {targets.map(to => {
+                const action = actionFor(props.status, to);
+                if (!action) return null;
+                const needsSign = to === "SIGNED";
+                const allowed = needsSign ? props.canSign : props.canEdit;
+                if (!allowed) return null;
+                const danger = to === "CANCELLED" || to === "ENTERED_IN_ERROR";
+                return (
+                  <button key={to} type="button" disabled={busy} onClick={() => transition(action, `${labelFor(props.status, to)} done.`)}
+                    className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50 ${
+                      needsSign ? "bg-[var(--cp-primary)] text-white hover:bg-[var(--cp-primary-deep)]"
+                        : danger ? "border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] hover:bg-[var(--cmp-surface-critical)]"
+                          : "border border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
+                    {labelFor(props.status, to)}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
         {/* ── CPR-ENC-002 s7: WARNINGS, NEVER REFUSALS ──────────────────────────────────────────
             ⚠ NOTHING HERE BLOCKS ANYTHING, and that is the specification's own word. A consultation
@@ -430,229 +600,281 @@ export default function EncounterConsole(props: {
           </nav>
 
           <div className="p-4">
-            {/* ══ OVERVIEW ══════════════════════════════════════════════════════════════════════ */}
+            {/* ══ THE CONSULTATION: CPR-ENC-003 s2's FOUR COGNITIVE BLOCKS ═══════════════════════
+                s3: "Centre column contains only the four cognitive decision blocks." The other seven
+                tabs ARE s3's "dedicated workspaces" -- the specialist forms that must not expand the
+                encounter -- and each decision card below opens the one that already holds its form.
+
+                ⚠ WHAT CHANGED, AND WHY, BECAUSE THIS IS THE WHOLE POINT OF THE REORGANISATION.
+                This tab was a two-column grid holding, in this order: reason, three note segments,
+                outcome | decisions, treatments, investigations, referrals. Nothing said which came
+                first, the left column ended with the OUTCOME of the consultation while the right column
+                was still recording what was done in it, and the eye had to cross the gutter twice to
+                follow one thought. It is now one column in the order the clinical reasoning actually
+                happens: why they are here, what you measured, what you make of it, what you are doing,
+                what happens next. No field was added and none was removed -- s7's "no duplicate
+                documentation" -- the same rows are asked for in the order they are thought about. */}
             {tab === "overview" && (
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="flex flex-col gap-4">
-                  <section>
-                    <h3 className="text-[13px] font-bold text-gray-900">Reason for encounter</h3>
-                    <p className={`mt-1.5 rounded-lg bg-gray-50 px-3 py-2 text-[12px] ${props.reasonForVisit ? "text-gray-800" : "text-gray-400"}`}>
+              <div className="flex flex-col gap-4">
+
+                {/* ── ① WHY IS THE PATIENT HERE? ──────────────────────────────────────────────────
+                    ⚠ READ-ONLY, AND THE SENTENCE SAYS SO RATHER THAN LEAVING IT TO BE DISCOVERED.
+                    practice_encounter.reason_for_visit is written by launchEncounter and by nothing
+                    else: there is no verb on the API that edits it. The design comp draws this as a
+                    textarea with a microphone and a row of "Common reasons" chips -- an editable field
+                    here would be a box that accepts typing and saves nothing, which is worse than a
+                    read-only one. Reported as the one element of s2 that needs a write path built. */}
+                {block("reason", (
+                  <>
+                    <p className={`rounded-lg bg-gray-50 px-3 py-2 text-[13px] ${props.reasonForVisit ? "text-gray-800" : "text-gray-400"}`}>
                       {props.reasonForVisit ?? "No reason was recorded when this encounter was opened."}
                     </p>
-                  </section>
+                    <p className="mt-1 text-[10px] text-gray-400">
+                      Recorded when this encounter was opened. It cannot be edited from this screen.
+                    </p>
+                  </>
+                ))}
 
-                  {/* THE COMP'S HEADINGS OVER THE EXISTING SEGMENTS. One row, two labels -- see the
-                      header note about CPR-ENC-002 s9's "no duplicate data entry". */}
-                  {OVERVIEW_SEGMENTS.map(([seg, heading, hint]) => (
-                    <section key={seg}>
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className="text-[13px] font-bold text-gray-900">{heading}</h3>
-                        {editable && (
-                          <Dictation label="Dictate" onText={text => {
-                            setBodies(b => ({ ...b, [seg]: `${b[seg]}${b[seg] && !b[seg].endsWith(" ") ? " " : ""}${text}` }));
-                            setSaved(s => ({ ...s, [seg]: false }));
-                            setDictated(d => ({ ...d, [seg]: true }));
-                          }} />
+                {/* ── THE MEASUREMENTS, BETWEEN ① AND ② ───────────────────────────────────────────
+                    Not one of s2's four blocks, and placed here on the ordinary clinical ground that a
+                    measurement is taken BEFORE an impression is formed and not after it. This is the
+                    ParameterCollection panel unchanged -- it used to sit above this workspace entirely,
+                    which put it before the screen had asked why the patient was there. */}
+                {props.measurements}
+
+                {/* ── ② CLINICAL IMPRESSION ──────────────────────────────────────────────────────── */}
+                {block("impression", (
+                  <div className="flex flex-col gap-4">
+                    {IMPRESSION_SEGMENTS.map(segment)}
+                  </div>
+                ))}
+
+                {/* ── ③ CLINICAL DECISIONS ───────────────────────────────────────────────────────── */}
+                {block("decisions", (
+                  <div className="flex flex-col gap-4">
+
+                    {/* THE COMP'S DECISION ROW. Every card carries a REAL count from a store that
+                        answered, and opens the tab that already holds that store's form.
+
+                        ⚠ THE COUNTS ARE NOT ALL THE SAME KIND OF NUMBER AND THE CARDS SAY SO. A
+                        diagnosis, a procedure and a treatment come back as plain arrays from
+                        getEncounter, so an empty one genuinely means none. Investigations and referrals
+                        come back as Panels that know whether their read FAILED -- and those two print
+                        "could not be read" rather than nought, because nought is a claim. */}
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {DECISION_CARDS.map(cardOf).map(c => (
+                        <button key={c.key} type="button" onClick={c.onOpen}
+                          className="flex items-start gap-2 rounded-lg border border-gray-200 px-2.5 py-2 text-left hover:border-[var(--cp-primary)] hover:bg-gray-50">
+                          <span aria-hidden className="mt-0.5 text-[12px] text-gray-400">{c.icon}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[12px] font-bold text-gray-900">{c.label}</span>
+                            <span className={`block text-[11px] ${c.tone}`}>{c.detail}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* ── THE PRESCRIBING CONSOLE, s5's PROGRESSIVE DISCLOSURE ────────────────────
+                        s4: "Medication is launched from the Clinical Decisions section." It is, and it
+                        is CLOSED until it is. It used to be a permanently-expanded ten-field form and a
+                        dose calculator above the clinical note, which every consultation paid for in
+                        vertical space and only some of them used.
+
+                        ⚠ AND THE WEIGHT PROMPT IS HERE, BESIDE THE THING IT UNBLOCKS. The console
+                        already refuses to produce a dose figure without a weight; this says so BEFORE
+                        the practitioner types a rate rather than after the server declines. It is a
+                        prompt and not a gate -- there is no disabled control anywhere in it, the link
+                        goes to the field, and closing this section is the whole of declining it. */}
+                    <div className="rounded-lg border border-gray-200">
+                      <button type="button" onClick={() => setOpenMed(v => !v)}
+                        aria-expanded={openMed}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-gray-50">
+                        <span aria-hidden className="text-[12px] text-gray-400">℞</span>
+                        <span className="text-[12.5px] font-bold text-gray-900">Prescribe a medication</span>
+                        <span className="text-[11px] text-gray-500">
+                          dose calculator, allergies, weight
+                        </span>
+                        <span aria-hidden className="ml-auto text-[11px] text-gray-400">{openMed ? "▲" : "▼"}</span>
+                      </button>
+
+                      {props.weightPrompt.state === "prompt" && (
+                        <p className="mx-3 mb-2 rounded-lg bg-[var(--cmp-surface-warning)] px-2.5 py-1.5 text-[11px] leading-snug text-[var(--cmp-text-warning)]">
+                          <a href="#weight-capture" className="font-bold underline">Record a weight first</a>
+                          {" — "}{props.weightPrompt.text}
+                        </p>
+                      )}
+
+                      {openMed && <div className="border-t border-gray-100 px-3 pb-3">{props.medication}</div>}
+                    </div>
+
+                    {/* ── DECISIONS MADE (migration 238) ────────────────────────────────────────── */}
+                    <section>
+                      <h3 className="text-[12.5px] font-bold text-gray-900">Decisions made</h3>
+                      <p className="text-[10px] text-gray-400">
+                        What you decided, one line each. The unit this product is organised around.
+                      </p>
+                      {props.decisions.items.length === 0
+                        ? panelState(props.decisions, "decisions", "Nothing recorded yet.")
+                        : (
+                          <ul className="mt-2 flex flex-col gap-1">
+                            {props.decisions.items.map(d => (
+                              <li key={d.id} className="flex items-start gap-2 rounded-lg border border-gray-100 px-2.5 py-1.5">
+                                <span className="mt-0.5 text-[12px] text-emerald-600">✓</span>
+                                <span className="flex-1 text-[12px] text-gray-800">{d.decision}</span>
+                                {editable && (
+                                  <button type="button" disabled={busy} onClick={() => dropDecision(d.id)}
+                                    className="text-[10px] text-gray-400 hover:text-rose-700 hover:underline">
+                                    remove
+                                  </button>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
                         )}
-                      </div>
-                      <p className="text-[10px] text-gray-400">{hint} Saved into the <code>{seg}</code> segment of the note.</p>
-                      <textarea aria-label={heading} rows={3} disabled={!editable}
-                        value={bodies[seg]}
-                        onChange={ev => { setBodies(b => ({ ...b, [seg]: ev.target.value })); setSaved(s => ({ ...s, [seg]: false })); }}
-                        className={`${input} mt-1 resize-y disabled:bg-gray-50 disabled:text-gray-500`} />
                       {editable && (
-                        <div className="mt-1 flex items-center gap-2">
-                          <button type="button" disabled={busy} onClick={() => saveNote(seg)} className={QUIET_BTN}>Save</button>
-                          {saved[seg] && <span className="text-[10px] text-[var(--cmp-text-success)]">saved</span>}
-                          {draftAt[seg] && !saved[seg] && (
-                            <span className="text-[10px] text-gray-400">draft kept {draftAt[seg]} &mdash; not in the record yet</span>
-                          )}
-                        </div>
+                        <form className="mt-2 flex gap-2" onSubmit={ev => { ev.preventDefault(); addDecision(); }}>
+                          <input required value={decision} onChange={ev => setDecision(ev.target.value)}
+                            placeholder="e.g. Continue levetiracetam 750mg BD" className={input} />
+                          <button type="submit" disabled={busy || !decision.trim()} className={QUIET_BTN}>Add</button>
+                        </form>
                       )}
                     </section>
-                  ))}
 
-                  {/* ── OUTCOME (migration 238) ────────────────────────────────────────────────── */}
-                  <section>
-                    <h3 className="text-[13px] font-bold text-gray-900">Outcome</h3>
-                    <p className="text-[10px] text-gray-400">
-                      How this contact ended. Optional &mdash; an encounter closed without one is a real
-                      thing, and nothing here will refuse it.
-                    </p>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {ENCOUNTER_OUTCOMES.map(([code, label]) => {
-                        const on = props.outcome === code;
-                        const sw = OUTCOME_SWATCH[code];
-                        return (
-                          <button key={code} type="button" disabled={!editable || busy}
-                            onClick={() => setEncounterOutcome(code)}
-                            aria-pressed={on}
-                            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-semibold disabled:opacity-60 ${
-                              on ? sw.chip : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"}`}>
-                            {/* The unselected dot is gray-200, which the dark theme maps. The next step
-                                down does not have a dark mapping and the personalisation harness
-                                (which greps the source, comments included) would fail on it. */}
-                            <span className={`h-2 w-2 rounded-full ${on ? sw.dot : "bg-gray-200"}`} />
-                            {label}
+                    {/* ── REFERRALS ─────────────────────────────────────────────────────────────── */}
+                    <section id="referrals">
+                      <h3 className="text-[12.5px] font-bold text-gray-900">Referrals</h3>
+                      <p className="text-[10px] text-gray-400">
+                        Recorded, not sent. CompetenPractice transmits nothing &mdash; the letter that goes
+                        anywhere is a document with its own release register.
+                      </p>
+                      {props.referrals.items.length === 0
+                        ? panelState(props.referrals, "referrals", "No referrals added.")
+                        : (
+                          <ul className="mt-2 flex flex-col gap-1.5">
+                            {props.referrals.items.map(r => (
+                              <li key={r.id} className="rounded-lg border border-gray-100 px-2.5 py-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[12px] font-semibold text-gray-800">{r.referredTo}</span>
+                                  <span className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold ${REFERRAL_CHIP[r.status]}`}>
+                                    {r.status}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-gray-600">{r.reason}</p>
+                                <p className="text-[10px] text-gray-400">recorded {formatDate(`${r.referredOn}T00:00:00Z`, "UTC")}</p>
+                                {editable && (
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {REFERRAL_STATUSES.filter(([s]) => s !== r.status).map(([s, label]) => (
+                                      <button key={s} type="button" disabled={busy} onClick={() => setReferralStatus(r.id, s)}
+                                        className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                                        {label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      {editable && (
+                        <form className="mt-2 grid gap-2" onSubmit={ev => { ev.preventDefault(); addReferral(); }}>
+                          <input required value={ref.referredTo} onChange={ev => setRef(p => ({ ...p, referredTo: ev.target.value }))}
+                            placeholder="Referred to (person or service)" className={input} />
+                          <input required value={ref.reason} onChange={ev => setRef(p => ({ ...p, reason: ev.target.value }))}
+                            placeholder="Reason" className={input} />
+                          <button type="submit" disabled={busy || !ref.referredTo.trim() || !ref.reason.trim()} className={QUIET_BTN}>
+                            Record referral
                           </button>
-                        );
-                      })}
-                    </div>
-                    {props.outcome === "other" && (
-                      <p className="mt-1.5 rounded-lg bg-gray-50 px-2.5 py-1.5 text-[12px] text-gray-700">
-                        {props.outcomeNote ?? "No note recorded."}
-                      </p>
-                    )}
-                    {editable && (
-                      <div className="mt-1.5">
-                        <label htmlFor="outcome-note" className="text-[10px] font-semibold text-gray-500">
-                          If none of the five fit, say what happened, then choose Other
-                        </label>
-                        <input id="outcome-note" value={encOutcomeNote} onChange={ev => setEncOutcomeNote(ev.target.value)}
-                          className={`${input} mt-0.5`} placeholder="Required for an outcome of Other" />
-                        <p className="mt-1 text-[10px] text-gray-400">
-                          An outcome of &ldquo;Other&rdquo; with nothing said is refused by the engine and by
-                          the database. The reason IS the field.
-                        </p>
-                      </div>
-                    )}
-                    {!props.outcome && (
-                      <p className="mt-1.5 text-[11px] text-gray-500">
-                        No outcome recorded. This is not the same as &ldquo;stable&rdquo;.
-                      </p>
-                    )}
-                  </section>
-                </div>
-
-                <div className="flex flex-col gap-4">
-                  {/* ── DECISIONS MADE (migration 238) ──────────────────────────────────────────── */}
-                  <section>
-                    <h3 className="text-[13px] font-bold text-gray-900">Decisions made</h3>
-                    <p className="text-[10px] text-gray-400">
-                      What you decided, one line each. The unit this product is organised around.
-                    </p>
-                    {props.decisions.items.length === 0
-                      ? panelState(props.decisions, "decisions", "Nothing recorded yet.")
-                      : (
-                        <ul className="mt-2 flex flex-col gap-1">
-                          {props.decisions.items.map(d => (
-                            <li key={d.id} className="flex items-start gap-2 rounded-lg border border-gray-100 px-2.5 py-1.5">
-                              <span className="mt-0.5 text-[12px] text-emerald-600">✓</span>
-                              <span className="flex-1 text-[12px] text-gray-800">{d.decision}</span>
-                              {editable && (
-                                <button type="button" disabled={busy} onClick={() => dropDecision(d.id)}
-                                  className="text-[10px] text-gray-400 hover:text-rose-700 hover:underline">
-                                  remove
-                                </button>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
+                        </form>
                       )}
-                    {editable && (
-                      <form className="mt-2 flex gap-2" onSubmit={ev => { ev.preventDefault(); addDecision(); }}>
-                        <input required value={decision} onChange={ev => setDecision(ev.target.value)}
-                          placeholder="e.g. Continue levetiracetam 750mg BD" className={input} />
-                        <button type="submit" disabled={busy || !decision.trim()} className={QUIET_BTN}>Add</button>
-                      </form>
-                    )}
-                  </section>
+                    </section>
+                  </div>
+                ))}
 
-                  {/* ── TREATMENT CHANGES (summary; the tab holds the form) ─────────────────────── */}
-                  <section>
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-[13px] font-bold text-gray-900">Treatment changes</h3>
-                      <button type="button" onClick={() => setTab("treatment")} className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
-                        + Add treatment change
-                      </button>
-                    </div>
-                    {props.treatments.length === 0 ? (
-                      <p className="mt-2 text-[12px] text-gray-400">No changes recorded in this encounter.</p>
-                    ) : (
-                      <ul className="mt-2 flex flex-col gap-1">
-                        {props.treatments.map(t => (
-                          <li key={t.id} className="text-[12px] text-gray-800">
-                            <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">{t.treatment_type}</span>{" "}
-                            {t.label}
-                            <span className="text-gray-400"> {[t.dose, t.frequency].filter(Boolean).join(" ")}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </section>
+                {/* ── ④ NEXT PLAN ────────────────────────────────────────────────────────────────── */}
+                {block("plan", (
+                  <div className="flex flex-col gap-4">
+                    {segment(PLAN_SEGMENT)}
 
-                  {/* ── INVESTIGATIONS (summary) ────────────────────────────────────────────────── */}
-                  <section>
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="text-[13px] font-bold text-gray-900">Investigations</h3>
-                      <button type="button" onClick={() => setTab("investigations")} className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
-                        + Add investigation
-                      </button>
-                    </div>
-                    {props.investigations.items.length === 0
-                      ? panelState(props.investigations, "investigations", "None recorded.")
-                      : (
-                        <ul className="mt-2 flex flex-col gap-1">
-                          {props.investigations.items.map(i => (
-                            <li key={i.id} className="flex items-center gap-2 text-[12px]">
-                              <span className="text-gray-800">{i.label}</span>
-                              <span className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold ${INVESTIGATION_CHIP[i.status]}`}>
-                                {i.status}
+                    {/* THE FOLLOW-UP SUMMARY. The form itself is the Follow-up tab -- one of s3's
+                        dedicated workspaces -- and this says what is owed without opening it. CPR-140:
+                        these are the PATIENT's live obligations, not this encounter's, because one
+                        raised at the last visit is exactly what today is meant to settle. */}
+                    <section>
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-[12.5px] font-bold text-gray-900">Follow-up</h3>
+                        <button type="button" onClick={() => setTab("follow-up")}
+                          className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                          Plan a follow-up →
+                        </button>
+                      </div>
+                      {props.followUps.length === 0 ? (
+                        <p className="mt-1 text-[12px] text-gray-400">Nothing is owed to this patient.</p>
+                      ) : (
+                        <ul className="mt-1 flex flex-col gap-0.5">
+                          {props.followUps.map(f => (
+                            <li key={f.id} className="text-[12px] text-gray-800">
+                              {f.reason}
+                              <span className={`ml-1.5 text-[11px] ${f.overdue ? "font-bold text-[var(--cmp-text-critical)]" : "text-gray-500"}`}>
+                                {f.overdue ? `${Math.abs(f.dueInDays)} days overdue` : `due ${f.due_on}`}
                               </span>
                             </li>
                           ))}
                         </ul>
                       )}
-                  </section>
+                    </section>
 
-                  {/* ── REFERRALS ───────────────────────────────────────────────────────────────── */}
-                  <section>
-                    <h3 className="text-[13px] font-bold text-gray-900">Referrals</h3>
-                    <p className="text-[10px] text-gray-400">
-                      Recorded, not sent. CompetenPractice transmits nothing &mdash; the letter that goes
-                      anywhere is a document with its own release register.
-                    </p>
-                    {props.referrals.items.length === 0
-                      ? panelState(props.referrals, "referrals", "No referrals added.")
-                      : (
-                        <ul className="mt-2 flex flex-col gap-1.5">
-                          {props.referrals.items.map(r => (
-                            <li key={r.id} className="rounded-lg border border-gray-100 px-2.5 py-1.5">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[12px] font-semibold text-gray-800">{r.referredTo}</span>
-                                <span className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold ${REFERRAL_CHIP[r.status]}`}>
-                                  {r.status}
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-gray-600">{r.reason}</p>
-                              <p className="text-[10px] text-gray-400">recorded {formatDate(`${r.referredOn}T00:00:00Z`, "UTC")}</p>
-                              {editable && (
-                                <div className="mt-1 flex flex-wrap gap-1">
-                                  {REFERRAL_STATUSES.filter(([s]) => s !== r.status).map(([s, label]) => (
-                                    <button key={s} type="button" disabled={busy} onClick={() => setReferralStatus(r.id, s)}
-                                      className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
-                                      {label}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </li>
-                          ))}
-                        </ul>
+                    {/* ── OUTCOME (migration 238) ──────────────────────────────────────────────── */}
+                    <section>
+                      <h3 className="text-[12.5px] font-bold text-gray-900">Outcome</h3>
+                      <p className="text-[10px] text-gray-400">
+                        How this contact ended. Optional &mdash; an encounter closed without one is a real
+                        thing, and nothing here will refuse it.
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {ENCOUNTER_OUTCOMES.map(([code, label]) => {
+                          const on = props.outcome === code;
+                          const sw = OUTCOME_SWATCH[code];
+                          return (
+                            <button key={code} type="button" disabled={!editable || busy}
+                              onClick={() => setEncounterOutcome(code)}
+                              aria-pressed={on}
+                              className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-semibold disabled:opacity-60 ${
+                                on ? sw.chip : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"}`}>
+                              {/* The unselected dot is gray-200, which the dark theme maps. The next step
+                                  down does not have a dark mapping and the personalisation harness
+                                  (which greps the source, comments included) would fail on it. */}
+                              <span className={`h-2 w-2 rounded-full ${on ? sw.dot : "bg-gray-200"}`} />
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {props.outcome === "other" && (
+                        <p className="mt-1.5 rounded-lg bg-gray-50 px-2.5 py-1.5 text-[12px] text-gray-700">
+                          {props.outcomeNote ?? "No note recorded."}
+                        </p>
                       )}
-                    {editable && (
-                      <form className="mt-2 grid gap-2" onSubmit={ev => { ev.preventDefault(); addReferral(); }}>
-                        <input required value={ref.referredTo} onChange={ev => setRef(p => ({ ...p, referredTo: ev.target.value }))}
-                          placeholder="Referred to (person or service)" className={input} />
-                        <input required value={ref.reason} onChange={ev => setRef(p => ({ ...p, reason: ev.target.value }))}
-                          placeholder="Reason" className={input} />
-                        <button type="submit" disabled={busy || !ref.referredTo.trim() || !ref.reason.trim()} className={QUIET_BTN}>
-                          Record referral
-                        </button>
-                      </form>
-                    )}
-                  </section>
-                </div>
+                      {editable && (
+                        <div className="mt-1.5">
+                          <label htmlFor="outcome-note" className="text-[10px] font-semibold text-gray-500">
+                            If none of the five fit, say what happened, then choose Other
+                          </label>
+                          <input id="outcome-note" value={encOutcomeNote} onChange={ev => setEncOutcomeNote(ev.target.value)}
+                            className={`${input} mt-0.5`} placeholder="Required for an outcome of Other" />
+                          <p className="mt-1 text-[10px] text-gray-400">
+                            An outcome of &ldquo;Other&rdquo; with nothing said is refused by the engine and by
+                            the database. The reason IS the field.
+                          </p>
+                        </div>
+                      )}
+                      {!props.outcome && (
+                        <p className="mt-1.5 text-[11px] text-gray-500">
+                          No outcome recorded. This is not the same as &ldquo;stable&rdquo;.
+                        </p>
+                      )}
+                    </section>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -1184,37 +1406,15 @@ export default function EncounterConsole(props: {
           </div>
         </div>
 
-        {/* ── The transition bar, at the foot of the workspace as the comp draws it ──────────────── */}
-        <section className={CARD}>
-          <h2 className="text-[13px] font-bold text-gray-900">This encounter</h2>
-          {targets.length === 0 ? (
-            <p className="mt-2 text-[12px] text-gray-400">This encounter is closed. No further transitions are possible.</p>
-          ) : (
-            <div className="mt-2 flex gap-1.5 flex-wrap">
-              {targets.map(to => {
-                const action = actionFor(props.status, to);
-                if (!action) return null;
-                const needsSign = to === "SIGNED";
-                const allowed = needsSign ? props.canSign : props.canEdit;
-                if (!allowed) return null;
-                const danger = to === "CANCELLED" || to === "ENTERED_IN_ERROR";
-                return (
-                  <button key={to} type="button" disabled={busy} onClick={() => transition(action, `${labelFor(props.status, to)} done.`)}
-                    className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50 ${
-                      needsSign ? "bg-[var(--cp-primary)] text-white hover:bg-[var(--cp-primary-deep)]"
-                        : danger ? "border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] hover:bg-[var(--cmp-surface-critical)]"
-                          : "border border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
-                    {labelFor(props.status, to)}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </section>
       </div>
 
-      {/* ══ RIGHT ACTIONS PANEL (CPR-ENC-002 s2) ═════════════════════════════════════════════════ */}
+      {/* ══ RIGHT COLUMN (CPR-ENC-003 s3) ════════════════════════════════════════════════════════
+          "Patient Summary, AI Assistant, Encounter Timeline and contextual utilities."
+          The patient summary and previous visits arrive as the `sidebar` slot from page.tsx; the
+          timeline and the quick actions are below. ⚠ There is no AI Assistant panel -- see page.tsx. */}
       <aside className="flex flex-col gap-4">
+        {props.sidebar}
+
         <section className={CARD}>
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-[13px] font-bold text-gray-900">Procedures in this encounter</h2>

@@ -44,6 +44,7 @@ import {
 } from "../src/lib/practice/encounter-workspace";
 import {
   encounterWarnings, ENCOUNTER_OUTCOME_CODES, QUICK_ACTIONS,
+  weightPrompt, CLINICAL_FLOW_BLOCKS,
 } from "../src/lib/practice/encounter-workspace-constants";
 
 loadEnvConfig(process.cwd());
@@ -110,6 +111,21 @@ function failingOn(table: string, message: string) {
     },
     rpc: (...args: unknown[]) => (admin.rpc as unknown as (...a: unknown[]) => unknown)(...args),
   };
+}
+
+/**
+ * Source with its comments removed.
+ *
+ * ⚠ EVERY ASSERTION THAT SOMETHING IS *NOT* RENDERED HAS TO GO THROUGH THIS. These files explain in
+ * prose why a patient photograph, an AI assistant panel and a "no critical alerts" line are absent, so a
+ * scan of the raw text finds each of those phrases exactly where the decision NOT to draw them is
+ * written down. Punishing a file for documenting itself is how a true assertion is made to fail.
+ */
+function withoutComments(src: string): string {
+  return src
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")   // JSX comment blocks
+    .replace(/\/\*[\s\S]*?\*\//g, "")       // block comments
+    .replace(/^\s*\/\/.*$/gm, "");          // line comments
 }
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -500,6 +516,233 @@ async function main() {
     QUICK_ACTIONS.some(a => a.key === "print_summary" && a.tab === "attachments")
     && !/=>\s*window\.print\(/.test(readFileSync(join(encDir, "[encounterId]", "EncounterConsole.tsx"), "utf8")),
     "a window.print() handler here would produce an unversioned sheet that looks like a clinical document");
+
+  // ── 13. CPR-ENC-003: THE CLINICAL DECISION WORKSPACE ──────────────────────
+  //
+  // The reorganisation of 2026-08-08. Three things have to be true and none of them can be reached by
+  // calling an engine, so they are source-checked -- a harness cannot execute a client component, which
+  // is the same reason src-1 and the ui-* block above are scans.
+  //
+  //   13a  THE CAPTURE-POINT INVENTORY IS UNCHANGED. This is the assertion the whole section exists for.
+  //        A reorganisation that quietly drops a field is a regression wearing a redesign's clothes, and
+  //        a clinical field that silently stopped being askable would not announce itself.
+  //   13b  NOTHING IS DRAWN THAT NO STORE CAN ANSWER.
+  //   13c  THE LOCKED STATE SURVIVED THE MOVE.
+  //
+  const encWs = join(process.cwd(), "src", "app", "practice", "(shell)", "encounters", "[encounterId]");
+  const encPage = readFileSync(join(encWs, "page.tsx"), "utf8");
+  const consoleSrc = readFileSync(join(encWs, "EncounterConsole.tsx"), "utf8");
+  const snapSrc = readFileSync(join(encWs, "SafetySnapshot.tsx"), "utf8");
+  const weightSrc = readFileSync(join(encWs, "WeightTile.tsx"), "utf8");
+  const paramSrc = readFileSync(join(encWs, "ParameterCollection.tsx"), "utf8");
+  const medSrc = readFileSync(join(encWs, "MedicationConsole.tsx"), "utf8");
+  ok("enc003-control. every file of the workspace was read and is non-trivial",
+    [encPage, consoleSrc, snapSrc, weightSrc, paramSrc, medSrc].every(s => s.length > 1500),
+    [encPage, consoleSrc, snapSrc, weightSrc, paramSrc, medSrc].map(s => s.length).join(","));
+
+  // ── 13a. THE CAPTURE-POINT INVENTORY ──────────────────────────────────────
+  //
+  // ⚠ EVERY WRITE THIS SCREEN CAN MAKE, AS A REQUEST SIGNATURE. Matched on the call, not on a label, so
+  // renaming a button does not break this and deleting the form behind it does. If an endpoint below
+  // stops being reachable from the encounter workspace, a clinician lost a way to record something.
+  const WRITE_PATHS: [string, RegExp][] = [
+    ["record a clinical parameter (incl. the weight)", /\/api\/v1\/practice\/parameters/],
+    ["prescribe / calculate a dose", /\/api\/v1\/practice\/medications/],
+    ["save a note segment, and transition the encounter", /\/api\/v1\/practice\/encounters\/\$\{props\.encounterId\}`,\s*\{\s*\n?\s*method: "PATCH"/],
+    ["apply a note template", /encounters\/\$\{props\.encounterId\}\/notes/],
+    ["autosave a draft, and discard one", /encounters\/\$\{props\.encounterId\}\/drafts/],
+    ["record a diagnosis", /encounters\/\$\{props\.encounterId\}\/diagnoses/],
+    ["record a treatment", /encounters\/\$\{props\.encounterId\}\/treatments/],
+    ["record and remove a decision", /encounters\/\$\{props\.encounterId\}\/decisions/],
+    ["record and review an investigation", /encounters\/\$\{props\.encounterId\}\/investigations/],
+    ["record and update a referral", /encounters\/\$\{props\.encounterId\}\/referrals/],
+    ["set the encounter outcome", /encounters\/\$\{props\.encounterId\}\/outcome/],
+    ["create a document from the consultation", /\/api\/v1\/practice\/documents/],
+    ["raise a follow-up", /"\/api\/v1\/practice\/follow-ups"/],
+    ["close a follow-up in this consultation", /follow-ups\/\$\{id\}/],
+    ["record a procedure", /"\/api\/v1\/practice\/procedures"/],
+    ["record a procedure outcome", /procedures\/\$\{procedureId\}/],
+    ["expand a smart phrase", /\/api\/v1\/practice\/smart-phrases/],
+  ];
+  const wsTree = [consoleSrc, paramSrc, medSrc, weightSrc,
+    readFileSync(join(encWs, "DocumentationTools.tsx"), "utf8")].join("\n");
+  const lostWrites = WRITE_PATHS.filter(([, re]) => !re.test(wsTree)).map(([l]) => l);
+  ok("13a-1. ⚠ EVERY WRITE PATH THAT EXISTED BEFORE THE REORGANISATION IS STILL REACHABLE",
+    lostWrites.length === 0, `LOST: ${lostWrites.join(" | ")}`);
+  ok("13a-1-control. the scan can tell when a write path is absent",
+    !/\/api\/v1\/practice\/a-route-that-was-never-built/.test(wsTree));
+
+  // ⚠ AND EVERY FIELD, BY THE LABEL OR PLACEHOLDER A PRACTITIONER READS. The request-signature scan
+  // above proves the ENDPOINT survived; it would stay green if a form lost four of its six inputs and
+  // still posted. These are the individual things a consultation can say.
+  const FIELDS = [
+    // ① reason, ② impression, ④ plan, and the full note
+    "Clinical impression", "Key findings (optional)", "Next steps / Plan", "template-pick",
+    "note-${t}", "outcome-note",
+    // diagnoses
+    'placeholder="Diagnosis"', 'aria-label="Certainty"', "Primary diagnosis", "Add to problem list as (optional)",
+    // treatment
+    'aria-label="Treatment type"', 'placeholder="What"', 'placeholder="Dose"', 'placeholder="Route"',
+    'placeholder="Frequency"', 'placeholder="Duration"',
+    // procedures
+    'aria-label="Procedure"', 'aria-label="Side"', 'aria-label="Consent"', 'aria-label="Outcome"',
+    "Name (if not in the catalogue)", "Site (optional)", "Indication (optional)",
+    "Why was it abandoned?", "Immediate outcome (optional)",
+    'aria-label="Outcome type"', 'aria-label="Severity"', "What was observed",
+    // investigations
+    "What are you asking for?", "Why, in one line (optional)", "What did you make of it?",
+    // referrals
+    "Referred to (person or service)", 'placeholder="Reason"',
+    // decisions + outcome
+    "e.g. Continue levetiracetam 750mg BD", "Required for an outcome of Other",
+    // follow-up
+    "What needs to happen, and why", 'aria-label="Kind of follow-up"', 'aria-label="When"',
+    'aria-label="Priority"', "this encounter is recorded as the closer",
+    // documents
+    'placeholder="Title"', 'aria-label="Document type"', "Addressed to (optional)",
+    "Start from what is recorded in this consultation",
+  ];
+  const lostFields = FIELDS.filter(f => !consoleSrc.includes(f));
+  ok(`13a-2. ⚠ all ${FIELDS.length} named capture fields survived the reorganisation`,
+    lostFields.length === 0, `LOST: ${lostFields.join(" | ")}`);
+  ok("13a-2-control. the field scan can tell when one is missing",
+    !consoleSrc.includes('placeholder="A field that was never on this screen"'));
+
+  // ⚠ AND THE TWO PANELS THAT MOVED ARE THE SAME PANELS. They were full-width blocks stacked above the
+  // workspace and are now slots inside the flow. Passing them as rendered elements is what let the move
+  // happen WITHOUT editing either file -- so this asserts the move, and that neither was re-implemented.
+  ok("13a-3. ⚠ the parameters panel and the prescribing console are passed in as SLOTS, not rebuilt",
+    /measurements=\{<ParameterCollection/.test(encPage) && /medication=\{\s*\n?\s*<MedicationConsole/.test(encPage)
+    && /\{props\.measurements\}/.test(consoleSrc) && /\{props\.medication\}/.test(consoleSrc),
+    "a second implementation of either is a second place for the carry-forward rule to be got wrong");
+  ok("13a-4. the four blocks of s2 are drawn, in the specification's own order",
+    CLINICAL_FLOW_BLOCKS.map(b => b.step).join(",") === "1,2,3,4"
+    && CLINICAL_FLOW_BLOCKS.every(b => new RegExp(`block\\("${b.key}"`).test(consoleSrc)),
+    CLINICAL_FLOW_BLOCKS.map(b => b.key).join(","));
+
+  // ── 13b. NOTHING IS DRAWN THAT NO STORE CAN ANSWER ────────────────────────
+  //
+  // ⚠ THE COMP DRAWS SIX THINGS THIS PRODUCT CANNOT BACK, AND THE SCREEN MUST NOT DRAW THEM. A blank
+  // field reads as "not recorded"; a populated one reads as "checked". On a prescribing surface the
+  // second is the dangerous one, so these are asserted as ABSENCES.
+  //
+  // ⚠ THE SOURCE IS STRIPPED OF ITS COMMENTS FIRST, AND THE FIRST VERSION OF THIS SCAN WAS NOT.
+  // It failed on the four files' own explanations of why a photograph and an AI panel are absent --
+  // "Suggest with AI", "Voice to AI" and "no critical alerts" all appear in this workspace exactly once
+  // each, inside the paragraph saying they are not drawn. An assertion that a file must not MENTION
+  // something punishes the file for documenting itself; ui-3b and ui-4 above record the same trap, and
+  // it was still walked into. What is asserted is what RENDERS.
+  const drawn = [snapSrc, weightSrc, encPage, consoleSrc].map(withoutComments).join("\n");
+  const FORBIDDEN: [string, RegExp][] = [
+    ["a patient photograph (no image column, no file storage)", /<img|<Image|avatar_url|photoUrl|backgroundImage/],
+    ["an AI dictation or suggestion control (no such endpoint exists)", /Suggest with AI|Voice to AI|Dictate with AI|\/assistant['"`]/],
+    ["a general 'no critical alerts' reassurance (only parameter alerts exist)", /[Nn]o critical alerts/],
+    ["a laboratory result field", /practice_encounter_investigation[\s\S]{0,200}result/],
+  ];
+  const drawnAnyway = FORBIDDEN.filter(([, re]) => re.test(drawn)).map(([l]) => l);
+  ok("13b-1. ⚠ nothing the comp draws without a store behind it is rendered",
+    drawnAnyway.length === 0, `DRAWN ANYWAY: ${drawnAnyway.join(" | ")}`);
+  ok("13b-1-control. the absence scan can see such an element when it is present",
+    FORBIDDEN[0][1].test('<img src={patient.photo} />'));
+
+  // ⚠ AND THE SAFETY SNAPSHOT KEEPS THE THREE STATES ON EVERY TILE. A tile that collapsed a failed read
+  // into an empty one would print "None on the problem list" about a query that never returned.
+  ok("13b-2. ⚠ every safety tile distinguishes not-permitted, could-not-be-read, and nothing-there",
+    /!s\.permitted/.test(snapSrc) && /activeProblems\.unavailable/.test(snapSrc)
+    && /allergyList\.unavailable/.test(snapSrc) && /storeState === "absent"/.test(snapSrc)
+    && /c\.unavailable/.test(snapSrc)
+    && (snapSrc.match(/could not be read/g) ?? []).length >= 2,
+    "a tile that flattens a failed read into an empty list is a false clinical statement");
+  ok("13b-3. ⚠ the alert tile counts PARAMETER alerts and says so -- it is the only alert store there is",
+    /Parameter alerts/.test(snapSrc) && /openAlerts/.test(snapSrc)
+    && /Nothing is monitored, so nothing is being watched for/.test(snapSrc),
+    "practice_parameter_alert is the only alert table in this product");
+  // ⚠ THE COMP'S OWN WEIGHT LINE IS THE BUG THIS ASSERTS AGAINST. It draws "Weight 22 kg (08 Aug 2025)"
+  // beside a live encounter dated 2026-08-08 -- a figure over a year old, on an eight-year-old, rendered
+  // as a current safety fact. Every vital in the snapshot carries its date and says whether it is today's.
+  ok("13b-4. ⚠ a prior measurement is dated and marked as NOT today's, never drawn as current",
+    /not today/.test(snapSrc) && /recordedThisEncounter/.test(snapSrc)
+    && /lastMeasuredAt/.test(snapSrc),
+    "a vital sign from a previous visit rendered as a bare figure reads as this morning's");
+
+  // ⚠ AND THE NEW WEIGHT FIELD OBEYS THE CARRY-FORWARD PROHIBITION. LCP s10.3. The parameters harness
+  // scans ParameterCollection and MonitoringPlanPanel for this; WeightTile is a third input on the same
+  // store and would not have been covered by either.
+  //
+  // ⚠ NO TRAILING \b, AND THE FIRST VERSION OF THIS REGEX HAD ONE. `\bprior\b` does not match
+  // `priorText` -- there is no word boundary between `r` and `T` -- so the scan matched only a spelling
+  // this codebase would never use, and its own control failed and said so. parameters-constants.ts
+  // records this exact trap against `weightForAgePercentile`; this is the third time it has been hit.
+  const CARRY = /(value|defaultValue)=\{[^}]*\b(latest|prior)/;
+  ok("13b-5. ⚠ the weight input is never bound to a PRIOR measurement (LCP s10.3)",
+    // ⚠ AND `defaultValue` IS ALSO CHECKED AGAINST THE STRIPPED SOURCE, for the third time in one
+    // assertion: WeightTile's header says in words that it never uses `defaultValue`, and testing the
+    // raw text found that promise and failed the file for making it.
+    !CARRY.test(withoutComments(weightSrc)) && !/defaultValue/.test(withoutComments(weightSrc))
+    && /not carried forward/.test(weightSrc),
+    "a weight nobody weighed, sitting in a box that looks typed, is what fills a chart with fiction");
+  ok("13b-5-control. the carry-forward scan can see such a binding", CARRY.test("<input value={p.priorText} />"));
+
+  // ── 13c. THE LOCKED STATE SURVIVED THE MOVE ───────────────────────────────
+  //
+  // ⚠ MIGRATION 194 ENFORCES SIGNED IMMUTABILITY IN THE DATABASE (proved live at sign-6 above). A
+  // control that offered an edit Postgres will refuse is worse than no control at all, so every panel
+  // that moved has to still take `locked` and still act on it.
+  ok("13c-1. every panel on the reorganised screen is passed the locked state",
+    /<ParameterCollection collection=\{parameterCollection\} locked=\{locked\}/.test(encPage)
+    && /<SafetySnapshot[\s\S]{0,400}locked=\{locked\}/.test(encPage)
+    && /locked=\{locked\}[\s\S]{0,80}\/>/.test(encPage));
+  ok("13c-2. ⚠ the NEW weight field refuses to draw an input when the encounter is closed",
+    /props\.locked \?[\s\S]{0,200}consultation is closed/.test(weightSrc)
+    && /locked: boolean/.test(weightSrc),
+    "the weight tile is the one control added by this work and it is the one most likely to miss the guard");
+  ok("13c-3. the action bar still renders the ENGINE's state table and not a second list of buttons",
+    /ENCOUNTER_TRANSITIONS\[props\.status\]/.test(consoleSrc) && /actionFor\(props\.status, to\)/.test(consoleSrc),
+    "moving the bar to the top must not have given it its own idea of what is possible");
+
+  // ── 13d. THE WEIGHT PROMPT: A PROMPT, AND NEVER A GATE ────────────────────
+  //
+  // The user's ruling of 2026-08-08: "do not make it required, but prompt for it." Pure, so every branch
+  // is reachable without a database.
+  const pNotActivated = weightPrompt({ activated: false, recordedThisEncounter: false });
+  const pPrompt = weightPrompt({ activated: true, recordedThisEncounter: false });
+  const pRecorded = weightPrompt({ activated: true, recordedThisEncounter: true });
+  const pUnreadable = weightPrompt({ activated: null, recordedThisEncounter: false });
+  ok("13d-1. a practice that has not activated weight gets a SETUP answer, not an empty clinical field",
+    pNotActivated.state === "not_activated" && /has not activated/.test(pNotActivated.text),
+    pNotActivated.state);
+  ok("13d-2. activated and nothing recorded today raises the prompt", pPrompt.state === "prompt", pPrompt.state);
+  ok("13d-3. a weight recorded in this encounter silences it", pRecorded.state === "recorded", pRecorded.state);
+  // ⚠ THE ONE THAT MATTERS MOST HERE. A collection that could not be READ must never be reported as a
+  // practice that has not activated the parameter: those two sentences send somebody to two different
+  // places, one to the setup page and one to whoever can say why the read failed.
+  ok("13d-4. ⚠ a collection that could not be READ is never reported as 'not activated'",
+    pUnreadable.state === "unreadable" && !/has not activated/.test(pUnreadable.text), pUnreadable.state);
+  ok("13d-5. ⚠ NO BRANCH OF THE PROMPT EVER BLOCKS ANYTHING",
+    [pNotActivated, pPrompt, pRecorded, pUnreadable].every(p => p.blocking === false));
+  // ⚠ AND THE SCREEN DOES NOT TURN IT INTO A GATE BEHIND THE FUNCTION'S BACK. `blocking:false` is a type;
+  // a disabled Finish button is a fact. The transition buttons' only `disabled` is `busy`.
+  ok("13d-6. ⚠ nothing on the screen disables an action because a weight is missing",
+    !/disabled=\{[^}]*weightPrompt/.test(consoleSrc) && !/weightPrompt[^;]{0,200}return null/.test(consoleSrc)
+    && /disabled=\{busy\} onClick=\{\(\) => transition\(/.test(consoleSrc),
+    "a Finish button greyed out for a missing weight is a requirement wearing a softer word");
+  // ⚠ AND IT IS SILENT WHEN THE PRACTICE HAS NOT ACTIVATED WEIGHT. A prompt that fires when nothing is
+  // wrong is one people learn to dismiss without reading -- migration 259's header makes the same case.
+  ok("13d-7. ⚠ the prescribing prompt is drawn ONLY in the `prompt` state, never when weight is off",
+    /weightPrompt\.state === "prompt" && \(/.test(consoleSrc),
+    "prompting for something the practice has switched off is noise");
+
+  // ⚠ AND THE LIVE HALF OF THE RULING. `encId` was signed at sign-1 above and NO WEIGHT WAS EVER
+  // RECORDED ON IT -- so the signature that already succeeded IS the proof that a missing weight blocks
+  // nothing. Asserted explicitly rather than left implicit, and paired with the read that proves the
+  // premise: there really is no weight measurement on that encounter.
+  const { count: weighed } = await admin.from("practice_parameter_measurement")
+    .select("*", { count: "exact", head: true }).eq("encounter_id", encId);
+  const { data: signedRow } = await admin.from("practice_encounter")
+    .select("status, signed_at").eq("id", encId).single();
+  ok("13d-8. ⚠ AN ENCOUNTER WITH NO WEIGHT RECORDED WAS SIGNED, AND THE PREMISE IS PROVEN NOT ASSUMED",
+    (weighed ?? 0) === 0 && signedRow?.status === "SIGNED" && !!signedRow?.signed_at,
+    JSON.stringify({ measurements: weighed, ...signedRow }));
 
   await cleanup();
   const { count: left } = await admin.from("practice_encounter").select("*", { count: "exact", head: true }).in("workspace_id", [wsA, wsB]);

@@ -159,6 +159,97 @@ export function encounterWarnings(input: {
   return out;
 }
 
+// ── CPR-ENC-003 s2: THE FOUR COGNITIVE BLOCKS ───────────────────────────────────────────────────────
+//
+// s2's "Core Clinical Flow" is five steps, and the fifth is Finish Encounter -- which is an ACTION, not a
+// block, and lives on the action bar. These four are the blocks s3 says the centre column contains.
+//
+// The numbers are the specification's own and they are drawn on the screen, because the complaint that
+// produced this work was that the screen had no evident order. A block that is numbered tells somebody
+// arriving mid-consultation where they are; a heading alone does not.
+
+export const CLINICAL_FLOW_BLOCKS: { key: string; step: number; title: string; hint: string }[] = [
+  { key: "reason", step: 1, title: "Why is the patient here?", hint: "Reason for encounter." },
+  { key: "impression", step: 2, title: "Clinical impression", hint: "What you think is going on." },
+  { key: "decisions", step: 3, title: "Clinical decisions", hint: "What you are doing for this patient." },
+  { key: "plan", step: 4, title: "Next plan", hint: "What happens after today." },
+];
+
+/**
+ * CPR-ENC-003 s3's Clinical Decisions row, and the tab each card opens.
+ *
+ * ⚠ EVERY ONE OF THESE HAS A STORE BEHIND IT, and the `tab` is where that store's form already lives.
+ * `advice` is deliberately not its own card: there is no advice table -- it is
+ * practice_treatment.treatment_type = 'advice' -- so it is recorded through the treatment form and the
+ * card says Treatment, which is the row that actually gets written.
+ */
+export const DECISION_CARDS: { key: string; label: string; tab: string; capability: string }[] = [
+  { key: "diagnosis", label: "Diagnosis", tab: "diagnoses", capability: "diagnosis.record" },
+  { key: "medication", label: "Medication", tab: "treatment", capability: "medication.record" },
+  { key: "procedure", label: "Procedure", tab: "procedures", capability: "procedure.record" },
+  { key: "investigation", label: "Investigation", tab: "investigations", capability: "encounter.edit" },
+  { key: "referral", label: "Referral", tab: "overview", capability: "encounter.edit" },
+  { key: "treatment", label: "Treatment / advice", tab: "treatment", capability: "treatment.record" },
+];
+
+// ── THE WEIGHT PROMPT (the user's ruling of 2026-08-08: "do not make it required, but prompt for it") ──
+//
+// ⚠ THIS IS A PROMPT AND NOT A GATE, AND THE TYPE SAYS SO. `blocking: false` is a literal, so a later
+// edit that made a missing weight prevent a signature would have to delete the word `false` from a
+// declared type -- which is a different act from adding an `if`.
+//
+// The reasoning is the one this codebase has now taken three times. A checklist that cannot be closed
+// with a step undone is one people close by ticking the box; a prescriber who cannot get a number out of
+// the product works the dose out on paper and the decision happens anyway with nothing recording it; and
+// a REQUIRED weight would be answered with a typed-in guess, which is worse than an honest gap because a
+// fabricated number is indistinguishable from a measured one once it is in the record, and doseArithmetic
+// would then multiply by it in good faith.
+//
+// ⚠ AND IT IS SILENT WHEN THE PRACTICE HAS NOT ACTIVATED `weight`. Prompting for something the practice
+// has switched off is noise, and a prompt that fires when nothing is wrong is one people learn to dismiss
+// without reading -- migration 259's header makes the same argument about the override reason field.
+
+export type WeightPromptState =
+  /** The practice has not activated the weight parameter. A CONFIGURATION fact, not a clinical gap. */
+  | "not_activated"
+  /** Activated, and a weight was recorded in THIS encounter. */
+  | "recorded"
+  /** Activated, nothing recorded today. The prompt. */
+  | "prompt"
+  /** The parameter collection could not be read, so nothing is known either way. */
+  | "unreadable";
+
+export const WEIGHT_PROMPT_TEXT: Record<WeightPromptState, string> = {
+  not_activated:
+    "This practice has not activated weight as a clinical parameter, so there is nowhere to record one. "
+    + "That is a setup answer, not a patient who was never weighed.",
+  recorded: "Weighed in this consultation.",
+  prompt:
+    "No weight has been recorded in this consultation. You can prescribe without one and you can sign "
+    + "without one -- but no dose figure will be produced for a weight-based prescription, and for a "
+    + "child the calculator will ask you to write down what you are prescribing on instead.",
+  unreadable:
+    "Whether a weight is being collected could not be read. Do not take this as a patient with no weight.",
+};
+
+/**
+ * The weight prompt for one encounter. PURE, so the harness asserts every branch without a database.
+ *
+ * `activated` is null when the parameter collection could not be read -- and a failed read is never
+ * turned into "not activated", because those two send somebody to two different places: one to the
+ * clinical parameters setup page, the other to whoever can tell them why the read failed.
+ */
+export function weightPrompt(input: { activated: boolean | null; recordedThisEncounter: boolean }): {
+  state: WeightPromptState; text: string; blocking: false;
+} {
+  const state: WeightPromptState =
+    input.activated === null ? "unreadable"
+      : input.activated === false ? "not_activated"
+        : input.recordedThisEncounter ? "recorded"
+          : "prompt";
+  return { state, text: WEIGHT_PROMPT_TEXT[state], blocking: false };
+}
+
 // ── COLOUR ──────────────────────────────────────────────────────────────────────────────────────────
 //
 // THE FIGURE TAKES THE CARD'S COLOUR. Composed from palette.ts rather than written out here, so a hue
