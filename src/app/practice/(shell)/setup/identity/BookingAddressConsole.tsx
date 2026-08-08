@@ -669,8 +669,14 @@ export default function BookingAddressConsole({ identity }: Props) {
           </p>
 
           <div className="mt-3 flex flex-wrap items-start gap-4">
-            {/* Drawn in this process from the address above. No external image service ever sees it. */}
-            <div className="w-36 shrink-0 rounded-lg border border-gray-200 bg-white p-2"
+            {/* Drawn in this process from the address above. No external image service ever sees it.
+                ⚠ THE SVG MUST BE CONSTRAINED OR IT SITS ON TOP OF EVERYTHING BESIDE IT. `bookingQr`
+                asks the encoder for `width: 320`, which emits width="320" height="320" ATTRIBUTES on the
+                svg element. An intrinsic size like that ignores the 144px wrapper, so the code overflowed
+                its box and overlapped the share buttons and both paragraphs -- found by the practice
+                owner on the page immediately after publishing the platform's first booking address.
+                A percentage width on the child is what makes it obey the box it is in. */}
+            <div className="w-36 shrink-0 rounded-lg border border-gray-200 bg-white p-2 [&>svg]:h-auto [&>svg]:w-full"
               dangerouslySetInnerHTML={{ __html: view.sharing.qrSvg }} />
             <div className="min-w-0 flex-1">
               <p className="break-all font-mono text-[12px] font-semibold text-gray-900">{view.sharing.url}</p>
