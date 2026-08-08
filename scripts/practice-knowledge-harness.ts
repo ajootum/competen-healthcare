@@ -564,20 +564,31 @@ async function main() {
   ok("11u-db-b. and the row is untouched by the attempt, not half-archived",
     stillDraft?.status === "draft" && stillDraft?.archived_reason === null, JSON.stringify(stillDraft));
 
-  // ── 11u-gap. ⚠ WHAT THE CONSTRAINT DOES *NOT* CATCH, ASSERTED SO IT CANNOT CLOSE SILENTLY ────────
+  // ── 11u-gap. THE GAP THAT WAS HERE, AND IS NOW CLOSED ────────────────────────────────────────────
   //
-  // The constraint reads `archived_reason is not null`, and a BLANK STRING IS NOT NULL. So the database
-  // refuses a MISSING reason and accepts an EMPTY one, which means the engine's guard above is the only
-  // thing standing between a blank reason and the record -- it is load-bearing, not a duplicate.
+  // ⚠ THIS ASSERTION USED TO SAY THE OPPOSITE, AND THAT IS THE POINT OF KEEPING IT. Migration 256 wrote
+  // `archived_reason is not null` and its comment claimed that stopped a blank reason. It did not: a
+  // blank string is not null, so "" and "   " were both accepted and the engine's guard was the only
+  // wall. This assertion recorded that gap POSITIVELY -- and when migration 257 tightened the constraint
+  // to `btrim(archived_reason) <> ''`, it went red and named the comment that had to change with it.
   //
-  // This asserts the gap POSITIVELY rather than trusting the comment that describes it. If somebody
-  // later tightens the constraint to `btrim(archived_reason) <> ''`, this assertion FAILS and points at
-  // the comment that has to change with it. A gap recorded only in prose is a gap that goes stale.
+  // That is the assertion doing its job, not breaking. A gap recorded only in prose goes stale silently
+  // and this one could not. It is inverted here rather than deleted, so the closure is now the thing
+  // under guard: if somebody ever relaxes the constraint back, this fails.
   const { error: blankErr } = await admin.from(GUIDANCE_TABLE)
     .update({ status: "archived", archived_at: new Date().toISOString(), archived_reason: "   " })
     .eq("id", abandon.data.id).eq("workspace_id", wsA);
-  ok("11u-gap. ⚠ THE CONSTRAINT ACCEPTS A BLANK REASON -- so the engine's guard is the rule, not a copy of it",
-    !blankErr, blankErr ? `unexpectedly refused: ${blankErr.code} -- tighten the comment in knowledge.ts, the gap has closed` : "accepted, as documented");
+  ok("11u-gap. ⚠ THE CONSTRAINT REFUSES A BLANK REASON TOO -- 257 closed what 256 left open",
+    String(blankErr?.code) === "23514" && /practice_guidance_archived_reason/.test(String(blankErr?.message)),
+    blankErr ? `${blankErr.code} ${blankErr.message}` : "ACCEPTED -- the constraint has been relaxed back to 256's `is not null`, and knowledge.ts's comment is true again");
+
+  // CONTROL for 11u-gap. Without it the assertion above passes for a database that refuses EVERY archive
+  // -- including a good one -- which would read as a tightened rule while actually being a broken table.
+  const { error: goodErr } = await admin.from(GUIDANCE_TABLE)
+    .update({ status: "archived", archived_at: new Date().toISOString(), archived_reason: "superseded by SOP-014 v3" })
+    .eq("id", abandon.data.id).eq("workspace_id", wsA);
+  ok("11u-gap-control. ...and accepts a real one, so the refusal is about blankness and not about archiving",
+    !goodErr, goodErr ? `${goodErr.code} ${goodErr.message}` : "accepted");
   // Put it back, so 11u-control tests archiving rather than re-archiving.
   await admin.from(GUIDANCE_TABLE)
     .update({ status: "draft", archived_at: null, archived_reason: null })

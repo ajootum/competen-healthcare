@@ -176,8 +176,11 @@ import {
 //     -- WITHDRAWING GUIDANCE WITHOUT SAYING WHY leaves the next person unable to tell "superseded" from
 //     -- "found to be wrong", which is the only thing they need to know. Same rule as a rejected
 //     -- approval requiring words.
+//     -- ⚠ AS AMENDED BY MIGRATION 257. This shipped as `archived_reason is not null`, which accepted
+//     -- "" and "   " because a blank string is not null -- the constraint refused a MISSING reason and
+//     -- not an EMPTY one, which is not what its comment claimed. The btrim half is the correction.
 //     constraint practice_guidance_archived_reason
-//       check (status <> 'archived' or archived_reason is not null),
+//       check (status <> 'archived' or (archived_reason is not null and btrim(archived_reason) <> '')),
 //
 //     constraint practice_guidance_not_self_superseding
 //       check (supersedes_id is null or supersedes_id <> id)
@@ -999,18 +1002,27 @@ export async function archiveGuidance(admin: any, args: {
   const doc = loaded.data;
 
   const reason = (args.reason ?? "").trim();
-  // ⚠ THIS GUARD IS LOAD-BEARING AND IT IS NOT A SECOND COPY OF THE CONSTRAINT. That was the first
-  // draft's belief, and it was wrong -- probed live against migration 256:
+  // ⚠ THIS GUARD IS NOW A DELIBERATE DUPLICATE OF THE CONSTRAINT, WHICH IT WAS NOT WHEN IT WAS WRITTEN.
+  // The history matters because the comment that used to sit here was true and then quietly stopped
+  // being true, and only a harness assertion caught it.
+  //
+  // Against migration 256, probed live:
   //
   //     archived_reason = NULL          -> REFUSED 23514
   //     archived_reason = ""            -> ACCEPTED
   //     archived_reason = "   "         -> ACCEPTED
   //
-  // `practice_guidance_archived_reason` says `archived_reason is not null`, and a blank string is not
-  // null. So the DATABASE refuses a MISSING reason and this refuses an EMPTY one, and they are two
-  // different rules rather than one rule written twice. Delete this and a practitioner can withdraw a
-  // published protocol by pressing space -- the next person finds "archived" with a reason field that
-  // renders as nothing, which is the outcome the constraint exists to prevent and does not.
+  // 256 said `archived_reason is not null` and its own comment claimed that stopped a blank reason. A
+  // blank string is not null, so it did not, and THIS FUNCTION WAS THE ONLY WALL. Migration 257 closed
+  // it -- the constraint now reads `archived_reason is not null and btrim(archived_reason) <> ''` and
+  // all three rows above are refused by the database.
+  //
+  // ⚠ SO WHY KEEP THIS. Two reasons, and neither is "belt and braces" for its own sake. It refuses
+  // BEFORE the write, so the caller gets REASON_REQUIRED with a sentence a practitioner can act on
+  // rather than a 23514 naming a constraint. And a check constraint is one migration away from being
+  // dropped by somebody solving a different problem, whereas this is covered by a test. Deleting it
+  // would not open the gap today -- it would move the refusal to the database and make the message
+  // worse, which the harness asserts by CODE rather than by whether a refusal happened at all.
   //
   // ⚠ THE TWO REFUSALS THEREFORE CARRY DIFFERENT CODES. This one is REASON_REQUIRED; the constraint's
   // is REASON_REQUIRED_BY_DATABASE, naming the constraint. They were the same code until a harness run
@@ -1019,11 +1031,11 @@ export async function archiveGuidance(admin: any, args: {
   // below. That is the exact shape of the vacuous assertions this codebase keeps finding, and a test
   // that cannot tell which layer refused is testing neither.
   //
-  // ⚠ THE HONEST GAP: the constraint SHOULD be
-  //   check (status <> 'archived' or (archived_reason is not null and btrim(archived_reason) <> ''))
-  // and until it is, this function is the only thing standing between a blank reason and the record.
-  // guidance harness 11u-gap asserts that gap exists, so it cannot close silently and leave a comment
-  // here saying something untrue.
+  // ⚠ THE GAP THIS PARAGRAPH USED TO DECLARE IS CLOSED, by migration 257. It said the constraint SHOULD
+  // be `(archived_reason is not null and btrim(archived_reason) <> '')` and that until it was, this
+  // function was the only wall. That is now what the constraint says. The harness assertion that made
+  // the closure visible -- 11u-gap -- is inverted rather than deleted, so a relaxation back to 256's
+  // wording fails a test instead of quietly restoring the gap and this comment with it.
   if (!reason)
     return { ok: false, status: 400, code: "REASON_REQUIRED", message: "say why this is being withdrawn. The next person needs to tell \"superseded\" from \"found to be wrong\"." };
 
