@@ -56,13 +56,15 @@ import {
   requiredInformationOf, resolveIntake, levelFor, intakeRefusalMessage, intakeDiscardNotice,
   plainWalkIn, plainCancellation, plainRequiredInformation,
   WALK_IN_OVERRIDABLE_CODES, WAITING_LIST_CONTACT_NOTE, walkInCutoff,
-  WAITING_LIST_NO_SCREEN_NOTE, QUEUE_PRIORITY_NO_SCREEN_NOTE,
+  WAITING_LIST_NO_SCREEN_NOTE, QUEUE_PRIORITY_NO_SCREEN_NOTE, minuteOfDayAsClock,
 } from "../src/lib/practice/booking-rule-constants";
 import {
   addToWaitingList, offerWaitingListEntry, closeWaitingListEntry, listWaitingList,
   cancelBooking, recordNoShow, waitingListStorePresent, forgetWaitingListStore,
 } from "../src/lib/practice/booking-cancellation";
 import { WALK_IN_NOW_CONFIGURABLE } from "../src/lib/practice/recall-constants";
+import { hhmm } from "../src/lib/practice/availability-config";
+import { checkPlacement } from "../src/lib/practice/scheduling";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
@@ -517,8 +519,30 @@ async function endToEnd(): Promise<void> {
   });
   ok("a walk-in inside the cutoff is refused", lateWalkIn.ok === false
     && (lateWalkIn as any).code === "WALK_IN_CUTOFF", JSON.stringify(lateWalkIn));
+  // ⚠ THE TIME, NOT A DISTANCE. "Inside that window by 30 minutes" makes a practitioner do arithmetic
+  // to learn when they COULD have booked. This assertion is what found that the two engines spelled
+  // this refusal differently and that the useful spelling was the one no caller ever reached.
   ok("...and the refusal names the last time a walk-in is taken",
     lateWalkIn.ok === false && /10:30/.test((lateWalkIn as any).message), (lateWalkIn as any).message);
+
+  // ⚠ AND THE OTHER ENGINE'S MESSAGE SAYS THE SAME TIME. checkPlacement refuses on the same ground when
+  // a caller reaches it without the rules engine -- bookAppointment has taken walk-ins since Phase 1 --
+  // so a harness that only exercised bookUnderRules would leave that path free to drift.
+  const direct = await checkPlacement(admin, {
+    workspaceId, startMs: Date.parse(at(date, 660)), endMs: Date.parse(at(date, 680)),
+    locationId: null, appointmentType: "walk_in", allowOverlap: false,
+  });
+  ok("checkPlacement refuses the same walk-in on the same ground",
+    direct.ok === false && (direct as any).code === "WALK_IN_CUTOFF", JSON.stringify(direct));
+  ok("...and names the same time as the rules engine does",
+    direct.ok === false && /10:30/.test((direct as any).message), (direct as any).message);
+
+  // ⚠ THE TWO CLOCK FORMATTERS MUST AGREE ABOUT EVERY MINUTE OF A DAY. booking-rule-constants.ts keeps
+  // its own because it may not import a module that touches the database; that is a real reason and it
+  // is also a real chance to drift, so the equivalence is checked rather than trusted.
+  let clocksAgree = true;
+  for (let m = 0; m < 1440; m++) if (minuteOfDayAsClock(m) !== hhmm(m)) { clocksAgree = false; break; }
+  ok("the pure clock formatter and availability-config's agree on all 1440 minutes", clocksAgree);
 
   const earlyWalkIn = await bookUnderRules(admin, ctx, {
     channel: "walk_in", patientName: "Early Arrival", appointmentType: "walk_in",
@@ -625,33 +649,68 @@ async function endToEnd(): Promise<void> {
     workspace_id: workspaceId, display_name: "Repeat Misser", status: "active",
   }).select("id").maybeSingle();
 
-  const first = await bookUnderRules(admin, ctx, {
+  // ⚠ THE FIXTURE HAS TO CREATE THE LATE CANCELLATION, NOT MERELY ASSERT ONE.
+  //
+  // The first version of this block booked into the session fixture -- the NEXT Wednesday, up to eight
+  // days out -- and then asserted `withinNotice === true` against a 24-hour notice period. The engine
+  // correctly answered false, because a cancellation 80 hours before an appointment is not a late one.
+  // The assertion was wrong and the engine was right, and relaxing the assertion to `=== false` would
+  // have made it agree with the behaviour while testing nothing about the notice period at all.
+  //
+  // So there are now TWO cancellations, and the pair is what makes either of them mean anything: one
+  // genuinely inside the notice window and one genuinely outside it.
+  const soonMs = Date.now() + 2 * 3600000;
+  const late = await bookUnderRules(admin, ctx, {
     channel: "practitioner", patientId: patient?.id, appointmentType: "new_consultation",
-    scheduledAt: at(date, 520), actorId: OWNER, correlationId: CORR,
+    scheduledAt: new Date(soonMs).toISOString(), actorId: OWNER, correlationId: CORR,
   });
-  ok("a booking for a patient record was made", first.ok === true,
-    first.ok ? "" : (first as any).message);
-  if (!first.ok) return;
+  ok("a booking two hours from now was made", late.ok === true,
+    late.ok ? "" : (late as any).message);
+  if (!late.ok) return;
 
   const cancelled = await cancelBooking(admin, ctx, {
-    appointmentId: first.data.appointmentId, reason: "clinician called to theatre",
+    appointmentId: late.data.appointmentId, reason: "clinician called to theatre",
     actorId: OWNER, correlationId: CORR,
   });
-  ok("the practice can always cancel its own booking", cancelled.ok === true,
+  ok("the practice can cancel its own booking two hours before it", cancelled.ok === true,
     cancelled.ok ? "" : (cancelled as any).message);
-  ok("...even though it is inside the practice's own 24-hour notice",
+  // ⚠ THE POINT OF THE PAIR: it IS inside the 24-hour notice, it is recorded as inside it, and the
+  // practice is not refused. A notice period is a promise to patients, not a rule against the practice.
+  ok("...and it is recorded as inside the practice's own 24-hour notice",
     cancelled.ok === true && cancelled.data.withinNotice === true,
-    cancelled.ok ? String(cancelled.data.withinNotice) : "");
+    cancelled.ok ? `withinNotice=${cancelled.data.withinNotice} notice=${cancelled.data.noticeMinutes}` : "");
   ok("...and the reason is stored on the appointment",
     cancelled.ok === true && cancelled.data.reasonStored === true,
     cancelled.ok ? (cancelled.data.reasonNote ?? "") : "");
   const { data: cancelledRow } = await admin.from("practice_appointment")
-    .select("cancellation_reason, cancelled_by_kind, cancelled_within_notice")
-    .eq("id", first.data.appointmentId).maybeSingle();
+    .select("cancellation_reason, cancelled_by_kind, cancelled_within_notice, cancelled_at")
+    .eq("id", late.data.appointmentId).maybeSingle();
   ok("...in a column a report can group by",
     cancelledRow?.cancellation_reason === "clinician called to theatre"
     && cancelledRow?.cancelled_by_kind === "practice"
-    && cancelledRow?.cancelled_within_notice === true, JSON.stringify(cancelledRow));
+    && cancelledRow?.cancelled_within_notice === true
+    && !!cancelledRow?.cancelled_at, JSON.stringify(cancelledRow));
+
+  // ⚠ THE CONTROL, AND WITHOUT IT THE ASSERTION ABOVE IS SATISFIED BY A COLUMN HARD-WIRED TO TRUE.
+  const early = await bookUnderRules(admin, ctx, {
+    channel: "practitioner", patientId: patient?.id, appointmentType: "new_consultation",
+    scheduledAt: at(date, 520), actorId: OWNER, correlationId: CORR,
+  });
+  ok("a booking several days out was made", early.ok === true,
+    early.ok ? "" : (early as any).message);
+  if (early.ok) {
+    const cancelledEarly = await cancelBooking(admin, ctx, {
+      appointmentId: early.data.appointmentId, reason: "patient asked to move it",
+      actorId: OWNER, correlationId: CORR,
+    });
+    ok("CONTROL: cancelling days ahead is recorded as OUTSIDE the notice",
+      cancelledEarly.ok === true && cancelledEarly.data.withinNotice === false,
+      cancelledEarly.ok ? String(cancelledEarly.data.withinNotice) : "");
+    const { data: earlyRow } = await admin.from("practice_appointment")
+      .select("cancelled_within_notice").eq("id", early.data.appointmentId).maybeSingle();
+    ok("CONTROL: ...and the column says so too",
+      earlyRow?.cancelled_within_notice === false, JSON.stringify(earlyRow));
+  }
 
   // Two misses, and the rule's threshold is two.
   for (const minute of [530, 535]) {

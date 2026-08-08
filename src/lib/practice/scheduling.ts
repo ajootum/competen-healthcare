@@ -335,7 +335,7 @@ export async function checkPlacement(admin: any, args: {
       if (cut.bites)
         return {
           ok: false, status: 409, code: "WALK_IN_CUTOFF",
-          message: `${wherePhrase} takes no walk-in in the last ${rule.walkInCutoffMinutes} minutes of a session, and ${s.sessionName} ends at ${hhmmOf(s.endsMinute)}. The last walk-in it takes is at ${hhmmOf(cut.lastWalkInMinute ?? s.endsMinute)}`,
+          message: `${wherePhrase} takes no walk-in in the last ${rule.walkInCutoffMinutes} minutes of a session, and ${s.sessionName} ends at ${hhmmOf(s.endsMinute)}. It takes its last walk-in at ${cut.lastWalkInAt ?? hhmmOf(s.endsMinute)}`,
         };
     }
 

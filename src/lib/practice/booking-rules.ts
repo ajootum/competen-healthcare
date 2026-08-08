@@ -1624,7 +1624,7 @@ export async function evaluateBooking(
     if (cut.bites)
       refusals.push({
         code: "WALK_IN_CUTOFF", overridable: true,
-        message: `"${(win.name as string | null) ?? "this rule"}" takes no walk-in in the last ${cutoff} minutes of a session, and ${a.session?.sessionName ?? "that session"} is inside that window by ${Math.abs(cut.minutesLeft ?? 0)} minute${Math.abs(cut.minutesLeft ?? 0) === 1 ? "" : "s"}.`,
+        message: `"${(win.name as string | null) ?? "this rule"}" takes no walk-in in the last ${cutoff} minutes of a session. ${a.session?.sessionName ?? "That session"} takes its last walk-in at ${cut.lastWalkInAt}, which is ${Math.abs(cut.minutesLeft ?? 0)} minute${Math.abs(cut.minutesLeft ?? 0) === 1 ? "" : "s"} before that time.`,
       });
     const minutesBeforeCutoff = cut.minutesLeft;
     if (a.full && a.session)

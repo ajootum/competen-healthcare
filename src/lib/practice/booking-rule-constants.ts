@@ -908,13 +908,40 @@ export function walkInCutoff(args: {
   cutoffMinutes: number | null;
   sessionEndsMinute: number | null;
   minuteOfDay: number;
-}): { applies: boolean; minutesLeft: number | null; bites: boolean; lastWalkInMinute: number | null } {
+}): {
+  applies: boolean; minutesLeft: number | null; bites: boolean;
+  lastWalkInMinute: number | null;
+  /**
+   * ⚠ THE TIME A PRACTITIONER CAN ACT ON, AS A STRING, COMPUTED HERE AND NOWHERE ELSE.
+   *
+   * The refusal used to be spelled twice -- checkPlacement said "the last walk-in it takes is at 10:30"
+   * and evaluateBooking said "inside that window by 30 minutes" -- and because bookUnderRules refuses on
+   * the evaluation before it ever reaches checkPlacement, THE MESSAGE NOBODY SAW WAS THE USEFUL ONE. A
+   * harness assertion on the refusal text is what found it. Both now print this field.
+   */
+  lastWalkInAt: string | null;
+} {
   if (args.cutoffMinutes === null || args.sessionEndsMinute === null)
-    return { applies: false, minutesLeft: null, bites: false, lastWalkInMinute: null };
+    return { applies: false, minutesLeft: null, bites: false, lastWalkInMinute: null, lastWalkInAt: null };
   const lastWalkInMinute = args.sessionEndsMinute - args.cutoffMinutes;
   const minutesLeft = lastWalkInMinute - args.minuteOfDay;
-  return { applies: true, minutesLeft, bites: minutesLeft <= 0, lastWalkInMinute };
+  return {
+    applies: true, minutesLeft, bites: minutesLeft <= 0,
+    lastWalkInMinute, lastWalkInAt: minuteOfDayAsClock(lastWalkInMinute),
+  };
 }
+
+/**
+ * A minute of the day as a 24-hour clock time.
+ *
+ * ⚠ IT IS NOT IMPORTED FROM availability-config.ts, AND THAT IS THIS FILE'S OWN RULE RATHER THAN
+ * duplication for its own sake: availability-config touches the database, and a "use client" component
+ * printing a cutoff time must not drag that chain into the browser bundle -- the failure this file's
+ * header opens with. The two spellings are asserted identical over every minute of a day, so they
+ * cannot drift into disagreeing about what 10:30 is.
+ */
+export const minuteOfDayAsClock = (m: number) =>
+  `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(Math.floor(m) % 60).padStart(2, "0")}`;
 
 export const WALK_IN_QUEUE_POLICIES = [
   {
