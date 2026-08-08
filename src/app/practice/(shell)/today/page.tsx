@@ -11,6 +11,8 @@ import SessionSummaryCard from "./SessionSummaryCard";
 import WaitingQueueCard from "./WaitingQueueCard";
 import SessionPerformance from "./SessionPerformance";
 import LiveRefresh from "../LiveRefresh";
+import OfflineCacheWriter from "../OfflineCacheWriter";
+import { offlineCacheGate } from "@/lib/practice/offline-gate";
 
 // /practice/today -- CPR-V5-004 "Current Session", the practitioner's live operational cockpit.
 //
@@ -44,7 +46,14 @@ export default async function CurrentSessionPage() {
   if (!hasCapability(shell.ctx, "practice.home.view")) redirect("/practice/home");
 
   const admin = createAdminClient();
-  const dash = await dashboardReadModel(admin, shell.ctx);
+  // ⚠ THE OFFLINE GATE IS RESOLVED ON THE SERVER, BESIDE THE DASHBOARD, AND HANDED DOWN AS PLAIN JSON.
+  // CP-OFFLINE-SURVEY-001 s3.7: "the flag resolved server-side and passed into the client component as a
+  // prop -- do not build a client evaluator." In parallel because it is a gate on a by-product; a screen
+  // that waited for it serially would pay for a feature nobody is looking at.
+  const [dash, offline] = await Promise.all([
+    dashboardReadModel(admin, shell.ctx),
+    offlineCacheGate(admin, shell.ctx, shell.ctx.userId),
+  ]);
   const { plan, session, queue, timeline, brief, metrics } = dash;
   const canControl = hasCapability(shell.ctx, "appointment.manage");
 
@@ -79,7 +88,7 @@ export default async function CurrentSessionPage() {
               : "nothing is running, so figures below count the whole day"}
           </p>
         </div>
-        <LiveRefresh />
+        <LiveRefresh asOf={dash.asOf} timezone={dash.timezone} />
       </div>
 
       {plan.unavailable && (
@@ -298,6 +307,14 @@ export default async function CurrentSessionPage() {
         As of {clock(dash.asOf, dash.timezone)} · {dash.timezone}. Every figure above is the same one the
         command centre shows, read once and shared, so the two screens cannot disagree.
       </p>
+
+      {/* The offline copy, written as a BY-PRODUCT of this successful render. Nothing above waits for it,
+          and its one line of status says what is held and when it goes. */}
+      <OfflineCacheWriter
+        workspaceId={shell.ctx.workspaceId}
+        gate={{ state: offline.state, reason: offline.reason, purge: offline.purge }}
+        showStatus
+      />
     </div>
   );
 }

@@ -223,4 +223,15 @@ export async function loadFeatureFlags(admin: any) {
  */
 export const WIRED_GATES: Record<string, string> = {
   executive_intelligence: "Hospital Executive → Executive Intelligence (/hospital-executive/intelligence)",
+  // ⚠ SEEDED BY MIGRATION 260 AND STILL OFF. This comment said "no migration seeds
+  // `practice_offline_cache`" and was true when written -- 260 landed the row afterwards, with
+  // `default_on false` and no assignment, so every resolution still answers OFF. What changed is that it
+  // now answers off DELIBERATELY rather than because the key is missing, which is a different fact and
+  // the one an operator reading the flags page needs.
+  //
+  // It stays listed for the reason it was listed while absent: the flags page renders this catalogue, so
+  // a key that is wired in code shows up either way rather than being invisible. Turning it on is a
+  // tenant-scoped assignment, not a code change. See the offline day route's header.
+  practice_offline_cache:
+    "Competen Practice → offline read-only cache (writes /api/v1/practice/offline/day into the browser store; /practice/offline reads it)",
 };

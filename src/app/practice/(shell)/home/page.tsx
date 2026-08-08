@@ -9,6 +9,8 @@ import { formatMinuteOfDay } from "@/lib/datetime";
 import { dashboardReadModel } from "@/lib/practice/dashboard";
 import StartYourDay from "./StartYourDay";
 import LiveRefresh from "../LiveRefresh";
+import OfflineCacheWriter from "../OfflineCacheWriter";
+import { offlineCacheGate } from "@/lib/practice/offline-gate";
 import {
   PANEL, GLANCE_SWATCH, LENS_SWATCH, FOLLOWUP_SWATCH, COHORT_RING,
   QUEUE_SWATCH, QUICK_SWATCH, QUICK_ICON, PERFORMANCE_SWATCH, SEVERITY,
@@ -86,7 +88,13 @@ export default async function PracticeCommandCentre() {
   //
   // The scope decision -- session-scoped after session start, day-scoped before it (s7) -- now lives in
   // the assembler, and /api/v1/practice/dashboard serves the identical payload to any other consumer.
-  const dash = await dashboardReadModel(admin, ctx, { at });
+  // ⚠ The offline gate rides alongside, resolved on the SERVER (CP-OFFLINE-SURVEY-001 s3.7) and handed to
+  // the writer as plain JSON. No client-side flag evaluation exists in this repository and this does not
+  // add the first one.
+  const [dash, offline] = await Promise.all([
+    dashboardReadModel(admin, ctx, { at }),
+    offlineCacheGate(admin, ctx, ctx.userId),
+  ]);
   const { plan, session: metrics, glance, queue, followUps: followUpLenses, alerts, drafts, timeline } = dash;
   const canPlan = hasCapability(ctx, "appointment.manage");
   // The rows the brief was derived from, which the alerts, tasks and messages cards render too. Read
@@ -145,7 +153,7 @@ export default async function PracticeCommandCentre() {
               nothing on it updates by itself. Saying otherwise would be the one claim here nobody could
               check by looking. */}
           <span className="ml-auto flex items-center gap-2">
-            <LiveRefresh />
+            <LiveRefresh asOf={dash.asOf} timezone={dash.timezone} />
           <p className="text-[11px] text-gray-500">
             As of {new Date(dash.asOf).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: dash.timezone })}
             {" · "}{dash.timezone}
@@ -904,6 +912,13 @@ export default async function PracticeCommandCentre() {
             ))}
           </ul>
         </details>
+
+        {/* The offline copy, a BY-PRODUCT of this successful render. Silent here: the command centre has
+            fourteen widgets already, and /practice/today carries the status line. */}
+        <OfflineCacheWriter
+          workspaceId={ctx.workspaceId}
+          gate={{ state: offline.state, reason: offline.reason, purge: offline.purge }}
+        />
       </div>
     </div>
   );

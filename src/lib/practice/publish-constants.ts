@@ -169,7 +169,7 @@ export const PUBLISH_CHECKS: PublishCheckDefinition[] = [
     code: "INTAKE_BUILT",
     requirement: "The patient-facing intake exists",
     severity: "blocker", authority: "build",
-    detail: "s19's Phase 4 asks for a handle, a link-only page, registration intake and confirmation. The handle and the stores landed; the intake and the confirmation did not, so a published page would have nothing behind the first screen. This is a fact about the code, not about your configuration -- no setting removes it.",
+    detail: "s19's Phase 4 asks for a handle, a link-only page, registration intake and confirmation. All four exist: the handle is claimed in Practice Setup, migration 254 landed the stores, and patient-booking.ts carries the intake and the confirmation. This row failed unconditionally until that was built, and passes unconditionally now -- what it never does is depend on configuration.",
     wouldNeed: null,
   },
 ];
