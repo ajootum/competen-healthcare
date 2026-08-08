@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   SESSION_ACTIVITY_TYPES, SESSION_ACTIVITY_LABEL, BOOKING_MODES, BOOKING_MODES_LIVE,
@@ -22,10 +22,15 @@ import {
 //      activity + day; the suggestion is offered as placeholder text and as a one-click fill. A
 //      suggestion silently saved becomes a name nobody chose, and the next person cannot tell it from
 //      one somebody typed.
-//   2. IT WILL NOT OFFER "Public" OR "Link only" AS WORKING CHOICES. s8's patient-facing access is
-//      Phase 4 and is not started, so those two are shown as what they are -- decisions this build
-//      cannot honour -- rather than as switches that store a promise. The engine refuses them too; the
-//      form not offering them is a courtesy, the engine refusing them is the guarantee.
+//   2. ⚠ THIS ENTRY SAID "Public" AND "Link only" WERE NOT OFFERED BECAUSE PHASE 4 WAS NOT STARTED, AND
+//      IT OUTLIVED ITS REASON. Phase 4 shipped: practice-sessions.ts removed its own PHASE_NOT_BUILT
+//      gate and records why, the handle is claimed in Practice Setup, migration 254 landed the stores,
+//      and patient-booking.ts carries the intake and the confirmation. This form went on greying both
+//      modes out and captioning them "Phase 4 -- not built", because it decided liveness from
+//      BOOKING_MODES_LIVE, which means something else entirely and says so in its own comment.
+//      All four modes are now selectable. What replaces the greying is a SENTENCE: a session opened to
+//      patients reaches nobody until the booking page is published. That is a fact about the practice
+//      rather than about the mode, and stating it is more use than a disabled radio giving no reason.
 //   3. IT WILL NOT DELETE A SESSION SOMEBODY IS BOOKED INTO (s4.4). It asks the server how many first,
 //      says the number in the confirmation, and the server refuses independently -- a client-side check
 //      alone is a suggestion.
@@ -100,6 +105,34 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  // ⚠ THE PAGE HAS TO GO WHERE THE ACTION WENT. Found by the practice owner walking the product: they
+  // pressed "+ Add session", the form rendered BELOW the week grid and off the bottom of the window, the
+  // page did not move, and the only thing visible was the panel's top edge. Their words were "i dont see
+  // create" -- the Create button was three hundred lines further down a page that had not scrolled.
+  //
+  // The notice had the same fault in reverse: it renders near the TOP of this component and the submit
+  // button is far below it, so the server's refusal -- which this file goes to some trouble to quote
+  // exactly -- appeared where nobody was looking. A refusal you cannot see is the same as no refusal.
+  //
+  // Both are one bug: a control that changes the page somewhere else must take the eye with it.
+  const draftRef = useRef<HTMLFormElement | null>(null);
+  const noticeRef = useRef<HTMLParagraphElement | null>(null);
+
+  // Honours prefers-reduced-motion rather than smooth-scrolling everybody: for a reader who has asked
+  // for less movement, a page that slides is worse than one that jumps.
+  const bring = (el: HTMLElement | null) => {
+    if (!el) return;
+    const reduce = typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+  };
+
+  // Keyed on the draft's IDENTITY, not on its contents: `draft` is replaced on every keystroke, and
+  // scrolling on each one would fight the practitioner for control of the page while they typed.
+  const draftKey = draft ? (draft.templateId ?? `new:${draft.weekday}`) : null;
+  useEffect(() => { if (draftKey) bring(draftRef.current); }, [draftKey]);
+  useEffect(() => { if (notice) bring(noticeRef.current); }, [notice]);
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) =>
     setDraft(d => (d ? { ...d, [k]: v } : d));
@@ -208,7 +241,7 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
     <div className="flex flex-col gap-4">
 
       {notice && (
-        <p role="status" className={`rounded-lg px-3.5 py-2.5 text-[12px] leading-relaxed ${
+        <p ref={noticeRef} role="status" className={`rounded-lg px-3.5 py-2.5 text-[12px] leading-relaxed ${
           notice.kind === "ok" ? "bg-emerald-50 text-emerald-900" : "bg-rose-50 text-rose-900"}`}>
           {notice.text}
         </p>
@@ -322,7 +355,7 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
 
       {/* ── THE SESSION EDITOR ───────────────────────────────────────────────────────────────────── */}
       {draft && (
-        <form onSubmit={save}
+        <form ref={draftRef} onSubmit={save}
           className="rounded-xl border border-[var(--cp-primary)]/25 bg-white p-4 shadow-[0_2px_8px_rgba(15,23,42,0.06)]">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--cp-primary)]/12 text-[14px] text-[var(--cp-primary-deep)]">✎</span>
@@ -336,21 +369,24 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
           </div>
 
           {/* ── Identity ─────────────────────────────────────────────────────────────────────── */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <label className={`${labelCls} sm:col-span-2`}>
-              Session name
-              <input type="text" value={draft.sessionName} maxLength={120}
-                placeholder={suggestion || "Name this session"}
-                onChange={e => set("sessionName", e.target.value)} className={field} />
-              {/* SUGGESTED, NOT WRITTEN. */}
-              {suggestion && draft.sessionName.trim() === "" && (
-                <button type="button" onClick={() => set("sessionName", suggestion)}
-                  className="mt-1 self-start text-[10px] font-semibold normal-case tracking-normal text-[var(--cp-primary)] hover:underline">
-                  Use &ldquo;{suggestion}&rdquo;
-                </button>
-              )}
-            </label>
+          {/* ⚠ THE NAME USED TO BE FIRST AND HALF THE ROW, AND THAT IS WHY IT READ AS REDUNDANT.
+              The practice owner, walking the product: "I think we can remove session name here, seems
+              redundant" -- having typed "Nsambya Hospital" into it while LOCATION on the same row already
+              said Nsambya Hospital.
 
+              It is optional and always was: leave it blank and the week grid shows the suggested name
+              instead. But every affordance saying so was suppressed at the moment it mattered. The
+              suggestion appears as PLACEHOLDER text, which an existing session's stored name hides, and
+              the one-click "Use ..." button only renders when the field is empty. So when EDITING -- the
+              case they were in -- nothing indicated the field could be left alone, while its position
+              said the opposite: first field, spanning half the row, where a form puts what it requires.
+
+              Demoted rather than deleted. A custom name still earns its place for "Tuesday evening extra
+              clinic", and four existing sessions carry real names that would be orphaned by removing the
+              only control that edits them. What changed is that the facts DEFINING a session -- day,
+              activity, times, location -- now come first, and the name comes after them, saying it is
+              optional and saying what happens if it is left blank. */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className={labelCls}>
               Day of week
               <select value={draft.weekday} onChange={e => set("weekday", Number(e.target.value))} className={field}>
@@ -403,6 +439,28 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
                   .map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </label>
+
+            {/* Last, and optional, and it says so both ways round: in the label, and by naming what
+                happens if it is left alone. A field that only tells you it is optional when it is already
+                empty tells the one person who needs to know -- somebody editing -- nothing at all. */}
+            <label className={`${labelCls} sm:col-span-2`}>
+              Session name <span className="font-normal normal-case tracking-normal text-gray-400">(optional)</span>
+              <input type="text" value={draft.sessionName} maxLength={120}
+                placeholder={suggestion || "Name this session"}
+                onChange={e => set("sessionName", e.target.value)} className={field} />
+              {/* SUGGESTED, NOT WRITTEN. */}
+              {suggestion && draft.sessionName.trim() === "" && (
+                <button type="button" onClick={() => set("sessionName", suggestion)}
+                  className="mt-1 self-start text-[10px] font-semibold normal-case tracking-normal text-[var(--cp-primary)] hover:underline">
+                  Use &ldquo;{suggestion}&rdquo;
+                </button>
+              )}
+              {suggestion && (
+                <span className="mt-0.5 text-[9.5px] font-normal normal-case tracking-normal text-gray-400">
+                  Leave blank and this is listed as &ldquo;{suggestion}&rdquo;.
+                </span>
+              )}
+            </label>
           </div>
 
           {/* ── s4.3's recurrence dates -- WHY ENDING IS A DATE ─────────────────────────────────── */}
@@ -447,7 +505,21 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
               <div>
                 <div className="space-y-1.5">
                   {BOOKING_MODES.map(m => {
-                    const live = BOOKING_MODES_LIVE.includes(m.code);
+                    // ⚠ EVERY MODE IS SELECTABLE. This used to read
+                    //   const live = BOOKING_MODES_LIVE.includes(m.code)
+                    // and greyed out Link only and Public with "Phase 4 — not built". Phase 4 SHIPPED:
+                    // practice-sessions.ts removed its own PHASE_NOT_BUILT gate and says why, and that
+                    // constant does not mean what this line assumed. Its comment says so in terms — it is
+                    // "the modes that need no patient-facing surface", kept deliberately unchanged so the
+                    // publish check does not answer a wrong nought. Reading it as "modes we can honour"
+                    // left the form refusing what the engine accepts.
+                    //
+                    // The dependency is real and is stated instead of enforced: a session opened to
+                    // patients reaches nobody until the booking page is published. That is a fact about
+                    // the practice, not about the mode, so it belongs in a sentence rather than in a
+                    // disabled radio that gives no reason.
+                    const needsPage = !BOOKING_MODES_LIVE.includes(m.code);
+                    const live = true;
                     return (
                       <label key={m.code}
                         className={`flex items-start gap-2 rounded-lg border px-2.5 py-1.5 ${
@@ -462,9 +534,9 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
                           </span>
                           <span className="block text-[10px] leading-relaxed text-gray-500">{m.blurb}</span>
                           {/* NOT A CONTROL. Named with its phase, not greyed out with no reason. */}
-                          {!live && (
-                            <span className="mt-0.5 block text-[9.5px] font-semibold text-slate-400">
-                              CPR-V5-007 Phase 4 — not built
+                          {needsPage && (
+                            <span className="mt-0.5 block text-[9.5px] font-semibold text-amber-600">
+                              Reaches patients only once your booking page is published
                             </span>
                           )}
                         </span>
