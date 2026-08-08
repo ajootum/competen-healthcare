@@ -65,6 +65,8 @@ type Draft = {
   effectiveTo: string;
   sessionNote: string;
   status: "active" | "suspended";
+  /** Set only when this draft began as a copy. Display only -- never sent to the server. */
+  copiedFrom?: string;
 };
 
 const blankDraft = (weekday: number, locationId: string): Draft => ({
@@ -92,6 +94,26 @@ const draftFrom = (s: any): Draft => ({
   effectiveFrom: s.effectiveFrom ?? "", effectiveTo: s.effectiveTo ?? "",
   sessionNote: s.sessionNote ?? "",
   status: s.status === "suspended" ? "suspended" : "active",
+});
+
+/**
+ * A session copied from another one: every operational field, and deliberately not two of them.
+ *
+ * ⚠ THE NAME IS DROPPED, AND THAT IS THE POINT OF WRITING THIS AS A FUNCTION RATHER THAN A SPREAD.
+ * A session named "Nsambya Hospital Wednesday Ward Round", copied to Thursday, would carry Wednesday in
+ * its name onto a Thursday card -- a label that contradicts the row it sits on, and the kind of small
+ * false statement nobody reads twice. Cleared, the suggestion regenerates from location + day + activity
+ * and reads correctly for the new day. A practitioner who wants a custom name types one, as before.
+ *
+ * ⚠ AND templateId IS NULL, so this SAVES AS A NEW SESSION. Carrying the id would silently MOVE the
+ * original instead of copying it -- the same click, the opposite outcome, and the week would look right
+ * until somebody noticed Wednesday was empty.
+ */
+const copyOf = (s: any): Draft => ({
+  ...draftFrom(s),
+  templateId: null,
+  sessionName: "",
+  copiedFrom: `${["", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][s.weekday]} ${toTime(s.startsMinute)}`,
 });
 
 const field = "mt-0.5 w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] text-gray-800";
@@ -319,6 +341,22 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
                               <p className="mt-0.5 text-[9px] font-semibold text-slate-500">From {s.effectiveFrom}</p>
                             )}
                           </button>
+
+                          {/* ⚠ COPY OPENS A DRAFT, IT DOES NOT SAVE ONE. Asked for while walking the
+                              product: "make it possible to duplicate a session and move it around, in
+                              this case I would like to duplicate wednesday for thursday." A one-click
+                              silent create would put a second session into a week without anybody
+                              choosing its day, and on a screen whose whole subject is when a
+                              practitioner is available that is the wrong way round. So it fills the form
+                              and leaves the day to be chosen -- which is also why the day is now the
+                              first field in it. */}
+                          {mayEdit && (
+                            <button type="button"
+                              onClick={() => { setNotice(null); setDraft(copyOf(s)); }}
+                              className="mt-0.5 w-full rounded px-1 py-px text-left text-[9px] font-semibold text-gray-400 hover:text-[var(--cp-primary)]">
+                              Copy to another day
+                            </button>
+                          )}
                         </li>
                       );
                     })}
@@ -360,8 +398,16 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--cp-primary)]/12 text-[14px] text-[var(--cp-primary-deep)]">✎</span>
             <h3 className="text-[14px] font-bold text-gray-900">
-              {draft.templateId ? "Edit this session" : "New session"}
+              {draft.templateId ? "Edit this session" : draft.copiedFrom ? "Copy of a session" : "New session"}
             </h3>
+            {/* ⚠ SAYS WHERE IT CAME FROM AND WHAT IS STILL TO DECIDE. A pre-filled form that looks like a
+                blank one invites somebody to press Create without noticing every field is already
+                answered -- including the day, which is the one thing a copy exists to change. */}
+            {draft.copiedFrom && (
+              <span className="text-[10px] font-normal text-gray-500">
+                Copied from {draft.copiedFrom}. Choose the day it belongs on, then create it.
+              </span>
+            )}
             <button type="button" onClick={() => setDraft(null)}
               className="ml-auto rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] text-gray-600 hover:bg-gray-50">
               Close
