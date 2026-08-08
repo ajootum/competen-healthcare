@@ -1,5 +1,6 @@
+import { requireHqContext } from "@/lib/hq/context";
 import { loadPersonalisation } from "@/lib/priorities/modules";
-import { ppeGuard, Head, ModuleNav, Card, Stat, Pill, Provision, Foot, URGENCY_TONE } from "../_ui";
+import { Head, ModuleNav, Card, Stat, Pill, Provision, Foot, URGENCY_TONE } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export default async function PersonalisationPage() {
-  const { admin } = await ppeGuard();
+  const { admin } = await requireHqContext("hq.executive.priorities.view");
   const d = await loadPersonalisation(admin) as any;
   const head = <Head code="PPE-004 · Priority & Execution Framework" title="Personalisation & Context Resolution Engine" sub="Resolve the effective priority set into each workspace and role — every dashboard, task list and AI recommendation adapts to the priorities that matter in that context." />;
   if (!d.provisioned) return <div className="max-w-[1400px] space-y-4">{head}<ModuleNav active="004" /><Provision module="Personalisation" /></div>;

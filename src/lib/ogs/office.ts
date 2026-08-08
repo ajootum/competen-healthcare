@@ -41,8 +41,19 @@ export async function resolveOffices(admin: any, hid: string | null, isSuper: bo
 
   // Preferred path: first-class offices (migration 116/117).
   const ogsRes = await scope(admin.from("ogs_offices").select("id, name, office_type, scope_type, status, authority_source, reporting_line, chair_id, chair_name, quorum, next_review_date, established_at, charter_version, is_active").limit(3000));
-  if (!ogsRes.error && (ogsRes.data?.length ?? 0) > 0) {
-    const rows = ogsRes.data as any[];
+  // ⚠ COMPETEN HQ'S PLATFORM SPACES ARE NOT TENANT OFFICES, AND MUST NOT BE MATCHABLE AS ONE.
+  // Migration 264 seeds five enterprise-scoped offices typed 'hq_executive', 'hq_platform', 'hq_practice',
+  // 'hq_learning' and 'hq_quality'. Two of those collide with MATCHERS keys below ('executive' -> HEX,
+  // 'quality' -> QAW), and officeForWorkspace's fallback also matches on the office NAME by regex, so
+  // "HQ Executive Space" would have satisfied /executive/i as well. Left unfiltered,
+  // holdsOfficeAppointment() would have read an HQ platform appointment as a Hospital Executive
+  // appointment and granted a tenant workspace — the exact over-grant the HQ programme exists to close,
+  // arriving through its own seed data. Filtered by TYPE, which the seed controls, not by name.
+  // ⚠ AND FILTERED BEFORE THE EMPTINESS TEST, so a tenant with only HQ offices still falls back to the v1
+  // committee mapping rather than resolving to nothing.
+  const tenantOffices = ((ogsRes.data ?? []) as any[]).filter(o => !String(o.office_type ?? "").startsWith("hq_"));
+  if (!ogsRes.error && tenantOffices.length > 0) {
+    const rows = tenantOffices;
     const ids = rows.map(o => o.id);
     let appts: any[] = [];
     for (let i = 0; i < ids.length; i += 200) {

@@ -2,8 +2,6 @@
 // super-admin shell (the layout already gates super_admin). Pure server components + one auth guard so each module
 // page stays lean. Consistent teal-accent headers, white cards, semantic pills/progress for strategy state.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PillTag as Pill } from "../../../components/ui/primitives";
 import { KitFoot as Foot } from "../../../components/ui/primitives";
@@ -13,16 +11,9 @@ import { ProgressBar as Progress } from "../../../components/ui/primitives";
 // implementations into the library must not remove that surface.
 export { Pill, Foot, Card, Progress };
 
-export async function ppeGuard() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const admin = createAdminClient() as any;
-  const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
-  return { admin, userId: user.id };
-}
+// ppeGuard() WAS HERE AND IS GONE ON PURPOSE — same reason as aisGuard in the AI Services kit. Eight pages
+// delegated their only role check to this one function, so each of them read as ungated to the permission
+// matrix. They now call requireHqContext("hq.executive.priorities.view") directly.
 
 export const PILL: Record<string, string> = {
   slate: "bg-gray-100 text-gray-600", blue: "bg-[var(--cmp-surface-information)] text-blue-700", emerald: "bg-[var(--cmp-surface-success)] text-emerald-700",

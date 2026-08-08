@@ -1,5 +1,6 @@
+import { requireHqContext } from "@/lib/hq/context";
 import { loadAiSkills } from "@/lib/ai/services";
-import { aisGuard, Head, Tabs, Card, Stat, Pill, Bars, Provision, Foot } from "../_ui";
+import { Head, Tabs, Card, Stat, Pill, Bars, Provision, Foot } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 const CAT_TONE: Record<string, string> = { internal: "blue", external: "amber", data: "teal", action: "violet", knowledge: "emerald" };
 
 export default async function SkillsPage() {
-  const { admin } = await aisGuard();
+  const { admin } = await requireHqContext("hq.platform.ai.view");
   const d = await loadAiSkills(admin) as any;
   const head = <Head code="AIS-004 · AI Services Platform" title="Skills & Plugin Framework" sub="The registry of governed capabilities the copilot and agents can discover and invoke — each call re-authorised, permission-checked and (for writes) confirmed." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="004" /><Provision /></div>;

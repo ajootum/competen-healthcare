@@ -6,7 +6,7 @@ import { setFlagAssignment } from "@/lib/platform/commercial";
 export async function POST(req: Request) {
   const caller = await getLandlordCaller();
   if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!landlordCan(caller, "platform_operations", "platform_super_admin", "product_manager")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!landlordCan(caller, "platform_operations", "product_manager")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   let body: { flagKey?: string; scopeType?: string; scopeRef?: string; enabled?: boolean };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid body" }, { status: 400 }); }

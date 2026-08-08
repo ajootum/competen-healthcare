@@ -1,5 +1,6 @@
+import { requireHqContext } from "@/lib/hq/context";
 import { loadAiObservability, loadAiEvals } from "@/lib/ai/services";
-import { aisGuard, Head, Tabs, Card, Stat, Pill, Bars, Provision, Foot } from "../_ui";
+import { Head, Tabs, Card, Stat, Pill, Bars, Provision, Foot } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 const STATUS_TONE: Record<string, string> = { ok: "emerald", refusal: "amber", error: "rose", not_configured: "slate" };
 
 export default async function ObservabilityPage() {
-  const { admin } = await aisGuard();
+  const { admin } = await requireHqContext("hq.platform.ai.view");
   const [d, ev] = await Promise.all([loadAiObservability(admin), loadAiEvals(admin)]) as any[];
   const head = <Head code="AIS-011 · AI Services Platform" title="AI Observability, Testing & Evaluation" sub="End-to-end telemetry over every AI call the platform makes — volume, tokens, cost, latency, errors and refusals, from the real plat_ai_requests gateway log." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="011" /><Provision /></div>;

@@ -1,5 +1,5 @@
+import { requireHqContext } from "@/lib/hq/context";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import MethodsManager from "./MethodsManager";
 
@@ -18,7 +18,9 @@ export default async function AssessmentMethodsPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const admin = createAdminClient();
+  // Per-page guard (PLAT-ARCH-SURVEY-001 s2.5). Next 16: a layout auth check "will not prevent nested
+  // route segments and Server Actions from being accessed" -- so the gate lives here, not upstairs.
+  const { admin } = await requireHqContext("hq.learning.assessment.view");
 
   const { data: methods } = await admin
     .from("assessment_method_configs")

@@ -1,5 +1,6 @@
+import { requireHqContext } from "@/lib/hq/context";
 import { loadGoalToAction } from "@/lib/priorities/modules";
-import { ppeGuard, Head, ModuleNav, Card, Stat, Pill, Provision, Foot, STATUS_TONE } from "../_ui";
+import { Head, ModuleNav, Card, Stat, Pill, Provision, Foot, STATUS_TONE } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 const TYPE_ICON: Record<string, string> = { task: "✅", learning: "🎓", audit: "🔍", competency: "🎯", notification: "📨", dashboard: "📊", report: "🧾" };
 
 export default async function ActionsPage() {
-  const { admin } = await ppeGuard();
+  const { admin } = await requireHqContext("hq.executive.priorities.view");
   const d = await loadGoalToAction(admin) as any;
   const head = <Head code="PPE-003 · Priority & Execution Framework" title="Goal-to-Action Translation Engine" sub="Compile approved objectives and priorities into executable work — tasks, learning, audits, notifications and dashboards — with full traceability from strategy to output." />;
   if (!d.provisioned) return <div className="max-w-[1400px] space-y-4">{head}<ModuleNav active="003" /><Provision module="the Translation Engine" /></div>;

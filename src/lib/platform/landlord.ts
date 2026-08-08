@@ -37,12 +37,33 @@ export async function getLandlordCaller(): Promise<LandlordCaller | null> {
   };
 }
 
+// ⚠ THE TWO BACK-COMPAT ALIASES, CANONICALISED IN ONE PLACE.
+// PlatformRole carries thirteen values and two of them are aliases documented in src/lib/roles.ts:
+// `platform_super_admin` is PSA-001 spelled the old way (canonically `platform_operations`), and
+// `developer` is ENG-001 spelled the old way (canonically `engineer`). Held values and required values
+// are both canonicalised below, so a gate naming the canonical role admits a holder of the alias and vice
+// versa. Without this, the alias is a value the type accepts, the database (from migration 264) accepts,
+// and every gate silently ignores.
+const CANONICAL: Partial<Record<PlatformRole, PlatformRole>> = {
+  platform_super_admin: "platform_operations",
+  developer: "engineer",
+};
+const canonical = (r: PlatformRole): PlatformRole => CANONICAL[r] ?? r;
+
 // True if the caller may enter a surface requiring one of `required` landlord
 // roles. A super admin / owner has full authority and passes everything.
+//
+// ⚠ AN EMPTY `required` DENIES. It used to return `caller.platformRoles.length > 0`, which meant a route
+// that resolved a landlord caller and then forgot to name the roles it wanted was reachable by EVERY
+// position holder. No call site hits that branch today, so this was a latent trap rather than a live hole
+// — but defaulting to reachable is precisely how a graduated-access programme fails quietly, and the
+// branch is the shape a new route reaches for. A caller that genuinely means "any landlord role" now has
+// to say so with `caller.platformRoles.length > 0`, in the open, at its own call site.
 export function landlordCan(caller: LandlordCaller, ...required: PlatformRole[]): boolean {
   if (caller.isOwner) return true;
-  if (required.length === 0) return caller.platformRoles.length > 0;
-  return caller.platformRoles.some(r => required.includes(r));
+  if (required.length === 0) return false;
+  const want = new Set(required.map(canonical));
+  return caller.platformRoles.some(r => want.has(canonical(r)));
 }
 
 // Record a landlord-plane action to the Global Audit Centre (best-effort).

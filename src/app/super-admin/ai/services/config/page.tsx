@@ -1,5 +1,6 @@
+import { requireHqContext } from "@/lib/hq/context";
 import { loadAiConfig } from "@/lib/ai/services";
-import { aisGuard, Head, Tabs, Card, Stat, Pill, Provision, Foot } from "../_ui";
+import { Head, Tabs, Card, Stat, Pill, Provision, Foot } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 const CAT_ICON: Record<string, string> = { copilot: "💬", model: "🧠", safety: "🛡️", routing: "🔀", feature: "✨", knowledge: "📚" };
 
 export default async function ConfigPage() {
-  const { admin } = await aisGuard();
+  const { admin } = await requireHqContext("hq.platform.ai.view");
   const d = await loadAiConfig(admin) as any;
   const head = <Head code="AIS-010 · AI Services Platform" title="AI Configuration & No-Code Integration" sub="Enable, customise and govern AI behaviour without code — copilot, model routing, safety, features and knowledge settings, resolved with WCE inheritance." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="010" /><Provision /></div>;

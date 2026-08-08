@@ -1,4 +1,5 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { requireHqContext } from "@/lib/hq/context";
+import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import CommitteesManager from "./CommitteesManager";
 
@@ -7,7 +8,9 @@ export default async function CommitteesPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const admin = createAdminClient();
+  // Per-page guard (PLAT-ARCH-SURVEY-001 s2.5). Next 16: a layout auth check "will not prevent nested
+  // route segments and Server Actions from being accessed" -- so the gate lives here, not upstairs.
+  const { admin } = await requireHqContext("hq.quality.governance.view");
   const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
   if (!["super_admin", "hospital_admin"].includes(profile?.role ?? "")) redirect("/dashboard");
 

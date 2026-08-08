@@ -1,5 +1,6 @@
+import { requireHqContext } from "@/lib/hq/context";
 import { loadAiKnowledge } from "@/lib/ai/services";
-import { aisGuard, Head, Tabs, Card, Stat, Pill, Bars, Provision, Foot } from "../_ui";
+import { Head, Tabs, Card, Stat, Pill, Bars, Provision, Foot } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 const fmtT = (t: string | null) => { if (!t) return "not indexed"; try { const h = Math.round((Date.now() - new Date(t).getTime()) / 3600000); return h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`; } catch { return "—"; } };
 
 export default async function KnowledgePage() {
-  const { admin } = await aisGuard();
+  const { admin } = await requireHqContext("hq.platform.ai.view");
   const d = await loadAiKnowledge(admin) as any;
   const head = <Head code="AIS-003 · AI Services Platform" title="Knowledge & Semantic Search Platform" sub="The enterprise knowledge sources that power Retrieval-Augmented Generation — governed, indexed and permission-filtered so every AI answer is grounded and citable." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="003" /><Provision /></div>;

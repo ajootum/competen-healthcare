@@ -1,8 +1,6 @@
 // Shared kit for the AI Services Platform control plane (AIS Phase 1). Light super-admin shell (layout gates
 // super_admin). Pure server components + one guard.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PillTag as Pill } from "../../../../components/ui/primitives";
 import { KitFoot as Foot } from "../../../../components/ui/primitives";
@@ -11,16 +9,11 @@ import { PlainCard as Card } from "../../../../components/ui/primitives";
 // implementations into the library must not remove that surface.
 export { Pill, Foot, Card };
 
-export async function aisGuard() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const admin = createAdminClient() as any;
-  const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
-  return { admin };
-}
+// aisGuard() WAS HERE AND IS GONE ON PURPOSE. It was a shared `roles.includes("super_admin")` check that
+// twelve pages delegated to — which meant the permission-matrix scanner, reading each page file on its own,
+// saw no gate in any of them and classified all twelve as `none`: "no access check of any kind". Each page
+// now calls requireHqContext("hq.platform.ai.view") itself, so the gate is visible where it is enforced and
+// the page carries the capability it actually needs (PLAT-ARCH-SURVEY-001 §2.5).
 
 export const PILL: Record<string, string> = { slate: "bg-gray-100 text-gray-600", blue: "bg-[var(--cmp-surface-information)] text-blue-700", emerald: "bg-[var(--cmp-surface-success)] text-emerald-700", amber: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", rose: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", violet: "bg-violet-50 text-violet-700", teal: "bg-teal-50 text-teal-700" };
 

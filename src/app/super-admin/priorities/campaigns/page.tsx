@@ -1,5 +1,6 @@
+import { requireHqContext } from "@/lib/hq/context";
 import { loadCampaigns } from "@/lib/priorities/modules";
-import { ppeGuard, Head, ModuleNav, Card, Stat, Pill, Progress, Provision, Foot, STATUS_TONE } from "../_ui";
+import { Head, ModuleNav, Card, Stat, Pill, Progress, Provision, Foot, STATUS_TONE } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 const money = (n: number) => (n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`);
 
 export default async function CampaignsPage() {
-  const { admin } = await ppeGuard();
+  const { admin } = await requireHqContext("hq.executive.priorities.view");
   const d = await loadCampaigns(admin) as any;
   const head = <Head code="PPE-005 · Priority & Execution Framework" title="Campaign & Initiative Manager" sub="Plan and track the initiatives that deliver strategic objectives — milestones, budgets, sponsors, KPIs and progress." />;
   if (!d.provisioned) return <div className="max-w-[1400px] space-y-4">{head}<ModuleNav active="005" /><Provision module="the Campaign Manager" /></div>;

@@ -1,5 +1,6 @@
+import { requireHqContext } from "@/lib/hq/context";
 import { loadAiModelRegistry } from "@/lib/ai/services";
-import { aisGuard, Head, Tabs, Card, Stat, Pill, Provision, Foot } from "../_ui";
+import { Head, Tabs, Card, Stat, Pill, Provision, Foot } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ const STATUS_TONE: Record<string, string> = { active: "emerald", preview: "amber
 const price = (n: any) => (n == null ? "—" : `$${n}`);
 
 export default async function ModelsPage() {
-  const { admin } = await aisGuard();
+  const { admin } = await requireHqContext("hq.platform.ai.view");
   const d = await loadAiModelRegistry(admin) as any;
   const head = <Head code="AIS-009 · AI Services Platform" title="Model Management & Provider Abstraction" sub="Switch, combine and govern foundation models without changing application code — the registry the AI Runtime Gateway routes over, with real list pricing and live usage." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="009" /><Provision /></div>;

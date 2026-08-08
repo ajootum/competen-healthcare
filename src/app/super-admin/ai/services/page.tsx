@@ -1,6 +1,7 @@
+import { requireHqContext } from "@/lib/hq/context";
 import Link from "next/link";
 import { loadAiControlPlane } from "@/lib/ai/services";
-import { aisGuard, Head, Tabs, Card, Stat, Pill, Bars, Provision, Foot } from "./_ui";
+import { Head, Tabs, Card, Stat, Pill, Bars, Provision, Foot } from "./_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ const MODULE_MAP: [string, string, string, string][] = [
 const MOD_TONE: Record<string, { pill: string; dot: string; label: string }> = { live: { pill: "emerald", dot: "bg-[var(--cmp-color-success)]", label: "Live" }, phase2: { pill: "amber", dot: "bg-[var(--cmp-color-warning)]", label: "Phase 2" }, phase3: { pill: "blue", dot: "bg-[var(--cmp-color-information)]", label: "Phase 3" }, backend: { pill: "slate", dot: "bg-gray-400", label: "Backend epic" } };
 
 export default async function AiControlPlanePage() {
-  const { admin } = await aisGuard();
+  const { admin } = await requireHqContext("hq.platform.ai.view");
   const d = await loadAiControlPlane(admin) as any;
   const head = <Head code="AIS-001 · AI Services Platform" title="AI Services Control Plane" sub="The super-admin control surface over Competen's real AI runtime — provider configuration, the model registry the gateway routes over, and live usage telemetry." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="001" /><Provision /></div>;

@@ -1,5 +1,6 @@
+import { requireHqContext } from "@/lib/hq/context";
 import { loadDistribution } from "@/lib/priorities/distribution";
-import { ppeGuard, Head, ModuleNav, Card, Stat, Pill, Provision, Foot, URGENCY_TONE, PILL } from "../_ui";
+import { Head, ModuleNav, Card, Stat, Pill, Provision, Foot, URGENCY_TONE, PILL } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 const MODE_TONE: Record<string, string> = { cascade: "teal", reference: "blue", local: "violet", block: "rose" };
 
 export default async function DistributionPage() {
-  const { admin } = await ppeGuard();
+  const { admin } = await requireHqContext("hq.executive.priorities.view");
   const d = await loadDistribution(admin) as any;
 
   const head = <Head code="PPE-002 · Priority & Execution Framework" title="Priority Distribution & Inheritance Engine" sub="Publish and cascade approved priorities down the hierarchy, resolve inheritance and overrides, and compile the effective, ranked priority set every workspace runs on." />;

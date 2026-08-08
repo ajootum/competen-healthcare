@@ -7,7 +7,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const caller = await getLandlordCaller();
   if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!landlordCan(caller, "platform_operations", "platform_super_admin", "finance")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!landlordCan(caller, "platform_operations", "finance")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   let body: { planCode?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid body" }, { status: 400 }); }

@@ -1,4 +1,5 @@
-import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { requireHqContext } from "@/lib/hq/context";
+import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import BuilderWorkspace, { type DomainNode, type CompetencyNode } from "./BuilderWorkspace";
 import VersionHistory from "./VersionHistory";
@@ -16,7 +17,9 @@ export default async function FrameworkDetailPage({ params }: { params: Promise<
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const admin = createAdminClient();
+  // Per-page guard (PLAT-ARCH-SURVEY-001 s2.5). Next 16: a layout auth check "will not prevent nested
+  // route segments and Server Actions from being accessed" -- so the gate lives here, not upstairs.
+  const { admin } = await requireHqContext("hq.learning.content.view");
 
   const { data: framework } = await admin
     .from("frameworks")

@@ -1,5 +1,6 @@
+import { requireHqContext } from "@/lib/hq/context";
 import { loadAiActions } from "@/lib/ai/services";
-import { aisGuard, Head, Tabs, Card, Stat, Pill, Bars, Provision, Foot } from "../_ui";
+import { Head, Tabs, Card, Stat, Pill, Bars, Provision, Foot } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 const TRIGGER_TONE: Record<string, string> = { recommendation: "violet", manual: "slate", scheduled: "blue", event: "amber" };
 
 export default async function ActionsPage() {
-  const { admin } = await aisGuard();
+  const { admin } = await requireHqContext("hq.platform.ai.view");
   const d = await loadAiActions(admin) as any;
   const head = <Head code="AIS-005 · AI Services Platform" title="Action & Workflow Orchestrator" sub="Converts AI recommendations into governed, auditable actions — with confirmation, approval workflows and human-in-the-loop for every state change." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="005" /><Provision /></div>;

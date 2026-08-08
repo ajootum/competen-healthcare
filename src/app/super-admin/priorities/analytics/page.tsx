@@ -1,5 +1,6 @@
+import { requireHqContext } from "@/lib/hq/context";
 import { loadAnalytics } from "@/lib/priorities/modules";
-import { ppeGuard, Head, ModuleNav, Card, Stat, Progress, Ring, Provision, Foot } from "../_ui";
+import { Head, ModuleNav, Card, Stat, Progress, Ring, Provision, Foot } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export default async function AnalyticsPage() {
-  const { admin } = await ppeGuard();
+  const { admin } = await requireHqContext("hq.executive.priorities.view");
   const d = await loadAnalytics(admin) as any;
   const head = <Head code="PPE-006 · Priority & Execution Framework" title="Priority Analytics & Impact Dashboard" sub="Measure strategic performance end-to-end: alignment, objective achievement, KPI attainment, initiative delivery and where strategy is at risk." />;
   if (!d.provisioned) return <div className="max-w-[1400px] space-y-4">{head}<ModuleNav active="006" /><Provision module="Analytics" /></div>;

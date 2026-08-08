@@ -1,5 +1,5 @@
+import { requireHqContext } from "@/lib/hq/context";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import WorkflowManager from "./WorkflowManager";
 
@@ -19,7 +19,9 @@ export default async function WorkflowsPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const admin = createAdminClient();
+  // Per-page guard (PLAT-ARCH-SURVEY-001 s2.5). Next 16: a layout auth check "will not prevent nested
+  // route segments and Server Actions from being accessed" -- so the gate lives here, not upstairs.
+  const { admin } = await requireHqContext("hq.platform.workflows.view");
   const { data: workflows } = await admin
     .from("workflow_templates")
     .select("id, name, description, trigger_type, steps, is_active, hospitals(name)")

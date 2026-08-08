@@ -1,5 +1,6 @@
+import { requireHqContext } from "@/lib/hq/context";
 import { loadAiGovConsole } from "@/lib/ai/services";
-import { aisGuard, Head, Tabs, Card, Stat, Pill, Provision, Foot } from "../_ui";
+import { Head, Tabs, Card, Stat, Pill, Provision, Foot } from "../_ui";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ const ENF_TONE: Record<string, string> = { enforce: "rose", monitor: "amber", ad
 const fmtT = (t: string | null) => { if (!t) return ""; try { return new Date(t).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }); } catch { return ""; } };
 
 export default async function GovernancePage() {
-  const { admin } = await aisGuard();
+  const { admin } = await requireHqContext("hq.platform.ai.view");
   const d = await loadAiGovConsole(admin) as any;
   const head = <Head code="AIS-008 · AI Services Platform" title="AI Governance, Security & Explainability" sub="Policies, controls and oversight ensuring safe, transparent and trustworthy AI — with real safety telemetry from the AI Runtime Gateway." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="008" /><Provision /></div>;

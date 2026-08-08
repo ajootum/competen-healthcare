@@ -9,7 +9,7 @@ const PRIORITIES = ["low", "normal", "high", "urgent"];
 export async function POST(req: Request) {
   const caller = await getLandlordCaller();
   if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!landlordCan(caller, "platform_operations", "platform_super_admin", "support", "customer_success")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!landlordCan(caller, "platform_operations", "support", "customer_success")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   let b: any;
   try { b = await req.json(); } catch { return NextResponse.json({ error: "Invalid body" }, { status: 400 }); }
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   const caller = await getLandlordCaller();
   if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!landlordCan(caller, "platform_operations", "platform_super_admin", "support", "customer_success")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!landlordCan(caller, "platform_operations", "support", "customer_success")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   let b: any;
   try { b = await req.json(); } catch { return NextResponse.json({ error: "Invalid body" }, { status: 400 }); }

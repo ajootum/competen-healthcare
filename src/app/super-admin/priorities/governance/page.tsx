@@ -1,5 +1,6 @@
+import { requireHqContext } from "@/lib/hq/context";
 import { loadGovernance } from "@/lib/priorities/modules";
-import { ppeGuard, Head, ModuleNav, Card, Stat, Pill, Provision, Foot, STATUS_TONE } from "../_ui";
+import { Head, ModuleNav, Card, Stat, Pill, Provision, Foot, STATUS_TONE } from "../_ui";
 import ApprovalDecisions from "./ApprovalDecisions";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 const fmtDate = (t: string | null) => { if (!t) return ""; try { return new Date(t).toLocaleDateString("en-GB", { day: "2-digit", month: "short" }); } catch { return ""; } };
 
 export default async function GovernancePage() {
-  const { admin } = await ppeGuard();
+  const { admin } = await requireHqContext("hq.executive.priorities.view");
   const d = await loadGovernance(admin) as any;
   const head = <Head code="PPE-008 · Priority & Execution Framework" title="Priority Governance & Approval Workflow" sub="Route strategic changes through approval workflows, capture decisions and evidence, and maintain an immutable audit trail." />;
   if (!d.provisioned) return <div className="max-w-[1400px] space-y-4">{head}<ModuleNav active="008" /><Provision module="Governance" /></div>;

@@ -6,7 +6,7 @@ import { getLandlordCaller, landlordCan, landlordAudit } from "@/lib/platform/la
 export async function POST(req: Request) {
   const caller = await getLandlordCaller();
   if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!landlordCan(caller, "platform_operations", "platform_super_admin", "product_manager")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!landlordCan(caller, "platform_operations", "product_manager")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   let b: any;
   try { b = await req.json(); } catch { return NextResponse.json({ error: "Invalid body" }, { status: 400 }); }
