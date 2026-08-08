@@ -555,6 +555,29 @@
       }
     },
     {
+      "path": "/api/competency/assessment-requests",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | SUPERVISOR_ROLES | isSuper"
+      }
+    },
+    {
       "path": "/api/competency/assignment-rules",
       "kind": "api",
       "gate": {
@@ -1663,10 +1686,21 @@
       "path": "/api/learning/pathway-items",
       "kind": "api",
       "gate": {
-        "kind": "auth-only",
-        "roles": [],
+        "kind": "role-list",
+        "roles": [
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
         "appointment": false,
-        "evidence": "if (!user) redirect(...)"
+        "evidence": "requireRole(c, EDUCATOR_ROLES)"
       }
     },
     {
@@ -1697,7 +1731,7 @@
         "kind": "auth-only",
         "roles": [],
         "appointment": false,
-        "evidence": "if (!user) redirect(...)"
+        "evidence": "getCaller() with no role predicate"
       }
     },
     {
@@ -2617,6 +2651,29 @@
       }
     },
     {
+      "path": "/api/operations/procedures",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
+      }
+    },
+    {
       "path": "/api/operations/quality-actions",
       "kind": "api",
       "gate": {
@@ -3113,11 +3170,10 @@
         "kind": "platform-role",
         "roles": [
           "platform_operations",
-          "platform_super_admin",
           "engineer"
         ],
         "appointment": false,
-        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\", \"engineer\")"
+        "evidence": "landlordCan(caller, \"platform_operations\", \"engineer\")"
       }
     },
     {
@@ -3139,11 +3195,10 @@
         "kind": "platform-role",
         "roles": [
           "platform_operations",
-          "platform_super_admin",
           "product_manager"
         ],
         "appointment": false,
-        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\", \"product_manager\")"
+        "evidence": "landlordCan(caller, \"platform_operations\", \"product_manager\")"
       }
     },
     {
@@ -3153,11 +3208,10 @@
         "kind": "platform-role",
         "roles": [
           "platform_operations",
-          "platform_super_admin",
           "security_operator"
         ],
         "appointment": false,
-        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\", \"security_operator\")"
+        "evidence": "landlordCan(caller, \"platform_operations\", \"security_operator\")"
       }
     },
     {
@@ -3225,11 +3279,10 @@
         "kind": "platform-role",
         "roles": [
           "platform_operations",
-          "platform_super_admin",
           "product_manager"
         ],
         "appointment": false,
-        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\", \"product_manager\")"
+        "evidence": "landlordCan(caller, \"platform_operations\", \"product_manager\")"
       }
     },
     {
@@ -3238,11 +3291,10 @@
       "gate": {
         "kind": "platform-role",
         "roles": [
-          "platform_operations",
-          "platform_super_admin"
+          "platform_operations"
         ],
         "appointment": false,
-        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\")"
+        "evidence": "landlordCan(caller, \"platform_operations\")"
       }
     },
     {
@@ -3264,12 +3316,11 @@
         "kind": "platform-role",
         "roles": [
           "platform_operations",
-          "platform_super_admin",
           "support",
           "customer_success"
         ],
         "appointment": false,
-        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\", \"support\", \"customer_success\")"
+        "evidence": "landlordCan(caller, \"platform_operations\", \"support\", \"customer_success\")"
       }
     },
     {
@@ -3290,11 +3341,10 @@
       "gate": {
         "kind": "platform-role",
         "roles": [
-          "platform_operations",
-          "platform_super_admin"
+          "platform_operations"
         ],
         "appointment": false,
-        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\")"
+        "evidence": "landlordCan(caller, \"platform_operations\")"
       }
     },
     {
@@ -3304,11 +3354,10 @@
         "kind": "platform-role",
         "roles": [
           "platform_operations",
-          "platform_super_admin",
           "finance"
         ],
         "appointment": false,
-        "evidence": "landlordCan(caller, \"platform_operations\", \"platform_super_admin\", \"finance\")"
+        "evidence": "landlordCan(caller, \"platform_operations\", \"finance\")"
       }
     },
     {
@@ -3402,6 +3451,42 @@
         ],
         "appointment": false,
         "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/qie/indicators",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "ADMIN_ROLES | isSuper"
+      }
+    },
+    {
+      "path": "/api/qie/investigations",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "assessor",
+          "educator",
+          "senior_educator",
+          "clinical_educator",
+          "curriculum_lead",
+          "assessment_lead",
+          "simulation_lead",
+          "quality_reviewer",
+          "education_administrator",
+          "program_director",
+          "hospital_admin",
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "STAFF_ROLES | isSuper"
       }
     },
     {
@@ -4214,6 +4299,1483 @@
       }
     },
     {
+      "path": "/api/v1/practice/activities",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "procedure.record"
+        ],
+        "evidence": "requirePracticeContext: procedure.record"
+      }
+    },
+    {
+      "path": "/api/v1/practice/appointments",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "appointment.manage",
+          "practice.calendar.view"
+        ],
+        "evidence": "requirePracticeContext: appointment.manage, practice.calendar.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/appointments/[appointmentId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "appointment.manage"
+        ],
+        "evidence": "requirePracticeContext: appointment.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/assistant",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.list"
+        ],
+        "evidence": "requirePracticeContext: encounter.list"
+      }
+    },
+    {
+      "path": "/api/v1/practice/attachments",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.edit",
+          "encounter.list"
+        ],
+        "evidence": "requirePracticeContext: encounter.edit, encounter.list"
+      }
+    },
+    {
+      "path": "/api/v1/practice/availability",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "appointment.manage"
+        ],
+        "evidence": "requirePracticeContext: appointment.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/availability-config",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "appointment.manage"
+        ],
+        "evidence": "requirePracticeContext: appointment.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/booking-access",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "practice.settings.manage"
+        ],
+        "evidence": "requirePracticeContext: practice.settings.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/booking-rules",
+      "kind": "api",
+      "gate": {
+        "kind": "member-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "requirePracticeContext(null)"
+      }
+    },
+    {
+      "path": "/api/v1/practice/case-memory",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.list"
+        ],
+        "evidence": "requirePracticeContext: encounter.list"
+      }
+    },
+    {
+      "path": "/api/v1/practice/checklist-runs/[runId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "document.view",
+          "task.manage"
+        ],
+        "evidence": "requirePracticeContext: document.view, task.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/checklists",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "document.view",
+          "template.manage"
+        ],
+        "evidence": "requirePracticeContext: document.view, template.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/checklists/[checklistId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "document.view",
+          "template.manage"
+        ],
+        "evidence": "requirePracticeContext: document.view, template.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/checklists/[checklistId]/lifecycle",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "template.manage"
+        ],
+        "evidence": "requirePracticeContext: template.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/checklists/[checklistId]/runs",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "task.manage"
+        ],
+        "evidence": "requirePracticeContext: task.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/configuration",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "practice.locations.manage",
+          "practice.settings.manage"
+        ],
+        "evidence": "requirePracticeContext: practice.locations.manage, practice.settings.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/contacts",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "comm.record",
+          "patient.list"
+        ],
+        "evidence": "requirePracticeContext: comm.record, patient.list"
+      }
+    },
+    {
+      "path": "/api/v1/practice/current-activity",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "practice.home.view"
+        ],
+        "evidence": "requirePracticeContext: practice.home.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/dashboard",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "practice.home.view"
+        ],
+        "evidence": "requirePracticeContext: practice.home.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/delegation",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "practice.members.manage"
+        ],
+        "evidence": "requirePracticeContext: practice.members.manage (and 3 call(s) with no capability)"
+      }
+    },
+    {
+      "path": "/api/v1/practice/documents",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "document.author",
+          "document.view"
+        ],
+        "evidence": "requirePracticeContext: document.author, document.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/documents/[documentId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "document.author",
+          "document.sign",
+          "document.view"
+        ],
+        "evidence": "requirePracticeContext: document.author, document.sign, document.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/documents/ai-draft",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "document.author"
+        ],
+        "evidence": "requirePracticeContext: document.author"
+      }
+    },
+    {
+      "path": "/api/v1/practice/documents/batch",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "document.author",
+          "document.view"
+        ],
+        "evidence": "requirePracticeContext: document.author, document.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/documents/bulk",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "inbox.record"
+        ],
+        "evidence": "requirePracticeContext: inbox.record"
+      }
+    },
+    {
+      "path": "/api/v1/practice/documents/classify",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "inbox.record"
+        ],
+        "evidence": "requirePracticeContext: inbox.record"
+      }
+    },
+    {
+      "path": "/api/v1/practice/documents/export",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "data.export"
+        ],
+        "evidence": "requirePracticeContext: data.export"
+      }
+    },
+    {
+      "path": "/api/v1/practice/documents/generate",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "document.author"
+        ],
+        "evidence": "requirePracticeContext: document.author"
+      }
+    },
+    {
+      "path": "/api/v1/practice/documents/register",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "document.view"
+        ],
+        "evidence": "requirePracticeContext: document.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/documents/review",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "task.manage"
+        ],
+        "evidence": "requirePracticeContext: task.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/encounters",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.create",
+          "encounter.list"
+        ],
+        "evidence": "requirePracticeContext: encounter.create, encounter.list"
+      }
+    },
+    {
+      "path": "/api/v1/practice/encounters/[encounterId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.edit",
+          "encounter.list",
+          "encounter.sign"
+        ],
+        "evidence": "requirePracticeContext: encounter.edit, encounter.list, encounter.sign"
+      }
+    },
+    {
+      "path": "/api/v1/practice/encounters/[encounterId]/decisions",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.edit"
+        ],
+        "evidence": "requirePracticeContext: encounter.edit"
+      }
+    },
+    {
+      "path": "/api/v1/practice/encounters/[encounterId]/diagnoses",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "diagnosis.record"
+        ],
+        "evidence": "requirePracticeContext: diagnosis.record"
+      }
+    },
+    {
+      "path": "/api/v1/practice/encounters/[encounterId]/drafts",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.edit"
+        ],
+        "evidence": "requirePracticeContext: encounter.edit"
+      }
+    },
+    {
+      "path": "/api/v1/practice/encounters/[encounterId]/investigations",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.edit"
+        ],
+        "evidence": "requirePracticeContext: encounter.edit"
+      }
+    },
+    {
+      "path": "/api/v1/practice/encounters/[encounterId]/notes",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.edit",
+          "encounter.list"
+        ],
+        "evidence": "requirePracticeContext: encounter.edit, encounter.list"
+      }
+    },
+    {
+      "path": "/api/v1/practice/encounters/[encounterId]/outcome",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.edit"
+        ],
+        "evidence": "requirePracticeContext: encounter.edit"
+      }
+    },
+    {
+      "path": "/api/v1/practice/encounters/[encounterId]/referrals",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.edit"
+        ],
+        "evidence": "requirePracticeContext: encounter.edit"
+      }
+    },
+    {
+      "path": "/api/v1/practice/encounters/[encounterId]/treatments",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "treatment.record"
+        ],
+        "evidence": "requirePracticeContext: treatment.record"
+      }
+    },
+    {
+      "path": "/api/v1/practice/encounters/record/[patientId]/allergies",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "patient.edit"
+        ],
+        "evidence": "requirePracticeContext: patient.edit"
+      }
+    },
+    {
+      "path": "/api/v1/practice/encounters/record/[patientId]/milestones",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "patient.edit"
+        ],
+        "evidence": "requirePracticeContext: patient.edit"
+      }
+    },
+    {
+      "path": "/api/v1/practice/exceptions",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "appointment.manage"
+        ],
+        "evidence": "requirePracticeContext: appointment.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/flags",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/v1/practice/follow-up-plans",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "followup.manage",
+          "followup.view"
+        ],
+        "evidence": "requirePracticeContext: followup.manage, followup.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/follow-ups",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "followup.manage",
+          "followup.view"
+        ],
+        "evidence": "requirePracticeContext: followup.manage, followup.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/follow-ups/[followUpId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "followup.manage",
+          "followup.view"
+        ],
+        "evidence": "requirePracticeContext: followup.manage, followup.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/form-submissions/[submissionId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "document.view",
+          "task.manage"
+        ],
+        "evidence": "requirePracticeContext: document.view, task.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/forms",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "document.view",
+          "template.manage"
+        ],
+        "evidence": "requirePracticeContext: document.view, template.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/forms/[formId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "document.view",
+          "template.manage"
+        ],
+        "evidence": "requirePracticeContext: document.view, template.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/forms/[formId]/lifecycle",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "template.manage"
+        ],
+        "evidence": "requirePracticeContext: template.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/forms/[formId]/submissions",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "task.manage"
+        ],
+        "evidence": "requirePracticeContext: task.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/identifier-format",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/v1/practice/identity",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "practice.settings.manage"
+        ],
+        "evidence": "requirePracticeContext: practice.settings.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/identity/handle-check",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "practice.settings.manage"
+        ],
+        "evidence": "requirePracticeContext: practice.settings.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/inbox",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "inbox.record",
+          "inbox.review"
+        ],
+        "evidence": "requirePracticeContext: inbox.record, inbox.review"
+      }
+    },
+    {
+      "path": "/api/v1/practice/intelligence",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "report.view"
+        ],
+        "evidence": "requirePracticeContext: report.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/knowledge",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "document.view",
+          "template.manage"
+        ],
+        "evidence": "requirePracticeContext: document.view, template.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/knowledge/[guidanceId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "document.view",
+          "template.manage"
+        ],
+        "evidence": "requirePracticeContext: document.view, template.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/knowledge/[guidanceId]/lifecycle",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "template.manage"
+        ],
+        "evidence": "requirePracticeContext: template.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/library",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "document.view",
+          "template.manage"
+        ],
+        "evidence": "requirePracticeContext: document.view, template.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/lifecycle",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "data.export",
+          "practice.lifecycle.view"
+        ],
+        "evidence": "requirePracticeContext: data.export, practice.lifecycle.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/medications",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "medication.override",
+          "medication.record",
+          "medication.view"
+        ],
+        "evidence": "requirePracticeContext: medication.override, medication.record, medication.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/note-templates",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.edit",
+          "template.manage"
+        ],
+        "evidence": "requirePracticeContext: encounter.edit, template.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/note-templates/[templateId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.edit",
+          "template.manage"
+        ],
+        "evidence": "requirePracticeContext: encounter.edit, template.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/notifications",
+      "kind": "api",
+      "gate": {
+        "kind": "member-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "requirePracticeContext(null)"
+      }
+    },
+    {
+      "path": "/api/v1/practice/offline/day",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "practice.home.view"
+        ],
+        "evidence": "requirePracticeContext: practice.home.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/operations/users",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/v1/practice/parameters",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "pack.install",
+          "parameter.configure",
+          "parameter.record",
+          "parameter.view"
+        ],
+        "evidence": "requirePracticeContext: pack.install, parameter.configure, parameter.record, parameter.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/pathways",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "pathway.design",
+          "pathway.view"
+        ],
+        "evidence": "requirePracticeContext: pathway.design, pathway.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/pathways/assignments",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "pathway.assign",
+          "pathway.view"
+        ],
+        "evidence": "requirePracticeContext: pathway.assign, pathway.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/pathways/assignments/[pathwayId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "pathway.assign",
+          "pathway.view"
+        ],
+        "evidence": "requirePracticeContext: pathway.assign, pathway.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/pathways/templates/[templateId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "pathway.design"
+        ],
+        "evidence": "requirePracticeContext: pathway.design"
+      }
+    },
+    {
+      "path": "/api/v1/practice/patient-access",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "practice.settings.manage"
+        ],
+        "evidence": "requirePracticeContext: practice.settings.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/patients",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "patient.create",
+          "patient.list"
+        ],
+        "evidence": "requirePracticeContext: patient.create, patient.list"
+      }
+    },
+    {
+      "path": "/api/v1/practice/patients/[patientId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "patient.edit",
+          "patient.view"
+        ],
+        "evidence": "requirePracticeContext: patient.edit, patient.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/patients/[patientId]/export",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "data.export"
+        ],
+        "evidence": "requirePracticeContext: data.export"
+      }
+    },
+    {
+      "path": "/api/v1/practice/patients/[patientId]/merge",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "patient.merge"
+        ],
+        "evidence": "requirePracticeContext: patient.merge"
+      }
+    },
+    {
+      "path": "/api/v1/practice/patients/search",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "patient.list"
+        ],
+        "evidence": "requirePracticeContext: patient.list"
+      }
+    },
+    {
+      "path": "/api/v1/practice/planner",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "appointment.manage"
+        ],
+        "evidence": "requirePracticeContext: appointment.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/portfolio",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "practice.home.view"
+        ],
+        "evidence": "requirePracticeContext: practice.home.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/preferences",
+      "kind": "api",
+      "gate": {
+        "kind": "member-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "requirePracticeContext(null)"
+      }
+    },
+    {
+      "path": "/api/v1/practice/procedure-types",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.list",
+          "procedure.manage"
+        ],
+        "evidence": "requirePracticeContext: encounter.list, procedure.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/procedures",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.list",
+          "procedure.record"
+        ],
+        "evidence": "requirePracticeContext: encounter.list, procedure.record"
+      }
+    },
+    {
+      "path": "/api/v1/practice/procedures/[procedureId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.list",
+          "procedure.record"
+        ],
+        "evidence": "requirePracticeContext: encounter.list, procedure.record"
+      }
+    },
+    {
+      "path": "/api/v1/practice/provisioning/[requestId]",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/v1/practice/provisioning/individual",
+      "kind": "api",
+      "gate": {
+        "kind": "role-list",
+        "roles": [
+          "super_admin"
+        ],
+        "appointment": false,
+        "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/v1/practice/queue/[entryId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "queue.manage"
+        ],
+        "evidence": "requirePracticeContext: queue.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/reflections",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "practice.home.view"
+        ],
+        "evidence": "requirePracticeContext: practice.home.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/registration",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "patient.create"
+        ],
+        "evidence": "requirePracticeContext: patient.create"
+      }
+    },
+    {
+      "path": "/api/v1/practice/registration-templates",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "practice.settings.manage"
+        ],
+        "evidence": "requirePracticeContext: practice.settings.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/registration-workspace",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "patient.create",
+          "patient.list"
+        ],
+        "evidence": "requirePracticeContext: patient.create, patient.list"
+      }
+    },
+    {
+      "path": "/api/v1/practice/report-schedules",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "report.view"
+        ],
+        "evidence": "requirePracticeContext: report.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/reports/export",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "report.view"
+        ],
+        "evidence": "requirePracticeContext: report.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/saved-searches",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "search.use"
+        ],
+        "evidence": "requirePracticeContext: search.use"
+      }
+    },
+    {
+      "path": "/api/v1/practice/search",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "search.use"
+        ],
+        "evidence": "requirePracticeContext: search.use"
+      }
+    },
+    {
+      "path": "/api/v1/practice/security",
+      "kind": "api",
+      "gate": {
+        "kind": "member-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "requirePracticeContext(null)"
+      }
+    },
+    {
+      "path": "/api/v1/practice/security/session",
+      "kind": "api",
+      "gate": {
+        "kind": "member-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "requirePracticeContext(null)"
+      }
+    },
+    {
+      "path": "/api/v1/practice/sessions",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "appointment.manage"
+        ],
+        "evidence": "requirePracticeContext: appointment.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/signup",
+      "kind": "api",
+      "gate": {
+        "kind": "unknown",
+        "roles": [],
+        "appointment": false,
+        "evidence": null
+      }
+    },
+    {
+      "path": "/api/v1/practice/smart-phrases",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "encounter.edit",
+          "template.manage"
+        ],
+        "evidence": "requirePracticeContext: encounter.edit, template.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/stream",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "practice.home.view"
+        ],
+        "evidence": "requirePracticeContext: practice.home.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/task-orchestration",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "task.manage",
+          "task.view"
+        ],
+        "evidence": "requirePracticeContext: task.manage, task.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/tasks",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "task.manage",
+          "task.view"
+        ],
+        "evidence": "requirePracticeContext: task.manage, task.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/tasks/[taskId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "task.manage",
+          "task.view"
+        ],
+        "evidence": "requirePracticeContext: task.manage, task.view"
+      }
+    },
+    {
+      "path": "/api/v1/practice/team",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "practice.members.manage"
+        ],
+        "evidence": "requirePracticeContext: practice.members.manage"
+      }
+    },
+    {
+      "path": "/api/v1/practice/team/join",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
+      "path": "/api/v1/practice/threads",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "message.use"
+        ],
+        "evidence": "requirePracticeContext: message.use"
+      }
+    },
+    {
+      "path": "/api/v1/practice/threads/[threadId]",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "message.use"
+        ],
+        "evidence": "requirePracticeContext: message.use"
+      }
+    },
+    {
+      "path": "/api/v1/practice/workspaces",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
+      "path": "/api/v1/practice/workspaces/[workspaceId]/access",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
+      "path": "/api/v1/practice/workspaces/[workspaceId]/activate",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
+      "path": "/api/v1/practice/workspaces/[workspaceId]/onboarding",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
       "path": "/api/workflows",
       "kind": "api",
       "gate": {
@@ -4414,6 +5976,16 @@
       }
     },
     {
+      "path": "/login",
+      "kind": "workspace",
+      "gate": {
+        "kind": "none",
+        "roles": [],
+        "appointment": false,
+        "evidence": "no access check found in this file"
+      }
+    },
+    {
       "path": "/office-governance",
       "kind": "workspace",
       "gate": {
@@ -4463,6 +6035,16 @@
         ],
         "appointment": true,
         "evidence": "const ALLOWED = [\"hospital_admin\", \"super_admin\", \"assessor\"]"
+      }
+    },
+    {
+      "path": "/signup",
+      "kind": "workspace",
+      "gate": {
+        "kind": "none",
+        "roles": [],
+        "appointment": false,
+        "evidence": "no access check found in this file"
       }
     },
     {

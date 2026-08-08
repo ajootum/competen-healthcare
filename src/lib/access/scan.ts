@@ -18,6 +18,9 @@ export type GateKind =
   | "auth-only"      // signed in, no role restriction
   | "service"        // machine authentication (a shared secret) — not a person at all
   | "platform-role"  // the LANDLORD axis (platform operator), a different plane from tenant roles
+  | "capability"     // the TENANT axis (Competen Practice): a capability code held via a membership
+  | "member-only"    // a practice context is required, but no capability — the tenant "auth-only"
+  | "hq-position"    // the GOVERNANCE axis (HQ): a capability held through a position appointment
   | "none"           // no access check of any kind — reachable without signing in
   | "unknown";       // a gate exists but this scanner does not understand it
 
@@ -26,6 +29,7 @@ export type Gate = {
   roles: string[];          // roles that pass; empty for auth-only
   appointment: boolean;     // additionally reachable by an OGS office appointment
   evidence: string | null;  // the source fragment the classification came from
+  capabilities?: string[];  // tenant-plane capability codes, for "capability" gates only
 };
 
 export type MatrixEntry = { path: string; kind: "workspace" | "api"; gate: Gate };
@@ -42,6 +46,15 @@ const SERVICE = /CRON_SECRET|headers\.get\(\s*["']authorization["']\s*\)/i;
 // platform's own admin routes.
 const LANDLORD = /landlordCan\s*\(\s*[A-Za-z_$][\w$]*\s*,\s*((?:"[a-z_]+"\s*,?\s*)+)\)/;
 const LANDLORD_ANY = /getLandlordCaller\s*\(/;
+// The TENANT plane (Competen Practice): requirePracticeContext(capability). A third idiom, and the
+// scanner was blind to it until it was taught — see the note on classifyPractice below for what that
+// blindness actually produced.
+const PRACTICE_ANY = /requirePracticeContext\s*\(/;
+// Four spellings, all of them real in this codebase: a literal, null, a resolved constant, and a ternary
+// whose branches are literals -- `requirePracticeContext(to === "SIGNED" ? "document.sign" : "document.author")`,
+// where the capability depends on the transition being attempted. BOTH branches are taken for the ternary:
+// either one reaches the route, and the union is what "who can reach this at all" means.
+const PRACTICE_CALL = /requirePracticeContext\s*\(\s*(?:"([a-z0-9._]+)"|(null)|([A-Z][A-Za-z0-9_]*)\s*\.\s*([A-Za-z0-9_]+)|[^()]*?\?\s*"([a-z0-9._]+)"\s*:\s*"([a-z0-9._]+)")\s*\)/g;
 // Two spellings of the same gate: pages redirect to /login, API routes return 401. Both mean
 // "signed in, no role restriction". `!user?.email` is the same check on a route that needs the address.
 const AUTH = /if\s*\(\s*!\s*user(?:\?\.\w+)?\s*\)\s*(?:redirect\(|return\s)/;
@@ -102,8 +115,91 @@ function classifyApiAuth(source: string, groups: RoleGroups): Gate | null {
   return { kind: "auth-only", roles: [], appointment, evidence: "getCaller() with no role predicate" };
 }
 
-export function classifyGate(source: string, groups: RoleGroups = {}): Gate {
+// ── The tenant idiom ──────────────────────────────────────────────────────────
+// Capability constants (CHECKLIST_CAPABILITIES.manage and friends) are passed in resolved rather than
+// restated here, for the same reason RoleGroups are: a copy of a constant drifts from the constant.
+export type CapabilityConsts = Record<string, Record<string, string>>;
+
+/**
+ * `requirePracticeContext(capability)` — Competen Practice's gate, and a plane of its own.
+ *
+ * ⚠ WHAT THIS FUNCTION'S ABSENCE USED TO PRODUCE, RECORDED SO NOBODY REMOVES IT AS REDUNDANT. Before it
+ * existed the scanner had no rule for this idiom, so a practice route matched no gate pattern at all and
+ * fell through to the final `anySignal` test — which reported `none`, meaning "no access check of any
+ * kind, reachable without signing in", and which roleReaches answers `true` for. Ninety-eight correctly
+ * gated routes would have been published to a manager as open to the world. That is the exact false
+ * reassurance this module was written to prevent, arriving through the module's own blind spot.
+ *
+ * ⚠ AN UNRESOLVED CONSTANT IS `unknown`, NEVER an empty capability list. A `capability` gate carrying no
+ * codes reads as "gated, nothing to see here" while proving nothing about what actually passes.
+ */
+function classifyPractice(source: string, caps: CapabilityConsts): Gate | null {
+  if (!PRACTICE_ANY.test(source)) return null;
   const appointment = APPOINTMENT.test(source);
+
+  const codes: string[] = [];
+  let nullCalls = 0;
+  let parsedCalls = 0;
+  let unresolved: string | null = null;
+
+  PRACTICE_CALL.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = PRACTICE_CALL.exec(source))) {
+    parsedCalls++;
+    if (m[1]) { codes.push(m[1]); continue; }
+    // requirePracticeContext(null): a practice context is required and no capability is. That is a real
+    // gate and a materially weaker one, so it gets its own kind rather than being folded in with the rest.
+    if (m[2]) { nullCalls++; continue; }
+    // ⚠ A TERNARY IS ONE CALL AND TWO CODES, which is why calls are counted separately from codes below.
+    if (m[5] && m[6]) { codes.push(m[5], m[6]); continue; }
+    const resolved = caps[m[3]]?.[m[4]];
+    if (resolved) codes.push(resolved);
+    else unresolved = `${m[3]}.${m[4]}`;
+  }
+
+  if (unresolved)
+    return { kind: "unknown", roles: [], appointment, capabilities: codes,
+      evidence: `requirePracticeContext(${unresolved}) — capability constant could not be resolved` };
+
+  // ⚠ EVERY CALL MUST HAVE BEEN ACCOUNTED FOR. A call spelled in a way PRACTICE_CALL does not match --
+  // a variable, a ternary, a template string -- sits next to calls that did parse, and reporting
+  // `capability` would claim the unparsed one is covered by the parsed ones. Counted rather than assumed.
+  // The import spells it `requirePracticeContext,` so it does not match this and must not be subtracted.
+  const calls = (source.match(/requirePracticeContext\s*\(/g) ?? []).length;
+  if (calls !== parsedCalls)
+    return { kind: "unknown", roles: [], appointment, capabilities: codes,
+      evidence: `${calls} requirePracticeContext call(s), ${parsedCalls} parsed` };
+
+  if (codes.length === 0 && nullCalls > 0)
+    return { kind: "member-only", roles: [], appointment, evidence: "requirePracticeContext(null)" };
+
+  return {
+    kind: "capability", roles: [], appointment,
+    capabilities: [...new Set(codes)].sort(),
+    evidence: `requirePracticeContext: ${[...new Set(codes)].sort().join(", ")}${nullCalls ? ` (and ${nullCalls} call(s) with no capability)` : ""}`,
+  };
+}
+
+export function classifyGate(source: string, groups: RoleGroups = {}, caps: CapabilityConsts = {}): Gate {
+  const appointment = APPOINTMENT.test(source);
+
+  // ⚠ THE TENANT IDIOM IS TESTED FIRST, AND THE ORDER IS LOAD-BEARING. Two routes gate per-verb on both
+  // planes (practice/lifecycle, practice/team/join): a capability on one verb, an estate role on another.
+  // classifyApiAuth would match the getCaller() in those files and report `auth-only`, silently dropping
+  // the capability. So the capability is established first, and any estate roles found alongside are
+  // carried in `roles` — the module's existing union rule, "the widest way in", applied across planes
+  // rather than within one.
+  const practice = classifyPractice(source, caps);
+  if (practice) {
+    if (practice.kind !== "capability" && practice.kind !== "member-only") return practice;
+    const alsoApi = classifyApiAuth(source, groups);
+    const estateRoles = alsoApi && alsoApi.kind !== "auth-only" ? alsoApi.roles : [];
+    if (estateRoles.length === 0) return practice;
+    return {
+      ...practice, roles: estateRoles,
+      evidence: `${practice.evidence}; also reachable by role: ${estateRoles.join(", ")}`,
+    };
+  }
 
   const api = classifyApiAuth(source, groups);
   if (api) return api;
@@ -142,7 +238,11 @@ export function classifyGate(source: string, groups: RoleGroups = {}): Gate {
   // "a gate this scanner could not parse", and conflating the two would bury a genuinely open route among
   // the scanner's own blind spots. Some of these are correct — the sign-in endpoints have to be reachable
   // before anyone is signed in — so the surface lists them for a human to confirm rather than judging.
-  const anySignal = /auth\.getUser|getCaller|getLandlordCaller|createClient\(\)|ALLOWED|roles/.test(source);
+  // ⚠ requirePracticeContext IS IN THIS LIST AS A SECOND LINE OF DEFENCE, not because it is reachable.
+  // classifyPractice above already claims every file containing it. If that ever stops being true, the
+  // failure this catches is a practice route reported as `none` -- open to the world -- which is the one
+  // wrong answer this module must never give.
+  const anySignal = /auth\.getUser|getCaller|getLandlordCaller|requirePracticeContext|createClient\(\)|ALLOWED|roles/.test(source);
   if (!anySignal) return { kind: "none", roles: [], appointment, evidence: "no access check found in this file" };
 
   return { kind: "unknown", roles: [], appointment, evidence: null };
@@ -154,7 +254,23 @@ export function roleReaches(gate: Gate, role: string): boolean | null {
   switch (gate.kind) {
     case "auth-only": return true;
     case "service": return false;   // machine-authenticated: no human role reaches it by role
-    case "platform-role": return false; // landlord plane: a tenant role never reaches it
+    // ⚠ THE OWNER SHORT-CIRCUIT IS REAL ON BOTH NON-TENANT PLANES, AND THIS USED TO SAY PLAIN `false`.
+    // `getLandlordCaller` sets `isOwner: isSuperAdmin || hasPlatformRole(me, "platform_owner")`, and
+    // `requireHqContext` tests ownership BEFORE it reads any HQ table. `super_admin` is in TENANT_ROLES,
+    // so answering `false` for it told a manager that the two accounts which reach every governance page
+    // cannot reach any of them. That is a false alarm rather than false reassurance -- the safer of the
+    // two ways to be wrong, and still a matrix that lies about the most privileged accounts on the
+    // platform. Every OTHER estate role genuinely cannot reach these planes.
+    case "platform-role":
+    case "hq-position":
+      return role === "super_admin";
+    // ⚠ THE TENANT PLANE IS NOT DECIDED BY AN ESTATE ROLE, so neither tick nor cross is the truth. What
+    // passes here is a capability held through a practice membership, and a nurse may hold it in one
+    // practice and not another -- a single answer for "nurse" cannot exist. `false` would tell a manager
+    // the route is locked to staff who reach it daily; `true` would claim a grant nobody checked.
+    // The exception is a route that ALSO carries an estate gate on another verb, where the roles are real.
+    case "capability": return gate.roles.length ? gate.roles.includes(role) : null;
+    case "member-only": return null;    // practice membership, which no estate role implies
     case "none": return true;       // no check at all - reachable by anyone, signed in or not
     case "role-list": return gate.roles.includes(role);
     case "single-role": return gate.roles.includes(role);

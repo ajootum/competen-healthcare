@@ -67,6 +67,41 @@ async function main() {
   ok("a route with several predicates reports the union, not the narrowest",
     G.STAFF_ROLES.every(r => wide.roles.includes(r)), JSON.stringify(wide.roles));
 
+  // ── The tenant plane (Competen Practice) ──
+  //
+  // ⚠ THE FIRST ASSERTION HERE IS THE WHOLE REASON THE OTHERS EXIST. Before scan.ts learned this idiom, a
+  // practice route matched no pattern and fell through to `none` -- "reachable without signing in", which
+  // roleReaches answers `true` for. Ninety-odd correctly gated routes classified as open to the world, and
+  // the tool built to prevent false reassurance was producing it. If this ever goes red again, that is the
+  // fault returning, not a new one.
+  console.log("\nThe tenant plane is read as a gate, never as an open door");
+  const CAPS = { CHECKLIST_CAPABILITIES: { manage: "checklist.manage", view: "checklist.view" } };
+  const capGate = classifyGate('const auth = await requirePracticeContext("patient.list");\nif (isDenied(auth)) return auth;', G, CAPS);
+  eq("a capability gate is not `none`", capGate.kind === "none", false);
+  eq("...it is its own kind", capGate.kind, "capability");
+  eq("...carrying the code it actually enforces", JSON.stringify(capGate.capabilities), JSON.stringify(["patient.list"]));
+  eq("a practice context with no capability is its own weaker kind",
+    classifyGate("const auth = await requirePracticeContext(null);\nif (isDenied(auth)) return auth;", G, CAPS).kind, "member-only");
+  eq("a capability constant is resolved, not guessed",
+    JSON.stringify(classifyGate("await requirePracticeContext(CHECKLIST_CAPABILITIES.manage);", G, CAPS).capabilities),
+    JSON.stringify(["checklist.manage"]));
+  // ⚠ An unresolved constant must NOT become a `capability` gate with an empty list -- that reads as
+  // "gated, nothing to see here" while proving nothing about what passes.
+  const ghost = classifyGate("await requirePracticeContext(MYSTERY_CAPABILITIES.manage);", G, CAPS);
+  eq("an unresolved capability constant is flagged, not silently emptied", ghost.kind, "unknown");
+  // A ternary is one call and two codes: either capability reaches the route, so both are reported.
+  const tern = classifyGate('await requirePracticeContext(to === "SIGNED" ? "document.sign" : "document.author");', G, CAPS);
+  eq("both branches of a ternary capability are taken", JSON.stringify(tern.capabilities), JSON.stringify(["document.author", "document.sign"]));
+  // A call spelled in a way the scanner cannot parse, sitting beside ones it can.
+  eq("an unparsed call beside parsed ones is flagged rather than covered by them",
+    classifyGate('await requirePracticeContext("patient.list");\nawait requirePracticeContext(someVariable);', G, CAPS).kind, "unknown");
+  eq("an estate role does not decide a tenant capability", roleReaches(capGate, "nurse"), null);
+  eq("...and is not answered false either, which would read as locked", roleReaches(capGate, "nurse") === false, false);
+  // The two routes that gate per-verb on BOTH planes: the capability must not erase the estate roles.
+  const both = classifyGate('const auth = await requirePracticeContext("practice.lifecycle.view");\nconst c = await getCaller();\nif (!isAdmin(c)) return forbidden();', G, CAPS);
+  eq("a route gated on both planes keeps its capability", both.kind, "capability");
+  ok("...and keeps the estate roles that also reach it", both.roles.includes("super_admin"), JSON.stringify(both.roles));
+
   console.log("\nAn unreadable gate never reads as access");
   const unknown = classifyGate("something the scanner has never seen but mentions roles", G);
   eq("...its kind is unknown", unknown.kind, "unknown");
