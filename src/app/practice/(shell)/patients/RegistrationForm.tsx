@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { SECTION_BADGE, BUTTON } from "@/lib/practice/palette";
 import { resolveApplicable, clearedNotice } from "@/lib/practice/registration-condition";
+import FormFieldInput from "@/components/practice/FormFieldInput";
 
 // CPR-PRM-001 s4/s5/s6 -- the registration form.
 //
@@ -546,25 +547,21 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
             {customFields.map((f: any) => (
               <label key={f.field_key} className={label}>
                 {f.label}{f.required ? " *" : ""}
-                {f.field_type === "select" ? (
-                  <select value={String(custom[f.field_key] ?? "")}
-                    onChange={e => editCustom(f.field_key, e.target.value)}
-                    className={`mt-1 ${input}`}>
-                    <option value="">—</option>
-                    {(f.options ?? []).map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                ) : f.field_type === "boolean" ? (
-                  <span className="mt-1 flex items-center gap-1.5 text-[13px] text-gray-700">
-                    <input type="checkbox" checked={custom[f.field_key] === true}
-                      onChange={e => editCustom(f.field_key, e.target.checked)} />
-                    Yes
-                  </span>
-                ) : (
-                  <input type={f.field_type === "number" ? "number" : f.field_type === "date" ? "date" : "text"}
-                    value={String(custom[f.field_key] ?? "")}
-                    onChange={e => editCustom(f.field_key, e.target.value)}
-                    className={`mt-1 ${input}`} />
-                )}
+                {/* ⚠ THE ONE FIELD RENDERER, SHARED WITH PRACTICE FORMS (CPR-KS-001 Phase 3).
+                    This was an inline ternary handling three of the nine types a practice can author:
+                    a multi-select drew a single-line text box, and so did a long text, and phone and
+                    email drew untyped text. Every type is drawn properly now, and it is drawn by the
+                    same component and validated by the same function that a consent form uses.
+                    ⚠ IT STILL GOES THROUGH `editCustom`, which is `edit`, which is the ONE write path
+                    where a withdrawn question's answer is thrown away. A control writing to setCustom
+                    directly would silently opt out of the clearing. */}
+                <span className="mt-1 block">
+                  <FormFieldInput
+                    field={f}
+                    value={custom[f.field_key]}
+                    onChange={v => editCustom(f.field_key, v)}
+                  />
+                </span>
                 {f.help && <span className="mt-0.5 block font-normal text-[11px] text-gray-400">{f.help}</span>}
               </label>
             ))}
