@@ -1,6 +1,7 @@
 import { audit } from "@/lib/practice/provisioning";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { type WorkspaceContext } from "@/lib/practice/access";
+import { conditionMet, type FieldCondition } from "@/lib/practice/registration-condition";
 
 // CPR-PRM-001 s2, s9 -- THE REGISTRATION CONFIGURATION FRAMEWORK.
 //
@@ -72,37 +73,20 @@ const PROTECTED_GROUPS = [...new Set(CORE_FIELDS.filter(f => f.protected).map(f 
   }));
 
 // ── THE CONDITION EVALUATOR ──────────────────────────────────────────────────────────────────────────
-
-export type FieldCondition =
-  | { when: string; equals: unknown }
-  | { when: string; in: unknown[] }
-  | { when: string; isPresent: boolean };
-
-/**
- * Does this field apply, given what has been filled in so far?
- *
- * ONE FUNCTION, USED BY THE SERVER AND THE FORM. Two evaluators would disagree eventually, and the one
- * that mattered would be the server's -- silently, after somebody had filled the whole form in.
- *
- * AN UNKNOWN CONDITION SHAPE MEANS THE FIELD APPLIES. The alternative is a field that quietly vanishes
- * because somebody wrote a rule the evaluator does not understand, and a vanished field on a
- * registration form is a question nobody was asked.
- */
-export function conditionMet(condition: unknown, values: Record<string, unknown>): boolean {
-  if (!condition || typeof condition !== "object") return true;
-  const c = condition as Record<string, unknown>;
-  if (typeof c.when !== "string") return true;
-
-  const actual = values[c.when];
-  if ("isPresent" in c) {
-    const present = actual !== undefined && actual !== null && actual !== "" &&
-      !(Array.isArray(actual) && actual.length === 0);
-    return c.isPresent === true ? present : !present;
-  }
-  if ("in" in c && Array.isArray(c.in)) return c.in.some(v => String(v) === String(actual));
-  if ("equals" in c) return String(c.equals) === String(actual);
-  return true;
-}
+//
+// ⚠ IT LIVES IN registration-condition.ts NOW, AND IS RE-EXPORTED FROM HERE.
+//
+// Not a tidying. This module imports `audit` (node:crypto) and WorkspaceContext (next/headers), so a
+// "use client" component that imported the evaluator from here would pull the server into the browser
+// bundle. The evaluator is pure and had no business being on that side of the line -- and until it
+// moved, the FORM had no way to reach it, so every conditional field was validated conditionally by
+// this file and then drawn unconditionally on screen. A practice that asked for a guardian's name only
+// for a minor showed that field to everybody.
+//
+// Re-exported rather than relocated-and-rewired so `conditionMet` still has exactly one definition and
+// every existing importer of it keeps working.
+export { conditionMet };
+export type { FieldCondition };
 
 // ── AUTHORING ────────────────────────────────────────────────────────────────────────────────────────
 

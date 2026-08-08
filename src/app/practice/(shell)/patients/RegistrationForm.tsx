@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { SECTION_BADGE, BUTTON } from "@/lib/practice/palette";
+import { resolveApplicable, clearedNotice } from "@/lib/practice/registration-condition";
 
 // CPR-PRM-001 s4/s5/s6 -- the registration form.
 //
@@ -15,6 +16,12 @@ import { SECTION_BADGE, BUTTON } from "@/lib/practice/palette";
 // THE GUARDIAN BLOCK IS NOT A SETTING. Which fields appear is the practice's template; whether a
 // guardian is REQUIRED is the date of birth, and no configuration can switch that off -- the same floor
 // the server enforces.
+//
+// A CONDITIONAL FIELD IS DRAWN CONDITIONALLY, USING THE SERVER'S OWN EVALUATOR -- see `valuesOf` and
+// `edit` below. It was not: every field the template carried was rendered every time, so a practice
+// that configured "ask for the guardian's name only when the patient is a minor" showed that question
+// to everybody, and the only thing the condition did was decide whether the answer was REQUIRED. The
+// rule was enforced on submission and invisible on screen.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -44,6 +51,36 @@ const emptyRelation = (asGuardian: boolean): Relation => ({
   phone: "", secondaryPhone: "", email: "",
   isLegalGuardian: asGuardian, mayReceiveInformation: true, isPrimary: false,
 });
+
+type PatientDraft = {
+  givenName: string; middleName: string; familyName: string; sex: string;
+  birthDate: string; ageEstimateYears: string; phone: string; email: string; nationalId: string;
+  reasonForVisit: string; appointmentAt: string;
+};
+
+const composeName = (s: PatientDraft) =>
+  [s.givenName, s.middleName, s.familyName].map(x => x.trim()).filter(Boolean).join(" ");
+
+/**
+ * The form, keyed the way the template keys its fields -- which is what a condition names.
+ *
+ * ⚠ BUILT TO MATCH register()'s OWN MAP, KEY FOR KEY AND EMPTY-FOR-EMPTY. The server evaluates the
+ * same conditions against the map IT builds, so if the two disagreed about whether an untouched phone
+ * box is `""` or absent, a field could be on screen and not applicable on the server, or required on
+ * the server and absent from the screen. The `|| undefined`s here mirror the `|| undefined`s in
+ * submit() below, which are what register() actually receives.
+ */
+function valuesOf(s: PatientDraft, custom: Record<string, unknown>): Record<string, unknown> {
+  return {
+    display_name: composeName(s) || undefined,
+    sex: s.sex,
+    birth_date: s.birthDate || undefined,
+    age_estimate_years: s.ageEstimateYears ? Number(s.ageEstimateYears) : undefined,
+    phone: s.phone || undefined,
+    email: s.email || undefined,
+    ...custom,
+  };
+}
 
 /** The same arithmetic as relationships.ts ageFrom(). Years, months and days -- s4. */
 function ageFrom(birthDate: string, today: string) {
@@ -93,13 +130,15 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
   const [error, setError] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<any[] | null>(null);
 
-  const [p, setP] = useState({
+  const [p, setP] = useState<PatientDraft>({
     givenName: "", middleName: "", familyName: "", sex: "unspecified",
     birthDate: "", ageEstimateYears: "", phone: "", email: "", nationalId: "",
     reasonForVisit: "", appointmentAt: "",
   });
   const [relations, setRelations] = useState<Relation[]>([]);
   const [custom, setCustom] = useState<Record<string, unknown>>({});
+  // The sentence shown when a question was withdrawn and its answer thrown away -- see `edit` below.
+  const [clearedNote, setClearedNote] = useState<string | null>(null);
   // Set once a draft has been saved, so pressing Save again updates it rather than leaving a trail of
   // half-finished copies of the same person on somebody's desk.
   const [draftId, setDraftId] = useState<string | null>(null);
@@ -116,8 +155,53 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
     Math.abs(Number(p.ageEstimateYears) - majorityAge) <= 2;
 
   const hasGuardian = relations.some(r => r.isLegalGuardian && GUARDIAN_TYPES.has(r.relationshipType) && r.fullName.trim());
-  const name = [p.givenName, p.middleName, p.familyName].map(s => s.trim()).filter(Boolean).join(" ");
-  const customFields = (form.fields ?? []).filter((f: any) => !f.is_core && f.visible);
+  const name = composeName(p);
+
+  // ── WHICH OF THIS PRACTICE'S OWN QUESTIONS APPLY RIGHT NOW ──────────────────────────────────────
+  const formValues = useMemo(() => valuesOf(p, custom), [p, custom]);
+  const resolved = useMemo(() => resolveApplicable(form.fields ?? [], formValues), [form.fields, formValues]);
+  const customFields = resolved.applicable.filter((f: any) => !f.is_core);
+
+  // ── ONE WRITE PATH FOR EVERY ANSWER ON THIS FORM ────────────────────────────────────────────────
+  //
+  // Every change to the patient's details and every change to a configured question goes through
+  // `edit`, and `edit` is where a withdrawn question's answer is thrown away. Two reasons it is here
+  // rather than in an effect watching the state:
+  //
+  //   1. React 19 refuses it. Clearing state from an effect is a cascading render, and this project's
+  //      lint says so as an error rather than a warning. "You might not need an effect" is right here:
+  //      the only thing that can withdraw a question is somebody changing an answer, and that is an
+  //      event, not a synchronisation.
+  //   2. ONE PLACE MEANS ONE PLACE TO GET WRONG. Every input below calls `edit`; a handler that wrote
+  //      to setP directly would silently opt out of the clearing, and the next person adding a field
+  //      to this form would have to know that.
+  const edit = useCallback((patch: Partial<PatientDraft>, customPatch?: Record<string, unknown>) => {
+    const nextP = { ...p, ...patch };
+    const nextCustom = customPatch ? { ...custom, ...customPatch } : custom;
+    const { cleared, values } = resolveApplicable(form.fields ?? [], valuesOf(nextP, nextCustom));
+
+    setP(nextP);
+    if (cleared.length === 0) { if (customPatch) setCustom(nextCustom); return; }
+
+    // THE ANSWER GOES, and it is SAID. A question disappearing takes what somebody typed with it, and
+    // a screen that does neither of those things out loud is how a form loses a minute of work with no
+    // account of where it went.
+    const kept: Record<string, unknown> = {};
+    for (const k of Object.keys(nextCustom)) if (k in values) kept[k] = nextCustom[k];
+    setCustom(kept);
+    setClearedNote(clearedNotice(cleared.map((f: any) => String(f.label ?? f.field_key))));
+  }, [p, custom, form.fields]);
+
+  const editCustom = (key: string, value: unknown) => edit({}, { [key]: value });
+
+  // WHAT ACTUALLY GOES IN THE PAYLOAD: a whitelist of the questions on screen. `edit` has already
+  // cleared the state, so the two agree -- but only one of them stays right if somebody later decides
+  // clearing was too aggressive, and it is not the state map.
+  const applicableCustom = useMemo(() => {
+    const out: Record<string, unknown> = {};
+    for (const f of customFields) if (f.field_key in custom) out[f.field_key] = custom[f.field_key];
+    return out;
+  }, [customFields, custom]);
 
   // A CHILD'S CONTACT IS THEIR GUARDIAN'S. A six-month-old has no phone, and demanding one makes this
   // form unusable for exactly the patients whose records matter most.
@@ -162,7 +246,10 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
         })),
         reasonForVisit: p.reasonForVisit || undefined,
         appointmentAt: p.appointmentAt ? new Date(p.appointmentAt).toISOString() : undefined,
-        custom, confirmNew,
+        // ⚠ NOT `custom`. Only the questions this form is actually asking travel -- an answer to a
+        // question the form withdrew must not reach the server, which would both store it and use it
+        // to decide that some OTHER conditional field is required.
+        custom: applicableCustom, confirmNew,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -243,13 +330,13 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
       <div>
         <div className="grid sm:grid-cols-3 gap-2">
           <label className={label}>First name
-            <input value={p.givenName} onChange={e => setP(v => ({ ...v, givenName: e.target.value }))} className={`mt-1 ${input}`} />
+            <input value={p.givenName} onChange={e => edit({ givenName: e.target.value })} className={`mt-1 ${input}`} />
           </label>
           <label className={label}>Middle name
-            <input value={p.middleName} onChange={e => setP(v => ({ ...v, middleName: e.target.value }))} className={`mt-1 ${input}`} />
+            <input value={p.middleName} onChange={e => edit({ middleName: e.target.value })} className={`mt-1 ${input}`} />
           </label>
           <label className={label}>Last name
-            <input value={p.familyName} onChange={e => setP(v => ({ ...v, familyName: e.target.value }))} className={`mt-1 ${input}`} />
+            <input value={p.familyName} onChange={e => edit({ familyName: e.target.value })} className={`mt-1 ${input}`} />
           </label>
         </div>
         {/* MONONYMS ARE REAL. Any one of the three is enough, and the form says so rather than starring
@@ -264,14 +351,14 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
       <div className="grid sm:grid-cols-3 gap-2">
         <label className={label}>Date of birth
           <input type="date" max={today} value={p.birthDate}
-            onChange={e => setP(v => ({ ...v, birthDate: e.target.value }))} className={`mt-1 ${input}`} />
+            onChange={e => edit({ birthDate: e.target.value })} className={`mt-1 ${input}`} />
         </label>
         <label className={label}>…or estimated age
           <input type="number" min={0} max={130} value={p.ageEstimateYears}
-            onChange={e => setP(v => ({ ...v, ageEstimateYears: e.target.value }))} className={`mt-1 ${input}`} />
+            onChange={e => edit({ ageEstimateYears: e.target.value })} className={`mt-1 ${input}`} />
         </label>
         <label className={label}>Sex
-          <select value={p.sex} onChange={e => setP(v => ({ ...v, sex: e.target.value }))} className={`mt-1 ${input}`}>
+          <select value={p.sex} onChange={e => edit({ sex: e.target.value })} className={`mt-1 ${input}`}>
             {[["unspecified", "Not stated"], ["female", "Female"], ["male", "Male"], ["other", "Other"], ["unknown", "Unknown"]]
               .map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
@@ -295,13 +382,13 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
       {/* ── Contact ───────────────────────────────────────────────────────────────────────────── */}
       <div className="grid sm:grid-cols-3 gap-2">
         <label className={label}>Phone
-          <input value={p.phone} onChange={e => setP(v => ({ ...v, phone: e.target.value }))} className={`mt-1 ${input}`} />
+          <input value={p.phone} onChange={e => edit({ phone: e.target.value })} className={`mt-1 ${input}`} />
         </label>
         <label className={label}>Email
-          <input value={p.email} onChange={e => setP(v => ({ ...v, email: e.target.value }))} className={`mt-1 ${input}`} />
+          <input value={p.email} onChange={e => edit({ email: e.target.value })} className={`mt-1 ${input}`} />
         </label>
         <label className={label}>National ID
-          <input value={p.nationalId} onChange={e => setP(v => ({ ...v, nationalId: e.target.value }))} className={`mt-1 ${input}`} />
+          <input value={p.nationalId} onChange={e => edit({ nationalId: e.target.value })} className={`mt-1 ${input}`} />
         </label>
       </div>
       <p className="-mt-3 text-[11px] text-gray-400">
@@ -430,19 +517,26 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
       <div className="grid sm:grid-cols-2 gap-2">
         <label className={`${label} sm:col-span-2`}>Reason for visit
           <textarea rows={2} value={p.reasonForVisit}
-            onChange={e => setP(v => ({ ...v, reasonForVisit: e.target.value }))}
+            onChange={e => edit({ reasonForVisit: e.target.value })}
             placeholder="In their words, if you can" className={`mt-1 ${input}`} />
         </label>
         <label className={label}>Appointment
           <input type="datetime-local" value={p.appointmentAt}
-            onChange={e => setP(v => ({ ...v, appointmentAt: e.target.value }))} className={`mt-1 ${input}`} />
+            onChange={e => edit({ appointmentAt: e.target.value })} className={`mt-1 ${input}`} />
         </label>
         <p className="self-end text-[11px] text-gray-400">
           Optional. Leaving it blank registers the patient without booking anything.
         </p>
       </div>
 
-      {/* ── Whatever this practice added to its own form (s9) ──────────────────────────────────── */}
+      {/* ── Whatever this practice added to its own form (s9) ────────────────────────────────────
+          RENDERED OUTSIDE THE SECTION, because the last conditional question disappearing is exactly
+          when the section disappears too -- and that is the moment the sentence is most needed. */}
+      {clearedNote && (
+        <p className="rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-[12px] text-[var(--cmp-text-warning)]">
+          {clearedNote}
+        </p>
+      )}
       {customFields.length > 0 && (
         <section className="rounded-lg border border-gray-200 bg-gray-50/60 p-3">
           <h3 className="text-[13px] font-bold text-gray-900">
@@ -454,7 +548,7 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
                 {f.label}{f.required ? " *" : ""}
                 {f.field_type === "select" ? (
                   <select value={String(custom[f.field_key] ?? "")}
-                    onChange={e => setCustom(c => ({ ...c, [f.field_key]: e.target.value }))}
+                    onChange={e => editCustom(f.field_key, e.target.value)}
                     className={`mt-1 ${input}`}>
                     <option value="">—</option>
                     {(f.options ?? []).map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -462,13 +556,13 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
                 ) : f.field_type === "boolean" ? (
                   <span className="mt-1 flex items-center gap-1.5 text-[13px] text-gray-700">
                     <input type="checkbox" checked={custom[f.field_key] === true}
-                      onChange={e => setCustom(c => ({ ...c, [f.field_key]: e.target.checked }))} />
+                      onChange={e => editCustom(f.field_key, e.target.checked)} />
                     Yes
                   </span>
                 ) : (
                   <input type={f.field_type === "number" ? "number" : f.field_type === "date" ? "date" : "text"}
                     value={String(custom[f.field_key] ?? "")}
-                    onChange={e => setCustom(c => ({ ...c, [f.field_key]: e.target.value }))}
+                    onChange={e => editCustom(f.field_key, e.target.value)}
                     className={`mt-1 ${input}`} />
                 )}
                 {f.help && <span className="mt-0.5 block font-normal text-[11px] text-gray-400">{f.help}</span>}
