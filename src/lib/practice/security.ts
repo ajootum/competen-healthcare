@@ -2,6 +2,10 @@ import { audit } from "@/lib/practice/provisioning";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { logAccess } from "@/lib/practice/privacy";
 import { AUTH_EVENT, authTrailSummary, recordAuthEvent } from "@/lib/practice/auth-audit";
+import {
+  resolveSessionLimits, ABSOLUTE_LIFETIME_NOT_ENFORCED, RESUME_METHODS_NOT_BUILT,
+  LOCK_SCREEN_TRUTHS, CLINICAL_PAUSE,
+} from "@/lib/practice/session-engine";
 
 // CPR-370's five unbuilt capabilities: sessions, devices, consent, break-glass and the MFA policy.
 //
@@ -1041,6 +1045,11 @@ export async function securityPosture(admin: any, workspaceId: string) {
       "Every sign-in that opens this practice is recorded, once, in the audit trail — and a figure that could not be read is shown as unavailable rather than as nought.",
       // Newly true, and the reason the device register works at all: see src/proxy.ts.
       "Every device that reaches this practice is recorded, and the same browser is the same device on its next visit rather than a new one.",
+      // ⚠ NEWLY TRUE, AND THE CLAIM IS DELIBERATELY THE NARROW ONE. This says a warning comes first and
+      // that the way back works -- not that the screen locks, which is only true where a practice set a
+      // limit. The unqualified version would describe nothing at all for every practice alive today.
+      "Where this practice sets an idle limit, a warning and a countdown come first, and a session in active use tells this practice so rather than being locked out mid-note.",
+      "A covered screen is reopened with a password, and that same password re-authenticates the session behind it -- which is what clears an idle lock-out rather than leaving somebody unlocked on a screen the next click would refuse.",
     ],
     notKnowableFromHere: [
       "Encryption algorithm and key management — a property of the deployment, not of this application.",
@@ -1051,6 +1060,11 @@ export async function securityPosture(admin: any, workspaceId: string) {
       // otherwise reasonably conclude that failures were counted somewhere, and they are not counted
       // anywhere -- which is also why this product has no account lockout.
       "How many times somebody tried and failed to sign in. Passwords are checked by the platform's authentication server, which this product does not sit in front of, so a failed attempt never reaches any code here.",
+      // ⚠ Named here so a practice reading "the screen locks when idle" does not conclude the workspace
+      // is covered everywhere. It is not: this is a Practice control, and it stops at the Practice URLs.
+      "Whether a screen was left open in another Competen workspace. The idle warning, the lock screen and the pause are built into the Practice shell only; a hospital or supervisor workspace open in another tab is untouched by any of them.",
+      // ⚠ And the cap COMP-AUTH-001 asks for, named rather than quietly missing.
+      `Nothing caps how long a session may run. ${ABSOLUTE_LIFETIME_NOT_ENFORCED.notEnforced}`,
     ],
     // The places this product's reach ends, stated as fields so no client can imply otherwise.
     revocationEndsPlatformSession: false,
@@ -1065,6 +1079,27 @@ export async function securityPosture(admin: any, workspaceId: string) {
     idleLimitEnforced: policy.readable && !!policy.session_idle_minutes,
     // And the way back, because an idle lock-out with no way back is a permanent ban applied by a timer.
     idleLockOutClearedBySigningInAgain: true,
+    // ⚠ COMP-AUTH-001'S SESSION LIFECYCLE, IN THE PAYLOAD RATHER THAN AS PAGE FURNITURE.
+    //
+    // The mode is the honest headline: on the day this ships every practice in existence is in OBSERVE,
+    // because the one live policy row carries `session_idle_minutes: null`. Nothing warns, nothing is
+    // covered and nothing is refused there -- the block exists so a practice can SEE that, and see what
+    // a limit would have done to it, before deciding.
+    sessionLifetime: {
+      ...resolveSessionLimits(policy),
+      // Every figure here is the length of a list in the audit trail, and null when the trail could not
+      // be read. `screensCoveredLast7Days` is a FLOOR -- a tab closed before it could report writes
+      // nothing, and the not-recorded list says so.
+      observed: authEvents.sessionLifetime,
+      observedReadable: authEvents.readable,
+      // What the lock screen and the pause actually are, so no screen and no marketing page can widen
+      // them. Read verbatim from the engine, which is the only place they are written down.
+      lockScreen: [...LOCK_SCREEN_TRUTHS],
+      resumeMethodsNotBuilt: [...RESUME_METHODS_NOT_BUILT],
+      clinicalPauseBuilt: [...CLINICAL_PAUSE.built],
+      clinicalPauseNotBuilt: [...CLINICAL_PAUSE.notBuilt],
+      absoluteLifetime: { ...ABSOLUTE_LIFETIME_NOT_ENFORCED },
+    },
     // Failed sign-ins are not counted anywhere, so there is nothing to lock an account on.
     accountLockoutBuiltHere: false,
     failedSignInAttemptsVisibleHere: false,

@@ -4,6 +4,7 @@ import { resolvePracticeAccess, resolveWorkspaceContext, readActiveWorkspaceId, 
 import { touchSession, getSecurityPolicy, mfaGate } from "@/lib/practice/security";
 import { DEVICE_COOKIE } from "@/lib/practice/device-register";
 import { AUTH_EVENT, recordAuthEvent, signInOccasion } from "@/lib/practice/auth-audit";
+import { resolveSessionLimits, absoluteLifetime, type SessionLimits } from "@/lib/practice/session-engine";
 
 // Server-side shell resolution (CPR-SHELL-001 sections 5, 5.1 and 6.1).
 //
@@ -36,7 +37,14 @@ export type ShellState =
   // what actually happened and offers a retry, and because it is derived fresh on every request it
   // clears itself the moment the underlying read works.
   | { state: "SECURITY_CHECK_UNAVAILABLE"; userId: string; workspaceId: string; check: "mfa_policy" | "mfa_status" }
-  | { state: "READY"; userId: string; ctx: WorkspaceContext };
+  // ⚠ `session` RIDES ON READY BECAUSE THE POLICY HAS ALREADY BEEN READ BY THE TIME WE GET HERE.
+  //
+  // The session engine that runs in the browser needs to know whether this practice sets an idle limit.
+  // The alternative -- a fetch from the client on every page load -- would be a request per navigation
+  // per tab for an answer this function already holds, and it would arrive after the page had rendered.
+  // Derived from the SAME policy read the MFA gate uses, so the two can never disagree about whether it
+  // was readable: an unreadable policy yields mode UNKNOWN, and UNKNOWN locks nothing.
+  | { state: "READY"; userId: string; ctx: WorkspaceContext; session: SessionLimits };
 
 /**
  * Resolve the shell, then write down what happened at the door.
@@ -186,7 +194,7 @@ async function resolveShellState(): Promise<ShellResolution> {
     return at({ state: "MFA_REQUIRED", userId: user.id, workspaceId: res.ctx.workspaceId, enrolled: gate.enrolled });
   }
 
-  return at({ state: "READY", userId: user.id, ctx: res.ctx });
+  return at({ state: "READY", userId: user.id, ctx: res.ctx, session: resolveSessionLimits(policy) });
 }
 
 /**
@@ -265,6 +273,39 @@ async function recordShellAuthEvents(state: ShellState, me: ShellUser): Promise<
         payload: { ...refusal.payload, authSignInAt: occasion.authSignInAt },
         correlationId,
       });
+    }
+
+    // ── THE ABSOLUTE SESSION LIFETIME (COMP-AUTH-001: "default 12 hours") ────────────────────────────
+    //
+    // ⚠ MEASURED HERE. NOT ENFORCED ANYWHERE, AND THAT IS NOT AN OVERSIGHT.
+    //
+    // The spec asks for a cap on total session age regardless of activity. `practice_security_policy`
+    // has no column to hold one -- it carries two-factor, emergency access and an idle limit and nothing
+    // else -- and this build writes no migration. A cap with nowhere to store its number would be a
+    // hardcoded 12 hours applied to every live practice at once, which is precisely the change
+    // COMP-SECURITY-SURVEY-001 s6.5 says to leave until last and never set below a clinical shift.
+    //
+    // So what happens instead is the measurement s6.5 asks for FIRST: one row per sign-in that is still
+    // being used more than twelve hours later. A practice can then see how many of its sessions a cap
+    // would have ended before anybody decides to have one. Nothing is hidden, nothing is refused, and
+    // the audit type says so in its own description.
+    //
+    // Only on READY: a refused person's session age answers no question, and this would otherwise add a
+    // read to the path that is already turning somebody away.
+    if (state.state === "READY") {
+      const life = absoluteLifetime({ signedInAt: me.lastSignInAt });
+      if (life.pastObservation === true) {
+        await recordAuthEvent(admin, {
+          workspaceId, actorId: me.id, eventType: AUTH_EVENT.ABSOLUTE_LIFETIME_OBSERVED,
+          // Once per sign-in. The session does not become newly interesting on every page load.
+          dedupeKey: occasion.key,
+          payload: {
+            authSignInAt: occasion.authSignInAt, minutesSinceSignIn: life.minutesSinceSignIn,
+            observationMinutes: life.observationMinutes, enforced: false,
+          },
+          correlationId,
+        });
+      }
     }
   } catch (e) {
     console.error(`[practice] the authentication trail could not be written: ${String(e)}`);

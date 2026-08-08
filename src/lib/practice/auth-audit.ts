@@ -46,6 +46,17 @@ export const AUTH_EVENT = {
   IDLE_SESSION_RESUMED: "practice.auth.idle_session_resumed",
   MFA_REFUSED: "practice.auth.mfa_refused",
   SECURITY_CHECK_UNAVAILABLE: "practice.auth.security_check_unavailable",
+  // ── COMP-AUTH-001's session lifecycle: "audit all login, logout, lock, unlock, refresh and timeout" ──
+  //
+  // ⚠ THE TWO "OBSERVED" TYPES ARE MEASUREMENTS, NOT REFUSALS, and they are named so that nobody reading
+  // a row can mistake one for the other. Nothing was hidden and nobody was turned away; the row says
+  // only that a session sat unused, or ran, for longer than COMP-AUTH-001's default. They exist because
+  // COMP-SECURITY-SURVEY-001 s6.5 asks for the measurement BEFORE the enforcement, and a measurement
+  // nobody stored would be an opinion.
+  WORKSPACE_LOCKED: "practice.auth.workspace_locked",
+  WORKSPACE_UNLOCKED: "practice.auth.workspace_unlocked",
+  IDLE_OBSERVED: "practice.auth.idle_observed",
+  ABSOLUTE_LIFETIME_OBSERVED: "practice.auth.absolute_lifetime_observed",
 } as const;
 
 export type AuthEventType = (typeof AUTH_EVENT)[keyof typeof AUTH_EVENT];
@@ -74,6 +85,12 @@ export const AUTH_EVENTS_RECORDED: { type: AuthEventType; what: string }[] = [
   { type: AUTH_EVENT.MFA_REFUSED, what: "Entry refused because this practice requires a second factor." },
   { type: AUTH_EVENT.SECURITY_CHECK_UNAVAILABLE, what: "A security check that gave no answer, so entry was refused." },
   { type: AUTH_EVENT.DEVICE_REGISTER_UNAVAILABLE, what: "A request the device register could not run on, so no device was recorded." },
+  { type: AUTH_EVENT.WORKSPACE_LOCKED, what: "A screen covered, either because it sat unused past this practice's limit or because somebody paused it." },
+  { type: AUTH_EVENT.WORKSPACE_UNLOCKED, what: "A covered screen reopened by re-entering a password." },
+  // ⚠ BOTH OF THESE ARE COUNTS OF SOMETHING THAT WAS ALLOWED. Worded so that a reader cannot take a row
+  // for a refusal: nothing was hidden and nobody was turned away.
+  { type: AUTH_EVENT.IDLE_OBSERVED, what: "A session that sat unused for longer than 30 minutes while this practice had no idle limit set. Nothing was hidden or refused; the row exists so a practice can see what a limit would have done before setting one." },
+  { type: AUTH_EVENT.ABSOLUTE_LIFETIME_OBSERVED, what: "A session still open more than 12 hours after the person last authenticated. Nothing was hidden or refused; this product enforces no cap on session age." },
 ];
 
 /**
@@ -99,6 +116,17 @@ export const AUTH_EVENTS_NOT_RECORDED_HERE: { what: string; why: string }[] = [
   {
     what: "A sign-in that never opened this practice.",
     why: "The trail is written by the Practice shell. Somebody who signs in and goes to a hospital workspace instead has not signed in to a practice, and inventing a row here would say they had.",
+  },
+  // ⚠ THE HONEST EDGE OF THE LOCK AND PAUSE ROWS ABOVE. They are reported by the browser that drew the
+  // cover, so a browser that stops reporting stops producing them. Said plainly, because a practice
+  // counting locks would otherwise read a missing row as a screen that was never covered.
+  {
+    what: "A lock or a pause on a tab that was closed before it could report one, or with the network away.",
+    why: "Those two rows are the only ones in this trail written by the browser rather than by the server. A tab that is closed, refused or offline at that moment writes nothing, and no later request can reconstruct it -- so these counts are a floor, never a total.",
+  },
+  {
+    what: "Which patient was on the screen when it was covered.",
+    why: "A lock row carries why the screen was covered and nothing about what was on it. Reads of a patient record are already recorded, individually, in the access log; repeating them here would put clinical detail in the authentication trail.",
   },
 ];
 
@@ -242,6 +270,19 @@ export type AuthTrailSummary = {
   truncated: boolean;
   recordedTypes: typeof AUTH_EVENTS_RECORDED;
   notRecordedHere: typeof AUTH_EVENTS_NOT_RECORDED_HERE;
+  /**
+   * COMP-AUTH-001's session lifecycle, counted rather than claimed.
+   *
+   * ⚠ EVERY FIELD IS NULL WHEN THE TRAIL COULD NOT BE READ, for the same reason as the four above it:
+   * "0 sessions ran past 12 hours" is a statement about this practice, and a failed read must not make
+   * it. And `screensCovered` is a FLOOR -- see AUTH_EVENTS_NOT_RECORDED_HERE.
+   */
+  sessionLifetime: {
+    screensCoveredLast7Days: number | null;
+    pausesLast7Days: number | null;
+    idleStretchesObservedLast7Days: number | null;
+    sessionsPastAbsoluteObservationLast7Days: number | null;
+  };
 };
 
 /** The figures the security console shows, each of them the length of a list the console can open. */
@@ -257,6 +298,10 @@ export async function authTrailSummary(admin: any, workspaceId: string, days = 7
     return {
       readable: false, signInsLast7Days: null, refusalsLast7Days: null, devicesFirstSeenLast7Days: null,
       lastSignInRecordedAt: null, truncated: false, ...shell,
+      sessionLifetime: {
+        screensCoveredLast7Days: null, pausesLast7Days: null,
+        idleStretchesObservedLast7Days: null, sessionsPastAbsoluteObservationLast7Days: null,
+      },
     };
 
   const of = (t: AuthEventType) => trail.events.filter(e => e.event_type === t);
@@ -265,6 +310,7 @@ export async function authTrailSummary(admin: any, workspaceId: string, days = 7
     e.event_type === AUTH_EVENT.SESSION_REFUSED || e.event_type === AUTH_EVENT.MFA_REFUSED
     || e.event_type === AUTH_EVENT.IDLE_TIMEOUT || e.event_type === AUTH_EVENT.SECURITY_CHECK_UNAVAILABLE);
 
+  const locks = of(AUTH_EVENT.WORKSPACE_LOCKED);
   return {
     readable: true,
     signInsLast7Days: signIns.length,
@@ -273,6 +319,14 @@ export async function authTrailSummary(admin: any, workspaceId: string, days = 7
     lastSignInRecordedAt: signIns[0]?.occurred_at ?? null,
     truncated: trail.truncated,
     ...shell,
+    sessionLifetime: {
+      screensCoveredLast7Days: locks.length,
+      // A pause is a lock somebody chose, and the two are counted apart because they answer different
+      // questions: one is about a limit, the other is about how people work.
+      pausesLast7Days: locks.filter(e => e.payload?.cause === "paused").length,
+      idleStretchesObservedLast7Days: of(AUTH_EVENT.IDLE_OBSERVED).length,
+      sessionsPastAbsoluteObservationLast7Days: of(AUTH_EVENT.ABSOLUTE_LIFETIME_OBSERVED).length,
+    },
   };
 }
 

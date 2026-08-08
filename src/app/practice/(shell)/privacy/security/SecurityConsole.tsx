@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatDateTime } from "@/lib/datetime";
+import { SESSION_PREVIEW_EVENT, CONSOLE_IDLE_OPTIONS } from "@/lib/practice/session-engine";
 
 // CPR-370's security surface: devices, emergency access, consent counts and the policy.
 //
@@ -311,6 +312,17 @@ export default function SecurityConsole({
         </section>
       )}
 
+      {/* ── THE SESSION LIFECYCLE (COMP-AUTH-001) ────────────────────────────────────────────────────
+          The panel that says what the idle rule, the lock screen and the pause actually do HERE, what
+          they have already done, and the things this build does not do at all. It rides on the posture,
+          which the page reads only for a caller holding practice.settings.manage -- so a member without
+          it sees the behaviour itself (the Pause button, and the warning where a limit is set) but not
+          these figures. That is a permission rather than a failure, and it is why the panel says nothing
+          when `posture` is null instead of rendering an empty one. */}
+      {posture?.sessionLifetime && (
+        <SessionLifetimePanel life={posture.sessionLifetime} canManage={canManage} busy={busy} send={send} />
+      )}
+
       {/* ── WHAT THE SIGN-IN RECORD COVERS, AND WHAT IT DOES NOT ──────────────────────────────────── */}
       {posture?.authEvents && (
         <section className={`${card} mt-4`}>
@@ -388,5 +400,129 @@ export default function SecurityConsole({
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * COMP-AUTH-001's session lifecycle, said plainly.
+ *
+ * ⚠ THE HEADLINE IS THE MODE, AND FOR EVERY PRACTICE ALIVE TODAY THE MODE IS "no limit set". This panel
+ * exists so that reads as a fact rather than as an absence: a practice looking for an idle rule should
+ * find out in one sentence that it has none, see what one would have cost it, and be able to WATCH the
+ * behaviour before switching it on. A security page that showed a countdown nobody had configured would
+ * be the same class of claim as the score this page refuses to print.
+ */
+function SessionLifetimePanel({ life, canManage, busy, send }: {
+  life: any; canManage: boolean; busy: boolean; send: (body: unknown) => void;
+}) {
+  const observed = life.observed ?? {};
+  const enforcing = life.mode === "ENFORCE";
+  const unknown = life.mode === "UNKNOWN";
+
+  return (
+    <section className={`${card} mt-4`}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-[13px] font-bold text-gray-900">Sessions: idle, locked and paused</h2>
+        {/* ⚠ THE REHEARSAL. "Ship it warn-only-capable" — a practice must be able to see this before it
+            bites. One window event; the guard runs the real warning and the real cover against the real
+            decision, and nothing is changed, recorded or shown to anybody else. */}
+        <button type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent(SESSION_PREVIEW_EVENT))}
+          className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11.5px] font-semibold text-gray-700 hover:bg-gray-50">
+          Show me what this looks like
+        </button>
+      </div>
+
+      {/* THREE STATES, and the third is not "off". */}
+      <p className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-[11.5px] leading-relaxed text-gray-600">
+        {unknown ? (
+          <>
+            <strong className="text-gray-800">This could not be read.</strong>{" "}
+            This practice&rsquo;s policy did not come back just now, so nothing here is being applied:
+            no screen is being covered and no session is being counted. That is <strong>not</strong> the
+            same as having no limit. Reload to try again.
+          </>
+        ) : enforcing ? (
+          <>
+            <strong className="text-gray-800">Idle limit: {life.idleMinutes} minutes.</strong>{" "}
+            A warning and a countdown appear {life.warningSeconds} seconds before the end. If nobody
+            answers, the screen is covered and a password brings it back. A session actually in use tells
+            this practice so every {Math.round(life.heartbeatSeconds / 60)} minutes, so working on one
+            page for a long time no longer looks like an empty desk.
+          </>
+        ) : (
+          <>
+            <strong className="text-gray-800">No idle limit is set.</strong>{" "}
+            Nothing counts down, nothing is covered and nobody is signed out for being away. What does
+            happen is a count: a session left unused for more than {life.idleObservationMinutes} minutes
+            is noted in the sign-in record, so this practice can see what a limit would have done before
+            setting one.
+          </>
+        )}
+      </p>
+
+      {canManage && !unknown && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <label className="text-[12px] font-semibold text-gray-700" htmlFor="idle-limit">Idle limit</label>
+          <select id="idle-limit" disabled={busy} value={life.idleMinutes ?? ""}
+            onChange={e => send({ sessionIdleMinutes: e.target.value === "" ? null : Number(e.target.value) })}
+            className={input}>
+            <option value="">No limit</option>
+            {CONSOLE_IDLE_OPTIONS.map(m => <option key={m} value={m}>{m} minutes</option>)}
+            {/* A limit set through the API outside this list is shown rather than silently replaced by
+                the nearest option, which would misreport what is actually stored. */}
+            {life.idleMinutes && !(CONSOLE_IDLE_OPTIONS as readonly number[]).includes(life.idleMinutes) && (
+              <option value={life.idleMinutes}>{life.idleMinutes} minutes</option>
+            )}
+          </select>
+          <span className="text-[10.5px] leading-snug text-gray-500">
+            The shortest offered here is {Math.min(...CONSOLE_IDLE_OPTIONS)} minutes. The database accepts
+            5, and this page does not offer it: a limit shorter than a consultation covers the screen of
+            somebody who is in the middle of one.
+          </span>
+        </div>
+      )}
+
+      <div className="mt-3 grid sm:grid-cols-2 gap-4">
+        <div>
+          <h3 className="text-[11px] font-semibold text-gray-700">What has happened, last 7 days</h3>
+          {life.observedReadable === false ? (
+            <p className="mt-1.5 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-[11.5px] text-[var(--cmp-text-warning)]">
+              The sign-in record could not be read, so these are shown as unavailable rather than as
+              nought. Reload to try again.
+            </p>
+          ) : (
+            <ul className="mt-1.5 flex flex-col gap-1 text-[11.5px] text-gray-600">
+              <li>{figure(observed.screensCoveredLast7Days)} screens covered, of which {figure(observed.pausesLast7Days)} were paused on purpose</li>
+              <li>{figure(observed.idleStretchesObservedLast7Days)} idle stretches past {life.idleObservationMinutes} minutes {enforcing ? "before the limit was set" : "— what a limit would have caught"}</li>
+              <li>{figure(observed.sessionsPastAbsoluteObservationLast7Days)} sessions still open more than {Math.round(life.absoluteObservationMinutes / 60)} hours after signing in</li>
+            </ul>
+          )}
+          {/* ⚠ THE FLOOR, NOT THE TOTAL. A tab closed before it could report writes nothing, and no later
+              request can reconstruct it. A practice counting locks must know that. */}
+          <p className="mt-1.5 text-[10.5px] leading-snug text-gray-400">
+            The first figure is a floor rather than a total: a tab closed at the moment it covered itself
+            reports nothing, and nothing afterwards can recover it.
+          </p>
+        </div>
+        <div>
+          <h3 className="text-[11px] font-semibold text-gray-700">What is not built</h3>
+          <ul className="mt-1.5 flex flex-col gap-1.5 text-[11.5px] leading-snug text-gray-600">
+            {/* THE CAP COMP-AUTH-001 ASKS FOR, AND WHY THERE ISN'T ONE. Read from the engine so this
+                cannot describe a control the code does not have. */}
+            <li>
+              <strong className="font-semibold text-gray-700">No cap on session age.</strong>{" "}
+              {life.absoluteLifetime?.notEnforced} {life.absoluteLifetime?.whatWouldBuildIt}
+            </li>
+            {life.clinicalPauseNotBuilt?.map((s: string) => (
+              <li key={s}><span aria-hidden className="mr-1 text-gray-300">—</span>{s}</li>
+            ))}
+            {life.resumeMethodsNotBuilt?.map((s: string) => (
+              <li key={s}><span aria-hidden className="mr-1 text-gray-300">—</span>{s}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
   );
 }

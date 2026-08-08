@@ -11,6 +11,7 @@ import SidebarNav from "./SidebarNav";
 import PracticeSignOut from "./PracticeSignOut";
 import PracticeAppearance from "./PracticeAppearance";
 import PracticeShortcuts from "./PracticeShortcuts";
+import PracticeSessionGuard from "./PracticeSessionGuard";
 
 // CPR-V2-020 authenticated application shell (SHELL-001 s7, CPR-V2-020 V3).
 //
@@ -161,6 +162,12 @@ export default async function PracticeShellLayout({ children }: { children: Reac
             </span>
           )}
           <div className="ml-auto flex items-center gap-2">
+            {/* COMP-AUTH-001's session lifecycle: Clinical Pause Mode's one press, the idle warning and
+                the lock screen. Mounted HERE, once, because the cover has to be reachable from every
+                route in the group -- and given `shell.session`, which came out of the policy read the
+                MFA gate had already done, so it costs no extra query. In OBSERVE mode (every practice
+                today) the only thing it renders is the Pause button. */}
+            <PracticeSessionGuard limits={shell.session} />
             <PracticeSignOut />
           </div>
         </header>
