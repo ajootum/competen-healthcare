@@ -639,15 +639,45 @@ export type ResolvedRule = {
   bookingHorizonDays: number | null;
   cancellationNoticeMinutes: number;
   walkInDailyLimit: number | null;
+  /** s7.7's cutoff (migration 268). Null means no cutoff, or the migration is not applied. */
+  walkInCutoffMinutes: number | null;
+  /** s7.2's separate notice for a MOVE (migration 268). Null means the cancellation notice governs one. */
+  rescheduleNoticeMinutes: number | null;
+  /** s7.2 (migration 268). A practice may switch patient self-service off per rule. */
+  selfCancelAllowed: boolean;
+  selfRescheduleAllowed: boolean;
   emergencyReserveMinutes: number;
   /** Which row won, so a refusal can say where the rule came from. */
   source: "location+type" | "location" | "type" | "practice" | "default";
+  /**
+   * ⚠ THIS FUNCTION USED TO DISCARD ITS ERROR, AND THE CONSEQUENCE WAS FAIL-OPEN ON FOUR CONTROLS.
+   *
+   * `const { data } = await ...` with no error read meant an unreadable rule table produced DEFAULT_RULE
+   * -- no notice period, no horizon, no walk-in limit, no cutoff -- and every caller treated that as a
+   * practice that had configured nothing. A database wobble therefore opened the diary, which is exactly
+   * the class this codebase has a scar from and exactly what "a failed read is never a zero" forbids.
+   *
+   * The signature is unchanged so that no caller has to be rewritten to be safe from it, and the two
+   * fields below are what a caller reads to REFUSE rather than to guess. checkPlacement does.
+   */
+  readFailed: boolean;
+  readError: string | null;
 };
 
 const DEFAULT_RULE: ResolvedRule = {
   leadTimeMinutes: 0, bookingHorizonDays: null, cancellationNoticeMinutes: 0,
-  walkInDailyLimit: null, emergencyReserveMinutes: 0, source: "default",
+  walkInDailyLimit: null, walkInCutoffMinutes: null, rescheduleNoticeMinutes: null,
+  selfCancelAllowed: true, selfRescheduleAllowed: true,
+  emergencyReserveMinutes: 0, source: "default",
+  readFailed: false, readError: null,
 };
+
+/** Migration 268's half of the resolved rule. Read only when the columns exist. */
+const RESOLVE_COLUMNS_BASE =
+  "location_id, appointment_type, lead_time_minutes, booking_horizon_days, "
+  + "cancellation_notice_minutes, walk_in_daily_limit, emergency_reserve_minutes";
+const RESOLVE_COLUMNS_268 =
+  "walk_in_cutoff_minutes, reschedule_notice_minutes, self_cancel_allowed, self_reschedule_allowed";
 
 /**
  * MOST SPECIFIC WINS, and the winner is named.
@@ -659,10 +689,30 @@ const DEFAULT_RULE: ResolvedRule = {
 export async function resolveBookingRule(
   admin: any, workspaceId: string, locationId: string | null, appointmentType: string,
 ): Promise<ResolvedRule> {
-  const { data } = await admin.from("practice_booking_rule")
-    .select("location_id, appointment_type, lead_time_minutes, booking_horizon_days, cancellation_notice_minutes, walk_in_daily_limit, emergency_reserve_minutes")
+  // ⚠ THE EXTENDED READ IS TRIED FIRST AND FALLS BACK ONCE. Adding migration 268's columns to the select
+  // unconditionally would make PostgREST refuse the WHOLE query at any practice whose database has not
+  // had the file applied -- which would turn a missing feature into a broken diary. The fallback is
+  // distinguished from a real failure by the error code, never by "no rows came back".
+  let rows: any[] | null = null;
+  let extended = false;
+  let readError: string | null = null;
+
+  const first = await admin.from("practice_booking_rule")
+    .select(`${RESOLVE_COLUMNS_BASE}, ${RESOLVE_COLUMNS_268}`)
     .eq("workspace_id", workspaceId).eq("active", true);
-  const rows = (data ?? []) as any[];
+  if (!first.error && first.data != null) { rows = first.data as any[]; extended = true; }
+  else if (first.error && MISSING_COLUMN_CODES.has(String(first.error.code))) {
+    const second = await admin.from("practice_booking_rule")
+      .select(RESOLVE_COLUMNS_BASE).eq("workspace_id", workspaceId).eq("active", true);
+    if (!second.error && second.data != null) rows = second.data as any[];
+    else readError = second.error?.message ?? "neither rows nor an error";
+  } else {
+    readError = first.error?.message ?? "neither rows nor an error";
+  }
+
+  // ⚠ AN UNREADABLE RULE TABLE IS NOT A PRACTICE WITH NO RULES. The caller is told, and checkPlacement
+  // refuses on it. Returning the default silently is what this function used to do.
+  if (rows === null) return { ...DEFAULT_RULE, readFailed: true, readError };
   if (rows.length === 0) return DEFAULT_RULE;
 
   const pick = (fn: (r: any) => boolean) => rows.find(fn);
@@ -680,10 +730,18 @@ export async function resolveBookingRule(
     bookingHorizonDays: r.booking_horizon_days ?? null,
     cancellationNoticeMinutes: r.cancellation_notice_minutes ?? 0,
     walkInDailyLimit: r.walk_in_daily_limit ?? null,
+    walkInCutoffMinutes: extended ? (r.walk_in_cutoff_minutes ?? null) : null,
+    rescheduleNoticeMinutes: extended ? (r.reschedule_notice_minutes ?? null) : null,
+    selfCancelAllowed: extended ? r.self_cancel_allowed !== false : true,
+    selfRescheduleAllowed: extended ? r.self_reschedule_allowed !== false : true,
     emergencyReserveMinutes: r.emergency_reserve_minutes ?? 0,
     source,
+    readFailed: false, readError: null,
   };
 }
+
+/** PostgREST's column miss and Postgres's own, which mean "migration 268 has not been applied". */
+const MISSING_COLUMN_CODES = new Set(["PGRST204", "PGRST205", "PGRST202", "42703", "42P01"]);
 
 // ── SLOT GENERATION ──────────────────────────────────────────────────────────────────────────────────
 

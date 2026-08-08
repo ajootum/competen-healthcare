@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import {
   BOOKING_CHANNELS, RULE_STATUSES, RULE_STATUS_CHIP, CONFIRMATION_MODES,
   PATIENT_ELIGIBILITY, BUILDER_SECTIONS, SPECIFICITY_DIMENSIONS,
+  BOOKING_INTAKE_FIELDS, REQUIREMENT_LEVELS, REQUIREMENT_LEVEL_WHEN_UNSET,
+  INTAKE_FIELDS_ALWAYS_REQUIRED, INTAKE_NOT_CONFIGURABLE,
+  WALK_IN_QUEUE_POLICIES, DNA_ACTIONS, WAITING_LIST_CONTACT_NOTE,
+  WAITING_LIST_NO_SCREEN_NOTE, QUEUE_PRIORITY_NO_SCREEN_NOTE,
 } from "@/lib/practice/booking-rule-constants";
 import { SESSION_APPOINTMENT_TYPES, appointmentTypeLabel, WEEKDAY_SHORT } from "@/lib/practice/practice-session-constants";
 
@@ -48,6 +52,12 @@ const blankDraft = (): Draft => ({
   patientEligibility: "any", minAgeYears: "", maxAgeYears: "",
   confirmationMode: "instant", followUpEarlyDays: "", followUpLateDays: "",
   leadTimeMinutes: 0, bookingHorizonDays: "", cancellationNoticeMinutes: 0, walkInDailyLimit: "",
+  // ── MIGRATION 268. The defaults ARE the behaviour this product had before the columns existed, so a
+  //    new rule created on this form decides exactly what it would have decided yesterday.
+  requiredFields: {} as Record<string, string>,
+  walkInCutoffMinutes: "", walkInQueuePolicy: "first_come",
+  selfCancelAllowed: true, selfRescheduleAllowed: true, rescheduleNoticeMinutes: "",
+  dnaThreshold: "", dnaAction: "none", waitingListEnabled: false,
   reason: "",
 });
 
@@ -65,11 +75,32 @@ const draftFrom = (r: any): Draft => ({
   confirmationMode: r.confirmationMode ?? "instant",
   followUpEarlyDays: r.followUpEarlyDays ?? "", followUpLateDays: r.followUpLateDays ?? "",
   leadTimeMinutes: r.leadTimeMinutes ?? 0, bookingHorizonDays: r.bookingHorizonDays ?? "",
-  walkInDailyLimit: r.walkInDailyLimit ?? "", reason: "",
+  walkInDailyLimit: r.walkInDailyLimit ?? "",
+  requiredFields: Object.fromEntries(Object.entries(
+    (r.requiredInformation?.fields ?? {}) as Record<string, { level?: string }>,
+  ).map(([k, v]) => [k, String(v?.level ?? "optional")])),
+  walkInCutoffMinutes: r.walkInCutoffMinutes ?? "",
+  walkInQueuePolicy: r.walkInQueuePolicy ?? "first_come",
+  selfCancelAllowed: r.selfCancelAllowed !== false,
+  selfRescheduleAllowed: r.selfRescheduleAllowed !== false,
+  rescheduleNoticeMinutes: r.rescheduleNoticeMinutes ?? "",
+  dnaThreshold: r.dnaThreshold ?? "", dnaAction: r.dnaAction ?? "none",
+  waitingListEnabled: r.waitingListEnabled === true,
+  reason: "",
 });
 
-/** A later phase's surface, drawn as what it is. Never a control that shrugs. */
-function NotBuilt({ title, phase, what }: { title: string; phase: string; what: string }) {
+/**
+ * A later phase's surface, drawn as what it is. Never a control that shrugs.
+ *
+ * ⚠ `alreadyBuilt` IS DRAWN FIRST AND IN COLOUR, ABOVE THE "NOT BUILT" BADGE, AND THAT ORDER IS THE
+ * POINT. This component used to print a title, a grey NOT BUILT chip, and a sentence -- and for
+ * walk-ins the sentence said "there is no per-session walk-in limit ON THIS TABLE" while the control
+ * for exactly that sat one layer away on the same screen. A qualification that only survives if the
+ * reader parses a subordinate clause after reading a badge in capital letters is not a qualification.
+ */
+function NotBuilt({ title, phase, what, alreadyBuilt }: {
+  title: string; phase: string; what: string; alreadyBuilt?: string | null;
+}) {
   return (
     <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/70 p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -78,8 +109,31 @@ function NotBuilt({ title, phase, what }: { title: string; phase: string; what: 
           {phase} — not built
         </span>
       </div>
+      {alreadyBuilt && (
+        <p className="mt-1.5 rounded bg-emerald-50 px-2 py-1.5 text-[11px] leading-relaxed text-emerald-900 ring-1 ring-emerald-200">
+          <span className="font-bold">What you CAN set today: </span>{alreadyBuilt}
+        </p>
+      )}
       <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{what}</p>
     </div>
+  );
+}
+
+/** A section that is built, and whose caption once said otherwise. The correction, drawn where it was. */
+function WasSaidNotBuilt({ text }: { text: string }) {
+  return (
+    <p className="mt-1 rounded bg-emerald-50 px-2 py-1.5 text-[10.5px] leading-relaxed text-emerald-900 ring-1 ring-emerald-200">
+      <span className="font-bold">This screen used to say this was not built. </span>{text}
+    </p>
+  );
+}
+
+/** The one sentence a section says when its columns are not in this database. Never a dead control. */
+function StoreAbsent({ note }: { note: string }) {
+  return (
+    <p className="mt-1.5 rounded-lg border border-dashed border-amber-300 bg-amber-50/70 px-2.5 py-2 text-[11px] leading-relaxed text-amber-900">
+      <span className="font-bold">Nothing here can be saved yet. </span>{note}
+    </p>
   );
 }
 
@@ -103,6 +157,18 @@ export default function RuleWorkspace({
 
   const set = (k: string, v: any) => setDraft(d => (d ? { ...d, [k]: v } : d));
 
+  // ⚠ READ OFF THE RULES THEMSELVES, NOT ASSUMED. Every card carries whether migration 268 is applied in
+  // this database, because the engine asked. When it is not, the three sections below draw a sentence
+  // naming the file instead of controls that would silently save nothing -- which is the worse outcome:
+  // a practitioner would leave believing a booking will be refused without a date of birth, and it will
+  // not be.
+  const sectionsConfigurable = rules.length === 0 ? true : rules[0].sectionsConfigurable !== false;
+  const absentNote: string = rules.find((r: any) => r.sectionsAbsentNote)?.sectionsAbsentNote
+    ?? "Migration 268 has not been applied, so there is nowhere to store this.";
+  /** The correction sentence for a section this screen once captioned NOT BUILT. */
+  const sectionNote = (key: string) =>
+    BUILDER_SECTIONS.find(s => s.key === key)?.alreadyBuilt ?? "";
+
   async function post(body: Record<string, unknown>) {
     const res = await fetch("/api/v1/practice/booking-rules", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -115,7 +181,28 @@ export default function RuleWorkspace({
   async function save() {
     if (!draft) return;
     setBusy(true); setNotice(null);
-    const r = await post({ action: "save_rule", ruleId: editingId, ...draft });
+    const { requiredFields, ...rest } = draft;
+    // ⚠ THE MAP IS SENT ONLY WHEN THE COLUMNS EXIST, and it is sent in the engine's own shape rather
+    // than the form's. The form keeps a flat { key: level } because that is what a select binds to; the
+    // engine stores { fields: { key: { level } } } because a condition may hang off a field later. The
+    // translation lives here, once, rather than in requiredInformationOf -- which would then have to
+    // accept two shapes forever.
+    const r = await post({
+      action: "save_rule", ruleId: editingId, ...rest,
+      ...(sectionsConfigurable
+        ? {
+          requiredInformation: {
+            fields: Object.fromEntries(
+              Object.entries(requiredFields as Record<string, string>)
+                // A field left at the default is not sent at all. Storing "optional" for all fifteen
+                // would make every rule's version diff unreadable and would record a choice nobody made.
+                .filter(([, level]) => level !== REQUIREMENT_LEVEL_WHEN_UNSET)
+                .map(([key, level]) => [key, { level }]),
+            ),
+          },
+        }
+        : {}),
+    });
     setBusy(false);
     if (!r.ok) { setNotice({ kind: "err", text: r.data?.error?.message ?? "The rule was not saved." }); return; }
     setNotice({
@@ -271,7 +358,27 @@ export default function RuleWorkspace({
                       {r.minAgeYears !== null || r.maxAgeYears !== null
                         ? ` · ${r.minAgeYears ?? 0} to ${r.maxAgeYears ?? 130} years` : ""}
                     </dd>
+                    {/* ⚠ THE THREE NEW LINES ARE ONLY DRAWN WHERE THEY MEAN SOMETHING. With migration
+                        268 unapplied they would every one of them print the platform default -- "no
+                        cutoff, first come, nothing insisted on" -- which reads as a choice this practice
+                        made rather than as a column that does not exist. */}
+                    {r.sectionsConfigurable && (
+                      <>
+                        <dt className="font-semibold text-gray-500">Walk-ins</dt>
+                        <dd className="text-gray-800">{r.walkInLine}</dd>
+                        <dt className="font-semibold text-gray-500">Asks for</dt>
+                        <dd className="text-gray-800">{r.requiredInformationLine}</dd>
+                        <dt className="font-semibold text-gray-500">Changes</dt>
+                        <dd className="text-gray-800">{r.cancellationLine}</dd>
+                      </>
+                    )}
                   </dl>
+
+                  {!r.sectionsConfigurable && r.sectionsAbsentNote && (
+                    <p className="mt-1.5 rounded bg-amber-50 px-2 py-1 text-[10.5px] leading-relaxed text-amber-900 ring-1 ring-amber-200">
+                      {r.sectionsAbsentNote}
+                    </p>
+                  )}
 
                   <p className="mt-2 border-t border-black/5 pt-1.5 text-[10px] leading-relaxed text-gray-500">
                     <span className="font-semibold text-violet-700">{r.rung}</span> — {r.reasons.join(" ")}
@@ -504,10 +611,165 @@ export default function RuleWorkspace({
               </div>
             </fieldset>
 
+            {/* ── s7.2's REQUIRED INFORMATION (migration 268) ─────────────────────────────────── */}
+            <fieldset>
+              <legend className="text-[11px] font-bold uppercase tracking-wide text-violet-700">Required information</legend>
+              <WasSaidNotBuilt text={sectionNote("required_information")} />
+              {!sectionsConfigurable ? (
+                <StoreAbsent note={absentNote} />
+              ) : (
+                <>
+                  <p className="mt-1.5 text-[10.5px] leading-relaxed text-gray-500">
+                    These are the questions a patient booking can ask, and they are the questions this
+                    build has somewhere to put. A required answer that is missing refuses the booking on
+                    the server — not only on the form. Leaving one alone means it is accepted if given and
+                    demanded of nobody, which is what happened before this section existed.
+                  </p>
+                  <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+                    {BOOKING_INTAKE_FIELDS.map(f => {
+                      const fixed = INTAKE_FIELDS_ALWAYS_REQUIRED.includes(f.field_key);
+                      const level = fixed ? "required"
+                        : (draft.requiredFields[f.field_key] ?? REQUIREMENT_LEVEL_WHEN_UNSET);
+                      return (
+                        <div key={f.field_key} className="rounded-lg border border-gray-200 px-2.5 py-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="text-[11.5px] font-semibold text-gray-800">{f.label}</p>
+                            {fixed && (
+                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-600">
+                                always asked
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 text-[10px] leading-relaxed text-gray-500">{f.help}</p>
+                          <select
+                            className={`${field} disabled:bg-gray-50 disabled:text-gray-500`}
+                            value={level} disabled={fixed}
+                            onChange={e => set("requiredFields", { ...draft.requiredFields, [f.field_key]: e.target.value })}>
+                            {REQUIREMENT_LEVELS.map(l => (
+                              <option key={l.code} value={l.code}>{l.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* ⚠ LISTED, NOT OMITTED. A section that offers most of what it names and says nothing
+                      about the rest reads as complete. */}
+                  <ul className="mt-1.5 space-y-1">
+                    {INTAKE_NOT_CONFIGURABLE.map(n => (
+                      <li key={n.what} className="rounded border border-dashed border-slate-300 bg-slate-50/70 px-2 py-1.5 text-[10.5px] leading-relaxed text-slate-600">
+                        <span className="font-bold">{n.what}: </span>{n.whyNot}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </fieldset>
+
+            {/* ── s7.7's WALK-INS (migration 268) ─────────────────────────────────────────────── */}
+            <fieldset>
+              <legend className="text-[11px] font-bold uppercase tracking-wide text-violet-700">Walk-ins</legend>
+              <WasSaidNotBuilt text={sectionNote("walk_ins")} />
+              {!sectionsConfigurable ? (
+                <StoreAbsent note={absentNote} />
+              ) : (
+                <>
+                  <div className="mt-1.5 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    <label className={labelCls}>Walk-ins a day (this rule)
+                      <input className={field} type="number" min={0} max={200} value={draft.walkInDailyLimit}
+                        onChange={e => set("walkInDailyLimit", e.target.value)} placeholder="no limit" />
+                    </label>
+                    <label className={labelCls}>Stop taking them this long before a session ends
+                      <input className={field} type="number" min={1} max={720} value={draft.walkInCutoffMinutes}
+                        onChange={e => set("walkInCutoffMinutes", e.target.value)} placeholder="no cutoff" />
+                    </label>
+                    <label className={`${labelCls} sm:col-span-2 lg:col-span-1`}>Who is seen first
+                      <select className={field} value={draft.walkInQueuePolicy}
+                        onChange={e => set("walkInQueuePolicy", e.target.value)}>
+                        {WALK_IN_QUEUE_POLICIES.map(p => <option key={p.code} value={p.code}>{p.label}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  {draft.walkInQueuePolicy === "priority_then_first_come" && (
+                    <p className="mt-1 rounded bg-amber-50 px-2 py-1.5 text-[10.5px] leading-relaxed text-amber-900 ring-1 ring-amber-200">
+                      {QUEUE_PRIORITY_NO_SCREEN_NOTE}
+                    </p>
+                  )}
+                  <p className="mt-1 text-[10px] leading-relaxed text-gray-500">
+                    Whether a session takes walk-ins at all, and how many it takes, is set on the session
+                    itself under <span className="font-semibold">My Regular Practice</span>. The stricter
+                    of the two limits refuses the walk-in, and the refusal names which one it was. An
+                    authorised person may lift any of these with a reason, which is recorded before the
+                    walk-in is booked.
+                  </p>
+                </>
+              )}
+            </fieldset>
+
+            {/* ── s7.2's CANCELLATIONS (migrations 268 and 269) ───────────────────────────────── */}
+            <fieldset>
+              <legend className="text-[11px] font-bold uppercase tracking-wide text-violet-700">Cancellations and missed appointments</legend>
+              <WasSaidNotBuilt text={sectionNote("cancellations")} />
+              {!sectionsConfigurable ? (
+                <StoreAbsent note={absentNote} />
+              ) : (
+                <>
+                  <div className="mt-1.5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    <label className="flex items-start gap-1.5 text-[11px] text-gray-700">
+                      <input type="checkbox" className="mt-0.5" checked={draft.selfCancelAllowed !== false}
+                        onChange={e => set("selfCancelAllowed", e.target.checked)} />
+                      Patients may cancel their own booking
+                    </label>
+                    <label className="flex items-start gap-1.5 text-[11px] text-gray-700">
+                      <input type="checkbox" className="mt-0.5" checked={draft.selfRescheduleAllowed !== false}
+                        onChange={e => set("selfRescheduleAllowed", e.target.checked)} />
+                      Patients may move their own booking
+                    </label>
+                    <label className={labelCls}>Notice to move it (minutes)
+                      <input className={field} type="number" min={0} max={43200} value={draft.rescheduleNoticeMinutes}
+                        onChange={e => set("rescheduleNoticeMinutes", e.target.value)}
+                        placeholder="same as cancelling" />
+                    </label>
+                    <label className="flex items-start gap-1.5 text-[11px] text-gray-700">
+                      <input type="checkbox" className="mt-0.5" checked={draft.waitingListEnabled === true}
+                        onChange={e => set("waitingListEnabled", e.target.checked)} />
+                      Offer freed time to a waiting list
+                    </label>
+                  </div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <label className={labelCls}>After this many missed appointments
+                      <input className={field} type="number" min={0} max={50} value={draft.dnaThreshold}
+                        onChange={e => set("dnaThreshold", e.target.value)} placeholder="no rule" />
+                    </label>
+                    <label className={labelCls}>…this happens
+                      <select className={field} value={draft.dnaAction}
+                        onChange={e => set("dnaAction", e.target.value)}>
+                        {DNA_ACTIONS.map(a => <option key={a.code} value={a.code}>{a.label}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  <p className="mt-1 text-[10px] leading-relaxed text-gray-500">
+                    The cancellation notice above is what a PATIENT is held to. It never refuses you — a
+                    practice that cannot take a booking out of its own diary is a practice with a wrong
+                    diary. Every cancellation now records who made it, why, and whether it was inside the
+                    notice.
+                  </p>
+                  {draft.waitingListEnabled === true && (
+                    // ⚠ SAID WHERE THE SWITCH IS, not in a footnote. A waiting list is the one thing here
+                    // that can be believed into existence: "we'll let you know" is what it MEANS.
+                    <p className="mt-1 rounded bg-amber-50 px-2 py-1.5 text-[10.5px] leading-relaxed text-amber-900 ring-1 ring-amber-200">
+                      {WAITING_LIST_NO_SCREEN_NOTE} {WAITING_LIST_CONTACT_NOTE}
+                    </p>
+                  )}
+                </>
+              )}
+            </fieldset>
+
             {/* WHAT IS NOT HERE (s7.2's remaining sections) */}
             <div className="grid gap-2 sm:grid-cols-2">
               {BUILDER_SECTIONS.filter(s => !s.built).map(s => (
-                <NotBuilt key={s.key} title={s.title} phase={s.phase ?? "A later phase"} what={s.note} />
+                <NotBuilt key={s.key} title={s.title} phase={s.phase ?? "A later phase"} what={s.note}
+                  alreadyBuilt={s.alreadyBuilt} />
               ))}
             </div>
 

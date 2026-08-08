@@ -122,21 +122,31 @@ export const RECALL_NOT_CONFIGURABLE = [
  * practice_availability_template both walk_ins_allowed and walk_in_limit. The other three have nowhere
  * to live and are named here rather than drawn as controls that do nothing.
  */
-export const WALK_IN_NOT_CONFIGURABLE = [
+// ⚠ ALL THREE OF THESE ARE BUILT NOW (migrations 268 and 269), AND THE LIST IS KEPT RATHER THAN DELETED.
+//
+// It is what this screen showed a practitioner as missing, so deleting it would leave somebody who read
+// it last week with no way to learn that it had arrived -- and `wouldNeed` was a promise about where the
+// control would appear. Each entry now says WHERE it is, and one of them records that the promise was
+// not kept to the letter: the cutoff went onto the RULE rather than onto the session, because a rule may
+// already name a session and s11's ladder then gives a per-session, per-location, per-type or
+// practice-wide cutoff from one column instead of only the first of those.
+export const WALK_IN_NOT_CONFIGURABLE: readonly { what: string; whyNot: string; wouldNeed: string }[] = [];
+
+export const WALK_IN_NOW_CONFIGURABLE = [
   {
     what: "A cutoff time after which no more walk-ins are accepted",
-    whyNot: "No column on practice_availability_template and none on practice_booking_rule. A session's end time is not a cutoff -- a practice that stops taking walk-ins an hour before it closes cannot say so.",
-    wouldNeed: "walk_in_cutoff_minutes integer on practice_availability_template, measured back from ends_minute.",
+    where: "On the booking rule that governs the clinic, under Walk-ins, as a number of minutes before a session ends.",
+    note: "recall-constants.ts said this would need a column on the SESSION. It went onto the rule instead: a rule may already name a session, so one column gives a cutoff per session, per location, per appointment type or practice-wide, and s11 decides which applies. A time no session covers has no cutoff, because a cutoff is measured back from a session's end.",
   },
   {
     what: "Queue position and ordering rules",
-    whyNot: "practice_queue_entry (migration 192) has entered_at and a status, so the queue is first-come. There is no priority, no triage band and no reserved position, so no ordering rule can be expressed.",
-    wouldNeed: "A priority column on practice_queue_entry, and a rule column saying how it is applied.",
+    where: "The policy is on the booking rule, under Walk-ins. The priority itself is set on the waiting-room entry, with a reason.",
+    note: "Every queue in this product is ordered by priority, then arrival. Under the default policy nobody may set a priority, so every entry is routine and that order is arrival order -- which is why turning the policy on changes what the desk may do and never changes how two screens sort the same queue.",
   },
   {
     what: "An emergency override of the walk-in limit",
-    whyNot: "The limit is refused by checkPlacement with no override path, unlike the booking window, which s14 lets an authorised person lift with a reason. There is no override record type for a walk-in limit either.",
-    wouldNeed: "The same shape s14's window override already uses, extended to the WALK_IN_LIMIT code.",
+    where: "Offered on the booking itself, to anybody holding the practice settings permission, with a reason.",
+    note: "It is s14's own shape, extended to the walk-in codes: the reason is recorded in the audit trail BEFORE the walk-in is booked, and the override is carried to checkPlacement on its own argument so that lifting a walk-in limit can never lift a booking window, or the reverse.",
   },
 ] as const;
 

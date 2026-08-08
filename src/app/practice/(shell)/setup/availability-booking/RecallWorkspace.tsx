@@ -298,6 +298,21 @@ export default function RecallWorkspace({ recall, walkIns, mayManage }: {
             </p>
           ))}
         </div>
+        {/* ⚠ THE LIST ABOVE USED TO CARRY THESE THREE, AND THEY ARE DRAWN AS ARRIVED RATHER THAN
+            DELETED. Somebody who read "not configurable: a cutoff time" last week has no other way to
+            learn that it now exists, and where. */}
+        {walkIns.nowConfigurable?.length > 0 && (
+          <div className="mt-2 rounded-lg bg-emerald-50/70 px-2.5 py-2 ring-1 ring-emerald-200">
+            <p className="text-[10.5px] font-bold text-emerald-900">
+              These three were listed here as not configurable, and now are.
+            </p>
+            {walkIns.nowConfigurable.map((n: any) => (
+              <p key={n.what} className="mt-1 text-[10px] leading-relaxed text-emerald-900/90">
+                <span className="font-semibold">{n.what}.</span> {n.where} {n.note}
+              </p>
+            ))}
+          </div>
+        )}
       </section>
     </>
   );

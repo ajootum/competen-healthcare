@@ -1,5 +1,5 @@
 import { issueOtp, verifyOtp, type Transport } from "@/lib/practice/messaging";
-import { bookUnderRules } from "@/lib/practice/booking-rules";
+import { bookUnderRules, evaluateBooking } from "@/lib/practice/booking-rules";
 import { rescheduleAppointment, transitionAppointment, APPOINTMENT_TRANSITIONS } from "@/lib/practice/scheduling";
 import { resolveBookingRule } from "@/lib/practice/availability-config";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
@@ -7,6 +7,7 @@ import { audit } from "@/lib/practice/provisioning";
 import {
   issuePatientSession, checkPatientSession, normaliseDestination, type Reading,
 } from "@/lib/practice/patient-session";
+import { recordCancellation } from "@/lib/practice/booking-cancellation";
 import { PUBLISH_STATES_LIVE } from "@/lib/practice/publish-constants";
 import { isPatientFacingMode } from "@/lib/practice/practice-session-constants";
 import type { WorkspaceContext } from "@/lib/practice/access";
@@ -221,7 +222,44 @@ export type BookingIntake = {
   representativePhone?: string | null;
   consentDataCapture: boolean;
   consentCommunication?: boolean;
+  /** s9's "age as stated". Migration 254 has held the column since it landed and nothing wrote it. */
+  ageYears?: number | null;
+  /** ⚠ s9's PATIENT-REPORTED CONTEXT. The `stated` prefix is the label and it never comes off. */
+  statedDiagnosis?: string | null;
+  statedTreatment?: string | null;
+  statedHospitalNumber?: string | null;
 };
+
+/**
+ * The intake as the RULE sees it: keyed by the column each answer lands in.
+ *
+ * ⚠ THE KEYS ARE THE COLUMN NAMES ON PURPOSE. BOOKING_INTAKE_FIELDS names a `column` for every question
+ * and a question with no column cannot exist -- so keying the map this way is what makes it impossible
+ * for a rule to insist on an answer there is nowhere to put.
+ */
+const intakeAnswers = (i: BookingIntake): Record<string, unknown> => ({
+  given_name: i.givenName?.trim() ?? "",
+  family_name: i.familyName?.trim() ?? "",
+  birth_date: i.birthDate ?? null,
+  age_years: i.ageYears ?? null,
+  // ⚠ 'unspecified' READS AS BLANK TO THE RULE, and that is the point. It is the column's default, so a
+  // practice that insists on sex must not have that insistence satisfied by nobody answering.
+  sex: i.sex && i.sex !== "unspecified" ? i.sex : null,
+  contact_phone: i.contactPhone?.trim() ?? null,
+  contact_email: i.contactEmail?.trim() ?? null,
+  representative_name: i.representativeName?.trim() ?? null,
+  representative_relationship: i.representativeRelationship ?? null,
+  representative_phone: i.representativePhone?.trim() ?? null,
+  reason_for_visit: i.reasonForVisit?.trim() ?? null,
+  referral_source: i.referralSource?.trim() ?? null,
+  stated_diagnosis: i.statedDiagnosis?.trim() ?? null,
+  stated_treatment: i.statedTreatment?.trim() ?? null,
+  stated_hospital_number: i.statedHospitalNumber?.trim() ?? null,
+  // ⚠ A `false` CONSENT IS AN ANSWER, NOT A BLANK, so a rule that requires it is satisfied by a
+  // deliberate no. Requiring somebody to say yes is not a required question, it is a condition of
+  // booking, and this product does not have one.
+  consent_communication: i.consentCommunication === true ? true : false,
+});
 
 export type BookingConfirmation = {
   /** ⚠ THE ONE THING A PATIENT CAN QUOTE BACK. Short, and not the row's id. */
@@ -244,6 +282,14 @@ export type BookingConfirmation = {
   confirmationSent: boolean;
   /** What the patient should understand about that. Never "we have sent you a message". */
   confirmationNote: string;
+  /**
+   * ⚠ WHAT WAS TYPED AND NOT KEPT, IN ONE SENTENCE, OR NULL.
+   *
+   * A practice may switch a question off. When somebody's answer to a withdrawn question is thrown away
+   * the confirmation says so -- silently discarding it would leave a patient believing they had told the
+   * practice something they had not.
+   */
+  answersNotKept: string | null;
 };
 
 /** A reference somebody can read down a telephone. Not the uuid, which nobody can. */
@@ -306,6 +352,42 @@ export async function submitBookingRequest(admin: any, args: {
   if (args.locationId && !p.locations.some(l => l.id === args.locationId))
     return { ok: false, status: 422, code: "LOCATION_NOT_OFFERED", message: "that location is not offered here" };
 
+  // ══ s7.2's REQUIRED INFORMATION, RESOLVED BEFORE ANYTHING IS WRITTEN ═══════════════════════════
+  //
+  // ⚠ THE PREVIEW EXISTS SO THAT THE ROW IS WRITTEN WITH THE ANSWERS THE RULE ACTUALLY ASKS FOR. This
+  // file's own header says the intake row is written FIRST so a refusal leaves a record -- which is
+  // right, and which means the row is written before bookUnderRules has had a chance to say which
+  // answers may be kept. Asking the engine first is what reconciles the two: the record of a refused
+  // attempt is still written, and it is written without the answers to questions this rule withdrew.
+  //
+  // ⚠ IT IS NOT THE DECISION. bookUnderRules re-runs the whole evaluation at the moment of the write,
+  // from the same function, exactly as the route's `evaluate` action is not a token for `book`.
+  const patientCtx: WorkspaceContext = {
+    userId: proof.proof.sessionId,
+    workspaceId: p.workspaceId,
+    workspaceName: "", workspaceType: "", workspaceStatus: "active",
+    roleCodes: [],
+    // ⚠ EMPTY, AND IT MUST STAY EMPTY. A patient holds no capability. bookUnderRules substitutes the
+    // session proof for the capability test on this channel alone.
+    capabilities: [],
+    entitled: true, entitlementStatus: null, onboardingComplete: true, onboardingStep: null,
+  };
+
+  const answers = intakeAnswers(args.intake);
+  const preview = await evaluateBooking(admin, patientCtx, {
+    channel: "patient_self", appointmentType: args.appointmentType, scheduledAt: args.scheduledAt,
+    durationMinutes: args.durationMinutes ?? null, locationId: args.locationId ?? null,
+    intake: answers,
+  });
+  // An outage or s11's blocked conflict. Neither is a refusal a record can usefully carry, because
+  // there is no request row yet and the attempt did not reach a rule.
+  if (!preview.ok) return preview;
+  const kept = preview.data.intake?.values ?? answers;
+  const keptStr = (key: string) => {
+    const v = kept[key];
+    return v === undefined || v === null || v === "" ? null : String(v);
+  };
+
   // ── THE INTAKE ROW, WRITTEN BEFORE THE BOOKING IS ATTEMPTED ────────────────────────────────────
   const { data: req, error: reqErr } = await admin.from("practice_booking_request").insert({
     workspace_id: p.workspaceId,
@@ -318,19 +400,33 @@ export async function submitBookingRequest(admin: any, args: {
     status: "verified",
     challenge_id: proof.proof.challengeId,
     verified_at: new Date().toISOString(),
-    given_name: args.intake.givenName?.trim() || null,
-    family_name: args.intake.familyName?.trim() || null,
-    birth_date: args.intake.birthDate || null,
-    sex: args.intake.sex || "unspecified",
-    contact_phone: args.intake.contactPhone?.trim() || null,
-    contact_email: args.intake.contactEmail?.trim() || null,
-    representative_name: args.intake.representativeName?.trim() || null,
-    representative_relationship: args.intake.representativeRelationship || null,
-    representative_phone: args.intake.representativePhone?.trim() || null,
-    reason_for_visit: args.intake.reasonForVisit?.trim() || null,
-    referral_source: args.intake.referralSource?.trim() || null,
+    // ⚠ EVERY ANSWER BELOW COMES FROM `kept`, NEVER FROM `args.intake`. That is the whole of s7.2's
+    // "do not ask" being real: a question the rule withdrew has already been deleted from the map, so
+    // there is no path by which an answer nobody was asked for reaches a column. Reading args.intake
+    // here again would put it straight back.
+    given_name: keptStr("given_name"),
+    family_name: keptStr("family_name"),
+    birth_date: keptStr("birth_date"),
+    age_years: kept.age_years === null || kept.age_years === undefined || kept.age_years === ""
+      ? null : Math.trunc(Number(kept.age_years)),
+    // The column is NOT NULL with its own default, so a withdrawn or unanswered sex is the default and
+    // never a null. intakeAnswers() maps the default back to blank for the rule, so the two agree.
+    sex: keptStr("sex") ?? "unspecified",
+    contact_phone: keptStr("contact_phone"),
+    contact_email: keptStr("contact_email"),
+    representative_name: keptStr("representative_name"),
+    representative_relationship: keptStr("representative_relationship"),
+    representative_phone: keptStr("representative_phone"),
+    reason_for_visit: keptStr("reason_for_visit"),
+    referral_source: keptStr("referral_source"),
+    stated_diagnosis: keptStr("stated_diagnosis"),
+    stated_treatment: keptStr("stated_treatment"),
+    stated_hospital_number: keptStr("stated_hospital_number"),
+    // ⚠ CONSENT IS NOT A RULE QUESTION AND IS NOT TAKEN FROM `kept`. Whether it is required, and the
+    // words it is asked in, belong to the booking PAGE -- see INTAKE_NOT_CONFIGURABLE. Only the
+    // COMMUNICATION preference is a rule question, because it is a preference rather than a permission.
     consent_data_capture: !!args.intake.consentDataCapture,
-    consent_communication: !!args.intake.consentCommunication,
+    consent_communication: kept.consent_communication === true,
     consent_recorded_at: args.intake.consentDataCapture ? new Date().toISOString() : null,
   }).select("id").maybeSingle();
   if (reqErr) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: reqErr.message };
@@ -358,17 +454,6 @@ export async function submitBookingRequest(admin: any, args: {
   //
   // ⚠ NO override, EITHER. s14's override needs practice.settings.manage, which a patient context does
   // not carry; passing one would be refused anyway, and not passing it makes that unmistakable.
-  const patientCtx: WorkspaceContext = {
-    userId: proof.proof.sessionId,
-    workspaceId: p.workspaceId,
-    workspaceName: "", workspaceType: "", workspaceStatus: "active",
-    roleCodes: [],
-    // ⚠ EMPTY, AND IT MUST STAY EMPTY. A patient holds no capability. bookUnderRules substitutes the
-    // session proof for the capability test on this channel alone.
-    capabilities: [],
-    entitled: true, entitlementStatus: null, onboardingComplete: true, onboardingStep: null,
-  };
-
   const booked = await bookUnderRules(admin, patientCtx, {
     channel: "patient_self",
     patientName: `${args.intake.givenName ?? ""} ${args.intake.familyName ?? ""}`.trim() || "Patient",
@@ -377,7 +462,13 @@ export async function submitBookingRequest(admin: any, args: {
     scheduledAt: args.scheduledAt,
     durationMinutes: args.durationMinutes ?? null,
     locationId: args.locationId ?? null,
-    reason: args.intake.reasonForVisit?.trim() || null,
+    // ⚠ FROM `kept`, LIKE THE ROW. A practice that switched "reason for the visit" off must not find it
+    // on the diary entry, which is the one place a withdrawn answer would still be visible.
+    reason: keptStr("reason_for_visit"),
+    // ⚠ THE SAME MAP THE PREVIEW WAS GIVEN, so the check that decides the booking is the check the row
+    // was written against. Handing bookUnderRules the already-cleaned `kept` instead would let a
+    // required-but-withdrawn question pass, because a value the rule deleted cannot be found missing.
+    intake: answers,
     patientSessionToken: args.token,
     patientContact: contact,
     actorId: proof.proof.sessionId,
@@ -440,6 +531,10 @@ export async function submitBookingRequest(admin: any, args: {
       confirmationSent: false,
       confirmationNote:
         "Your appointment is booked. Write down the reference above -- no message has been sent to you, because this practice has no way to send one yet, so nothing will arrive by text or email. Contact the practice directly if you need to change or cancel it.",
+      // ⚠ SAID, NOT SILENTLY DONE. Somebody who typed a reason for their visit into a practice that does
+      // not ask for one is entitled to know it was not kept, rather than to assume the practitioner has
+      // read it.
+      answersNotKept: booked.data.intakeDiscardNotice,
     },
   };
 }
@@ -884,7 +979,14 @@ export async function managedBookings(admin: any, args: {
     const type = String(a.appointment_type ?? r.appointment_type);
 
     const rule = await resolveBookingRule(admin, c.page.workspaceId, locationId, type);
-    const gate = manageGate({ status, scheduledAtMs: Date.parse(scheduledAt), now, notice: rule.cancellationNoticeMinutes });
+    const gate = manageGate({
+      status, scheduledAtMs: Date.parse(scheduledAt), now,
+      notice: rule.cancellationNoticeMinutes,
+      rescheduleNotice: rule.rescheduleNoticeMinutes,
+      selfCancelAllowed: rule.selfCancelAllowed,
+      selfRescheduleAllowed: rule.selfRescheduleAllowed,
+      ruleUnreadable: rule.readFailed,
+    });
 
     bookings.push({
       reference: referenceFrom(String(r.id)),
@@ -928,9 +1030,28 @@ export async function managedBookings(admin: any, args: {
  * enforce a rule the practice never wrote. What DOES constrain a reschedule is the lead time on the new
  * time, which bookableSlots applies from the same rule row.
  */
-function manageGate(args: { status: string; scheduledAtMs: number; now: number; notice: number }): {
+function manageGate(args: {
+  status: string; scheduledAtMs: number; now: number; notice: number;
+  /** ⚠ MIGRATION 268. Null means the cancellation notice governs a move too, which is what happened
+   *  before the column existed and is what this function reported doing. */
+  rescheduleNotice?: number | null;
+  selfCancelAllowed?: boolean;
+  selfRescheduleAllowed?: boolean;
+  /** ⚠ The rule could not be READ. Not the same as a practice with no rule -- see below. */
+  ruleUnreadable?: boolean;
+}): {
   canReschedule: boolean; canCancel: boolean; whyNot: string | null;
 } {
+  // ⚠ AN UNREADABLE RULE SHUTS BOTH BUTTONS RATHER THAN OPENING THEM. resolveBookingRule used to
+  // discard its error and hand back the platform default, which has a notice period of nought -- so a
+  // failed read used to mean a patient could cancel anything at any time. That is the fail-open
+  // direction, and it is now closed here as well as inside checkPlacement.
+  if (args.ruleUnreadable)
+    return {
+      canReschedule: false, canCancel: false,
+      whyNot: "this practice's booking rules could not be read just now, so nothing can be changed here. Try again shortly, or contact the practice.",
+    };
+
   const cancellable = (APPOINTMENT_TRANSITIONS[args.status] ?? []).includes("CANCELLED");
   if (!cancellable)
     return {
@@ -945,17 +1066,51 @@ function manageGate(args: { status: string; scheduledAtMs: number; now: number; 
   if (Number.isNaN(args.scheduledAtMs))
     return { canReschedule: false, canCancel: false, whyNot: "this appointment has no readable time, so nothing can be changed here." };
 
-  const deadline = args.scheduledAtMs - args.notice * 60000;
-  if (args.now > deadline) {
-    const hours = Math.round(args.notice / 60);
+  // ⚠ TWO DEADLINES NOW, AND THEY MAY DIFFER. This function's own header used to record that no column
+  // held a separate reschedule window and that reusing the cancellation notice for both "would enforce a
+  // rule the practice never wrote". Migration 268 gives the column, so the two are separated -- and when
+  // it is null the cancellation notice governs a move, which is the behaviour that was already reported
+  // and is now a stored choice rather than an absence.
+  const rescheduleNotice = args.rescheduleNotice ?? args.notice;
+  const period = (m: number) => m < 120 ? `${m} minutes` : `${Math.round(m / 60)} hours`;
+
+  const pastCancel = args.now > args.scheduledAtMs - args.notice * 60000;
+  const pastReschedule = args.now > args.scheduledAtMs - rescheduleNotice * 60000;
+  // ⚠ MIGRATION 268. Absent columns default to true, so a practice that has configured nothing is
+  // exactly as it was.
+  const mayCancel = args.selfCancelAllowed !== false && !pastCancel;
+  const mayReschedule = args.selfRescheduleAllowed !== false && !pastReschedule;
+
+  if (mayCancel || mayReschedule) {
+    // ⚠ A REASON IS GIVEN FOR THE HALF THAT IS SHUT, not only when both are. A patient offered "move"
+    // and not "cancel" with no sentence beside it is a patient who telephones to ask why.
+    const shut: string[] = [];
+    if (!mayCancel)
+      shut.push(args.selfCancelAllowed === false
+        ? "this practice does not take cancellations online"
+        : `this practice asks for ${period(args.notice)}' notice to cancel, and that has passed`);
+    if (!mayReschedule)
+      shut.push(args.selfRescheduleAllowed === false
+        ? "this practice does not take changes of time online"
+        : `this practice asks for ${period(rescheduleNotice)}' notice to move an appointment, and that has passed`);
     return {
-      canReschedule: false, canCancel: false,
-      whyNot: args.notice > 0
-        ? `this practice asks for ${args.notice < 120 ? `${args.notice} minutes` : `${hours} hours`}' notice, and that has passed. Contact the practice directly.`
-        : "this appointment time has passed. Contact the practice directly.",
+      canReschedule: mayReschedule, canCancel: mayCancel,
+      whyNot: shut.length === 0 ? null : `${shut.join(", and ")}. Contact the practice directly.`,
     };
   }
-  return { canReschedule: true, canCancel: true, whyNot: null };
+
+  if (args.selfCancelAllowed === false && args.selfRescheduleAllowed === false)
+    return {
+      canReschedule: false, canCancel: false,
+      whyNot: "this practice arranges changes itself rather than online. Contact them directly.",
+    };
+  const worst = Math.max(args.notice, rescheduleNotice);
+  return {
+    canReschedule: false, canCancel: false,
+    whyNot: worst > 0
+      ? `this practice asks for ${period(worst)}' notice, and that has passed. Contact the practice directly.`
+      : "this appointment time has passed. Contact the practice directly.",
+  };
 }
 
 /** The one booking a manage action names, proved to belong to the verified contact. */
@@ -1098,6 +1253,21 @@ export async function cancelManagedBooking(admin: any, args: {
   if (!cancelled.ok) return cancelled;
 
   const reason = (args.reason ?? "").trim().slice(0, 500) || null;
+
+  // ⚠ THE REASON HAS SOMEWHERE TO GO NOW, AND THIS FUNCTION USED TO SAY IT DID NOT. Migration 269 gives
+  // practice_appointment the four columns, so the patient path writes them through the SAME helper the
+  // practice path uses -- a second write of the same four columns is how two cancellation records start
+  // disagreeing about who cancelled. `reasonStoredOnBooking` below is now read from the attempt rather
+  // than hard-coded false, so the day the migration lands the sentence changes on its own.
+  const rule = await resolveBookingRule(admin, workspaceId, null, booking.appointmentType);
+  const scheduledMs = Date.parse(booking.scheduledAt);
+  const record = await recordCancellation(admin, workspaceId, booking.appointmentId, {
+    reason,
+    actorKind: "patient",
+    withinNotice: rule.readFailed || Number.isNaN(scheduledMs)
+      ? null : Date.now() > scheduledMs - rule.cancellationNoticeMinutes * 60000,
+  });
+
   await audit(admin, {
     workspaceId, actorId: sessionId, eventType: "practice.booking_cancelled_by_patient",
     payload: {
@@ -1111,8 +1281,8 @@ export async function cancelManagedBooking(admin: any, args: {
     ok: true,
     data: {
       reference: booking.reference, appointmentId: booking.appointmentId, status: cancelled.data.status,
-      // ⚠ FALSE, AND SAID OUT LOUD. See the header.
-      reasonStoredOnBooking: false,
+      // ⚠ READ FROM THE WRITE, NOT ASSUMED. See above.
+      reasonStoredOnBooking: record.stored,
       confirmationSent: false,
       confirmationNote:
         "This appointment has been cancelled. No message has been sent to you or to the practice, "

@@ -1,12 +1,14 @@
 import { audit } from "@/lib/practice/provisioning";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
 import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
-import { resolveBookingRule } from "@/lib/practice/availability-config";
+import { resolveBookingRule, hhmm as hhmmOf } from "@/lib/practice/availability-config";
 // CPR-V5-007 s7.7. ⚠ No cycle: practice-sessions reaches 11 modules and this one is not among them,
 // checked rather than assumed. It is imported so the per-session walk-in limit has ONE resolver shared
 // with the screen that reports it.
 import { walkInAllowance, sessionBookingModeAt } from "@/lib/practice/practice-sessions";
 import { bookingBlock } from "@/lib/practice/lifecycle-constants";
+// CPR-V5-007 s7.7 (migration 268). ⚠ Constants only, and the ONE definition of the cutoff boundary.
+import { walkInCutoff } from "@/lib/practice/booking-rule-constants";
 
 // PEN-001 Appointment & Scheduling Engine -- the business rules, separated from every UI that uses them
 // (PEN-001 "separate scheduling logic from user interfaces"). CPR-V2-003 V3 is one consumer; the command
@@ -110,6 +112,20 @@ export async function checkPlacement(admin: any, args: {
   locationId: string | null; appointmentType: string; allowOverlap: boolean;
   excludeAppointmentId?: string;
   windowOverridden?: string[];
+  /**
+   * s7.7's EMERGENCY OVERRIDE, as its own argument.
+   *
+   * ⚠ SEPARATE FROM windowOverridden BY CONSTRUCTION RATHER THAN BY A FILTER. WALK_IN_NOT_CONFIGURABLE
+   * asked for "the same shape s14's window override already uses, extended to the WALK_IN_LIMIT code",
+   * and the shape it uses is a list of codes recorded in the audit trail before the booking. What it
+   * must NOT become is one list that a filter divides, because a filter is a thing somebody widens: a
+   * lifted notice period would then be one edit away from lifting a capacity rule. Two arguments cannot
+   * be widened into each other by accident.
+   *
+   * ⚠ AND IT REACHES NOTHING ELSE. The double-booking check, the travel rule, the closed location and
+   * the practice's own lifecycle state never consult it.
+   */
+  walkInOverridden?: string[];
   /** s7.3's booking channel. Only `patient_self` is treated differently -- see the header. */
   channel?: string | null;
 }): Promise<EngineResult<{ locationName: string | null }>> {
@@ -206,6 +222,16 @@ export async function checkPlacement(admin: any, args: {
   // Lead time and the booking horizon are skipped for walk-ins and emergencies: a walk-in by definition
   // arrives without notice, and requiring an emergency to be booked a day ahead is a contradiction.
   const rule = await resolveBookingRule(admin, args.workspaceId, args.locationId ?? null, args.appointmentType);
+  // ⚠ A RULE THAT COULD NOT BE READ IS NOT A PRACTICE WITH NO RULES, AND THIS LINE IS NEW BECAUSE THE
+  // RESOLVER USED TO DISCARD ITS ERROR. Until now an unreadable practice_booking_rule silently produced
+  // the platform default here -- no notice period, no horizon, no walk-in limit -- so a database wobble
+  // opened the diary and nothing anywhere said so. Four controls were fail-open through one missing
+  // `error` read. See ResolvedRule.readFailed.
+  if (rule.readFailed)
+    return {
+      ok: false, status: 503, code: "RULES_UNREADABLE",
+      message: `this booking was not made because your booking rules could not be read: ${rule.readError ?? "no reason was given"} — an unread rule is not an absent one`,
+    };
   const wherePhrase = rule.source === "default" || rule.source === "practice"
     ? "your practice's booking rule" : `the booking rule for this ${rule.source.replace("+", " and ")}`;
 
@@ -225,9 +251,12 @@ export async function checkPlacement(admin: any, args: {
       };
   }
 
+  const walkInLifted = args.walkInOverridden ?? [];
+
   // THE ONE RULE THAT IS ABOUT WALK-INS, so it runs for them. Null means no limit; ZERO MEANS ZERO,
   // which is why the column is nullable rather than defaulting to nought.
-  if (args.appointmentType === "walk_in" && rule.walkInDailyLimit !== null) {
+  if (args.appointmentType === "walk_in" && rule.walkInDailyLimit !== null
+    && !walkInLifted.includes("WALK_IN_LIMIT")) {
     const { data: ws } = await admin.from("practice_workspace")
       .select("timezone").eq("id", args.workspaceId).maybeSingle();
     const { startIso, endIso } = zonedDayRange(practiceToday(ws?.timezone ?? "UTC", new Date(args.startMs)), ws?.timezone ?? "UTC");
@@ -261,7 +290,8 @@ export async function checkPlacement(admin: any, args: {
   //
   // ⚠ IT IS NOT PART OF s14's WINDOW OVERRIDE. `lifted` suppresses LEAD_TIME and BEYOND_HORIZON only,
   // and this refusal never consults it. An override of the notice period must never become an override
-  // of a capacity rule -- the same separation the double-book check keeps.
+  // of a capacity rule -- the same separation the double-book check keeps. It DOES consult
+  // `walkInOverridden`, which is a different argument carrying a different authorisation.
   //
   // ⚠ AND IT SITS OUTSIDE THE OVERLAP_EXEMPT BLOCK DELIBERATELY. A walk-in is exempt from the OVERLAP
   // rule because a queue exists precisely so an unscheduled arrival needs no free grid slot. That says
@@ -277,7 +307,39 @@ export async function checkPlacement(admin: any, args: {
         ok: false, status: 503, code: "SESSION_WALK_IN_UNREADABLE",
         message: `this walk-in was not booked because the session's walk-in limit could not be checked: ${allowance.reason}`,
       };
-    if (allowance.value.full) {
+
+    // ── CPR-V5-007 s7.7's CUTOFF (migration 268) ───────────────────────────────────────────────────
+    //
+    // ⚠ THE CONTROL, AND evaluateBooking's IS THE PREVIEW. A cutoff that only existed in the rules
+    // engine would be one that any caller of bookAppointment walked straight past -- and bookAppointment
+    // is how a walk-in has been registered at the desk since Phase 1. This function is the one funnel
+    // all four booking paths pass through, which is why the refusal lives here.
+    //
+    // ⚠ NO SESSION MEANS NOTHING TO MEASURE FROM. The cutoff is a distance back from a session's END, so
+    // a time no session covers has no cutoff -- refusing there would invent a rule nobody wrote.
+    if (rule.walkInCutoffMinutes !== null && allowance.value.session !== null
+      && !walkInLifted.includes("WALK_IN_CUTOFF")) {
+      const s = allowance.value.session;
+      const { data: cutoffWs } = await admin.from("practice_workspace")
+        .select("timezone").eq("id", args.workspaceId).maybeSingle();
+      const tz = (cutoffWs?.timezone as string) || "UTC";
+      const dayStartMs = Date.parse(zonedDayRange(practiceToday(tz, new Date(args.startMs)), tz).startIso);
+      const minuteOfDay = Math.floor((args.startMs - dayStartMs) / 60000);
+      // ⚠ walkInCutoff() OWNS THE BOUNDARY, and evaluateBooking's preview calls the same function. Two
+      // spellings of "the last 60 minutes" is how a screen ends up offering a time this refuses.
+      const cut = walkInCutoff({
+        cutoffMinutes: rule.walkInCutoffMinutes,
+        sessionEndsMinute: s.endsMinute,
+        minuteOfDay,
+      });
+      if (cut.bites)
+        return {
+          ok: false, status: 409, code: "WALK_IN_CUTOFF",
+          message: `${wherePhrase} takes no walk-in in the last ${rule.walkInCutoffMinutes} minutes of a session, and ${s.sessionName} ends at ${hhmmOf(s.endsMinute)}. The last walk-in it takes is at ${hhmmOf(cut.lastWalkInMinute ?? s.endsMinute)}`,
+        };
+    }
+
+    if (allowance.value.full && !walkInLifted.includes("SESSION_WALK_IN_LIMIT")) {
       const s = allowance.value.session!;
       const n = allowance.value.sessionLimit!;
       // NAMES THE SESSION AND ITS OWN NUMBER. "Walk-in limit reached" over two different limits is the
@@ -627,6 +689,31 @@ export async function transitionQueueEntry(admin: any, args: {
   return { ok: true, data: { status: args.to } };
 }
 
+const QUEUE_LIVE_STATUSES = ["WAITING", "READY", "IN_CONSULTATION", "PAUSED"];
+
+/**
+ * The waiting room, in the one order this product uses.
+ *
+ * ⚠ THE PRIORITY COLUMN IS TRIED AND THE READ FALLS BACK ONCE. Naming a column migration 269 has not
+ * added would make PostgREST refuse the whole query, and the whole query is the day's waiting room --
+ * so a deployment without the file would lose its queue rather than lose a feature. The fallback is
+ * distinguished by the error CODE, never by an empty result.
+ */
+async function liveQueue(admin: any, workspaceId: string): Promise<{ data: any[] | null }> {
+  const extended = await admin.from("practice_queue_entry")
+    .select("id, patient_name, status, entered_at, appointment_id, priority, priority_reason")
+    .eq("workspace_id", workspaceId).in("status", QUEUE_LIVE_STATUSES)
+    .order("priority", { ascending: false }).order("entered_at");
+  if (!extended.error) return { data: extended.data };
+  if (!MISSING_QUEUE_COLUMN.has(String(extended.error.code))) return { data: null };
+  const base = await admin.from("practice_queue_entry")
+    .select("id, patient_name, status, entered_at, appointment_id")
+    .eq("workspace_id", workspaceId).in("status", QUEUE_LIVE_STATUSES).order("entered_at");
+  return { data: base.error ? null : base.data };
+}
+
+const MISSING_QUEUE_COLUMN = new Set(["PGRST204", "PGRST205", "PGRST202", "42703"]);
+
 /** The day's diary plus the live queue -- what CPR-V2-003's Today panel and CPR-V2-001's widget both read. */
 export async function loadDay(admin: any, workspaceId: string, dayIso: string) {
   const dayStart = `${dayIso}T00:00:00.000Z`;
@@ -638,10 +725,17 @@ export async function loadDay(admin: any, workspaceId: string, dayIso: string) {
       .select("id, patient_id, patient_name, patient_phone, appointment_type, scheduled_at, duration_minutes, status, reason")
       .eq("workspace_id", workspaceId).gte("scheduled_at", dayStart).lte("scheduled_at", dayEnd)
       .order("scheduled_at"),
-    admin.from("practice_queue_entry")
-      .select("id, patient_name, status, entered_at, appointment_id")
-      .eq("workspace_id", workspaceId).in("status", ["WAITING", "READY", "IN_CONSULTATION", "PAUSED"])
-      .order("entered_at"),
+    // ⚠ ONE ORDERING FOR THE WAITING ROOM, AND IT IS THIS ONE (migration 269).
+    //
+    // `priority desc, entered_at` is arrival order at every practice that has set no priority, because
+    // every row is then 0 -- so this changes nothing for anybody until a desk uses the control. The
+    // alternative considered and rejected was to sort by arrival here and by priority on the walk-in
+    // report, resolving the rule's queue policy in each place. That is two answers to "who is next" for
+    // one waiting room, and the one people act on is whichever screen they happen to be looking at.
+    //
+    // The rule's walk_in_queue_policy therefore decides whether a priority may be SET at all, never how
+    // a queue is sorted. See setQueuePriority in practice-sessions.ts.
+    liveQueue(admin, workspaceId),
     admin.from("practice_availability_slot")
       .select("id, starts_at, ends_at, status, note")
       .eq("workspace_id", workspaceId).gte("starts_at", dayStart).lte("starts_at", dayEnd)

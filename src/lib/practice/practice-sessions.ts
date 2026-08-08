@@ -6,7 +6,11 @@ import {
   SESSION_ACTIVITY_TYPES, BOOKING_MODES, BOOKING_MODES_LIVE, SESSION_APPOINTMENT_TYPES,
   isPatientFacingMode, suggestSessionName, type BookingMode,
 } from "@/lib/practice/practice-session-constants";
-import { WALK_IN_NOT_CONFIGURABLE, WALK_IN_ENFORCEMENT_NOTE } from "@/lib/practice/recall-constants";
+import { WALK_IN_NOT_CONFIGURABLE, WALK_IN_NOW_CONFIGURABLE, WALK_IN_ENFORCEMENT_NOTE } from "@/lib/practice/recall-constants";
+// CPR-V5-007 s7.7 (migrations 268-269). ⚠ Constants only, from the file that touches no database.
+import {
+  QUEUE_PRIORITIES, QUEUE_PRIORITY_VALUES, QUEUE_PRIORITY_NEEDING_A_REASON,
+} from "@/lib/practice/booking-rule-constants";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -906,6 +910,8 @@ export type WalkInPolicy = {
   practiceDailyLimitsUnreadable: string | null;
   /** What s7.7 asks for that no column holds. Carried to the screen rather than drawn as a control. */
   notConfigurable: readonly { what: string; whyNot: string; wouldNeed: string }[];
+  /** ⚠ What this screen USED to list as missing and no longer is, with where each one went. */
+  nowConfigurable: readonly { what: string; where: string; note: string }[];
   enforcementNote: string;
 };
 
@@ -1048,8 +1054,95 @@ export async function walkInPolicy(admin: any, ctx: { workspaceId: string }, arg
     })),
     practiceDailyLimitsUnreadable: rules.error ? `your booking rules could not be read: ${rules.error.message}` : null,
     notConfigurable: WALK_IN_NOT_CONFIGURABLE,
+    nowConfigurable: WALK_IN_NOW_CONFIGURABLE,
     enforcementNote: WALK_IN_ENFORCEMENT_NOTE,
   };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// s7.7's QUEUE ORDERING RULES (migrations 268 and 269)
+//
+// WALK_IN_NOT_CONFIGURABLE said this needed "a priority column on practice_queue_entry, and a rule
+// column saying how it is applied". Both exist now, and the rule column does something narrower than
+// that sentence implies, deliberately:
+//
+// ⚠ THE POLICY DECIDES WHETHER A PRIORITY MAY BE SET. IT DOES NOT DECIDE HOW A QUEUE IS SORTED.
+//
+// Every queue read in this product orders by `priority desc, entered_at`, always. Under 'first_come'
+// nothing may set a priority, so every row is 0, so that order IS arrival order -- the policy is honoured
+// exactly, and there is still only one answer to "who is next". Making the SORT depend on the policy
+// would have meant resolving a booking rule inside every queue read, and the day one of them forgot,
+// two screens in the same practice would disagree about which patient to call.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Set how urgent somebody in the waiting room is, when the practice's rule permits it at all.
+ *
+ * ⚠ ABOVE ROUTINE, A REASON IS NOT OPTIONAL -- here, and again in migration 269's own CHECK. A queue
+ * jump nobody wrote down cannot be answered for afterwards, which is the same standard s14 holds an
+ * override to.
+ */
+export async function setQueuePriority(admin: any, ctx: WorkspaceContext, args: {
+  entryId: string; priority: number; reason?: string | null;
+  actorId: string; correlationId: string;
+}): Promise<{ ok: true; data: { id: string; priority: number } } | { ok: false; status: number; code: string; message: string }> {
+  if (!ctx.capabilities.includes("appointment.manage"))
+    return { ok: false, status: 403, code: "FORBIDDEN", message: "appointment.manage is required" };
+
+  const priority = Math.trunc(Number(args.priority));
+  if (!QUEUE_PRIORITY_VALUES.includes(priority))
+    return {
+      ok: false, status: 400, code: "VALIDATION_ERROR",
+      message: `a queue priority is one of: ${QUEUE_PRIORITIES.map(p => `${p.value} (${p.label.toLowerCase()})`).join(", ")}`,
+    };
+  const reason = (args.reason ?? "").trim().slice(0, 300) || null;
+  if (priority >= QUEUE_PRIORITY_NEEDING_A_REASON && !reason)
+    return {
+      ok: false, status: 400, code: "REASON_REQUIRED",
+      message: "moving somebody up the queue has to say why. Somebody else waits longer for it, and that has to be answerable for.",
+    };
+
+  const { data: entry, error } = await admin.from("practice_queue_entry")
+    .select("id, appointment_id").eq("id", args.entryId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (error) return { ok: false, status: 503, code: "READ_FAILED", message: `that queue entry could not be read: ${error.message}` };
+  if (!entry) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+
+  // ── THE PRACTICE'S OWN POLICY, RESOLVED FROM THE RULE THAT GOVERNS THIS QUEUE ─────────────────────
+  //
+  // ⚠ READ HERE RATHER THAN INSIDE THE QUEUE READS. See the section header: this is the one place the
+  // policy decides anything, and it decides whether the control may be used at all.
+  const { data: policyRows, error: policyErr } = await admin.from("practice_booking_rule")
+    .select("walk_in_queue_policy, location_id, appointment_type")
+    .eq("workspace_id", ctx.workspaceId).eq("status", "active");
+  if (policyErr && !/PGRST204|PGRST205|42703|could not find/i.test(`${policyErr.code} ${policyErr.message}`))
+    return { ok: false, status: 503, code: "READ_FAILED", message: `your booking rules could not be read, so it could not be checked whether this practice orders its queue by priority: ${policyErr.message}` };
+  // ⚠ MIGRATION 268 ABSENT MEANS NO PRACTICE HAS CHOSEN A POLICY, which is 'first_come' -- the same
+  // answer as a practice that has one and left it alone. Not an error, and not permission either.
+  const allowsPriority = !policyErr
+    && ((policyRows ?? []) as any[]).some(r => r.walk_in_queue_policy === "priority_then_first_come");
+  if (!allowsPriority && priority > 0)
+    return {
+      ok: false, status: 422, code: "QUEUE_IS_FIRST_COME",
+      message: "this practice sees people in the order they arrive. To move somebody up, change the walk-in queue policy on the booking rule that governs this clinic.",
+    };
+
+  const { data: updated, error: upErr } = await admin.from("practice_queue_entry")
+    .update({ priority, priority_reason: reason, updated_at: new Date().toISOString() })
+    .eq("id", args.entryId).eq("workspace_id", ctx.workspaceId).select("id").maybeSingle();
+  if (upErr && /PGRST204|42703|could not find/i.test(`${upErr.code} ${upErr.message}`))
+    return {
+      ok: false, status: 503, code: "STORE_ABSENT",
+      message: "queue priority is not configurable in this deployment yet: migration \"269-practice-waiting-list (waiting list, queue priority, what a cancellation records)\" has not been applied, so there is nowhere to store it.",
+    };
+  if (upErr) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: upErr.message };
+  if (!updated) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: args.actorId, eventType: "practice.queue_priority_set",
+    payload: { entryId: args.entryId, priority, reason, appointmentId: entry.appointment_id ?? null },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { id: args.entryId, priority } };
 }
 
 /**

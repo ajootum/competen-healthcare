@@ -12,8 +12,17 @@ import {
   CONFIRMATION_MODE_CODES, PATIENT_ELIGIBILITY_CODES,
   specificityOf, specificityRung, specificityReasons, scopesCanOverlap, scopeDimensions,
   plainWindow, plainCapacity, PLATFORM_DEFAULT_RUNG,
-  type ScopeShape,
+  plainWalkIn, plainCancellation, plainRequiredInformation,
+  BOOKING_INTAKE_FIELDS, requiredInformationOf, levelFor, resolveIntake,
+  intakeRefusalMessage, intakeDiscardNotice,
+  BOOKING_INTAKE_FIELD_KEYS, INTAKE_FIELDS_ALWAYS_REQUIRED,
+  WALK_IN_QUEUE_POLICY_CODES, DNA_ACTION_CODES, WALK_IN_OVERRIDABLE_CODES, walkInCutoff,
+  type ScopeShape, type RequiredInformation,
 } from "@/lib/practice/booking-rule-constants";
+// CPR-V5-007 s7.7. ⚠ No cycle: practice-sessions reaches 11 modules and this one is not among them,
+// which scheduling.ts checked when it took the same import for the same reason -- the per-session
+// walk-in limit and the cutoff have ONE resolver, shared with the screen that reports them.
+import { walkInAllowance } from "@/lib/practice/practice-sessions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -81,11 +90,235 @@ import {
 //
 // ---- WHAT IS NOT HERE ------------------------------------------------------------------------------
 //
-//   Phase 4  s8's patient-facing access -- handle, link, OTP, publish state. The patient_self and
-//            referral channels are storable as a rule's scope (AC-06 requires that) and have NO DOOR:
-//            a booking through them is refused with the phase named.
-//   Phase 5  s7.5's recall queue and s7.7's walk-in session limits, cutoff and queue rules.
-//   Phase 6  s10's scenario preview and publish validation.
+//   Phase 4  s8's patient-facing SCREENS. The engines are here and in patient-booking.ts; what does not
+//            exist is a wizard a stranger can use, which PATIENT_BOOKING_SCREENS_BUILT states.
+//   Phase 6  s7.2's NOTIFICATIONS section, and it is not here on purpose rather than by omission.
+//            Nothing in this product sends a message to a patient, so a trigger stored here would
+//            promise a notification nobody would receive. The section is drawn as not built and says so.
+//
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// MIGRATIONS 268 AND 269 -- THE FOUR SECTIONS s7.2 NAMED AND THIS TABLE COULD NOT HOLD
+//
+// ⚠ TWO FILES RATHER THAN ONE, AND THE SPLIT IS DELIBERATE. Migration 108 was truncated on the way in
+// and had to be re-run by hand. 268 is the one everything below depends on and it touches ONE table.
+// 269 adds the two stores that only the cancellation and queue engines read, so a truncated 269 leaves
+// the rule card fully working and reports the missing half rather than half-breaking the screen.
+//
+// ⚠ REQUIRED TEXT IS `btrim(x) <> ''`, NEVER `is not null`. Migration 256 shipped that mistake and 257
+// was the correction. Every text check below is written the corrected way the first time.
+//
+// ⚠ NO SEMICOLON ANYWHERE EXCEPT ENDING A STATEMENT, INCLUDING INSIDE A COMMENT, and no `--` inside a
+// string literal. The runner splits on semicolons and a comment stripper works line-wise -- one of each
+// silently shredded two sections of migration 238 and truncated a literal in 264.
+//
+//   -- ============================================================
+//   -- MIGRATION 268: BOOKING RULE -- REQUIRED INFORMATION, WALK-IN CUTOFF AND QUEUE, CANCELLATIONS
+//   -- CPR-V5-007 s7.2, s7.7, s9
+//   --
+//   -- Additive columns on practice_booking_rule only. Nothing is dropped and nothing is backfilled:
+//   -- every default below is the behaviour this product had before the column existed, so applying
+//   -- this migration changes no decision anywhere until somebody configures something.
+//   -- ============================================================
+//
+//   -- ---- 1. s7.2 REQUIRED INFORMATION (s9's intake) ---------------------------------------------
+//   --
+//   -- A JSONB COLUMN RATHER THAN A CHILD TABLE, AND THE REASON IS AC-13. The rule VERSION snapshot in
+//   -- practice_booking_rule_version photographs COLUMNS. A child table would not be in the photograph,
+//   -- so "which questions were required when this booking was made" would be answered with today's
+//   -- answer -- which is the exact defect versioning exists to prevent.
+//   --
+//   -- The shape is { "fields": { "<field_key>": "off|optional|required" } }, or an object per field
+//   -- carrying a condition. It is validated in requiredInformationOf(), which drops anything it does
+//   -- not recognise rather than enforcing it. An EMPTY object means every question is accepted if given
+//   -- and demanded of nobody, which is what this product did before this column existed.
+//   alter table practice_booking_rule add column if not exists required_information jsonb not null default '{}'::jsonb;
+//   alter table practice_booking_rule drop constraint if exists practice_booking_rule_required_info_object;
+//   alter table practice_booking_rule add constraint practice_booking_rule_required_info_object
+//     check (jsonb_typeof(required_information) = 'object');
+//
+//   -- ---- 2. s7.7 WALK-IN CUTOFF AND QUEUE POLICY ------------------------------------------------
+//   --
+//   -- ⚠ ON THE RULE, NOT ON THE SESSION, AND THAT IS A DEPARTURE FROM WHAT recall-constants.ts SAID
+//   -- WOULD BE NEEDED. Its note proposed walk_in_cutoff_minutes on practice_availability_template. The
+//   -- rule table is better and the reason is the ladder that already exists: a rule may name a session
+//   -- (session_template_id), so a cutoff here can be per session, per location, per appointment type or
+//   -- practice-wide, and s11 decides which one applies. On the template it could only ever be one of
+//   -- those four. The note is corrected rather than followed.
+//   --
+//   -- NULL MEANS NO CUTOFF. The range starts at 1 rather than 0 because a cutoff of 0 minutes before the
+//   -- end is a session with no cutoff, and two spellings of one answer is a question with two answers.
+//   alter table practice_booking_rule add column if not exists walk_in_cutoff_minutes integer;
+//   alter table practice_booking_rule drop constraint if exists practice_booking_rule_walk_in_cutoff_range;
+//   alter table practice_booking_rule add constraint practice_booking_rule_walk_in_cutoff_range
+//     check (walk_in_cutoff_minutes is null or walk_in_cutoff_minutes between 1 and 720);
+//
+//   -- 'first_come' is what happened before this column, so it is the default and applying this changes
+//   -- no waiting room anywhere.
+//   alter table practice_booking_rule add column if not exists walk_in_queue_policy text not null default 'first_come';
+//   alter table practice_booking_rule drop constraint if exists practice_booking_rule_queue_policy_known;
+//   alter table practice_booking_rule add constraint practice_booking_rule_queue_policy_known
+//     check (walk_in_queue_policy in ('first_come', 'priority_then_first_come'));
+//
+//   -- ---- 3. s7.2 CANCELLATIONS ------------------------------------------------------------------
+//   --
+//   -- ⚠ THESE GOVERN A PATIENT'S OWN CANCELLATION AND NOTHING ELSE. A practice must always be able to
+//   -- correct its own diary, so nothing here is ever consulted for a practitioner or staff cancellation.
+//   -- TRUE by default: patient self-service was already permitted and this must not switch it off.
+//   alter table practice_booking_rule add column if not exists self_cancel_allowed boolean not null default true;
+//   alter table practice_booking_rule add column if not exists self_reschedule_allowed boolean not null default true;
+//
+//   -- NULL MEANS THE CANCELLATION NOTICE GOVERNS A MOVE TOO, which is what patient-booking.ts already
+//   -- did and reported doing. A number here separates the two.
+//   alter table practice_booking_rule add column if not exists reschedule_notice_minutes integer;
+//   alter table practice_booking_rule drop constraint if exists practice_booking_rule_reschedule_notice_range;
+//   alter table practice_booking_rule add constraint practice_booking_rule_reschedule_notice_range
+//     check (reschedule_notice_minutes is null or reschedule_notice_minutes between 0 and 43200);
+//
+//   -- s7.2's DNA handling. NULL threshold means no rule, which is not the same as a threshold of 0 --
+//   -- 0 would mean a single missed appointment counts, and somebody has to be able to write that.
+//   alter table practice_booking_rule add column if not exists dna_threshold integer;
+//   alter table practice_booking_rule drop constraint if exists practice_booking_rule_dna_threshold_range;
+//   alter table practice_booking_rule add constraint practice_booking_rule_dna_threshold_range
+//     check (dna_threshold is null or dna_threshold between 0 and 50);
+//
+//   alter table practice_booking_rule add column if not exists dna_action text not null default 'none';
+//   alter table practice_booking_rule drop constraint if exists practice_booking_rule_dna_action_known;
+//   alter table practice_booking_rule add constraint practice_booking_rule_dna_action_known
+//     check (dna_action in ('none', 'require_approval', 'block_self_booking'));
+//
+//   -- A threshold with nothing to do, and an action with nothing to count, are both half a rule. Refused
+//   -- here rather than left to a screen, because the halves are written on two different controls.
+//   alter table practice_booking_rule drop constraint if exists practice_booking_rule_dna_pair;
+//   alter table practice_booking_rule add constraint practice_booking_rule_dna_pair
+//     check ((dna_action = 'none' and dna_threshold is null) or (dna_action <> 'none' and dna_threshold is not null));
+//
+//   alter table practice_booking_rule add column if not exists waiting_list_enabled boolean not null default false;
+//
+//   alter table practice_booking_rule enable row level security;
+//
+//   notify pgrst, 'reload schema';
+//
+//   -- ============================================================
+//   -- MIGRATION 269: THE WAITING LIST, THE QUEUE PRIORITY AND WHAT A CANCELLATION RECORDS
+//   -- CPR-V5-007 s7.2, s7.7
+//   -- ============================================================
+//
+//   -- ---- 1. s7.7's QUEUE ORDERING ---------------------------------------------------------------
+//   --
+//   -- ⚠ ONE ORDERING, NOT TWO. Every queue read in this product orders by priority then arrival, and
+//   -- under the default policy every row is 0, so that order IS arrival order and nothing changed. The
+//   -- policy on the rule decides whether the desk may set a priority at all -- it never decides how a
+//   -- queue is sorted, because two sort orders for one waiting room is two answers to one question.
+//   alter table practice_queue_entry add column if not exists priority integer not null default 0;
+//   alter table practice_queue_entry drop constraint if exists practice_queue_entry_priority_range;
+//   alter table practice_queue_entry add constraint practice_queue_entry_priority_range
+//     check (priority between 0 and 3);
+//
+//   -- ⚠ A QUEUE JUMP NOBODY EXPLAINED CANNOT BE ANSWERED FOR. Above routine, a reason is not optional,
+//   -- and the check is btrim so the space bar does not satisfy it.
+//   alter table practice_queue_entry add column if not exists priority_reason text;
+//   alter table practice_queue_entry drop constraint if exists practice_queue_entry_priority_reason;
+//   alter table practice_queue_entry add constraint practice_queue_entry_priority_reason
+//     check ((priority = 0 and (priority_reason is null or btrim(priority_reason) <> ''))
+//         or (priority > 0 and priority_reason is not null and btrim(priority_reason) <> ''
+//             and char_length(priority_reason) <= 300));
+//
+//   create index if not exists idx_practice_queue_entry_order
+//     on practice_queue_entry(workspace_id, priority desc, entered_at);
+//
+//   -- ---- 2. WHAT A CANCELLATION RECORDS ---------------------------------------------------------
+//   --
+//   -- practice_appointment has held a status and nothing else about a cancellation. "Who cancelled this
+//   -- and why" was answerable only from the audit trail, which is a log and not a column a report can
+//   -- group by. cancelManagedBooking already said out loud that a patient's reason had nowhere to go.
+//   alter table practice_appointment add column if not exists cancellation_reason text;
+//   alter table practice_appointment drop constraint if exists practice_appointment_cancellation_reason_len;
+//   alter table practice_appointment add constraint practice_appointment_cancellation_reason_len
+//     check (cancellation_reason is null or (btrim(cancellation_reason) <> '' and char_length(cancellation_reason) <= 500));
+//
+//   alter table practice_appointment add column if not exists cancelled_by_kind text;
+//   alter table practice_appointment drop constraint if exists practice_appointment_cancelled_by_kind_known;
+//   alter table practice_appointment add constraint practice_appointment_cancelled_by_kind_known
+//     check (cancelled_by_kind is null or cancelled_by_kind in ('patient', 'practice'));
+//
+//   -- ⚠ THREE STATES AND NULL IS ONE OF THEM. True means inside the notice period, false means outside,
+//   -- and null means this appointment was never cancelled OR was cancelled before this column existed.
+//   alter table practice_appointment add column if not exists cancelled_within_notice boolean;
+//   alter table practice_appointment add column if not exists cancelled_at timestamptz;
+//
+//   -- ---- 3. s7.2's WAITING LIST -----------------------------------------------------------------
+//   --
+//   -- ⚠ IT HOLDS NO SLOT AND RESERVES NOTHING, exactly as practice_booking_request holds no slot. An
+//   -- offer is a record that somebody was told about a time, and the time stays bookable by anybody
+//   -- until an appointment row takes it -- migration 255's exclusion constraint has the last word.
+//   create table if not exists practice_waiting_list_entry (
+//     id uuid primary key default gen_random_uuid(),
+//     workspace_id uuid not null references practice_workspace(id) on delete cascade,
+//     location_id uuid references practice_location(id) on delete set null,
+//     appointment_type text not null default 'new_consultation'
+//       check (appointment_type in ('new_consultation', 'scheduled_followup', 'walk_in', 'emergency',
+//                                  'hospital_consultation', 'teleconsultation', 'home_visit')),
+//
+//     -- Nullable, because somebody may be on a list before they are a patient record.
+//     patient_id uuid references practice_patient(id) on delete set null,
+//     patient_name text not null check (btrim(patient_name) <> '' and char_length(patient_name) <= 160),
+//     contact_phone text check (contact_phone is null or (btrim(contact_phone) <> '' and char_length(contact_phone) <= 40)),
+//     contact_email text check (contact_email is null or (btrim(contact_email) <> '' and char_length(contact_email) <= 160)),
+//
+//     -- The window they can actually be seen in. Both nullable: "any time" is a real answer.
+//     earliest_date date,
+//     latest_date date,
+//     note text check (note is null or (btrim(note) <> '' and char_length(note) <= 500)),
+//
+//     status text not null default 'waiting'
+//       check (status in ('waiting', 'offered', 'booked', 'withdrawn', 'expired')),
+//     offered_at timestamptz,
+//     offered_start timestamptz,
+//     offer_note text check (offer_note is null or (btrim(offer_note) <> '' and char_length(offer_note) <= 500)),
+//     appointment_id uuid references practice_appointment(id) on delete set null,
+//
+//     -- Who put them on it. 'patient' exists so the column can tell the truth the day a patient screen
+//     -- can add to it. Nothing patient-facing writes this row today.
+//     source text not null default 'practice' check (source in ('practice', 'patient')),
+//
+//     created_at timestamptz not null default now(),
+//     created_by uuid,
+//     updated_at timestamptz not null default now(),
+//     updated_by uuid
+//   );
+//
+//   alter table practice_waiting_list_entry drop constraint if exists practice_waiting_list_window_order;
+//   alter table practice_waiting_list_entry add constraint practice_waiting_list_window_order
+//     check (earliest_date is null or latest_date is null or latest_date >= earliest_date);
+//
+//   -- An offered row that names no time, and a booked row that names no appointment, are both records
+//   -- that claim something happened without saying what.
+//   alter table practice_waiting_list_entry drop constraint if exists practice_waiting_list_offer_complete;
+//   alter table practice_waiting_list_entry add constraint practice_waiting_list_offer_complete
+//     check (status <> 'offered' or (offered_at is not null and offered_start is not null));
+//   alter table practice_waiting_list_entry drop constraint if exists practice_waiting_list_booked_complete;
+//   alter table practice_waiting_list_entry add constraint practice_waiting_list_booked_complete
+//     check (status <> 'booked' or appointment_id is not null);
+//
+//   create index if not exists idx_practice_waiting_list_ws
+//     on practice_waiting_list_entry(workspace_id, status, appointment_type);
+//
+//   alter table practice_waiting_list_entry enable row level security;
+//
+//   notify pgrst, 'reload schema';
+//
+// ---- ⚠ UNTIL THOSE MIGRATIONS ARE APPLIED ----------------------------------------------------------
+//
+// This engine does NOT put the new columns into RULE_COLUMNS unconditionally, and that is the difference
+// between a screen that degrades and a screen that dies. PostgREST refuses an entire select naming one
+// column that does not exist, so a single unconditional addition would turn every booking-rules read at
+// every practice into "your booking rules could not be read" until somebody applied a file by hand.
+//
+// So the extension is PROBED, once per process, exactly as forms.ts probes for its four tables -- by a
+// real `select ... limit 1`, never by head+count, because a missing table and an empty one both return a
+// null count and that trap produced four wrong answers in the survey this build follows. When the probe
+// says absent, the four new sections report themselves absent WITH THE MIGRATION NAMED and enforce
+// nothing. The moment the migration lands the answer changes on its own, with no code change.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export type EngineResult<T> =
@@ -111,7 +344,7 @@ const LIVE_FOLLOW_UP_STATUSES = ["OPEN", "SCHEDULED"];
  * ⚠ EVERY COLUMN THIS ENGINE DECIDES WITH, IN ONE LIST. A rule read that omits a column silently turns
  * that part of somebody's policy off, and the omission looks exactly like a policy nobody set.
  */
-const RULE_COLUMNS =
+const RULE_COLUMNS_BASE =
   "id, workspace_id, name, description, status, priority, effective_from, effective_to, "
   + "location_id, session_template_id, appointment_type, channel, "
   + "capacity_total, capacity_new, capacity_follow_up, capacity_urgent_reserve, overbooking_allowed, "
@@ -119,6 +352,58 @@ const RULE_COLUMNS =
   + "follow_up_early_days, follow_up_late_days, version, active, "
   + "lead_time_minutes, booking_horizon_days, cancellation_notice_minutes, walk_in_daily_limit, "
   + "emergency_reserve_minutes, visibility, created_at, updated_at, created_by";
+
+/** Migration 268's columns. Read only once the probe below says they exist. */
+const RULE_COLUMNS_268 =
+  "required_information, walk_in_cutoff_minutes, walk_in_queue_policy, "
+  + "self_cancel_allowed, self_reschedule_allowed, reschedule_notice_minutes, "
+  + "dna_threshold, dna_action, waiting_list_enabled";
+
+export const BOOKING_RULE_MIGRATION_268 =
+  "268-practice-booking-rule-sections (required_information, walk-in cutoff and queue, cancellations)";
+export const BOOKING_RULE_MIGRATION_269 =
+  "269-practice-waiting-list (waiting list, queue priority, what a cancellation records)";
+
+/** PostgREST's schema-cache miss, its column miss, and Postgres's own two. All mean "not applied". */
+const NOT_APPLIED_CODES = new Set(["PGRST204", "PGRST205", "PGRST202", "42703", "42P01"]);
+const isNotApplied = (error: any) =>
+  !!error && (NOT_APPLIED_CODES.has(String(error.code))
+    || /could not find the .*column|could not find the table|does not exist/i.test(String(error.message ?? "")));
+
+/**
+ * ⚠ ONE PROBE PER PROCESS, AND `null` IS NOT `false`.
+ *
+ * Three answers, and the third is what stops a database wobble reading as an unapplied migration:
+ * `true` the columns are there, `false` the migration has not been applied, `null` NOBODY COULD TELL.
+ * A caller that treats null as false would report a practitioner's configured requirements as absent
+ * for the length of an outage, which is the fail-quiet direction this file's rule 4 forbids.
+ */
+let extension268: boolean | null | undefined;
+
+export async function bookingRuleExtensionPresent(admin: any): Promise<boolean | null> {
+  if (extension268 !== undefined) return extension268;
+  const { error } = await admin.from("practice_booking_rule").select(RULE_COLUMNS_268).limit(1);
+  if (!error) { extension268 = true; return true; }
+  if (isNotApplied(error)) { extension268 = false; return false; }
+  // ⚠ NOT CACHED. An outage must not pin this process to "unknown" for its whole life.
+  return null;
+}
+
+/** Test seam. The harness flips the schema underneath a live process and must not read a stale answer. */
+export function forgetBookingRuleExtension() { extension268 = undefined; }
+
+const ruleColumns = (extended: boolean) =>
+  extended ? `${RULE_COLUMNS_BASE}, ${RULE_COLUMNS_268}` : RULE_COLUMNS_BASE;
+
+/**
+ * The sentence every section of this build says when its columns are not there.
+ *
+ * ⚠ IT NAMES THE FILE. "Not available" sends somebody looking. "Migration 268 has not been applied" is
+ * something a person can act on in one step.
+ */
+export const sectionAbsentNote = (what: string, migration: string) =>
+  `${what} is not configurable in this deployment yet: migration "${migration}" has not been applied, so `
+  + `there is nowhere to store it. Nothing is being enforced and nothing has been lost.`;
 
 /** The fields a version snapshot photographs. Changing any of them is an edit worth a new version. */
 export const VERSIONED_FIELDS = [
@@ -130,6 +415,24 @@ export const VERSIONED_FIELDS = [
   "lead_time_minutes", "booking_horizon_days", "cancellation_notice_minutes",
   "walk_in_daily_limit", "emergency_reserve_minutes", "visibility",
 ] as const;
+
+/**
+ * ⚠ MIGRATION 268's FIELDS ARE VERSIONED TOO, AND THAT IS THE WHOLE REASON required_information IS A
+ * COLUMN RATHER THAN A CHILD TABLE. "Which questions were required when this booking was made" is an
+ * AC-13 question, and only a column is in the version photograph.
+ *
+ * They are a SEPARATE list because a snapshot must not photograph a column that does not exist: before
+ * the migration lands, writing these keys into a version payload would record nulls as though somebody
+ * had cleared a setting they never had.
+ */
+export const VERSIONED_FIELDS_268 = [
+  "required_information", "walk_in_cutoff_minutes", "walk_in_queue_policy",
+  "self_cancel_allowed", "self_reschedule_allowed", "reschedule_notice_minutes",
+  "dna_threshold", "dna_action", "waiting_list_enabled",
+] as const;
+
+export const versionedFields = (extended: boolean): string[] =>
+  extended ? [...VERSIONED_FIELDS, ...VERSIONED_FIELDS_268] : [...VERSIONED_FIELDS];
 
 const scopeOf = (r: any): ScopeShape => ({
   effectiveFrom: (r.effective_from as string | null) ?? null,
@@ -190,6 +493,30 @@ export type BookingRuleCard = {
   legacy: boolean;
   /** The ids of every active rule this one is deadlocked with. s11: activation is blocked until resolved. */
   conflictsWith: string[];
+
+  // ── MIGRATION 268's FOUR SECTIONS ────────────────────────────────────────────────────────────────
+  //
+  // ⚠ `sectionsConfigurable` IS FALSE WHEN THE MIGRATION IS NOT APPLIED, and every field below is then
+  // the value that enforces nothing. A screen must draw the absence rather than draw "off", because
+  // "you have switched this off" and "this deployment cannot store it" are opposite facts.
+  sectionsConfigurable: boolean;
+  sectionsAbsentNote: string | null;
+  /** s7.2's required information, already read into the shape the resolver takes. */
+  requiredInformation: RequiredInformation;
+  /** In the practitioner's words: which questions this rule insists on. Empty means none. */
+  requiredFieldLabels: string[];
+  walkInCutoffMinutes: number | null;
+  walkInQueuePolicy: string;
+  selfCancelAllowed: boolean;
+  selfRescheduleAllowed: boolean;
+  rescheduleNoticeMinutes: number | null;
+  dnaThreshold: number | null;
+  dnaAction: string;
+  waitingListEnabled: boolean;
+  /** s7.1's card lines for the three new sections, in s15's plain language. */
+  walkInLine: string;
+  cancellationLine: string;
+  requiredInformationLine: string;
 };
 
 export type RuleConflict = {
@@ -202,8 +529,22 @@ export type RuleConflict = {
   resolution: string;
 };
 
-function toCard(r: any, names: { location: Map<string, string>; session: Map<string, string> }): BookingRuleCard {
+function toCard(
+  r: any, names: { location: Map<string, string>; session: Map<string, string> }, extended: boolean,
+): BookingRuleCard {
   const s = scopeOf(r);
+  const required = requiredInformationOf(extended ? r.required_information : null);
+  const requiredFieldLabels = BOOKING_INTAKE_FIELDS
+    .filter(f => !f.alwaysRequired && levelFor(required, f.field_key) === "required")
+    .map(f => f.label);
+  const walkInCutoffMinutes = extended ? ((r.walk_in_cutoff_minutes as number | null) ?? null) : null;
+  const walkInQueuePolicy = extended ? ((r.walk_in_queue_policy as string) ?? "first_come") : "first_come";
+  const selfCancelAllowed = extended ? r.self_cancel_allowed !== false : true;
+  const selfRescheduleAllowed = extended ? r.self_reschedule_allowed !== false : true;
+  const rescheduleNoticeMinutes = extended ? ((r.reschedule_notice_minutes as number | null) ?? null) : null;
+  const dnaThreshold = extended ? ((r.dna_threshold as number | null) ?? null) : null;
+  const dnaAction = extended ? ((r.dna_action as string) ?? "none") : "none";
+  const waitingListEnabled = extended ? r.waiting_list_enabled === true : false;
   const scopeBits: string[] = [];
   scopeBits.push(r.location_id ? names.location.get(r.location_id as string) ?? "A location" : "Whole practice");
   if (r.session_template_id) scopeBits.push(names.session.get(r.session_template_id as string) ?? "One session");
@@ -256,6 +597,25 @@ function toCard(r: any, names: { location: Map<string, string>; session: Map<str
     reasons: specificityReasons(s),
     legacy: (r.name as string | null) === null,
     conflictsWith: [],
+
+    sectionsConfigurable: extended,
+    sectionsAbsentNote: extended ? null
+      : sectionAbsentNote("Required information, the walk-in cutoff and queue, and the cancellation rules", BOOKING_RULE_MIGRATION_268),
+    requiredInformation: required,
+    requiredFieldLabels,
+    walkInCutoffMinutes, walkInQueuePolicy,
+    selfCancelAllowed, selfRescheduleAllowed, rescheduleNoticeMinutes,
+    dnaThreshold, dnaAction, waitingListEnabled,
+    walkInLine: plainWalkIn({
+      dailyLimit: (r.walk_in_daily_limit as number | null) ?? null,
+      cutoffMinutes: walkInCutoffMinutes, queuePolicy: walkInQueuePolicy,
+    }),
+    cancellationLine: plainCancellation({
+      noticeMinutes: (r.cancellation_notice_minutes as number) ?? 0,
+      rescheduleNoticeMinutes, selfCancelAllowed, selfRescheduleAllowed,
+      dnaThreshold, dnaAction, waitingListEnabled,
+    }),
+    requiredInformationLine: plainRequiredInformation(required),
   };
 }
 
@@ -294,8 +654,9 @@ export function conflictsAmong(rules: any[]): RuleConflict[] {
 
 /** Every rule this practice has, as cards, with the conflicts marked on them. */
 export async function listBookingRules(admin: any, ctx: WorkspaceContext): Promise<Reading<BookingRuleCard[]>> {
+  const extended = await bookingRuleExtensionPresent(admin) === true;
   const { data, error } = await admin.from("practice_booking_rule")
-    .select(RULE_COLUMNS).eq("workspace_id", ctx.workspaceId);
+    .select(ruleColumns(extended)).eq("workspace_id", ctx.workspaceId);
   // ⚠ NOT AN EMPTY LIST. "No rules" and "the rules could not be read" are the same length and opposite
   // facts, and only one of them means nothing is refusing a booking today.
   if (error) return { state: "unreadable", reason: `your booking rules could not be read: ${error.message}` };
@@ -314,7 +675,7 @@ export async function listBookingRules(admin: any, ctx: WorkspaceContext): Promi
     ])),
   };
 
-  const cards = rows.map(r => toCard(r, names));
+  const cards = rows.map(r => toCard(r, names, extended));
   const byId = new Map(cards.map(c => [c.id, c]));
   for (const c of conflictsAmong(rows)) {
     byId.get(c.a.id)?.conflictsWith.push(c.b.id);
@@ -355,6 +716,19 @@ export type RuleInput = {
   bookingHorizonDays?: number | null;
   cancellationNoticeMinutes?: number | null;
   walkInDailyLimit?: number | null;
+
+  // ── MIGRATION 268. ⚠ Every one is `undefined`-tolerant: a screen that does not draw a section must
+  //    not clear it, and a deployment without the migration must not be told it tried.
+  requiredInformation?: unknown;
+  walkInCutoffMinutes?: number | null;
+  walkInQueuePolicy?: string | null;
+  selfCancelAllowed?: boolean | null;
+  selfRescheduleAllowed?: boolean | null;
+  rescheduleNoticeMinutes?: number | null;
+  dnaThreshold?: number | null;
+  dnaAction?: string | null;
+  waitingListEnabled?: boolean | null;
+
   /** Why it changed. s14 wants a reason on a configuration change; a version nobody explained is a guess. */
   reason?: string | null;
   actorId: string;
@@ -385,11 +759,15 @@ export async function saveBookingRule(admin: any, ctx: WorkspaceContext, args: R
   if (!ctx.capabilities.includes("practice.settings.manage"))
     return { ok: false, status: 403, code: "FORBIDDEN", message: "practice.settings.manage is required to write a booking rule" };
 
+  // ⚠ ASKED ONCE, AT THE TOP, AND CARRIED. Asking twice inside one save is how the read half and the
+  // write half of one function end up disagreeing about which columns exist.
+  const extended = await bookingRuleExtensionPresent(admin) === true;
+
   // ── The rule as it exists now, if it exists.
   let existing: any = null;
   if (args.ruleId) {
     const { data, error } = await admin.from("practice_booking_rule")
-      .select(RULE_COLUMNS).eq("id", args.ruleId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+      .select(ruleColumns(extended)).eq("id", args.ruleId).eq("workspace_id", ctx.workspaceId).maybeSingle();
     if (error) return { ok: false, status: 500, code: "READ_FAILED", message: `the rule could not be read: ${error.message}` };
     if (!data) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
     existing = data;
@@ -436,7 +814,49 @@ export async function saveBookingRule(admin: any, ctx: WorkspaceContext, args: R
     visibility: existing?.visibility ?? "internal",
   };
 
-  const bad = validateRuleShape(next);
+  // ══ MIGRATION 268's FOUR SECTIONS ══════════════════════════════════════════════════════════════
+  //
+  // ⚠ REFUSED RATHER THAN DROPPED WHEN THE MIGRATION IS NOT APPLIED. Writing a rule and silently
+  // discarding the requirement somebody just typed is the single worst outcome available here: they
+  // would leave the screen believing a booking will be refused without a date of birth, and it will not
+  // be. The refusal names the file.
+  const wants268 = [
+    args.requiredInformation, args.walkInCutoffMinutes, args.walkInQueuePolicy,
+    args.selfCancelAllowed, args.selfRescheduleAllowed, args.rescheduleNoticeMinutes,
+    args.dnaThreshold, args.dnaAction, args.waitingListEnabled,
+  ].some(v => v !== undefined);
+  if (wants268 && !extended)
+    return {
+      ok: false, status: 503, code: "STORE_ABSENT",
+      message: sectionAbsentNote(
+        "Required information, the walk-in cutoff and queue, and the cancellation rules",
+        BOOKING_RULE_MIGRATION_268),
+    };
+
+  if (extended) {
+    // ⚠ NORMALISED THROUGH requiredInformationOf BEFORE IT IS STORED, so what lands in the column is
+    // exactly what the resolver will read back. Storing a shape the reader then ignores is a setting
+    // that appears saved and decides nothing.
+    next.required_information = args.requiredInformation === undefined
+      ? (existing?.required_information ?? {})
+      : requiredInformationOf(args.requiredInformation);
+    next.walk_in_cutoff_minutes = args.walkInCutoffMinutes === undefined
+      ? (existing?.walk_in_cutoff_minutes ?? null) : int(args.walkInCutoffMinutes);
+    next.walk_in_queue_policy = args.walkInQueuePolicy ?? existing?.walk_in_queue_policy ?? "first_come";
+    next.self_cancel_allowed = args.selfCancelAllowed === undefined || args.selfCancelAllowed === null
+      ? (existing?.self_cancel_allowed ?? true) : args.selfCancelAllowed === true;
+    next.self_reschedule_allowed = args.selfRescheduleAllowed === undefined || args.selfRescheduleAllowed === null
+      ? (existing?.self_reschedule_allowed ?? true) : args.selfRescheduleAllowed === true;
+    next.reschedule_notice_minutes = args.rescheduleNoticeMinutes === undefined
+      ? (existing?.reschedule_notice_minutes ?? null) : int(args.rescheduleNoticeMinutes);
+    next.dna_threshold = args.dnaThreshold === undefined
+      ? (existing?.dna_threshold ?? null) : int(args.dnaThreshold);
+    next.dna_action = args.dnaAction ?? existing?.dna_action ?? "none";
+    next.waiting_list_enabled = args.waitingListEnabled === undefined || args.waitingListEnabled === null
+      ? (existing?.waiting_list_enabled ?? false) : args.waitingListEnabled === true;
+  }
+
+  const bad = validateRuleShape(next, extended);
   if (bad) return bad;
 
   // Scope references must belong to this practice. A rule naming another practice's location or session
@@ -488,18 +908,18 @@ export async function saveBookingRule(admin: any, ctx: WorkspaceContext, args: R
       payload: { ruleId: data.id, version: 1, reason: args.reason ?? null, rule: next },
       correlationId: args.correlationId,
     });
-    return { ok: true, data: { id: data.id as string, version: 1, created: true, changed: [...VERSIONED_FIELDS], conflicts: [] } };
+    return { ok: true, data: { id: data.id as string, version: 1, created: true, changed: versionedFields(extended), conflicts: [] } };
   }
 
   // ══ EDIT ═══════════════════════════════════════════════════════════════════════════════════════
-  const changed = VERSIONED_FIELDS.filter(f => (existing[f] ?? null) !== (next[f] ?? null));
+  const changed = versionedFields(extended).filter(f => (existing[f] ?? null) !== (next[f] ?? null));
   if (changed.length === 0)
     return { ok: true, data: { id: existing.id as string, version: existing.version as number, created: false, changed: [], conflicts: conflicts.data } };
 
   // THE WHOLE PRIOR SHAPE, AT THE PRIOR VERSION NUMBER. So "what did version 3 say" is one row lookup
   // months later, rather than a replay of every diff since.
   const priorPayload: Record<string, any> = {};
-  for (const f of VERSIONED_FIELDS) priorPayload[f] = existing[f] ?? null;
+  for (const f of versionedFields(extended)) priorPayload[f] = existing[f] ?? null;
   const { error: snapErr } = await admin.from("practice_booking_rule_version").insert({
     workspace_id: ctx.workspaceId,
     rule_id: existing.id,
@@ -538,7 +958,53 @@ export async function saveBookingRule(admin: any, ctx: WorkspaceContext, args: R
   return { ok: true, data: { id: existing.id as string, version: nextVersion, created: false, changed: [...changed], conflicts: conflicts.data } };
 }
 
-function validateRuleShape(next: Record<string, any>): EngineResult<never> | null {
+function validateRuleShape(next: Record<string, any>, extended = false): EngineResult<never> | null {
+  if (extended) {
+    if (!WALK_IN_QUEUE_POLICY_CODES.includes(next.walk_in_queue_policy))
+      return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `the walk-in queue policy must be one of: ${WALK_IN_QUEUE_POLICY_CODES.join(", ")}` };
+    if (!DNA_ACTION_CODES.includes(next.dna_action))
+      return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `what happens after missed appointments must be one of: ${DNA_ACTION_CODES.join(", ")}` };
+    // ⚠ REFUSED IN FRONT OF THE PERSON TYPING IT, as well as by migration 268's own CHECK. A threshold
+    // with nothing to do and an action with nothing to count are each half a rule, and the halves sit on
+    // two different controls -- so a constraint name would arrive with no way to act on it.
+    if (next.dna_action === "none" && next.dna_threshold !== null)
+      return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "you have set a number of missed appointments and chosen nothing to happen at it. Choose what should happen, or clear the number." };
+    if (next.dna_action !== "none" && next.dna_threshold === null)
+      return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "you have chosen what happens after missed appointments without saying how many. Set the number, or choose nothing automatic." };
+    if (next.dna_threshold !== null && (next.dna_threshold < 0 || next.dna_threshold > 50))
+      return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "the number of missed appointments runs from 0 to 50" };
+    if (next.walk_in_cutoff_minutes !== null
+      && (next.walk_in_cutoff_minutes < 1 || next.walk_in_cutoff_minutes > 720))
+      return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a walk-in cutoff runs from 1 to 720 minutes before a session ends. Leave it empty for no cutoff -- a cutoff of nought and no cutoff are the same thing, so only one of them may be written." };
+    if (next.reschedule_notice_minutes !== null
+      && (next.reschedule_notice_minutes < 0 || next.reschedule_notice_minutes > 43200))
+      return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "the notice needed to move a booking runs from 0 to 43200 minutes. Leave it empty and the cancellation notice governs a move too." };
+
+    const req = requiredInformationOf(next.required_information);
+    for (const key of Object.keys(req.fields)) {
+      // ⚠ A LEVEL ON A QUESTION THAT CANNOT BE SWITCHED OFF IS A SETTING THAT DECIDES NOTHING. Refused
+      // rather than stored, because a stored setting that is ignored is exactly the class of thing this
+      // whole build is correcting.
+      if (INTAKE_FIELDS_ALWAYS_REQUIRED.includes(key) && req.fields[key].level !== "required")
+        return {
+          ok: false, status: 400, code: "VALIDATION_ERROR",
+          message: `"${BOOKING_INTAKE_FIELDS.find(f => f.field_key === key)?.label ?? key}" is asked of everybody and cannot be made optional or switched off. A booking nobody can call by name is one nobody can call.`,
+        };
+    }
+    const unknown = Object.keys(
+      (next.required_information && typeof next.required_information === "object"
+        ? ((next.required_information as any).fields ?? {}) : {}) as Record<string, unknown>,
+    ).filter(k => !BOOKING_INTAKE_FIELD_KEYS.includes(k));
+    if (unknown.length > 0)
+      return {
+        ok: false, status: 400, code: "VALIDATION_ERROR",
+        message: `${unknown.map(u => `"${u}"`).join(", ")} ${unknown.length === 1 ? "is not a question" : "are not questions"} a booking can ask. The booking intake asks only what has a column on the booking record: ${BOOKING_INTAKE_FIELD_KEYS.join(", ")}.`,
+      };
+  }
+  return validateRuleShapeBase(next);
+}
+
+function validateRuleShapeBase(next: Record<string, any>): EngineResult<never> | null {
   if (!RULE_STATUS_CODES.includes(next.status))
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `status must be one of: ${RULE_STATUS_CODES.join(", ")}` };
   if (next.channel !== null && !BOOKING_CHANNEL_CODES.includes(next.channel))
@@ -571,7 +1037,7 @@ async function conflictsIfActivated(
   admin: any, ctx: WorkspaceContext, candidate: Record<string, any>, excludeId: string | null,
 ): Promise<EngineResult<RuleConflict[]>> {
   const { data, error } = await admin.from("practice_booking_rule")
-    .select(RULE_COLUMNS).eq("workspace_id", ctx.workspaceId);
+    .select(ruleColumns(await bookingRuleExtensionPresent(admin) === true)).eq("workspace_id", ctx.workspaceId);
   if (error) return { ok: false, status: 500, code: "READ_FAILED", message: `the other rules could not be read, so a conflict could not be ruled out: ${error.message}` };
   const others = ((data ?? []) as any[]).filter(r => r.id !== excludeId);
   const probe = { ...candidate, id: excludeId ?? "__candidate__", status: "active" };
@@ -602,8 +1068,9 @@ export type RuleVersionEntry = {
 export async function ruleVersionHistory(
   admin: any, ctx: WorkspaceContext, ruleId: string,
 ): Promise<Reading<RuleVersionEntry[]>> {
+  const extended = await bookingRuleExtensionPresent(admin) === true;
   const { data: live, error: liveErr } = await admin.from("practice_booking_rule")
-    .select(RULE_COLUMNS).eq("id", ruleId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+    .select(ruleColumns(extended)).eq("id", ruleId).eq("workspace_id", ctx.workspaceId).maybeSingle();
   if (liveErr) return { state: "unreadable", reason: `the rule could not be read: ${liveErr.message}` };
   if (!live) return { state: "unreadable", reason: "that rule is not in this practice" };
 
@@ -613,7 +1080,7 @@ export async function ruleVersionHistory(
   if (error) return { state: "unreadable", reason: `the rule's history could not be read: ${error.message}` };
 
   const livePayload: Record<string, any> = {};
-  for (const f of VERSIONED_FIELDS) livePayload[f] = (live as any)[f] ?? null;
+  for (const f of versionedFields(extended)) livePayload[f] = (live as any)[f] ?? null;
 
   return {
     state: "ok",
@@ -642,6 +1109,21 @@ export type BookingRequest = {
   followUpId?: string | null;
   /** s7.6's "referred only". A fact about this booking, not about the patient record. */
   referred?: boolean;
+  /**
+   * s9's intake, when there is one.
+   *
+   * ⚠ THIS IS NOT A BREACH OF THIS FILE'S RULE 3, AND THE DISTINCTION IS WORTH STATING. Rule 3 forbids a
+   * DECISION arriving in a request -- a rule id, a version, a verdict, or a fact the engine could read
+   * for itself. The patient's own answers are none of those: they are the SUBJECT of the check, they
+   * exist nowhere else at the moment it runs, and the rule they are checked against is still resolved
+   * here from the record. What must never happen is a caller asserting that the answers are SUFFICIENT,
+   * and no field on this type lets one.
+   *
+   * ⚠ UNDEFINED IS NOT AN EMPTY INTAKE. `undefined` means this caller is not an intake path at all --
+   * a practitioner at a desk -- and the requirements are not applied to them. `{}` means an intake path
+   * that collected nothing, and every required question is then missing. See intakeAppliesTo().
+   */
+  intake?: Record<string, unknown>;
 };
 
 export type Refusal = {
@@ -650,6 +1132,20 @@ export type Refusal = {
   /** s14: an authorised override applies to CAPACITY and WINDOW, and to nothing else. */
   overridable: boolean;
 };
+
+/**
+ * ⚠ WHOSE BOOKING THE REQUIRED-INFORMATION RULES ARE ABOUT.
+ *
+ * s7.2's section is the questions A PATIENT is asked. A practitioner typing a booking into their own
+ * diary is not answering an intake form, and refusing them for a blank date of birth would make a
+ * required question into a rule against the practice -- which is the same mistake as refusing a practice
+ * its own cancellation. So the check runs for the two patient-facing channels ALWAYS (a patient_self
+ * booking with no intake at all is every question missing, which is the honest answer), and for every
+ * other channel only when the caller has actually supplied an intake to check.
+ */
+const INTAKE_CHANNELS = ["patient_self", "referral"];
+const intakeAppliesTo = (channel: string, intake: Record<string, unknown> | undefined) =>
+  INTAKE_CHANNELS.includes(channel) || intake !== undefined;
 
 export type RuleDecision = {
   allowed: boolean;
@@ -675,6 +1171,37 @@ export type RuleDecision = {
   } | null;
   /** Caveats that are true of this decision. Never a substitute for a refusal. */
   notes: string[];
+
+  // ── MIGRATION 268's SECTIONS, AS PART OF THE ANSWER RATHER THAN AS A SECOND CALL ─────────────────
+  /**
+   * s7.2's required information, resolved against this booking's own answers.
+   *
+   * ⚠ NULL WHEN THE CHECK DID NOT APPLY -- a practitioner's own booking -- and that is not the same as
+   * an empty list of missing questions. A screen that drew "nothing missing" for a check nobody ran
+   * would tell a practitioner their requirements had been satisfied by a booking they were never asked
+   * about.
+   */
+  intake: {
+    asked: { fieldKey: string; label: string; level: string }[];
+    missing: { fieldKey: string; label: string }[];
+    discarded: { fieldKey: string; label: string }[];
+    discardNotice: string | null;
+    /** The answers as they must be WRITTEN. Anything this rule does not ask has been removed. */
+    values: Record<string, unknown>;
+  } | null;
+  /** s7.7's walk-in picture for this time, when this is a walk-in. Null for every other type. */
+  walkIn: {
+    sessionName: string | null;
+    used: number | null;
+    sessionLimit: number | null;
+    cutoffMinutes: number | null;
+    /** Minutes left before the cutoff bites. Negative means it already has. Null when nothing applies. */
+    minutesBeforeCutoff: number | null;
+  } | null;
+  /** s7.2's DNA count for this patient, and what the rule says about it. Null when no rule counts. */
+  dna: { missed: number; threshold: number; action: string } | null;
+  /** True when migration 268 is applied. False means the three sections above decided nothing. */
+  sectionsConfigurable: boolean;
 };
 
 type PatientFacts = {
@@ -839,8 +1366,9 @@ export async function evaluateBooking(
   const locationId = req.locationId ?? null;
 
   // ══ THE RULES. ⚠ AN UNREADABLE RULE SET IS NOT AN EMPTY ONE. ═══════════════════════════════════
+  const extended = await bookingRuleExtensionPresent(admin) === true;
   const { data: ruleRows, error: ruleErr } = await admin.from("practice_booking_rule")
-    .select(RULE_COLUMNS).eq("workspace_id", ctx.workspaceId);
+    .select(ruleColumns(extended)).eq("workspace_id", ctx.workspaceId);
   if (ruleErr)
     return {
       ok: false, status: 503, code: "RULES_UNREADABLE",
@@ -894,6 +1422,11 @@ export async function evaluateBooking(
 
   // ══ s11's SIXTH RUNG: NO RULE AT ALL ═══════════════════════════════════════════════════════════
   if (winners.length === 0) {
+    // ⚠ THE INTAKE IS STILL RESOLVED, and the reason is `values`. No rule means nothing is REQUIRED --
+    // but the caller still has to be told which answers to write, and returning nothing here would make
+    // "which answers may be stored" a question with two answers depending on whether a rule matched.
+    const openIntake = intakeAppliesTo(req.channel, req.intake)
+      ? resolveIntake(requiredInformationOf(null), req.intake ?? {}, date) : null;
     return {
       ok: true,
       data: {
@@ -910,6 +1443,8 @@ export async function evaluateBooking(
           ...notes,
           "This booking was not decided by a rule. It will be recorded as such rather than attributed to one.",
         ],
+        intake: openIntake === null ? null : intakeBlock(openIntake),
+        walkIn: null, dna: null, sectionsConfigurable: extended,
       },
     };
   }
@@ -1033,12 +1568,127 @@ export async function evaluateBooking(
     });
   }
 
+  // ══ s7.2's REQUIRED INFORMATION (migration 268) ════════════════════════════════════════════════
+  //
+  // ⚠ NOT OVERRIDABLE, AND THAT IS A DELIBERATE DIFFERENCE FROM EVERY OTHER REFUSAL HERE. s14's
+  // override lifts CAPACITY and WINDOW: a practitioner deciding to squeeze somebody in is a judgement
+  // they may make and answer for. A missing date of birth is not a judgement -- there is no information
+  // to be had, and "overriding" it would mean writing a record with a hole in it and a reason attached
+  // saying the hole was intentional. If a practice wants the question to be skippable, the control for
+  // that is on the rule and it is called optional.
+  const requiredInfo: RequiredInformation = requiredInformationOf(extended ? win.required_information : null);
+  const intakeApplies = intakeAppliesTo(req.channel, req.intake);
+  const intake = intakeApplies ? resolveIntake(requiredInfo, req.intake ?? {}, date) : null;
+  if (intake && intake.missing.length > 0)
+    refusals.push({
+      code: "INTAKE_INCOMPLETE", overridable: false,
+      message: intakeRefusalMessage(intake.missing),
+    });
+  if (intake && !extended && Object.keys(requiredInfo.fields).length === 0)
+    notes.push(sectionAbsentNote("Required information", BOOKING_RULE_MIGRATION_268));
+
+  // ══ s7.7's WALK-IN CUTOFF AND SESSION LIMIT (migration 268) ════════════════════════════════════
+  //
+  // ⚠ RESOLVED BY walkInAllowance() AND NOWHERE ELSE, which is the same discipline scheduling.ts keeps
+  // and for the same reason: the screen a practitioner acts on reads walkInPolicy(), so re-resolving the
+  // session here would give this product two answers to one question.
+  //
+  // ⚠ THIS IS A PREVIEW OF A REFUSAL checkPlacement WILL MAKE ANYWAY, not a replacement for it. A screen
+  // that says a walk-in is allowed and then watches it refused is worse than either half alone -- and a
+  // refusal that only exists here would be one an API caller walks straight past.
+  let walkIn: RuleDecision["walkIn"] = null;
+  if (req.appointmentType === "walk_in") {
+    const allowance = await walkInAllowance(admin, {
+      workspaceId: ctx.workspaceId, locationId, startMs,
+    });
+    // ⚠ A FAILED READ IS NOT A FREE PLACE. Rule 4 of this file's header, applied to the newest control.
+    if (allowance.state !== "ok")
+      return {
+        ok: false, status: 503, code: "SESSION_WALK_IN_UNREADABLE",
+        message: `this booking was not made because the session's walk-in allowance could not be checked: ${allowance.reason}`,
+      };
+    const a = allowance.value;
+    const cutoff = extended ? ((win.walk_in_cutoff_minutes as number | null) ?? null) : null;
+    // ⚠ THE ARITHMETIC IS walkInCutoff()'s, NOT A SECOND COPY OF IT. checkPlacement enforces the same
+    // rule from the same function, so the preview and the refusal cannot disagree about the boundary.
+    const cut = walkInCutoff({
+      cutoffMinutes: cutoff,
+      sessionEndsMinute: a.session?.endsMinute ?? null,
+      minuteOfDay,
+    });
+    // ⚠ A CUTOFF WITH NO SESSION TO MEASURE FROM APPLIES TO NOTHING, and that is said rather than
+    // silently skipped: a practitioner who set a cutoff and watched a 23:00 walk-in accepted is
+    // entitled to know why.
+    if (cutoff !== null && a.session === null)
+      notes.push(`This rule closes walk-ins ${cutoff} minutes before a session ends, and no session covers that time, so there was nothing to measure the cutoff against.`);
+    if (cut.bites)
+      refusals.push({
+        code: "WALK_IN_CUTOFF", overridable: true,
+        message: `"${(win.name as string | null) ?? "this rule"}" takes no walk-in in the last ${cutoff} minutes of a session, and ${a.session?.sessionName ?? "that session"} is inside that window by ${Math.abs(cut.minutesLeft ?? 0)} minute${Math.abs(cut.minutesLeft ?? 0) === 1 ? "" : "s"}.`,
+      });
+    const minutesBeforeCutoff = cut.minutesLeft;
+    if (a.full && a.session)
+      refusals.push({
+        code: "SESSION_WALK_IN_LIMIT", overridable: true,
+        message: `${a.session.sessionName} takes ${a.sessionLimit} walk-in${a.sessionLimit === 1 ? "" : "s"}, and ${a.used === 1 ? "there is already 1" : `there are already ${a.used}`}. This is that session's own limit, not your practice-wide one.`,
+      });
+    walkIn = {
+      sessionName: a.session?.sessionName ?? null,
+      used: a.used, sessionLimit: a.sessionLimit,
+      cutoffMinutes: cutoff, minutesBeforeCutoff,
+    };
+  }
+
+  // ══ s7.2's DNA HANDLING (migration 268) ════════════════════════════════════════════════════════
+  //
+  // ⚠ COUNTED FROM THE DIARY, NEVER ACCEPTED. "How many has this patient missed" is the kind of fact
+  // rule 3 of this file's header exists for -- a number in a request body is a number somebody edits.
+  let dna: RuleDecision["dna"] = null;
+  const dnaThreshold = extended ? ((win.dna_threshold as number | null) ?? null) : null;
+  const dnaAction = extended ? ((win.dna_action as string) ?? "none") : "none";
+  let dnaForcesRequest = false;
+  if (dnaThreshold !== null && dnaAction !== "none" && req.patientId) {
+    const { data: missed, error: missedErr } = await admin.from("practice_appointment")
+      .select("id").eq("workspace_id", ctx.workspaceId).eq("patient_id", req.patientId)
+      .eq("status", "NO_SHOW");
+    // ⚠ AN UNCOUNTED MISS IS NOT NO MISS. The whole point of the rule is that it bites at a number, and
+    // a database wobble must not be the way past it.
+    if (missedErr)
+      return {
+        ok: false, status: 503, code: "DNA_COUNT_UNREADABLE",
+        message: `this booking was not made because this patient's missed appointments could not be counted: ${missedErr.message}`,
+      };
+    const count = ((missed ?? []) as any[]).length;
+    dna = { missed: count, threshold: dnaThreshold, action: dnaAction };
+    if (count >= dnaThreshold) {
+      if (dnaAction === "block_self_booking" && req.channel === "patient_self")
+        refusals.push({
+          code: "DNA_LIMIT", overridable: true,
+          message: `this booking cannot be made online. Please ring the practice to arrange it.`,
+        });
+      else if (dnaAction === "block_self_booking")
+        notes.push(`This patient has missed ${count} appointment${count === 1 ? "" : "s"} and cannot book online under this rule. You are booking on their behalf, which this rule does not stop.`);
+      else if (dnaAction === "require_approval") {
+        dnaForcesRequest = true;
+        notes.push(`This patient has missed ${count} appointment${count === 1 ? "" : "s"}, which is at or over this rule's threshold of ${dnaThreshold}, so this booking is a request for you to approve rather than a confirmed appointment.`);
+      }
+    }
+  } else if (dnaThreshold !== null && dnaAction !== "none") {
+    // ⚠ SAID, NOT SILENTLY SKIPPED. A rule that counts missed appointments cannot count them for a
+    // booking that names nobody, and a practitioner is entitled to know their rule did not apply.
+    notes.push("This rule acts on missed appointments, and this booking is not linked to a patient record, so there was nothing to count.");
+  }
+
   // ── s7.2's CONFIRMATION.
   const mode = (win.confirmation_mode as string) ?? "instant";
   const initialStatus: "CONFIRMED" | "REQUESTED" =
-    mode === "instant" ? "CONFIRMED"
-      : mode === "conditional" ? (facts.value.isNew === false ? "CONFIRMED" : "REQUESTED")
-        : "REQUESTED";
+    // ⚠ DNA's require_approval WINS OVER `instant`, AND IT CAN ONLY EVER MOVE ONE WAY. It can turn a
+    // confirmation into a request and never a request into a confirmation, so the two settings cannot
+    // combine into something weaker than either of them alone.
+    dnaForcesRequest ? "REQUESTED"
+      : mode === "instant" ? "CONFIRMED"
+        : mode === "conditional" ? (facts.value.isNew === false ? "CONFIRMED" : "REQUESTED")
+          : "REQUESTED";
   if (mode === "conditional" && facts.value.isNew === null)
     notes.push("This rule confirms existing patients immediately, and this booking is not linked to a patient record, so it was made a request rather than assumed to be somebody you have seen.");
 
@@ -1064,7 +1714,20 @@ export async function evaluateBooking(
       why, runnersUp,
       confirmationMode: mode, initialStatus,
       refusals, capacity, notes,
+      intake: intake === null ? null : intakeBlock(intake),
+      walkIn, dna, sectionsConfigurable: extended,
     },
+  };
+}
+
+/** The resolution, flattened for the wire. ⚠ Strings and booleans only -- see the note below. */
+function intakeBlock(r: ReturnType<typeof resolveIntake>): NonNullable<RuleDecision["intake"]> {
+  return {
+    asked: r.asked.map(a => ({ fieldKey: a.field.field_key, label: a.field.label, level: a.level })),
+    missing: r.missing.map(m => ({ fieldKey: m.field.field_key, label: m.field.label })),
+    discarded: r.discarded.map(d => ({ fieldKey: d.field_key, label: d.label })),
+    discardNotice: intakeDiscardNotice(r.discarded),
+    values: r.values,
   };
 }
 
@@ -1086,6 +1749,8 @@ export type InternalBookingArgs = {
   followUpId?: string | null;
   referred?: boolean;
   allowOverlap?: boolean;
+  /** s9's intake. See BookingRequest.intake -- undefined and `{}` are different things. */
+  intake?: Record<string, unknown>;
   /** s14, AC-14. A reason is not optional and the record is written before the booking. */
   override?: { reason: string } | null;
   /**
@@ -1114,6 +1779,16 @@ export type InternalBookingResult = {
   why: string[];
   overridden: string[];
   notes: string[];
+  /**
+   * ⚠ THE ANSWERS THAT MAY BE WRITTEN, AFTER THE RULE HAS TAKEN AWAY THE ONES IT DOES NOT ASK.
+   *
+   * Null when no intake was checked. The caller writes THESE and never what it was handed -- a question
+   * set to "do not ask" whose answer is stored anyway is a record that says something nobody was asked,
+   * which is the failure registration-condition.ts's own header argues at length.
+   */
+  intakeValues: Record<string, unknown> | null;
+  /** The sentence to show when answers were thrown away. Null when none were. */
+  intakeDiscardNotice: string | null;
 };
 
 /**
@@ -1185,6 +1860,7 @@ export async function bookUnderRules(
     channel: args.channel, appointmentType: args.appointmentType, scheduledAt: args.scheduledAt,
     durationMinutes: args.durationMinutes ?? null, locationId: args.locationId ?? null,
     patientId: args.patientId ?? null, followUpId: args.followUpId ?? null, referred: args.referred === true,
+    intake: args.intake,
   });
   // A refusal here is an outage or s11's blocked conflict. Both stop the booking.
   if (!decision.ok) return decision;
@@ -1274,8 +1950,16 @@ export async function bookUnderRules(
     // very row this engine just decided with. Told nothing, it would refuse the booking a second time
     // on the ground s14 has already lifted, leaving an audit record of an override that produced no
     // booking. It is told the codes and NOTHING ELSE: the double-book, the travel conflict, the closed
-    // location and the walk-in limit all still run, and all still stop the booking.
-    windowOverridden: overridden,
+    // location and the double-booking check all still run, and all still stop the booking.
+    //
+    // ⚠ TWO LISTS RATHER THAN ONE, AND THAT IS THE WHOLE POINT OF THE EMERGENCY OVERRIDE. This argument
+    // used to carry every lifted code and checkPlacement filtered it to the two window ones. Now that a
+    // walk-in refusal is overridable too, one list would mean the FILTER decides which override applies
+    // to which check -- and a filter is a thing somebody widens. Splitting them makes it structural: a
+    // lifted LEAD_TIME can never reach the walk-in limit, and a lifted WALK_IN_LIMIT can never reach the
+    // booking window, because they arrive on different arguments.
+    windowOverridden: overridden.filter(c => !WALK_IN_OVERRIDABLE_CODES.includes(c as never)),
+    walkInOverridden: overridden.filter(c => WALK_IN_OVERRIDABLE_CODES.includes(c as never)),
     // ⚠ THE CHANNEL, SO s4.3's booking_mode CAN BE HONOURED WHERE IT IS ENFORCED RATHER THAN WHERE IT IS
     // DISPLAYED. checkPlacement refuses a `patient_self` booking into a session the practitioner marked
     // internal-only, and leaves every other channel exactly as it was -- a practice books into its own
@@ -1334,6 +2018,8 @@ export async function bookUnderRules(
       why: d.why,
       overridden,
       notes: d.notes,
+      intakeValues: d.intake?.values ?? null,
+      intakeDiscardNotice: d.intake?.discardNotice ?? null,
     },
   };
 }
@@ -1382,8 +2068,9 @@ export async function explainAppointment(
     };
   }
 
+  const extended = await bookingRuleExtensionPresent(admin) === true;
   const { data: live, error: liveErr } = await admin.from("practice_booking_rule")
-    .select(RULE_COLUMNS).eq("id", ruleId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+    .select(ruleColumns(extended)).eq("id", ruleId).eq("workspace_id", ctx.workspaceId).maybeSingle();
   if (liveErr) return { state: "unreadable", reason: `the rule behind this booking could not be read: ${liveErr.message}` };
 
   const liveVersion = live ? (live.version as number) : null;
@@ -1391,7 +2078,7 @@ export async function explainAppointment(
 
   if (live && liveVersion === version) {
     asApplied = {};
-    for (const f of VERSIONED_FIELDS) asApplied[f] = (live as any)[f] ?? null;
+    for (const f of versionedFields(extended)) asApplied[f] = (live as any)[f] ?? null;
   } else {
     const { data: snap, error: snapErr } = await admin.from("practice_booking_rule_version")
       .select("payload").eq("rule_id", ruleId).eq("version", version)

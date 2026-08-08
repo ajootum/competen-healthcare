@@ -4,6 +4,11 @@ import {
   listBookingRules, saveBookingRule, setRuleStatus, ruleVersionHistory,
   evaluateBooking, bookUnderRules, explainAppointment,
 } from "@/lib/practice/booking-rules";
+import {
+  cancelBooking, recordNoShow, addToWaitingList, offerWaitingListEntry, closeWaitingListEntry,
+  listWaitingList,
+} from "@/lib/practice/booking-cancellation";
+import { setQueuePriority } from "@/lib/practice/practice-sessions";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -62,6 +67,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ applied: explained.value, correlationId: caller.traceId });
   }
 
+  // s7.2's waiting list. ⚠ 503 rather than an empty list, exactly as the rules are: "nobody is waiting"
+  // and "the list could not be read" are the same length and opposite facts, and one of them is a
+  // reason to stop offering freed appointments to anybody.
+  if (url.searchParams.get("waitingList") === "1") {
+    const list = await listWaitingList(caller.admin, ctx, {
+      includeClosed: url.searchParams.get("includeClosed") === "1",
+    });
+    if (list.state !== "ok")
+      return NextResponse.json({ error: { code: "WAITING_LIST_UNREADABLE", message: list.reason } }, { status: 503 });
+    return NextResponse.json({ waitingList: list.value, correlationId: caller.traceId });
+  }
+
   const rules = await listBookingRules(caller.admin, ctx);
   // ⚠ 503 RATHER THAN AN EMPTY ARRAY. A screen handed [] for an outage would tell a practitioner that
   // nothing is refusing a booking today, which is the opposite of what it knows.
@@ -112,6 +129,22 @@ export async function POST(req: NextRequest) {
         bookingHorizonDays: body.bookingHorizonDays === undefined ? undefined : num(body.bookingHorizonDays),
         cancellationNoticeMinutes: num(body.cancellationNoticeMinutes),
         walkInDailyLimit: body.walkInDailyLimit === undefined ? undefined : num(body.walkInDailyLimit),
+        // ── MIGRATION 268's FOUR SECTIONS ─────────────────────────────────────────────────────────
+        //
+        // ⚠ EVERY ONE IS `undefined` WHEN THE BODY DOES NOT CARRY IT, and that is not tidiness. A
+        // screen that draws only the Identity section must not clear a practitioner's required-
+        // information configuration by not mentioning it -- which is exactly what `?? null` here would
+        // do. The engine treats undefined as "leave it" and null as "clear it", and only the body can
+        // tell them apart.
+        requiredInformation: body.requiredInformation === undefined ? undefined : body.requiredInformation,
+        walkInCutoffMinutes: body.walkInCutoffMinutes === undefined ? undefined : num(body.walkInCutoffMinutes),
+        walkInQueuePolicy: body.walkInQueuePolicy === undefined ? undefined : str(body.walkInQueuePolicy),
+        selfCancelAllowed: body.selfCancelAllowed === undefined ? undefined : body.selfCancelAllowed === true,
+        selfRescheduleAllowed: body.selfRescheduleAllowed === undefined ? undefined : body.selfRescheduleAllowed === true,
+        rescheduleNoticeMinutes: body.rescheduleNoticeMinutes === undefined ? undefined : num(body.rescheduleNoticeMinutes),
+        dnaThreshold: body.dnaThreshold === undefined ? undefined : num(body.dnaThreshold),
+        dnaAction: body.dnaAction === undefined ? undefined : str(body.dnaAction),
+        waitingListEnabled: body.waitingListEnabled === undefined ? undefined : body.waitingListEnabled === true,
         reason: str(body.reason),
         actorId, correlationId,
       });
@@ -142,6 +175,12 @@ export async function POST(req: NextRequest) {
         patientId: str(body.patientId),
         followUpId: str(body.followUpId),
         referred: body.referred === true,
+        // ⚠ UNDEFINED, NOT `{}`, WHEN NOTHING IS SENT. The engine treats an absent intake as "this
+        // caller is not an intake path" and an empty one as "an intake path that collected nothing",
+        // and turning the first into the second here would make a practitioner's preview of their own
+        // booking report every required question as missing.
+        intake: body.intake && typeof body.intake === "object" && !Array.isArray(body.intake)
+          ? (body.intake as Record<string, unknown>) : undefined,
       });
       if (!r.ok) return NextResponse.json({ error: { code: r.code, message: r.message } }, { status: r.status });
       return NextResponse.json({ decision: r.data, correlationId });
@@ -172,9 +211,79 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ booking: r.data, correlationId }, { status: 201 });
     }
 
+    // ══ s7.2's CANCELLATIONS: what a cancellation records, and a missed appointment ════════════════
+    //
+    // ⚠ NOT A SECOND CANCELLATION PATH. Both actions below go through transitionAppointment, which owns
+    // the state machine, the concurrency token and the audit line. What is new is the RECORD -- who
+    // cancelled, why, and whether it was inside the notice -- which a status alone cannot carry.
+    case "cancel": {
+      const r = await cancelBooking(admin, ctx, {
+        appointmentId: String(body.appointmentId ?? ""),
+        reason: str(body.reason),
+        // ⚠ THE SUBJECT OF THIS WRITE IS THE CALLER, and this route is reached only with a practice
+        // capability -- so the actor kind is 'practice' and is NOT read from the body. A body that
+        // could say "patient" would let staff record their own late cancellation as the patient's.
+        actorKind: "practice",
+        actorId, correlationId,
+      });
+      if (!r.ok) return NextResponse.json({ error: { code: r.code, message: r.message } }, { status: r.status });
+      return NextResponse.json({ cancellation: r.data, correlationId });
+    }
+
+    case "record_no_show": {
+      const r = await recordNoShow(admin, ctx, {
+        appointmentId: String(body.appointmentId ?? ""), actorId, correlationId,
+      });
+      if (!r.ok) return NextResponse.json({ error: { code: r.code, message: r.message } }, { status: r.status });
+      return NextResponse.json({ missed: r.data, correlationId });
+    }
+
+    // ══ s7.2's WAITING LIST (migration 269) ═══════════════════════════════════════════════════════
+    case "waiting_list_add": {
+      const r = await addToWaitingList(admin, ctx, {
+        patientName: str(body.patientName), patientId: str(body.patientId),
+        appointmentType: String(body.appointmentType ?? "new_consultation"),
+        locationId: str(body.locationId),
+        contactPhone: str(body.contactPhone), contactEmail: str(body.contactEmail),
+        earliestDate: str(body.earliestDate), latestDate: str(body.latestDate),
+        note: str(body.note), actorId, correlationId,
+      });
+      if (!r.ok) return NextResponse.json({ error: { code: r.code, message: r.message } }, { status: r.status });
+      return NextResponse.json({ entry: r.data, correlationId }, { status: 201 });
+    }
+
+    case "waiting_list_offer": {
+      const r = await offerWaitingListEntry(admin, ctx, {
+        entryId: String(body.entryId ?? ""), offeredStart: String(body.offeredStart ?? ""),
+        offerNote: str(body.offerNote), actorId, correlationId,
+      });
+      if (!r.ok) return NextResponse.json({ error: { code: r.code, message: r.message } }, { status: r.status });
+      return NextResponse.json({ offer: r.data, correlationId });
+    }
+
+    case "waiting_list_close": {
+      const r = await closeWaitingListEntry(admin, ctx, {
+        entryId: String(body.entryId ?? ""), status: String(body.status ?? ""),
+        appointmentId: str(body.appointmentId), actorId, correlationId,
+      });
+      if (!r.ok) return NextResponse.json({ error: { code: r.code, message: r.message } }, { status: r.status });
+      return NextResponse.json({ entry: r.data, correlationId });
+    }
+
+    // ══ s7.7's QUEUE PRIORITY (migration 269) ═════════════════════════════════════════════════════
+    case "queue_priority": {
+      const r = await setQueuePriority(admin, ctx, {
+        entryId: String(body.entryId ?? ""), priority: Number(body.priority ?? 0),
+        reason: str(body.reason), actorId, correlationId,
+      });
+      if (!r.ok) return NextResponse.json({ error: { code: r.code, message: r.message } }, { status: r.status });
+      return NextResponse.json({ entry: r.data, correlationId });
+    }
+
     default:
       return NextResponse.json({
-        error: "action must be one of: save_rule, set_status, evaluate, book",
+        error: "action must be one of: save_rule, set_status, evaluate, book, cancel, record_no_show, "
+          + "waiting_list_add, waiting_list_offer, waiting_list_close, queue_priority",
       }, { status: 400 });
   }
 }
