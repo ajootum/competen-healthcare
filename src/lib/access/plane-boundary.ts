@@ -1,0 +1,421 @@
+// THE PLATFORM PLANE'S DATA BOUNDARY — the allowlist, and the rule that judges a read against it.
+// PLAT-OVERSIGHT-SURVEY-001 §6.2. Enforced by scripts/plane-boundary-harness.ts.
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// THE RULE, STATED SO A MACHINE CAN CHECK IT
+//
+//   No file reachable by import from `src/app/super-admin/**` or `src/app/api/platform/**` may read a
+//   `practice_*` table outside this allowlist, and for each allowlisted table the COLUMNS it selects are
+//   declared here too. Anything not listed fails. Anything that cannot be parsed fails.
+//
+// ⚠ WHY THIS FILE EXISTS AT ALL, AND IT IS NOT A STYLE PREFERENCE.
+//
+// `src/lib/practice/operations.ts:3–7` says "nothing here can be widened by accident: the selects say
+// so". That is a comment. Changing `select("workspace_id")` to `select("workspace_id, given_name")` is a
+// four-word edit, and every other control in this codebase would let it through:
+//
+//   - RLS on `practice_*` is ENABLED WITH ZERO POLICIES (migration 191:319–332) and every platform page
+//     holds the service-role client, so the database will not refuse the widened read;
+//   - `requireHqContext` returns `admin` — that same client — as the first field of its context, so the
+//     HQ guard decides who opens the page and never what the page reads;
+//   - the access matrix models the door: `MatrixEntry` in scan.ts has no data dimension at all.
+//
+// So the distance between "five integers per practice" and clinical content is ONE JOIN, and nothing
+// would refuse it. This file is the refusal.
+//
+// ⚠ IT DESCRIBES TODAY, DELIBERATELY. The allowlist was derived from what the platform closure actually
+// reads, so it lands green and every later change is legible as a change. An allowlist written to the
+// policy someone WISHES were true starts red, gets muted, and protects nothing.
+//
+// PENDING TIGHTENINGS — decided in §9, not yet expressed here. See PENDING at the bottom of this file.
+//
+// PURE, AND IMPORTS NOTHING. The scanner (plane-boundary-scan.ts) pulls in the TypeScript compiler and
+// must not be imported by application code; this module may be, and §7.3 of the survey intends it to be:
+// the practitioner-facing sentence about what the platform can see should be generated from
+// `describeAllowlist()` so the sentence and the harness cannot diverge.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+export type SelectKind =
+  | "columns"      // .select("a, b")
+  | "star"         // .select() or .select("*")
+  | "none"         // the chain never selected anything
+  | "unresolved";  // a select whose argument is not a literal this scanner can read
+
+export type BoundarySite = {
+  file: string;
+  line: number;
+  /** null when the table name could not be resolved to a literal — which is a FAILURE, never a pass. */
+  table: string | null;
+  /** Set when one `.from()` resolves to several tables (a table name held in a variable). */
+  resolvedFrom: string | null;
+  /** The source text of the `.from()` argument — the key a declared exception is written against. */
+  argText: string;
+  select: SelectKind;
+  columns: string[];
+  /** PostgREST embedded resources — `select("id, practice_patient(given_name)")`. The join, in a string. */
+  embeds: { table: string; columns: string[] }[];
+  /** `{ head: true }` — PostgREST returns the count and NO ROWS. */
+  head: boolean;
+  exactCount: boolean;
+  /** The chain contains insert/update/upsert/delete. */
+  write: boolean;
+  verbs: string[];
+  /** Columns named in .eq/.in/.order/… — REPORTED, NOT ASSERTED. See the note on FILTERS below. */
+  filters: string[];
+  chain: string;
+  unresolved: string | null;
+};
+
+export type TablePolicy = {
+  table: string;
+  /**
+   * Columns this plane may select. `"*"` allows the whole row and is only ever correct for a table that
+   * holds no practitioner or patient data at all.
+   */
+  columns: readonly string[] | "*";
+  /** A `{ head: true }` count is permitted: PostgREST returns a number and no rows. */
+  count: boolean;
+  why: string;
+};
+
+// ── THE ALLOWLIST ────────────────────────────────────────────────────────────────────────────────────
+//
+// Two clinical tables appear here. Both are present for exactly one column — `workspace_id`, the tenancy
+// key — because the operator console counts rows to answer "is this practice being used" and "did the
+// clinical loop close". Neither name, nor note, nor diagnosis, nor date of birth is reachable, and the
+// harness is what makes that sentence true rather than aspirational.
+//
+// ⚠ `practice_audit_event` IS ABSENT ON PURPOSE. Survey §4.4: its payloads carry clinical detail, and it
+// is the practice's own trail. Reaching it from a super-admin page must turn this harness red.
+
+export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
+  {
+    table: "practice_platform_flags",
+    columns: ["flag", "enabled", "note"],
+    count: true,
+    why: "the three launch flags. Platform-owned configuration; holds nothing about any practice.",
+  },
+  {
+    table: "practice_workspace",
+    columns: [
+      "id", "name", "type", "status", "owner_person_id", "country", "timezone",
+      "created_at", "updated_at",
+    ],
+    count: true,
+    why:
+      "the operational row the console renders: which practices exist, who owns one, what state it is in. " +
+      "`owner_person_id` is a join key to `profiles`, which is platform data the operator already " +
+      "administers — see D1 under PENDING for the email/name tightening on that join.",
+  },
+  {
+    table: "practice_membership",
+    columns: ["workspace_id"],
+    count: true,
+    why: "counted, never listed. The tenancy key is all the count needs and all it may have.",
+  },
+  {
+    table: "practice_appointment",
+    columns: ["workspace_id"],
+    count: true,
+    why: "counted, never listed. ⚠ TENANCY COLUMN ONLY — a patient's appointment time is not operational telemetry.",
+  },
+  {
+    table: "practice_patient",
+    columns: ["workspace_id"],
+    count: true,
+    why:
+      "⚠ TENANCY COLUMN ONLY. This is the table the survey is about. `given_name`, `family_name`, " +
+      "`date_of_birth` and every identifier on it are outside this plane, permanently.",
+  },
+  {
+    table: "practice_encounter",
+    columns: ["workspace_id"],
+    count: true,
+    why:
+      "⚠ TENANCY COLUMN ONLY. `status` is filtered on to count SIGNED/AMENDED rows for the clinical-loop " +
+      "gate, and a filter is not a select — see FILTERS below for what that does and does not cover.",
+  },
+  {
+    table: "practice_role_capabilities",
+    columns: [],
+    count: true,
+    why: "row count only, to prove migrations 191–194 are live. No column is selected.",
+  },
+  {
+    table: "practice_plans",
+    columns: [],
+    count: true,
+    why: "row count only, for the seed gate. `practice_plans` carries no money (§3.3).",
+  },
+  {
+    table: "practice_onboarding_step_catalog",
+    columns: [],
+    count: true,
+    why: "row count only, for the seed gate.",
+  },
+  {
+    table: "practice_identifier_format",
+    columns: "*",
+    count: true,
+    why:
+      "the SHAPE of a practitioner number — prefix, digits, check digit, version. Platform-owned " +
+      "configuration with a single row and no subject, which is why `*` is honest here and nowhere else.",
+  },
+  {
+    table: "practice_identifier_format_history",
+    columns: "*",
+    count: true,
+    why: "the change log of that shape. Same subject as above: the format, not a person.",
+  },
+  {
+    table: "practice_practitioner_identity",
+    columns: ["practitioner_number", "number_format_version"],
+    count: true,
+    why:
+      "⚠ NO PROFILE FIELDS. `handle`, `display_name`, `discovery` and the licence-verification columns are " +
+      "outside this plane. The two columns allowed are the identifier itself and the format version it was " +
+      "issued under, read to refuse a format change that would strand the sequence " +
+      "(identifier-format.ts:167). " +
+      "⚠ Two notes. The survey's §6.2 allowlist omitted `number_format_version`, which is selected " +
+      "beside `practitioner_number` in the same call and would have started the harness red. And that " +
+      "call sits in `updateFormat`, reachable from the operator console only through " +
+      "`/api/v1/practice/identifier-format` — an OUT_OF_SCOPE_OPERATOR_ROUTE — so within this rule's " +
+      "entry set the columns are a dead grant and only the head-count is live. They are declared anyway " +
+      "because the human surface is the same console; the harness prints them as unread.",
+  },
+];
+
+/**
+ * Stored functions this plane may call.
+ *
+ * ⚠ AN RPC IS A COLUMN RULE WITH THE COLUMNS HIDDEN INSIDE IT. A `practice_*` function can return
+ * anything its body selects, and no amount of care about `.select()` strings sees inside one. Survey
+ * §1.3 says there are no `.rpc()` calls "under src/app/super-admin/" — true of the directory, and the
+ * closure disagrees: `identifier-format.ts:170` calls one, two imports from the identifiers page.
+ */
+export const PRACTICE_RPC_ALLOWLIST: readonly string[] = [
+  // Returns the next integer of a sequence and nothing else. Called to refuse a format change that
+  // would strand the numbering (identifier-format.ts:170).
+  "practice_next_practitioner_sequence",
+];
+
+// ── WHAT THIS RULE DOES NOT COVER, SAID PLAINLY ──────────────────────────────────────────────────────
+//
+// FILTERS. `.eq("family_name", x)` names a column without selecting it, and a caller who can filter can
+// in principle confirm a value by binary search. Asserting filter columns would fail every legitimate
+// `.eq("id", …)` and `.in("workspace_id", …)` in the closure, so filters are COLLECTED AND REPORTED, not
+// asserted. Saying so here is the point: an uncovered case that is written down is a known gap, and an
+// uncovered case that is not is a false negative wearing a green tick.
+//
+// WRITES. `.insert()` / `.update()` without a `.select()` return no rows and disclose nothing, so they
+// are reported and not judged. A write that reads rows back IS judged, because `.insert(x).select("…")`
+// is a read with extra steps.
+//
+// RPC AND VIEWS. Survey §1.3 says there are no `.rpc()` calls "under `src/app/super-admin/`". True of
+// the directory; the CLOSURE disagrees — `identifier-format.ts:170` calls one. The harness judges
+// reachable `practice_*` RPCs against PRACTICE_RPC_ALLOWLIST above. Database VIEWS are a
+// migration-level fact and are not re-derived here.
+//
+// ⚠ REACHABILITY IS BY SYMBOL, NOT BY BUNDLE, AND THAT IS A TRADE. The harness judges a read only when
+// some export the platform plane imports can actually reach the declaration containing it. A read
+// planted in a module that is bundled but uncallable does not turn it red. The alternative — bundle-level
+// reachability — produces 23 refusals for reads no platform page can cause, all of them arriving through
+// `identifier-format.ts:1 import { audit } from "@/lib/practice/provisioning"`, and an allowlist written
+// to satisfy them would have to permit `practice_entitlement` and a practitioner's `biography`. The
+// harness prints the bundled-but-uncallable set on every run so the trade stays visible.
+
+// ── DECLARED BLIND SPOTS ─────────────────────────────────────────────────────────────────────────────
+//
+// ⚠ THE PLATFORM PLANE READS TABLES WHOSE NAMES ARE NOT IN THE SOURCE. Nine reads in the reachable
+// closure take their table from a runtime value — a registry row, a caller's argument, a request body —
+// and no column rule can see through them. That is a real gap and it is NOT the survey's; §1.3 does not
+// mention it, because a search for `practice_*` string literals cannot find a read that never spells
+// one.
+//
+// They are listed rather than ignored, each with the reason it is not a practice read, so that:
+//   - a NEW dynamic read fails the harness until somebody writes down why it is safe,
+//   - a listed one that DISAPPEARS also fails (staleness), so the list cannot rot into fiction,
+//   - the size of the list is visible, which is the honest measure of how much of this plane the
+//     column rule does not cover.
+//
+// ⚠ NONE OF THESE IS A PRACTICE READ TODAY, AND THAT IS A HUMAN JUDGEMENT, NOT A PROOF. Each was read
+// by hand at the line given. Where a table name arrives from outside the file the harness cannot
+// confirm it, which is exactly why the exception has to be written down.
+export type UnresolvedException = {
+  /** Repo-relative path. */
+  file: string;
+  /** The source text of the `.from()` argument, as the scanner prints it. */
+  arg: string;
+  why: string;
+};
+
+export const UNRESOLVED_EXCEPTIONS: readonly UnresolvedException[] = [
+  {
+    file: "src/app/api/platform/comments/route.ts", arg: "entity.table",
+    why: "COMMENT_ENTITIES is a local registry of comment subjects (hospitals, frameworks, plat_*). " +
+      "The key comes from the request body and is looked up in that registry, so an unknown key yields " +
+      "no table rather than an arbitrary one. No entry names a practice_* table.",
+  },
+  {
+    file: "src/lib/assets/registry.ts", arg: "table",
+    why: "probe(table) head-counts an arbitrary store to report which asset domains are populated. The " +
+      "candidate names arrive from the asset registry's own domain list (competency/framework stores).",
+  },
+  {
+    file: "src/lib/platform/monitoring.ts", arg: "p.table",
+    why: "PROBES is a local list of subsystem health probes; each entry names a platform table and the " +
+      "read is a head-only reachability count.",
+  },
+  {
+    file: "src/lib/platform/provisioning.ts", arg: "c.table",
+    why: "the tenant provisioning checklist, a local registry of plat_*/tenant tables.",
+  },
+  {
+    file: "src/lib/qie/engines.ts", arg: "table",
+    why: "probeStore(admin, tables, …) tries a list of candidate store names supplied by the QIE " +
+      "catalogue to tell 'absent' from 'empty'; the candidates are quality/competency stores.",
+  },
+];
+
+// ── ⚠ THE RULE'S OWN BLIND SPOT: OPERATOR ROUTES FILED UNDER THE PRACTICE PRODUCT ────────────────────
+//
+// §6.2 names two entry points — `src/app/super-admin/**` and `src/app/api/platform/**` — and FIVE
+// super-admin-only API routes live in neither, because they are filed by PRODUCT and not by PLANE:
+//
+//   src/app/api/v1/practice/flags/route.ts                    flips the three launch flags
+//   src/app/api/v1/practice/identifier-format/route.ts        changes the practitioner-number shape
+//   src/app/api/v1/practice/operations/users/route.ts         the operator's reasoned user search
+//   src/app/api/v1/practice/provisioning/individual/route.ts  provisions a workspace for a named user
+//   src/app/api/v1/practice/provisioning/[requestId]/route.ts resumes a failed provisioning saga
+//
+// Every one of them answers `403` to a non-super caller and none of them calls
+// `requirePracticeContext`, so they are the platform plane by every test except their path. Two of them
+// reach `src/lib/practice/provisioning.ts`, whose reads this harness therefore does NOT judge.
+//
+// ⚠ THEY ARE NOT SILENTLY ADOPTED. Extending the entry set to cover them would force the allowlist to
+// admit `practice_entitlement`, `practice_configuration`, `practice_onboarding`,
+// `practice_role_assignment` and — through `provisioning.ts:191`'s dynamic import of
+// `identity-service.ts` — a practitioner's `display_name`, `biography` and `qualifications`. That is a
+// second, genuinely different surface (the provisioning saga, which BUILDS a practice) and it wants its
+// own allowlist, not this one widened until it permits everything. Recording the five here keeps the gap
+// visible; the harness asserts the list is exactly the set that exists, so a SIXTH one fails.
+export const OUT_OF_SCOPE_OPERATOR_ROUTES: readonly string[] = [
+  "src/app/api/v1/practice/flags/route.ts",
+  "src/app/api/v1/practice/identifier-format/route.ts",
+  "src/app/api/v1/practice/operations/users/route.ts",
+  "src/app/api/v1/practice/provisioning/individual/route.ts",
+  "src/app/api/v1/practice/provisioning/[requestId]/route.ts",
+];
+
+export type Verdict = {
+  ok: boolean;
+  code:
+    | "ALLOWED" | "COUNT_ONLY" | "WRITE_NO_READBACK" | "UNRESOLVED_DECLARED"
+    | "UNRESOLVED_TABLE" | "UNRESOLVED_SELECT" | "NO_TERMINAL"
+    | "TABLE_NOT_ALLOWED" | "COLUMN_NOT_ALLOWED" | "STAR_NOT_ALLOWED" | "EMBED_NOT_ALLOWED";
+  detail: string;
+};
+
+export const exceptionFor = (site: BoundarySite): UnresolvedException | undefined =>
+  UNRESOLVED_EXCEPTIONS.find(e => e.file === site.file && e.arg === site.argText);
+
+export const policyFor = (table: string): TablePolicy | undefined =>
+  PRACTICE_ALLOWLIST.find(p => p.table === table);
+
+/**
+ * Judge one read against the allowlist. Pure — no filesystem, no source text — so the rule can be
+ * exercised directly by the harness's controls with hand-built sites.
+ *
+ * ⚠ THE ORDER OF THESE BRANCHES IS THE CONTROL. Everything unparseable is refused BEFORE anything is
+ * looked up, so a site the scanner failed to read can never fall through into "no practice table here".
+ */
+export function judge(site: BoundarySite): Verdict {
+  // 1. Could not read the table name. scan.ts's house rule: unknown is never open — unless somebody has
+  //    written down, in this file, why this particular read is not a practice read.
+  if (site.table === null) {
+    const declared = exceptionFor(site);
+    return declared
+      ? { ok: true, code: "UNRESOLVED_DECLARED", detail: `${site.file}: .from(${site.argText}) — ${declared.why}` }
+      : { ok: false, code: "UNRESOLVED_TABLE", detail: site.unresolved ?? "the table name is not a literal" };
+  }
+
+  // 2. Could not read the select list, on a table we know is a practice table.
+  if (site.select === "unresolved")
+    return { ok: false, code: "UNRESOLVED_SELECT", detail: site.unresolved ?? `${site.table}: the select list is not a literal` };
+
+  const policy = policyFor(site.table);
+
+  // 3. A chain that neither selected nor wrote. Not obviously harmless — it is a query this scanner
+  //    could not classify — so it is refused rather than assumed inert.
+  if (site.select === "none" && !site.write)
+    return { ok: false, code: "NO_TERMINAL", detail: `${site.table}: .from() with neither a select nor a write (verbs: ${site.verbs.join(".") || "none"})` };
+
+  // 4. A write that reads nothing back discloses nothing.
+  if (site.select === "none" && site.write)
+    return { ok: true, code: "WRITE_NO_READBACK", detail: `${site.table}: ${site.verbs.join(".")} returns no rows` };
+
+  if (!policy)
+    return { ok: false, code: "TABLE_NOT_ALLOWED", detail: `${site.table} is not on the platform-plane allowlist` };
+
+  // 5. `{ head: true }` returns the count and no rows, whatever the select list says. This is what makes
+  //    `select("*", { count: "exact", head: true })` acceptable and `select("*")` not.
+  if (site.head)
+    return policy.count
+      ? { ok: true, code: "COUNT_ONLY", detail: `${site.table}: head-only count, no rows returned` }
+      : { ok: false, code: "COLUMN_NOT_ALLOWED", detail: `${site.table}: counting is not permitted` };
+
+  if (site.select === "star")
+    return policy.columns === "*"
+      ? { ok: true, code: "ALLOWED", detail: `${site.table}: whole-row read, declared` }
+      : { ok: false, code: "STAR_NOT_ALLOWED", detail: `${site.table}: select("*") reads every column; the allowlist names ${(policy.columns as readonly string[]).length}` };
+
+  // 6. Embedded resources are foreign-table reads and are judged as such.
+  for (const e of site.embeds) {
+    const nested = judge({
+      ...site, table: e.table, columns: e.columns, embeds: [], select: "columns",
+      head: false, write: false, unresolved: null,
+    });
+    if (!nested.ok)
+      return { ok: false, code: "EMBED_NOT_ALLOWED", detail: `${site.table} embeds ${e.table}(${e.columns.join(", ")}) — ${nested.detail}` };
+  }
+
+  if (policy.columns === "*")
+    return { ok: true, code: "ALLOWED", detail: `${site.table}: whole-row read, declared` };
+
+  const allowed = new Set(policy.columns);
+  const bad = site.columns.filter(c => c !== "" && !allowed.has(c));
+  if (bad.length)
+    return { ok: false, code: "COLUMN_NOT_ALLOWED", detail: `${site.table}: ${bad.join(", ")} — allowed: ${[...allowed].join(", ") || "(count only)"}` };
+
+  return { ok: true, code: "ALLOWED", detail: `${site.table}: ${site.columns.join(", ") || "(no columns)"}` };
+}
+
+// ── PENDING TIGHTENINGS ──────────────────────────────────────────────────────────────────────────────
+//
+// ⚠ DECIDED IN §9 AND NOT EXPRESSED ABOVE. They are recorded here because this file is where they land,
+// and because a decision with no home drifts back into being an opinion.
+//
+//   D1 — OWNER NAME, NOT OWNER EMAIL, in the standing view. This does not move any line of the allowlist
+//        above: the owner join is on `profiles`, which is not a `practice_*` table and is outside this
+//        rule's subject. If D1 is to be enforced by a harness it needs a `profiles`-scoped allowlist that
+//        distinguishes the STANDING loader from the reasoned search path
+//        (`src/app/api/v1/practice/operations/users/route.ts`), where email stays legitimate. This
+//        harness does not draw that distinction and does not claim to.
+//
+//   D2 — BUCKETED COUNTS (0 / 1–9 / 10–99 / 100+) in the standing view. Also invisible here, and for a
+//        sharper reason: bucketing happens AFTER the read. The select is still `select("workspace_id")`
+//        on the same four tables, so the boundary this file guards is identical before and after D2.
+//        ⚠ If a future edit implements bucketing by reading a column instead of counting rows, that read
+//        must appear above or it is refused — which is the correct outcome.
+//
+// Both are tightenings of what is DISPLAYED. This file governs what is READ. They meet only if a
+// tightening removes a read, and neither does.
+
+/** The field list for a practitioner-facing disclosure (§7.3), so the sentence cannot outrun the rule. */
+export function describeAllowlist(): { table: string; columns: string; why: string }[] {
+  return PRACTICE_ALLOWLIST.map(p => ({
+    table: p.table,
+    columns: p.columns === "*" ? "every column" : (p.columns.length ? p.columns.join(", ") : "row count only"),
+    why: p.why,
+  }));
+}
