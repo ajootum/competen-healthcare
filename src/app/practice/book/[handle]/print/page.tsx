@@ -61,6 +61,21 @@ export default async function PrintAssetsPage({ params }: {
   // The same redirect the profile page performs, for the same reason: an old handle must arrive
   // somewhere, including when somebody is reprinting from an old link.
   if (resolved.kind === "redirect") redirect(`${resolved.to}/print`);
+  // ⚠ AND A FAILED READ PRINTS NOTHING. These sheets are the one output that cannot be corrected once it
+  // leaves the printer, so "we could not check" must never render as a card. Same sentence for every
+  // handle, so it discloses nothing about who exists.
+  if (resolved.kind === "unreadable") {
+    return (
+      <main className="mx-auto max-w-[210mm] px-4 py-12">
+        <h1 className="text-lg font-bold text-gray-900">Nothing has been printed</h1>
+        <p className="mt-2 text-[13px] leading-relaxed text-gray-600">
+          This address could not be read just now, so no card, no poster and no code has been drawn.
+          Printing something we could not verify is the one mistake these sheets cannot recover from.
+          Please try again shortly.
+        </p>
+      </main>
+    );
+  }
   if (resolved.kind === "none") notFound();
 
   const p = resolved.profile;

@@ -37,8 +37,27 @@ export const IDENTITY_STATES = [
   "temporarily_hidden", "suspended", "archived", "deleted",
 ] as const;
 
-/** Which states may reach the public, whatever the discovery mode says. */
-const RESOLVABLE_STATES = new Set(["active", "licence_verified"]);
+/**
+ * Which states may reach the public, whatever the discovery mode says.
+ *
+ * ⚠ EXPORTED FOR WORDING, NEVER FOR DECIDING. resolveHandle() below is the only thing that says whether
+ * an address opens; a second place that re-checks `discovery !== hidden && RESOLVABLE_STATES.has(status)`
+ * is a copy that drifts the moment this set changes, and the screen it feeds would go on offering a QR
+ * code and a print button for an address the resolver refuses. Callers outside this module use it to
+ * EXPLAIN a refusal the resolver has already made -- see identitySetupView's `address.remaining`.
+ */
+export const RESOLVABLE_STATES = new Set(["active", "licence_verified"]);
+
+/**
+ * ⚠ THE STATES A PRACTITIONER MAY NOT WALK OUT OF THEMSELVES.
+ *
+ * s10's table lets `suspended` go back to `active`, which is correct for the lifecycle and wrong for a
+ * self-service button: a suspension is something an operator did, and a practitioner who could clear it
+ * from their own settings page has not been suspended at all. `archived` and `deleted` are terminal by
+ * intent. So publication refuses them and says who to ask, rather than quietly reversing somebody's
+ * decision. Nothing here changes TRANSITIONS -- an operator surface can still make those moves.
+ */
+export const NOT_SELF_PUBLISHABLE = new Set(["suspended", "archived", "deleted"]);
 
 export const NOT_BUILT = [
   {
@@ -588,10 +607,43 @@ export type IdentitySetupView = {
    * that line had no way to know the path had moved.
    */
   urlPrefix: string;
-  /** ⚠ CPB-002's sharing workspace. Null until a handle is claimed, because there is nothing to share. */
+  /**
+   * ⚠ CPB-002's sharing workspace. NULL UNLESS THE ADDRESS ACTUALLY OPENS -- see `address` below.
+   *
+   * This used to be populated on `if (row.handle)` alone, which meant the moment a handle was claimed the
+   * console offered a QR code, a print button and WhatsApp, Facebook and LinkedIn share links for a URL
+   * that resolveHandle refuses. Every identity in this deployment is `created` and `hidden`, so that was
+   * every practitioner who ever claimed one: invited to print a dead address onto a card and post it
+   * publicly. A screen can be redeployed; a box of cards cannot.
+   */
   sharing: IdentitySharing | null;
+  /**
+   * ⚠ DOES THE ADDRESS ACTUALLY OPEN? ANSWERED BY resolveHandle ITSELF.
+   *
+   * Not by re-checking its two conditions here -- a copy drifts the moment RESOLVABLE_STATES changes, and
+   * the drift is silent in the direction that matters. `remaining` explains a refusal the resolver has
+   * already made; it never makes one.
+   */
+  address: {
+    state: "no_handle" | "resolves" | "does_not_resolve" | "unreadable";
+    /** Why, when there is a why beyond the steps in `remaining`. Null when `remaining` says it all. */
+    reason: string | null;
+    /** What is still standing in the way, each a fact about this identity as it is right now. */
+    remaining: string[];
+  };
+  /** s7's modes, as plain data, so the client renders the same five the engine validates against. */
+  discoveryModes: { key: string; label: string; detail: string }[];
+  /** ⚠ THE REAL SIGNAL BEHIND email_verified, shown before the button rather than after the refusal. */
+  emailConfirmed: EmailConfirmation;
+  /** The public profile fields as they stand, so an edit form is not a blank that erases them. */
+  publicProfile: {
+    qualifications: string; specialties: string; biography: string;
+    languages: string; consultationTypes: string;
+  };
   /** What a claim costs, in the words the harness also checks. */
   permanenceNotice: string;
+  /** What publishing discloses, in the words the harness also checks. */
+  publicationNotice: string;
 
   /**
    * Candidates s3's algorithm produced THAT ARE ACTUALLY FREE. Offered, never applied -- and the
@@ -663,6 +715,43 @@ export async function identitySharing(displayName: string, handle: string): Prom
 /** How many name candidates are worth offering. Enough to choose from, few enough to read. */
 const SUGGESTION_LIMIT = 5;
 
+/**
+ * Turn the resolver's answer into something a screen can act on, WITHOUT SECOND-GUESSING IT.
+ *
+ * ⚠ `reach` DECIDES. The row is read only to say what is still true, and the wording uses the same
+ * RESOLVABLE_STATES the resolver uses, so the explanation cannot describe a rule that has moved.
+ */
+function addressState(
+  reach: Awaited<ReturnType<typeof resolveHandle>>, row: { discovery: string; status: string },
+): IdentitySetupView["address"] {
+  if (reach.kind === "unreadable")
+    return {
+      state: "unreadable",
+      reason: `whether your address opens could not be checked just now, so nothing on this page says that it does -- ${reach.reason}`,
+      remaining: [],
+    };
+  if (reach.kind === "found") return { state: "resolves", reason: null, remaining: [] };
+
+  const remaining: string[] = [];
+  if (row.discovery === "hidden")
+    remaining.push(
+      "Your discovery setting is hidden, which is where every identity starts. Nobody can reach your page, by search or by link.",
+    );
+  if (!RESOLVABLE_STATES.has(row.status))
+    remaining.push(
+      `Your identity is ${row.status}. Only an identity that is ${[...RESOLVABLE_STATES].join(" or ")} can be opened by a patient.`,
+    );
+  return {
+    state: "does_not_resolve",
+    // ⚠ THE CASE WHERE THE EXPLANATION RUNS OUT, SAID RATHER THAN PAPERED OVER. If the resolver refuses
+    // for a reason neither field accounts for, the honest answer is that we do not know why -- not
+    // silence, and certainly not a share sheet.
+    reason: remaining.length > 0 ? null
+      : "Your address does not open, and neither your discovery setting nor your status explains why. Nothing here should be shared until that is understood.",
+    remaining,
+  };
+}
+
 export async function identitySetupView(admin: any, args: {
   userId: string; workspaceId: string; fallbackDisplayName?: string | null;
 }): Promise<IdentitySetupView> {
@@ -679,7 +768,16 @@ export async function identitySetupView(admin: any, args: {
     // ⚠ ONE CONSTRUCTION, ON THE SERVER. See the field's own note.
     urlPrefix: `${host}${BOOKING_PATH}@`,
     sharing: null as IdentitySharing | null,
+    address: { state: "no_handle", reason: null, remaining: [] } as IdentitySetupView["address"],
+    // ⚠ COPIED OUT OF THE FROZEN TUPLE INTO PLAIN OBJECTS. DISCOVERY_MODES is `as const`, and handing a
+    // readonly tuple to a client component through a typed payload is a type argument nobody needs.
+    discoveryModes: DISCOVERY_MODES.map(m => ({ key: m.key as string, label: m.label as string, detail: m.detail as string })),
+    emailConfirmed: await authEmailConfirmation(admin, args.userId),
+    publicProfile: {
+      qualifications: "", specialties: "", biography: "", languages: "", consultationTypes: "",
+    },
     permanenceNotice: HANDLE_PERMANENCE_NOTICE,
+    publicationNotice: PUBLICATION_NOTICE,
     suggestions: [] as string[],
     suggestionsIncomplete: false,
   };
@@ -687,23 +785,47 @@ export async function identitySetupView(admin: any, args: {
   const bookingPage = await bookingPageState(admin, args.workspaceId);
 
   const { data: row, error } = await admin.from("practice_practitioner_identity")
-    .select("practitioner_number, display_name, handle, discovery, status")
+    .select("practitioner_number, display_name, handle, discovery, status, qualifications, specialties, biography, languages, consultation_types")
     .eq("user_id", args.userId).maybeSingle();
   // ⚠ A FAILED READ IS NOT "YOU HAVE NO IDENTITY". Reporting it as `none` would offer a practitioner a
   // button that issues a SECOND permanent number the moment the database answered again.
-  if (error) return { ...base, state: "unreadable", reason: error.message, bookingPage };
+  if (error) return {
+    ...base, state: "unreadable", reason: error.message, bookingPage,
+    // ⚠ AND THE ADDRESS IS UNREADABLE TOO, not "you have no handle". The same failed read cannot be
+    // honest about the identity and confident about its address.
+    address: { state: "unreadable", reason: error.message, remaining: [] },
+  };
 
   if (!row) {
-    return { ...base, state: "none", displayName: args.fallbackDisplayName ?? null, bookingPage };
+    return {
+      ...base, state: "none", displayName: args.fallbackDisplayName ?? null, bookingPage,
+      address: {
+        state: "no_handle", reason: null,
+        remaining: ["No identity has been issued to you yet, so there is no address and nothing to publish."],
+      },
+    };
   }
 
+  const publicProfile = {
+    qualifications: row.qualifications ?? "", specialties: row.specialties ?? "",
+    biography: row.biography ?? "", languages: row.languages ?? "",
+    consultationTypes: row.consultation_types ?? "",
+  };
+
   if (row.handle) {
+    // ⚠ THE GATE, ASKED RATHER THAN REPRODUCED. The share sheet is built only for an address a patient
+    // could actually open, because everything in it -- the QR, the print sheet, the WhatsApp link -- ends
+    // up somewhere this product cannot reach to correct it.
+    const address = addressState(await resolveHandle(admin, row.handle), row);
     return {
       ...base, state: "claimed",
       practitionerNumber: row.practitioner_number, displayName: row.display_name,
       handle: row.handle, bookingUrl: bookingUrl(row.handle),
       discovery: row.discovery, identityStatus: row.status,
-      sharing: await identitySharing(row.display_name ?? "", row.handle),
+      address, publicProfile,
+      sharing: address.state === "resolves"
+        ? await identitySharing(row.display_name ?? "", row.handle)
+        : null,
       bookingPage,
     };
   }
@@ -721,6 +843,13 @@ export async function identitySetupView(admin: any, args: {
     ...base, state: "unclaimed",
     practitionerNumber: row.practitioner_number, displayName: row.display_name,
     discovery: row.discovery, identityStatus: row.status,
+    // ⚠ `no_handle` IS NOT `does_not_resolve`. There is no address yet, so there is nothing to ask the
+    // resolver about -- and nothing for a screen to describe as broken.
+    address: {
+      state: "no_handle", reason: null,
+      remaining: ["You have not claimed a handle, so there is no address for a patient to open."],
+    },
+    publicProfile,
     suggestions: free, suggestionsIncomplete: incomplete,
     bookingPage,
   };
@@ -844,6 +973,236 @@ export async function transitionIdentity(admin: any, args: {
   return { ok: true, data: { status: args.to } };
 }
 
+// ── PUBLICATION ──────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Is the sign-in email of THIS user confirmed?
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ THE ONLY HONEST WAY TO REACH `email_verified`, AND THE REASON THE ALTERNATIVE WAS REFUSED.
+ *
+ * s10 makes `email_verified` the only step out of `created`, so it sits on the critical path to a working
+ * address -- which makes a button labelled "my email is verified" the obvious build. It is also a button
+ * that writes a state meaning "somebody checked" on the word of the person being checked. The state would
+ * then be a lie held in a column the rest of the system trusts.
+ *
+ * So it is DERIVED from the real signal: auth.users.email_confirmed_at, read through the service-role
+ * client for one id. No practitioner input reaches this function, and nothing here can be argued with.
+ *
+ * ⚠ FOUR STATES, AND EVERY ONE OF THEM THAT IS NOT `confirmed` REFUSES. A missing account and a failed
+ * read are kept apart from an unconfirmed address because they need different sentences and different
+ * status codes -- but none of them is ever treated as "probably fine".
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ */
+export type EmailConfirmation = {
+  state: "confirmed" | "unconfirmed" | "no_account" | "unreadable";
+  confirmedAt: string | null;
+  /** Populated for everything except `confirmed`. What is wrong, in the practitioner's words. */
+  reason: string | null;
+};
+
+export const EMAIL_UNCONFIRMED_NOTICE =
+  "The email address you sign in with has not been confirmed, so nothing can record it as verified and "
+  + "your address cannot be published. Competen sent a confirmation link when your account was created -- "
+  + "open that, or ask for it to be sent again, and then come back here. Nothing has been changed.";
+
+export async function authEmailConfirmation(admin: any, userId: string): Promise<EmailConfirmation> {
+  try {
+    const { data, error } = await admin.auth.admin.getUserById(userId);
+    if (error) {
+      // 404 is "there is no such auth user", which is a different thing from "the directory would not
+      // answer" -- and for a caller who has just authenticated it should be impossible. Said plainly
+      // rather than folded into either neighbour.
+      if ((error as any).status === 404)
+        return {
+          state: "no_account", confirmedAt: null,
+          reason: "no sign-in account could be found for you, so there is no email address to confirm",
+        };
+      return { state: "unreadable", confirmedAt: null, reason: error.message };
+    }
+    const user = data?.user;
+    if (!user)
+      return {
+        state: "no_account", confirmedAt: null,
+        reason: "no sign-in account could be found for you, so there is no email address to confirm",
+      };
+    const at = (user.email_confirmed_at ?? null) as string | null;
+    return at
+      ? { state: "confirmed", confirmedAt: at, reason: null }
+      : { state: "unconfirmed", confirmedAt: null, reason: EMAIL_UNCONFIRMED_NOTICE };
+  } catch (e) {
+    // ⚠ A THROW IS `unreadable`, NOT `unconfirmed`. Both refuse, but only one of them is a statement
+    // about the practitioner's account, and telling somebody their email is unconfirmed when the
+    // directory simply did not answer sends them off to fix something that is not broken.
+    return { state: "unreadable", confirmedAt: null, reason: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
+ * ⚠ WHAT PUBLISHING DISCLOSES, IN ONE SENTENCE THE SCREEN AND THE HARNESS BOTH READ.
+ *
+ * Same reasoning as HANDLE_PERMANENCE_NOTICE: a warning that lives only in JSX is one a redesign drops
+ * with nothing failing, and this one is the difference between a practitioner who chose to be findable
+ * and one who pressed a button.
+ */
+export const PUBLICATION_NOTICE =
+  "Publishing opens your booking page at your address. Anybody holding the link -- from a card, a poster, "
+  + "a QR code or a message -- reaches a page carrying your name, your practitioner number, and whichever "
+  + "qualifications, specialties, languages, consultation types and biography you have filled in. Listing "
+  + "publicly does that AND puts those details into Competen's practitioner search, where strangers can "
+  + "find you without a link. You can return to hidden whenever you like and the page stops opening "
+  + "immediately -- but your handle is never released, and a card already printed or a page already read "
+  + "cannot be recalled.";
+
+/** The named steps between an issued identity and an address that opens. Reported, in this order. */
+export const PUBLISH_STEPS = ["email_confirmed", "email_verified", "active", "discovery"] as const;
+export type PublishStep = typeof PUBLISH_STEPS[number];
+
+export type PublishOutcome = {
+  status: string;
+  discovery: string;
+  bookingUrl: string;
+  /** Steps this call performed. */
+  completed: PublishStep[];
+  /** Steps that were already true, so nothing was written for them. */
+  alreadyTrue: PublishStep[];
+  /** ⚠ ASKED OF resolveHandle AFTERWARDS, not inferred from the writes above having returned ok. */
+  address: "resolves" | "does_not_resolve" | "unreadable";
+  addressReason: string | null;
+};
+
+export type PublishResult =
+  | { ok: true; data: PublishOutcome }
+  /** ⚠ A FAILURE CARRIES HOW FAR IT GOT. A half-run that reports only its last error leaves a
+   *  practitioner unable to tell whether their lifecycle moved, and the next attempt looks like a
+   *  different bug. */
+  | { ok: false; status: number; code: string; message: string; completed: PublishStep[]; alreadyTrue: PublishStep[] };
+
+/**
+ * PIS-000 s7, s10 -- take an identity from issued-and-private to an address that actually opens.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ THE ORDER IS THE WHOLE FUNCTION, AND EACH STEP HAS A DIFFERENT REASON FOR BEING WHERE IT IS.
+ *
+ *   1. A HANDLE FIRST. updateIdentity already refuses `public` without one; this refuses every mode
+ *      without one, because a discovery setting on an identity with no address changes nothing a patient
+ *      could reach and would leave somebody believing they had published.
+ *   2. THE EMAIL, READ RATHER THAN ASSERTED. See authEmailConfirmation.
+ *   3. THE LIFECYCLE, ONE LEGAL STEP AT A TIME, through transitionIdentity so s10's table stays the only
+ *      thing that decides what may follow what.
+ *   4. THE DISCOVERY MODE LAST. If any earlier step refuses, the identity is still hidden -- which is the
+ *      safe direction to fail in, and the reason this order is not merely tidy.
+ *
+ * ⚠ AND `licence_verified` IS NOT ON THE PATH. s10 allows email_verified -> licence_verified, and this
+ * function deliberately steps around it to `active` instead. transitionIdentity writes
+ * licence_verified_by = actorId, and the only actor this function ever has is the practitioner
+ * themselves: a self-awarded record that somebody checked a licence is worse than no record at all,
+ * because everything downstream reads it as provenance. Verification is an operator's act and has no
+ * practitioner-facing door, here or anywhere.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ */
+export async function publishIdentity(admin: any, args: {
+  userId: string; discovery: string; correlationId: string;
+}): Promise<PublishResult> {
+  const completed: PublishStep[] = [];
+  const alreadyTrue: PublishStep[] = [];
+  const refuse = (status: number, code: string, message: string): PublishResult =>
+    ({ ok: false, status, code, message, completed, alreadyTrue });
+
+  const identity = await getIdentity(admin, args.userId);
+  if (!identity) return refuse(404, "NO_IDENTITY", "no identity has been issued for you yet");
+
+  if (!identity.handle)
+    return refuse(409, "NO_HANDLE",
+      "claim your handle first -- publishing a discovery setting with no address gives a patient nothing to open");
+
+  if (!DISCOVERY_MODES.some(m => m.key === args.discovery))
+    return refuse(400, "VALIDATION_ERROR",
+      `discovery must be one of: ${DISCOVERY_MODES.map(m => m.key).join(", ")}`);
+
+  // ⚠ PUBLISHING TO HIDDEN IS NOT PUBLISHING. Refused rather than quietly accepted, because it would run
+  // the lifecycle steps below and then leave the address shut -- and report success for both.
+  if (args.discovery === "hidden")
+    return refuse(400, "DISCOVERY_IS_HIDDEN",
+      "hidden is where an identity starts and it publishes nothing. To go private again, change your discovery setting rather than publishing.");
+
+  // ⚠ A PRACTITIONER DOES NOT LIFT THEIR OWN SUSPENSION. See NOT_SELF_PUBLISHABLE.
+  if (NOT_SELF_PUBLISHABLE.has(identity.status))
+    return refuse(409, "STATUS_NOT_SELF_SERVICE",
+      `your identity is ${identity.status}, and that is not something this page can change. Nothing was published.`);
+
+  const email = await authEmailConfirmation(admin, args.userId);
+  if (email.state === "unreadable")
+    return refuse(503, "EMAIL_UNREADABLE",
+      `whether your sign-in email is confirmed could not be checked just now, so nothing was published: ${email.reason}`);
+  if (email.state === "no_account")
+    return refuse(409, "NO_AUTH_ACCOUNT", email.reason ?? "no sign-in account could be found for you");
+  if (email.state === "unconfirmed")
+    return refuse(409, "EMAIL_NOT_CONFIRMED", email.reason ?? EMAIL_UNCONFIRMED_NOTICE);
+  completed.push("email_confirmed");
+
+  let status: string = identity.status;
+
+  if (status === "created") {
+    const moved = await transitionIdentity(admin, {
+      userId: args.userId, to: "email_verified", actorId: args.userId, correlationId: args.correlationId,
+    });
+    if (!moved.ok) return refuse(moved.status, moved.code, moved.message);
+    status = moved.data.status;
+    completed.push("email_verified");
+  } else {
+    alreadyTrue.push("email_verified");
+  }
+
+  if (!RESOLVABLE_STATES.has(status)) {
+    const moved = await transitionIdentity(admin, {
+      userId: args.userId, to: "active", actorId: args.userId, correlationId: args.correlationId,
+    });
+    if (!moved.ok) return refuse(moved.status, moved.code, moved.message);
+    status = moved.data.status;
+    completed.push("active");
+  } else {
+    // licence_verified already reaches the public, so it is left alone rather than stepped past: moving
+    // it to active would discard a record of who checked, for nothing.
+    alreadyTrue.push("active");
+  }
+
+  const updated = await updateIdentity(admin, {
+    userId: args.userId, discovery: args.discovery, correlationId: args.correlationId,
+  });
+  if (!updated.ok) return refuse(updated.status, updated.code, updated.message);
+  if (args.discovery === identity.discovery) alreadyTrue.push("discovery");
+  else completed.push("discovery");
+
+  // ⚠ ASKED, NOT ASSUMED. Four writes returning ok is not the same as a patient's browser arriving
+  // somewhere, and this is the one function whose whole purpose is that it does.
+  const check = await resolveHandle(admin, identity.handle);
+  const address = check.kind === "found" ? "resolves"
+    : check.kind === "unreadable" ? "unreadable" : "does_not_resolve";
+
+  await audit(admin, {
+    workspaceId: identity.primary_workspace_id, actorId: args.userId,
+    eventType: "practice.identity_published",
+    payload: {
+      identityId: identity.id, handle: identity.handle, discovery: args.discovery,
+      status, completed, address,
+    },
+    correlationId: args.correlationId,
+  });
+
+  return {
+    ok: true,
+    data: {
+      status, discovery: updated.data.discovery, bookingUrl: bookingUrl(identity.handle),
+      completed, alreadyTrue, address,
+      addressReason: address === "unreadable" && check.kind === "unreadable" ? check.reason
+        : address === "does_not_resolve"
+          ? "every step reported success and the address still does not open. Nothing further was changed."
+          : null,
+    },
+  };
+}
+
 // ── RESOLUTION AND SEARCH ────────────────────────────────────────────────────────────────────────────
 
 /** Only the fields s6 lists. Never the internal id, the user id or the workspace -- s13. */
@@ -874,17 +1233,33 @@ function publicView(row: any) {
  * A HIDDEN IDENTITY IS A 404, NOT A REFUSAL. "This practitioner exists but will not see you" is a
  * disclosure about a named person; nothing distinguishes it from a handle that was never issued.
  * Returns the REDIRECT when the handle is a retired one, which is what s8's automatic redirect is.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ A FAILED READ IS `unreadable`, AND IT USED TO BE `none`.
+ *
+ * All three queries below destructured only `data`, so a database that could not answer produced a
+ * confident "there is no such practitioner" -- a 404 for a real, live, published clinician whose patient
+ * was holding a printed card. It is the same defect handleAvailable() carries a warning about, in the
+ * function that decides whether a printed address opens at all.
+ *
+ * It matters twice over now that identitySetupView asks THIS FUNCTION whether a handle resolves before
+ * it offers a QR code and a print button: reporting a broken read as "does not resolve" is merely
+ * unhelpful, but reporting it as "resolves" would have been the sharing defect all over again. Three
+ * states, so neither caller has to guess.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
  */
 export async function resolveHandle(admin: any, rawHandle: string): Promise<
   | { kind: "found"; profile: ReturnType<typeof publicView> }
   | { kind: "redirect"; to: string }
   | { kind: "none" }
+  | { kind: "unreadable"; reason: string }
 > {
   const h = normaliseHandle(rawHandle);
   if (!HANDLE_RE.test(h)) return { kind: "none" };
 
-  const { data: row } = await admin.from("practice_practitioner_identity")
+  const { data: row, error } = await admin.from("practice_practitioner_identity")
     .select("*").eq("handle", h).maybeSingle();
+  if (error) return { kind: "unreadable", reason: error.message };
 
   if (row) {
     if (row.discovery === "hidden") return { kind: "none" };
@@ -903,11 +1278,13 @@ export async function resolveHandle(admin: any, rawHandle: string): Promise<
   // ⚠ AND THE TARGET IS COMPOSED FROM bookingPath, not typed. It used to read `/@${handle}`, which was
   // the route before CPB-002 moved it; a redirect that points at a route this application no longer
   // serves is a 404 wearing a 307.
-  const { data: retired } = await admin.from("practice_handle_history")
+  const { data: retired, error: retiredError } = await admin.from("practice_handle_history")
     .select("identity_id").eq("handle", h).maybeSingle();
+  if (retiredError) return { kind: "unreadable", reason: retiredError.message };
   if (retired) {
-    const { data: current } = await admin.from("practice_practitioner_identity")
+    const { data: current, error: currentError } = await admin.from("practice_practitioner_identity")
       .select("handle, discovery, status").eq("id", retired.identity_id).maybeSingle();
+    if (currentError) return { kind: "unreadable", reason: currentError.message };
     if (current?.handle && current.discovery !== "hidden" && RESOLVABLE_STATES.has(current.status))
       return { kind: "redirect", to: bookingPath(current.handle) };
   }

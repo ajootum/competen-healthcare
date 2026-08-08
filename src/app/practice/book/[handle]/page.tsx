@@ -78,6 +78,25 @@ export default async function PractitionerPage({ params }: {
   const resolved = await resolveHandle(createAdminClient(), handle);
   // s8: legacy URLs redirect automatically after a handle change, so printed cards keep working.
   if (resolved.kind === "redirect") redirect(resolved.to);
+  // ⚠ A DATABASE THAT WOULD NOT ANSWER IS NOT A PRACTITIONER WHO DOES NOT EXIST. resolveHandle used to
+  // discard its read errors and return `none`, so a failed read was served as a 404 -- to a patient
+  // holding a printed card for a live, published clinician. This says what actually happened, and says
+  // exactly the same thing whether or not the handle exists, so it discloses nothing.
+  if (resolved.kind === "unreadable") {
+    return (
+      <div className="mx-auto max-w-3xl px-5 py-12">
+        <h1 className="text-xl font-bold text-gray-900">This page could not be loaded just now</h1>
+        <p className="mt-2 text-[13px] leading-relaxed text-gray-600">
+          Nothing could be read about this address, so nothing here is a statement about whether it
+          exists. This is a fault at our end rather than anything about the link you followed &mdash;
+          please try again shortly.
+        </p>
+        <p className="mt-8 text-[11px] text-gray-400">
+          <Link href="/practice" className="hover:underline">Competen Practice</Link>
+        </p>
+      </div>
+    );
+  }
   if (resolved.kind === "none") notFound();
 
   const p = resolved.profile;
