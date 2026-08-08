@@ -33,6 +33,7 @@ import {
   HANDLE_PERMANENCE_NOTICE,
 } from "../src/lib/practice/identity-service";
 import { getFormat, parsePractitionerNumber } from "../src/lib/practice/identifier-format";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -94,12 +95,14 @@ async function cleanup() {
   for (const u of USERS) {
     const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);
     for (const w of (ws ?? []) as { id: string }[]) {
-      await admin.from("practice_booking_access").delete().eq("workspace_id", w.id);
-      await admin.from("practice_workspace").delete().eq("id", w.id);
-    }
+      await admin.from("practice_booking_access").delete().eq("workspace_id", w.id);    }
     await admin.from("practice_practitioner_identity").delete().eq("user_id", u);
     await admin.from("provisioning_request").delete().eq("target_user_id", u);
   }
+  // ⚠ The workspace delete itself lives in _cleanup.ts: it unpicks the six tables that reference
+  // practice_parameter_definition with no on-delete clause, and REPORTS a failure instead of
+  // discarding it. The bespoke unpick above runs first and is unchanged.
+  await purgeWorkspacesOwnedBy(admin, USERS);
 }
 
 /**

@@ -29,6 +29,7 @@ import { register, registrationForm, ageForForm } from "../src/lib/practice/regi
 import { composeDisplayName, registerPatient } from "../src/lib/practice/patients";
 import { patientRelationships } from "../src/lib/practice/relationships";
 import { createTemplate, upsertField, publishTemplate } from "../src/lib/practice/registration-config";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 import {
   registrationWorkspace, queueWalkIn, saveDraft, listDrafts, discardDraft, steps,
 } from "../src/lib/practice/registration-workspace";
@@ -72,13 +73,16 @@ async function cleanup() {
   for (const w of (ws ?? []) as { id: string }[]) {
     await admin.from("practice_patient_identifier").delete().eq("workspace_id", w.id);
     await admin.from("practice_facility").delete().eq("workspace_id", w.id);
-    await admin.from("practice_workspace").delete().eq("id", w.id);
   }
   // Drafts and queue entries carry `on delete cascade` to the workspace, so the loop above takes them
   // with it. No second pass -- one that ran after the delete would be reading an empty list and looking
   // like it did something.
   await admin.from("provisioning_request").delete().eq("target_user_id", OWNER);
   await admin.from("practice_audit_event").delete().eq("actor_id", OWNER);
+  // ⚠ The workspace delete itself lives in _cleanup.ts: it unpicks the six tables that reference
+  // practice_parameter_definition with no on-delete clause, and REPORTS a failure instead of
+  // discarding it. The bespoke unpick above runs first and is unchanged.
+  await purgeWorkspacesOwnedBy(admin, [OWNER]);
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

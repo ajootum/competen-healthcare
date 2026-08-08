@@ -36,6 +36,7 @@ import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { registerPatient } from "../src/lib/practice/patients";
 import { launchEncounter, transitionEncounter, recordDiagnosis, recordTreatment } from "../src/lib/practice/encounters";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 import {
   listTemplates, getTemplate, createTemplate, setTemplateStatus,
   saveNoteSegment, noteHistory, applyTemplate,
@@ -78,12 +79,7 @@ async function provision(user: string, name: string, suffix: string): Promise<st
 }
 
 async function cleanup() {
-  for (const u of [USER_A, USER_B]) {
-    const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);
-    for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
-    await admin.from("provisioning_request").delete().eq("target_user_id", u);
-    await admin.from("practice_audit_event").delete().eq("actor_id", u);
-  }
+  await purgeWorkspacesOwnedBy(admin, [USER_A, USER_B]);
 }
 
 const base = { actorId: USER_A, correlationId: "harness-doc" };

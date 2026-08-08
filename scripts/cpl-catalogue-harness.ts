@@ -30,6 +30,7 @@ import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { resolveWorkspaceContext, type WorkspaceContext } from "../src/lib/practice/access";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 import {
   ensureCoreLibrary, ensurePlatformCatalogue, createDefinition, createPack, setPackItem, CORE_LIBRARY,
 } from "../src/lib/practice/parameters";
@@ -81,20 +82,16 @@ const payload = (name: string): IndividualRequest => ({
  * failure, because a cleanup that quietly does nothing is how a harness stops being re-runnable.
  */
 async function cleanup() {
-  const { data: ws, error } = await admin.from("practice_workspace").select("id").eq("owner_person_id", USER);
-  if (error) { console.log(`  cleanup: the workspace list could not be read -- ${error.message}`); return; }
-  for (const w of (ws ?? []) as { id: string }[]) {
-    const { data: packs } = await admin.from("practice_parameter_pack").select("id").eq("workspace_id", w.id);
-    for (const p of (packs ?? []) as { id: string }[])
-      await admin.from("practice_parameter_pack_item").delete().eq("pack_id", p.id);
-    await admin.from("practice_parameter_pack").delete().eq("workspace_id", w.id);
-    await admin.from("practice_parameter_definition").delete().eq("workspace_id", w.id);
-    const { error: delErr } = await admin.from("practice_workspace").delete().eq("id", w.id);
-    // ⚠ NEVER DISCARDED. A cleanup that failed and said nothing is why this comment exists.
-    if (delErr) console.log(`  cleanup: workspace ${w.id} could not be deleted -- ${delErr.message}`);
-  }
-  await admin.from("provisioning_request").delete().eq("target_user_id", USER);
-  await admin.from("practice_audit_event").delete().eq("actor_id", USER);
+  // ⚠ THIS WAS THE PROTOTYPE, AND IT UNPICKED ONE OF SIX. The version written here unpicked
+  // practice_parameter_pack_item, which is all this harness happens to create -- but migration 246 gives
+  // SIX tables a reference to practice_parameter_definition with no on-delete clause, and any harness
+  // that records a measurement, an activation, a monitoring plan, a derived value or an alert would still
+  // have restricted. A fix that works for its own author is how a defect survives in eighty other files.
+  //
+  // All six now live in _cleanup.ts, with the error reported rather than discarded, which was the actual
+  // bug. practice_audit_event is no longer cleared -- migration 247 made it append-only, so that call has
+  // been a silent no-op ever since.
+  await purgeWorkspacesOwnedBy(admin, [USER]);
 }
 
 /** A catalogue row with one field broken, for the validator's controls. */

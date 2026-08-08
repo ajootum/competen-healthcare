@@ -27,6 +27,7 @@
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 import {
   issueIdentity, getIdentity, changeHandle, claimHandle, suggestHandle, updateIdentity,
   transitionIdentity, resolveHandle, searchPractitioners, handleAvailable, handleCandidates,
@@ -74,11 +75,13 @@ async function provision(user: string, name: string, suffix: string): Promise<st
 async function cleanup() {
   for (const u of [A, B, C]) {
     await admin.from("practice_practitioner_identity").delete().eq("user_id", u);
-    const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);
-    for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
-    await admin.from("provisioning_request").delete().eq("target_user_id", u);
+    const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);    await admin.from("provisioning_request").delete().eq("target_user_id", u);
     await admin.from("practice_audit_event").delete().eq("actor_id", u);
   }
+  // ⚠ The workspace delete lives in _cleanup.ts: it unpicks the six tables referencing
+  // practice_parameter_definition with no on-delete clause, and REPORTS a failure instead of
+  // discarding it. Anything deleted above still runs first and is unchanged.
+  await purgeWorkspacesOwnedBy(admin, [A, B, C]);
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

@@ -42,6 +42,7 @@ import {
 } from "../src/lib/practice/patient-booking";
 import { checkPatientSession, revokePatientSession } from "../src/lib/practice/patient-session";
 import type { Transport } from "../src/lib/practice/messaging";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -105,7 +106,6 @@ async function cleanup() {
     await admin.from("practice_availability_template").delete().eq("workspace_id", w.id);
     await admin.from("practice_location").update({ facility_id: null }).eq("workspace_id", w.id);
     await admin.from("practice_facility").delete().eq("workspace_id", w.id);
-    await admin.from("practice_workspace").delete().eq("id", w.id);
   }
   await admin.from("practice_practitioner_identity").delete().eq("user_id", OWNER);
   await admin.from("provisioning_request").delete().eq("target_user_id", OWNER);
@@ -113,6 +113,10 @@ async function cleanup() {
   // ⚠ NO practice_audit_event DELETE. Migration 247 makes it append-only and REFUSES the delete; several
   // harnesses here call it anyway and discard the error, so they have been reporting a clean teardown
   // for months while leaving rows behind. Nothing in this file counts audit rows, so nothing needs it.
+  // ⚠ The workspace delete itself lives in _cleanup.ts: it unpicks the six tables that reference
+  // practice_parameter_definition with no on-delete clause, and REPORTS a failure instead of
+  // discarding it. The bespoke unpick above runs first and is unchanged.
+  await purgeWorkspacesOwnedBy(admin, [OWNER]);
 }
 
 /** Everything "sent" lands here. No request leaves the process, and no code is ever printed. */
@@ -177,10 +181,10 @@ async function main() {
   for (let weekday = 1; weekday <= 7; weekday++) {
     const saved = await saveSession(admin, ctx, {
       weekday, startsMinute: 6 * 60, endsMinute: 18 * 60, locationId: locId,
-      // ⚠ SAVED AS internal AND THEN SET TO link_only DIRECTLY. saveSession still refuses link_only with
-      // PHASE_NOT_BUILT -- correct while Phase 4 was unbuilt, stale now. Reported rather than changed,
-      // because relaxing it turns round two assertions in practice-session-harness.ts.
-      sessionName: `Clinic ${weekday}`, bookingMode: "internal",
+      // ⚠ SAVED AS link_only THROUGH THE ENGINE. It had to be written as internal and promoted by a
+      // raw update, because saveSession refused link_only with PHASE_NOT_BUILT -- a guard that outlived
+      // Phase 4. The guard is gone, so the fixture now uses the path a practitioner actually uses.
+      sessionName: `Clinic ${weekday}`, bookingMode: "link_only",
       appointmentTypes: ["new_consultation"],
       actorId: OWNER, correlationId: CORR,
     });
@@ -190,7 +194,7 @@ async function main() {
     // refuses link_only with PHASE_NOT_BUILT -- a guard that was correct while Phase 4 was unbuilt and
     // is now stale. Relaxing it turns round two assertions in practice-session-harness.ts, so it is
     // reported rather than changed here.
-    if (saved.ok) { sessionsMade++; await admin.from("practice_availability_template").update({ booking_mode: "link_only" }).eq("id", saved.data.id); }
+    if (saved.ok) sessionsMade++;
   }
 
   // s10.2 needs a published registration template before a page may publish -- a booking with no form

@@ -27,6 +27,7 @@ import { registerPatient } from "../src/lib/practice/patients";
 import { launchEncounter } from "../src/lib/practice/encounters";
 import { createDocument, transitionDocument, recordRelease } from "../src/lib/practice/documentation";
 import { recordContact, recordIncoming } from "../src/lib/practice/communication";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 import {
   createFolder, deleteFolder, listFolders, recordLibraryDocument, listLibrary, librarySummary,
   binDocument, restoreDocument, purgeDocument, moveDocuments, patientCorrespondence,
@@ -65,12 +66,7 @@ async function provision(user: string, name: string, suffix: string): Promise<st
 }
 
 async function cleanup() {
-  for (const u of [OWNER, OTHER]) {
-    const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);
-    for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
-    await admin.from("provisioning_request").delete().eq("target_user_id", u);
-    await admin.from("practice_audit_event").delete().eq("actor_id", u);
-  }
+  await purgeWorkspacesOwnedBy(admin, [OWNER, OTHER]);
 }
 
 const base = { actorId: OWNER, correlationId: "harness-lib" };

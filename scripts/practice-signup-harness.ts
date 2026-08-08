@@ -29,6 +29,7 @@
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { LEGAL_VERSIONS } from "../src/lib/practice/catalogs";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -72,7 +73,9 @@ async function cleanup() {
   const { data: users } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
   for (const u of (users?.users ?? []).filter(x => x.email === EMAIL || x.email === OTHER_EMAIL)) {
     const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u.id);
-    for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
+    // ⚠ Inside the loop: u.id is loop-scoped, and the workspace must go before the profile and the
+    // auth user it belongs to. _cleanup.ts unpicks the six restrict paths and reports a failure.
+    await purgeWorkspacesOwnedBy(admin, [u.id]);
     await admin.from("provisioning_request").delete().eq("target_user_id", u.id);
     await admin.from("practice_audit_event").delete().eq("actor_id", u.id);
     await admin.from("profiles").delete().eq("id", u.id);

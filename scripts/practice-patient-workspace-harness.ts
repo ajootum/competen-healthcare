@@ -44,6 +44,7 @@ import { launchEncounter, transitionEncounter, recordTreatment, recordDiagnosis 
 import { createFollowUp } from "../src/lib/practice/follow-ups";
 import { recordIncoming, reviewIncoming } from "../src/lib/practice/communication";
 import { zonedDayRange, practiceToday } from "../src/lib/practice/practice-time";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 import {
   universalSearch, worklists, myPatients, patientSummary, patientContextBanner,
   familyRelationships, patientsWorkspace,
@@ -103,10 +104,13 @@ async function cleanup() {
   for (const u of [OWNER, OTHER]) {
     await admin.from("practice_practitioner_identity").delete().eq("user_id", u);
     const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);
-    for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
     await admin.from("provisioning_request").delete().eq("target_user_id", u);
     await admin.from("practice_audit_event").delete().eq("actor_id", u);
   }
+  // ⚠ The workspace delete lives in _cleanup.ts: it unpicks the six tables referencing
+  // practice_parameter_definition with no on-delete clause, and REPORTS a failure instead of
+  // discarding it. Anything deleted above still runs first and is unchanged.
+  await purgeWorkspacesOwnedBy(admin, [OWNER, OTHER]);
 }
 
 async function withoutCapabilities(workspaceId: string, userId: string, capabilities: string[]): Promise<WorkspaceContext> {

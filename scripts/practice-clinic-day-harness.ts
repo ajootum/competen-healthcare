@@ -26,6 +26,7 @@ import { launchEncounter, transitionEncounter, interruptWith } from "../src/lib/
 import { createFollowUp } from "../src/lib/practice/follow-ups";
 import { dashboardReadModel } from "../src/lib/practice/dashboard";
 import type { WorkspaceContext } from "../src/lib/practice/access";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -68,11 +69,14 @@ async function cleanup() {
     await admin.from("practice_activity").delete().eq("workspace_id", w.id);
     await admin.from("practice_location").update({ facility_id: null }).eq("workspace_id", w.id);
     await admin.from("practice_facility").delete().eq("workspace_id", w.id);
-    await admin.from("practice_workspace").delete().eq("id", w.id);
   }
   await admin.from("practice_practitioner_identity").delete().eq("user_id", DOCTOR);
   await admin.from("provisioning_request").delete().eq("target_user_id", DOCTOR);
   await admin.from("practice_audit_event").delete().eq("actor_id", DOCTOR);
+  // ⚠ The workspace delete itself lives in _cleanup.ts: it unpicks the six tables that reference
+  // practice_parameter_definition with no on-delete clause, and REPORTS a failure instead of
+  // discarding it. The bespoke unpick above runs first and is unchanged.
+  await purgeWorkspacesOwnedBy(admin, ["practice_encounter_status_history", "practice_domain_event", "practice_follow_up_event", "practice_follow_up", "practice_arrival", "practice_queue_entry"]);
 }
 
 async function main() {

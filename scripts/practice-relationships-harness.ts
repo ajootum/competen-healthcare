@@ -25,6 +25,7 @@ import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { registerPatient } from "../src/lib/practice/patients";
 import { resolveWorkspaceContext, type WorkspaceContext } from "../src/lib/practice/access";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 import {
   ageFrom, relationshipExpectation, patientRelationships, addRelationship, endRelationship,
   recordConsent, updatePatientAdmin, relationshipGaps, RELATIONSHIP_TYPES, CONSENT_TYPES, MAJORITY_AGE,
@@ -66,10 +67,13 @@ async function cleanup() {
   for (const u of [OWNER, OTHER]) {
     await admin.from("practice_practitioner_identity").delete().eq("user_id", u);
     const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);
-    for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
     await admin.from("provisioning_request").delete().eq("target_user_id", u);
     await admin.from("practice_audit_event").delete().eq("actor_id", u);
   }
+  // ⚠ The workspace delete lives in _cleanup.ts: it unpicks the six tables referencing
+  // practice_parameter_definition with no on-delete clause, and REPORTS a failure instead of
+  // discarding it. Anything deleted above still runs first and is unchanged.
+  await purgeWorkspacesOwnedBy(admin, [OWNER, OTHER]);
 }
 
 const base = { actorId: OWNER, correlationId: "harness-rel" };

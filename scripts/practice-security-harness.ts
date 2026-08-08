@@ -47,6 +47,7 @@ import {
 } from "../src/lib/practice/auth-audit";
 import { needsDeviceCookie, isPracticePath, mintDeviceId } from "../src/lib/practice/device-register";
 import { PRACTICE_LOGIN, PATIENT_LOGIN } from "../src/lib/marketing/practice-site";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -82,12 +83,7 @@ async function provision(user: string, name: string, suffix: string): Promise<st
 }
 
 async function cleanup() {
-  for (const u of [OWNER, OTHER]) {
-    const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);
-    for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
-    await admin.from("provisioning_request").delete().eq("target_user_id", u);
-    await admin.from("practice_audit_event").delete().eq("actor_id", u);
-  }
+  await purgeWorkspacesOwnedBy(admin, [OWNER, OTHER]);
 }
 
 const base = { actorId: OWNER, correlationId: "harness-sec" };

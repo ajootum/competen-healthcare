@@ -28,6 +28,7 @@ import { bookAppointment, transitionAppointment } from "../src/lib/practice/sche
 import { launchEncounter, transitionEncounter, recordDiagnosis, recordTreatment } from "../src/lib/practice/encounters";
 import { saveNoteSegment as saveNote } from "../src/lib/practice/documentation";
 import { launchState } from "../src/lib/practice/operations";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -59,10 +60,7 @@ const payload: IndividualRequest = {
 };
 
 async function cleanup() {
-  const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", USER);
-  for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
-  await admin.from("provisioning_request").delete().eq("target_user_id", USER);
-  await admin.from("practice_audit_event").delete().eq("actor_id", USER);
+  await purgeWorkspacesOwnedBy(admin, [USER]);
 }
 
 async function main() {

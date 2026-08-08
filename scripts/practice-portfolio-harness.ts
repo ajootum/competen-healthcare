@@ -31,6 +31,7 @@ import { recordProcedure } from "../src/lib/practice/procedures";
 import { recordActivity, setPortfolio } from "../src/lib/practice/clinical-activity";
 import { writeReflection } from "../src/lib/practice/reflection";
 import { resolveWorkspaceContext } from "../src/lib/practice/access";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 import {
   buildPortfolio, exportPortfolio, saveProfile, getProfile, addEntry, removeEntry,
   PORTFOLIO_LIMITS, PROVENANCE,
@@ -69,12 +70,7 @@ async function provision(user: string, name: string, suffix: string): Promise<st
 }
 
 async function cleanup() {
-  for (const u of [OWNER, OTHER]) {
-    const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);
-    for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
-    await admin.from("provisioning_request").delete().eq("target_user_id", u);
-    await admin.from("practice_audit_event").delete().eq("actor_id", u);
-  }
+  await purgeWorkspacesOwnedBy(admin, [OWNER, OTHER]);
 }
 
 const base = { actorId: OWNER, correlationId: "harness-pf" };

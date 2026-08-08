@@ -27,6 +27,7 @@ import {
 import { sessionMetrics } from "../src/lib/practice/session";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import type { WorkspaceContext } from "../src/lib/practice/access";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -66,12 +67,15 @@ async function cleanup(...users: string[]) {
       await admin.from("practice_activity").delete().eq("workspace_id", w.id);
       await admin.from("practice_location").update({ facility_id: null }).eq("workspace_id", w.id);
       await admin.from("practice_facility").delete().eq("workspace_id", w.id);
-      await admin.from("practice_workspace").delete().eq("id", w.id);
     }
     await admin.from("practice_practitioner_identity").delete().eq("user_id", u);
     await admin.from("provisioning_request").delete().eq("target_user_id", u);
     await admin.from("practice_audit_event").delete().eq("actor_id", u);
   }
+  // ⚠ The workspace delete itself lives in _cleanup.ts: it unpicks the six tables that reference
+  // practice_parameter_definition with no on-delete clause, and REPORTS a failure instead of
+  // discarding it. The bespoke unpick above runs first and is unchanged.
+  await purgeWorkspacesOwnedBy(admin, users);
 }
 
 /** A practice provisioned through the real saga. NEVER an inserted workspace: half a practice is not one. */

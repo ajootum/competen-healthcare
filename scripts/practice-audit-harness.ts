@@ -48,6 +48,7 @@ import { exportPatientRecord } from "../src/lib/practice/privacy";
 import { practiceReport, exportActivityCsv } from "../src/lib/practice/reports";
 import { runAssistant } from "../src/lib/practice/ai-assistant";
 import type { WorkspaceContext } from "../src/lib/practice/access";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -93,14 +94,16 @@ async function wipe(userId: string) {
     await admin.from("practice_encounter").delete().eq("workspace_id", w.id);
     await admin.from("practice_clinical_document").delete().eq("workspace_id", w.id);
     await admin.from("practice_location").update({ facility_id: null }).eq("workspace_id", w.id);
-    await admin.from("practice_workspace").delete().eq("id", w.id);
-    // practice_audit_event carries no foreign key to the workspace (migration 191 keeps it standalone so
-    // the trail outlives what it describes), so it is cleared by hand rather than by the cascade.
-    await admin.from("practice_audit_event").delete().eq("workspace_id", w.id);
   }
   await admin.from("practice_practitioner_identity").delete().eq("user_id", userId);
-  await admin.from("provisioning_request").delete().eq("target_user_id", userId);
-  await admin.from("practice_audit_event").delete().eq("actor_id", userId);
+  // ⚠ The workspace delete lives in _cleanup.ts, which unpicks the six tables that reference
+  // practice_parameter_definition with no on-delete clause and REPORTS a failure instead of discarding
+  // it. The self-reference nulling above still runs first and is unchanged -- it solves a different
+  // problem (a row pointing at a sibling in its own table, which no cascade clears).
+  await purgeWorkspacesOwnedBy(admin, [userId]);
+  // ⚠ practice_audit_event is NOT cleared here any more. Migration 247 made it append-only, so the
+  // delete raises and the error was discarded -- it has been a silent no-op ever since. This harness
+  // scopes its own assertions to rows created after the run started, which is the only thing that works.
 }
 
 async function provision(userId: string, name: string): Promise<string | null> {

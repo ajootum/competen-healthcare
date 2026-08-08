@@ -33,6 +33,7 @@ import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import { createTask, taskBoard } from "../src/lib/practice/tasks";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 import {
   listTeam, createInvitation, revokeInvitation, listInvitations, acceptInvitation,
   setMembershipStatus, reinstateMembership, delegateCapability, endDelegation, membershipHistory,
@@ -75,14 +76,7 @@ async function provision(user: string, name: string, suffix: string): Promise<st
 }
 
 async function cleanup() {
-  for (const u of [OWNER, OTHER_OWNER]) {
-    const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);
-    for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
-    await admin.from("provisioning_request").delete().eq("target_user_id", u);
-  }
-  for (const u of [OWNER, OTHER_OWNER, JOINER, SECOND_JOINER]) {
-    await admin.from("practice_audit_event").delete().eq("actor_id", u);
-  }
+  await purgeWorkspacesOwnedBy(admin, [OWNER, OTHER_OWNER]);
 }
 
 const base = { actorId: OWNER, correlationId: "harness-team" };

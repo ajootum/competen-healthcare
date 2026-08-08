@@ -56,6 +56,7 @@ import {
   unresolvedMarkers, signBlockers,
 } from "../src/lib/practice/documents-workspace-constants";
 import { RELEASE_CHANNELS } from "../src/lib/practice/document-constants";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -97,12 +98,7 @@ async function provision(user: string, name: string, suffix: string): Promise<st
 }
 
 async function cleanup() {
-  for (const u of [USER_A, USER_B, ASSISTANT]) {
-    const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);
-    for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
-    await admin.from("provisioning_request").delete().eq("target_user_id", u);
-    await admin.from("practice_audit_event").delete().eq("actor_id", u);
-  }
+  await purgeWorkspacesOwnedBy(admin, [USER_A, USER_B, ASSISTANT]);
 }
 
 const base = { actorId: USER_A, correlationId: CID };

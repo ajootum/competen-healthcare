@@ -48,6 +48,7 @@ import { specificityOf, specificityRung } from "../src/lib/practice/booking-rule
 // ⚠ THE CALENDAR'S OWN READ, IMPORTED ON PURPOSE. It is the reader that could not see a card rule while
 // Phase 3's `active = false` workaround stood, so it is the reader that proves the workaround is gone.
 import { resolveBookingRule } from "../src/lib/practice/availability-config";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -102,12 +103,14 @@ async function cleanup() {
       await admin.from("practice_booking_rule").delete().eq("workspace_id", w.id);
       await admin.from("practice_availability_template").delete().eq("workspace_id", w.id);
       await admin.from("practice_location").update({ facility_id: null }).eq("workspace_id", w.id);
-      await admin.from("practice_facility").delete().eq("workspace_id", w.id);
-      await admin.from("practice_workspace").delete().eq("id", w.id);
-    }
+      await admin.from("practice_facility").delete().eq("workspace_id", w.id);    }
     await admin.from("provisioning_request").delete().eq("target_user_id", u);
     await admin.from("practice_audit_event").delete().eq("actor_id", u);
   }
+  // ⚠ The workspace delete itself lives in _cleanup.ts: it unpicks the six tables that reference
+  // practice_parameter_definition with no on-delete clause, and REPORTS a failure instead of
+  // discarding it. The bespoke unpick above runs first and is unchanged.
+  await purgeWorkspacesOwnedBy(admin, [OWNER, OTHER]);
 }
 
 /**

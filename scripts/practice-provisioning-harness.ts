@@ -29,6 +29,7 @@
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, PROVISIONING_STEPS, type IndividualRequest } from "../src/lib/practice/provisioning";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -99,10 +100,7 @@ async function heldBy(membershipId: string): Promise<string[]> {
 }
 
 async function cleanup() {
-  const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", SYNTH_USER);
-  for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
-  await admin.from("provisioning_request").delete().eq("target_user_id", SYNTH_USER);
-  await admin.from("practice_audit_event").delete().eq("actor_id", SYNTH_USER);
+  await purgeWorkspacesOwnedBy(admin, [SYNTH_USER]);
 }
 
 async function main() {

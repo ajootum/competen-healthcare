@@ -39,6 +39,7 @@ import {
 import { operationsHome } from "../src/lib/practice/operations-home";
 import { searchPractice } from "../src/lib/practice/search";
 import { resolveWorkspaceContext, type WorkspaceContext } from "../src/lib/practice/access";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -76,14 +77,7 @@ async function provision(user: string, name: string, suffix: string): Promise<st
 }
 
 async function cleanup() {
-  for (const u of [USER_A, USER_B]) {
-    const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);
-    for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
-    await admin.from("provisioning_request").delete().eq("target_user_id", u);
-  }
-  for (const u of [USER_A, USER_B, COLLEAGUE]) {
-    await admin.from("practice_audit_event").delete().eq("actor_id", u);
-  }
+  await purgeWorkspacesOwnedBy(admin, [USER_A, USER_B]);
 }
 
 const base = { actorId: USER_A, correlationId: "harness-comm" };

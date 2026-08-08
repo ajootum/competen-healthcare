@@ -67,6 +67,7 @@ import {
   PUBLISH_CHECKS_DATABASE_OWNED, PUBLISHABLE_CONSTRAINT, PUBLISH_STATE_CODES,
 } from "../src/lib/practice/publish-constants";
 import { practiceToday, dueDateFrom } from "../src/lib/practice/practice-time";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -124,7 +125,6 @@ async function cleanup() {
       await admin.from("practice_availability_template").delete().eq("workspace_id", w.id);
       await admin.from("practice_location").update({ facility_id: null }).eq("workspace_id", w.id);
       await admin.from("practice_facility").delete().eq("workspace_id", w.id);
-      await admin.from("practice_workspace").delete().eq("id", w.id);
     }
     await admin.from("provisioning_request").delete().eq("target_user_id", u);
     // ⚠ NO `practice_audit_event` DELETE HERE, AND THAT IS DELIBERATE. Migration 247 makes that table
@@ -133,6 +133,10 @@ async function cleanup() {
     // and reporting a clean teardown. A teardown that cannot work should not be written as though it
     // does; nothing in this file asserts over the audit table's total, so nothing needs it gone.
   }
+  // ⚠ The workspace delete itself lives in _cleanup.ts: it unpicks the six tables that reference
+  // practice_parameter_definition with no on-delete clause, and REPORTS a failure instead of
+  // discarding it. The bespoke unpick above runs first and is unchanged.
+  await purgeWorkspacesOwnedBy(admin, [OWNER, OTHER]);
 }
 
 /**

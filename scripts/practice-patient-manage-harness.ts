@@ -43,6 +43,7 @@ import {
   bookingReference, BOOKING_REFERENCE_NOTE, PATIENT_BOOKING_SCREENS_BUILT,
 } from "../src/lib/practice/patient-booking";
 import type { Transport } from "../src/lib/practice/messaging";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -115,13 +116,16 @@ async function cleanup() {
     await admin.from("practice_registration_template").delete().eq("workspace_id", w.id);
     await admin.from("practice_location").update({ facility_id: null }).eq("workspace_id", w.id);
     await admin.from("practice_facility").delete().eq("workspace_id", w.id);
-    await admin.from("practice_workspace").delete().eq("id", w.id);
   }
   await admin.from("practice_practitioner_identity").delete().eq("user_id", OWNER);
   await admin.from("provisioning_request").delete().eq("target_user_id", OWNER);
   await admin.from("practice_otp_challenge").delete().like("destination", "+256772555%");
   // ⚠ NO practice_audit_event DELETE. Migration 247 makes it append-only and REFUSES the delete; nothing
   // in this file counts audit rows, so nothing needs it.
+  // ⚠ The workspace delete itself lives in _cleanup.ts: it unpicks the six tables that reference
+  // practice_parameter_definition with no on-delete clause, and REPORTS a failure instead of
+  // discarding it. The bespoke unpick above runs first and is unchanged.
+  await purgeWorkspacesOwnedBy(admin, [OWNER]);
 }
 
 /** Everything "sent" lands here. No request leaves the process, and no code is ever printed. */

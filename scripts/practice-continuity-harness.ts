@@ -46,6 +46,7 @@ import { PRACTICE_EVENT_TYPES } from "../src/lib/practice/events";
 import { FOLLOWUP_CARD_SWATCH } from "../src/lib/practice/palette";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -79,10 +80,7 @@ async function provision(user: string, name: string, suffix: string): Promise<st
 }
 
 async function cleanup() {
-  const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", USER_A);
-  for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
-  await admin.from("provisioning_request").delete().eq("target_user_id", USER_A);
-  await admin.from("practice_audit_event").delete().eq("actor_id", USER_A);
+  await purgeWorkspacesOwnedBy(admin, [USER_A]);
 }
 
 const base = { actorId: USER_A, correlationId: "harness-cc" };

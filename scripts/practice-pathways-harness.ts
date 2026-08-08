@@ -47,6 +47,7 @@ import {
 import { PATHWAY_CARD_SWATCH } from "../src/lib/practice/palette";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 import {
   PATHWAY_PROGRESS_STATES, PATHWAY_DEVIATIONS, pathwayProgress, addDays,
 } from "../src/lib/practice/pathways-constants";
@@ -86,12 +87,7 @@ async function provision(user: string, name: string, suffix: string): Promise<st
 }
 
 async function cleanup() {
-  for (const u of [USER_A, USER_B]) {
-    const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);
-    for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
-    await admin.from("provisioning_request").delete().eq("target_user_id", u);
-    await admin.from("practice_audit_event").delete().eq("actor_id", u);
-  }
+  await purgeWorkspacesOwnedBy(admin, [USER_A, USER_B]);
 }
 
 const base = { actorId: USER_A, correlationId: "harness-pw" };

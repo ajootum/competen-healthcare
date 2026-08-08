@@ -64,6 +64,7 @@ import {
 } from "../src/lib/practice/documents-workspace-review";
 import { aiAttribution, draftIntoDocument, draftAvailability } from "../src/lib/practice/documents-workspace-ai";
 import { setAssistantEnabled, AI_NOTICE_VERSION, ASSISTANT_TASKS } from "../src/lib/practice/ai-assistant";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 import {
   AI_DRAFT_TASKS, DOC_BULK_LIMIT, DOC_EXPORT_COLUMNS, DOC_PERMISSION_ROWS, DOC_SAVED_VIEWS, DOC_TABS,
   csvCell, docFilterToQuery, documentExportHref, parseDocFilter,
@@ -111,12 +112,7 @@ async function provision(user: string, name: string, suffix: string): Promise<st
 }
 
 async function cleanup() {
-  for (const u of [USER_A, USER_B, COLLEAGUE, STRANGER]) {
-    const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);
-    for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
-    await admin.from("provisioning_request").delete().eq("target_user_id", u);
-    await admin.from("practice_audit_event").delete().eq("actor_id", u);
-  }
+  await purgeWorkspacesOwnedBy(admin, [USER_A, USER_B, COLLEAGUE, STRANGER]);
 }
 
 const base = { actorId: USER_A, correlationId: CID };

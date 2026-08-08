@@ -39,6 +39,7 @@ import { runProvisioning, type IndividualRequest } from "../src/lib/practice/pro
 import { registerPatient } from "../src/lib/practice/patients";
 import { launchEncounter, transitionEncounter, recordDiagnosis, recordTreatment } from "../src/lib/practice/encounters";
 import { resolveWorkspaceContext, type WorkspaceContext } from "../src/lib/practice/access";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 import {
   runAssistant, assistantSettings, setAssistantEnabled, listSessions, sessionMessages,
   rateMessage, assistantUsage, systemPrompt, ASSISTANT_TASKS, REFUSED, AI_NOTICE_VERSION,
@@ -77,12 +78,7 @@ async function provision(user: string, name: string, suffix: string): Promise<st
 }
 
 async function cleanup() {
-  for (const u of [OWNER, OTHER]) {
-    const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", u);
-    for (const w of (ws ?? []) as { id: string }[]) await admin.from("practice_workspace").delete().eq("id", w.id);
-    await admin.from("provisioning_request").delete().eq("target_user_id", u);
-    await admin.from("practice_audit_event").delete().eq("actor_id", u);
-  }
+  await purgeWorkspacesOwnedBy(admin, [OWNER, OTHER]);
 }
 
 const base = { actorId: OWNER, correlationId: "harness-ai" };

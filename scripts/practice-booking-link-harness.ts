@@ -27,6 +27,7 @@ import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import QRCode from "qrcode";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 import {
   issueIdentity, claimHandle, changeHandle, updateIdentity, resolveHandle, handleAvailable,
   identitySetupView, identitySharing, shareTargets, embedSnippet, normaliseHandle,
@@ -86,10 +87,13 @@ async function cleanup() {
     await admin.from("practice_booking_access").delete().eq("workspace_id", w.id);
     await admin.from("practice_location").update({ facility_id: null }).eq("workspace_id", w.id);
     await admin.from("practice_facility").delete().eq("workspace_id", w.id);
-    await admin.from("practice_workspace").delete().eq("id", w.id);
   }
   await admin.from("practice_practitioner_identity").delete().eq("user_id", OWNER);
   await admin.from("provisioning_request").delete().eq("target_user_id", OWNER);
+  // ⚠ The workspace delete itself lives in _cleanup.ts: it unpicks the six tables that reference
+  // practice_parameter_definition with no on-delete clause, and REPORTS a failure instead of
+  // discarding it. The bespoke unpick above runs first and is unchanged.
+  await purgeWorkspacesOwnedBy(admin, [OWNER]);
 }
 
 /** Walk a payload and return every value that is a function. */

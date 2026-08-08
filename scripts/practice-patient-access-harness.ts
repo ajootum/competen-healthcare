@@ -54,6 +54,7 @@ import {
   PATIENT_BOOKING_FLAG, PATIENT_ACCESS_STORES, PATIENT_ACCESS_BUILD_BLOCKERS,
 } from "../src/lib/practice/patient-access-constants";
 import { PRACTICE_NAV } from "../src/lib/practice/navigation";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -109,13 +110,16 @@ async function cleanup() {
       await admin.from("practice_availability_template").delete().eq("workspace_id", w.id);
       await admin.from("practice_location").update({ facility_id: null }).eq("workspace_id", w.id);
       await admin.from("practice_facility").delete().eq("workspace_id", w.id);
-      await admin.from("practice_workspace").delete().eq("id", w.id);
     }
     await admin.from("provisioning_request").delete().eq("target_user_id", u);
     await admin.from("practice_audit_event").delete().eq("actor_id", u);
   }
   await admin.from("practice_otp_challenge").delete().like("destination", "+256711%");
   await admin.from("practice_platform_flags").delete().eq("flag", PATIENT_BOOKING_FLAG);
+  // ⚠ The workspace delete itself lives in _cleanup.ts: it unpicks the six tables that reference
+  // practice_parameter_definition with no on-delete clause, and REPORTS a failure instead of
+  // discarding it. The bespoke unpick above runs first and is unchanged.
+  await purgeWorkspacesOwnedBy(admin, [OWNER, OTHER]);
 }
 
 /**
