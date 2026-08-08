@@ -53,6 +53,10 @@ export async function loadPracticeOps(admin: any) {
     // which would have rendered this page with an empty workspace list and no error anywhere.
     admin.from("practice_workspace")
       .select("id, name, type, status, owner_person_id, country, timezone, created_at, updated_at")
+      // ⚠ 200 IS A PAGE OF THE LIST, AND THE HEADLINE COUNT MUST NOT COME FROM IT. The console shows the
+      // most recent practices, which is a reasonable page size -- but a total derived by measuring this
+      // array says "200" for ever once there are more than 200 practices, on the one figure an operator
+      // would quote. The exact total is read separately below and never inferred from this page.
       .order("created_at", { ascending: false }).limit(200),
     admin.from("provisioning_request")
       .select("id, idempotency_key, request_type, status, error_code, target_user_id, workspace_id, created_at, updated_at")
@@ -95,25 +99,62 @@ export async function loadPracticeOps(admin: any) {
     members: "practice_membership", appointments: "practice_appointment",
     patients: "practice_patient", encounters: "practice_encounter",
   };
-  for (const [key, table] of Object.entries(TABLES)) {
-    const { data: rows } = wsIds.length
-      ? await admin.from(table).select("workspace_id").in("workspace_id", wsIds).limit(5000)
-      : { data: [] };
-    for (const r of (rows ?? []) as any[]) {
-      (counts[r.workspace_id] ??= {})[key] = ((counts[r.workspace_id] ??= {})[key] ?? 0) + 1;
+  // ⚠ THESE COUNTS USED TO STOP COUNTING AT 1,000 AND SAY NOTHING.
+  //
+  // The reads asked for `.limit(5000)` and counted the rows in TypeScript. PostgREST caps a response at
+  // 1,000 rows by default, so `.limit(5000)` was never 5,000 -- past a thousand rows the number simply
+  // stopped growing, on a page an operator reads to decide whether a practice is being used. A figure
+  // that quietly stops counting is worse than no figure, because nobody doubts it.
+  //
+  // Paginated with `.range()` instead, and every read's error is reported rather than discarded -- a
+  // failed page must not read as "no more rows", which would truncate in a second way while looking
+  // fixed. Where a ceiling IS hit the count says so through `countsTruncated`, so the surface can print
+  // "1,000+" rather than a wrong exact number.
+  const PAGE = 1000;
+  const CEILING = 100_000;
+  const truncated: string[] = [];
+
+  // The true number of practices, counted by the database rather than by measuring the 200-row page above.
+  // ⚠ `head: true` is deliberately NOT used: it returns no error for a table that does not exist and
+  // reports it present, which cost a wrong "absent" verdict earlier in this codebase's life.
+  const { count: workspaceTotalRaw, error: wsCountErr } = await admin
+    .from("practice_workspace").select("id", { count: "exact" }).limit(1);
+  // A failed count is null, never 0. The surface must be able to tell "none" from "could not be read".
+  const workspaceTotal = wsCountErr ? null : (workspaceTotalRaw ?? null);
+  if (wsCountErr) truncated.push(`practices: ${wsCountErr.message}`);
+
+  async function countByWorkspace(table: string, key: string, apply?: (q: any) => any) {
+    if (!wsIds.length) return;
+    for (let from = 0; from < CEILING; from += PAGE) {
+      let q = admin.from(table).select("workspace_id").in("workspace_id", wsIds);
+      if (apply) q = apply(q);
+      const { data: rows, error } = await q.range(from, from + PAGE - 1);
+      // ⚠ REPORTED, NEVER DISCARDED. Treating a failed page as an empty one would end the loop early and
+      // report a smaller number with no sign that anything went wrong.
+      if (error) { truncated.push(`${key}: ${error.message}`); return; }
+      const page = (rows ?? []) as any[];
+      for (const r of page) {
+        (counts[r.workspace_id] ??= {})[key] = ((counts[r.workspace_id] ??= {})[key] ?? 0) + 1;
+      }
+      if (page.length < PAGE) return;
+      if (from + PAGE >= CEILING) truncated.push(`${key}: more than ${CEILING.toLocaleString()}`);
     }
   }
+
+  for (const [key, table] of Object.entries(TABLES)) await countByWorkspace(table, key);
   // Signed encounters are counted separately: an unsigned record does not prove the loop closed.
-  const { data: signedRows } = wsIds.length
-    ? await admin.from("practice_encounter").select("workspace_id")
-      .in("workspace_id", wsIds).in("status", ["SIGNED", "AMENDED"]).limit(5000)
-    : { data: [] };
-  for (const r of (signedRows ?? []) as any[]) {
-    (counts[r.workspace_id] ??= {}).signed = ((counts[r.workspace_id] ??= {}).signed ?? 0) + 1;
-  }
+  await countByWorkspace("practice_encounter", "signed",
+    (q: any) => q.in("status", ["SIGNED", "AMENDED"]));
 
   return {
     flags, flagRows, launch: launchState(flags),
+    // ⚠ CARRIED TO THE SURFACE RATHER THAN SWALLOWED. Empty means every count below is exact. Non-empty
+    // names which count could not be completed and why, so the page can say "1,000+" or "could not be
+    // read" instead of printing a number that is confidently wrong.
+    countsTruncated: truncated,
+    // The real total. `workspaces` below is at most the 200 most recent, so its length is a page size,
+    // not an answer. Null means the count could not be read -- which is not zero and must not render as it.
+    workspaceTotal,
     workspaces: workspaces.map(w => ({
       ...w,
       ownerName: person.get(w.owner_person_id)?.full_name ?? null,

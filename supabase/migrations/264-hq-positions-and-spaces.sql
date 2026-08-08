@@ -207,7 +207,7 @@ insert into hq_capability (code, space, label, description) values
   ('hq.platform.settings.view',        'platform',  'Platform Settings',         'Global platform configuration'),
   ('hq.platform.workflows.view',       'platform',  'Workflow Administration',   'Platform workflow definitions'),
   ('hq.platform.metadata.view',        'platform',  'Metadata Administration',   'Platform metadata and reference data'),
-  ('hq.platform.audit.view',           'platform',  'Global Audit Centre',       'Cross-plane audit trail'),
+  ('hq.platform.audit.view',           'platform',  'Global Audit Centre',       'Platform-plane audit only. NOT practice_audit_event, whose payloads carry clinical content. See migration 266.'),
   ('hq.practice.operations.view',      'practice',  'Practice Product Ops',      'Competen Practice pilot gate and product operations'),
   ('hq.learning.competencies.view',    'learning',  'Competency Library',        'Master competency library'),
   ('hq.learning.content.view',         'learning',  'Content and Frameworks',    'Frameworks, content authoring and import'),
