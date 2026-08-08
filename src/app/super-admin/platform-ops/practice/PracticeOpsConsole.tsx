@@ -268,18 +268,26 @@ export default function PracticeOpsConsole({ callerId, callerName, initial }: {
                 {(initial.workspaces as any[]).map(w => (
                   <tr key={w.id} className="border-t border-gray-100">
                     <td className="py-1.5 pr-3 text-gray-900">{w.name}</td>
-                    <td className="py-1.5 pr-3 text-gray-600">{w.ownerEmail ?? w.ownerName ?? "—"}</td>
+                    {/* ⚠ D1: the owner's NAME, and their email is not in this payload to fall back to.
+                        Reach an address through the lookup below, which answers one query at a time. */}
+                    <td className="py-1.5 pr-3 text-gray-600">{w.ownerName ?? "—"}</td>
                     <td className="py-1.5 pr-3">
                       <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
                         w.status === "ACTIVE" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
                           : w.status === "ONBOARDING" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"
                             : "bg-gray-100 text-gray-500"}`}>{w.status}</span>
                     </td>
-                    <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.members ?? 0}</td>
-                    <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.appointments ?? 0}</td>
-                    <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.patients ?? 0}</td>
-                    <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.encounters ?? 0}</td>
-                    <td className={`py-1.5 pr-3 text-right tabular-nums font-semibold ${w.counts.signed ? "text-[var(--cmp-text-success)]" : "text-gray-300"}`}>{w.counts.signed ?? 0}</td>
+                    {/* ⚠ D2: BANDS, NOT NUMBERS. These arrive banded from the loader -- the exact figure
+                        is never sent, so it cannot be read out of the payload either. "Is this practice
+                        alive" is answered; "how big is her book" is not.
+                        ⚠ The signed column compares against "0" rather than testing truthiness: the
+                        string "0" is truthy, so `w.counts.signed ? ...` would colour every practice as
+                        having closed the loop, including those that have signed nothing. */}
+                    <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.members ?? "0"}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.appointments ?? "0"}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.patients ?? "0"}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.encounters ?? "0"}</td>
+                    <td className={`py-1.5 pr-3 text-right tabular-nums font-semibold ${(w.counts.signed ?? "0") !== "0" ? "text-[var(--cmp-text-success)]" : "text-gray-300"}`}>{w.counts.signed ?? "0"}</td>
                     <td className="py-1.5 font-mono text-gray-400">{String(w.created_at).slice(0, 10)}</td>
                   </tr>
                 ))}
@@ -307,7 +315,9 @@ export default function PracticeOpsConsole({ callerId, callerName, initial }: {
                     r.status === "COMPLETED" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
                       : r.status === "FAILED" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"
                         : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{r.status}</span>
-                  <span className="text-gray-800">{r.targetEmail ?? r.targetName ?? r.target_user_id}</span>
+                  {/* D1 applies here too: a provisioning failure is identified by who it was for, not by
+                      their address. The id remains as the last resort so a row is never nameless. */}
+                  <span className="text-gray-800">{r.targetName ?? r.target_user_id}</span>
                   <span className="text-gray-400">{r.request_type}</span>
                   {r.error_code && <span className="text-[var(--cmp-text-critical)]">{r.error_code}</span>}
                   <span className="ml-auto font-mono text-[11px] text-gray-400">{String(r.created_at).slice(0, 16).replace("T", " ")}</span>

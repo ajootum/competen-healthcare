@@ -3,8 +3,20 @@
 // THE OPERATOR SEES METADATA, NEVER CLINICAL CONTENT. SEC-001 puts the record under the practitioner's
 // ownership and requires minimum-necessary access with purpose limitation; the purpose here is
 // "did provisioning work and did the clinical loop close", which counts answer and notes do not. So this
-// loader reads statuses, timestamps and COUNTS -- no patient name, no note body, no diagnosis label
-// crosses into the super-admin surface. Nothing here can be widened by accident: the selects say so.
+// loader reads statuses, timestamps and BANDED COUNTS -- no patient name, no note body, no diagnosis
+// label crosses into the super-admin surface.
+//
+// ⚠ THIS HEADER USED TO END "Nothing here can be widened by accident: the selects say so." THAT WAS
+// FALSE, and it is the reason scripts/plane-boundary-harness.ts exists. The selects said so to a reader;
+// they said nothing to the machine. Changing `select("workspace_id")` to add a patient name was a
+// four-word edit nothing would have refused -- RLS on practice_* is enabled with ZERO policies, and every
+// page on this plane holds the service-role client. A comment is not a control. The harness is.
+//
+// The counts are BANDS, not numbers (D2, docs/PLAT-OVERSIGHT-SURVEY-001.md s9), and the owner's EMAIL is
+// not read at all (D1). Both are decisions of 2026-08-08, not tidying.
+
+/** 0 / 1-9 / 10-99 / 100+. See the D2 note beside `band` for why the standing view is not given numbers. */
+export type CountBand = "0" | "1-9" | "10-99" | "100+";
 //
 // There is deliberately NO "open this practice" action. Support impersonation is a control-plane feature
 // with its own audit and consent requirements (CPR-V2-000A), and inventing a back door into a colleague's
@@ -77,7 +89,10 @@ export async function loadPracticeOps(admin: any) {
     ...requests.map(r => r.target_user_id),
   ].filter(Boolean))];
   const { data: people } = personIds.length
-    ? await admin.from("profiles").select("id, full_name, email").in("id", personIds)
+    // ⚠ D1: `email` IS NO LONGER SELECTED. Dropping it from the payload while still fetching it would
+    // leave it one careless spread away from being sent again, and would leave the boundary harness's
+    // allowlist describing a read this plane no longer needs to make.
+    ? await admin.from("profiles").select("id, full_name").in("id", personIds)
     : { data: [] };
   const person = new Map(((people ?? []) as any[]).map(p => [p.id, p]));
 
@@ -146,6 +161,27 @@ export async function loadPracticeOps(admin: any) {
   await countByWorkspace("practice_encounter", "signed",
     (q: any) => q.in("status", ["SIGNED", "AMENDED"]));
 
+  // ── D2: THE STANDING VIEW GETS BANDS, NOT NUMBERS ────────────────────────────────────────────────
+  //
+  // ⚠ "Dr Nakato's Practice - 412 patients, 38 encounters this month" is business intelligence about a
+  // named clinician's book. "1,000 practices hold 41,000 patients" is not. The justification this file
+  // gave for exact counts was the pilot gate -- and that justification EXPIRES when the gate passes,
+  // which nothing here previously said.
+  //
+  // ⚠ BANDED ON THE SERVER, NOT IN THE COMPONENT. Returning the exact number and rounding it for
+  // display would put the exact number in the payload, where anybody can read it -- the client-payload
+  // leak this codebase has been bitten by before. What is not sent cannot be inspected.
+  //
+  // The gate loses nothing: it asks whether a practice has ANY signed encounter, and a band answers that
+  // as well as a number does. See evaluateGate's closedLoop.
+  const band = (n: number): CountBand =>
+    n === 0 ? "0" : n < 10 ? "1-9" : n < 100 ? "10-99" : "100+";
+  const banded: Record<string, Record<string, CountBand>> = {};
+  for (const [wsId, byKey] of Object.entries(counts)) {
+    banded[wsId] = {};
+    for (const [key, n] of Object.entries(byKey)) banded[wsId][key] = band(n);
+  }
+
   return {
     flags, flagRows, launch: launchState(flags),
     // ⚠ CARRIED TO THE SURFACE RATHER THAN SWALLOWED. Empty means every count below is exact. Non-empty
@@ -158,13 +194,17 @@ export async function loadPracticeOps(admin: any) {
     workspaces: workspaces.map(w => ({
       ...w,
       ownerName: person.get(w.owner_person_id)?.full_name ?? null,
-      ownerEmail: person.get(w.owner_person_id)?.email ?? null,
-      counts: counts[w.id] ?? {},
+      // ⚠ D1: NO OWNER EMAIL IN THE STANDING VIEW, AND NOT SENT AT ALL RATHER THAN SENT-AND-HIDDEN.
+      // An email is the more identifying of the two and doubles as a contact channel, so a standing
+      // table of them is a directory of every practitioner on the platform. It stays reachable on the
+      // reasoned lookup at /api/v1/practice/operations/users, which answers one query at a time and
+      // refuses a search under two characters -- "a lookup that answers the empty string is a directory
+      // dump wearing a search box".
+      counts: banded[w.id] ?? {},
     })),
     requests: requests.map(r => ({
       ...r,
       targetName: person.get(r.target_user_id)?.full_name ?? null,
-      targetEmail: person.get(r.target_user_id)?.email ?? null,
       steps: (stepsByRequest[r.id] ?? []).sort((a, b) => String(a.started_at ?? "").localeCompare(String(b.started_at ?? ""))),
     })),
     generatedAt: new Date().toISOString(),
@@ -194,7 +234,12 @@ export async function evaluateGate(admin: any, ops: Awaited<ReturnType<typeof lo
   ]);
 
   const active = ops.workspaces.filter(w => w.status === "ACTIVE");
-  const closedLoop = ops.workspaces.filter(w => (w.counts.signed ?? 0) > 0);
+  // ⚠ THE GATE ASKS WHETHER ANY SIGNED ENCOUNTER EXISTS, WHICH A BAND ANSWERS AS WELL AS A NUMBER DID.
+  // This is why D2 costs the gate nothing: "0" is the only band that means none, so every other band is
+  // proof the loop closed at least once. Written as an explicit comparison against "0" rather than a
+  // truthiness test, because the string "0" is truthy and `w.counts.signed ? ...` would have passed
+  // every practice including those with nothing signed.
+  const closedLoop = ops.workspaces.filter(w => (w.counts.signed ?? "0") !== "0");
   const failedRequests = ops.requests.filter(r => r.status === "FAILED");
 
   return [
