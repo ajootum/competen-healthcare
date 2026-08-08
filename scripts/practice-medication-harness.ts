@@ -408,10 +408,17 @@ async function main() {
   // apply belongs to THIS migration and not somebody else's" -- which is what the 257 collision broke and
   // what this now checks by NAME. A number taken by a different file still fails, which is the case that
   // mattered.
+  // ⚠ MEDICATION_MIGRATION IS A SENTENCE, NOT A FILENAME. It reads
+  // "258-practice-medication (practice_medication + practice_medication_event + ...)" because it is
+  // printed in the absent-store message so nobody has to guess what is missing. Comparing it whole
+  // against the directory can never match, which is how the first version of this fix failed -- and
+  // failed CORRECTLY, rather than passing for the wrong reason. The stem is everything before the first
+  // space.
+  const claimedFile = `${MEDICATION_MIGRATION.split(" ")[0]}.sql`;
   const atClaimed = applied.filter(f => f.startsWith(`${claimed}-`));
   ok("6a2. ⚠ the migration number this engine claims is unused, or is this engine's own file",
-    atClaimed.length === 0 || (atClaimed.length === 1 && atClaimed[0] === `${MEDICATION_MIGRATION}.sql`),
-    `${claimed} -> ${atClaimed.join(", ") || "free"} (engine claims ${MEDICATION_MIGRATION})`);
+    atClaimed.length === 0 || (atClaimed.length === 1 && atClaimed[0] === claimedFile),
+    `${claimed} -> ${atClaimed.join(", ") || "free"} (engine names ${claimedFile})`);
   ok("6a2-control. the migration directory really was read, and the number before it IS taken",
     applied.length > 200 && applied.some(f => f.startsWith(`${Number(claimed) - 1}-`)),
     `${applied.length} migrations`);
