@@ -5,6 +5,8 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { securityPosture, listSessions, breakGlassLog } from "@/lib/practice/security";
 import SecurityConsole from "./SecurityConsole";
+import OfflineCacheSwitch from "./OfflineCacheSwitch";
+import { OFFLINE_PRACTICE_SWITCH } from "@/lib/practice/offline-gate";
 
 // /practice/privacy/security -- CPR-370's security surface.
 //
@@ -41,14 +43,26 @@ export default async function SecurityPage() {
   // `readable: false` from the engine and the console says so. Collapsing the two would let a database
   // fault present itself as "you are not allowed to see this", which sends somebody to ask the wrong
   // person the wrong question.
-  const [posture, sessions, glass] = await Promise.all([
+  // ⚠ ABSENT IS NOT OFF (see offline-gate.ts). A practice that has never touched the switch has not
+  // refused; the platform's own rollout flag decides for it. So the switch renders "on" unless the
+  // practice has explicitly stored `false`, which is exactly what the gate reads.
+  const [posture, sessions, glass, offlineConfig] = await Promise.all([
     canManage ? securityPosture(admin, ctx.workspaceId) : Promise.resolve(null),
     // Everybody sees their OWN devices; the whole practice's is administration.
     listSessions(admin, ctx.workspaceId, canManage ? {} : { userId: ctx.userId }),
     canReview
       ? breakGlassLog(admin, ctx.workspaceId)
       : Promise.resolve({ readable: true, episodes: [], awaitingReview: 0, live: 0, namesReadable: true, truncated: false }),
+    admin.from("practice_configuration").select("feature_flags")
+      .eq("workspace_id", ctx.workspaceId).eq("is_effective", true).maybeSingle(),
   ]);
+
+  // ⚠ A FAILED READ IS NOT "ON". Without the error check the switch would report the practice's setting
+  // as on from a query that never succeeded -- the one sentence on this page that nobody could check by
+  // looking.
+  const offlineReadable = !offlineConfig?.error;
+  const offlineOn =
+    ((offlineConfig?.data?.feature_flags ?? {}) as Record<string, unknown>)[OFFLINE_PRACTICE_SWITCH] !== false;
 
   return (
     <div className="max-w-5xl">
@@ -76,6 +90,9 @@ export default async function SecurityPage() {
         canReview={canReview}
         me={ctx.userId}
       />
+
+      <OfflineCacheSwitch workspaceId={ctx.workspaceId} enabled={offlineOn} readable={offlineReadable}
+        canManage={canManage} />
     </div>
   );
 }

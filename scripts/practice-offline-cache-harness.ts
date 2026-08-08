@@ -1,0 +1,422 @@
+/**
+ * CP-OFFLINE-SURVEY-001 phase one — the read-only offline cache.
+ *
+ * WHAT IT PROVES, taken from the survey's own rules rather than from what the code happens to do:
+ *   - s3.8.1  "Project at WRITE time, not at render time" -- an ALLOW-LIST, and a dropped field is
+ *             physically absent from the record rather than merely unrendered.
+ *   - s3.8.1  age, not date of birth. No contact details. No free-text reason. No metrics.
+ *   - s3.8.7  the clinical service label is CACHED and is NOT in the list row.
+ *   - s3.8.2  hard expiry at the end of the clinic day IN THE PRACTICE'S TIMEZONE, escalating labels
+ *             from 60 minutes, and past expiry the record is WITHHELD AND DELETED, not shown.
+ *   - s3.4    a clock earlier than the capture instant means nothing is shown.
+ *   - s3.5    ZERO ENABLED MUTATING CONTROLS offline -- asserted, not reviewed for.
+ *   - s3.3    the service worker caches the app shell and NEVER an API response.
+ *   - s3.7/8.6 the flag is fail-closed, and a practice's own "off" PURGES.
+ *   - s3.6    what encryption does: a round trip, and the plaintext not lying in the store.
+ *
+ * ⚠ Several assertions are paired with a CONTROL that would pass trivially without it -- "the queue is
+ * not cached" is worthless unless something proves the dashboard had a queue feeder to drop.
+ *
+ *   npx --yes tsx scripts/practice-offline-cache-harness.ts
+ */
+import { createClient } from "@supabase/supabase-js";
+import { loadEnvConfig } from "@next/env";
+import { readFileSync } from "node:fs";
+import { dashboardReadModel } from "../src/lib/practice/dashboard";
+import { offlineDayPayload } from "../src/lib/practice/offline-day";
+import { offlineCacheGate, OFFLINE_FLAG } from "../src/lib/practice/offline-gate";
+import { updateConfiguration } from "../src/lib/practice/configuration";
+import {
+  OFFLINE_DAY_KEYS, OFFLINE_FORBIDDEN_FIELDS, OFFLINE_PATIENT_KEYS, OFFLINE_SCHEMA_VERSION,
+  enabledMutatingControls, offlineControls, offlineExpiry, offlineFreshness, offlineListRow,
+  offlineRecordDetail, readOfflineDay, type OfflineDay,
+} from "../src/lib/practice/offline-projection";
+import { fieldsNotAllowed } from "../src/lib/practice/offline-store";
+import { generateCacheKey, openRecord, sealRecord } from "../src/lib/practice/offline-crypto";
+import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
+import type { WorkspaceContext } from "../src/lib/practice/access";
+import { purgeWorkspacesOwnedBy } from "./_cleanup";
+
+loadEnvConfig(process.cwd());
+
+let pass = 0; const failures: string[] = [];
+const ok = (name: string, cond: boolean, detail = "") => {
+  if (cond) { pass++; console.log(`  PASS  ${name}`); }
+  else { failures.push(name); console.log(`  FAIL  ${name}${detail ? ` -- ${detail}` : ""}`); }
+};
+
+const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } });
+
+const USER = "00000000-0000-4000-8000-00000000fc01";
+const ALL = ["practice.home.view", "practice.calendar.view", "appointment.manage", "queue.manage",
+  "encounter.list", "task.view", "followup.view", "inbox.record", "practice.settings.manage"];
+
+const ctxFor = (workspaceId: string, caps: string[] = ALL): WorkspaceContext => ({
+  userId: USER, workspaceId, workspaceName: "H", workspaceType: "individual_practice",
+  workspaceStatus: "active", roleCodes: ["owner"], capabilities: caps, entitled: true,
+  entitlementStatus: "trial", onboardingComplete: true, onboardingStep: null,
+});
+
+// The fixture's disclosive values. Each is a field s3.8.1 DROPS, and each is searched for by value in the
+// serialised record -- a key-name check alone would miss a field renamed on its way into the cache.
+const PHONE = "+256700123456";
+const REASON = "cough and night sweats for three weeks";
+const BIRTH_DATE = "1990-03-15";
+const NATIONAL_ID = "CM90031512345X";
+const PRACTICE_ID = "PX-0042";
+const PATIENT_NAME = "Harness Offline Patient";
+
+async function cleanup() {
+  const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", USER);
+  for (const w of (ws ?? []) as { id: string }[]) {
+    await admin.from("practice_encounter").delete().eq("workspace_id", w.id);
+    await admin.from("practice_queue_entry").delete().eq("workspace_id", w.id);
+    await admin.from("practice_appointment").delete().eq("workspace_id", w.id);
+    await admin.from("practice_patient_identifier").delete().eq("workspace_id", w.id);
+    await admin.from("practice_patient").delete().eq("workspace_id", w.id);
+    await admin.from("practice_activity").delete().eq("workspace_id", w.id);
+    await admin.from("practice_location").update({ facility_id: null }).eq("workspace_id", w.id);
+    await admin.from("practice_facility").delete().eq("workspace_id", w.id);
+  }
+  await admin.from("practice_practitioner_identity").delete().eq("user_id", USER);
+  await admin.from("provisioning_request").delete().eq("target_user_id", USER);
+  // ⚠ practice_audit_event is NOT deleted here: migration 247 made it append-only and every harness's
+  // delete has been a silent no-op since. Any assertion about audit rows must scope itself to this run.
+  await purgeWorkspacesOwnedBy(admin, [USER], { quiet: true });
+  await admin.from("plat_feature_flags").delete().eq("key", OFFLINE_FLAG);
+}
+
+/** Every key at every depth, so a forbidden field cannot hide inside a nested object. */
+function allKeys(value: unknown, into: Set<string> = new Set()): Set<string> {
+  if (Array.isArray(value)) { for (const v of value) allKeys(v, into); return into; }
+  if (value && typeof value === "object") {
+    for (const [k, v] of Object.entries(value)) { into.add(k); allKeys(v, into); }
+  }
+  return into;
+}
+
+async function main() {
+  console.log("\n=== OFFLINE READ-ONLY CACHE (CP-OFFLINE-SURVEY-001 phase one) ===\n");
+  await cleanup();
+
+  const { data: req } = await admin.from("provisioning_request").insert({
+    idempotency_key: `harness-offline-${Date.now()}`, request_type: "pilot",
+    actor_user_id: USER, target_user_id: USER, payload_hash: "harness", correlation_id: "harness-offline",
+  }).select("id").single();
+  const payload: IndividualRequest = {
+    displayName: "Harness Offline", countryCode: "UG", timezone: "Africa/Kampala",
+    professionCode: "medical_doctor", defaultPracticeType: "clinic", locale: "en-UG",
+    termsVersion: "t1", privacyNoticeVersion: "p1", source: "pilot",
+  };
+  const run = await runProvisioning(admin,
+    { id: req!.id, target_user_id: USER, correlation_id: "harness-offline", workspace_id: null }, payload);
+  if (!run.ok || !run.workspaceId) { console.error("provisioning failed:", run.errorCode); process.exitCode = 1; return; }
+  const workspaceId = run.workspaceId;
+  const ctx = ctxFor(workspaceId);
+
+  // ── FIXTURE: one patient carrying every field the cache must drop ────────────────────────────────
+  const { data: patient } = await admin.from("practice_patient").insert({
+    workspace_id: workspaceId, display_name: PATIENT_NAME, sex: "female", birth_date: BIRTH_DATE,
+  }).select("id").single();
+  await admin.from("practice_patient_identifier").insert([
+    { workspace_id: workspaceId, patient_id: patient!.id, identifier_type: "national_id", value: NATIONAL_ID },
+    { workspace_id: workspaceId, patient_id: patient!.id, identifier_type: "practice_id", value: PRACTICE_ID },
+    { workspace_id: workspaceId, patient_id: patient!.id, identifier_type: "phone", value: PHONE },
+  ]);
+
+  const at = new Date();
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Kampala", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(at);
+  // 09:30 in Kampala on the practice's today. Chosen rather than "now" so the printed time label is a
+  // known string and not whatever o'clock the harness happens to run at.
+  const scheduledAt = new Date(`${today}T09:30:00.000+03:00`).toISOString();
+
+  const { data: appt, error: apptErr } = await admin.from("practice_appointment").insert({
+    workspace_id: workspaceId, patient_id: patient!.id, patient_name: PATIENT_NAME,
+    patient_phone: PHONE, appointment_type: "scheduled_followup", scheduled_at: scheduledAt,
+    duration_minutes: 25, status: "CONFIRMED", reason: REASON,
+  }).select("id").single();
+  ok("0a-control. the fixture appointment was created", !!appt && !apptErr, apptErr?.message ?? "");
+  if (!appt) { await cleanup(); report(); return; }
+
+  const { data: enc } = await admin.from("practice_encounter").insert({
+    workspace_id: workspaceId, patient_id: patient!.id, appointment_id: appt.id,
+    entry_pathway: "scheduled_followup", status: "ACTIVE", reason_for_visit: REASON,
+  }).select("id").single();
+
+  // ── 1. THE PROJECTION: s3.8.1's allow-list ───────────────────────────────────────────────────────
+  const built = await offlineDayPayload(admin, ctx, { at });
+  ok("1a-control. the day was assembled at all", built.ok, built.ok ? "" : built.reason);
+  if (!built.ok) { await cleanup(); report(); return; }
+  const day = built.day;
+
+  ok("1b-control. the fixture patient really is on the cached day",
+    day.patients.length === 1 && day.patients[0].name === PATIENT_NAME,
+    JSON.stringify(day.patients.map(p => p.name)));
+
+  const p0 = day.patients[0];
+  ok("1c. a cached patient carries EXACTLY the allow-listed fields, no more and no fewer",
+    [...Object.keys(p0)].sort().join(",") === [...OFFLINE_PATIENT_KEYS].sort().join(","),
+    Object.keys(p0).join(","));
+  ok("1d. and the record itself does too",
+    [...Object.keys(day)].sort().join(",") === [...OFFLINE_DAY_KEYS].sort().join(","),
+    Object.keys(day).join(","));
+
+  // ⚠ `feeders` is excluded from the walk because it is a MAP WHOSE KEYS ARE CARD NAMES -- "alerts",
+  // "brief", "drafts" -- and a card name is not a field. Including it would make this assertion fail for
+  // a reason that has nothing to do with what is stored about a patient, and the usual fix for that
+  // (deleting those names from the forbidden list) would quietly stop it checking three real fields.
+  const keys = allKeys({ ...day, feeders: {} });
+  const leakedKeys = OFFLINE_FORBIDDEN_FIELDS.filter(f => keys.has(f));
+  ok("1e. no forbidden field NAME appears anywhere in the record, at any depth",
+    leakedKeys.length === 0, leakedKeys.join(","));
+
+  // ⚠ BY VALUE, NOT BY KEY NAME. A dropped field that arrived under a different name would pass 1e.
+  const serialised = JSON.stringify(day);
+  ok("1f. the patient's PHONE NUMBER is not in the record", !serialised.includes(PHONE));
+  ok("1g. the free-text reason for visit is not in the record", !serialised.includes(REASON));
+  ok("1h. the DATE OF BIRTH is not in the record", !serialised.includes(BIRTH_DATE));
+  ok("1i. the national identifier is not in the record", !serialised.includes(NATIONAL_ID));
+
+  // Age instead of DOB -- and it must be the right number, or "we dropped the DOB" is bought by
+  // dropping the clinical utility with it.
+  const expectedAge = (() => {
+    const b = new Date(`${BIRTH_DATE}T00:00:00Z`);
+    let y = at.getUTCFullYear() - b.getUTCFullYear();
+    if (at.getUTCMonth() < b.getUTCMonth()
+      || (at.getUTCMonth() === b.getUTCMonth() && at.getUTCDate() < b.getUTCDate())) y -= 1;
+    return y;
+  })();
+  ok("1j. AGE is carried instead, in whole years, correctly", p0.ageYears === expectedAge,
+    `${p0.ageYears} vs ${expectedAge}`);
+
+  ok("1k. ONE identifier is carried, and it is the practice one -- not the phone",
+    p0.identifierType === "practice_id" && p0.identifierValue === PRACTICE_ID,
+    `${p0.identifierType}=${p0.identifierValue}`);
+  ok("1l. the clinic-running fields survive: time, duration, status, encounter id",
+    p0.timeLabel === "09:30" && p0.durationMinutes === 25 && p0.status === "CONFIRMED"
+    && p0.encounterId === enc?.id,
+    JSON.stringify({ t: p0.timeLabel, d: p0.durationMinutes, s: p0.status, e: p0.encounterId }));
+
+  // ── 2. THE LIVE QUEUE IS SUPPRESSED, and the control proves there was one to suppress ────────────
+  const model = await dashboardReadModel(admin, ctx, { at });
+  ok("2a-control. the dashboard read model DOES carry a queue feeder",
+    Object.keys(model.feeders).includes("queue"), Object.keys(model.feeders).join(","));
+  ok("2b. the cached day does not, and carries no queue at all",
+    !Object.keys(day.feeders).includes("queue") && !("queue" in (day as unknown as Record<string, unknown>)),
+    Object.keys(day.feeders).join(","));
+  ok("2c. and no management metric, brief, alert or draft survives the projection",
+    !("metrics" in day) && !("brief" in day) && !("alerts" in day) && !("drafts" in day));
+  ok("2d. the per-card degradation captured at cache time is kept",
+    Object.keys(day.feeders).length > 0
+    && Object.keys(day.feeders).every(k => Object.keys(model.feeders).includes(k)),
+    Object.keys(day.feeders).join(","));
+
+  // ── 3. s3.8.7: THE SERVICE LABEL IS CACHED, AND IS NOT IN THE LIST ROW ───────────────────────────
+  //
+  // Both halves. Asserting only the second would pass on a build that never cached it, which would fail
+  // the clinical half of the requirement instead.
+  ok("3a-control. the visit kind IS cached -- a practitioner cannot triage without it",
+    p0.visitKind === "scheduled_followup", p0.visitKind);
+  ok("3b. it is NOT in the list row",
+    !Object.keys(offlineListRow(p0)).includes("visitKind"), Object.keys(offlineListRow(p0)).join(","));
+  ok("3c. it IS on the record opened deliberately",
+    Object.keys(offlineRecordDetail(p0)).includes("visitKind"));
+  const readerSrc = readFileSync("src/app/practice/offline/OfflineReader.tsx", "utf8");
+  ok("3d. and the screen reaches it only through the record, never through the row",
+    !/\brow\.visitKind\b/.test(readerSrc) && /\bdetail\.visitKind\b/.test(readerSrc));
+
+  // ── 4. s3.8.2: EXPIRY AT THE END OF THE CLINIC DAY, IN THE PRACTICE'S TIMEZONE ───────────────────
+  //
+  // Kampala is UTC+3 all year, so the end of the practice's day is 21:00Z on the same date. Written out
+  // literally rather than recomputed with the same function the code uses -- an assertion that calls the
+  // implementation to work out what it expects proves only that the implementation is consistent.
+  ok("4a. the day expires at the next midnight ON THE PRACTICE'S CLOCK, not the server's",
+    day.expiresAt === `${today}T21:00:00.000Z`, `${day.expiresAt} vs ${today}T21:00:00.000Z`);
+  ok("4b-control. and that is NOT the same instant as UTC midnight",
+    day.expiresAt !== `${today}T00:00:00.000Z` && day.expiresAt !== `${today}T23:59:59.999Z`);
+  ok("4c. offlineExpiry agrees for a zone on the other side of UTC",
+    offlineExpiry("2026-06-15", "America/New_York") === "2026-06-16T04:00:00.000Z",
+    offlineExpiry("2026-06-15", "America/New_York"));
+
+  const asOf = "2026-06-15T05:00:00.000Z";
+  const band = (mins: number) => offlineFreshness(asOf, "Africa/Kampala", new Date(Date.parse(asOf) + mins * 60000));
+  ok("4d. under an hour the day is labelled fresh", band(59).band === "fresh", band(59).band);
+  ok("4e. AT sixty minutes the label escalates", band(60).band === "ageing", band(60).band);
+  ok("4f. and again at three hours", band(180).band === "stale", band(180).band);
+  ok("4g. the three bands do not share a sentence or a colour",
+    new Set([band(0).sentence, band(60).sentence, band(180).sentence]).size === 3
+    && new Set([band(0).tone, band(60).tone, band(180).tone]).size === 3);
+  ok("4h. the stamp is the PRACTICE's wall clock, absolute -- 05:00Z is 08:00 in Kampala",
+    band(0).atLabel === "08:00", band(0).atLabel);
+
+  // ── 5. s3.4.3: PAST EXPIRY THE RECORD IS WITHHELD AND DELETED, NOT SHOWN ─────────────────────────
+  const stored: OfflineDay = { ...day, asOf, expiresAt: "2026-06-15T21:00:00.000Z" };
+  const justInside = readOfflineDay(stored, new Date("2026-06-15T20:59:00.000Z"));
+  ok("5a-control. a moment before expiry the day IS shown", justInside.state === "ok", justInside.state);
+  const justOutside = readOfflineDay(stored, new Date("2026-06-15T21:00:00.000Z"));
+  ok("5b. at the expiry instant it is withheld", justOutside.state === "expired", justOutside.state);
+  ok("5c. ⚠ and NOTHING of the day comes back with the refusal -- an empty screen with a reason",
+    !("day" in justOutside) && "reason" in justOutside && justOutside.reason.length > 0);
+  ok("5d. the record is marked for deletion, not merely hidden",
+    justOutside.state === "expired" && justOutside.purge === true);
+
+  const rolledBack = readOfflineDay(stored, new Date("2026-06-15T04:00:00.000Z"));
+  ok("5e. a device clock EARLIER than the capture instant shows nothing",
+    rolledBack.state === "clock_rollback" && !("day" in rolledBack));
+  ok("5f. but does not delete -- a wrong clock is not a decision to discard the day",
+    rolledBack.state === "clock_rollback" && rolledBack.purge === false);
+  const wrongSchema = readOfflineDay({ ...stored, schemaVersion: OFFLINE_SCHEMA_VERSION + 1 },
+    new Date("2026-06-15T09:00:00.000Z"));
+  ok("5g. a record from an older shape is discarded rather than guessed at",
+    wrongSchema.state === "wrong_schema" && wrongSchema.purge === true);
+  ok("5h. nothing cached is a stated reason, not an empty day",
+    readOfflineDay(null, new Date()).state === "none");
+
+  // ── 6. s3.5: ZERO ENABLED MUTATING CONTROLS ─────────────────────────────────────────────────────
+  const controls = offlineControls(p0);
+  ok("6a-control. the offline screen really does offer controls that would mutate",
+    controls.filter(c => c.mutating).length > 0, `${controls.length} controls`);
+  ok("6b. ⚠ NOT ONE OF THEM IS ENABLED",
+    enabledMutatingControls(controls).length === 0,
+    enabledMutatingControls(controls).map(c => c.key).join(","));
+  ok("6c. and each says why, in a sentence",
+    controls.filter(c => c.mutating).every(c => (c.reason ?? "").length > 20));
+
+  // The JSX, not only the data. s5's warning is about a FORM reused from an online page that merely fails
+  // on submit -- which no assertion over a control array would ever see.
+  const pageSrc = readFileSync("src/app/practice/offline/page.tsx", "utf8");
+  const offlineTree = readerSrc + pageSrc;
+  ok("6d. the offline screen contains no form and no input of any kind",
+    !/<form\b/i.test(offlineTree) && !/<input\b/i.test(offlineTree)
+    && !/<textarea\b/i.test(offlineTree) && !/<select\b/i.test(offlineTree));
+  ok("6e. it sends nothing: no fetch, no mutating method, no server action",
+    !/\bfetch\s*\(/.test(offlineTree) && !/"(POST|PATCH|PUT|DELETE)"/.test(offlineTree)
+    && !/use server/.test(offlineTree));
+  const buttons = offlineTree.match(/<button[\s\S]*?>/g) ?? [];
+  ok("6f-control. there are buttons on the screen to judge", buttons.length > 0, `${buttons.length}`);
+  ok("6g. every button is either disabled or the non-mutating disclosure toggle",
+    buttons.every(b => /\bdisabled\b/.test(b) || /aria-expanded/.test(b)),
+    buttons.filter(b => !/\bdisabled\b/.test(b) && !/aria-expanded/.test(b)).join(" | "));
+
+  // ── 7. s3.3: THE SERVICE WORKER CACHES THE SHELL AND NEVER AN API RESPONSE ───────────────────────
+  const swSrc = readFileSync("public/sw.js", "utf8");
+  const listeners: Record<string, (e: unknown) => void> = {};
+  const cachePut: string[] = [];
+  const fakeCache = { put: (req: { url?: string } | string) => { cachePut.push(typeof req === "string" ? req : (req.url ?? "?")); return Promise.resolve(); }, add: () => Promise.resolve(), match: () => Promise.resolve(undefined) };
+  const fakeCaches = { open: () => Promise.resolve(fakeCache), match: () => Promise.resolve(undefined), keys: () => Promise.resolve([]), delete: () => Promise.resolve(true) };
+  const fakeSelf: Record<string, unknown> = {
+    addEventListener: (name: string, fn: (e: unknown) => void) => { listeners[name] = fn; },
+    location: { origin: "https://app.example" },
+    skipWaiting: () => Promise.resolve(),
+    clients: { claim: () => Promise.resolve() },
+  };
+  new Function("self", "caches", "fetch", "Response", "URL", swSrc)(
+    fakeSelf, fakeCaches, () => Promise.reject(new Error("offline")), Response, URL,
+  );
+
+  const policy = fakeSelf.__cachePolicy as (r: { url: string; mode?: string }, origin: string) => string;
+  ok("7a-control. the worker registered a fetch handler and exposed its policy",
+    typeof policy === "function" && typeof listeners.fetch === "function");
+  ok("7b. ⚠ an API response is NEVER cached",
+    policy({ url: "https://app.example/api/v1/practice/dashboard" }, "https://app.example") === "never");
+  ok("7c. nor is the offline endpoint that carries the patients",
+    policy({ url: "https://app.example/api/v1/practice/offline/day" }, "https://app.example") === "never");
+  ok("7d. build assets are, and the offline shell is",
+    policy({ url: "https://app.example/_next/static/chunk.js" }, "https://app.example") === "static"
+    && policy({ url: "https://app.example/practice/offline" }, "https://app.example") === "shell");
+  ok("7e. a cross-origin request is never touched",
+    policy({ url: "https://elsewhere.example/practice/offline" }, "https://app.example") === "never");
+  ok("7f. and an ordinary practice page is not cached either -- only navigations fall back to the shell",
+    policy({ url: "https://app.example/practice/today" }, "https://app.example") === "never"
+    && policy({ url: "https://app.example/practice/today", mode: "navigate" }, "https://app.example") === "shell");
+
+  // Behavioural, not only declarative: drive the real handler with a real API request.
+  let responded = false;
+  listeners.fetch({
+    request: { url: "https://app.example/api/v1/practice/offline/day", mode: "cors" },
+    // The catch is not cosmetic: the static branch calls the stubbed fetch, which rejects to simulate a
+    // dead network, and an unhandled rejection would take the whole harness down mid-run.
+    respondWith: (p: unknown) => { responded = true; void Promise.resolve(p).catch(() => undefined); },
+    waitUntil: () => undefined,
+  });
+  ok("7g. the handler does not even intercept an API request", !responded && cachePut.length === 0,
+    `responded=${responded} put=${cachePut.join(",")}`);
+  listeners.fetch({
+    request: { url: "https://app.example/_next/static/chunk.js", mode: "no-cors" },
+    // The catch is not cosmetic: the static branch calls the stubbed fetch, which rejects to simulate a
+    // dead network, and an unhandled rejection would take the whole harness down mid-run.
+    respondWith: (p: unknown) => { responded = true; void Promise.resolve(p).catch(() => undefined); },
+    waitUntil: () => undefined,
+  });
+  ok("7h-control. it DOES intercept a build asset, so 7g is not passing over a dead handler", responded);
+
+  // ── 8. THE WRITE-TIME ALLOW-LIST IN THE BROWSER STORE ───────────────────────────────────────────
+  ok("8a-control. the real record is accepted", fieldsNotAllowed(day).length === 0,
+    fieldsNotAllowed(day).join(","));
+  const contaminated: OfflineDay = {
+    ...day,
+    patients: day.patients.map(p => ({ ...p, birthDate: BIRTH_DATE } as unknown as typeof p)),
+  };
+  ok("8b. a record carrying one extra field is REFUSED, and the field is named",
+    fieldsNotAllowed(contaminated).includes("patient.birthDate"),
+    fieldsNotAllowed(contaminated).join(","));
+
+  // ── 9. s3.6: WHAT THE ENCRYPTION ACTUALLY DOES ──────────────────────────────────────────────────
+  const key = await generateCacheKey();
+  const sealed = await sealRecord(key, day);
+  const opened = await openRecord<OfflineDay>(key, sealed);
+  ok("9a. a sealed day opens again, unchanged", JSON.stringify(opened) === JSON.stringify(day));
+  const bytes = Buffer.from(new Uint8Array(sealed.ciphertext)).toString("latin1");
+  ok("9b. the patient's name is not lying in the stored bytes", !bytes.includes(PATIENT_NAME));
+  const otherKey = await generateCacheKey();
+  ok("9c. another key opens nothing, and returns null rather than throwing",
+    (await openRecord(otherKey, sealed)) === null);
+  const tampered = new Uint8Array(sealed.ciphertext.slice(0));
+  tampered[0] ^= 0xff;
+  ok("9d. a single flipped byte makes the record unreadable, not partly readable",
+    (await openRecord(key, { iv: sealed.iv, ciphertext: tampered.buffer })) === null);
+
+  // ── 10. s3.7 / s3.8.6: THE GATE ─────────────────────────────────────────────────────────────────
+  const noFlag = await offlineCacheGate(admin, ctx, USER);
+  ok("10a. with no flag in the catalogue the gate is UNRESOLVED, and closed",
+    noFlag.state === "unresolved" && noFlag.allowed === false, noFlag.reason);
+  ok("10b. ⚠ and does NOT purge -- an unreadable switch is not a decision anybody made",
+    noFlag.purge === false);
+
+  await admin.from("plat_feature_flags").insert({ key: OFFLINE_FLAG, default_on: true, description: "harness" });
+  const flagOn = await offlineCacheGate(admin, ctx, USER);
+  ok("10c-control. seeded and defaulted on, the gate opens",
+    flagOn.state === "allowed" && flagOn.allowed === true, flagOn.reason);
+
+  const off = await updateConfiguration(admin, {
+    workspaceId, offlineCache: false, actorId: USER, correlationId: "harness-offline-off",
+  });
+  ok("10d-control. a practice can switch it off through the settings engine", off.ok,
+    off.ok ? "" : off.message);
+  const practiceOff = await offlineCacheGate(admin, ctx, USER);
+  ok("10e. the practice's own switch closes the gate even with the platform flag on",
+    practiceOff.state === "withheld" && practiceOff.allowed === false, practiceOff.reason);
+  ok("10f. ⚠ and turning it off PURGES rather than merely stopping new writes",
+    practiceOff.purge === true);
+  ok("10g. its reason is a sentence a practitioner can read, naming what happened",
+    /turned offline access off/i.test(practiceOff.reason));
+
+  await admin.from("plat_feature_flags").update({ default_on: false }).eq("key", OFFLINE_FLAG);
+  const platformOff = await offlineCacheGate(admin, ctx, USER);
+  ok("10h. the platform switch closes it too, and purges", platformOff.state === "withheld"
+    && platformOff.purge === true, platformOff.reason);
+
+  await cleanup();
+  report();
+}
+
+function report() {
+  console.log(`\n${failures.length ? "FAILED" : "PASSED"}  ${pass} passed, ${failures.length} failed`);
+  failures.forEach(f => console.log(`  - ${f}`));
+  if (failures.length) process.exitCode = 1;
+}
+
+main().catch(async e => { console.error(e); await cleanup(); process.exitCode = 1; });

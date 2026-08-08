@@ -107,6 +107,19 @@ export async function updateConfiguration(admin: any, args: {
   locale?: string; defaultEncounterMode?: string; defaultAppointmentMinutes?: number;
   letterheadName?: string; letterheadRegistration?: string; letterheadAddress?: string;
   letterheadContact?: string; letterheadFooter?: string;
+  /**
+   * CP-OFFLINE-SURVEY-001 s3.8.6 — THE PRACTICE'S OWN OFFLINE SWITCH.
+   *
+   * ⚠ Being able to say "do not hold my patients' data on that laptop" is itself a security control, and
+   * it is worthless if it requires a support ticket. So it is here, on the settings a practice
+   * administrator already operates, rather than only in a platform operator's flag console.
+   *
+   * ⚠ Setting it to false does not merely stop new writes. The device purges on its next load -- and the
+   * honest caveat, which belongs beside the switch wherever it is shown, is that purging needs the device
+   * to come online. On a device that never reconnects, the end-of-clinic-day expiry is the only control
+   * that acts.
+   */
+  offlineCache?: boolean;
   actorId: string; correlationId: string;
 }): Promise<EngineResult<{ changed: string[]; timezoneChangedFrom: string | null }>> {
   const current = await getConfiguration(admin, args.workspaceId);
@@ -175,6 +188,18 @@ export async function updateConfiguration(admin: any, args: {
     if (next !== ((current.config as Record<string, unknown>)[column] ?? null)) {
       configPatch[column] = next;
       changed.push(label);
+    }
+  }
+
+  // The offline switch lives inside `feature_flags`, the jsonb column migration 191 already provides, so
+  // it needs no migration of its own. The object is REBUILT rather than patched in place: a jsonb column
+  // updated with a partial object replaces the whole value, and spreading the current one is what stops
+  // this switch silently deleting any other per-practice flag that lands beside it later.
+  if (args.offlineCache !== undefined) {
+    const flags = (current.config.feature_flags ?? {}) as Record<string, unknown>;
+    if (flags.offline_cache !== args.offlineCache) {
+      configPatch.feature_flags = { ...flags, offline_cache: args.offlineCache };
+      changed.push(args.offlineCache ? "offline access on" : "offline access off");
     }
   }
 

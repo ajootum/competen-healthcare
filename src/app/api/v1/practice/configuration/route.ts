@@ -52,6 +52,10 @@ export async function PATCH(req: NextRequest) {
     letterheadAddress: s.letterheadAddress !== undefined ? String(s.letterheadAddress) : undefined,
     letterheadContact: s.letterheadContact !== undefined ? String(s.letterheadContact) : undefined,
     letterheadFooter: s.letterheadFooter !== undefined ? String(s.letterheadFooter) : undefined,
+    // CP-OFFLINE-SURVEY-001 s3.8.6. A strict boolean check, not truthiness: "false" arriving as a string
+    // would otherwise switch offline access ON, which is the wrong direction for the one control a
+    // practice has over what sits on its devices.
+    offlineCache: typeof s.offlineCache === "boolean" ? s.offlineCache : undefined,
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
