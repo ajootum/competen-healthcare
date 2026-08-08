@@ -127,10 +127,58 @@ async function main() {
     `${s.unknown} unknown of ${s.total}`);
   ok("no entry claims a role reaches it while being unclassified",
     entries.every((e: any) => e.gate.kind !== "unknown" || TENANT_ROLES.every(r => roleReaches(e.gate, r) === null)));
-  const um = entries.find((e: any) => e.path === "/unit-manager");
+  // ⚠ BY PATH *AND* KIND. Since the matrix went to page granularity a path is no longer unique -- a
+  // workspace root has both its layout entry and its page entry, and `find` by path alone returned
+  // whichever sorted first. This assertion is about the WORKSPACE LAYOUT gate and must say so.
+  const um = entries.find((e: any) => e.path === "/unit-manager" && e.kind === "workspace");
   eq("the unit-manager gate is read correctly", JSON.stringify(um?.gate.roles), JSON.stringify(["hospital_admin", "super_admin"]));
   eq("...and a nurse does not reach it", roleReaches(um.gate, "nurse"), false);
-  const hw = entries.find((e: any) => e.path === "/healthcare-worker");
+  // ── PAGE GRANULARITY, AND THE COVERAGE QUESTION IT EXISTS TO ANSWER ──
+  //
+  // ⚠ ONE ENTRY USED TO STAND FOR A WHOLE WORKSPACE: /super-admin was a single row covering 204 page
+  // patterns, so "which positions reach which governance pages" had no row to ask. These assert the
+  // per-page picture rather than the summary.
+  console.log("\nEvery page is answered for, not just every workspace");
+  const pages = entries.filter((e: any) => e.kind === "page");
+  ok("pages are in the matrix at all", pages.length > 800, `got ${pages.length}`);
+  const sa = pages.filter((e: any) => e.path.startsWith("/super-admin"));
+  ok("the whole governance estate is enumerated, not summarised", sa.length >= 200, `got ${sa.length}`);
+  // ⚠ THE COVERAGE ASSERTION. Not "the gate logic is right" -- the HQ harness proves that -- but "no
+  // governance page is reachable by merely being signed in". A route added under /super-admin without a
+  // guard fails HERE, which is the failure mode the whole programme is guarding against: nobody adds it
+  // to the model, and the default is reachable.
+  const weak = sa.filter((e: any) => e.gate.kind === "none" || e.gate.kind === "auth-only");
+  ok("no governance page is ungated or merely auth-only", weak.length === 0,
+    weak.slice(0, 5).map((e: any) => `${e.path}=${e.gate.kind}`).join(" "));
+  // ⚠ AND THE ONE THAT ACTUALLY BITES. The assertion above passes for a page with no check of its own
+  // sitting under the /super-admin layout -- it inherits `single-role` and looks protected. It IS
+  // protected in the browser and NOT protected against a Server Action, which is Next's own warning
+  // ("will not prevent nested route segments and Server Actions from being accessed") and the entire
+  // reason 36 pages were given their own guards. A new governance module added without one fails HERE
+  // and passes everything else, which is precisely the quiet failure this programme is guarding against.
+  const leaning = sa.filter((e: any) => e.guard === "inherited");
+  ok("NO governance page relies only on an ancestor layout -- each carries its own check",
+    leaning.length === 0, leaning.slice(0, 5).map((e: any) => e.path).join(" "));
+  ok("...and some of them are on the position model, so the above is not vacuously true of an empty set",
+    sa.some((e: any) => e.gate.kind === "hq-position"), `${sa.filter((e: any) => e.gate.kind === "hq-position").length} position-gated`);
+
+  // ⚠ THE CONJUNCTION RULE. A request passes the layout AND the page, so a page whose own check is only
+  // `auth-only` under a role-gating layout is reachable by those ROLES -- not by any signed-in user.
+  // Reporting the page's own weaker gate said "any nurse reaches /unit-manager", which is how this was
+  // found: 295 pages moved from auth-only to role-gated when the rule was corrected.
+  const umPage = entries.find((e: any) => e.path === "/unit-manager" && e.kind === "page");
+  ok("a page under a role-gated layout reports the LAYOUT's roles, not its own weaker check",
+    umPage ? roleReaches(umPage.gate, "nurse") === false : false,
+    umPage ? `${umPage.gate.kind} guard=${umPage.guard}` : "no page entry");
+  // CONTROL: inheritance must not be blanket. A genuinely public page still reads as ungated.
+  const home = entries.find((e: any) => e.path === "/" && e.kind === "page");
+  ok("CONTROL: a public page is still reported ungated, so inheritance did not blanket everything",
+    home?.gate.kind === "none", JSON.stringify(home?.gate.kind));
+  ok("...and where a gate is inherited the matrix says so rather than implying the page checks",
+    pages.some((e: any) => e.guard === "inherited" && e.inheritedFrom),
+    `${pages.filter((e: any) => e.guard === "inherited").length} inherited`);
+
+  const hw = entries.find((e: any) => e.path === "/healthcare-worker" && e.kind === "workspace");
   eq("a nurse reaches the worker workspace", roleReaches(hw.gate, "nurse"), true);
 
   // ── Segregation of duties, live ──

@@ -32,7 +32,21 @@ export type Gate = {
   capabilities?: string[];  // tenant-plane capability codes, for "capability" gates only
 };
 
-export type MatrixEntry = { path: string; kind: "workspace" | "api"; gate: Gate };
+export type MatrixEntry = {
+  path: string;
+  kind: "workspace" | "api" | "page";
+  gate: Gate;
+  /**
+   * ⚠ WHERE THE GATE ACTUALLY IS, AND THE DISTINCTION IS NOT COSMETIC. `own` means the page or route
+   * checks for itself. `inherited` means the only thing standing in front of it is an ancestor layout --
+   * and Next's own documentation says that is not enough: a layout "will not prevent nested route
+   * segments and Server Actions from being accessed". Collapsing the two would report 920 pages as
+   * uniformly protected when 38 of them are the ones that actually check.
+   */
+  guard?: "own" | "inherited";
+  /** The layout the gate came from, when inherited. Null when the page checks for itself. */
+  inheritedFrom?: string | null;
+};
 
 const ROLE_LIST = /const\s+ALLOWED\s*(?::[^=]+)?=\s*\[([^\]]*)\]/;
 const SINGLE = /if\s*\(\s*!\s*(?:user)?[Rr]oles\??\.includes\(\s*"([a-z_]+)"\s*\)\s*\)/;
@@ -49,6 +63,15 @@ const LANDLORD_ANY = /getLandlordCaller\s*\(/;
 // The TENANT plane (Competen Practice): requirePracticeContext(capability). A third idiom, and the
 // scanner was blind to it until it was taught — see the note on classifyPractice below for what that
 // blindness actually produced.
+// ⚠ THE PRACTICE SHELL, WHICH IS A THIRD IDIOM AND WAS FOUND THE SAME WAY AS THE SECOND.
+// `src/app/practice/(shell)/layout.tsx` gates the entire practitioner workspace by resolving a shell
+// state and redirecting every non-READY one -- `AUTH_REQUIRED` goes to sign-in. It matches no pattern
+// above, so before this rule existed it classified as `none`, and the moment the matrix moved to page
+// granularity that answer propagated to SIXTY pages reported as reachable without signing in. The
+// practice API routes taught this lesson once at 98 routes; this is the same lesson arriving through
+// layouts instead of routes, which is why the rule is written to the STATE MACHINE rather than to the
+// one file that currently uses it.
+const SHELL_GATE = /resolvePracticeShell\s*\(|["']AUTH_REQUIRED["']/;
 const PRACTICE_ANY = /requirePracticeContext\s*\(/;
 // Four spellings, all of them real in this codebase: a literal, null, a resolved constant, and a ternary
 // whose branches are literals -- `requirePracticeContext(to === "SIGNED" ? "document.sign" : "document.author")`,
@@ -200,6 +223,12 @@ export function classifyGate(source: string, groups: RoleGroups = {}, caps: Capa
       evidence: `${practice.evidence}; also reachable by role: ${estateRoles.join(", ")}`,
     };
   }
+
+  // The shell state machine is a membership gate: it admits a signed-in practitioner with a usable
+  // workspace and redirects everybody else. That is exactly what `member-only` means on this plane, so it
+  // reuses the kind rather than inventing a fourth one for the same answer.
+  if (SHELL_GATE.test(source))
+    return { kind: "member-only", roles: [], appointment, evidence: "resolvePracticeShell() with AUTH_REQUIRED redirect" };
 
   const api = classifyApiAuth(source, groups);
   if (api) return api;
