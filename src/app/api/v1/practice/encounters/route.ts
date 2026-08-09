@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { launchEncounter, LIVE_STATUSES } from "@/lib/practice/encounters";
 
-// GET  /api/v1/practice/encounters?status=live|all -- the encounter queue (CPR-V2-006 "encounter queue/history").
+// GET  /api/v1/practice/encounters?status=live|all[&patientId=] -- the encounter queue (CPR-V2-006
+//      "encounter queue/history"), narrowable to one patient.
 // POST /api/v1/practice/encounters -- FLOW-001 launch. Returns 200 with resumed:true when a live
 //      encounter already exists for the patient, and 201 when one is created: resuming is a SUCCESS,
 //      not a conflict, because "one active encounter per visit" is the intended behaviour rather than
@@ -13,13 +14,23 @@ export async function GET(req: NextRequest) {
   if (isDenied(auth)) return auth;
 
   const scope = req.nextUrl.searchParams.get("status") ?? "live";
+  // ONE PATIENT'S HISTORY, ASKED FOR BY THE THING THAT NEEDS IT. The start-an-encounter picker has to
+  // know whether this person has been seen here before, because FLOW-001's pathway is written onto the
+  // encounter and never revised. Reading the whole queue and filtering it in the browser would answer
+  // "no earlier encounter" for anybody who fell outside the fifty most recent.
+  const patientId = req.nextUrl.searchParams.get("patientId");
   let q = auth.caller.admin.from("practice_encounter")
     .select("id, patient_id, status, entry_pathway, encounter_mode, reason_for_visit, started_at")
     .eq("workspace_id", auth.ctx.workspaceId)
     .order("started_at", { ascending: false }).limit(50);
   if (scope === "live") q = q.in("status", LIVE_STATUSES);
+  if (patientId) q = q.eq("patient_id", patientId);
 
-  const { data: encounters } = await q;
+  // ⚠ THE ERROR USED TO BE DISCARDED, AND THE PICKER IS WHY THAT NOW MATTERS. A refused read left
+  // `encounters: []`, which reads as "this patient has never been seen here" -- and the caller then
+  // files a returning patient's consultation as a first visit. An empty list and an unanswered
+  // question are different facts and the payload now carries which one this is.
+  const { data: encounters, error } = await q;
   const ids = [...new Set(((encounters ?? []) as { patient_id: string }[]).map(e => e.patient_id))];
   const { data: patients } = ids.length
     ? await auth.caller.admin.from("practice_patient").select("id, display_name").in("id", ids)
@@ -28,6 +39,8 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     encounters: ((encounters ?? []) as Record<string, unknown>[]).map(e => ({ ...e, patientName: nameById.get(e.patient_id as string) ?? null })),
+    unavailable: !!error,
+    detail: error?.message ?? null,
     correlationId: auth.caller.traceId,
   });
 }

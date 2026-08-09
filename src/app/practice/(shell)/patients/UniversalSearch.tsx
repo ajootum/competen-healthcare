@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { IDENTIFIER_LABELS } from "@/lib/practice/patient-workspace-constants";
+import { MIN_PICKER_QUERY } from "@/lib/practice/encounter-start";
 import { CARD } from "./Honesty";
 import type { SearchMatchView, SearchView } from "./types";
 
@@ -37,7 +38,10 @@ const LENSES = [
   { key: "guardian", label: "Parent or guardian" },
 ];
 
-const MIN_QUERY = 2;
+// ⚠ ONE FLOOR, SHARED WITH THE ENCOUNTER PICKER THAT ALSO MOUNTS THIS BOX. Two constants would drift,
+// and the sentence below prints the number -- so a box that refused at two while saying three is a
+// smaller change away than it looks.
+const MIN_QUERY = MIN_PICKER_QUERY;
 const PAUSE_MS = 350;
 
 function matchLabel(m: SearchMatchView): string {
@@ -161,6 +165,18 @@ export default function UniversalSearch({
           Every search looks everywhere &mdash; these only narrow what is shown. Results appear when you stop typing.
         </span>
       </div>
+
+      {/* ⚠ A BOX THAT REFUSES SILENTLY LOOKS LIKE A BOX THAT IS STILL THINKING. Below the floor nothing
+          is sent -- no read, no access-log row -- and until now nothing said so either: somebody who
+          typed one character and waited was waiting for a search that was never going to happen. The
+          number is printed because the rule is the number. */}
+      {q.trim().length > 0 && q.trim().length < MIN_QUERY && (
+        <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[12px] text-gray-600">
+          <span className="font-semibold">Nothing has been searched yet.</span> A search needs at least{" "}
+          {MIN_QUERY} characters, so this one was not sent &mdash; a single character matches a large
+          part of the register rather than a patient. Nothing here is a statement about who is registered.
+        </p>
+      )}
 
       {failed && (
         <p className="mt-3 rounded-lg bg-[var(--cmp-surface-critical)] px-3 py-2 text-[12px] text-[var(--cmp-text-critical)]">

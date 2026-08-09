@@ -9,6 +9,7 @@ import {
 } from "@/lib/practice/encounter-workspace-constants";
 import { formatMinuteOfDay, formatTime, formatDate } from "@/lib/datetime";
 import RowMenu from "./RowMenu";
+import StartEncounter from "./StartEncounter";
 
 // /practice/encounters -- CPR-ENC-001 s9's four panels: Today's Sessions, Open Encounters, Recently
 // Closed, and the attention counts the comp draws as an assistant.
@@ -195,6 +196,11 @@ export default async function EncountersPage({ searchParams }: {
   // Read once here rather than per row: the row menu offers the patient record, and a link that 403s on
   // arrival is worse than a line that says it cannot be followed.
   const canSeePatient = hasCapability(shell.ctx, "patient.list");
+  // ⚠ COMPUTED HERE, ON THE SERVER, FROM THE CAPABILITY TABLE -- never inferred in the browser
+  // (SHELL-001 s9.1). The picker hides its register branch on the second of these; the API refuses it
+  // again on arrival, which is what makes the hiding a courtesy rather than the control.
+  const canStartEncounter = hasCapability(shell.ctx, "encounter.create");
+  const canRegisterPatient = hasCapability(shell.ctx, "patient.create");
 
   const row = (e: DashboardEncounter) => {
     const mins = e.elapsedMinutes;
@@ -239,10 +245,13 @@ export default async function EncountersPage({ searchParams }: {
           <h1 className="text-xl font-bold text-gray-900">Encounters</h1>
           <p className="text-[13px] text-gray-500">Your patient encounters today and recently.</p>
         </div>
-        <Link href="/practice/patients"
-          className="rounded-lg bg-[var(--cp-primary)] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)]">
-          + Start encounter
-        </Link>
+        {/* ⚠ THIS WAS A LINK TO /practice/patients, AND THAT IS THE DEFECT THE OWNER FOUND WALKING THE
+            PRODUCT: "Start encounter takes me to patient section". The press started nothing. It
+            changed the page to a register that did not know why anybody had arrived, whose own
+            equivalent action lives in a panel that appears only after a patient is selected. An
+            encounter genuinely needs a patient -- so the button asks for one HERE, over this board,
+            and the next screen after choosing is the consultation itself. */}
+        <StartEncounter canStart={canStartEncounter} canRegisterPatient={canRegisterPatient} />
       </div>
 
       {/* ⚠ A FILTERED LIST SAYS SO, LOUDLY AND WITH A WAY OUT. A narrowed board that looks like the whole
