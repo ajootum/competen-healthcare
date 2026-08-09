@@ -161,8 +161,27 @@ export function workspacesFor(
 
 export const ROLE_PRIORITY: AppRole[] = ["super_admin", "hospital_admin", "educator", "assessor", "nurse"];
 
-export function highestRole(roles: string[]): AppRole {
-  return ROLE_PRIORITY.find(r => roles.includes(r)) ?? "nurse";
+/**
+ * The most senior ESTATE role somebody holds, or null when they hold none.
+ *
+ * ⚠ IT USED TO FALL BACK TO "nurse", AND THAT WOULD HAVE DEFEATED THE GATE SPLIT ENTIRELY.
+ *
+ * CP-SPLIT-001 introduces `practice_only`: an account that exists on the platform directory but is NOT on
+ * the estate at all -- a Competen Practice practitioner who has never seen a ward. Such a person holds no
+ * AppRole, so `ROLE_PRIORITY.find(...)` returns undefined, and `?? "nurse"` silently handed them a nurse
+ * identity in every screen that asked. The badge gate 2 must not issue would have been re-issued here, by
+ * a default nobody would have thought to look at.
+ *
+ * Returning null makes the absence a fact the type system forces every caller to answer, which is the
+ * whole point: there are only four, and each of them is a decision about whether the estate admits you.
+ */
+export function highestRole(roles: string[]): AppRole | null {
+  return ROLE_PRIORITY.find(r => roles.includes(r)) ?? null;
+}
+
+/** Does this person stand on the estate at all? The complement of CP-SPLIT-001 s3 practice_only. */
+export function hasEstateRole(roles: string[]): boolean {
+  return highestRole(roles) !== null;
 }
 
 // Keep SubRole as an alias so any lingering imports don't break immediately
