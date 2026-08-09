@@ -1,8 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import type { PlannerActivity, PlannerDay, PlannerWeek } from "@/lib/practice/planner";
-import { PLANNER_STATE_LABEL } from "@/lib/practice/planner-constants";
-import { hhmm, hoursMinutes, longDate, toneFor, STATE_CHIP, type LocationOption, type Notice, type RunAction } from "./planner-ui";
+import { PLANNER_STATE_LABEL, type PlannerFilters } from "@/lib/practice/planner-constants";
+import {
+  hhmm, hoursMinutes, longDate, toneFor, STATE_CHIP, filterDay, capacityPhrase, plannerHref,
+  APPOINTMENT_STATUS_CHIP, OUTCOME_CHIP,
+  type LocationOption, type Notice, type RunAction, type PlannerUrlState,
+} from "./planner-ui";
 import ActivityActions from "./ActivityActions";
 
 // s3's CENTRE COLUMN -- the Daily Planner for whichever day the week panel has selected.
@@ -25,7 +30,9 @@ import ActivityActions from "./ActivityActions";
 // another -- and an overlap is exactly the thing the practitioner most needs to SEE.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-export default function DayPlanner({ day, week, canManage, locations, busy, notice, run, onAdd }: {
+export default function DayPlanner({
+  day, week, canManage, locations, busy, notice, run, onAdd, filters, urlState, selectedSessionId,
+}: {
   day: PlannerDay;
   week: PlannerWeek;
   canManage: boolean;
@@ -34,11 +41,17 @@ export default function DayPlanner({ day, week, canManage, locations, busy, noti
   notice: Notice;
   run: RunAction;
   onAdd: () => void;
+  filters: PlannerFilters;
+  urlState: PlannerUrlState;
+  selectedSessionId: string | null;
 }) {
-  const ordered = [...day.activities].sort((a, b) =>
+  const shown = filterDay(day, filters);
+  const ordered = [...shown.activities].sort((a, b) =>
     a.plannedStartMinute - b.plannedStartMinute || a.plannedEndMinute - b.plannedEndMinute);
   const conflicted = new Set(day.conflicts.flatMap(c => c.activityIds));
   const w = day.workload;
+  const loose = shown.appointments.filter(
+    a => !shown.sessions.some(s => s.appointmentIds.includes(a.id)));
 
   return (
     <section className="rounded-2xl border border-gray-200 bg-white">
@@ -92,8 +105,132 @@ export default function DayPlanner({ day, week, canManage, locations, busy, noti
             </div>
           )}
 
+          {/* ── CP-PLAN-002 s5's DAY: "Chronological sessions, appointments, free/blocked periods,
+              location, status and quick actions." The sessions and the patients booked into them, from
+              the SAME payload the month grid counts and the agenda lists. ──────────────────────── */}
+          {shown.sessions.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {shown.sessions.map(s => {
+                const inside = shown.appointments.filter(a => s.appointmentIds.includes(a.id));
+                return (
+                  <section key={s.id}
+                    className={`rounded-xl border ${selectedSessionId === s.id
+                      ? "border-[var(--cp-primary-border)] ring-1 ring-[var(--cp-primary)]/20"
+                      : "border-gray-200"} ${s.capacity.blocked ? "bg-gray-50" : "bg-white"}`}>
+                    <div className="flex flex-wrap items-baseline gap-2 border-b border-gray-100 px-3 py-2">
+                      <span className="text-[13px] font-bold tabular-nums text-gray-800">
+                        {hhmm(s.startMinute)} - {hhmm(s.endMinute)}
+                      </span>
+                      <span className="text-[13px] text-gray-700">{s.locationName ?? "no location"}</span>
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                        {s.slotKindLabel}
+                      </span>
+                      {s.source === "program" && (
+                        // ⚠ A PROGRAM SESSION IS NOT BOOKABLE TIME. It is the regular week saying a clinic
+                        // runs; until times are generated there is nothing for anybody to take.
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                          No times generated
+                        </span>
+                      )}
+                      {s.capacity.blocked && (
+                        <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-700">
+                          Blocked
+                        </span>
+                      )}
+                      <Link scroll={false}
+                        href={plannerHref({ ...urlState, view: "day", date: day.date, from: null, to: null, sel: s.id })}
+                        className="ml-auto text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                        {capacityPhrase(s.capacity)}
+                      </Link>
+                    </div>
+                    {inside.length === 0 ? (
+                      <p className="px-3 py-1.5 text-[12px] text-gray-400">
+                        {s.capacity.booked === 0
+                          ? "No bookings in this session."
+                          : "No bookings in this session match what you are showing."}
+                      </p>
+                    ) : (
+                      <ul className="divide-y divide-gray-50">
+                        {inside.map(a => (
+                          <li key={a.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 px-3 py-1.5">
+                            <span className={`w-[46px] shrink-0 text-[12px] tabular-nums ${a.voided
+                              ? "text-gray-400 line-through" : "text-gray-600"}`}>
+                              {hhmm(a.startMinute)}
+                            </span>
+                            {a.href ? (
+                              <Link href={a.href} className={`min-w-0 flex-1 truncate text-[13px] hover:underline ${a.voided
+                                ? "text-gray-400 line-through" : "font-semibold text-gray-900"}`}>
+                                {a.patientName}
+                              </Link>
+                            ) : (
+                              <span className={`min-w-0 flex-1 truncate text-[13px] ${a.voided
+                                ? "text-gray-400 line-through" : "font-semibold text-gray-900"}`}>
+                                {a.patientName}
+                              </span>
+                            )}
+                            <span className="shrink-0 text-[11px] text-gray-500">{a.typeLabel}</span>
+                            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                              APPOINTMENT_STATUS_CHIP[a.status] ?? "bg-slate-100 text-slate-600"}`}>
+                              {a.statusLabel}
+                            </span>
+                            {/* WHAT HAPPENED, on a day that has been. Only where it says something the
+                                status does not, so a future row is not labelled twice. */}
+                            {(day.isPast || day.isToday) && a.outcomeLabel !== a.statusLabel && (
+                              <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                                OUTCOME_CHIP[a.outcome] ?? "bg-slate-100 text-slate-600"}`}>
+                                {a.outcomeLabel}
+                              </span>
+                            )}
+                            {a.arrivedMinute !== null && (
+                              <span className="shrink-0 text-[10px] text-gray-500">
+                                arrived {hhmm(a.arrivedMinute)}
+                              </span>
+                            )}
+                            {a.encounterHref && (
+                              <Link href={a.encounterHref}
+                                className="shrink-0 text-[10px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                                consultation
+                              </Link>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
+          )}
+
+          {loose.length > 0 && (
+            <section className="rounded-xl border border-dashed border-gray-200">
+              <p className="border-b border-gray-100 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-gray-500">
+                Booked outside any session
+              </p>
+              <ul className="divide-y divide-gray-50">
+                {loose.map(a => (
+                  <li key={a.id} className="flex flex-wrap items-baseline gap-x-2 px-3 py-1.5 text-[12px]">
+                    <span className="w-[46px] shrink-0 tabular-nums text-gray-600">{hhmm(a.startMinute)}</span>
+                    <span className={`min-w-0 flex-1 truncate ${a.voided
+                      ? "text-gray-400 line-through" : "font-semibold text-gray-900"}`}>
+                      {a.patientName}
+                    </span>
+                    <span className="shrink-0 text-[11px] text-gray-500">{a.typeLabel}</span>
+                    <span className="shrink-0 text-[11px] text-gray-500">{a.statusLabel}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {ordered.length === 0 ? (
-            <p className="py-6 text-center text-[13px] text-gray-400">Nothing is planned for this day.</p>
+            <p className="py-6 text-center text-[13px] text-gray-400">
+              {shown.hidden > 0
+                ? `Nothing here matches what you are showing -- ${shown.hidden} hidden by the filters.`
+                : day.dayOff
+                  ? "No program and nothing planned on this date."
+                  : "Nothing is planned for this day."}
+            </p>
           ) : (
             ordered.map((a, i) => {
               const prev = ordered.slice(0, i).filter(p => p.state !== "cancelled").at(-1);

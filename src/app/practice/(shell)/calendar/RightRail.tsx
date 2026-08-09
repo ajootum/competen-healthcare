@@ -2,25 +2,41 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import type { PlannerDay, PlannerWeek } from "@/lib/practice/planner";
+import type { PlannerDay, PlannerSession, PlannerWeek } from "@/lib/practice/planner";
 import {
   CONFLICT_LABEL, PLANNER_QUICK_ACTIONS, PLANNER_STATE_LABEL,
   TRAVEL_BASIS_LABEL, TRAVEL_BASIS_NOTE, activityLabel,
 } from "@/lib/practice/planner-constants";
-import { hhmm, hoursMinutes, shortDate, toneFor, LEGEND_TYPES, STATE_CHIP } from "./planner-ui";
+import {
+  hhmm, hoursMinutes, shortDate, toneFor, LEGEND_TYPES, STATE_CHIP, type PlannerUrlState,
+} from "./planner-ui";
+import ContextPanel from "./ContextPanel";
 
 // s3's RIGHT PANEL: Day Summary, AI Planner, Upcoming Follow-ups, Quick Actions and Legend.
+//
+// ⚠ CP-PLAN-002 s7's CONTEXTUAL PANEL SITS AT THE TOP OF IT, and it is a different question from the Day
+// Summary below. The Day Summary is the practitioner's WORKLOAD -- how much of their own time is spoken
+// for. The contextual panel is the SCHEDULE -- capacity, who is booked and what a schedule override has
+// done to them. Merging the two would put "4 free appointment slots" next to "6h 30m spoken for" as
+// though they were the same kind of number.
 
-export default function RightRail({ day, week, canManage, followUps, followUpsUnavailable, onQuickAdd }: {
+export default function RightRail({
+  day, week, canManage, followUps, followUpsUnavailable, onQuickAdd,
+  session, urlState, onBook,
+}: {
   day: PlannerDay;
   week: PlannerWeek;
   canManage: boolean;
   followUps: { id: string; patientName: string | null; dueOn: string; kind: string | null; overdue: boolean }[];
   followUpsUnavailable: string | null;
   onQuickAdd: (activityType: string) => void;
+  session: PlannerSession | null;
+  urlState: PlannerUrlState;
+  onBook: (date: string, startMinute: number | null) => void;
 }) {
   return (
     <aside className="flex flex-col gap-4">
+      <ContextPanel day={day} session={session} canManage={canManage} urlState={urlState} onBook={onBook} />
       <DaySummary day={day} />
       <AiPlanner day={day} week={week} />
       <FollowUps items={followUps} unavailable={followUpsUnavailable} />

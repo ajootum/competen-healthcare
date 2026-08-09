@@ -1,12 +1,21 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
 import { ACTIVITY_LABEL, type ActivityType } from "@/lib/practice/activity-constants";
 import { activityState } from "@/lib/practice/activity";
-import { practiceToday } from "@/lib/practice/practice-time";
+import { practiceToday, zonedDayRange, zoneOffsetMinutes } from "@/lib/practice/practice-time";
 import { audit } from "@/lib/practice/audit";
 import type { EventSource } from "@/lib/practice/events";
-import { TRAVEL_BASIS_NOTE, WEEKDAY_NAME, WEEKDAY_SHORT } from "@/lib/practice/planner-constants";
+import {
+  TRAVEL_BASIS_NOTE, WEEKDAY_NAME, WEEKDAY_SHORT, PLANNER_STATE_LABEL,
+  APPOINTMENT_STATUSES_BOOKED, APPOINTMENT_STATUS_LABEL, APPOINTMENT_TYPE_LABEL,
+  CAPACITY_BASIS_NOTE, SLOT_KIND_LABEL,
+  addDaysIso, daysBetweenIso, PERIOD_DAY_CAP,
+  appointmentOutcome, OUTCOME_LABEL, ENCOUNTER_RANK,
+  type AppointmentOutcome, type PlannerPeriod,
+} from "@/lib/practice/planner-constants";
+import { EXCEPTION_KINDS } from "@/lib/practice/schedule-exception-constants";
 import { occursOn, readRecurrence } from "@/lib/practice/recurrence";
 import { MISSING_COLUMN_CODES, RECURRENCE_COLUMNS } from "@/lib/practice/availability-config";
+import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the Supabase admin client is untyped; every
    engine in src/lib/practice does the same. */
@@ -49,6 +58,18 @@ export {
   PLANNER_ACTIONS, PLANNER_QUICK_ACTIONS, PLANNER_WEEKDAYS, PLANNER_STATE_LABEL,
   WEEKDAY_NAME, WEEKDAY_SHORT, TRAVEL_BASIS_LABEL, TRAVEL_BASIS_NOTE, CONFLICT_LABEL,
   type PlannerActionKey,
+  // CP-PLAN-002's navigator and content controls. Re-exported so a server caller has one import and
+  // nothing anywhere ends up with a second definition of "what does Next month mean".
+  PLANNER_VIEWS, PLANNER_QUICK_PERIODS, PLANNER_SHOW_OPTIONS,
+  APPOINTMENT_TYPE_LABEL, APPOINTMENT_STATUS_LABEL, SLOT_KIND_LABEL,
+  APPOINTMENT_STATUSES_BOOKED, APPOINTMENT_STATUSES_VOID,
+  CAPACITY_BASIS_LABEL, CAPACITY_BASIS_NOTE,
+  plannerPeriod, plannerPeriodLabel, shiftPlannerPeriod, quickPeriodTarget, isPlannerView,
+  // The practice owner's "and what HAPPENED on that day". The rule is pure and lives with the other
+  // screen-facing constants; see WHAT_HAPPENED_LIMITS for what this product cannot answer.
+  appointmentOutcome, OUTCOME_LABEL, WHAT_HAPPENED_LIMITS,
+  type AppointmentOutcome,
+  type PlannerView, type PlannerPeriod, type PlannerShowKey,
 } from "@/lib/practice/planner-constants";
 
 /**
@@ -82,6 +103,12 @@ export const PLANNER_REFUSES = [
     "their context -- relocating it would move a clinical record's setting after the fact.",
   "Delete anything. CPR-CORE-001 s13: deleted records are voided or superseded, never physically " +
     "removed. A cancelled block stays on the week, struck through, with who cancelled it and when.",
+  "Infer that a patient WAS SEEN, or that they DID NOT ATTEND, from the fact that a date has passed. " +
+    "The practice owner asked to see 'what happened on that day', and what happened is read from a " +
+    "recorded arrival, a recorded encounter or a status somebody set. A past appointment nobody touched " +
+    "reads as 'nothing was recorded' -- because that is the only true thing this product knows about " +
+    "it, and either of the other two would be a clinical claim no human made. WHAT_HAPPENED_LIMITS " +
+    "states the rest of the gap on the payload rather than in a document nobody opens.",
 ];
 
 // ⚠ THESE MUST BE CAPABILITY CODES THAT ACTUALLY EXIST. A capability code is a STRING COMPARED AGAINST
@@ -214,9 +241,11 @@ export type DayWorkload = {
 };
 
 export type DayConflict = {
-  code: "ACTIVITY_OVERLAP" | "ACTIVITY_TRAVEL_CONFLICT";
+  code: "ACTIVITY_OVERLAP" | "ACTIVITY_TRAVEL_CONFLICT" | "SCHEDULE_OVERRIDE_CONFLICT";
   message: string;
   activityIds: string[];
+  /** CP-PLAN-002 s7's conflict state names PATIENTS, not blocks. Empty on the two activity codes. */
+  appointmentIds?: string[];
 };
 
 /** One session of the regular week, shown beside what is actually planned. s6. */
@@ -230,6 +259,152 @@ export type TemplateSession = {
   note: string | null;
   /** True when something planned actually covers this window. False is s6's "override". */
   coveredByPlan: boolean;
+  /**
+   * True when the diary actually holds generated times for this window on this date.
+   *
+   * ⚠ THIS IS WHY A MONTH CELL MAY SHOW A SESSION WITH NO FREE COUNT. The regular week says "Tuesday
+   * clinic"; the availability generator is what turns that into bookable time. A session nobody has
+   * generated has a REAL window and NO free time, and printing "0 free" for it would be a claim that the
+   * clinic is full when in truth it is not open for booking at all.
+   */
+  generated: boolean;
+};
+
+// ── CP-PLAN-002: THE SCHEDULE ITSELF -- APPOINTMENTS, SESSIONS AND CAPACITY ──────────────────────────
+//
+// ⚠ NOT A SECOND SCHEDULING SYSTEM, AND s8 IS EXPLICIT ABOUT IT: "These are different views/workflows
+// over shared scheduling data. Do not create independent appointment stores for each surface." Every
+// field below is read from practice_appointment (migration 192), practice_availability_slot (192, 227,
+// 230) and practice_availability_exception (230, 242) -- the same three tables the appointment book on
+// this route, the patient booking engine and the availability generator all read. This module adds no
+// table and writes none of them.
+
+export type PlannerAppointment = {
+  id: string;
+  patientId: string | null;
+  patientName: string;
+  appointmentType: string;
+  typeLabel: string;
+  status: string;
+  statusLabel: string;
+  /** Practice-local minutes from midnight, so an appointment and an activity are on one clock. */
+  startMinute: number;
+  endMinute: number;
+  minutes: number;
+  locationId: string | null;
+  locationName: string | null;
+  /** The availability slot it was booked into, when it was booked into one. */
+  sessionId: string | null;
+  reason: string | null;
+  /** CANCELLED or NO_SHOW: on the schedule, struck through, out of every count. */
+  voided: boolean;
+  isWalkIn: boolean;
+  isFollowUp: boolean;
+  /** Where the patient record is, or null for a booking that is a name and nothing else. */
+  href: string | null;
+
+  // ---- WHAT HAPPENED. Every field below is a RECORDED fact or a null. ----
+  /** When the patient was actually checked in. Null means no arrival was recorded, not that they were late. */
+  arrivedAtIso: string | null;
+  arrivedMinute: number | null;
+  encounterId: string | null;
+  encounterStatus: string | null;
+  encounterHref: string | null;
+  outcome: AppointmentOutcome;
+  outcomeLabel: string;
+};
+
+/**
+ * s7's capacity summary for one session.
+ *
+ * ⚠ `available` IS NULLABLE AND THE NULL IS THE POINT. s6 asks for booked and available counts "WHERE
+ * CALCULABLE", and on a session with no generated times there is nothing to calculate -- so this says so
+ * rather than printing a nought that reads as "full".
+ *
+ * ⚠ AND THE FIGURE IS THE PRACTITIONER'S OWN DIARY, NOT A PATIENT'S OFFER. See CAPACITY_BASIS_NOTE.
+ */
+export type SessionCapacity = {
+  /** The practice's configured appointment length -- defaultAppointmentMinutes, the same call the
+   *  booking engine subdivides sessions with. */
+  appointmentMinutes: number;
+  /** How many appointment-length steps fit in the window. Null when the session has no generated time. */
+  slots: number | null;
+  booked: number;
+  available: number | null;
+  /** Time that exists and is not for seeing patients: BLOCKED/CLOSED, or a leave/blocked/admin kind. */
+  blocked: boolean;
+  basis: "session_divided_by_appointment_length";
+  note: string;
+  /** Said in words when `available` is null, so a screen never has to invent the reason. */
+  availableUnknownReason: string | null;
+};
+
+/** One session on a day: a generated availability slot, or a program session nobody has generated yet. */
+export type PlannerSession = {
+  /** The availability slot's id, or the program session's template id. Unique either way. */
+  id: string;
+  source: "generated" | "program";
+  templateId: string | null;
+  startMinute: number;
+  endMinute: number;
+  slotKind: string;
+  slotKindLabel: string;
+  /** OPEN / RESERVED / BLOCKED / CLOSED from the slot, or PLANNED for a program session. */
+  status: string;
+  locationId: string | null;
+  locationName: string | null;
+  note: string | null;
+  /** Every figure is the length of a list you can open: these are the ids behind `capacity.booked`. */
+  appointmentIds: string[];
+  capacity: SessionCapacity;
+};
+
+/** A date the regular week does not describe: leave, a closure, an extra session, a location change. */
+export type DayException = {
+  id: string;
+  kind: string;
+  kindLabel: string;
+  /** `removes`, `adds` or `reshapes`, straight off EXCEPTION_KINDS. */
+  effect: string;
+  reason: string | null;
+  startMinute: number | null;
+  endMinute: number | null;
+  locationId: string | null;
+};
+
+/**
+ * ⚠ WHAT HAPPENED ON A DAY, counted from recorded facts. See WHAT_HAPPENED_LIMITS.
+ *
+ * `notRecorded` is the number a practice should look at first, and it is why this shape exists: it is
+ * the count of bookings whose day has passed and whose outcome nobody wrote down. A summary that folded
+ * those into "did not attend" would look tidier and would be an accusation.
+ */
+export type DayOutcomes = {
+  seen: number;
+  consultationStarted: number;
+  markedComplete: number;
+  arrived: number;
+  didNotAttend: number;
+  cancelled: number;
+  expected: number;
+  notRecorded: number;
+  /** Activities that actually ran, and the ones that were planned and never started. */
+  activitiesRan: number;
+  activitiesNotStarted: number;
+  /** True once the day is over, so a screen knows whether "nothing recorded yet" is a gap or a normal state. */
+  isPast: boolean;
+};
+
+export type DayCapacity = {
+  sessionCount: number;
+  /** Summed over the sessions that have generated times. Null when none of them do. */
+  slots: number | null;
+  booked: number;
+  available: number | null;
+  /** Sessions whose free time could not be worked out, and why, in one number a screen can name. */
+  sessionsNotGenerated: number;
+  bookedMinutes: number;
+  blockedMinutes: number;
 };
 
 export type PlannerDay = {
@@ -247,6 +422,27 @@ export type PlannerDay = {
   /** Null when the day could not be read. Never a zeroed summary of a day nobody looked at. */
   workload: DayWorkload | null;
   unavailable: boolean;
+
+  // ---- CP-PLAN-002. The same day, seen as a SCHEDULE rather than only as a plan. ----
+  sessions: PlannerSession[];
+  appointments: PlannerAppointment[];
+  exceptions: DayException[];
+  /** Null when the day holds no session at all -- see DAY_OFF_LABEL and `dayOff` below. */
+  capacity: DayCapacity | null;
+  /**
+   * What is recorded to have HAPPENED on this day. Null when the day could not be read -- never a set of
+   * zeroes, which would read as a day on which nothing occurred.
+   */
+  happened: DayOutcomes | null;
+  /** True when the practitioner program says anything about this date. */
+  hasProgram: boolean;
+  /**
+   * ⚠ THREE STATES, NOT TWO. `dayOff` is a day the program does not cover and nothing was planned onto.
+   * It is NOT the same as `unavailable` (the day could not be read) and it is NOT a record -- s6:
+   * "Day off/no program should be visually distinct WITHOUT CREATING AN APPOINTMENT-LIKE RECORD", so
+   * this is a boolean a cell can style and never a row a list can contain.
+   */
+  dayOff: boolean;
 };
 
 export type WeekWorkload = {
@@ -263,15 +459,29 @@ export type WeekWorkload = {
   travelMeasured: false;
   byType: { activityType: string; label: string; count: number; minutes: number }[];
   locationCount: number;
+
+  // ---- CP-PLAN-002. The schedule half of the same total. ----
+  /** Appointments that occupy their time -- APPOINTMENT_STATUSES_BOOKED. */
+  appointmentCount: number;
+  /** CANCELLED and NO_SHOW. Shown, never counted as booked. */
+  voidAppointmentCount: number;
+  sessionCount: number;
+  /** Free appointment-length steps, summed over sessions where it is calculable. Null when none are. */
+  availableCount: number | null;
+  sessionsNotGenerated: number;
 };
 
 export type PlannerWeek = {
   timezone: string;
   todayDate: string;
+  /** The first and last day this payload describes. For a week these are the Monday and the Sunday. */
+  fromDate: string;
+  toDate: string;
   weekStartDate: string;
   weekEndDate: string;
-  /** ALWAYS seven. s2: "all seven days always visible". A day with nothing on it is a day with nothing
-   *  on it, and it is a row -- not an absent one a screen has to invent. */
+  /** ALWAYS seven for a week. s2: "all seven days always visible". A day with nothing on it is a day
+   *  with nothing on it, and it is a row -- not an absent one a screen has to invent. Over an arbitrary
+   *  range this is one entry per day between fromDate and toDate, inclusive, with no gaps. */
   days: PlannerDay[];
   workload: WeekWorkload | null;
   /** True when the week could not be read, so a screen says so instead of drawing an empty week. */
@@ -280,7 +490,18 @@ export type PlannerWeek = {
   detail: string | null;
   /** True when the week held more blocks than the cap below. Named rather than silently truncated. */
   truncated: boolean;
+  /** True when the period asked for was longer than RANGE_DAY_CAP and was cut. Named, never silent. */
+  rangeCapped: boolean;
 };
+
+/**
+ * The same payload, named for what it actually is once the planner stopped being a week.
+ *
+ * ⚠ ONE TYPE AND ONE COMPUTATION FOR ALL FOUR VIEWS. Day, Week, Month and Agenda differ only in which
+ * days plannerPeriod() asks for and in how a component draws them. A second read for the month grid is
+ * how a month cell comes to say "8 booked" over a day view that lists seven.
+ */
+export type PlannerRange = PlannerWeek;
 
 // ── SMALL PURE HELPERS ───────────────────────────────────────────────────────────────────────────────
 
@@ -341,6 +562,9 @@ const PLANNER_COLUMNS =
  * PostgREST answers an unbounded select with at most 1000 rows AND NO INDICATION THAT IT DID. A week
  * belonging to one practitioner will not reach this, but "will not" is a belief about the data and the
  * cap is a property of the transport, so it is asked for explicitly and the overflow is REPORTED.
+ *
+ * ⚠ THIS IS NOW THE WRITE PATH'S CAP ONLY. activityConflict reads ONE day and 500 blocks on one day is
+ * already absurd. The range read uses SCHEDULE_ROW_CAP, which is sized for up to 120 days.
  */
 const WEEK_ROW_CAP = 500;
 
@@ -375,59 +599,165 @@ function shape(row: any, locById: Map<string, any>, facilityById: Map<string, an
   };
 }
 
-// ── THE SEVEN-DAY WEEK (s4) ──────────────────────────────────────────────────────────────────────────
+// ── THE RANGE (CP-PLAN-002 s3-s6) AND THE SEVEN-DAY WEEK (CPR-V5-005 s4) ─────────────────────────────
+//
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// ⚠ ONE COMPUTATION, FOUR VIEWS. CP-PLAN-002 s2 freezes it -- "Day, Week, Month and Agenda are VIEWS OF
+// THE SAME UNDERLYING SCHEDULE" -- and s8 says what happens if that is ignored: "Do not create
+// independent appointment stores for each surface."
+//
+// So plannerRange() below is the only read, plannerWeek() is a seven-day call into it, and the Day,
+// Month and Agenda screens are the same PlannerDay[] drawn differently. A month cell's "8 booked - 4
+// free" is arithmetic over the very rows the Day view lists, which is why clicking the number can open
+// them: it is the length of a list that already exists on the payload.
+//
+// ⚠ AND NOTHING HERE COMPUTES AVAILABILITY A SECOND TIME. The free count is the availability slot's own
+// window cut into the practice's own appointment length (defaultAppointmentMinutes -- the same call
+// patient-booking.ts subdivides sessions with) minus the appointments that already cover a step. That is
+// the same subtraction the booking engine makes over the same two tables. It differs from the patient
+// channel in exactly two named ways, both recorded on the payload rather than in a comment nobody reads:
+//
+//   1. IT DOES NOT APPLY BOOKING RULES. Notice period, horizon and which sessions are open to patients
+//      belong to an OFFER. This is the practitioner's own diary: time inside their own notice period is
+//      still free time in their own afternoon, and reporting it as booked would be a lie about their
+//      day. CAPACITY_BASIS_NOTE says so wherever the figure is drawn.
+//   2. IT COUNTS `COMPLETED` AS OCCUPYING. takenSpans() in patient-booking subtracts only REQUESTED,
+//      CONFIRMED and ARRIVED, because a finished appointment is in the past and cannot be booked into
+//      anyway. Here the past is a first-class view -- Agenda and Month cover it -- and a clinic that saw
+//      twelve patients yesterday must not read "12 booked, 12 free". The difference only ever makes this
+//      figure SMALLER, which is the safe direction for a number a practitioner plans against.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
 
 /**
- * The week, Monday to Sunday, with every day's activities, locations and workload.
+ * How many days one call will read, whatever it is asked for.
  *
- * ⚠ A FAILED READ IS NOT AN EMPTY WEEK, and the flags are shaped so a screen cannot confuse the two.
- * Seven days are always returned because s2 requires them, but a day whose read failed carries
- * `unavailable: true` and `workload: null` rather than a zeroed summary. "You have nothing on Thursday"
- * and "I could not find out about Thursday" are different sentences, and only one of them should ever be
- * shown to somebody deciding whether to take a theatre list.
+ * ⚠ A WHOLE YEAR FITS, and it fits because the practice owner asked for one: "any day of the week or
+ * month or year". 366 admits every period the navigator can produce -- a month grid is 42 days, three
+ * months is 92, a leap year is 366 -- and still bounds a hand-typed range.
  *
- * @param opts.date any date inside the week wanted. Defaults to the practice's today.
+ * ⚠ AND REACHING IT IS REPORTED as `rangeCapped`, never silently trimmed. An agenda that quietly stopped
+ * in August would look exactly like a diary that empties in August.
  */
-export async function plannerWeek(
-  admin: any, ctx: WorkspaceContext, opts: { date?: string; at?: Date } = {},
-): Promise<PlannerWeek> {
+export const RANGE_DAY_CAP = PERIOD_DAY_CAP;
+
+/**
+ * ⚠ PostgREST RETURNS AT MOST 1000 ROWS AND SAYS NOTHING ABOUT IT, so the schedule reads are PAGED TO
+ * EXHAUSTION rather than capped.
+ *
+ * This started as a single `limit(900)` with the overflow reported, which is honest but useless over a
+ * year: a practice seeing thirty patients a day fills 900 rows in five weeks, so every year-long agenda
+ * would have come back flagged "some of this is not shown". takenSpans() in patient-booking.ts pages the
+ * same table for the same reason and this follows it, including the STOP -- a runaway loop is not
+ * allowed, and hitting the stop is reported as `truncated` rather than passed off as the whole answer.
+ */
+const SCHEDULE_PAGE = 1000;
+const SCHEDULE_PAGE_STOP = 25;
+
+/**
+ * Read a whole table's worth of a range, one page at a time.
+ *
+ * ⚠ THE ORDER MUST BE TOTAL. Paging on a non-unique sort key can return the same row twice and skip
+ * another, so every caller below orders by its time column AND by id.
+ */
+async function readPaged(
+  build: (from: number, to: number) => any,
+): Promise<{ ok: true; rows: any[]; truncated: boolean } | { ok: false; message: string }> {
+  const rows: any[] = [];
+  for (let page = 0; page < SCHEDULE_PAGE_STOP; page++) {
+    const { data, error } = await build(page * SCHEDULE_PAGE, page * SCHEDULE_PAGE + SCHEDULE_PAGE - 1);
+    if (error || data == null)
+      return { ok: false, message: error?.message ?? "neither rows nor an error" };
+    rows.push(...(data as any[]));
+    if ((data as any[]).length < SCHEDULE_PAGE) return { ok: true, rows, truncated: false };
+  }
+  return { ok: true, rows, truncated: true };
+}
+
+/**
+ * An instant, as the practice's own calendar date and minutes from ITS midnight.
+ *
+ * ⚠ THIS IS THE JOIN BETWEEN TWO CLOCKS AND IT IS WHY IT EXISTS. An activity is stored as a date and
+ * minutes (migration 232); an appointment is stored as an INSTANT (migration 192). Drawing them on one
+ * day means converting the instant into the practice's wall clock, and doing that with
+ * `toISOString().slice(0,10)` is right in UTC and wrong by three hours in Kampala -- which puts an 01:00
+ * appointment on the previous day, the exact bug CPR-300 found on the operations home.
+ */
+function zonedDayMinute(iso: string | null, timezone: string): { date: string; minute: number } | null {
+  if (!iso) return null;
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return null;
+  const wall = ms + zoneOffsetMinutes(timezone, new Date(ms)) * 60000;
+  const date = new Date(wall).toISOString().slice(0, 10);
+  const minute = Math.round((wall - Date.parse(`${date}T00:00:00Z`)) / 60000);
+  return { date, minute };
+}
+
+/** The clock, read once and shared, so a week and the range it delegates to cannot disagree about today. */
+type PlannerClock = { timezone: string; todayDate: string; error: { message: string } | null };
+
+async function plannerClock(admin: any, ctx: WorkspaceContext, at?: Date): Promise<PlannerClock> {
   // ⚠ THE ERROR IS CHECKED. Discarded, a failed workspace read silently becomes "UTC", `today` is then
   // computed for the wrong calendar day, the week is built around the wrong Monday, and the result is a
   // confident week from a query that never succeeded. activity.ts records this exact bug.
-  const { data: ws, error: wsError } = await admin.from("practice_workspace")
+  const { data: ws, error } = await admin.from("practice_workspace")
     .select("timezone").eq("id", ctx.workspaceId).maybeSingle();
   const timezone = ws?.timezone || "UTC";
-  const at = opts.at ?? new Date();
-  const todayDate = practiceToday(timezone, at);
-  const anchor = isDate(opts.date) ? opts.date : todayDate;
-  const weekStart = weekStartDate(anchor);
-  const weekEnd = addDays(weekStart, 6);
-  const dates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  return { timezone, todayDate: practiceToday(timezone, at ?? new Date()), error: error ?? null };
+}
 
-  const skeleton = (unavailable: boolean, detail: string | null): PlannerWeek => ({
-    timezone, todayDate, weekStartDate: weekStart, weekEndDate: weekEnd,
+/**
+ * EVERY DAY BETWEEN TWO DATES, with its activities, its program, its appointments, its capacity and its
+ * conflicts.
+ *
+ * ⚠ A FAILED READ IS NOT AN EMPTY PERIOD, and the flags are shaped so a screen cannot confuse the two.
+ * Every day in the range is always returned, but a day whose read failed carries `unavailable: true` and
+ * `workload: null` rather than a zeroed summary. "You have nothing on Thursday" and "I could not find
+ * out about Thursday" are different sentences, and only one of them should ever be shown to somebody
+ * deciding whether to take a theatre list.
+ */
+export async function plannerRange(
+  admin: any, ctx: WorkspaceContext,
+  opts: { fromDate: string; toDate: string; at?: Date; clock?: PlannerClock },
+): Promise<PlannerRange> {
+  const clock = opts.clock ?? await plannerClock(admin, ctx, opts.at);
+  const { timezone, todayDate } = clock;
+
+  // A range that is not a range is not an error a practitioner can act on, so it is repaired rather than
+  // refused: an absent or malformed date falls back to today, and a backwards range is read forwards.
+  const rawFrom = isDate(opts.fromDate) ? opts.fromDate : todayDate;
+  const rawTo = isDate(opts.toDate) ? opts.toDate : rawFrom;
+  const fromDate = rawTo < rawFrom ? rawTo : rawFrom;
+  const askedTo = rawTo < rawFrom ? rawFrom : rawTo;
+  const rangeCapped = daysBetweenIso(fromDate, askedTo) > RANGE_DAY_CAP;
+  const toDate = rangeCapped ? addDaysIso(fromDate, RANGE_DAY_CAP - 1) : askedTo;
+
+  const dates: string[] = [];
+  for (let i = 0; i < daysBetweenIso(fromDate, toDate); i++) dates.push(addDaysIso(fromDate, i));
+
+  const skeleton = (unavailable: boolean, detail: string | null): PlannerRange => ({
+    timezone, todayDate, fromDate, toDate, weekStartDate: fromDate, weekEndDate: toDate,
     days: dates.map(date => emptyDay(date, todayDate, unavailable)),
     workload: unavailable ? null : emptyWeekWorkload(),
-    unavailable, detail, truncated: false,
+    unavailable, detail, truncated: false, rangeCapped,
   });
 
-  if (wsError) return skeleton(true, wsError.message);
+  if (clock.error) return skeleton(true, clock.error.message);
   if (!ctx.capabilities.includes(CAN_VIEW))
     return skeleton(true, `${CAN_VIEW} is required`);
 
-  const { data: rows, error } = await admin.from("practice_activity")
+  const activityRead = await readPaged((from, to) => admin.from("practice_activity")
     .select(PLANNER_COLUMNS)
     .eq("workspace_id", ctx.workspaceId)
     .eq("practitioner_id", ctx.userId)
-    .gte("plan_date", weekStart).lte("plan_date", weekEnd)
+    .gte("plan_date", fromDate).lte("plan_date", toDate)
     .order("plan_date", { ascending: true })
     .order("planned_start_minute", { ascending: true })
-    .limit(WEEK_ROW_CAP + 1);
-  if (error) return skeleton(true, error.message);
+    .order("id")
+    .range(from, to));
+  if (!activityRead.ok) return skeleton(true, activityRead.message);
 
-  const all = (rows ?? []) as any[];
-  const truncated = all.length > WEEK_ROW_CAP;
-  const kept = truncated ? all.slice(0, WEEK_ROW_CAP) : all;
+  let truncated = activityRead.truncated;
+  const kept = activityRead.rows;
 
   // The places and the institutions behind them, in one round trip each rather than an embedded join
   // per row: the travel buffers are needed for the hops anyway, so the map has to exist regardless.
@@ -454,6 +784,9 @@ export async function plannerWeek(
   // practice-sessions and booking-rules all try-then-fall-back for exactly this reason, and
   // readRecurrence() answers WEEKLY for a row without the columns, so the fallback degrades to the
   // behaviour this file had before.
+  //
+  // ⚠ EVERY NEW READ THAT NAMES THOSE COLUMNS MUST DO THE SAME, and this is still the only one that does
+  // -- the slot, appointment and exception reads below name no column newer than migration 242.
   const TEMPLATE_BASE = "id, weekday, starts_minute, ends_minute, location_id, slot_kind, note";
   const readTemplates = (columns: string) => admin.from("practice_availability_template")
     .select(columns)
@@ -465,22 +798,195 @@ export async function plannerWeek(
   const { data: templates, error: tmplError } = tmplRes;
   if (tmplError) return skeleton(true, tmplError.message);
 
-  const byDate = new Map<string, PlannerActivity[]>();
-  for (const r of kept) {
-    const list = byDate.get(r.plan_date) ?? [];
-    list.push(shape(r, locById, facilityById));
-    byDate.set(r.plan_date, list);
+  // ---- THE SCHEDULE. The practice's own day, both ends, so nothing lands on the wrong date. ----
+  const startIso = zonedDayRange(fromDate, timezone).startIso;
+  const endIso = zonedDayRange(toDate, timezone).endIso;
+
+  const [slotRes, apptRes, exRes, arrivalRes, encounterRes, appointmentMinutes] = await Promise.all([
+    readPaged((from, to) => admin.from("practice_availability_slot")
+      .select("id, starts_at, ends_at, status, slot_kind, note, location_id, generated_from_template_id")
+      .eq("workspace_id", ctx.workspaceId)
+      .gte("starts_at", startIso).lt("starts_at", endIso)
+      .order("starts_at").order("id").range(from, to)),
+    readPaged((from, to) => admin.from("practice_appointment")
+      .select("id, patient_id, patient_name, appointment_type, scheduled_at, duration_minutes, " +
+        "status, reason, location_id, slot_id")
+      .eq("workspace_id", ctx.workspaceId)
+      .gte("scheduled_at", startIso).lt("scheduled_at", endIso)
+      .order("scheduled_at").order("id").range(from, to)),
+    readPaged((from, to) => admin.from("practice_availability_exception")
+      .select("id, kind, from_date, to_date, starts_minute, ends_minute, reason, location_id")
+      .eq("workspace_id", ctx.workspaceId)
+      .lte("from_date", toDate).gte("to_date", fromDate)
+      .order("from_date").order("id").range(from, to)),
+    // ---- WHAT ACTUALLY HAPPENED (the owner's second sentence). See WHAT_HAPPENED_LIMITS below. ----
+    //
+    // ⚠ READ BY WHEN THEY ARRIVED, not by which appointments are in the range. The appointment ids in a
+    // year can run into the thousands and an `in(...)` filter of that size is a URL PostgREST will
+    // refuse. An arrival is recorded when the patient walks in, so its own timestamp puts it on the same
+    // day as the appointment in every case except a check-in recorded across midnight -- named in
+    // WHAT_HAPPENED_LIMITS rather than papered over.
+    readPaged((from, to) => admin.from("practice_arrival")
+      .select("id, appointment_id, status, arrived_at")
+      .eq("workspace_id", ctx.workspaceId)
+      .gte("arrived_at", startIso).lt("arrived_at", endIso)
+      .order("arrived_at").order("id").range(from, to)),
+    readPaged((from, to) => admin.from("practice_encounter")
+      .select("id, appointment_id, patient_id, status, started_at, completed_at, signed_at")
+      .eq("workspace_id", ctx.workspaceId)
+      .gte("started_at", startIso).lt("started_at", endIso)
+      .order("started_at").order("id").range(from, to)),
+    defaultAppointmentMinutes(admin, ctx.workspaceId),
+  ]);
+  // ⚠ ANY ONE OF THESE FAILING MAKES THE WHOLE PERIOD UNAVAILABLE, and that is deliberate rather than
+  // heavy-handed. A period drawn from activities alone, with the appointment read silently dropped,
+  // reads as a week with nothing booked into it -- which is the single most dangerous sentence this
+  // screen can say, because it is what a practitioner checks before agreeing to be somewhere else.
+  //
+  // ⚠ AND THE SAME GOES FOR THE TWO "WHAT HAPPENED" READS. If the encounter read failed and were
+  // discarded, every past appointment would report "nothing was recorded" -- a screen accusing a
+  // practitioner of not writing up a clinic they did write up.
+  for (const r of [slotRes, apptRes, exRes, arrivalRes, encounterRes])
+    if (!r.ok) return skeleton(true, r.message);
+
+  const slotRows = slotRes.ok ? slotRes.rows : [];
+  const apptRows = apptRes.ok ? apptRes.rows : [];
+  const exRows = exRes.ok ? exRes.rows : [];
+  const arrivalRows = arrivalRes.ok ? arrivalRes.rows : [];
+  const encounterRows = encounterRes.ok ? encounterRes.rows : [];
+  truncated = truncated
+    || [slotRes, apptRes, exRes, arrivalRes, encounterRes].some(r => r.ok && r.truncated);
+
+  // ---- WHAT HAPPENED, INDEXED BY THE APPOINTMENT IT HAPPENED TO ----
+  const arrivalByAppointment = new Map<string, any>();
+  for (const r of arrivalRows) {
+    if (String(r.status) === "CANCELLED") continue;   // a cancelled check-in is not an arrival
+    if (!arrivalByAppointment.has(String(r.appointment_id)))
+      arrivalByAppointment.set(String(r.appointment_id), r);
+  }
+  const encounterByAppointment = new Map<string, any>();
+  for (const r of encounterRows) {
+    if (!r.appointment_id) continue;
+    const key = String(r.appointment_id);
+    const held = encounterByAppointment.get(key);
+    // The furthest-along encounter wins, so a draft started after a signed one does not erase it.
+    if (!held || ENCOUNTER_RANK.indexOf(String(r.status)) > ENCOUNTER_RANK.indexOf(String(held.status)))
+      encounterByAppointment.set(key, r);
   }
 
-  const days = dates.map(date =>
-    buildDay(date, todayDate, byDate.get(date) ?? [], locById, (templates ?? []) as any[]));
+  // ---- BUCKET BY THE PRACTICE'S OWN DATE ----
+  const activitiesByDate = new Map<string, PlannerActivity[]>();
+  for (const r of kept) {
+    const list = activitiesByDate.get(r.plan_date) ?? [];
+    list.push(shape(r, locById, facilityById));
+    activitiesByDate.set(r.plan_date, list);
+  }
+
+  const apptByDate = new Map<string, PlannerAppointment[]>();
+  for (const a of apptRows) {
+    const when = zonedDayMinute(a.scheduled_at, timezone);
+    if (!when) continue;
+    const minutes = (a.duration_minutes as number | null) ?? 0;
+    const status = String(a.status);
+    const type = String(a.appointment_type);
+    const arrival = arrivalByAppointment.get(String(a.id)) ?? null;
+    const enc = encounterByAppointment.get(String(a.id)) ?? null;
+    const arrivedMinute = arrival ? zonedDayMinute(arrival.arrived_at, timezone)?.minute ?? null : null;
+    const outcome = appointmentOutcome({
+      status, date: when.date, todayDate,
+      arrived: !!arrival, encounterStatus: enc ? String(enc.status) : null,
+    });
+    const list = apptByDate.get(when.date) ?? [];
+    list.push({
+      id: a.id,
+      patientId: a.patient_id ?? null,
+      patientName: a.patient_name ?? "a patient",
+      appointmentType: type,
+      typeLabel: APPOINTMENT_TYPE_LABEL[type] ?? type,
+      status,
+      statusLabel: APPOINTMENT_STATUS_LABEL[status] ?? status,
+      startMinute: when.minute,
+      endMinute: when.minute + minutes,
+      minutes,
+      locationId: a.location_id ?? null,
+      locationName: a.location_id ? locById.get(a.location_id)?.name ?? null : null,
+      sessionId: a.slot_id ?? null,
+      reason: a.reason ?? null,
+      voided: !APPOINTMENT_STATUSES_BOOKED.includes(status),
+      isWalkIn: type === "walk_in",
+      isFollowUp: type === "scheduled_followup",
+      // ONE CLICK TO THE PATIENT, but only where a booking is linked to a real record. A name-only
+      // booking has nothing to open, and saying so beats a link that 404s.
+      href: a.patient_id ? `/practice/patients/${a.patient_id}` : null,
+      // ---- WHAT HAPPENED. Recorded facts only. See appointmentOutcome and WHAT_HAPPENED_LIMITS. ----
+      arrivedAtIso: arrival ? String(arrival.arrived_at) : null,
+      arrivedMinute,
+      encounterId: enc ? String(enc.id) : null,
+      encounterStatus: enc ? String(enc.status) : null,
+      encounterHref: enc ? `/practice/encounters/${enc.id}` : null,
+      outcome,
+      outcomeLabel: OUTCOME_LABEL[outcome],
+    });
+    apptByDate.set(when.date, list);
+  }
+
+  const slotsByDate = new Map<string, any[]>();
+  for (const s of slotRows) {
+    const when = zonedDayMinute(s.starts_at, timezone);
+    if (!when) continue;
+    const list = slotsByDate.get(when.date) ?? [];
+    list.push(s);
+    slotsByDate.set(when.date, list);
+  }
+
+  const days = dates.map(date => buildDay(date, todayDate, activitiesByDate.get(date) ?? [], locById, {
+    templates: (templates ?? []) as any[],
+    slots: slotsByDate.get(date) ?? [],
+    appointments: apptByDate.get(date) ?? [],
+    exceptions: exRows,
+    timezone,
+    appointmentMinutes: appointmentMinutes as number,
+  }));
 
   return {
-    timezone, todayDate, weekStartDate: weekStart, weekEndDate: weekEnd,
+    timezone, todayDate, fromDate, toDate, weekStartDate: fromDate, weekEndDate: toDate,
     days,
     workload: rollUp(days),
-    unavailable: false, detail: null, truncated,
+    unavailable: false, detail: null, truncated, rangeCapped,
   };
+}
+
+/**
+ * The week, Monday to Sunday, with every day's activities, locations and workload.
+ *
+ * ⚠ NOW A SEVEN-DAY CALL INTO plannerRange() AND NOT A SECOND READ. Every field it returned before it
+ * still returns, in the same shape, because the range engine IS this function with the seven-day
+ * assumption taken out of it. See the banner above plannerRange for why there is only one.
+ *
+ * @param opts.date any date inside the week wanted. Defaults to the practice's today.
+ */
+export async function plannerWeek(
+  admin: any, ctx: WorkspaceContext, opts: { date?: string; at?: Date } = {},
+): Promise<PlannerWeek> {
+  const clock = await plannerClock(admin, ctx, opts.at);
+  const anchor = isDate(opts.date) ? opts.date : clock.todayDate;
+  const weekStart = weekStartDate(anchor);
+  return plannerRange(admin, ctx, {
+    fromDate: weekStart, toDate: addDays(weekStart, 6), at: opts.at, clock,
+  });
+}
+
+/**
+ * The period a view is showing, read in one call. The screens' entry point.
+ *
+ * ⚠ THE PERIOD IS COMPUTED BY plannerPeriod(), WHICH THE BROWSER ALSO CALLS. The header's label, the
+ * previous/next links and this read all come from one function in one import-free file, so the days that
+ * were read and the days that are drawn cannot drift apart.
+ */
+export async function plannerForPeriod(
+  admin: any, ctx: WorkspaceContext, period: PlannerPeriod, opts: { at?: Date } = {},
+): Promise<PlannerRange> {
+  return plannerRange(admin, ctx, { fromDate: period.fromDate, toDate: period.toDate, at: opts.at });
 }
 
 function emptyTravel(): DayTravel {
@@ -505,6 +1011,13 @@ function emptyDay(date: string, todayDate: string, unavailable: boolean): Planne
       byType: [], unassignedCount: 0,
     },
     unavailable,
+    sessions: [], appointments: [], exceptions: [],
+    // ⚠ NULL AND FALSE, NOT "NO PROGRAM". A day nobody could read is not a day off, and a month grid that
+    // greyed it out as one would be telling a practitioner they are free on a date it never looked at.
+    capacity: null,
+    happened: null,
+    hasProgram: false,
+    dayOff: !unavailable,
   };
 }
 
@@ -513,12 +1026,25 @@ const emptyWeekWorkload = (): WeekWorkload => ({
   daysWithActivities: 0, conflictCount: 0, travelShortfallCount: 0,
   travelBufferMinutes: 0, travelBasis: "typed_buffer", travelMeasured: false,
   byType: [], locationCount: 0,
+  appointmentCount: 0, voidAppointmentCount: 0, sessionCount: 0,
+  availableCount: null, sessionsNotGenerated: 0,
 });
+
+/** Everything a day needs that is not its own activities. Named so buildDay does not grow eight arguments. */
+type DayInputs = {
+  templates: any[];
+  slots: any[];
+  appointments: PlannerAppointment[];
+  exceptions: any[];
+  timezone: string;
+  appointmentMinutes: number;
+};
 
 function buildDay(
   date: string, todayDate: string, activities: PlannerActivity[],
-  locById: Map<string, any>, templates: any[],
+  locById: Map<string, any>, inputs: DayInputs,
 ): PlannerDay {
+  const { templates } = inputs;
   const day = emptyDay(date, todayDate, false);
   day.activities = activities;
 
@@ -629,9 +1155,118 @@ function buildDay(
   // function the slot generator uses to decide which occurrences to materialise, so the planner and the
   // diary cannot disagree about which Saturdays exist. readRecurrence() answers WEEKLY for any row
   // without the columns, so this is unchanged for every session that is not fortnightly.
-  day.templateSessions = templates
-    .filter(t => t.weekday === day.weekday && occursOn(day.date, t.weekday, readRecurrence(t)))
-    .map(t => ({
+  // ⚠ ONE FILTER, USED BY ALL FOUR VIEWS. Day, Week, Month and Agenda every one of them draw
+  // `day.templateSessions`, so a fortnightly clinic is absent from its off weeks in all four for the same
+  // reason and by the same line of code. There is no month-specific session list to forget this on.
+  const occurring = templates
+    .filter(t => t.weekday === day.weekday && occursOn(day.date, t.weekday, readRecurrence(t)));
+
+  // ══ CP-PLAN-002: THE SCHEDULE HALF OF THE SAME DAY ══════════════════════════════════════════════
+  day.appointments = [...inputs.appointments]
+    .sort((a, b) => a.startMinute - b.startMinute || a.endMinute - b.endMinute);
+  const booked = day.appointments.filter(a => !a.voided);
+
+  /**
+   * ⚠ WHICH APPOINTMENTS BELONG TO A SESSION, and the two rules are not interchangeable.
+   *
+   * An appointment booked INTO a slot carries its id (migration 192's slot_id), and that linkage is the
+   * truth -- a session and its bookings stay together even if somebody later moves the session's window.
+   * An appointment with no slot of its own is a walk-in or a booking made before the session existed, and
+   * the only thing that can attach it is the clock.
+   *
+   * A booking that overlaps two sessions is counted against both. That is a real double-count, and it is
+   * the honest one: the alternative is to silently drop it from one of them, which would make a session's
+   * "booked" smaller than the list underneath it.
+   */
+  const belongsTo = (sessionId: string | null, s: number, e: number) => (a: PlannerAppointment) =>
+    (sessionId !== null && a.sessionId === sessionId)
+    || (a.sessionId === null && overlaps(a.startMinute, a.endMinute, s, e));
+
+  const BLOCKED_STATUSES = ["BLOCKED", "CLOSED"];
+  const NON_PATIENT_KINDS = ["leave", "blocked", "admin"];
+
+  /**
+   * s7's capacity summary, computed the way the booking engine computes availability: the session's own
+   * window cut into the practice's own appointment length, less the steps an appointment already covers.
+   * See the banner above plannerRange for the two named differences from the patient channel.
+   */
+  const capacityFor = (
+    startMinute: number, endMinute: number,
+    o: { sessionId: string | null; generated: boolean; blocked: boolean },
+  ): { capacity: SessionCapacity; appointmentIds: string[] } => {
+    const m = Math.max(1, inputs.appointmentMinutes);
+    const mine = booked.filter(belongsTo(o.sessionId, startMinute, endMinute));
+    const base = {
+      appointmentMinutes: m, booked: mine.length, blocked: o.blocked,
+      basis: "session_divided_by_appointment_length" as const, note: CAPACITY_BASIS_NOTE,
+    };
+    if (!o.generated)
+      return {
+        capacity: {
+          ...base, slots: null, available: null,
+          // ⚠ THE REASON IS ON THE PAYLOAD so the screen never has to guess between "full" and "not open".
+          availableUnknownReason:
+            "no times have been generated for this session, so there is nothing free to count",
+        },
+        appointmentIds: mine.map(a => a.id),
+      };
+    let slots = 0, free = 0;
+    for (let s = startMinute; s + m <= endMinute; s += m) {
+      slots++;
+      if (!mine.some(a => overlaps(a.startMinute, a.endMinute, s, s + m))) free++;
+    }
+    return {
+      capacity: {
+        ...base, slots,
+        // A blocked session HAS a window and offers nothing in it. Nought free is the true answer here,
+        // unlike the ungenerated case above where nought would be a fiction.
+        available: o.blocked ? 0 : free,
+        availableUnknownReason: null,
+      },
+      appointmentIds: mine.map(a => a.id),
+    };
+  };
+
+  // ---- THE GENERATED SESSIONS: real availability slots, which is what a patient can be booked into. ----
+  day.sessions = [...inputs.slots]
+    .map(s => {
+      const from = zonedDayMinute(s.starts_at, inputs.timezone);
+      const to = zonedDayMinute(s.ends_at, inputs.timezone);
+      if (!from) return null;
+      // An end that lands on the NEXT date is midnight, which is minute 1440 of this one.
+      const endMinute = to && to.date === from.date ? to.minute : 1440;
+      const status = String(s.status ?? "OPEN");
+      const kind = String(s.slot_kind ?? "clinic");
+      const blocked = BLOCKED_STATUSES.includes(status) || NON_PATIENT_KINDS.includes(kind);
+      const { capacity, appointmentIds } =
+        capacityFor(from.minute, endMinute, { sessionId: s.id, generated: true, blocked });
+      const session: PlannerSession = {
+        id: s.id, source: "generated",
+        templateId: s.generated_from_template_id ?? null,
+        startMinute: from.minute, endMinute,
+        slotKind: kind, slotKindLabel: SLOT_KIND_LABEL[kind] ?? kind,
+        status,
+        locationId: s.location_id ?? null,
+        locationName: s.location_id ? locById.get(s.location_id)?.name ?? null : null,
+        note: s.note ?? null,
+        appointmentIds, capacity,
+      };
+      return session;
+    })
+    .filter((s): s is PlannerSession => s !== null);
+
+  // ---- THE PROGRAM SESSIONS. s6's template beside the reality, now also carrying whether the diary
+  //      actually holds times for it. A session with generated slots is NOT repeated as a second card.
+  const generatedTemplateIds = new Set(day.sessions.map(s => s.templateId).filter(Boolean) as string[]);
+  day.templateSessions = occurring.map(t => {
+    const generated = generatedTemplateIds.has(String(t.id))
+      // A slot with no template attribution still counts as this session being generated when it covers
+      // the same window at the same place -- migration 230's generated_from_template_id was added after
+      // some slots already existed, and an unattributed slot is still real time in the diary.
+      || day.sessions.some(s =>
+        (s.locationId ?? null) === (t.location_id ?? null)
+        && overlaps(s.startMinute, s.endMinute, t.starts_minute, t.ends_minute));
+    return {
       id: t.id,
       startsMinute: t.starts_minute,
       endsMinute: t.ends_minute,
@@ -641,7 +1276,101 @@ function buildDay(
       note: t.note ?? null,
       coveredByPlan: live.some(a =>
         overlaps(a.plannedStartMinute, a.plannedEndMinute, t.starts_minute, t.ends_minute)),
-    }));
+      generated,
+    };
+  });
+
+  for (const t of day.templateSessions) {
+    if (t.generated) continue;
+    const { capacity, appointmentIds } =
+      capacityFor(t.startsMinute, t.endsMinute, { sessionId: null, generated: false, blocked: false });
+    day.sessions.push({
+      id: t.id, source: "program", templateId: t.id,
+      startMinute: t.startsMinute, endMinute: t.endsMinute,
+      slotKind: t.slotKind, slotKindLabel: SLOT_KIND_LABEL[t.slotKind] ?? t.slotKind,
+      status: "PLANNED",
+      locationId: t.locationId, locationName: t.locationName,
+      note: t.note, appointmentIds, capacity,
+    });
+  }
+  day.sessions.sort((a, b) => a.startMinute - b.startMinute || a.endMinute - b.endMinute);
+
+  // ---- THE DAY'S CAPACITY. Sums of the sessions above, with the unknowable left unknown. ----
+  if (day.sessions.length > 0) {
+    const computable = day.sessions.filter(s => s.capacity.available !== null);
+    day.capacity = {
+      sessionCount: day.sessions.length,
+      slots: computable.length > 0 ? computable.reduce((n, s) => n + (s.capacity.slots ?? 0), 0) : null,
+      booked: booked.length,
+      // ⚠ NULL WHEN NOTHING COULD BE COUNTED, never nought. A month cell reading "0 free" on a practice
+      // that has simply not generated its times would send a practitioner looking for a full clinic.
+      available: computable.length > 0 ? computable.reduce((n, s) => n + (s.capacity.available ?? 0), 0) : null,
+      sessionsNotGenerated: day.sessions.filter(s => s.capacity.available === null).length,
+      bookedMinutes: booked.reduce((n, a) => n + a.minutes, 0),
+      blockedMinutes: day.sessions.filter(s => s.capacity.blocked)
+        .reduce((n, s) => n + (s.endMinute - s.startMinute), 0),
+    };
+  }
+
+  // ---- THE DATES THE REGULAR WEEK DOES NOT DESCRIBE, and s7's conflict state. ----
+  day.exceptions = inputs.exceptions
+    .filter(e => String(e.from_date).slice(0, 10) <= day.date && String(e.to_date).slice(0, 10) >= day.date)
+    .map(e => {
+      const kind = String(e.kind);
+      const meta = EXCEPTION_KINDS.find(k => k.code === kind);
+      return {
+        id: e.id, kind,
+        kindLabel: meta?.label ?? kind,
+        effect: meta?.effect ?? "removes",
+        reason: e.reason ?? null,
+        startMinute: e.starts_minute ?? null,
+        endMinute: e.ends_minute ?? null,
+        locationId: e.location_id ?? null,
+      };
+    });
+
+  // ⚠ s7's "Conflict state: visible warning when SCHEDULE OVERRIDES AFFECT EXISTING APPOINTMENTS", and
+  // s22's "never silently move existing patients when a program/override changes". This is a REPORT and
+  // not a refusal: the override is already stored, the patients are already booked, and the only thing
+  // this screen can usefully do is make sure nobody discovers it on the day.
+  for (const e of day.exceptions) {
+    const meta = EXCEPTION_KINDS.find(k => k.code === e.kind);
+    if (!meta?.impacts) continue;
+    const s = e.startMinute ?? 0, en = e.endMinute ?? 1440;
+    const hit = booked.filter(a =>
+      overlaps(a.startMinute, a.endMinute, s, en)
+      && (e.locationId === null || a.locationId === null || a.locationId === e.locationId));
+    if (hit.length === 0) continue;
+    day.conflicts.push({
+      code: "SCHEDULE_OVERRIDE_CONFLICT",
+      message: `${e.kindLabel.toLowerCase()} covers ${e.startMinute === null ? "this whole day" : `${hhmm(s)}-${hhmm(en)}`}` +
+        ` and ${hit.length} appointment${hit.length === 1 ? " is" : "s are"} still booked in it`,
+      activityIds: [],
+      appointmentIds: hit.map(a => a.id),
+    });
+  }
+
+  // ---- WHAT HAPPENED. Counted from `outcome`, which is itself computed from recorded facts only. ----
+  const count = (o: string) => day.appointments.filter(a => a.outcome === o).length;
+  day.happened = {
+    seen: count("seen"),
+    consultationStarted: count("consultation_started"),
+    markedComplete: count("marked_complete"),
+    arrived: count("arrived"),
+    didNotAttend: count("did_not_attend"),
+    cancelled: count("cancelled"),
+    expected: count("expected"),
+    notRecorded: count("not_recorded"),
+    activitiesRan: day.activities.filter(a => a.startedAt !== null).length,
+    // Planned and never started, on a day that has been and gone. On a future day this is simply the
+    // plan, which is why the screen reads it beside `isPast` rather than on its own.
+    activitiesNotStarted: day.activities.filter(a => a.state === "planned").length,
+    isPast: day.isPast,
+  };
+
+  // ---- IS THIS A DAY OFF? THREE STATES, AND THIS IS THE THIRD. ----
+  day.hasProgram = day.templateSessions.length > 0 || day.sessions.length > 0;
+  day.dayOff = !day.hasProgram && day.activities.length === 0 && day.appointments.length === 0;
 
   return day;
 }
@@ -671,6 +1400,16 @@ function rollUp(days: PlannerDay[]): WeekWorkload | null {
       byType.set(t.activityType, cur);
     }
     for (const l of d.locations) locationIds.add(l.locationId);
+
+    // ---- CP-PLAN-002's half of the same total. ----
+    week.appointmentCount += d.appointments.filter(a => !a.voided).length;
+    week.voidAppointmentCount += d.appointments.filter(a => a.voided).length;
+    week.sessionCount += d.sessions.length;
+    week.sessionsNotGenerated += d.capacity?.sessionsNotGenerated ?? 0;
+    // ⚠ NULL STAYS NULL UNTIL SOMETHING IS COUNTABLE. Starting this at nought and adding to it would
+    // turn a period in which nothing could be worked out into a confident "0 free".
+    if (d.capacity?.available != null)
+      week.availableCount = (week.availableCount ?? 0) + d.capacity.available;
   }
 
   week.byType = [...byType.entries()].map(([activityType, v]) => ({
@@ -1363,4 +2102,193 @@ export async function addActivityNotes(
     correlationId: opts.correlationId, source: opts.source ?? "web",
   });
   return { ok: true, value: { id, notes, cleared: notes === null } };
+}
+
+// ── CP-PLAN-002 s4: SEARCH THE SCHEDULE ──────────────────────────────────────────────────────────────
+//
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// s4's search requirement, verbatim: "Searching for a future patient must return the appointment date,
+// time, location and session with a direct 'View appointment' / 'Go to date' action. THE USER SHOULD NOT
+// HAVE TO NAVIGATE WEEK-BY-WEEK TO FIND A KNOWN BOOKING."
+//
+// ⚠ SO THIS DOES NOT SEARCH THE LOADED PERIOD. The filters on the screen narrow what is drawn on the days
+// the navigator asked for; this searches the WHOLE DIARY, past and future, and hands back the date to
+// navigate to. A search that only looked at the fortnight already on screen would answer "no results" for
+// the one patient the practitioner knows is booked, which is the failure the requirement names.
+//
+// ⚠ IT IS NOT searchPractice(). search.ts is a full-text search across patients, encounters and documents
+// and it answers "who is this person"; this answers "WHEN ARE THEY COMING", which is a different index
+// (scheduled_at) and a different answer shape (a date to go to). Neither is a substitute for the other,
+// and this one deliberately reads only the two scheduling tables.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+export type ScheduleSearchHit = {
+  kind: "appointment" | "activity";
+  id: string;
+  /** The patient's name, or the activity's title. What the practitioner typed to find it. */
+  title: string;
+  subtitle: string | null;
+  date: string;
+  startMinute: number;
+  endMinute: number;
+  locationName: string | null;
+  /** Which session it sits in, where it was booked into one. s4 asks for the session by name. */
+  sessionLabel: string | null;
+  status: string;
+  statusLabel: string;
+  /** The patient record, or null for a booking that is a name and nothing else. */
+  href: string | null;
+  /** s4's "Go to date": the date the planner should open on to show this. */
+  goToDate: string;
+  past: boolean;
+};
+
+export type ScheduleSearchResult = {
+  query: string;
+  hits: ScheduleSearchHit[];
+  /** True when the search could not be run. NEVER an empty hit list standing in for a failed read. */
+  unavailable: boolean;
+  detail: string | null;
+  /** True when more matched than were returned, so "nothing else" is never implied. */
+  truncated: boolean;
+};
+
+/** The shortest query worth running. One letter matches most of a practice and helps nobody. */
+export const SCHEDULE_SEARCH_MIN = 2;
+const SCHEDULE_SEARCH_LIMIT = 25;
+
+/**
+ * ⚠ THE WILDCARDS ARE STRIPPED AND SO IS THE COMMA, for two different reasons.
+ *
+ * `%` and `_` are ilike wildcards: a query of "_" would otherwise match every patient in the practice.
+ * The COMMA is PostgREST's own value separator -- an unescaped one does not match nothing, it changes the
+ * SHAPE of the filter. Parentheses, quotes and dots go with it for the same reason.
+ */
+function ilikeSafe(raw: string): string {
+  return raw.replace(/[%_\\,().*"']/g, " ").replace(/\s+/g, " ").trim();
+}
+
+export async function scheduleSearch(
+  admin: any, ctx: WorkspaceContext, rawQuery: string,
+  opts: { limit?: number; at?: Date } = {},
+): Promise<ScheduleSearchResult> {
+  const query = typeof rawQuery === "string" ? rawQuery.trim() : "";
+  const safe = ilikeSafe(query);
+  const limit = Math.max(1, Math.min(opts.limit ?? SCHEDULE_SEARCH_LIMIT, 100));
+  const empty = (unavailable: boolean, detail: string | null): ScheduleSearchResult =>
+    ({ query, hits: [], unavailable, detail, truncated: false });
+
+  if (!ctx.capabilities.includes(CAN_VIEW)) return empty(true, `${CAN_VIEW} is required`);
+  if (safe.length < SCHEDULE_SEARCH_MIN) return empty(false, null);
+
+  const clock = await plannerClock(admin, ctx, opts.at);
+  if (clock.error) return empty(true, clock.error.message);
+  const { timezone, todayDate } = clock;
+
+  const [apptRes, actRes, locRes] = await Promise.all([
+    admin.from("practice_appointment")
+      .select("id, patient_id, patient_name, appointment_type, scheduled_at, duration_minutes, " +
+        "status, reason, location_id, slot_id")
+      .eq("workspace_id", ctx.workspaceId)
+      .ilike("patient_name", `%${safe}%`)
+      .order("scheduled_at", { ascending: false })
+      .limit(limit + 1),
+    admin.from("practice_activity")
+      .select("id, activity_type, title, plan_date, planned_start_minute, planned_end_minute, " +
+        "cancelled_at, started_at, ended_at, location_id")
+      .eq("workspace_id", ctx.workspaceId).eq("practitioner_id", ctx.userId)
+      .ilike("title", `%${safe}%`)
+      .order("plan_date", { ascending: false })
+      .limit(limit + 1),
+    admin.from("practice_location").select("id, name").eq("workspace_id", ctx.workspaceId),
+  ]);
+  // ⚠ A FAILED SEARCH IS NOT "NO RESULTS". Somebody told their patient is not booked, when in truth the
+  // query failed, rings that patient and cancels a clinic that was going ahead.
+  const readError = apptRes.error ?? actRes.error ?? locRes.error;
+  if (readError) return empty(true, readError.message);
+
+  const locById = new Map(((locRes.data ?? []) as any[]).map(l => [l.id, l]));
+  const apptRows = (apptRes.data ?? []) as any[];
+  const actRows = (actRes.data ?? []) as any[];
+
+  // The sessions the matching appointments sit in, named rather than numbered. Bounded by the limit
+  // above, so this is a lookup over at most a couple of dozen ids and never a scan.
+  const slotIds = [...new Set(apptRows.map(a => a.slot_id).filter(Boolean))] as string[];
+  let slotById = new Map<string, any>();
+  if (slotIds.length > 0) {
+    const { data: slots, error: slotError } = await admin.from("practice_availability_slot")
+      .select("id, starts_at, ends_at, slot_kind, location_id")
+      .eq("workspace_id", ctx.workspaceId).in("id", slotIds);
+    if (slotError) return empty(true, slotError.message);
+    slotById = new Map(((slots ?? []) as any[]).map(s => [s.id, s]));
+  }
+
+  const hits: ScheduleSearchHit[] = [];
+
+  for (const a of apptRows.slice(0, limit)) {
+    const when = zonedDayMinute(a.scheduled_at, timezone);
+    if (!when) continue;
+    const status = String(a.status);
+    const type = String(a.appointment_type);
+    const slot = a.slot_id ? slotById.get(a.slot_id) : null;
+    const slotFrom = slot ? zonedDayMinute(slot.starts_at, timezone) : null;
+    const slotTo = slot ? zonedDayMinute(slot.ends_at, timezone) : null;
+    hits.push({
+      kind: "appointment",
+      id: a.id,
+      title: a.patient_name ?? "a patient",
+      subtitle: APPOINTMENT_TYPE_LABEL[type] ?? type,
+      date: when.date,
+      startMinute: when.minute,
+      endMinute: when.minute + ((a.duration_minutes as number | null) ?? 0),
+      locationName: a.location_id ? locById.get(a.location_id)?.name ?? null : null,
+      sessionLabel: slot && slotFrom
+        ? `${SLOT_KIND_LABEL[String(slot.slot_kind)] ?? slot.slot_kind} ${hhmm(slotFrom.minute)}-${hhmm(slotTo?.minute ?? slotFrom.minute)}`
+        : null,
+      status,
+      statusLabel: APPOINTMENT_STATUS_LABEL[status] ?? status,
+      href: a.patient_id ? `/practice/patients/${a.patient_id}` : null,
+      goToDate: when.date,
+      past: when.date < todayDate,
+    });
+  }
+
+  for (const r of actRows.slice(0, limit)) {
+    const state: PlannerActivityState =
+      r.cancelled_at ? "cancelled" : activityState(r.started_at ?? null, r.ended_at ?? null);
+    hits.push({
+      kind: "activity",
+      id: r.id,
+      title: r.title,
+      subtitle: ACTIVITY_LABEL[r.activity_type as ActivityType] ?? r.activity_type,
+      date: r.plan_date,
+      startMinute: r.planned_start_minute,
+      endMinute: r.planned_end_minute,
+      locationName: r.location_id ? locById.get(r.location_id)?.name ?? null : null,
+      sessionLabel: null,
+      status: state,
+      statusLabel: PLANNER_STATE_LABEL[state] ?? state,
+      href: null,
+      goToDate: r.plan_date,
+      past: r.plan_date < todayDate,
+    });
+  }
+
+  // NEAREST FIRST, FUTURE BEFORE PAST. Somebody searching a name is nearly always asking "when are they
+  // next in", and a diary sorted by date alone buries that under three years of history.
+  hits.sort((x, y) => {
+    if (x.past !== y.past) return x.past ? 1 : -1;
+    const byDate = x.past
+      ? (x.date < y.date ? 1 : x.date > y.date ? -1 : 0)
+      : (x.date < y.date ? -1 : x.date > y.date ? 1 : 0);
+    return byDate || x.startMinute - y.startMinute;
+  });
+
+  return {
+    query,
+    hits: hits.slice(0, limit),
+    unavailable: false,
+    detail: null,
+    truncated: apptRows.length > limit || actRows.length > limit || hits.length > limit,
+  };
 }

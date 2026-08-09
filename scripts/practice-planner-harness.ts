@@ -86,7 +86,16 @@ async function cleanup(...users: string[]) {
     }
     await admin.from("practice_practitioner_identity").delete().eq("user_id", u);
     await admin.from("provisioning_request").delete().eq("target_user_id", u);
-    await admin.from("practice_audit_event").delete().eq("actor_id", u);
+    // ⚠ THE AUDIT TRAIL IS NOT DELETED, AND THE LINE THAT TRIED TO WAS A SILENT NO-OP FROM THE DAY
+    // MIGRATION 247 SHIPPED. 247 s3 makes practice_audit_event append-only with a BEFORE DELETE trigger
+    // -- deliberately, so that "deletion events are never removable" is true -- and the delete here
+    // raised P0001 on every run while its error was discarded.
+    //
+    // The consequence was not cosmetic. Section 7 below read EVERY audit row this user had ever written,
+    // so after the second run `.find(event_type === cancelled)` returned some previous run's block and
+    // 7c failed, while 7a passed on rows an earlier run had left behind -- vacuously green whatever the
+    // engine did. Section 7 is now scoped to THIS run's workspace, which is what makes it an assertion
+    // about this run at all.
   }
   // ⚠ The workspace delete itself lives in _cleanup.ts: it unpicks the six tables that reference
   // practice_parameter_definition with no on-delete clause, and REPORTS a failure instead of
@@ -114,6 +123,24 @@ async function provision(user: string, name: string, suffix: string) {
 
 const addDays = (d: string, n: number) =>
   new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+
+/**
+ * ⚠ A QUERY THAT FAILS AT WHATEVER DEPTH IT IS CHAINED TO.
+ *
+ * The engine's reads are six and seven calls long, and a stub that spells the chain out by hand stops
+ * injecting a fault the moment the engine adds a `.order()` -- it throws a TypeError instead, which
+ * looks like a harness bug and is usually "fixed" by weakening the assertion. This mirrors any shape.
+ */
+function failingQuery(message = "relation does not exist") {
+  const result = { data: null, error: { message, code: "42P01" } };
+  const chain: any = new Proxy({}, {
+    get(_t, prop) {
+      if (prop === "then") return (res: any, rej: any) => Promise.resolve(result).then(res, rej);
+      return () => chain;
+    },
+  });
+  return chain;
+}
 
 async function main() {
   console.log("\n=== PRACTICE PLANNER: WEEK, ACTIONS, CONFLICTS (CPR-V5-005, migration 236) ===\n");
@@ -598,8 +625,12 @@ async function main() {
   // Every action writes state, and CPR-CORE-001 s13 wants an actor, a timestamp, a source and an entry
   // for each. This engine emits no domain event -- migration 236 s7 says why -- so the trail is the ONLY
   // record that a block was moved, and a hole in it is indistinguishable from a quiet week.
+  // ⚠ SCOPED TO THIS RUN'S WORKSPACE, NOT TO THE USER. practice_audit_event is append-only (migration
+  // 247) so the fixtures' trail survives every teardown; reading by actor alone reads every run this
+  // machine has ever done, which makes 7a pass on somebody else's rows and 7c compare against somebody
+  // else's block. The workspace id is fresh on every run, so this is the only honest filter.
   const { data: auditRows, error: auditErr } = await admin.from("practice_audit_event")
-    .select("event_type, source, actor_id, payload").eq("actor_id", USER_A)
+    .select("event_type, source, actor_id, payload").eq("actor_id", USER_A).eq("workspace_id", wsA)
     .like("event_type", "practice.activity_%");
   const types = new Set(((auditRows ?? []) as { event_type: string }[]).map(r => r.event_type));
   const expected = ["practice.activity_moved", "practice.activity_duplicated", "practice.activity_split",
@@ -636,27 +667,12 @@ async function main() {
   // practice_activity is broken -- which is what every caller sees before migration 236 is applied.
   // Seven empty days would be a confident claim that the practitioner has nothing on all week, from a
   // query that never succeeded, and nothing downstream could tell that from a quiet week.
-  const brokenAdmin = {
-    from: (table: string) => table === "practice_activity"
-      ? {
-        select: () => ({
-          eq: () => ({
-            eq: () => ({
-              gte: () => ({
-                lte: () => ({
-                  order: () => ({
-                    order: () => ({
-                      limit: async () => ({ data: null, error: { message: "relation does not exist" } }),
-                    }),
-                  }),
-                }),
-              }),
-            }),
-          }),
-        }),
-      }
-      : admin.from(table),
-  };
+  // ⚠ SHAPE-INDEPENDENT, AND IT WAS NOT. This stub used to spell out the engine's exact chain --
+  // select().eq().eq().gte().lte().order().order().limit() -- and the moment plannerWeek's read gained a
+  // tie-breaking .order("id") and .range() for paging, the stub threw a TypeError instead of injecting a
+  // fault. A fault-injection test that breaks when the CALLER changes is a test that will eventually be
+  // "fixed" by deleting it. The proxy below fails at whatever depth it is chained to.
+  const brokenAdmin = { from: (table: string) => table === "practice_activity" ? failingQuery() : admin.from(table) };
   const blind = await plannerWeek(brokenAdmin, ctxA, { date: d(3) });
   ok("9a. an unreadable week says UNAVAILABLE and carries the database's own words",
     blind.unavailable && blind.detail === "relation does not exist", JSON.stringify(blind.detail));
@@ -669,11 +685,8 @@ async function main() {
     !week.unavailable && week.workload !== null, JSON.stringify(week.unavailable));
 
   // A write that cannot read the block REFUSES rather than guessing.
-  const blindMove = await moveActivity(
-    { from: (t: string) => t === "practice_activity"
-      ? { select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { message: "relation does not exist" } }) }) }) }) }) }
-      : admin.from(t) },
-    ctxA, A, { plannedStartMinute: 600 }, { source: "system" });
+  const blindMove = await moveActivity(brokenAdmin, ctxA, A, { plannedStartMinute: 600 },
+    { source: "system" });
   ok("9e. a move that cannot read the block refuses rather than writing blind",
     !blindMove.ok && blindMove.code === "READ_FAILED", JSON.stringify(blindMove));
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { PlannerDay, PlannerWeek } from "@/lib/practice/planner";
 import { TRAVEL_BASIS_LABEL } from "@/lib/practice/planner-constants";
-import { hhmm, hoursMinutes, shortDate, toneFor } from "./planner-ui";
+import { hhmm, hoursMinutes, shortDate, toneFor, plannerHref, type PlannerUrlState } from "./planner-ui";
 
 // s4 THE WEEKLY PLANNER -- Monday to Sunday, ALL SEVEN, ALWAYS.
 //
@@ -17,11 +17,13 @@ import { hhmm, hoursMinutes, shortDate, toneFor } from "./planner-ui";
 // THE CURRENT DAY IS EXPANDED BY DEFAULT (s4). The others collapse to their counts, which is enough to
 // see where the week is heavy without scrolling past seven open lists.
 
-export default function WeekPanel({ week, selectedDate, canManage, onAdd }: {
+export default function WeekPanel({ week, selectedDate, canManage, onAdd, urlState }: {
   week: PlannerWeek;
   selectedDate: string;
   canManage: boolean;
   onAdd: (date: string) => void;
+  /** ⚠ Carried through every day link so choosing a day does not clear the filters or the view. */
+  urlState: PlannerUrlState;
 }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ [selectedDate]: true });
   const toggle = (date: string) => setExpanded(e => ({ ...e, [date]: !e[date] }));
@@ -44,6 +46,7 @@ export default function WeekPanel({ week, selectedDate, canManage, onAdd }: {
             onToggle={() => toggle(day.date)}
             canManage={canManage}
             onAdd={() => onAdd(day.date)}
+            urlState={urlState}
           />
         ))}
       </div>
@@ -51,9 +54,9 @@ export default function WeekPanel({ week, selectedDate, canManage, onAdd }: {
   );
 }
 
-function DayCard({ day, selected, open, onToggle, canManage, onAdd }: {
+function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState }: {
   day: PlannerDay; selected: boolean; open: boolean; onToggle: () => void;
-  canManage: boolean; onAdd: () => void;
+  canManage: boolean; onAdd: () => void; urlState: PlannerUrlState;
 }) {
   const w = day.workload;
   const live = day.activities.filter(a => a.state !== "cancelled");
@@ -65,7 +68,7 @@ function DayCard({ day, selected, open, onToggle, canManage, onAdd }: {
         : "border-gray-200 bg-white"}`}
     >
       <div className="flex items-center gap-2 px-3 py-2">
-        <Link href={`/practice/calendar?date=${day.date}`} scroll={false}
+        <Link href={plannerHref({ ...urlState, date: day.date, sel: null })} scroll={false}
           className="flex min-w-0 flex-1 items-baseline gap-2 text-left">
           <span className={`text-[13px] font-bold ${day.isToday ? "text-[var(--cp-primary-deep)]" : "text-gray-900"}`}>
             {day.weekdayShort}

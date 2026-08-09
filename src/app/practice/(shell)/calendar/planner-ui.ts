@@ -6,8 +6,17 @@
 // planner.ts imports activity.ts -> metrics.ts -> access.ts -> `next/headers`, and a client component
 // that pulls in so much as one string from that chain fails `next build` with an import trace on pages
 // nobody touched. tsc and eslint both pass while it is broken. See the header of planner-constants.ts.
+//
+// ⚠ THE ONE EXCEPTION IS `import type`, WHICH IS ERASED BEFORE ANY BUNDLE EXISTS. PlannerDay is imported
+// from planner.ts below as a TYPE ONLY -- write `import { type X }` or `import type { X }` and nothing
+// reaches the browser; drop the word `type` and the whole chain does. The planner harness asserts that
+// every planner.ts import in this directory is type-only, because the difference is one word.
 
 import { ACTIVITY_TYPES } from "@/lib/practice/activity-constants";
+import {
+  activityPasses, appointmentPasses, sessionPasses, type PlannerFilters,
+} from "@/lib/practice/planner-constants";
+import type { PlannerDay } from "@/lib/practice/planner";
 
 export const hhmm = (minute: number) =>
   `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(Math.floor(minute) % 60).padStart(2, "0")}`;
@@ -109,3 +118,117 @@ export const STATE_CHIP: Record<string, string> = {
   done: "bg-slate-100 text-slate-500",
   cancelled: "bg-rose-100 text-rose-700",
 };
+
+// ── CP-PLAN-002: THE URL IS THE STATE, AND THE FILTER IS APPLIED IN ONE PLACE ────────────────────────
+
+/**
+ * ⚠ EVERY CONTROL ON THIS SCREEN IS A LINK, and the whole planner state is in the query string: which
+ * view, which day, which custom period, what is selected and what is filtered.
+ *
+ * The reason is not tidiness. The appointment book underneath the planner already reads `?date=`, the
+ * server does the range read, and s3 requires a "Go to date" and a period a practitioner can come back
+ * to. Client state would give two ideas of "the day I am looking at" on one screen -- which is how
+ * somebody edits Thursday while reading Wednesday -- and would make every one of these controls
+ * unlinkable and unbookmarkable.
+ */
+export type PlannerUrlState = {
+  view?: string;
+  date?: string | null;
+  from?: string | null;
+  to?: string | null;
+  sel?: string | null;
+  show?: string | null;
+  location?: string | null;
+  activityType?: string | null;
+  appointmentType?: string | null;
+  status?: string | null;
+  q?: string | null;
+};
+
+/** Builds /practice/calendar?... dropping everything empty, so a default never appears in the URL. */
+export function plannerHref(state: PlannerUrlState): string {
+  const p = new URLSearchParams();
+  const put = (k: string, v: string | null | undefined) => {
+    if (v !== undefined && v !== null && v !== "") p.set(k, v);
+  };
+  put("view", state.view);
+  put("date", state.date);
+  put("from", state.from);
+  put("to", state.to);
+  put("sel", state.sel);
+  put("show", state.show === "all" ? null : state.show);
+  put("location", state.location);
+  put("activityType", state.activityType);
+  put("appointmentType", state.appointmentType);
+  put("status", state.status);
+  put("q", state.q);
+  const qs = p.toString();
+  return qs ? `/practice/calendar?${qs}` : "/practice/calendar";
+}
+
+/**
+ * One day, narrowed by s4's content controls.
+ *
+ * ⚠ THE PREDICATES ARE IMPORTED, NEVER RESTATED. appointmentPasses, activityPasses and sessionPasses
+ * live in planner-constants.ts and are the same functions the harness exercises; a second copy of the
+ * "Walk-ins" rule written in a component is a rule that can quietly disagree with the one being tested.
+ *
+ * ⚠ AND IT REPORTS WHAT IT HID. A filtered day that simply looks empty is indistinguishable from a day
+ * with nothing on it, which is the distinction this whole product is built around.
+ */
+export function filterDay(day: PlannerDay, f: PlannerFilters): {
+  activities: PlannerDay["activities"];
+  appointments: PlannerDay["appointments"];
+  sessions: PlannerDay["sessions"];
+  hidden: number;
+  empty: boolean;
+} {
+  const activities = day.activities.filter(a => activityPasses(f, a));
+  const appointments = day.appointments.filter(a => appointmentPasses(f, a));
+  const sessions = day.sessions.filter(s => sessionPasses(f, {
+    slotKind: s.slotKind, slotKindLabel: s.slotKindLabel, status: s.status,
+    locationId: s.locationId, locationName: s.locationName,
+    blocked: s.capacity.blocked, available: s.capacity.available, note: s.note,
+  }));
+  const shown = activities.length + appointments.length + sessions.length;
+  const total = day.activities.length + day.appointments.length + day.sessions.length;
+  return { activities, appointments, sessions, hidden: total - shown, empty: shown === 0 };
+}
+
+/** How an appointment status is drawn. Every one of migration 192's six has an entry. */
+export const APPOINTMENT_STATUS_CHIP: Record<string, string> = {
+  REQUESTED: "bg-amber-100 text-amber-800",
+  CONFIRMED: "bg-indigo-100 text-indigo-700",
+  ARRIVED: "bg-emerald-100 text-emerald-700",
+  COMPLETED: "bg-slate-100 text-slate-600",
+  CANCELLED: "bg-rose-100 text-rose-700",
+  NO_SHOW: "bg-rose-100 text-rose-700",
+};
+
+/**
+ * ⚠ HOW AN OUTCOME IS DRAWN. `not_recorded` is AMBER, not grey and not red.
+ *
+ * It is not an error and it is not a did-not-attend: it is a booking whose day has passed and whose
+ * outcome nobody wrote down, which is something a practice can act on. Drawing it in the same grey as
+ * "Expected" would hide it; drawing it in the same red as "Did not attend" would accuse the patient.
+ */
+export const OUTCOME_CHIP: Record<string, string> = {
+  seen: "bg-emerald-100 text-emerald-800",
+  consultation_started: "bg-amber-100 text-amber-800",
+  marked_complete: "bg-slate-100 text-slate-700",
+  arrived: "bg-indigo-100 text-indigo-700",
+  did_not_attend: "bg-rose-100 text-rose-700",
+  cancelled: "bg-rose-50 text-rose-600",
+  expected: "bg-slate-100 text-slate-500",
+  not_recorded: "bg-amber-50 text-amber-800 ring-1 ring-amber-200",
+};
+
+/**
+ * ⚠ HOW A FREE COUNT IS WORDED, in one place, so no screen can round the unknown down to nought.
+ *
+ * `available === null` means the session has no generated times and there is nothing to count. "0 free"
+ * would read as a full clinic; "free times not generated" is what is actually true.
+ */
+export function capacityPhrase(c: { booked: number; available: number | null }): string {
+  return `${c.booked} booked · ${c.available === null ? "free not calculable" : `${c.available} free`}`;
+}
