@@ -272,4 +272,6 @@ export type ScreenCapabilities = {
   maySearch: boolean;
   /** encounter.create -- the gate on "Register and start the consultation" and "Start consultation". */
   mayStartEncounter: boolean;
+  /** appointment.manage -- the gate on CP-SCHED-001's registration scheduling card. */
+  mayBook: boolean;
 };

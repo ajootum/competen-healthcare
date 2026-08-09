@@ -27,10 +27,12 @@ import { STEP_STATE } from "@/lib/practice/palette";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export default function RegistryConsole({ canCreate, canStartEncounter, workspace }: {
+export default function RegistryConsole({ canCreate, canStartEncounter, canBook = false, workspace }: {
   canCreate: boolean;
   /** encounter.create. Gates "Register and start the consultation" -- see RegistrationForm. */
   canStartEncounter: boolean;
+  /** appointment.manage. Gates CP-SCHED-001's scheduling card -- see RegistrationForm. */
+  canBook?: boolean;
   workspace: any;
 }) {
   const [mode, setMode] = useState<"quick" | "full">("quick");
@@ -113,6 +115,7 @@ export default function RegistryConsole({ canCreate, canStartEncounter, workspac
             today={workspace.today}
             mode={mode}
             canStartEncounter={canStartEncounter}
+            canBook={canBook}
             onNotice={setNotice}
             onBirthDateChange={onBirthDateChange}
             onRegistered={(r) => {

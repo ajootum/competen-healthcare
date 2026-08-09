@@ -5,6 +5,7 @@ import Link from "next/link";
 import { SECTION_BADGE, BUTTON } from "@/lib/practice/palette";
 import { resolveApplicable, clearedNotice } from "@/lib/practice/registration-condition";
 import FormFieldInput from "@/components/practice/FormFieldInput";
+import SchedulingCard, { type SchedulingChoice } from "./SchedulingCard";
 
 // CPR-PRM-001 s4/s5/s6 -- the registration form.
 //
@@ -56,7 +57,7 @@ const emptyRelation = (asGuardian: boolean): Relation => ({
 type PatientDraft = {
   givenName: string; middleName: string; familyName: string; sex: string;
   birthDate: string; ageEstimateYears: string; phone: string; email: string; nationalId: string;
-  reasonForVisit: string; appointmentAt: string;
+  reasonForVisit: string;
 };
 
 const composeName = (s: PatientDraft) =>
@@ -103,7 +104,7 @@ function ageFrom(birthDate: string, today: string) {
   return { years, months, days, label };
 }
 
-export default function RegistrationForm({ form, majorityAge, today, mode = "full", canStartEncounter = false, onRegistered, onNotice, onBirthDateChange }: {
+export default function RegistrationForm({ form, majorityAge, today, mode = "full", canStartEncounter = false, canBook = false, onRegistered, onNotice, onBirthDateChange }: {
   form: { template: any; fields: any[] };
   majorityAge: number;
   today: string;
@@ -115,6 +116,12 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
    * has patient.create and does not have this one.
    */
   canStartEncounter?: boolean;
+  /**
+   * appointment.manage. CP-SCHED-001's card reads the practitioner's diary and its primary action puts an
+   * appointment in it, so without the capability the card is not rendered at all -- rather than rendered
+   * and then failing at the last press with a 403.
+   */
+  canBook?: boolean;
   onRegistered: (r: any) => void;
   onNotice?: (n: { kind: "ok" | "err"; text: string }) => void;
   /**
@@ -134,8 +141,17 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
   const [p, setP] = useState<PatientDraft>({
     givenName: "", middleName: "", familyName: "", sex: "unspecified",
     birthDate: "", ageEstimateYears: "", phone: "", email: "", nationalId: "",
-    reasonForVisit: "", appointmentAt: "",
+    reasonForVisit: "",
   });
+
+  // ── CP-SCHED-001 s6: THE CHOSEN SLOT, AND THE TWO THINGS A LOST RACE NEEDS ──────────────────────
+  //
+  // `booking` is what the card returned -- a time the SERVER offered, never one typed here. `nonce`
+  // makes the card re-read after a refusal, and `alternatives` are the times the server sent back WITH
+  // that refusal so the desk sees replacements before any new read lands.
+  const [booking, setBooking] = useState<SchedulingChoice | null>(null);
+  const [nonce, setNonce] = useState(0);
+  const [alternatives, setAlternatives] = useState<any[] | null>(null);
   const [relations, setRelations] = useState<Relation[]>([]);
   const [custom, setCustom] = useState<Record<string, unknown>>({});
   // The sentence shown when a question was withdrawn and its answer thrown away -- see `edit` below.
@@ -225,33 +241,80 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
   }
 
   // A BOOKING FOR ANOTHER DAY IS NOT THE START OF A CONSULTATION. See the action row below.
-  const bookedForLater = !!p.appointmentAt && p.appointmentAt.slice(0, 10) > today;
+  const bookedForLater = !!booking && booking.date > today;
+
+  /** Everything about the person, shared by the sequential route and the transactional one. */
+  const personBody = () => ({
+    givenName: p.givenName || undefined, middleName: p.middleName || undefined,
+    familyName: p.familyName || undefined, sex: p.sex,
+    birthDate: p.birthDate || undefined,
+    ageEstimateYears: p.ageEstimateYears ? Number(p.ageEstimateYears) : undefined,
+    phone: p.phone || undefined, email: p.email || undefined,
+    nationalId: p.nationalId || undefined,
+    relationships: relations.filter(r => r.fullName.trim()).map(r => ({
+      relationshipType: r.relationshipType, fullName: r.fullName,
+      phone: r.phone || undefined, secondaryPhone: r.secondaryPhone || undefined,
+      email: r.email || undefined,
+      isLegalGuardian: r.isLegalGuardian && GUARDIAN_TYPES.has(r.relationshipType),
+      mayReceiveInformation: r.mayReceiveInformation, isPrimary: r.isPrimary,
+    })),
+    reasonForVisit: p.reasonForVisit || undefined,
+    // ⚠ NOT `custom`. Only the questions this form is actually asking travel -- an answer to a
+    // question the form withdrew must not reach the server, which would both store it and use it
+    // to decide that some OTHER conditional field is required.
+    custom: applicableCustom,
+  });
+
+  // ── ⚠ REGISTER AND BOOK IS ONE ACT, SO IT IS ONE REQUEST ────────────────────────────────────────
+  //
+  // CP-SCHED-001 s10: "Use an atomic transaction for registration + booking WHERE THE UI PROMISES A
+  // COMBINED ACTION." This button promises one, so it goes to the transactional route rather than
+  // registering and then booking. The difference is only visible when the race happens -- and when it
+  // does, the whole thing rolls back and this screen can say so truthfully instead of reporting a
+  // patient who exists with an appointment that does not.
+  async function submitBooking(confirmNew: boolean) {
+    if (!booking) return;
+    setBusy(true); setError(null); setCandidates(null); setAlternatives(null);
+    const res = await fetch("/api/v1/practice/register-and-book", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...personBody(), confirmNew,
+        scheduledAt: booking.startsAt, locationId: booking.locationId,
+        durationMinutes: booking.minutes,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBusy(false);
+
+    if (res.status === 409 && Array.isArray(data.candidates) && data.candidates.length) {
+      setCandidates(data.candidates.map((c: any) => ({ ...c, hardBlock: data?.error?.code === "DUPLICATE_IDENTIFIER", booked: true })));
+      return;
+    }
+    if (!res.ok) {
+      setError(data?.error?.message ?? "The registration was not saved.");
+      // ⚠ A LOST SLOT REFRESHES THE CARD. Leaving the old list on screen invites a second press on a
+      // minute that has gone, and a second refusal that reads as the product being broken.
+      if (data?.error?.code === "SLOT_TAKEN" || data?.error?.code === "TIME_NOT_OFFERED") {
+        setAlternatives(Array.isArray(data.alternatives) ? data.alternatives : null);
+        setBooking(null);
+        setNonce(n => n + 1);
+      }
+      return;
+    }
+    onRegistered(data);
+  }
 
   async function submit(confirmNew: boolean, action: "register" | "queue" | "encounter" = "register") {
     setBusy(true); setError(null); setCandidates(null);
     const res = await fetch("/api/v1/practice/registration", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        givenName: p.givenName || undefined, middleName: p.middleName || undefined,
-        familyName: p.familyName || undefined, sex: p.sex,
-        birthDate: p.birthDate || undefined,
-        ageEstimateYears: p.ageEstimateYears ? Number(p.ageEstimateYears) : undefined,
-        phone: p.phone || undefined, email: p.email || undefined,
-        nationalId: p.nationalId || undefined,
-        relationships: relations.filter(r => r.fullName.trim()).map(r => ({
-          relationshipType: r.relationshipType, fullName: r.fullName,
-          phone: r.phone || undefined, secondaryPhone: r.secondaryPhone || undefined,
-          email: r.email || undefined,
-          isLegalGuardian: r.isLegalGuardian && GUARDIAN_TYPES.has(r.relationshipType),
-          mayReceiveInformation: r.mayReceiveInformation, isPrimary: r.isPrimary,
-        })),
-        reasonForVisit: p.reasonForVisit || undefined,
-        appointmentAt: p.appointmentAt ? new Date(p.appointmentAt).toISOString() : undefined,
-        // ⚠ NOT `custom`. Only the questions this form is actually asking travel -- an answer to a
-        // question the form withdrew must not reach the server, which would both store it and use it
-        // to decide that some OTHER conditional field is required.
-        custom: applicableCustom, confirmNew,
-      }),
+      // ⚠ NO appointmentAt ON THIS PATH ANY MORE, AND THAT IS THE WHOLE POINT OF THE CARD.
+      //
+      // This route books by calling bookAppointment with whatever instant it is handed and a null
+      // location, which is how a free-form datetime box got a time judged that no session covered.
+      // A booking now goes to /register-and-book with a slot the SERVER offered. This path registers,
+      // and registering is all it does.
+      body: JSON.stringify({ ...personBody(), confirmNew }),
     });
     const data = await res.json().catch(() => ({}));
     setBusy(false);
@@ -323,7 +386,11 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
   }
 
   return (
-    <form className="mt-3 flex flex-col gap-4" onSubmit={e => { e.preventDefault(); submit(false); }}>
+    // ⚠ ENTER DOES WHAT THE PRIMARY BUTTON DOES. It used to call submit(false) unconditionally, which
+    // with a time chosen would register the patient and quietly throw the appointment away -- the desk
+    // would land on the patient's page with no booking and nothing saying one was dropped.
+    <form className="mt-3 flex flex-col gap-4"
+      onSubmit={e => { e.preventDefault(); if (booking) submitBooking(false); else submit(false); }}>
       {/* ── Identity (comp: a titled card) ─────────────────────────────── */}
       <h3 className="flex items-center gap-2 text-[13px] font-bold text-gray-900"><span aria-hidden className={`flex h-6 w-6 items-center justify-center rounded-md text-[12px] ${SECTION_BADGE.identity.badge}`}>{SECTION_BADGE.identity.icon}</span>Identity</h3>
 
@@ -514,21 +581,28 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
         </p>
       </section>
 
-      {/* ── The visit ─────────────────────────────────────────────────────────────────────────── */}
-      <div className="grid sm:grid-cols-2 gap-2">
-        <label className={`${label} sm:col-span-2`}>Reason for visit
+      {/* ── The visit ─────────────────────────────────────────────────────────────────────────────
+          CP-SCHED-001 s6: "Reason for visit remains above it." The free-form datetime box that used to
+          sit here is gone -- see the scheduling card's own header for what it could not know. */}
+      <div className="grid gap-2">
+        <label className={label}>Reason for visit
           <textarea rows={2} value={p.reasonForVisit}
             onChange={e => edit({ reasonForVisit: e.target.value })}
             placeholder="In their words, if you can" className={`mt-1 ${input}`} />
         </label>
-        <label className={label}>Appointment
-          <input type="datetime-local" value={p.appointmentAt}
-            onChange={e => edit({ appointmentAt: e.target.value })} className={`mt-1 ${input}`} />
-        </label>
-        <p className="self-end text-[11px] text-gray-400">
-          Optional. Leaving it blank registers the patient without booking anything.
-        </p>
       </div>
+
+      {canBook ? (
+        <SchedulingCard value={booking} onChange={setBooking}
+          refreshNonce={nonce} alternatives={alternatives} />
+      ) : (
+        // ⚠ SAID, NOT SILENTLY ABSENT. Somebody who may register but not book should know why there is
+        // no appointment section rather than assume the practice cannot take one.
+        <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50/60 px-3 py-2 text-[12px] text-gray-500">
+          You can register this patient but not book an appointment for them &mdash; that needs the
+          appointment permission. Somebody who has it can book from the calendar.
+        </p>
+      )}
 
       {/* ── Whatever this practice added to its own form (s9) ────────────────────────────────────
           RENDERED OUTSIDE THE SECTION, because the last conditional question disappearing is exactly
@@ -586,30 +660,48 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
             ))}
           </ul>
           {!candidates[0]?.hardBlock && (
-            <button type="button" disabled={busy} onClick={() => submit(true)}
+            // ⚠ THE CONFIRMATION RETURNS TO THE ACT IT CAME FROM. A duplicate warning raised while
+            // booking must resume the booking -- sending it to the plain registration would silently
+            // drop the appointment the desk had just chosen, and nothing on screen would say so.
+            <button type="button" disabled={busy}
+              onClick={() => (candidates[0]?.booked ? submitBooking(true) : submit(true))}
               className="mt-2 rounded-lg border border-[var(--cmp-color-warning)] px-3 py-1.5 text-[12px] font-semibold text-[var(--cmp-text-warning)] hover:bg-white/40">
-              This is a different person — register anyway
+              This is a different person — register {candidates[0]?.booked ? "and book " : ""}anyway
             </button>
           )}
         </div>
       )}
 
-      {/* ── The comp's four actions ─────────────────────────────────────────────────────────────
-          Cancel · Save Draft · Register & Queue · Register Only. The first three are new here; the
-          order is the comp's, and the primary action is the one a walk-in desk presses most. */}
+      {/* ── The actions ─────────────────────────────────────────────────────────────────────────
+          CP-SCHED-001 s6 step 4: "Primary CTA becomes contextual, e.g. 'Register & book 10:20'.
+          Secondary action: 'Register only'." Plus s6's separate operational action, "Add to today's
+          queue", which uses today's active session and is not a booking at all.
+
+          ⚠ THE PRIMARY ACTION MOVES WITH THE STATE OF THE CARD. With a time chosen, the consequential
+          act is the booking and it names the minute -- a button that says "Register and book" without
+          saying WHAT is a button somebody presses to find out. With no time chosen there is nothing to
+          book, so the primary is the queue: that is what a walk-in desk presses most. */}
       <div className="flex items-center gap-2 flex-wrap border-t border-gray-100 pt-3">
+        {booking && (
+          <button type="button" disabled={busy || !canSubmit}
+            onClick={() => submitBooking(false)}
+            className={`rounded-lg px-4 py-2 text-[14px] font-semibold ${BUTTON.primary}`}>
+            {busy ? "Saving…" : `Register & book ${booking.timeLabel}`}
+          </button>
+        )}
+
         {/* TWO PRIMARY ACTIONS, TWO COLOURS, because they are not the same act: one puts a person into
             today's clinic, the other files a record. The comp gives them indigo and violet; rendering
             both in one hue at a walk-in desk makes the more consequential of the two a coin toss, and
             rendering the second as a quiet outline (which it was) reads as "cancel". */}
         <button type="button" disabled={busy || !canSubmit}
           onClick={() => submit(false, "queue")}
-          className={`rounded-lg px-4 py-2 text-[14px] font-semibold ${BUTTON.primary}`}>
-          {busy ? "Checking for duplicates…" : "Register and add to the queue"}
+          className={`rounded-lg px-4 py-2 text-[14px] font-semibold ${booking ? BUTTON.secondaryAction : BUTTON.primary}`}>
+          {busy ? "Checking for duplicates…" : "Add to today's queue"}
         </button>
-        <button type="submit" disabled={!canSubmit}
-          className={`rounded-lg px-4 py-2 text-[14px] font-semibold ${BUTTON.secondaryAction}`}>
-          {p.appointmentAt ? "Register and book" : "Register only"}
+        <button type="button" disabled={busy || !canSubmit} onClick={() => submit(false)}
+          className={`rounded-lg px-4 py-2 text-[14px] font-semibold ${booking ? BUTTON.quiet : BUTTON.secondaryAction}`}>
+          Register only
         </button>
 
         {/* THE THIRD ACT, AND IT IS EXPLICIT ON PURPOSE -- see the reasoning in submit(). It is offered

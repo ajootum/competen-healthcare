@@ -169,13 +169,33 @@ export async function searchPatients(admin: any, workspaceId: string, q: string,
   return { results, complete: failures.length === 0, detail };
 }
 
-/** CPR-V2-005: search first, duplicate detection BEFORE save, identifier generation, then create. */
-export async function registerPatient(admin: any, input: RegisterInput): Promise<EngineResult<{
-  id: string; practiceId: string;
-  /** Writes that did not happen. Empty on a clean registration -- never absent, so a caller cannot
-   * forget to look. See the note above the identifier and contact inserts. */
-  incomplete: { step: string; reason: string }[];
-}>> {
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// ⚠ EVERY JUDGEMENT REGISTRATION MAKES, IN ONE FUNCTION, BECAUSE THERE ARE NOW TWO WRITERS.
+//
+// registerPatient writes with four PostgREST calls; registerAndBook (registration.ts) writes with one
+// transactional RPC so that a lost race leaves no patient behind. Those are two ways of WRITING and they
+// must never become two ways of DECIDING -- a duplicate check that ran on one path and not the other is
+// exactly how a hospital number ends up on two records.
+//
+// So the minimum dataset, the identifier collision and the demographic similarity live here, are called
+// by both, and are not restated anywhere. The transaction below does not repeat them either: it makes no
+// decisions at all, by construction.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+export type ScreenResult =
+  | { ok: true; data: { displayName: string } }
+  | { ok: false; status: number; code: string; message: string; candidates?: Candidate[] };
+
+/** The name, the minimum dataset, the identifier collision and the similar-person check. No writes. */
+export async function screenRegistration(admin: any, input: {
+  workspaceId: string;
+  displayName?: string;
+  givenName?: string; middleName?: string; familyName?: string;
+  birthDate?: string; ageEstimateYears?: number;
+  phone?: string; email?: string;
+  identifiers?: { type: string; value: string; issuer?: string }[];
+  confirmNew?: boolean;
+}): Promise<ScreenResult> {
   // THE PARTS COMPOSE THE WHOLE when a caller sends them, and the whole still wins when it is sent on
   // its own -- so an existing caller keeps working and a one-name patient stays registrable.
   const name = (input.displayName?.trim() || composeDisplayName(input)).trim();
@@ -266,10 +286,34 @@ export async function registerPatient(admin: any, input: RegisterInput): Promise
     }
   }
 
+  return { ok: true, data: { displayName: name } };
+}
+
+/**
+ * ⚠ THE ONE PLACE `sex` IS NARROWED TO WHAT MIGRATION 193's CHECK ACCEPTS.
+ *
+ * The transactional path writes the column too, and a second spelling of this expression is a second
+ * answer to "what does an unanswered sex become".
+ */
+export const storedSex = (sex: string | null | undefined) =>
+  ["female", "male", "other", "unknown"].includes(sex ?? "") ? (sex as string) : "unspecified";
+
+/** CPR-V2-005: search first, duplicate detection BEFORE save, identifier generation, then create. */
+export async function registerPatient(admin: any, input: RegisterInput): Promise<EngineResult<{
+  id: string; practiceId: string;
+  /** Writes that did not happen. Empty on a clean registration -- never absent, so a caller cannot
+   * forget to look. See the note above the identifier and contact inserts. */
+  incomplete: { step: string; reason: string }[];
+}>> {
+  // ⚠ THE SAME SCREENING THE TRANSACTIONAL PATH RUNS, CALLED RATHER THAN COPIED. See its header.
+  const screened = await screenRegistration(admin, input);
+  if (!screened.ok) return screened;
+  const name = screened.data.displayName;
+
   // 3. Create patient + generated practice id (retried on the unique index) + primary contact(s).
   const { data: patient, error: pErr } = await admin.from("practice_patient").insert({
     workspace_id: input.workspaceId, display_name: name,
-    sex: ["female", "male", "other", "unknown"].includes(input.sex ?? "") ? input.sex : "unspecified",
+    sex: storedSex(input.sex),
     birth_date: input.birthDate ?? null, age_estimate_years: input.ageEstimateYears ?? null,
     given_name: input.givenName?.trim() || null,
     middle_name: input.middleName?.trim() || null,

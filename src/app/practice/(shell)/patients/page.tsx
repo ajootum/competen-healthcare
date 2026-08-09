@@ -84,6 +84,9 @@ export default async function PatientsPage({ searchParams }: {
     // encounter.create, verified against migration 191's seeded capability list. There is no
     // "patient.register" capability -- registration is patient.create.
     mayStartEncounter: hasCapability(ctx, "encounter.create"),
+    // appointment.manage, seeded by migration 192 to `practitioner` and `practice_assistant`. The
+    // scheduling card reads the diary and its primary action writes to it, so both halves need this.
+    mayBook: hasCapability(ctx, "appointment.manage"),
   };
 
   const [base, regWorkspace, summaryResult, familyResult, searchResult] = await Promise.all([
@@ -154,6 +157,7 @@ export default async function PatientsPage({ searchParams }: {
               <RegistryConsole
                 canCreate={canCreate}
                 canStartEncounter={capabilities.mayStartEncounter}
+                canBook={capabilities.mayBook}
                 workspace={regWorkspace}
               />
               {/* The operational context the registration desk works against -- today's clinic, who is

@@ -4,13 +4,16 @@ import { bookUnderRules, evaluateBooking } from "@/lib/practice/booking-rules";
 import { rescheduleAppointment, transitionAppointment, APPOINTMENT_TRANSITIONS } from "@/lib/practice/scheduling";
 import { resolveBookingRule } from "@/lib/practice/availability-config";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
+import { practiceToday } from "@/lib/practice/practice-time";
 import { audit } from "@/lib/practice/audit";
 import {
   issuePatientSession, checkPatientSession, normaliseDestination, type Reading,
 } from "@/lib/practice/patient-session";
 import { recordCancellation } from "@/lib/practice/booking-cancellation";
 import { PUBLISH_STATES_LIVE } from "@/lib/practice/publish-constants";
-import { isPatientFacingMode } from "@/lib/practice/practice-session-constants";
+import {
+  isPatientFacingMode, isStaffBookableMode, SESSION_APPOINTMENT_TYPES,
+} from "@/lib/practice/practice-session-constants";
 import type { WorkspaceContext } from "@/lib/practice/access";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -593,6 +596,30 @@ const SLOT_KINDS_SEEING_PATIENTS = ["clinic", "telemedicine", "emergency_reserve
 /** How far ahead this function will look, whatever it is asked for. Bounds the read, not the rule. */
 const AVAILABILITY_WINDOW_CAP_DAYS = 120;
 
+/**
+ * ⚠ PostgREST RETURNS AT MOST 1000 ROWS AND SAYS NOTHING ABOUT IT.
+ *
+ * The diary read below decides which times are FREE by subtraction, so a truncated read does not return
+ * fewer answers -- it returns MORE FREE TIMES THAN EXIST, which is the direction that double-books
+ * people. The window this file can be asked for is up to 120 days, and a practice seeing thirty patients
+ * a day fills 1000 rows in five weeks. So the read is paged to exhaustion and a page that cannot be read
+ * refuses, exactly as every other read here does.
+ */
+const APPOINTMENT_PAGE = 1000;
+/** A stop, so a runaway page loop cannot spin for ever. Reported when it bites; never silently ignored. */
+const APPOINTMENT_PAGE_CAP = 100;
+
+/**
+ * ⚠ WHO IS ASKING WHAT IS FREE. CP-SCHED-001 s5 step 6 and s9's `channel=` on the slots contract.
+ *
+ * `patient_self` is the vocabulary checkPlacement already uses for the same distinction, and it is spelt
+ * the same here on purpose: a second word for one channel is a second thing to keep in step.
+ */
+export type BookingChannel = "patient_self" | "staff";
+
+/** ⚠ THE DEFAULT IS THE PATIENT CHANNEL, so a caller that names none cannot be loosened by omission. */
+const DEFAULT_CHANNEL: BookingChannel = "patient_self";
+
 export type BookableSlot = {
   /** The session window this time came out of. Provenance, not a reservation. */
   sourceSlotId: string;
@@ -611,35 +638,165 @@ export type BookableTimes = {
   /** The window actually searched, which may be narrower than the one asked for. */
   fromIso: string;
   toIso: string;
+  /** Which channel these were computed for. Provenance, so a screen cannot mislabel its own list. */
+  channel: BookingChannel;
   /**
    * ⚠ ONLY OFFERABLE TIMES. Never a taken one, never a reason, never a total. See the header.
    */
   slots: BookableSlot[];
 };
 
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// ⚠ ONE COMPUTATION, TWO CHANNELS, AND EXACTLY THREE DIFFERENCES BETWEEN THEM.
+//
+// This function was the patient channel and nothing else, and reusing it unchanged at the registration
+// desk gives a PRACTITIONER THE WRONG ANSWER ABOUT THEIR OWN DIARY in three specific ways:
+//
+//   1. IT REQUIRED A PUBLISHED PATIENT BOOKING PAGE. resolveBookingPage returns nothing unless the
+//      practice published one, so a practitioner who never opened a public page was told "There is no
+//      booking page at that address" when trying to book their own patient at their own desk.
+//   2. IT NARROWED TO WHAT THE PUBLIC PAGE EXPOSES -- visible_location_ids and visible_appointment_types,
+//      which are the subset a practice chose to show STRANGERS. Staff see the practice's own estate.
+//   3. IT FILTERED SESSIONS TO PATIENT-FACING MODES. `internal` means "you and authorised staff may book
+//      patients in", so the one mode written FOR this channel was the one being removed from it. On a
+//      real practice with four internal sessions and one link-only, that is the difference between the
+//      registration card offering one day a week and offering five.
+//
+// EVERYTHING ELSE IS SHARED AND MUST STAY SHARED: slot status OPEN, the slot kinds that see patients, the
+// session's appointment-type links, the booking rule's lead time and horizon, and the subtraction of
+// existing appointments. A second implementation of any of those is how a DATE comes to say "12
+// available" over a time list that is empty.
+//
+// ⚠ AND THE PATIENT SIDE IS NOT LOOSENED BY ONE INCH. bookableSlots() below keeps its exact signature and
+// its exact behaviour; the channel it passes is a literal, not an argument it forwards.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** What a channel is allowed to be offered, resolved before anything is computed. */
+type InventoryScope = {
+  workspaceId: string;
+  channel: BookingChannel;
+  /** The locations this channel may see, resolved to names. Empty means none, never "all". */
+  locations: { id: string; name: string }[];
+  /** The appointment types this channel may ask for. */
+  appointmentTypes: string[];
+};
+
 /**
- * The times a patient may be offered, computed from the diary and the rules rather than stored.
+ * Resolve the scope of a channel: whose diary, which locations, which types.
+ *
+ * ⚠ THE PATIENT BRANCH IS resolveBookingPage AND NOTHING ELSE, unchanged. The staff branch never touches
+ * it -- there is no path by which an unpublished practice becomes readable to a stranger, because the
+ * staff branch is reached only from a caller that already proved a capability in this workspace.
+ */
+async function resolveInventoryScope(admin: any, args: {
+  channel: BookingChannel; handle?: string | null; workspaceId?: string | null;
+}): Promise<EngineResult<InventoryScope>> {
+  if (args.channel === "staff") {
+    // ⚠ THE WORKSPACE COMES FROM THE CALLER'S CONTEXT, NEVER FROM A HANDLE. requirePracticeContext has
+    // already established membership, status, entitlement and the capability; a handle here would be a
+    // second, weaker way to name a practice.
+    const workspaceId = (args.workspaceId ?? "").trim();
+    if (!workspaceId)
+      return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a workspace is required to read staff availability" };
+
+    const { data: locs, error: lErr } = await admin.from("practice_location")
+      .select("id, name, active").eq("workspace_id", workspaceId).order("name");
+    // ⚠ A FAILED READ IS NOT A PRACTICE WITH NO LOCATIONS. An empty list here would silently drop every
+    // slot that names a location, and the card would report an empty diary for a full one.
+    if (lErr || locs == null)
+      return { ok: false, status: 503, code: "READ_FAILED", message: `this practice's locations could not be read: ${lErr?.message ?? "neither rows nor an error"}` };
+
+    return {
+      ok: true,
+      data: {
+        workspaceId, channel: "staff",
+        // `active` is the ONLY per-location booking gate this schema has. CP-SCHED-001 s7 asks for
+        // booking_enabled and self_booking_enabled columns on PracticeLocation; they do not exist, and
+        // inventing them here would be a control that is really a filter. Recorded, not faked.
+        locations: ((locs ?? []) as any[]).filter(l => l.active).map(l => ({ id: l.id as string, name: l.name as string })),
+        // The closed list migration 192's CHECK enforces. A staff booking may be any type the column can
+        // hold; what a session OFFERS is still decided by that session's own type links, below.
+        appointmentTypes: SESSION_APPOINTMENT_TYPES.map(([code]) => code as string),
+      },
+    };
+  }
+
+  const page = await resolveBookingPage(admin, args.handle ?? "");
+  if (page.state !== "ok") return { ok: false, status: 503, code: "READ_FAILED", message: page.reason };
+  if (!page.value) return { ok: false, status: 404, code: "NOT_FOUND", message: "There is no booking page at that address." };
+  return {
+    ok: true,
+    data: {
+      workspaceId: page.value.workspaceId, channel: "patient_self",
+      locations: page.value.locations, appointmentTypes: page.value.appointmentTypes,
+    },
+  };
+}
+
+/**
+ * Every live appointment overlapping the window, read to EXHAUSTION.
+ *
+ * ⚠ THE PAGING IS THE POINT. See APPOINTMENT_PAGE. Two columns decide freeness and `id` is read only to
+ * give the pages a stable order -- migration 255 s5's rule is about patient_name, patient_id, reason and
+ * appointment_type, none of which this select names, and the row id never leaves this function.
+ */
+async function takenSpans(admin: any, workspaceId: string, fromMs: number, toIso: string): Promise<
+  { ok: true; spans: { s: number; e: number }[] } | { ok: false; message: string }
+> {
+  const spans: { s: number; e: number }[] = [];
+  // Widened at the front by the cap on an appointment's length, so a long appointment starting before
+  // the window but running into it is still seen. Migration 192 checks duration between 5 and 480.
+  const fromIso = new Date(fromMs - 480 * 60000).toISOString();
+  for (let page = 0; page < APPOINTMENT_PAGE_CAP; page++) {
+    const { data, error } = await admin.from("practice_appointment")
+      .select("id, scheduled_at, duration_minutes")
+      .eq("workspace_id", workspaceId).in("status", ["REQUESTED", "CONFIRMED", "ARRIVED"])
+      .gte("scheduled_at", fromIso).lt("scheduled_at", toIso)
+      .order("scheduled_at").order("id")
+      .range(page * APPOINTMENT_PAGE, page * APPOINTMENT_PAGE + APPOINTMENT_PAGE - 1);
+    if (error || data == null)
+      return { ok: false, message: error?.message ?? "neither rows nor an error" };
+    for (const a of (data as any[])) {
+      const s = Date.parse(a.scheduled_at);
+      spans.push({ s, e: s + ((a.duration_minutes as number | null) ?? 20) * 60000 });
+    }
+    if ((data as any[]).length < APPOINTMENT_PAGE) return { ok: true, spans };
+  }
+  // ⚠ SAID, NOT ASSUMED. Reaching the cap means the subtraction is incomplete, and an incomplete
+  // subtraction offers times that are taken. Refused rather than returned.
+  return { ok: false, message: `this diary holds more than ${APPOINTMENT_PAGE_CAP * APPOINTMENT_PAGE} appointments in the window asked for, so the free times could not be computed` };
+}
+
+/**
+ * The times this channel may be offered, computed from the diary and the rules rather than stored.
  *
  * ⚠ A FAILED READ IS NOT AN EMPTY DIARY. Every query below is error-checked and an unreadable anything
  * refuses with READ_FAILED -- because "no times are available" and "nobody could tell" are different
  * sentences, and printing the first when the second is true sends a patient away from a practice that
  * was open.
  */
-export async function bookableSlots(admin: any, args: {
-  handle: string;
+export async function bookableTimes(admin: any, args: {
+  /** ⚠ Defaults to the patient channel. See DEFAULT_CHANNEL. */
+  channel?: BookingChannel;
+  /** Required for `patient_self`. Ignored by `staff`. */
+  handle?: string | null;
+  /** Required for `staff`. Ignored by `patient_self`. */
+  workspaceId?: string | null;
   appointmentType: string;
   locationId?: string | null;
   fromIso: string;
   toIso: string;
 }): Promise<EngineResult<BookableTimes>> {
-  const page = await resolveBookingPage(admin, args.handle);
-  if (page.state !== "ok") return { ok: false, status: 503, code: "READ_FAILED", message: page.reason };
-  if (!page.value) return { ok: false, status: 404, code: "NOT_FOUND", message: "There is no booking page at that address." };
-  const p = page.value;
+  const channel: BookingChannel = args.channel ?? DEFAULT_CHANNEL;
+  const scoped = await resolveInventoryScope(admin, {
+    channel, handle: args.handle ?? null, workspaceId: args.workspaceId ?? null,
+  });
+  if (!scoped.ok) return scoped;
+  const p = scoped.data;
 
-  // The page OFFERS these, so the page also ANSWERS for these. A type or a location that was never on it
-  // arriving here is somebody editing the request, and it is refused the same way submitBookingRequest
-  // refuses it rather than quietly returning nothing.
+  // The channel OFFERS these, so the channel also ANSWERS for these. A type or a location that was never
+  // on it arriving here is somebody editing the request, and it is refused the same way
+  // submitBookingRequest refuses it rather than quietly returning nothing.
   if (!p.appointmentTypes.includes(args.appointmentType))
     return { ok: false, status: 422, code: "TYPE_NOT_OFFERED", message: "that kind of appointment is not offered here" };
   if (args.locationId && !p.locations.some(l => l.id === args.locationId))
@@ -701,7 +858,7 @@ export async function bookableSlots(admin: any, args: {
   const offersType = new Set(((typeLinks ?? []) as any[])
     .filter(l => l.appointment_type === args.appointmentType).map(l => String(l.template_id)));
 
-  // ── ⚠ WHICH SESSIONS ARE OPEN TO PATIENTS AT ALL (s4.3's booking_mode) ─────────────────────────
+  // ── ⚠ WHICH SESSIONS ARE OPEN TO THIS CHANNEL AT ALL (s4.3's booking_mode) ─────────────────────
   //
   // ⚠ THIS FILTER WAS ABSENT AND THE COLUMN WAS DECIDING NOTHING HERE. Migration 240 has stored
   // booking_mode since Phase 1, and this function did not read it -- so a session a practitioner had
@@ -714,54 +871,74 @@ export async function bookableSlots(admin: any, args: {
   // it was ever offered one. Removing this filter would make the page rude; removing that check would
   // make the rule fictional.
   //
-  // ⚠ isPatientFacingMode IS THE SAME EXPRESSION patient-access.ts USES THREE TIMES -- the complement of
-  // BOOKING_MODES_LIVE -- imported rather than restated as `["link_only","public"]`. A fourth spelling
-  // of "patient-bookable" is a fourth thing to forget when a fifth mode is added.
+  // ⚠ TWO PREDICATES, BOTH IMPORTED, NEITHER RESTATED. isPatientFacingMode is the same expression
+  // patient-access.ts uses three times; isStaffBookableMode is BOOKING_MODES minus `none`. They are NOT
+  // opposites -- link_only and public are true for both, because a session a patient may book is also a
+  // session the practice may book into -- and writing either as a literal list here would be a spelling
+  // of "bookable" that nobody updates when a fifth mode is added.
+  //
+  // ⚠ `none` IS REFUSED ON BOTH CHANNELS. It is the practitioner's own protected time and the registration
+  // desk has no more claim on it than a stranger does.
   //
   // ⚠ A SLOT WITH NO TEMPLATE IS UNTOUCHED, exactly as it is by the type link above: a one-off extra
   // session or a stretch of extended hours has no session to carry a mode, and is governed by the
-  // booking page's own visible types, which the practice did choose and which were checked above.
+  // channel's own list of types, which was checked above.
   const { data: modeRows, error: modeErr } = await admin.from("practice_availability_template")
     .select("id, booking_mode").eq("workspace_id", p.workspaceId).eq("status", "active");
   if (modeErr || modeRows == null)
-    return { ok: false, status: 503, code: "READ_FAILED", message: `it could not be read which of this practice's sessions are open to patients: ${modeErr?.message ?? "neither rows nor an error"}` };
-  const openToPatients = new Set(((modeRows ?? []) as any[])
-    .filter(t => isPatientFacingMode(t.booking_mode as string | null)).map(t => String(t.id)));
+    return { ok: false, status: 503, code: "READ_FAILED", message: `it could not be read which of this practice's sessions are open to booking: ${modeErr?.message ?? "neither rows nor an error"}` };
+  const admitsMode = channel === "staff" ? isStaffBookableMode : isPatientFacingMode;
+  const openToChannel = new Set(((modeRows ?? []) as any[])
+    .filter(t => admitsMode(t.booking_mode as string | null)).map(t => String(t.id)));
 
-  // ── WHAT IS ALREADY TAKEN. Four columns, and the reason is in the header. ───────────────────────
-  const { data: apptRows, error: apptErr } = await admin.from("practice_appointment")
-    .select("scheduled_at, duration_minutes")
-    .eq("workspace_id", p.workspaceId).in("status", ["REQUESTED", "CONFIRMED", "ARRIVED"])
-    // Widened at the front by the cap on an appointment's length, so a long appointment starting before
-    // the window but running into it is still seen. Migration 192 checks duration between 5 and 480.
-    .gte("scheduled_at", new Date(fromMs - 480 * 60000).toISOString())
-    .lt("scheduled_at", toIso);
-  if (apptErr || apptRows == null)
-    return { ok: false, status: 503, code: "READ_FAILED", message: `this practice's diary could not be read: ${apptErr?.message ?? "neither rows nor an error"}` };
-  const taken = ((apptRows ?? []) as any[]).map(a => {
-    const s = Date.parse(a.scheduled_at);
-    return { s, e: s + ((a.duration_minutes as number | null) ?? 20) * 60000 };
-  });
+  // ── WHAT IS ALREADY TAKEN. Read to exhaustion -- see takenSpans and APPOINTMENT_PAGE. ───────────
+  const diary = await takenSpans(admin, p.workspaceId, fromMs, toIso);
+  if (!diary.ok)
+    return { ok: false, status: 503, code: "READ_FAILED", message: `this practice's diary could not be read: ${diary.message}` };
+  const taken = diary.spans;
 
   const locName = new Map(p.locations.map(l => [l.id, l.name]));
   const now = Date.now();
   const out: BookableSlot[] = [];
 
+  // ⚠ ONE RULE RESOLUTION PER LOCATION, NOT ONE PER SESSION ROW. The dates engine asks this function for
+  // up to 120 days at a time, which is up to 120 session rows and 120 identical round trips for an answer
+  // that cannot change inside a single computation. Memoised, never cached across calls -- a rule edited
+  // between two calls must be seen by the second.
+  const ruleByLocation = new Map<string, Awaited<ReturnType<typeof resolveBookingRule>>>();
+  const ruleFor = async (locationId: string | null) => {
+    const key = locationId ?? "";
+    const hit = ruleByLocation.get(key);
+    if (hit) return hit;
+    const resolved = await resolveBookingRule(admin, p.workspaceId, locationId, args.appointmentType);
+    ruleByLocation.set(key, resolved);
+    return resolved;
+  };
+
   for (const slot of ((slotRows ?? []) as any[])) {
     const slotLocation = (slot.location_id as string | null) ?? null;
-    // ⚠ A LOCATION THE PAGE DOES NOT EXPOSE IS NOT AN OFFER. resolveBookingPage already dropped
-    // inactive and foreign ids from p.locations, so this test is against the exposed list and not
-    // against the practice's whole estate.
+    // ⚠ A LOCATION THIS CHANNEL DOES NOT SEE IS NOT AN OFFER. resolveInventoryScope already dropped
+    // inactive locations (and, on the patient channel, everything the page does not expose), so this
+    // test is against the channel's own list and never against the practice's whole estate.
     if (slotLocation && !locName.has(slotLocation)) continue;
     if (args.locationId && slotLocation !== args.locationId) continue;
 
     const templateId = (slot.generated_from_template_id as string | null) ?? null;
     if (templateId && !offersType.has(templateId)) continue;
     // s4.3's booking_mode. See the section above -- and note this drops the slot silently, like every
-    // other test in this loop, because a patient is told what IS offerable and never why something is not.
-    if (templateId && !openToPatients.has(templateId)) continue;
+    // other test in this loop, because a caller is told what IS offerable and never why something is not.
+    if (templateId && !openToChannel.has(templateId)) continue;
 
-    const rule = await resolveBookingRule(admin, p.workspaceId, slotLocation, args.appointmentType);
+    const rule = await ruleFor(slotLocation);
+    // ⚠ AN UNREADABLE RULE IS NOT A PRACTICE WITH NO RULES. checkPlacement has refused on this since
+    // resolveBookingRule started reporting it; the OFFERING did not, so a database wobble silently
+    // produced the platform default here -- no notice period, no horizon -- and offered times the
+    // control would then refuse. Offering and control now fail in the same direction.
+    if (rule.readFailed)
+      return {
+        ok: false, status: 503, code: "READ_FAILED",
+        message: `these times could not be computed because your booking rules could not be read: ${rule.readError ?? "no reason was given"}`,
+      };
     const earliest = now + rule.leadTimeMinutes * 60000;
     const latest = rule.bookingHorizonDays === null ? Infinity : now + rule.bookingHorizonDays * 86400000;
 
@@ -792,8 +969,220 @@ export async function bookableSlots(admin: any, args: {
   out.sort((a, b) => (a.startsAt < b.startsAt ? -1 : a.startsAt > b.startsAt ? 1 : 0));
   return {
     ok: true,
-    data: { appointmentType: args.appointmentType, minutes, timezone, fromIso, toIso, slots: out },
+    data: { appointmentType: args.appointmentType, minutes, timezone, fromIso, toIso, channel, slots: out },
   };
+}
+
+/**
+ * The patient-facing read, unchanged in signature and unchanged in behaviour.
+ *
+ * ⚠ THE CHANNEL IS A LITERAL HERE AND NOT AN ARGUMENT THIS FUNCTION FORWARDS. Every existing caller --
+ * the public route, the reschedule check, the harnesses -- keeps exactly what it had, and there is no
+ * value anybody can pass through this door that reaches the staff branch.
+ */
+export async function bookableSlots(admin: any, args: {
+  handle: string;
+  appointmentType: string;
+  locationId?: string | null;
+  fromIso: string;
+  toIso: string;
+}): Promise<EngineResult<BookableTimes>> {
+  return bookableTimes(admin, { ...args, channel: "patient_self" });
+}
+
+// ── 5b. WHICH DATES ARE WORTH OPENING -- CP-SCHED-001 s6 step 2, s9 "Next available dates" ───────────
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// ⚠ IT DERIVES DATES FROM THE TIMES. IT DOES NOT COMPUTE THEM.
+//
+// The obvious implementation -- walk the session templates, apply the weekday recurrence, count the
+// theoretical slots -- is the one that goes wrong, and it goes wrong QUIETLY. The moment a date is
+// computed by different code from the times behind it, the two drift on the first rule anybody changes,
+// and the symptom is a chip that says "12 available" over a time list that is empty. That is not a
+// cosmetic defect: it is the registration desk telling a patient standing at it that Tuesday is open.
+//
+// So this asks bookableTimes for the WHOLE window in one call and buckets what comes back. Every rule --
+// slot status, slot kind, the session's type links, the session's booking mode for this channel, the
+// lead time, the horizon, and the subtraction of live appointments -- is applied exactly once, by the
+// function that will be asked again when the user picks the date. The count on the chip IS the length of
+// the list they are about to see.
+//
+// ⚠ AND THE BUCKET IS THE PRACTICE'S OWN DAY, NOT UTC. practiceToday() converts an instant to the
+// practice's calendar date. A 06:00 Kampala session is 03:00Z, so bucketing on the ISO string's first ten
+// characters would put a third of the morning on the previous day, and the chip would offer a date on
+// which the times listed were yesterday's.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** How far ahead the dates engine will scan for the next few working days. Bounded, and REPORTED. */
+export const DATES_SCAN_DAYS = 120;
+
+export type AvailableDate = {
+  /** The practice's own calendar date, YYYY-MM-DD. */
+  date: string;
+  /** "Tue 11 Aug 2026", already in the practice's timezone so no screen has to guess one. */
+  label: string;
+  /** ⚠ THE NUMBER OF TIMES THE TIME LIST WILL ACTUALLY CONTAIN. Same computation, same call. */
+  freeCount: number;
+  /** The earliest of them, so a card can offer one press. */
+  firstFreeAt: string;
+};
+
+export type NextAvailableDates = {
+  appointmentType: string;
+  minutes: number;
+  timezone: string;
+  channel: BookingChannel;
+  /** The instant the scan started from. */
+  fromIso: string;
+  /** ⚠ THE END OF WHAT WAS SEARCHED. Fewer dates than asked for means "none inside this", not "none". */
+  scannedToIso: string;
+  dates: AvailableDate[];
+  /**
+   * ⚠ TRUE WHEN THE SCAN RAN OUT OF WINDOW BEFORE IT RAN OUT OF DEMAND -- i.e. fewer dates were found
+   * than were asked for. A screen that printed "no more dates" over a capped scan would tell a
+   * practitioner their diary ends in four months. Three states, here as everywhere.
+   */
+  windowExhausted: boolean;
+};
+
+/**
+ * The next N valid working dates for a practitioner + location + appointment type, each with the number
+ * of times actually free on it.
+ */
+export async function nextAvailableDates(admin: any, args: {
+  channel?: BookingChannel;
+  handle?: string | null;
+  workspaceId?: string | null;
+  appointmentType: string;
+  locationId?: string | null;
+  /** Where to start looking. An instant, not a date, so "from now" needs no timezone guess. */
+  fromIso: string;
+  /** How many dates to return. Bounded below and above; the bound is not a rule, only a read size. */
+  limit?: number;
+}): Promise<EngineResult<NextAvailableDates>> {
+  const fromMs = Date.parse(args.fromIso);
+  if (Number.isNaN(fromMs))
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a start instant is required" };
+  const limit = Math.min(Math.max(Math.trunc(args.limit ?? 5), 1), 30);
+  const toMs = fromMs + DATES_SCAN_DAYS * 86400000;
+
+  const times = await bookableTimes(admin, {
+    channel: args.channel, handle: args.handle, workspaceId: args.workspaceId,
+    appointmentType: args.appointmentType, locationId: args.locationId ?? null,
+    fromIso: new Date(fromMs).toISOString(), toIso: new Date(toMs).toISOString(),
+  });
+  // ⚠ PASSED STRAIGHT THROUGH. A refusal here is the same refusal the time list would give, with the
+  // same code, so a screen never has to reconcile two vocabularies for one outage.
+  if (!times.ok) return times;
+
+  const tz = times.data.timezone;
+  const byDate = new Map<string, { count: number; first: string }>();
+  for (const slot of times.data.slots) {
+    const date = practiceToday(tz, new Date(slot.startsAt));
+    const hit = byDate.get(date);
+    if (hit) hit.count += 1;
+    else byDate.set(date, { count: 1, first: slot.startsAt });
+  }
+
+  // The slots arrive sorted, so the dates come out sorted and the FIRST time recorded for a date is its
+  // earliest. Sorted again anyway, because relying on an upstream sort is how an ordering becomes a
+  // coincidence.
+  const dates: AvailableDate[] = [...byDate.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .slice(0, limit)
+    .map(([date, v]) => ({
+      date, label: dateChipLabel(v.first, tz), freeCount: v.count, firstFreeAt: v.first,
+    }));
+
+  return {
+    ok: true,
+    data: {
+      appointmentType: times.data.appointmentType, minutes: times.data.minutes,
+      timezone: tz, channel: times.data.channel,
+      fromIso: times.data.fromIso, scannedToIso: times.data.toIso,
+      dates, windowExhausted: dates.length < limit,
+    },
+  };
+}
+
+/** "Tue 11 Aug 2026", in the practice's own timezone. Formatting, never a decision. */
+function dateChipLabel(instantIso: string, timezone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      timeZone: timezone, weekday: "short", day: "numeric", month: "short", year: "numeric",
+    }).format(new Date(instantIso));
+  } catch {
+    // An unknown timezone must not take the whole card down. The date is still true; only its wording
+    // falls back to the practice's calendar date.
+    return practiceToday(timezone, new Date(instantIso));
+  }
+}
+
+// ── 5c. WHERE THE REGISTRATION DESK MAY BOOK -- CP-SCHED-001 s6 step 1, s9 "List eligible locations" ──
+
+export type StaffBookingLocations = {
+  locations: { id: string; name: string; type: string }[];
+  /**
+   * ⚠ s6 step 1's "default to the current active session location WHEN CONTEXT MAKES THIS UNAMBIGUOUS",
+   * and null is the honest answer whenever it does not. Two sessions running at two places at once, or
+   * none running at all and more than one location on the books, means nobody can tell -- and a default
+   * guessed there is a patient booked into the wrong building.
+   */
+  defaultLocationId: string | null;
+  /** Why that one, in the desk's own words. Null when there is no default. */
+  defaultReason: string | null;
+};
+
+/**
+ * The locations a signed-in practitioner or their staff may book into, and which one to preselect.
+ *
+ * ⚠ A FAILED READ IS NOT A PRACTICE WITH NO LOCATIONS.
+ */
+export async function staffBookingLocations(
+  admin: any, workspaceId: string,
+): Promise<EngineResult<StaffBookingLocations>> {
+  const { data: locs, error } = await admin.from("practice_location")
+    .select("id, name, type, active").eq("workspace_id", workspaceId).order("name");
+  if (error || locs == null)
+    return { ok: false, status: 503, code: "READ_FAILED", message: `this practice's locations could not be read: ${error?.message ?? "neither rows nor an error"}` };
+
+  const locations = ((locs ?? []) as any[]).filter(l => l.active)
+    .map(l => ({ id: l.id as string, name: l.name as string, type: String(l.type ?? "clinic") }));
+  const known = new Set(locations.map(l => l.id));
+
+  // ── WHICH SESSION IS RUNNING RIGHT NOW ─────────────────────────────────────────────────────────
+  //
+  // Derived from the SAME table the times come out of, rather than from a second notion of "the current
+  // session". A row covering this instant is a session in progress; anything else is a guess.
+  const nowIso = new Date().toISOString();
+  const { data: running, error: runErr } = await admin.from("practice_availability_slot")
+    .select("location_id").eq("workspace_id", workspaceId).eq("status", "OPEN")
+    .in("slot_kind", SLOT_KINDS_SEEING_PATIENTS)
+    .lte("starts_at", nowIso).gt("ends_at", nowIso);
+  if (runErr || running == null)
+    return { ok: false, status: 503, code: "READ_FAILED", message: `it could not be read which session is running now: ${runErr?.message ?? "neither rows nor an error"}` };
+
+  const runningHere = [...new Set(((running ?? []) as any[])
+    .map(r => (r.location_id as string | null) ?? null)
+    .filter((id): id is string => !!id && known.has(id)))];
+
+  if (runningHere.length === 1)
+    return {
+      ok: true,
+      data: {
+        locations, defaultLocationId: runningHere[0],
+        defaultReason: `${locations.find(l => l.id === runningHere[0])?.name ?? "This location"} has a session running now.`,
+      },
+    };
+  if (runningHere.length === 0 && locations.length === 1)
+    return {
+      ok: true,
+      data: {
+        locations, defaultLocationId: locations[0].id,
+        defaultReason: `${locations[0].name} is this practice's only active location.`,
+      },
+    };
+  return { ok: true, data: { locations, defaultLocationId: null, defaultReason: null } };
 }
 
 // ── 6. MANAGE A BOOKING WITHOUT AN ACCOUNT ───────────────────────────────────────────────────────────

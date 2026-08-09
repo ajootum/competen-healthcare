@@ -107,6 +107,33 @@ export const BOOKING_MODES_PATIENT_FACING: BookingMode[] = BOOKING_MODES
 export const isPatientFacingMode = (code: string | null | undefined): boolean =>
   BOOKING_MODES_PATIENT_FACING.includes((code ?? "none") as BookingMode);
 
+/**
+ * ⚠ THE MODES A PRACTITIONER OR THEIR STAFF MAY BOOK A PATIENT INTO -- CP-SCHED-001 s5 step 6's
+ * "channel rules: self-bookable, STAFF-ONLY, minimum notice...".
+ *
+ * ⚠ `internal` EXISTS FOR EXACTLY THIS CHANNEL AND WAS BEING FILTERED OUT OF EVERY AVAILABILITY READ.
+ * Its own blurb above says it: "You and authorised staff may book patients in. No patient-facing route
+ * exists." Until the registration card there was no staff-channel availability read at all, so the only
+ * consumer of a computed session list was the patient page -- and `internal` correctly never appeared on
+ * it. Reusing that patient-channel read at the registration desk would have hidden four fifths of a real
+ * practice's diary from the person sitting in it.
+ *
+ * ⚠ `none` IS NEVER IN THIS LIST, and that is the whole reason it is written as a subtraction from
+ * BOOKING_MODES rather than as the literal triple ["internal", "link_only", "public"]. `none` is "time
+ * you have set aside for yourself" -- the one mode whose meaning is that NOBODY books into it, including
+ * the practitioner's own desk. A literal list is a list somebody extends; a subtraction states the rule.
+ *
+ * ⚠ AND IT IS DELIBERATELY NOT THE COMPLEMENT OF ANYTHING. isPatientFacingMode is the complement of
+ * BOOKING_MODES_LIVE, and the two predicates are NOT opposites: link_only and public are true for BOTH,
+ * because a session a patient may book is also a session the practice may book into.
+ */
+export const BOOKING_MODES_STAFF_BOOKABLE: BookingMode[] = BOOKING_MODES
+  .map(m => m.code).filter(c => c !== "none");
+
+/** Whether a stored `booking_mode` admits a staff/practitioner booking. An unknown mode does not. */
+export const isStaffBookableMode = (code: string | null | undefined): boolean =>
+  BOOKING_MODES_STAFF_BOOKABLE.includes((code ?? "none") as BookingMode);
+
 export const bookingModeLabel = (code: string) =>
   BOOKING_MODES.find(m => m.code === code)?.label ?? code;
 
