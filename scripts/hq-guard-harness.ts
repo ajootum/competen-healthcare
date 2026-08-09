@@ -31,6 +31,7 @@ import {
   capabilityForRoute, decideHq, activeGrants, isHqOfficeType, hqOfficeType,
 } from "../src/lib/hq/spaces";
 import { landlordCan, type LandlordCaller } from "../src/lib/platform/landlord";
+import { resolveHqPositions } from "../src/lib/hq/context";
 import { PLATFORM_ROLES, type PlatformRole } from "../src/lib/roles";
 
 loadEnvConfig(process.cwd());
@@ -273,6 +274,80 @@ ok("S3", classifyHqGate(naked).kind === "none",
   ok("B5", eq(dbGrant("chief_executive"), grantsFor("chief_executive").sort())
         && eq(dbGrant("practice_product_director"), grantsFor("practice_product_director").sort()),
     "the applied grants match the migration file the decision tests were run against");
+
+  // ── 8. The /super-admin door ──────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ THIS SECTION EXISTS BECAUSE THE LAYOUT IS THE ONLY THING THAT WIDENED. Everything above proves the
+  // decision function refuses correctly; none of it would have failed while the layout was still testing
+  // super_admin alone and making every appointment inert.
+  //
+  // ⚠ AND IT ASSERTS ON THE LAYOUT SOURCE, NOT ON A COPY OF ITS LOGIC. A harness that recomputes
+  // `isOwner || capabilities.length` and checks the result would pass unchanged if the layout were
+  // deleted. So D1-D3 read the file, with comments stripped first -- the commonest cause of a vacuous
+  // assertion in this codebase is scanning source for a phrase that also appears in a comment about it.
+  console.log("\n8. THE /super-admin DOOR");
+  const rawLayout = readFileSync("src/app/super-admin/layout.tsx", "utf8");
+  const layout = rawLayout.replace(/\/\*[\s\S]*?\*\//g, "").split("\n")
+    .filter(l => !l.trim().startsWith("//") && !l.trim().startsWith("*")).join("\n");
+
+  const ownerLine = /const isOwner\s*=\s*userRoles\.includes\("super_admin"\)\s*\|\|\s*hasPlatformRole\(profile,\s*"platform_owner"\)/.test(layout);
+  ok("G1", ownerLine,
+    "the owner predicate is super_admin OR platform_owner -- the same test resolveHqContext():189 makes, so the door and the page guard cannot disagree");
+
+  // The owner branch must be able to answer WITHOUT the HQ read. `isOwner ? [] : await ...` is the shape
+  // that guarantees it; an unconditional await would mean a broken ogs_offices locks the owners out.
+  ok("G2", /isOwner\s*\?\s*\[\]\s*:\s*\(await resolveHqPositions\(/.test(layout),
+    "⚠ break-glass: the HQ tables are read ONLY for a non-owner, so no failure of ogs_offices can lock out the two owner accounts");
+
+  // ⚠ capabilities, NOT positions. resolveHqPositions returns a non-empty `positions` for a DEACTIVATED
+  // position (context.ts:121) and only empties `capabilities`, so gating on positions would leave a
+  // switched-off position still opening this door.
+  ok("G3", /hqCapabilities\s*=\s*isOwner/.test(layout) && /!isOwner\s*&&\s*hqCapabilities\.length\s*===\s*0/.test(layout)
+        && !/hqPositions\.length/.test(layout),
+    "the gate reads `capabilities`, so DEACTIVATING a position actually shuts this door");
+
+  // ── The control. Everything above is about admitting; this is the refusal it must be paired with. ──
+  const nonOwners = (profs ?? []).filter((p: any) =>
+    !((p.roles?.length ? p.roles : [p.role]) as string[]).includes("super_admin") && !p.platform_role);
+  const resolved = await Promise.all(nonOwners.slice(0, 60).map(async (p: any) =>
+    ({ id: p.id, caps: (await resolveHqPositions(admin, p.id)).capabilities })));
+  const admitted = resolved.filter(r => r.caps.length > 0);
+  ok("G4", nonOwners.length > 0 && admitted.length === 0,
+    `⚠ CONTROL: all ${resolved.length} unappointed non-owner profile(s) resolve to ZERO capabilities and are refused -- with 0 appointments this door is exactly as narrow as before the change`);
+
+  // ⚠ AND THE OTHER HALF, OR G4 IS UNFALSIFIABLE. "Everybody is refused" also passes when the resolver is
+  // broken and refuses everybody forever -- which is precisely the state this change exists to leave. So a
+  // real appointment is written for a real non-owner, the real resolver is asked, and the row is removed.
+  const subject = nonOwners[0];
+  const office = hqOffices[0];
+  const position = ((await admin.from("hq_position").select("code, is_active").eq("is_active", true).limit(50)).data ?? [])
+    .map((r: any) => r.code).find((c: string) => grantsFor(c).length > 0);
+  if (!subject || !office || !position) {
+    skip("G5", "no non-owner / HQ office / granting position available to prove admission");
+  } else {
+    const { data: ins, error: insErr } = await admin.from("ogs_office_appointments")
+      .insert({ office_id: office.id, person_id: subject.id, role: position, status: "active" })
+      .select("id").single();
+    try {
+      // ⚠ NEVER DISCARD AN INSERT'S ERROR. A silently-failed fixture makes the admission check look like
+      // a resolver that refuses, i.e. it turns this proof into the bug it is testing for.
+      if (insErr || !ins) {
+        ok("G5", false, `fixture appointment could not be written (${insErr?.message ?? "no row"}) -- admission is UNPROVEN`);
+      } else {
+        const after = await resolveHqPositions(admin, subject.id);
+        ok("G5", after.capabilities.length > 0,
+          `⚠ the door OPENS: one live ${position} appointment turns the same refused profile into ${after.capabilities.length} capabilit(ies) -- G4 is a real refusal, not a broken resolver`);
+      }
+    } finally {
+      // The tree has been left with orphaned fixture rows before. This is checked, not hoped for.
+      if (ins?.id) {
+        await admin.from("ogs_office_appointments").delete().eq("id", ins.id);
+        const { data: still } = await admin.from("ogs_office_appointments").select("id").eq("id", ins.id).limit(1);
+        ok("G6", (still ?? []).length === 0 && (await resolveHqPositions(admin, subject.id)).capabilities.length === 0,
+          "the fixture appointment is GONE and the subject is refused again -- this harness left nothing behind");
+      }
+    }
+  }
   report();
 })();
 
