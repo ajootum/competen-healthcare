@@ -114,6 +114,9 @@ export default async function PractitionerPage({ params }: {
         <h1 className="mt-1 text-2xl font-bold text-gray-900">{p.displayName}</h1>
         {p.qualifications && <p className="mt-0.5 text-[13px] text-gray-600">{p.qualifications}</p>}
         {p.specialties && <p className="mt-0.5 text-[13px] text-gray-600">{p.specialties}</p>}
+        {/* Its own line rather than appended to the specialty: a paediatric urologist is a paediatrician
+            AND a urologist, and running the two together reads as one longer specialty name. */}
+        {p.subSpecialty && <p className="text-[13px] text-gray-600">{p.subSpecialty}</p>}
         <p className="mt-1 text-[11px] text-gray-400">{p.practitionerNumber}</p>
       </header>
 

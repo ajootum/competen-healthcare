@@ -75,6 +75,7 @@ export default function BookingAddressConsole({ identity }: Props) {
     displayName: identity.displayName ?? "",
     qualifications: identity.publicProfile.qualifications,
     specialties: identity.publicProfile.specialties,
+    subSpecialty: identity.publicProfile.subSpecialty,
     biography: identity.publicProfile.biography,
     languages: identity.publicProfile.languages,
     consultationTypes: identity.publicProfile.consultationTypes,
@@ -156,6 +157,7 @@ export default function BookingAddressConsole({ identity }: Props) {
         displayName: next.displayName ?? "",
         qualifications: next.publicProfile.qualifications,
         specialties: next.publicProfile.specialties,
+        subSpecialty: next.publicProfile.subSpecialty,
         biography: next.publicProfile.biography,
         languages: next.publicProfile.languages,
         consultationTypes: next.publicProfile.consultationTypes,
@@ -619,6 +621,15 @@ export default function BookingAddressConsole({ identity }: Props) {
               <span className="text-[11px] font-semibold text-gray-600">Specialties</span>
               <input value={profile.specialties} placeholder="Paediatrics"
                 onChange={e => setProfile({ ...profile, specialties: e.target.value })}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-[13px] text-gray-900 focus:border-[var(--cp-primary)] focus:outline-none" />
+            </label>
+            {/* Its own field rather than a second thing typed into Specialties: PIS-000 s9 resolves
+                search by specialty, and two concepts in one box make that search worse with every
+                practitioner who joins. Nothing verifies it, exactly like the four fields around it. */}
+            <label className="block">
+              <span className="text-[11px] font-semibold text-gray-600">Sub-specialty</span>
+              <input value={profile.subSpecialty} placeholder="Paediatric urology"
+                onChange={e => setProfile({ ...profile, subSpecialty: e.target.value })}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-[13px] text-gray-900 focus:border-[var(--cp-primary)] focus:outline-none" />
             </label>
             <label className="block">

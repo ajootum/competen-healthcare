@@ -637,7 +637,7 @@ export type IdentitySetupView = {
   emailConfirmed: EmailConfirmation;
   /** The public profile fields as they stand, so an edit form is not a blank that erases them. */
   publicProfile: {
-    qualifications: string; specialties: string; biography: string;
+    qualifications: string; specialties: string; subSpecialty: string; biography: string;
     languages: string; consultationTypes: string;
   };
   /** What a claim costs, in the words the harness also checks. */
@@ -774,7 +774,7 @@ export async function identitySetupView(admin: any, args: {
     discoveryModes: DISCOVERY_MODES.map(m => ({ key: m.key as string, label: m.label as string, detail: m.detail as string })),
     emailConfirmed: await authEmailConfirmation(admin, args.userId),
     publicProfile: {
-      qualifications: "", specialties: "", biography: "", languages: "", consultationTypes: "",
+      qualifications: "", specialties: "", subSpecialty: "", biography: "", languages: "", consultationTypes: "",
     },
     permanenceNotice: HANDLE_PERMANENCE_NOTICE,
     publicationNotice: PUBLICATION_NOTICE,
@@ -785,7 +785,7 @@ export async function identitySetupView(admin: any, args: {
   const bookingPage = await bookingPageState(admin, args.workspaceId);
 
   const { data: row, error } = await admin.from("practice_practitioner_identity")
-    .select("practitioner_number, display_name, handle, discovery, status, qualifications, specialties, biography, languages, consultation_types")
+    .select("practitioner_number, display_name, handle, discovery, status, qualifications, specialties, sub_specialty, biography, languages, consultation_types")
     .eq("user_id", args.userId).maybeSingle();
   // ⚠ A FAILED READ IS NOT "YOU HAVE NO IDENTITY". Reporting it as `none` would offer a practitioner a
   // button that issues a SECOND permanent number the moment the database answered again.
@@ -807,7 +807,7 @@ export async function identitySetupView(admin: any, args: {
   }
 
   const publicProfile = {
-    qualifications: row.qualifications ?? "", specialties: row.specialties ?? "",
+    qualifications: row.qualifications ?? "", specialties: row.specialties ?? "", subSpecialty: row.sub_specialty ?? "",
     biography: row.biography ?? "", languages: row.languages ?? "",
     consultationTypes: row.consultation_types ?? "",
   };
@@ -877,7 +877,7 @@ async function bookingPageState(admin: any, workspaceId: string): Promise<Identi
 
 /** The public profile fields (s6) and the discovery mode (s7). All practitioner-controlled. */
 export async function updateIdentity(admin: any, args: {
-  userId: string; displayName?: string; qualifications?: string; specialties?: string;
+  userId: string; displayName?: string; qualifications?: string; specialties?: string; subSpecialty?: string;
   biography?: string; languages?: string; consultationTypes?: string;
   discovery?: string; primaryWorkspaceId?: string | null; correlationId: string;
 }): Promise<EngineResult<{ id: string; discovery: string }>> {
@@ -894,7 +894,7 @@ export async function updateIdentity(admin: any, args: {
 
   const patch: Record<string, unknown> = { updated_at: nowIso() };
   const map: Record<string, string> = {
-    displayName: "display_name", qualifications: "qualifications", specialties: "specialties",
+    displayName: "display_name", qualifications: "qualifications", specialties: "specialties", subSpecialty: "sub_specialty",
     biography: "biography", languages: "languages", consultationTypes: "consultation_types",
     discovery: "discovery",
   };
@@ -1048,7 +1048,8 @@ export async function authEmailConfirmation(admin: any, userId: string): Promise
 export const PUBLICATION_NOTICE =
   "Publishing opens your booking page at your address. Anybody holding the link -- from a card, a poster, "
   + "a QR code or a message -- reaches a page carrying your name, your practitioner number, and whichever "
-  + "qualifications, specialties, languages, consultation types and biography you have filled in. Listing "
+  + "qualifications, specialties, sub-specialty, languages, consultation types and biography you have filled "
+  + "in. Listing "
   + "publicly does that AND puts those details into Competen's practitioner search, where strangers can "
   + "find you without a link. You can return to hidden whenever you like and the page stops opening "
   + "immediately -- but your handle is never released, and a card already printed or a page already read "
@@ -1213,6 +1214,7 @@ function publicView(row: any) {
     displayName: row.display_name,
     qualifications: row.qualifications,
     specialties: row.specialties,
+    subSpecialty: row.sub_specialty,
     biography: row.biography,
     languages: row.languages,
     consultationTypes: row.consultation_types,

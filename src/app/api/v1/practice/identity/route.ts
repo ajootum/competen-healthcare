@@ -194,6 +194,7 @@ export async function POST(req: NextRequest) {
       displayName: str(body.displayName),
       qualifications: str(body.qualifications),
       specialties: str(body.specialties),
+      subSpecialty: str(body.subSpecialty),
       biography: str(body.biography),
       languages: str(body.languages),
       consultationTypes: str(body.consultationTypes),
