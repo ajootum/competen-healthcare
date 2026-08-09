@@ -6,6 +6,7 @@ import NavLink from "@/components/NavLink";
 import NavGroup from "@/components/NavGroup";
 import RoleSwitcher from "@/components/RoleSwitcher";
 import type { AppRole } from "@/lib/roles";
+import { parentHrefs } from "@/lib/nav/active";
 
 // Super-admin sidebar with dedicated workspace shells. Inside /super-admin/ckp/*
 // it renders the Clinical Knowledge Platform nav, and inside /super-admin/ai/*
@@ -202,7 +203,17 @@ const SYS_NAV = [
   ]},
 ];
 
+// ⚠ HAND-MAINTAINED, AND IT HAD ALREADY DRIFTED TWICE. NavLink prefix-matches by default, so a group's
+// "Overview" stays lit while you are on any of its children -- two rows highlighted, and no way to tell
+// where you are. This set marked the parents that must match EXACTLY, and adding a group meant remembering
+// to add its parent here. /super-admin/platform-ops and /super-admin/enterprise were both missed, which is
+// why "Overview" and "Tenant Operations" were highlighted together.
+//
+// It is kept only as a floor. exactHrefs below DERIVES the same answer from the nav itself, and the two are
+// unioned: the list can no longer be the single point of failure, and removing an entry from it cannot
+// widen matching for any parent that has children in the tree.
 const OVERVIEW_HREFS = new Set(["/super-admin", "/super-admin/ckp", "/super-admin/ai", "/super-admin/governance", "/super-admin/system", "/super-admin/studio", "/super-admin/content"]);
+
 
 export default function WorkspaceSidebar({ profileName, roles, activeRole, workspaces }: { profileName: string | null; roles: AppRole[]; activeRole: AppRole; workspaces: any[] }) {
   const pathname = usePathname();
@@ -213,6 +224,9 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
   const inSys = pathname === "/super-admin/system" || pathname.startsWith("/super-admin/system/");
   const inWorkspace = inCkp || inStudio || inAi || inGov || inSys;
   const nav = inCkp ? CKP_NAV : inStudio ? STUDIO_NAV : inAi ? AI_NAV : inGov ? GOV_NAV : inSys ? SYS_NAV : GENERAL_NAV;
+  // ⚠ FLATTENED ACROSS GROUPS, NOT COMPUTED PER GROUP. /super-admin sits alone in MISSION CONTROL and is a
+  // prefix of every other entry in the sidebar, so a per-group scan would never see it as a parent at all.
+  const exactHrefs = parentHrefs(nav.flatMap(g => g.items));
   const home = inCkp ? "/super-admin/ckp" : inStudio ? "/super-admin/studio" : inAi ? "/super-admin/ai" : inGov ? "/super-admin/governance" : inSys ? "/super-admin/system" : "/super-admin";
   const subtitle = inCkp ? "Clinical Knowledge Platform" : inStudio ? "Competency Studio" : inAi ? "AI & Intelligence" : inGov ? "Governance & Compliance" : inSys ? "System & Security" : "Mission Control";
 
@@ -240,7 +254,8 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
         {nav.map(({ group, items }) => (
           <NavGroup key={group} title={group} hrefs={items.map(i => i.href)} headerClass="text-[9px] font-bold text-slate-600 uppercase tracking-widest">
             {items.map(({ label, href, icon }) => (
-              <NavLink key={label} href={href} icon={icon} label={label} exact={OVERVIEW_HREFS.has(href)}
+              <NavLink key={label} href={href} icon={icon} label={label}
+                exact={OVERVIEW_HREFS.has(href) || exactHrefs.has(href.split("?")[0])}
                 className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:bg-rose-900/30 hover:text-white transition-colors"
                 activeClassName="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs bg-rose-900/50 text-white font-medium" />
             ))}

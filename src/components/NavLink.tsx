@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { pathMatches } from "@/lib/nav/active";
 
 // Sidebar link with active-page highlighting (review item: "you can't tell
 // where you are"). Active when the path matches exactly, or is a sub-path
@@ -43,15 +44,13 @@ export default function NavLink({ href, icon, label, className, activeClassName,
   const pathname = usePathname();
   const search = useSearchParams();
 
-  const [path, query] = href.split("?");
+  const [, query] = href.split("?");
   const hrefParams = new URLSearchParams(query ?? "");
   const keys = new Set<string>([...hrefParams.keys(), ...Array.from(search?.keys() ?? [])]);
   const queryMatches = [...keys].every(k => (hrefParams.get(k) ?? null) === (search?.get(k) ?? null));
 
-  const pathMatches = exact
-    ? pathname === path
-    : pathname === path || pathname.startsWith(path + "/");
-  const active = pathMatches && queryMatches;
+  // The path half lives in @/lib/nav/active so the sidebar harness can test THIS rule rather than a copy.
+  const active = pathMatches(href, pathname, !!exact) && queryMatches;
 
   const tone = severity ?? "critical";
 
