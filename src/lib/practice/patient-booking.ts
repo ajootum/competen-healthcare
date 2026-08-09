@@ -669,7 +669,20 @@ export async function bookableSlots(admin: any, args: {
     .select("id, location_id, starts_at, ends_at, slot_kind, status, generated_from_template_id")
     .eq("workspace_id", p.workspaceId).eq("status", "OPEN")
     .in("slot_kind", SLOT_KINDS_SEEING_PATIENTS)
-    .gte("starts_at", fromIso).lt("starts_at", toIso).order("starts_at");
+    // ⚠ OVERLAP, NOT START. THIS ROW IS A WHOLE SESSION, AND THE FILTER USED TO FORGET THAT.
+    //
+    // The subdivision loop below says it plainly -- "a generated slot is a whole SESSION ... a 06:00-18:00
+    // clinic is one row" -- and then this read asked for rows whose STARTS_AT fell inside the window. So a
+    // patient asking what was free between 10:00 and 11:00 never fetched the 06:00 row at all, and was told
+    // nothing was available for an hour the clinic was open and empty. Only a window containing the
+    // session's own start returned anything, which is why a whole-day query looked fine and every narrower
+    // one silently returned nothing.
+    //
+    // A session overlaps the window when it starts before the window ends AND ends after the window begins.
+    // The floor keeps the read bounded and the index usable: no session runs longer than a day, so nothing
+    // starting more than 24h before the window can still be running inside it.
+    .gte("starts_at", new Date(fromMs - 86400000).toISOString())
+    .lt("starts_at", toIso).gt("ends_at", fromIso).order("starts_at");
   if (slotErr || slotRows == null)
     return { ok: false, status: 503, code: "READ_FAILED", message: `this practice's times could not be read: ${slotErr?.message ?? "neither rows nor an error"}` };
 

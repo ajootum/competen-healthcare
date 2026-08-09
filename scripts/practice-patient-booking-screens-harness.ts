@@ -354,12 +354,32 @@ async function main() {
   const page = await resolveBookingPage(admin, HANDLE);
   ok("0f-control. the page resolves for a stranger", page.state === "ok" && page.value !== null);
 
-  const slotDay = new Date(Date.now() + 4 * 86400000);
-  slotDay.setUTCHours(8, 0, 0, 0);
-  const timeA = slotDay.toISOString();
-  const timeB = new Date(Date.parse(timeA) + 3600000).toISOString();
-  const timeC = new Date(Date.parse(timeA) + 7200000).toISOString();
-  const timeD = new Date(Date.parse(timeA) + 10800000).toISOString();
+  // ⚠ ASKED FOR, NOT ASSUMED -- AND THE ASSUMPTION IS WHAT HID A PRODUCT BUG FOR A WHOLE RELEASE.
+  //
+  // These four times used to be invented: a day four days out, 08:00Z, then +1h, +2h, +3h. Nothing checked
+  // that the practice offered any of them. It did not: the sessions are 06:00-18:00 Kampala, so slots begin
+  // at 03:00Z, and a whole-hour-from-08:00Z grid need not land on the practice's own appointment length.
+  // Every assertion about a time being offered, still offered, or no longer offered was therefore being made
+  // against an EMPTY LIST -- 4b failed for the wrong reason and 4b-control-2 passed vacuously, "proving"
+  // that booking removes a time by observing that a time never on the list was still not on it.
+  //
+  // Chasing that emptiness is what found the real defect: bookableSlots filtered session rows by STARTS_AT
+  // inside the window, so a 06:00 session was invisible to any window that did not contain 06:00.
+  //
+  // So the harness now ASKS the product what it offers and asserts over those times. A fixture that states
+  // the answer cannot discover that the answer is wrong.
+  const offerFrom = new Date(Date.now() + 4 * 86400000); offerFrom.setUTCHours(0, 0, 0, 0);
+  const menu = await bookableSlots(admin, {
+    handle: HANDLE, appointmentType: "new_consultation", locationId: locId,
+    fromIso: offerFrom.toISOString(),
+    toIso: new Date(offerFrom.getTime() + 86400000).toISOString(),
+  });
+  ok("0b3-control. ⚠ the practice actually offers times on the fixture day, and the later assertions use THOSE times rather than invented ones",
+    menu.ok && menu.data.slots.length >= 4,
+    menu.ok ? `${menu.data.slots.length} offered: ${JSON.stringify(menu.data.slots.slice(0, 4).map(s => s.startsAt))}` : (menu as any).message);
+  if (!menu.ok || menu.data.slots.length < 4) return report();
+
+  const [timeA, timeB, timeC, timeD] = menu.data.slots.slice(0, 4).map(s => s.startsAt);
 
   // ══ B. ⚠ THE SHUT POSITION, AND A FAILED READ. NEITHER NEEDS MIGRATION 272 ════════════════════
   //
@@ -552,6 +572,32 @@ async function main() {
   const apptCountBefore = await admin.from("practice_appointment")
     .select("*", { count: "exact", head: true }).eq("workspace_id", ws);
 
+  // ⚠ THE OBSERVATION 4b AND 4b-control-2 BOTH ASSUMED, AND NEITHER MADE.
+  //
+  // 4b asserts the time is STILL offered after an unverified request; 4b-control-2 asserts a real booking
+  // REMOVES its time. Both are absence-or-presence claims about the state AFTER an act, and neither looked
+  // at the state BEFORE it. If the fixture never offered that minute at all, 4b fails for a reason that has
+  // nothing to do with requests holding slots -- and 4b-control-2 passes VACUOUSLY, because a time that was
+  // never on the list is trivially not on it afterwards. That is the whole control gone.
+
+  // The widest question first: does this fixture offer ANY time that day? If not, every presence/absence
+  // assertion below is being made against an empty list.
+  const offeredThatDay = await bookableSlots(admin, {
+    handle: HANDLE, appointmentType: "new_consultation", locationId: locId,
+    fromIso: timeA, toIso: new Date(Date.parse(timeA) + 12 * 3600000).toISOString(),
+  });
+  ok("4b-pre0. the diary offers times at all on the fixture day",
+    offeredThatDay.ok && offeredThatDay.data.slots.length > 0,
+    offeredThatDay.ok ? JSON.stringify(offeredThatDay.data.slots.slice(0, 8).map(s => s.startsAt)) : (offeredThatDay as any).message);
+
+  const offeredBeforeC = await bookableSlots(admin, {
+    handle: HANDLE, appointmentType: "new_consultation", locationId: locId,
+    fromIso: timeC, toIso: new Date(Date.parse(timeC) + 60000).toISOString(),
+  });
+  ok("4b-pre. ⚠ the minute 4b is about IS on the list to begin with -- otherwise 4b measures the fixture, not the guard",
+    offeredBeforeC.ok && offeredBeforeC.data.slots.some(s => Date.parse(s.startsAt) === Date.parse(timeC)),
+    offeredBeforeC.ok ? JSON.stringify(offeredBeforeC.data.slots.map(s => s.startsAt)) : (offeredBeforeC as any).message);
+
   const held = await submitUnverifiedRequest(admin, {
     handle: HANDLE, intake: intake(), requestedStart: timeC,
     appointmentType: "new_consultation", locationId: locId,
@@ -576,6 +622,14 @@ async function main() {
 
   // ⚠ THE CONTROL FOR 4b: A REAL BOOKING DOES REMOVE THE TIME. Without it, 4b proves only that
   // bookableSlots ignores everything.
+  const offeredBeforeD = await bookableSlots(admin, {
+    handle: HANDLE, appointmentType: "new_consultation", locationId: locId,
+    fromIso: timeD, toIso: new Date(Date.parse(timeD) + 60000).toISOString(),
+  });
+  ok("4b-control-0. ⚠ and the minute the CONTROL is about is on the list before the booking -- without this, 4b-control-2 passes for a time that was never offered",
+    offeredBeforeD.ok && offeredBeforeD.data.slots.some(s => Date.parse(s.startsAt) === Date.parse(timeD)),
+    offeredBeforeD.ok ? JSON.stringify(offeredBeforeD.data.slots.map(s => s.startsAt)) : (offeredBeforeD as any).message);
+
   const pairH = await freshPair();
   const realBooking = await submitBookingRequest(admin, {
     handle: HANDLE, token: pairH.token, intake: intake({ contactPhone: pairH.phone }),
