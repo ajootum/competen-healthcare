@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { createAdminClient } from "@/lib/supabase/server";
-import { resolveLifecycleActor } from "@/lib/practice/lifecycle";
+import { resolveLifecycleActor, PERSON_SCOPED_EXPORT_PATH } from "@/lib/practice/lifecycle";
 import { CAP_RESTORE } from "@/lib/practice/lifecycle-constants";
 import RestorePracticePanel from "./RestorePracticePanel";
 import IdleReSignIn from "./IdleReSignIn";
@@ -137,6 +137,25 @@ export default async function Page() {
             </Link>
           </p>
         )}
+        {/* ⚠ THE ONE ROUTE TO A PROFESSIONAL RECORD FROM BEHIND A LOCKED DOOR (CPR-IDENT-SURVEY-001 D1).
+            Every other portfolio path resolves a workspace context, and this page exists precisely
+            because no context can be resolved. The record itself is person-scoped from migration 270,
+            so this link works whatever has happened to the practice. */}
+        <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50/60 p-4 text-left">
+          <p className="text-[13px] font-semibold text-gray-900">Your professional record is not part of this</p>
+          <p className="mt-1 text-[12px] leading-relaxed text-gray-600">
+            Your qualifications, registration details, publications, certificates and awards belong to you
+            rather than to this practice, and nothing above affects them. You can take a copy now, from
+            here, without opening a practice at all. It does not include your consultation, procedure or
+            CPD counts &mdash; those are recorded inside a practice and stay there.
+          </p>
+          <p className="mt-2">
+            <Link href={PERSON_SCOPED_EXPORT_PATH}
+              className="inline-block rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+              Export my professional record
+            </Link>
+          </p>
+        </div>
         <p className="mt-4 text-[13px] text-gray-500">
           <Link href="/practice" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Back to Competen Practice</Link>
         </p>

@@ -607,7 +607,34 @@ export const EXPORT_SECTIONS: { key: string; table: string; label: string }[] = 
   { key: "bookingRules", table: "practice_booking_rule", label: "Booking rules" },
   { key: "memberships", table: "practice_membership", label: "Team" },
   { key: "lifecycleTransitions", table: "practice_lifecycle_transition", label: "Lifecycle history" },
+  // ⚠ THE PORTFOLIO ENTRIES TYPED HERE, AND THE REASON THIS SECTION READS THE WAY IT DOES.
+  //
+  // CPR-IDENT-SURVEY-001 s1.2 found that this list omitted both portfolio tables, so a whole-practice
+  // export did not carry the practitioner's own professional record. Migration 270 answers the larger
+  // half of that by making the record PERSON-SCOPED: `practice_portfolio_entry.workspace_id` is now
+  // provenance -- where an entry was typed -- rather than the scope it is read by.
+  //
+  // So this section carries the entries whose provenance is THIS PRACTICE, which is the question a
+  // whole-practice export is entitled to ask, and is what an erasure or subject-access enquiry against
+  // this practice needs to be able to find. It is deliberately NOT the practitioner's whole record.
+  { key: "portfolioEntries", table: "practice_portfolio_entry", label: "Professional portfolio entries typed here" },
 ];
+
+/**
+ * ⚠ WHAT IS DELIBERATELY NOT IN THE LIST ABOVE, AND WHERE IT IS EXPORTED INSTEAD.
+ *
+ * `practice_practitioner_identity` -- the practitioner's number, handle, declared professional facts and
+ * licence state -- is NOT in a practice export, and adding it would be wrong twice over. It is one row
+ * per PERSON, not per practice, so a practice cannot be its controller; and it would be reachable only
+ * with `data.export` inside a practice that opens, which is precisely the condition the person-scoped
+ * record has to survive.
+ *
+ * It is exported from `/api/v1/practice/portfolio/record?view=export`, which takes no workspace at all
+ * and answers for an authenticated caller with no practice, an archived one, or a closed one. That route
+ * is the answer to "somewhere the practitioner can reach without an active practice"; this section is
+ * the answer to "what did this practice hold".
+ */
+export const PERSON_SCOPED_EXPORT_PATH = "/api/v1/practice/portfolio/record?view=export";
 
 export type PracticeExport = Record<string, unknown>;
 

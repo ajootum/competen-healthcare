@@ -2,7 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
-import { buildPortfolio, PORTFOLIO_KINDS, PROVENANCE } from "@/lib/practice/portfolio";
+import {
+  buildPortfolio, PORTFOLIO_KINDS, PROVENANCE, PORTABLE_ENTRY_NOTICE, PORTABLE_FIELDS,
+} from "@/lib/practice/portfolio";
+import { PERSON_SCOPED_EXPORT_PATH } from "@/lib/practice/lifecycle";
 import PortfolioConsole from "./PortfolioConsole";
 
 // /practice/portfolio -- CPR-240 PROFESSIONAL PORTFOLIO.
@@ -44,10 +47,18 @@ export default async function PortfolioPage() {
             What this product recorded of your work, and what you have declared alongside it.
           </p>
         </div>
-        <Link href="/api/v1/practice/portfolio?view=export"
-          className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
-          Export
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/api/v1/practice/portfolio?view=export"
+            className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+            Export
+          </Link>
+          {/* The half that is yours rather than this practice's, exportable on its own -- and by a route
+              that needs no practice, so it still works after this one is archived or closed. */}
+          <Link href={PERSON_SCOPED_EXPORT_PATH}
+            className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+            Export my professional record
+          </Link>
+        </div>
       </div>
 
       {/* ── THE COVERAGE WINDOW, FIRST. The comp puts "Total Experience 8.6 yrs" here instead. ──── */}
@@ -174,7 +185,8 @@ export default async function PortfolioPage() {
                 {declared.byKind.map((g: {
                   key: string; label: string;
                   items: { id: string; title: string; organisation: string | null; reference: string | null;
-                    occurred_on: string | null; expires_on: string | null; expired: boolean }[];
+                    occurred_on: string | null; expires_on: string | null; expired: boolean;
+                    recordedAtPractice: string | null }[];
                 }) => (
                   <div key={g.key}>
                     <p className="text-[11px] font-semibold text-gray-600">{g.label}</p>
@@ -183,9 +195,14 @@ export default async function PortfolioPage() {
                         <li key={i.id} className="flex items-baseline gap-2 border-b border-gray-100 py-1 last:border-0">
                           <span className="min-w-0">
                             <span className="block truncate text-[12px] text-gray-800">{i.title}</span>
-                            {(i.organisation || i.reference) && (
+                            {/* WHERE IT WAS TYPED IS PROVENANCE, NOT OWNERSHIP -- "I did this, at that
+                                practice". It is shown because an entry made elsewhere and carried here
+                                should not look as though it arose in this practice. */}
+                            {(i.organisation || i.reference || i.recordedAtPractice) && (
                               <span className="block text-[10px] text-gray-500">
-                                {[i.organisation, i.reference].filter(Boolean).join(" · ")}
+                                {[i.organisation, i.reference,
+                                  i.recordedAtPractice ? `entered at ${i.recordedAtPractice}` : null,
+                                ].filter(Boolean).join(" · ")}
                               </span>
                             )}
                           </span>
@@ -204,7 +221,13 @@ export default async function PortfolioPage() {
                 ))}
               </div>
             )}
-            <PortfolioConsole kinds={PORTFOLIO_KINDS.map(([key, label]) => ({ key, label }))} />
+            <PortfolioConsole
+              kinds={PORTFOLIO_KINDS.map(([key, label]) => ({ key, label }))}
+              portableNotice={PORTABLE_ENTRY_NOTICE}
+              // ⚠ COPIED OUT OF THE FROZEN TUPLE INTO PLAIN OBJECTS. PORTABLE_FIELDS is `as const`, and a
+              // readonly tuple handed to a client component is a type argument nobody needs.
+              portableFields={PORTABLE_FIELDS.map(f => ({ field: f.field as string, label: f.label as string, notice: f.notice as string }))}
+            />
           </section>
         </div>
 
@@ -214,13 +237,17 @@ export default async function PortfolioPage() {
             <h2 className="text-[13px] font-bold text-gray-900">You</h2>
             {p.profile ? (
               <ul className="mt-2 flex flex-col">
+                {/* ⚠ EVERY REGISTRATION LINE IS LABELLED "declared", AND THE LICENCE LINE IS NOT.
+                    Since migration 270 these facts sit on the same row as licence_verified_at, so the
+                    screen has to keep apart what the table now keeps apart by column name. */}
                 {[
-                  ["Name", p.profile.full_name],
-                  ["Profession", p.profile.profession],
-                  ["Specialty", p.profile.specialty],
-                  ["Registration", p.profile.registration_number],
-                  ["Issued by", p.profile.registration_body],
-                  ["Practising since", p.profile.practising_since],
+                  ["Name", p.profile.display_name],
+                  ["Profession (declared)", p.profile.self_declared_profession],
+                  ["Specialty (declared)", p.profile.specialties],
+                  ["Registration number (declared)", p.profile.self_declared_registration_number],
+                  ["Issued by (declared)", p.profile.self_declared_registration_body],
+                  ["Practising since (declared)", p.profile.self_declared_practising_since],
+                  ["Licence checked on", p.profile.licence.checkedAt],
                 ].filter(([, v]) => v).map(([k, v]) => (
                   <li key={String(k)} className="flex items-baseline gap-2 border-b border-gray-100 py-1 last:border-0">
                     <span className="text-[12px] text-gray-700">{k}</span>
@@ -232,13 +259,20 @@ export default async function PortfolioPage() {
               <p className="mt-2 text-[12px] text-gray-400">Not recorded yet.</p>
             )}
             <p className="mt-1.5 text-[10px] text-gray-500">
-              All of it declared by you. The design shows a licence number beside a verified badge; nothing
-              here contacted a regulator, so there is no badge.
+              Everything marked declared was typed by you. The design shows a licence number beside a
+              verified badge; nothing here contacted a regulator, so there is no badge.{" "}
+              {p.profile?.licence.checked
+                ? "A licence check is recorded against you, which says somebody looked and their name stays against it — it is not a verification by this product."
+                : "No licence check is recorded against you."}
             </p>
-            {p.profile?.practising_since && p.coverage.from && (
+            <p className="mt-1.5 text-[10px] text-gray-500">
+              These details belong to you rather than to this practice, and they stay with you if it is
+              archived, closed, or you open another.
+            </p>
+            {p.profile?.self_declared_practising_since && p.coverage.from && (
               <p className="mt-1.5 text-[10px] text-gray-500">
-                You have practised since {p.profile.practising_since}. This portfolio covers from{" "}
-                {p.coverage.from}. The difference is not missing &mdash; it happened before this product.
+                You have practised since {p.profile.self_declared_practising_since}. This portfolio covers
+                from {p.coverage.from}. The difference is not missing &mdash; it happened before this product.
               </p>
             )}
           </section>

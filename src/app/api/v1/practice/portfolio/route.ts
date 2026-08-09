@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import {
   buildPortfolio, exportPortfolio, getProfile, saveProfile, addEntry, removeEntry,
-  PORTFOLIO_KINDS, PORTFOLIO_LIMITS, PROVENANCE,
+  PORTFOLIO_KINDS, PORTFOLIO_LIMITS, PROVENANCE, PORTABLE_ENTRY_NOTICE, PORTABLE_FIELDS,
 } from "@/lib/practice/portfolio";
 
 // GET    /api/v1/practice/portfolio            -- the portfolio, with its coverage window
@@ -28,6 +28,9 @@ export async function GET(req: NextRequest) {
   const portfolio = await buildPortfolio(auth.caller.admin, auth.ctx);
   return NextResponse.json({
     ...portfolio, kinds: PORTFOLIO_KINDS, limits: PORTFOLIO_LIMITS, provenance: PROVENANCE,
+    // D3. The write-time warning travels with the form's own vocabulary, so a client that renders the
+    // kinds from this response has no excuse for rendering the fields without it.
+    portableNotice: PORTABLE_ENTRY_NOTICE, portableFields: PORTABLE_FIELDS,
     correlationId: auth.caller.traceId,
   });
 }
@@ -60,17 +63,20 @@ export async function PATCH(req: NextRequest) {
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
 
   const str = (k: string) => body[k] === undefined ? undefined : String(body[k]);
-  const result = await saveProfile(auth.caller.admin, auth.ctx, {
-    fullName: str("fullName"), profession: str("profession"),
-    specialty: str("specialty"), subSpecialty: str("subSpecialty"),
+  // ⚠ THE PROFILE IS THE PERSON'S, SO THIS TAKES A USER ID. The workspace is passed only as provenance
+  // for the audit row -- where the typing happened -- and decides nothing about what is written or read.
+  // `subSpecialty` is gone: the identity carries one `specialties` box, and retiring the duplicate table
+  // means retiring its second field rather than inventing a column to keep it in.
+  const result = await saveProfile(auth.caller.admin, auth.ctx.userId, {
+    fullName: str("fullName"), profession: str("profession"), specialty: str("specialty"),
     registrationNumber: str("registrationNumber"), registrationBody: str("registrationBody"),
     registrationExpiresOn: body.registrationExpiresOn === undefined ? undefined : (body.registrationExpiresOn ? String(body.registrationExpiresOn) : null),
     practisingSince: body.practisingSince === undefined ? undefined : (body.practisingSince ? String(body.practisingSince) : null),
-    summary: str("summary"), correlationId: auth.caller.traceId,
+    summary: str("summary"), workspaceId: auth.ctx.workspaceId, correlationId: auth.caller.traceId,
   });
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
 
-  const profile = await getProfile(auth.caller.admin, auth.ctx);
+  const profile = await getProfile(auth.caller.admin, auth.ctx.userId);
   return NextResponse.json({ profile, correlationId: auth.caller.traceId });
 }
 
