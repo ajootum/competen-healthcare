@@ -53,10 +53,30 @@ reachable, so the two accounts whose reads most need a trail leave none.
 `hq_access_observation` therefore observes only what it refuses, and it has refused nothing, because nobody
 is appointed.
 
-⚠ **THE DECISION THAT MUST BE MADE FIRST, and it is not a coding choice.** `context.ts:153` calls the
-observation write *"Best-effort … an observation nobody could record is not a refusal"*. That is right for a
-migration instrument and **wrong for an access log**: you cannot fail-soft on the record of a read. If the
-record cannot be written, does the read proceed?
+### ⚠ THE FAILURE POSTURE — SETTLED BY THE OWNER, 2026-08-10
+
+> **"The read should proceed and flag, never refuse."**
+
+So: if the record of an allowed read cannot be written, the read still happens. Refusing would mean a
+platform outage becomes a platform lockout, and the people it would strand are the ones holding the console
+that fixes it.
+
+⚠ **BUT "FLAG" IS WHERE THIS GOES HOLLOW, AND THE IMPLEMENTATION MUST NOT LET IT.** `context.ts:153` already
+calls the observation write *"Best-effort … an observation nobody could record is not a refusal"* — and
+best-effort with a swallowed `console.error` is fail-soft wearing a warning's clothes. The decision is
+proceed-and-flag, not proceed-and-hope. So the flag has to be somewhere a person actually looks:
+
+- ⚠ **It cannot be a row in the same database**, because the likeliest reason the audit write failed is that
+  the database is unreachable — the flag would fail for the same reason and vanish with it.
+- The server log is the only destination guaranteed to survive that, so it is the floor, not the answer.
+- **The operator console must be able to say "reads are not currently being recorded"** — a live state, not
+  a count derived from rows that were never written. An unrecorded read leaves no trace to count, which is
+  precisely why the absence has to be reported at the time rather than reconstructed later.
+- **And it must be visible to the practice too.** The destination chosen for D6 is the practice's own
+  `practice_audit_event` trail so a practitioner can see who read their data. A gap in that trail is a fact
+  about their record, not only about our infrastructure.
+
+A read that proceeded unrecorded is a real event. The rule is that it is never silent.
 
 The survey (§6.3) offers three destinations and the owner chose the transparent one — `practice_audit_event`,
 the practice's own trail, visible to the practitioner. ⚠ Note that table is **append-only** since migration
@@ -65,7 +85,7 @@ harness must never try to clean up after itself there.
 
 ## Order when it is picked up
 
-1. Settle D6's failure posture (proceed-and-flag, or refuse the read).
+1. ~~Settle D6's failure posture~~ — SETTLED: proceed and flag, never refuse. See above.
 2. D6 in `context.ts` — record allowed reads, including the owner branch, into `practice_audit_event`.
 3. D5's engine and operator surface.
 4. Re-run `practice-booking-link-harness` and `hq-guard-harness` (⚠ the latter's `E1` page-count baseline is
