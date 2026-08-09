@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { transitionDocument, recordRelease, getTemplate } from "@/lib/practice/documentation";

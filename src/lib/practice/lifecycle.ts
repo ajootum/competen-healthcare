@@ -1,4 +1,4 @@
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { logAccess } from "@/lib/practice/privacy";
 import {

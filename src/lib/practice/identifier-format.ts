@@ -1,4 +1,4 @@
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
 
 // THE ONE PLACE THAT KNOWS THE SHAPE OF A PRACTITIONER NUMBER.

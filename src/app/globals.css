@@ -304,6 +304,9 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
   --cp-slate-500: #64748B;
   --cp-slate-300: #CBD5E1;
   --cp-slate-100: #F1F5F9;
+  /* Completes the scale downwards. SessionWorkspace already wrote var(--cp-slate-50, #f8fafc) -- a
+     reference to a token that did not exist, so the fallback was the only thing ever used. */
+  --cp-slate-50: #F8FAFC;
   --cp-white: #FFFFFF;
 
   /* Tints derived from the primary rather than hand-picked, so they cannot drift away from it. */
@@ -389,6 +392,12 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
   --cp-area-5: #6D28D9;
   --cp-area-6: #BE185D;
   --cp-area-7: #155E75;
+  /* The EIGHTH the comment above already asks for. It existed as a literal -- #7C3AED, in ACTIVITY_HUE
+     beside six tokens, in the two availability boards, and on two setup steps -- so the set was one short
+     and the shortfall was being paid for in raw hex. Named at its OWN value rather than folded into
+     --cp-area-5 (#6D28D9): those are different violets, and substituting one for the other would be a
+     design change wearing the costume of a tokenisation. */
+  --cp-area-8: #7C3AED;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════════

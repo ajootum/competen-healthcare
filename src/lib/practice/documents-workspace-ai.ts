@@ -1,4 +1,4 @@
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { updateDocument } from "@/lib/practice/documentation";

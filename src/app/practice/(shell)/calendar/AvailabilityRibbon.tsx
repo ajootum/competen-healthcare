@@ -28,7 +28,7 @@ const dayName = (d: string) =>
 // colour rather than a wrong one.
 const PLACE_HUES = [
   "var(--cp-primary)", "var(--cp-success)", "var(--cp-accent)",
-  "var(--cp-warning)", "var(--cp-info)", "#7C3AED",
+  "var(--cp-warning)", "var(--cp-info)", "var(--cp-area-8)",
 ];
 function placeHue(names: string[], allPlaces: string[]): string | null {
   if (names.length === 0) return null;

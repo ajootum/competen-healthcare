@@ -150,7 +150,7 @@ const CATALOGUE: Entry[] = [
   {
     n: 5, key: "booking_rules", title: "Booking Rules",
     description: "Set booking windows, cancellation rules, lead times and other rules.",
-    icon: "⚌", hue: "#DB2777", href: "/practice/setup/availability?step=4",
+    icon: "⚌", hue: "var(--cp-area-2)", href: "/practice/setup/availability?step=4",
     capability: "practice.settings.manage", specUnbuilt: true,
     domain: "operations", subsumedBy: "availability",
   },
@@ -170,7 +170,7 @@ const CATALOGUE: Entry[] = [
   {
     n: 8, key: "notifications", title: "Patient Notifications",
     description: "Manage reminders, updates and other messages by SMS, email or WhatsApp.",
-    icon: "◐", hue: "#7C3AED", href: null, capability: null, specUnbuilt: true, domain: "operations",
+    icon: "◐", hue: "var(--cp-area-8)", href: null, capability: null, specUnbuilt: true, domain: "operations",
     notBuilt: "The delivery channel exists in the engine, and there is no screen to configure it — so nothing here can be turned on yet. Reminders are not scheduled or sent by anything either.",
   },
   {
@@ -200,7 +200,7 @@ const CATALOGUE: Entry[] = [
   {
     n: 13, key: "integrations", title: "Integrations",
     description: "Connect calendars, communication tools and other systems.",
-    icon: "⚯", hue: "#7C3AED", href: null, capability: null, specUnbuilt: true, domain: "administration",
+    icon: "⚯", hue: "var(--cp-area-8)", href: null, capability: null, specUnbuilt: true, domain: "administration",
     notBuilt: "No calendar, messaging, payment or FHIR integration exists. Each is somebody else's system and its own authorisation story.",
   },
   {
@@ -218,7 +218,7 @@ const CATALOGUE: Entry[] = [
   {
     n: 16, key: "billing", title: "Billing & Payments",
     description: "Set consultation fees, payment methods, invoices, taxes and discounts.",
-    icon: "▣", hue: "#DB2777", href: null, capability: null, specUnbuilt: true, domain: "administration",
+    icon: "▣", hue: "var(--cp-area-2)", href: null, capability: null, specUnbuilt: true, domain: "administration",
     notBuilt: "There is no billing module. Fees, invoices, taxes and a payment gateway are a financial system with its own reconciliation and audit obligations, not a settings page.",
   },
   {

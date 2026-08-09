@@ -1,4 +1,4 @@
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { INVITABLE_ROLES, INVITE_EXPIRY_BOUNDS } from "@/lib/practice/team-constants";
 

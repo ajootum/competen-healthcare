@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 
 // POST /api/v1/practice/availability -- block or open time (PEN-001 availability; CPR-V2-003 "clinician
 // availability, leave and blocked time"). Blocking is the practitioner statement "I am not seeing

@@ -1,5 +1,5 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import { transitionAppointment, APPOINTMENT_TRANSITIONS } from "@/lib/practice/scheduling";
 import { resolveBookingRule } from "@/lib/practice/availability-config";
 import {

@@ -1,7 +1,7 @@
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
 import { logAccess } from "@/lib/practice/privacy";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 
 // CPR-330 REPORTS.
 //

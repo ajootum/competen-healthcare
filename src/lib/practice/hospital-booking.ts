@@ -1,5 +1,5 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 
 const nowIso = () => new Date().toISOString();
 

@@ -1,4 +1,4 @@
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
 import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
 import { resolveBookingRule, hhmm as hhmmOf } from "@/lib/practice/availability-config";

@@ -827,7 +827,7 @@ export const LAYER1_STAT_SWATCH: Record<string, { badge: string; figure: string;
  */
 export const ACTIVITY_HUE: Record<string, string> = {
   outpatient_clinic: "var(--cp-success)",
-  ward_round: "#7C3AED",
+  ward_round: "var(--cp-area-8)",
   theatre: "var(--cp-accent)",
   emergency_consult: "var(--cp-error)",
   virtual_clinic: "var(--cp-warning)",

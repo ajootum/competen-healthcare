@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCaller, isResponse } from "@/lib/api-auth";
 import { resolveWorkspaceContext } from "@/lib/practice/access";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 
 // GET/PATCH /api/v1/practice/workspaces/{workspaceId}/onboarding (PROV-001 s12, IAM-001 s9).
 //

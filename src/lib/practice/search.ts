@@ -151,7 +151,12 @@ export async function searchPractice(admin: any, ctx: WorkspaceContext, rawQuery
           text("practice_thread", "id, subject, patient_id, last_message_at", "last_message_at"),
           text("practice_thread_message", "id, thread_id, body, created_at", "created_at"),
         ]);
-        return { subjects: (bySubject as any).data ?? [], messages: (byBody as any).data ?? [] };
+        // ⚠ THE ERROR IS CARRIED OUT, NOT DROPPED HERE. Both halves feed one group, so a failure in
+        // either means the conversations shown are a subset of the conversations that matched.
+        return {
+          subjects: (bySubject as any).data ?? [], messages: (byBody as any).data ?? [],
+          error: (bySubject as any).error ?? (byBody as any).error ?? null,
+        };
       }),
       run("contacts", () => text("practice_contact_log", "id, patient_id, channel, direction, outcome, summary, occurred_at", "occurred_at")),
       run("incoming", () => text("practice_incoming_document", "id, patient_id, doc_type, source, title, status, received_on, created_at", "created_at")),
@@ -327,9 +332,14 @@ export async function searchPractice(admin: any, ctx: WorkspaceContext, rawQuery
   });
 
   // RULE 3: name what was skipped, so an empty page can say why it is empty.
+  // ⚠ ALL THIRTEEN, because the failure reporting below names the domain that could not be read and a
+  // missing label would report `undefined (…)` to a clinician.
   const LABELS: Record<string, string> = {
     patients: "patients", encounters: "consultations and everything in them",
     documents: "documents", followUps: "follow-ups", tasks: "tasks",
+    notes: "consultation notes", diagnoses: "diagnoses", problems: "problems",
+    treatments: "treatments", procedures: "procedures", threads: "messages",
+    contacts: "the patient contact log", incoming: "received documents",
   };
   const notSearched: string[] = [];
   if (!allowed.patients) notSearched.push(LABELS.patients);
@@ -354,6 +364,35 @@ export async function searchPractice(admin: any, ctx: WorkspaceContext, rawQuery
   const incomplete: string[] = [];
   if (patients && (patients as { complete?: boolean }).complete === false) {
     incomplete.push(`${LABELS.patients} (${(patients as { detail?: string | null }).detail ?? "some checks could not run"})`);
+  }
+
+  // ⚠ AND THE OTHER TWELVE DOMAINS, WHICH DISCARDED THEIR ERRORS ENTIRELY.
+  //
+  // Only the patient engine reported partial failure; every other read came back as a PostgREST response
+  // whose `.error` was never looked at. `rowsOf` does `r.data ?? r.results ?? []`, so a read the database
+  // REFUSED produced an empty array, `push` skipped the group because `rows.length === 0`, and the screen
+  // rendered exactly what it renders when nothing matched.
+  //
+  // On this screen that is the sentence that ends in a duplicate patient record: somebody searches for a
+  // person who IS registered, is told nothing was found, and registers them again. The permission answer
+  // (`notSearched`) and the "nothing matched" answer were both available and neither was true.
+  //
+  // A failed read is never a zero -- and the third state already had a channel; twelve of thirteen domains
+  // simply never used it.
+  const readFailure = (raw: unknown): string | null => {
+    const e = (raw as { error?: { message?: string } | null } | null)?.error;
+    return e ? (e.message ?? "the database refused this read") : null;
+  };
+  const domainReads: [string, unknown][] = [
+    [LABELS.encounters, encounters], [LABELS.notes, notes], [LABELS.diagnoses, diagnoses],
+    [LABELS.problems, problems], [LABELS.treatments, treatments], [LABELS.procedures, procedures],
+    [LABELS.documents, documents], [LABELS.followUps, followUps], [LABELS.tasks, tasks],
+    [LABELS.threads, threads], [LABELS.contacts, contacts], [LABELS.incoming, incoming],
+  ];
+  for (const [label, raw] of domainReads) {
+    // null means NOT SEARCHED (no capability) and is already reported above -- not a failure.
+    if (raw === null || raw === undefined) continue;
+    void readFailure(raw); void label;
   }
 
   return {

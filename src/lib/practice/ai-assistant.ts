@@ -1,6 +1,6 @@
 import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { getEncounter, patientTimeline } from "@/lib/practice/encounters";
 import { type WorkspaceContext } from "@/lib/practice/access";

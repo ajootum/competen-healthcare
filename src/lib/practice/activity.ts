@@ -2,7 +2,7 @@ import type { WorkspaceContext } from "@/lib/practice/access";
 import { ACTIVITY_TYPES, ACTIVITY_LABEL, type ActivityType } from "@/lib/practice/activity-constants";
 import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
 import { emitEvents, type EventEnvelope, type EventSource } from "@/lib/practice/events";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import { practiceMetrics, metricScope, type PracticeMetrics } from "@/lib/practice/metrics";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the Supabase admin client is untyped; every

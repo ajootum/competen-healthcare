@@ -310,7 +310,7 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
                             onClick={() => { setNotice(null); setDraft(draftFrom(s)); }}
                             className="w-full rounded-lg border border-l-[3px] px-2 py-1.5 text-left transition hover:shadow-sm disabled:cursor-default"
                             style={{
-                              background: dim ? "var(--cp-slate-50, #f8fafc)" : `color-mix(in srgb, ${hue} 7%, white)`,
+                              background: dim ? "var(--cp-slate-50)" : `color-mix(in srgb, ${hue} 7%, white)`,
                               borderColor: `color-mix(in srgb, ${hue} 22%, white)`,
                               borderLeftColor: dim ? "var(--cp-slate-300)" : hue,
                             }}>

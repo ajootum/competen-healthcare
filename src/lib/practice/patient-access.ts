@@ -1,4 +1,5 @@
-import { platformFlag, audit } from "@/lib/practice/provisioning";
+import { platformFlag } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import { messagingStatus } from "@/lib/practice/messaging";
 import { BOOKING_MODES_LIVE, SESSION_APPOINTMENT_TYPES } from "@/lib/practice/practice-session-constants";
 import {

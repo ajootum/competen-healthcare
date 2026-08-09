@@ -1,5 +1,5 @@
 import QRCode from "qrcode";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
 import {
   getFormat, formatPractitionerNumber, parsePractitionerNumber, lockFormat,

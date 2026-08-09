@@ -171,7 +171,7 @@ import { evaluateBooking } from "@/lib/practice/booking-rules";
 // wording of "you left these blank" is a second thing to keep true when the catalogue changes.
 import { intakeField, intakeRefusalMessage } from "@/lib/practice/booking-rule-constants";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import {
   resolveBookingPage, bookingReference, hashBookingSource,
   type EngineResult, type BookingIntake,

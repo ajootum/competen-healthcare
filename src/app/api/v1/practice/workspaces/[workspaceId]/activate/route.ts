@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCaller, isResponse } from "@/lib/api-auth";
 import { resolveWorkspaceContext, ACTIVE_WS_COOKIE } from "@/lib/practice/access";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 
 // POST /api/v1/practice/workspaces/{workspaceId}/activate (IAM-001 s12 switchWorkspace, SHELL-001 s11).
 //

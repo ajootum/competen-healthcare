@@ -1,4 +1,4 @@
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import { emitEvents } from "@/lib/practice/events";
 import type { EngineResult } from "@/lib/practice/encounters";
 import {

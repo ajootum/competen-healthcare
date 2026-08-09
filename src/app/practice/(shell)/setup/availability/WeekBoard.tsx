@@ -27,7 +27,7 @@ const DAYS = [
 
 const PLACE_HUES = [
   "var(--cp-primary)", "var(--cp-success)", "var(--cp-accent)",
-  "var(--cp-warning)", "var(--cp-info)", "#7C3AED",
+  "var(--cp-warning)", "var(--cp-info)", "var(--cp-area-8)",
 ];
 
 const toMinutes = (v: string) => {

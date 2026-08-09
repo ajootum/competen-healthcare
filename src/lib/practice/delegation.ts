@@ -1,4 +1,4 @@
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
 import {
   DELEGATION_AREAS, areaByCode, NEVER_DELEGABLE, APPROVAL_SUBJECTS,

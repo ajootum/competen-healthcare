@@ -4,7 +4,7 @@ import { bookUnderRules, evaluateBooking } from "@/lib/practice/booking-rules";
 import { rescheduleAppointment, transitionAppointment, APPOINTMENT_TRANSITIONS } from "@/lib/practice/scheduling";
 import { resolveBookingRule } from "@/lib/practice/availability-config";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import {
   issuePatientSession, checkPatientSession, normaliseDestination, type Reading,
 } from "@/lib/practice/patient-session";

@@ -1,4 +1,4 @@
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import { editableEncounter, type EngineResult } from "@/lib/practice/encounters";
 import {
   PROCEDURE_CATEGORIES, SIDED_LATERALITIES, LATERALITIES, CONSENT_STATUSES,

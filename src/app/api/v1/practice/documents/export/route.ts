@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { documentMetadataExport } from "@/lib/practice/documents-workspace-review";
 import { parseDocFilter } from "@/lib/practice/documents-workspace-constants";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import { logAccess } from "@/lib/practice/privacy";
 
 // GET /api/v1/practice/documents/export?<the same querystring the register uses>

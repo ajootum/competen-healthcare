@@ -1,4 +1,4 @@
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { NOTE_TYPES } from "@/lib/practice/encounter-constants";
 import { LOCKED_STATUSES } from "@/lib/practice/encounter-constants";

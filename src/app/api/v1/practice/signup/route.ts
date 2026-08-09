@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { headers } from "next/headers";
 import {
-  validateIndividual, payloadHash, runProvisioning, platformFlag, audit, type IndividualRequest,
+  validateIndividual, payloadHash, runProvisioning, platformFlag, type IndividualRequest,
 } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import { isPracticeType, isProfession, LEGAL_VERSIONS } from "@/lib/practice/catalogs";
 
 // POST /api/v1/practice/signup -- CPR-IAM-001 s8, the minimum-friction individual practitioner flow.

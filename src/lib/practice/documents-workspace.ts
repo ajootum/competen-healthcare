@@ -1,4 +1,4 @@
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { workspaceClock } from "@/lib/practice/practice-time";
 import { INCOMING_DOC_TYPES } from "@/lib/practice/communication-constants";

@@ -1,4 +1,4 @@
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { logAccess } from "@/lib/practice/privacy";
 import { AUTH_EVENT, authTrailSummary, recordAuthEvent } from "@/lib/practice/auth-audit";

@@ -293,6 +293,49 @@ async function main() {
   ok("...and it respects capabilities too", recentBlind.encounters.length === 0, `${recentBlind.encounters.length}`);
   await restoreCapability(wsA, USER_A, "encounter.list");
 
+  // ── ⚠ A FAILED READ IS NEVER A ZERO, IN ALL THIRTEEN DOMAINS ────────────────────────────────────
+  //
+  // Twelve of the thirteen domain reads discarded their PostgREST error. rowsOf does `r.data ?? []`, so a
+  // read the database REFUSED became an empty array, the group was skipped for being empty, and the screen
+  // rendered exactly what it renders when nothing matched. On THIS screen that is the sentence that ends
+  // in a duplicate patient record: a clinician searches for someone who is registered, is told nothing was
+  // found, and registers them again.
+  //
+  // The `incomplete` channel and the screen's sentence both already existed. Only the patient engine used
+  // them.
+  const blindTo = (table: string) => ({
+    from(t: string) {
+      if (t !== table) return (admin as any).from(t);
+      const result = { data: null, error: { message: "harness: this read was refused", code: "XX000" }, count: null };
+      const target: any = function () { /* proxy target only */ };
+      const h: any = new Proxy(target, {
+        get(_t, prop) {
+          if (prop === "then") return (res: any) => Promise.resolve(result).then(res);
+          return () => h;
+        },
+        apply() { return h; },
+      });
+      return h;
+    },
+  }) as any;
+
+  const blindEnc = await searchPractice(blindTo("practice_encounter"), a.ctx, "mango");
+  ok("⚠ A REFUSED DOMAIN READ IS REPORTED AS INCOMPLETE, not rendered as 'nothing matched'",
+    blindEnc.incomplete.some(s => s.startsWith("consultations")),
+    JSON.stringify({ incomplete: blindEnc.incomplete, notSearched: blindEnc.notSearched }));
+  // ⚠ AND IT IS NOT MISREPORTED AS A PERMISSION PROBLEM. notSearched means "you do not hold the
+  // capability"; telling somebody that about a capability they DO hold sends them to ask for access they
+  // already have, instead of retrying a read that failed.
+  ok("...and it is NOT folded into notSearched, which would name a permission the caller actually holds",
+    !blindEnc.notSearched.some(s => s.startsWith("consultations")),
+    JSON.stringify(blindEnc.notSearched));
+  // ⚠ THE CONTROL. Both assertions above also pass if searchPractice has simply started reporting every
+  // domain as incomplete, or has stopped returning results at all. This is the same call, unblinded.
+  const sighted = await searchPractice(admin, a.ctx, "mango");
+  ok("control: the same search with nothing blinded reports NO incomplete domains and still finds hits",
+    sighted.incomplete.length === 0 && sighted.total > 0,
+    JSON.stringify({ incomplete: sighted.incomplete, total: sighted.total }));
+
   return report();
 }
 

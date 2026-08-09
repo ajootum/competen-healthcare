@@ -2,7 +2,7 @@ import type { WorkspaceContext } from "@/lib/practice/access";
 import { ACTIVITY_LABEL, type ActivityType } from "@/lib/practice/activity-constants";
 import { activityState } from "@/lib/practice/activity";
 import { practiceToday } from "@/lib/practice/practice-time";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import type { EventSource } from "@/lib/practice/events";
 import { TRAVEL_BASIS_NOTE, WEEKDAY_NAME, WEEKDAY_SHORT } from "@/lib/practice/planner-constants";
 

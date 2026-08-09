@@ -1,4 +1,4 @@
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import { requestApproval } from "@/lib/practice/delegation";
 import type { EngineResult } from "@/lib/practice/encounters";
 import {

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 
 // PEN-002 Patient Identity Engine -- one longitudinal identity per patient, duplicates prevented at
 // registration, retrieval in seconds, merges audited. This module is the engine; CPR-V2-004's registry and

@@ -1,5 +1,5 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
 import { checkPlacement } from "@/lib/practice/scheduling";

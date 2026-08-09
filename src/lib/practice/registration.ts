@@ -5,7 +5,7 @@ import { addRelationship, ageFrom, relationshipExpectation, MAJORITY_AGE } from 
 import { bookAppointment } from "@/lib/practice/scheduling";
 import { practiceToday, workspaceClock } from "@/lib/practice/practice-time";
 import { resolveTemplate, validateSubmission } from "@/lib/practice/registration-config";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 
 // CPR-PRM-001 s5 -- "Register", "Register & Book", and the relationship workflow that goes with them.
 //

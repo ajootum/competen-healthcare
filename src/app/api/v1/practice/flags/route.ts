@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCaller, isResponse, isSuper } from "@/lib/api-auth";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import { FLAG_CONSEQUENCE } from "@/lib/practice/operations";
 
 // PATCH /api/v1/practice/flags -- move Competen Practice along IAM-001 s14.1's launch ladder.

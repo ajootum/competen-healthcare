@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { getPatient } from "@/lib/practice/patients";
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 
 // GET   /api/v1/practice/patients/{id} -- the patient with identifiers, contacts and diary history.
 // PATCH /api/v1/practice/patients/{id} -- demographic edit, optimistic-concurrency guarded, audited

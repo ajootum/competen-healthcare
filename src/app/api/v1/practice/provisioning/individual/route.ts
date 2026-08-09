@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCaller, isResponse, isSuper } from "@/lib/api-auth";
 import {
-  validateIndividual, payloadHash, runProvisioning, platformFlag, audit, type IndividualRequest,
+  validateIndividual, payloadHash, runProvisioning, platformFlag, type IndividualRequest,
 } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 
 // POST /api/v1/practice/provisioning/individual (CPR-PROV-001 s10/s11, CPR-IAM-001 s8).
 //

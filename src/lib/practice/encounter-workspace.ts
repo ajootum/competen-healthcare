@@ -1,4 +1,4 @@
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { editableEncounter, type EngineResult } from "@/lib/practice/encounters";
 import { LIVE_STATUSES, LOCKED_STATUSES } from "@/lib/practice/encounter-constants";

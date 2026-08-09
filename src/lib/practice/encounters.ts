@@ -1,4 +1,4 @@
-import { audit } from "@/lib/practice/provisioning";
+import { audit } from "@/lib/practice/audit";
 import { runningActivityId } from "@/lib/practice/activity";
 import { ENCOUNTER_TRANSITIONS, LOCKED_STATUSES, LIVE_STATUSES } from "@/lib/practice/encounter-constants";
 import { emitEvents, type EventEnvelope, type EventSource, type PracticeEventType } from "@/lib/practice/events";

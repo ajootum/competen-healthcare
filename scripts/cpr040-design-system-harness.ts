@@ -92,9 +92,22 @@ function main() {
     join(process.cwd(), "src", "lib", "marketing", "practice-content.ts"),
     join(process.cwd(), "src", "lib", "marketing", "practice-site.ts"),
   ];
+  // ⚠ ONE FILE IS EXEMPT, AND IT IS EXEMPT BY PATH RATHER THAN BY VALUE.
+  //
+  // preference-constants.ts declares ACCENTS: the seven accent colours a practitioner may CHOOSE in
+  // Personalisation. A colour picker has to contain colours -- the swatch IS the value -- so these are
+  // data the user selects from, not theme a component leaked. There is no token to point them at, because
+  // a token per user choice is just this list with more steps.
+  //
+  // ⚠ EXEMPTED BY PATH, NOT BY ADDING THE SEVEN HEXES TO ALLOWED. #4F46E5 is the brand indigo; putting it
+  // in ALLOWED would let any component in the Practice surface hardcode the primary colour and still pass
+  // the check that exists to stop exactly that. The exemption is this file's palette and nothing else.
+  const ACCENT_PALETTE = join(process.cwd(), "src", "lib", "practice", "preference-constants.ts");
+
   const offenders: string[] = [];
   for (const f of files) {
     if (!existsSync(f)) continue;
+    if (f === ACCENT_PALETTE) continue;
     for (const [i, line] of readFileSync(f, "utf8").split("\n").entries()) {
       for (const hex of line.match(/#[0-9A-Fa-f]{6}\b/g) ?? []) {
         if (!ALLOWED.has(hex)) offenders.push(`${f.replace(process.cwd() + "\\", "")}:${i + 1} ${hex}`);
@@ -107,6 +120,19 @@ function main() {
   // CONTROL: the scan must actually be reading files. Without this, a bad path glob reports a clean
   // sweep of nothing -- the confident zero this project keeps meeting.
   ok("3-control. the scan read a meaningful number of files", files.length > 20, `${files.length} files`);
+
+  // ⚠ THE EXEMPTION IS BOUNDED, OR IT IS A HOLE. An exempt file is a place raw colour can accumulate
+  // unnoticed, so the exemption is only as good as a check on its size. Seven accents are offered; an
+  // eighth hex in this file -- or a hex outside the ACCENTS block -- is a new raw colour and must fail.
+  const paletteLines = readFileSync(ACCENT_PALETTE, "utf8").split("\n");
+  const paletteHexes = paletteLines.flatMap(l => l.match(/#[0-9A-Fa-f]{6}\b/g) ?? []);
+  const accentBlock = paletteLines
+    .slice(paletteLines.findIndex(l => /export const ACCENTS/.test(l)),
+           paletteLines.findIndex(l => /export const FONT_SCALES/.test(l)))
+    .flatMap(l => l.match(/#[0-9A-Fa-f]{6}\b/g) ?? []);
+  ok("3-exempt. the exempt palette holds exactly its 7 accents, all inside the ACCENTS block",
+    paletteHexes.length === 7 && accentBlock.length === 7,
+    `${paletteHexes.length} in the file, ${accentBlock.length} inside ACCENTS`);
 
   // ── 4. The focus rule CPR-040 s9 requires is present and scoped ──────────────────────────────
   ok("4. a visible focus state is defined for the Practice surface",
