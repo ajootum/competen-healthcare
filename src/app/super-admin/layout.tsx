@@ -9,6 +9,7 @@ import { loadHeaderContext } from "@/lib/platform/header";
 import WorkspaceSidebar from "./_components/WorkspaceSidebar";
 import { highestRole, hasPlatformRole, type AppRole } from "@/lib/roles";
 import { resolveHqPositions } from "@/lib/hq/context";
+import SessionIdentityNotice, { RememberSessionIdentity } from "@/components/SessionIdentityNotice";
 
 // Sidebar IA aligned to the Mission Control model (MC-001). The nav config and
 // its Clinical Knowledge Platform branch live in the WorkspaceSidebar client
@@ -79,12 +80,40 @@ export default async function SuperAdminLayout({ children }: { children: React.R
         <div className="text-center">
           <p className="text-4xl mb-3">🔒</p>
           <h1 className="text-lg font-bold text-gray-900">Competen HQ</h1>
-          {/* ⚠ THE OLD SENTENCE SAID "Super Admin only" AND THAT IS NO LONGER TRUE. It is now reachable
-              by appointment, and a refusal that misdescribes the rule sends people to ask the wrong
-              person for the wrong thing. It still names no position and no office: what somebody is
-              missing is not something a refused stranger should be told. */}
-          <p className="text-gray-400 text-sm mt-1">You do not hold a position that opens this platform.</p>
-          <Link href="/dashboard" className="mt-4 inline-block text-sm text-teal-600 hover:underline">← Go to dashboard</Link>
+          {/* ⚠ THE OLD SENTENCE SAID "Super Admin only" AND THAT IS NO LONGER TRUE -- HQ is reachable by
+              appointment now, so a refusal naming only super_admin sends people to ask the wrong person
+              for the wrong thing.
+
+              ⚠ BUT THE FIRST REPLACEMENT WAS WORSE FOR THE COMMONEST CASE, AND THE OWNER HIT IT. It said
+              only "You do not hold a position that opens this platform", which reads as "your HQ
+              appointment is missing" -- so somebody signed in on their OTHER account concluded the
+              product had switched their session. It had not. They were simply signed in as themselves
+              rather than as the platform account, which is the ordinary reason to land here.
+
+              So it NAMES WHO YOU ARE, and that discloses nothing: it is the viewer's own session, which
+              the header already shows on every other page. What it still refuses to name is any position,
+              office or capability -- what a refused person is MISSING is not something to tell them. */}
+          <p className="text-gray-500 text-sm mt-2">
+            You are signed in as <span className="font-semibold text-gray-700">{profile?.full_name ?? "this account"}</span>.
+          </p>
+          <p className="text-gray-400 text-sm mt-1">
+            This platform is open to platform owners and to people holding an HQ position.
+          </p>
+          {/* ⚠ THE HALF THAT ANSWERS "did something just switch my account?". Renders nothing unless this
+              tab was opened by a DIFFERENT account, which is the case the owner hit and reported as a bug. */}
+          <SessionIdentityNotice userId={user.id} displayName={profile?.full_name ?? null} />
+          <div className="mt-4 flex items-center justify-center gap-4 text-sm">
+            <Link href="/dashboard" className="text-teal-600 hover:underline">← Go to your dashboard</Link>
+            {/* The actionable half. If this is the wrong account, the way out is to leave it, and making
+                somebody hunt for sign-out is how a refusal gets mistaken for a fault.
+
+                ⚠ A POST FORM TO THE SAME ENDPOINT THE SIDEBAR USES, not a link to /logout. There is no
+                /logout route -- a link there would 404, which is a worse answer than offering nothing.
+                Signing out is a state change and belongs on a POST regardless. */}
+            <form action="/api/auth/logout" method="POST">
+              <button type="submit" className="text-gray-500 hover:underline">Sign out</button>
+            </form>
+          </div>
         </div>
       </div>
     );
@@ -93,6 +122,8 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   return (
     <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
       <a href="#main-content" className="cmp-skip-link">Skip to main content</a>
+      {/* Records who opened this tab. Writes once; see the module header for why first-write-wins. */}
+      <RememberSessionIdentity userId={user.id} displayName={profile?.full_name ?? null} />
       <div className="hidden md:block md:ml-56">
         <GlobalHeader
           workspaceTitle="Platform Super Admin"
