@@ -226,7 +226,14 @@ export default async function PracticeSetupOverview() {
                               </span>
                             </div>
                             <p className={`mt-2 text-[12px] font-bold leading-snug ${muted ? "text-gray-500" : "text-gray-900"}`}>
-                              {m.title}
+                              {/* ⚠ THE TITLE CARRIES THE LINK WHEN THE PARTS DO. A card whose rows are
+                                  each their own destination cannot also be one big anchor -- nested
+                                  anchors are invalid HTML and React refuses to hydrate them -- so the
+                                  card stops being a link and the heading becomes one. Every other card
+                                  is unchanged and still opens from anywhere on it. */}
+                              {parts && openable
+                                ? <Link href={m.href!} className="hover:text-[var(--cp-primary-deep)] hover:underline">{m.title}</Link>
+                                : m.title}
                             </p>
                             <p className="mt-1 text-[10.5px] leading-relaxed text-gray-500">{m.description}</p>
 
@@ -243,21 +250,45 @@ export default async function PracticeSetupOverview() {
                                       width: `${parts.progress.of === 0 ? 0 : (parts.progress.done / parts.progress.of) * 100}%`,
                                     }} />
                                 </div>
+                                {/* ── EACH ROW GOES WHERE IT IS ABOUT ────────────────────────────
+                                    The practice owner walked this list and reported that it says what
+                                    is unconfigured and does not take you there. Every part already
+                                    carried the href of the screen that owns it and nothing rendered it.
+
+                                    ⚠ THE NOT-BUILT ROW STAYS TEXT. Its href is null because there is
+                                    nothing behind it, and a link to nowhere is worse than a line of
+                                    prose -- it is the one thing this codebase refuses hardest. */}
                                 <ul className="mt-1.5 space-y-0.5">
-                                  {parts.parts.map(p => (
-                                    <li key={p.key} className="flex items-start gap-1 text-[9.5px] leading-tight">
+                                  {parts.parts.map(p => {
+                                    const mark = (
                                       <span aria-hidden className={
                                         p.notBuilt ? "text-slate-300"
                                           : p.done === null ? "text-slate-400"
                                             : p.done ? "text-emerald-600" : "text-amber-500"}>
                                         {p.notBuilt ? "–" : p.done === null ? "?" : p.done ? "✓" : "○"}
                                       </span>
+                                    );
+                                    const text = (
                                       <span className={p.notBuilt ? "text-slate-400" : "text-gray-600"}>
                                         {p.label}
                                         <span className="text-gray-400"> · {p.detail}</span>
                                       </span>
-                                    </li>
-                                  ))}
+                                    );
+                                    return (
+                                      <li key={p.key} className="text-[9.5px] leading-tight">
+                                        {p.href && !p.notBuilt ? (
+                                          <Link href={p.href}
+                                            className="-mx-1 flex items-start gap-1 rounded px-1 py-0.5 hover:bg-[var(--cp-primary)]/[0.06]">
+                                            {mark}
+                                            {text}
+                                            <span aria-hidden className="ml-auto shrink-0 text-gray-300">›</span>
+                                          </Link>
+                                        ) : (
+                                          <span className="flex items-start gap-1 px-1 py-0.5">{mark}{text}</span>
+                                        )}
+                                      </li>
+                                    );
+                                  })}
                                 </ul>
                               </>
                             )}
@@ -270,13 +301,14 @@ export default async function PracticeSetupOverview() {
                             )}
                           </>
                         );
-                        return openable ? (
+                        // ⚠ A CARD WITH LINKS INSIDE IT CANNOT ITSELF BE A LINK. See the title above.
+                        return openable && !parts ? (
                           <Link key={m.key} href={m.href!}
                             className={`${card} block !p-3 transition hover:border-[var(--cp-primary)]/40 hover:shadow-md`}>
                             {Inner}
                           </Link>
                         ) : (
-                          <div key={m.key} className={`${card} !p-3 bg-slate-50/70`}>{Inner}</div>
+                          <div key={m.key} className={`${card} !p-3 ${muted ? "bg-slate-50/70" : ""}`}>{Inner}</div>
                         );
                       })}
                     </div>
@@ -425,6 +457,18 @@ export default async function PracticeSetupOverview() {
                             configuring anything says so, and names the phase that owns it. */}
                         {r.blockedReason && (
                           <p className="mt-0.5 text-[10px] leading-relaxed text-slate-400">{r.blockedReason}</p>
+                        )}
+                        {/* ⚠ WHERE TO GO, WHEN THERE IS SOMEWHERE. Computed from the first module that
+                            is really unconfigured and really openable, so it moves as the practice is
+                            set up and vanishes when nothing is left. A row with no `next` renders no
+                            link rather than a dead one -- including every row that is already met, and
+                            every row whose remaining work could not be read. */}
+                        {r.next && (
+                          <Link href={r.next.href}
+                            className="mt-1 inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:underline">
+                            {r.next.label}
+                            <span aria-hidden>›</span>
+                          </Link>
                         )}
                       </div>
                     </li>

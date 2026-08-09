@@ -66,6 +66,11 @@ export async function POST(req: NextRequest) {
         walkInLimit: nullableNumber(body.walkInLimit),
         effectiveFrom: nullableString(body.effectiveFrom),
         effectiveTo: nullableString(body.effectiveTo),
+        // CPR-RECUR-001 (migration 274). "Alternate Saturdays" is an interval and the FIRST SATURDAY it
+        // runs on -- never an ISO week parity, which a 53-week year inverts. The engine refuses an
+        // interval above 1 without a first date rather than choosing a fortnight on somebody's behalf.
+        recurrenceWeeks: body.recurrenceWeeks != null ? Number(body.recurrenceWeeks) : undefined,
+        recurrenceAnchorDate: nullableString(body.recurrenceAnchorDate),
         sessionNote: nullableString(body.sessionNote),
         slotKind: body.slotKind ? String(body.slotKind) : undefined,
         status: body.status ? String(body.status) as "active" | "suspended" : undefined,

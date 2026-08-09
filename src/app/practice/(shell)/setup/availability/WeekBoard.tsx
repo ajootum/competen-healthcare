@@ -35,8 +35,10 @@ const toMinutes = (v: string) => {
   return (h || 0) * 60 + (m || 0);
 };
 
-export default function WeekBoard({ sessions, locations, clinics }: {
+export default function WeekBoard({ sessions, locations, clinics, today }: {
   sessions: any[]; locations: any[]; clinics: any[];
+  /** The practice's own today, which the fortnightly badge counts "next" from. */
+  today: string;
 }) {
   const router = useRouter();
   const [addingTo, setAddingTo] = useState<number | null>(null);
@@ -136,7 +138,7 @@ export default function WeekBoard({ sessions, locations, clinics }: {
               ) : (
                 <ul className="space-y-1.5">
                   {onThisDay.map((s: any) => (
-                    <SessionCard key={s.id} session={s}
+                    <SessionCard key={s.id} session={s} today={today}
                       locations={locations} clinics={clinics} kindHue={hueFor(s.location_id)} />
                   ))}
                   {/* Multiple sessions per day, which the specification asks for explicitly. */}
@@ -207,9 +209,15 @@ export default function WeekBoard({ sessions, locations, clinics }: {
         </p>
       </div>
 
+      {/* ⚠ THIS PARAGRAPH SAID "changing Tuesday changes every Tuesday", AND CPR-RECUR-001 MADE THAT
+          FALSE. A session can now repeat every second, third or fourth week, so an unqualified "every
+          Tuesday" is a claim about somebody's diary that their own cards above may contradict. The
+          interval is chosen in the session editor rather than here, and this says where. */}
       <p className="mt-2 text-[10px] leading-relaxed text-gray-400">
-        A session is a day and a time, not fifty-two copies — so changing Tuesday changes every Tuesday.
-        Changes save as you make them, and the bookable slots are rebuilt straight away.
+        A session is a day and a time, not fifty-two copies — so changing Tuesday changes every Tuesday
+        the session runs. Sessions that repeat every second, third or fourth week are marked on the card
+        and are set in the session editor. Changes save as you make them, and the bookable slots are
+        rebuilt straight away.
       </p>
 
       {clinics.length > 0 && (

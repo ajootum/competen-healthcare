@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+// CPR-RECUR-001 (migration 274). Pure arithmetic, the same the generator runs on.
+import { readRecurrence, recurrenceBadge, nextOccurrences, shortDate } from "@/lib/practice/recurrence";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -36,8 +38,10 @@ const PLACE_GLYPH: Record<string, string> = {
   hospital: "⌂", clinic: "✚", outreach: "◈", teleconsultation: "▭", independent: "▣",
 };
 
-export default function SessionCard({ session, locations, clinics = [], kindHue }: {
+export default function SessionCard({ session, locations, clinics = [], kindHue, today }: {
   session: any; locations: any[]; clinics?: any[]; kindHue: string;
+  /** The PRACTICE's today, so "next" on the badge is not the server's day in another timezone. */
+  today: string;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(null);
@@ -132,6 +136,18 @@ export default function SessionCard({ session, locations, clinics = [], kindHue 
           </p>
           {clinicName(session.clinic_id) && (
             <p className="truncate text-[9px] text-gray-500">{clinicName(session.clinic_id)}</p>
+          )}
+          {/* ⚠ CPR-RECUR-001: A FORTNIGHTLY SESSION MUST READ AS FORTNIGHTLY HERE. This board's whole
+              subject is when the practitioner is available, and until migration 274 every card meant
+              "every week" -- so an unmarked card now says something that may be false. The badge is
+              derived from the stored interval and anchor, never from a stored phrase. */}
+          {recurrenceBadge(readRecurrence(session)) && (
+            <p className="text-[9px] font-semibold text-violet-700">
+              {recurrenceBadge(readRecurrence(session))}
+              {nextOccurrences(today, session.weekday, readRecurrence(session), 1)[0]
+                ? ` · next ${shortDate(nextOccurrences(today, session.weekday, readRecurrence(session), 1)[0])}`
+                : ""}
+            </p>
           )}
           {suspended && <p className="text-[9px] font-semibold text-amber-700">Suspended</p>}
         </div>

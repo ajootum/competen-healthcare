@@ -407,6 +407,10 @@ export default async function AvailabilityBookingPage({ searchParams }: {
                     today={s.today}
                     defaultMinutes={s.practiceDefaultMinutes}
                     mayEdit={s.mayEdit}
+                    // CPR-RECUR-001. Migration 274 is applied by hand, so the editor is told whether
+                    // this database can hold an alternate-week pattern rather than offering one it
+                    // cannot store.
+                    recurrenceAvailable={s.recurrenceAvailable}
                   />
 
                   {/* ── s4.2 LOCATIONS, REUSED not duplicated ─────────────────────────────────── */}

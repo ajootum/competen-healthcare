@@ -6,6 +6,12 @@ import {
   REMOVES_TIME, RESHAPES_TIME, ADDS_TIME,
 } from "@/lib/practice/schedule-exception-constants";
 import { commitScheduleChange } from "@/lib/practice/schedule-exceptions";
+// CPR-RECUR-001 (migration 274). ⚠ Constants and arithmetic only, from the file that touches no database
+// and imports nothing -- so the session editor in the browser and the generator on the server work out
+// the same Saturdays. Two implementations of "every other week" would disagree about somebody's month.
+import {
+  occursOn, readRecurrence, recurrencesCanCoincide, alignAnchorToWeekday, WEEKLY, type Recurrence,
+} from "@/lib/practice/recurrence";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -108,7 +114,7 @@ export async function availabilityConfig(admin: any, ctx: WorkspaceContext) {
   const today = practiceToday(timezone);
 
   const [
-    { data: locations }, { data: clinics }, { data: templates },
+    { data: locations }, { data: clinics }, templateRead,
     { data: exceptions }, { data: rules }, { count: generatedSlots },
   ] = await Promise.all([
     admin.from("practice_location")
@@ -120,10 +126,11 @@ export async function availabilityConfig(admin: any, ctx: WorkspaceContext) {
     // ACTIVE AND SUSPENDED, NOT JUST ACTIVE. A suspended session must stay on the screen or there is no
     // way to resume it -- which would make "suspend" a slower spelling of "delete". Closed ones are
     // gone. The GENERATOR filters to active on its own; this read is what a person looks at.
-    admin.from("practice_availability_template")
-      .select("id, location_id, clinic_id, weekday, starts_minute, ends_minute, slot_kind, appointment_minutes, capacity, note, active, status")
-      .eq("workspace_id", ctx.workspaceId).in("status", ["active", "suspended"])
-      .order("weekday").order("starts_minute"),
+    //
+    // ⚠ AND IT CARRIES THE RECURRENCE, because the week grid this feeds draws one card per session and
+    // the scope note's own warning is that a fortnightly session must READ as fortnightly on the card or
+    // the grid resumes lying. Falls back to the pre-274 column list rather than failing the whole read.
+    readTemplatesForDisplay(admin, ctx.workspaceId),
     admin.from("practice_availability_exception")
       .select("id, location_id, clinic_id, kind, from_date, to_date, starts_minute, ends_minute, slot_kind, appointment_minutes, reason")
       .eq("workspace_id", ctx.workspaceId).gte("to_date", today).order("from_date"),
@@ -138,7 +145,11 @@ export async function availabilityConfig(admin: any, ctx: WorkspaceContext) {
     timezone, today,
     locations: (locations ?? []) as any[],
     clinics: (clinics ?? []) as any[],
-    templates: (templates ?? []) as any[],
+    templates: (templateRead.rows ?? []) as any[],
+    /** Named, so a screen can say "your sessions could not be read" instead of drawing an empty week. */
+    templatesUnreadable: templateRead.error,
+    /** Whether migration 274 is applied, so no control offers a pattern this database cannot store. */
+    recurrenceAvailable: templateRead.recurrenceAvailable,
     exceptions: (exceptions ?? []) as any[],
     rules: (rules ?? []) as any[],
     generatedSlotCount: generatedSlots ?? 0,
@@ -226,14 +237,24 @@ export async function addClinic(admin: any, ctx: WorkspaceContext, args: {
 export async function sessionConflict(admin: any, ctx: WorkspaceContext, args: {
   weekday: number; startsMinute: number; endsMinute: number; locationId: string | null;
   excludeId?: string;
+  /**
+   * CPR-RECUR-001. Absent means weekly, which is what every caller meant before migration 274 and what
+   * every row without the columns still is.
+   */
+  recurrence?: Recurrence;
 }): Promise<{ ok: false; status: number; code: string; message: string } | null> {
-  const { data: existing, error } = await admin.from("practice_availability_template")
-    .select("id, starts_minute, ends_minute, location_id")
-    .eq("workspace_id", ctx.workspaceId).eq("weekday", args.weekday).eq("status", "active");
-  if (error)
-    return { ok: false, status: 500, code: "READ_FAILED", message: `could not read the week: ${error.message}` };
+  const columns = "id, starts_minute, ends_minute, location_id";
+  const query = (cols: string) => admin.from("practice_availability_template")
+    .select(cols).eq("workspace_id", ctx.workspaceId).eq("weekday", args.weekday).eq("status", "active");
 
-  const others = ((existing ?? []) as any[]).filter(t => t.id !== args.excludeId);
+  let existing = await query(`${columns}, ${RECURRENCE_COLUMNS}`);
+  if (existing.error && MISSING_COLUMN_CODES.has(String(existing.error.code)))
+    existing = await query(columns);
+  if (existing.error)
+    return { ok: false, status: 500, code: "READ_FAILED", message: `could not read the week: ${existing.error.message}` };
+
+  const mine = args.recurrence ?? WEEKLY;
+  const others = ((existing.data ?? []) as any[]).filter(t => t.id !== args.excludeId);
   if (others.length === 0) return null;
 
   const locationIds = [...new Set(
@@ -248,6 +269,13 @@ export async function sessionConflict(admin: any, ctx: WorkspaceContext, args: {
   const here = args.locationId ? locById.get(args.locationId) : null;
 
   for (const t of others) {
+    // ⚠ CPR-RECUR-001: TWO SESSIONS ON ONE WEEKDAY ARE NOT NECESSARILY ON ONE DAY. Alternate Saturdays
+    // at TMR and the OTHER alternate Saturdays at Aga Khan never coincide, so neither the overlap rule
+    // nor the travel rule has anything to bite on -- and refusing them would forbid the exact
+    // arrangement this feature was asked for. Both rules are skipped together, deliberately: a pair that
+    // is never on the same date needs no travel time between them either.
+    if (!recurrencesCanCoincide(args.weekday, mine, readRecurrence(t))) continue;
+
     const overlaps = t.starts_minute < args.endsMinute && t.ends_minute > args.startsMinute;
     const samePlace = (t.location_id ?? null) === (args.locationId ?? null);
 
@@ -363,13 +391,15 @@ export async function editSession(admin: any, ctx: WorkspaceContext, args: {
   if (!ctx.capabilities.includes("appointment.manage"))
     return { ok: false, status: 403, code: "FORBIDDEN", message: "appointment.manage is required" };
 
-  const { data: t, error: readError } = await admin.from("practice_availability_template")
-    // appointment_type is NOT selected: migration 241 dropped it from this table and the join table
-    // practice_session_appointment_type owns the offered set, because s4.3 needs zero, one AND several.
-    .select("id, weekday, starts_minute, ends_minute, location_id, clinic_id, slot_kind, capacity, status, note")
-    .eq("id", args.templateId).eq("workspace_id", ctx.workspaceId).maybeSingle();
-  if (readError)
-    return { ok: false, status: 500, code: "READ_FAILED", message: `could not read the session: ${readError.message}` };
+  // appointment_type is NOT selected: migration 241 dropped it from this table and the join table
+  // practice_session_appointment_type owns the offered set, because s4.3 needs zero, one AND several.
+  // The recurrence comes back too -- an edit to a fortnightly session's TIME must be judged against the
+  // weeks it actually runs, or its antiphase partner refuses it.
+  const read = await readTemplateWithRecurrence(admin, ctx.workspaceId, args.templateId,
+    "id, weekday, starts_minute, ends_minute, location_id, clinic_id, slot_kind, capacity, status, note");
+  if (read.error)
+    return { ok: false, status: 500, code: "READ_FAILED", message: `could not read the session: ${read.error}` };
+  const t = read.row;
   if (!t) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (t.status === "closed")
     return { ok: false, status: 422, code: "SESSION_CLOSED", message: "this session is closed; add a new one instead" };
@@ -399,10 +429,20 @@ export async function editSession(admin: any, ctx: WorkspaceContext, args: {
 
   // THE CONFLICT CHECK RUNS ON EVERY PATH, excluding this session so it cannot clash with itself. A
   // suspend or a close is exempt: taking time OUT of the week can never create an overlap.
+  // ⚠ THE ANCHOR MOVES WITH THE WEEKDAY, AND THE DATABASE INSISTS ON IT. Migration 274 checks that a
+  // recurrence anchor falls on the session's own weekday, so moving an alternate-Saturday clinic to a
+  // Sunday without moving the anchor would be REFUSED by the constraint -- a correct refusal of an
+  // incorrect write, but a wall to the practitioner. Aligning keeps the WEEKS they chose and changes
+  // only the day inside them.
+  const wasRecurrence = readRecurrence(t);
+  const nextRecurrence: Recurrence = wasRecurrence.anchorDate && next.weekday !== t.weekday
+    ? { ...wasRecurrence, anchorDate: alignAnchorToWeekday(wasRecurrence.anchorDate, next.weekday) }
+    : wasRecurrence;
+
   if (next.status === "active") {
     const conflict = await sessionConflict(admin, ctx, {
       weekday: next.weekday, startsMinute: next.starts_minute, endsMinute: next.ends_minute,
-      locationId: next.location_id ?? null, excludeId: t.id,
+      locationId: next.location_id ?? null, excludeId: t.id, recurrence: nextRecurrence,
     });
     if (conflict) return conflict;
   }
@@ -413,8 +453,14 @@ export async function editSession(admin: any, ctx: WorkspaceContext, args: {
   if (changed.length === 0)
     return { ok: false, status: 422, code: "NO_CHANGE", message: "nothing was different" };
 
+  // The anchor is written ONLY where the column exists and only where it actually moved -- naming a
+  // column migration 274 has not added would make PostgREST refuse the whole update and take the edit
+  // with it.
+  const anchorPatch = read.recurrenceAvailable && nextRecurrence.anchorDate !== wasRecurrence.anchorDate
+    ? { recurrence_anchor_date: nextRecurrence.anchorDate } : {};
+
   const { error } = await admin.from("practice_availability_template")
-    .update({ ...next, active: next.status === "active", updated_at: nowIso() })
+    .update({ ...next, ...anchorPatch, active: next.status === "active", updated_at: nowIso() })
     .eq("id", t.id);
   if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
 
@@ -456,10 +502,13 @@ export async function duplicateSession(admin: any, ctx: WorkspaceContext, args: 
   if (!Array.isArray(args.toWeekdays) || args.toWeekdays.length === 0)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "choose at least one day to copy to" };
 
-  const { data: t } = await admin.from("practice_availability_template")
-    .select("id, weekday, starts_minute, ends_minute, location_id, clinic_id, slot_kind, appointment_minutes, capacity, note")
-    .eq("id", args.templateId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  const read = await readTemplateWithRecurrence(admin, ctx.workspaceId, args.templateId,
+    "id, weekday, starts_minute, ends_minute, location_id, clinic_id, slot_kind, appointment_minutes, capacity, note");
+  if (read.error)
+    return { ok: false, status: 500, code: "READ_FAILED", message: `could not read the session: ${read.error}` };
+  const t = read.row;
   if (!t) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  const sourceRecurrence = readRecurrence(t);
 
   const startsMinute = args.startsMinute ?? t.starts_minute;
   const endsMinute = args.endsMinute ?? t.ends_minute;
@@ -475,7 +524,17 @@ export async function duplicateSession(admin: any, ctx: WorkspaceContext, args: 
       refused.push({ weekday, reason: "not a day of the week" });
       continue;
     }
-    const conflict = await sessionConflict(admin, ctx, { weekday, startsMinute, endsMinute, locationId });
+    // ⚠ A COPY OF A FORTNIGHTLY SESSION IS FORTNIGHTLY, ON THE SAME WEEKS. Dropping the recurrence would
+    // turn "copy my alternate Saturday to Sunday" into a session that runs EVERY Sunday -- twice the
+    // work, silently, from a button that said copy. The anchor is aligned onto the new weekday so it
+    // stays inside the same weeks and satisfies migration 274's constraint.
+    const copyRecurrence: Recurrence = sourceRecurrence.anchorDate
+      ? { ...sourceRecurrence, anchorDate: alignAnchorToWeekday(sourceRecurrence.anchorDate, weekday) }
+      : sourceRecurrence;
+
+    const conflict = await sessionConflict(admin, ctx, {
+      weekday, startsMinute, endsMinute, locationId, recurrence: copyRecurrence,
+    });
     if (conflict) { refused.push({ weekday, reason: conflict.message }); continue; }
 
     const { data, error } = await admin.from("practice_availability_template").insert({
@@ -484,6 +543,10 @@ export async function duplicateSession(admin: any, ctx: WorkspaceContext, args: 
       weekday, starts_minute: startsMinute, ends_minute: endsMinute,
       slot_kind: t.slot_kind,
       appointment_minutes: t.appointment_minutes, capacity: t.capacity,
+      // Only where the columns exist -- naming one migration 274 has not added would refuse the insert.
+      ...(read.recurrenceAvailable
+        ? { recurrence_weeks: copyRecurrence.everyWeeks, recurrence_anchor_date: copyRecurrence.anchorDate }
+        : {}),
       note: t.note, duplicated_from_id: t.id, created_by: args.actorId,
     }).select("id").maybeSingle();
     if (error || !data) { refused.push({ weekday, reason: error?.message ?? "could not be created" }); continue; }
@@ -741,7 +804,136 @@ export async function resolveBookingRule(
 }
 
 /** PostgREST's column miss and Postgres's own, which mean "migration 268 has not been applied". */
-const MISSING_COLUMN_CODES = new Set(["PGRST204", "PGRST205", "PGRST202", "42703", "42P01"]);
+export const MISSING_COLUMN_CODES = new Set(["PGRST204", "PGRST205", "PGRST202", "42703", "42P01"]);
+
+// ── RECURRENCE (CPR-RECUR-001, migration 274) ────────────────────────────────────────────────────────
+
+/** Migration 274's two columns. Read only where they exist -- the file is applied by hand. */
+export const RECURRENCE_COLUMNS = "recurrence_weeks, recurrence_anchor_date";
+
+/**
+ * ⚠ THREE STATES, NOT A BOOLEAN, and the third one is why.
+ *
+ * "The columns are not there" and "the database did not answer" are the same absence and opposite facts.
+ * A writer told `false` refuses an alternate-week session with a sentence naming the migration, which is
+ * right when the file has not been applied and WRONG when the connection merely wobbled -- so the wobble
+ * gets its own answer and its own refusal.
+ *
+ * ⚠ ONLY DEFINITE ANSWERS ARE CACHED. Caching `unknown` as `absent` would make one bad moment look like
+ * a permanently unbuilt feature for the life of the process.
+ */
+export type RecurrenceStoreState = "present" | "absent" | "unknown";
+let recurrenceStoreCache: RecurrenceStoreState | null = null;
+
+export async function recurrenceStoreState(admin: any): Promise<RecurrenceStoreState> {
+  if (recurrenceStoreCache) return recurrenceStoreCache;
+  const { error } = await admin.from("practice_availability_template")
+    .select("recurrence_weeks").limit(1);
+  if (!error) { recurrenceStoreCache = "present"; return "present"; }
+  if (MISSING_COLUMN_CODES.has(String(error.code))) { recurrenceStoreCache = "absent"; return "absent"; }
+  return "unknown";
+}
+
+/** For the harness, which has to prove both branches inside one process. */
+export function forgetRecurrenceStore() { recurrenceStoreCache = null; }
+
+/**
+ * Read a workspace's templates WITH their recurrence, falling back once when migration 274 is absent.
+ *
+ * ⚠ THE FALLBACK IS KEYED ON THE ERROR CODE, NEVER ON "no rows came back". Adding the two columns to
+ * every select unconditionally would make PostgREST refuse the WHOLE query on a database that has not had
+ * the file applied -- turning a missing feature into an empty diary. Distinguishing the two by row count
+ * would turn a practice with no sessions into a practice with no recurrence support.
+ *
+ * ⚠ AND AN UNREADABLE TEMPLATE LIST IS RETURNED AS ONE, NOT AS `[]`. The generator's reaping pass treats
+ * "no template is live on this day" as "every generated slot on this day is stale", so a template read
+ * that failed and was quietly read as an empty list would spend the run DELETING the diary it could not
+ * see. Only the appointments would have survived, by the second guard.
+ */
+async function readTemplatesForGeneration(admin: any, workspaceId: string): Promise<
+  { rows: any[]; error: null } | { rows: null; error: string }
+> {
+  const base = "id, location_id, clinic_id, weekday, starts_minute, ends_minute, slot_kind, appointment_minutes";
+  const first = await admin.from("practice_availability_template")
+    .select(`${base}, ${RECURRENCE_COLUMNS}`)
+    .eq("workspace_id", workspaceId).eq("status", "active");
+  if (!first.error && first.data != null) return { rows: first.data as any[], error: null };
+  if (first.error && MISSING_COLUMN_CODES.has(String(first.error.code))) {
+    const second = await admin.from("practice_availability_template")
+      .select(base).eq("workspace_id", workspaceId).eq("status", "active");
+    if (!second.error && second.data != null) return { rows: second.data as any[], error: null };
+    return { rows: null, error: second.error?.message ?? "neither rows nor an error" };
+  }
+  return { rows: null, error: first.error?.message ?? "neither rows nor an error" };
+}
+
+/**
+ * One session row, with its recurrence, falling back once when migration 274 is absent.
+ *
+ * Shared by every writer that has to decide something about a session it did not create -- an edit, a
+ * copy and a save all need to know whether the row in front of them is fortnightly, and a writer that
+ * assumed weekly would compare an antiphase pair as though they collided and refuse a legitimate edit.
+ */
+export async function readTemplateWithRecurrence(
+  admin: any, workspaceId: string, templateId: string, baseColumns: string,
+): Promise<{ row: any | null; error: string | null; recurrenceAvailable: boolean }> {
+  const q = (cols: string) => admin.from("practice_availability_template")
+    .select(cols).eq("id", templateId).eq("workspace_id", workspaceId).maybeSingle();
+
+  const first = await q(`${baseColumns}, ${RECURRENCE_COLUMNS}`);
+  if (!first.error) return { row: first.data ?? null, error: null, recurrenceAvailable: true };
+  if (MISSING_COLUMN_CODES.has(String(first.error.code))) {
+    const second = await q(baseColumns);
+    if (!second.error) return { row: second.data ?? null, error: null, recurrenceAvailable: false };
+    return { row: null, error: second.error.message, recurrenceAvailable: false };
+  }
+  return { row: null, error: first.error.message, recurrenceAvailable: false };
+}
+
+/**
+ * The same fallback, for the read a PERSON looks at rather than the one the generator runs on.
+ *
+ * It reports THREE things and not one: the rows, whether the read failed, and whether migration 274 is
+ * applied. The last is not cosmetic -- a session editor that offers "every other week" against a database
+ * that cannot store it would take the choice, fail on save, and leave a practitioner believing they had
+ * set something. The control is only drawn where the answer is yes.
+ */
+async function readTemplatesForDisplay(admin: any, workspaceId: string): Promise<{
+  rows: any[] | null; error: string | null; recurrenceAvailable: boolean;
+}> {
+  const base = "id, location_id, clinic_id, weekday, starts_minute, ends_minute, slot_kind, appointment_minutes, capacity, note, active, status";
+  const q = (cols: string) => admin.from("practice_availability_template")
+    .select(cols).eq("workspace_id", workspaceId).in("status", ["active", "suspended"])
+    .order("weekday").order("starts_minute");
+
+  const first = await q(`${base}, ${RECURRENCE_COLUMNS}`);
+  if (!first.error && first.data != null)
+    return { rows: first.data as any[], error: null, recurrenceAvailable: true };
+  if (first.error && MISSING_COLUMN_CODES.has(String(first.error.code))) {
+    const second = await q(base);
+    if (!second.error && second.data != null)
+      return { rows: second.data as any[], error: null, recurrenceAvailable: false };
+    return {
+      rows: null, recurrenceAvailable: false,
+      error: second.error?.message ?? "neither rows nor an error",
+    };
+  }
+  return {
+    rows: null, recurrenceAvailable: false,
+    error: first.error?.message ?? "neither rows nor an error",
+  };
+}
+
+/**
+ * Does this session run on this date? The weekday test AND migration 274's interval, in one place.
+ *
+ * Used by BOTH halves of the generator -- the pass that creates slots and the pass that decides which
+ * existing slots have gone stale. Two copies of this test would be two chances for the second pass to
+ * delete what the first had just made, which is the bug the `liveTemplateIds` comment below already
+ * records once.
+ */
+const templateRunsOn = (t: any, date: string) =>
+  occursOn(date, t.weekday as number, readRecurrence(t));
 
 // ── SLOT GENERATION ──────────────────────────────────────────────────────────────────────────────────
 
@@ -817,6 +1009,14 @@ export type GenerationReport = {
    */
   slotsReshaped: number;
   daysSkippedForLeave: number;
+  /**
+   * CPR-RECUR-001: (session, date) pairs that fell on the session's weekday and were NOT its week.
+   *
+   * Reported rather than silent, because "your fortnightly clinic produced two slots this month" and
+   * "your clinic produced two slots this month" are the same number and different facts, and a
+   * practitioner who has just changed the interval is owed the second half of that sentence.
+   */
+  occurrencesSkippedForInterval: number;
   /** Named, not silent: generation stops at this many days and says it did. */
   cappedAt: number | null;
 };
@@ -846,12 +1046,11 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
   const capped = allDates.length > GENERATION_CAP_DAYS;
   const dates = allDates.slice(0, GENERATION_CAP_DAYS);
 
-  const [{ data: templates }, { data: exceptions }] = await Promise.all([
+  const [templateRead, exceptionRead] = await Promise.all([
     // ACTIVE ONLY. A suspended session is still on the screen and still generates nothing -- that is the
-    // whole difference between suspending and closing.
-    admin.from("practice_availability_template")
-      .select("id, location_id, clinic_id, weekday, starts_minute, ends_minute, slot_kind, appointment_minutes")
-      .eq("workspace_id", ctx.workspaceId).eq("status", "active"),
+    // whole difference between suspending and closing. Migration 274's recurrence comes back with it,
+    // and falls back to weekly when the file has not been applied.
+    readTemplatesForGeneration(admin, ctx.workspaceId),
     admin.from("practice_availability_exception")
       // ⚠ THE TWO REPLACEMENT COLUMNS ARE SELECTED BECAUSE THEY ARE READ, thirty lines below. Migration
       // 242 added them for s5.2's location change and activity substitution, and a column added for a
@@ -863,8 +1062,23 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
       .gte("to_date", dates[0] ?? args.fromDate),
   ]);
 
-  const tmpls = (templates ?? []) as any[];
-  const excs = (exceptions ?? []) as any[];
+  // ⚠ NEITHER READ MAY BE DISCARDED, AND BOTH USED TO BE. `const { data: templates } = await ...` with
+  // no error read turned an unreadable session list into an EMPTY one -- and the reaping pass at the
+  // bottom of this function deletes every generated slot whose template is not live on its day, so a
+  // failed read would have spent the run erasing the diary it could not see. The exceptions read has the
+  // mirror-image fault: an unread leave list is an empty one, and the generator would cheerfully
+  // manufacture a clinic on a day the practitioner is away.
+  //
+  // Refusing costs a regeneration. Guessing costs a diary.
+  if (templateRead.error !== null)
+    return { ok: false, status: 503, code: "TEMPLATES_UNREADABLE", message: `your sessions could not be read, so nothing was generated or removed: ${templateRead.error}` };
+  if (exceptionRead.error)
+    return { ok: false, status: 503, code: "EXCEPTIONS_UNREADABLE", message: `your leave and schedule changes could not be read, so nothing was generated or removed: ${exceptionRead.error.message}` };
+
+  const tmpls = templateRead.rows;
+  const excs = (exceptionRead.data ?? []) as any[];
+  /** (session, date) pairs a session's own interval skipped. Reported, never silent. */
+  let occurrencesSkippedForInterval = 0;
 
   // ── WHAT IS ALREADY THERE, so generation is idempotent rather than duplicating on every run.
   //
@@ -954,6 +1168,12 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
     //    practice-wide one takes all of it.
     for (const t of tmpls) {
       if (t.weekday !== weekday) continue;
+      // ⚠ CPR-RECUR-001: THE WEEKDAY IS NO LONGER THE WHOLE TEST. An alternate-Saturday session is on
+      // Saturday and is not on THIS Saturday, and the difference is counted in whole weeks from the
+      // anchor the practitioner chose -- never from an ISO week number, which a 53-week year inverts.
+      // Counted rather than skipped silently, so the report can say why a fortnight produced half a
+      // month's slots.
+      if (!templateRunsOn(t, date)) { occurrencesSkippedForInterval++; continue; }
       const removed = removals.some(e => e.location_id === null || e.location_id === t.location_id);
       if (removed) { daysSkippedForLeave++; continue; }
       const shape = reshapeFor(t, onThisDate);
@@ -1033,11 +1253,18 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
   // Slots this generator made for days that are now on leave, or for sessions no longer in the week.
   let slotsRemoved = 0, slotsKept = 0;
   for (const date of dates) {
-    const weekday = isoWeekday(date);
     const onThisDate = excs.filter(e => e.from_date <= date && e.to_date >= date);
     const removals = onThisDate.filter(e => REMOVES.includes(e.kind));
+    // ⚠ THE SAME OCCURRENCE TEST THE CREATING PASS USED, from one function. A weekly session that has
+    // just become fortnightly leaves slots standing on weeks it no longer runs -- those are exactly the
+    // rows this pass has to find, and it can only find them by asking the same question. Asking a
+    // different one would either strand them for ever or delete the ones the pass above just created.
+    //
+    // ⚠ AND FINDING THEM IS NOT REMOVING THEM. reapGeneratedSlots applies both guards: only slots this
+    // template generated, and never one somebody is booked into -- matched by slot_id AND by time
+    // overlap. A booked off-week Saturday survives the change to fortnightly and is COUNTED as kept.
     const liveTemplateIds = tmpls
-      .filter(t => t.weekday === weekday
+      .filter(t => templateRunsOn(t, date)
         && !removals.some(e => e.location_id === null || e.location_id === t.location_id))
       .map(t => t.id);
 
@@ -1062,6 +1289,7 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
     fromDate: args.fromDate, toDate: args.toDate,
     daysConsidered: dates.length,
     slotsCreated, slotsRemoved, slotsKept, slotsReshaped, daysSkippedForLeave,
+    occurrencesSkippedForInterval,
     cappedAt: capped ? GENERATION_CAP_DAYS : null,
   };
 

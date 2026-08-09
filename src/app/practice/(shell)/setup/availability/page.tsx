@@ -217,6 +217,10 @@ export default async function AvailabilityConfigPage({ searchParams }: {
                 sessions={JSON.parse(JSON.stringify(cfg.templates))}
                 locations={JSON.parse(JSON.stringify(activeLocations))}
                 clinics={JSON.parse(JSON.stringify(cfg.clinics.filter((c: any) => c.active)))}
+                // The PRACTICE's today, not the server's -- a fortnightly card's "next" date is worked
+                // out from it, and a practice three hours ahead of UTC would otherwise be shown the
+                // wrong side of a midnight.
+                today={cfg.today}
               />
             </div>
 

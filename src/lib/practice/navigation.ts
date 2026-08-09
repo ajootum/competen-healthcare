@@ -259,6 +259,31 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/portfolio", label: "Portfolio", icon: "❑", capability: null, group: "Intelligence", phase: 5, built: true, parent: "/practice/intelligence" },
 
   // -- Practice Setup: configuring the practice, and your own preferences ---------------------------
+  //
+  // ── PIS-000 s3: THE BOOKING ADDRESS, REACHABLE AT LAST ──────────────────────────────────────────
+  //
+  // ⚠ THIS ENTRY EXISTS BECAUSE THE PRACTICE OWNER WALKED THE PRODUCT AND SAID "I DON'T SEE IDENTITY".
+  // /practice/setup/identity shipped working and was reachable only by typing the URL: the setup
+  // landing page links it from a header button and one part row, and neither is somewhere you look for
+  // a section. A screen nobody can navigate to is a screen that does not exist, whatever the route
+  // table says -- the same defect that made /practice/setup itself a dead end two specifications ago.
+  //
+  // ⚠ NOT PRIMARY, AND THAT IS THE WHOLE OF WHY IT IS SAFE. CPR-V5-002 froze PRIMARY_ORDER at nine and
+  // the nav harness pins every one of them by name and by position. A CHILD of Practice Setup changes
+  // no primary item, no order and no heading -- it is the same shape /practice/setup/lifecycle and
+  // /practice/setup/clinical-parameters would have if they were listed, and identical to Team &
+  // Permissions below. The identity page's own header used to say "it is not a sidebar item and must
+  // not become one"; that sentence was about PRIMARY_ORDER, and it has been corrected in place rather
+  // than left to contradict this line.
+  //
+  // ⚠ THE LABEL CARRIES BOTH WORDS ON PURPOSE. The page is titled "Your booking address" and the owner
+  // went looking for "identity" -- one word finds it for the person choosing a public name, the other
+  // for the person who remembers a practitioner number. A sidebar entry that only its author's
+  // vocabulary can find is the failure this entry is fixing.
+  //
+  // ⚠ THE CAPABILITY IS THE PAGE'S OWN GUARD, practice.settings.manage -- which is also what the API
+  // enforces. An entry rendered for somebody the page redirects is a sidebar item that bounces.
+  { href: "/practice/setup/identity", label: "Identity & Address", icon: "@", capability: "practice.settings.manage", group: "Setup", phase: 8, built: true, parent: "/practice/setup" },
   { href: "/practice/people", label: "Team & Permissions", icon: "⚇", capability: null, group: "Setup", phase: 5, built: true, parent: "/practice/setup" },
   { href: "/practice/settings", label: "Personal Settings", icon: "☰", capability: null, group: "Personal", phase: 8, built: true, parent: "/practice/setup" },
   { href: "/practice/privacy", label: "Activity Log", icon: "⚿", capability: "access.review", group: "Personal", phase: 5, built: true, parent: "/practice/setup" },

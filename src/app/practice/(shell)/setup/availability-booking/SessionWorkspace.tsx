@@ -7,6 +7,13 @@ import {
   SESSION_APPOINTMENT_TYPES, WEEKDAY_SHORT, ACTIVITY_HUE, ACTIVITY_HUE_UNSET,
   bookingModeLabel, appointmentTypeLabel,
 } from "@/lib/practice/practice-session-constants";
+// CPR-RECUR-001 (migration 274). ⚠ THE SAME ARITHMETIC THE GENERATOR USES, from the file that touches no
+// database. The dates this form promises and the dates the diary holds have to be worked out by one
+// function, or the screen and the slots will disagree about somebody's month.
+import {
+  RECURRENCE_INTERVALS, nextOccurrences, nextWeekdayOnOrAfter, alignAnchorToWeekday,
+  describeRecurrence, isDateIso, shortDate, addDaysIso,
+} from "@/lib/practice/recurrence";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -65,6 +72,10 @@ type Draft = {
   effectiveTo: string;
   sessionNote: string;
   status: "active" | "suspended";
+  /** CPR-RECUR-001: repeat every N weeks. 1 is the weekly session this form has always made. */
+  recurrenceWeeks: number;
+  /** The first occurrence. Always on `weekday` -- the control offers no other kind of date. */
+  recurrenceAnchorDate: string;
   /** Set only when this draft began as a copy. Display only -- never sent to the server. */
   copiedFrom?: string;
 };
@@ -76,6 +87,9 @@ const blankDraft = (weekday: number, locationId: string): Draft => ({
   bookingMode: "none", appointmentTypes: [],
   capacityManual: "", appointmentMinutes: "", walkInsAllowed: false, walkInLimit: "",
   effectiveFrom: "", effectiveTo: "", sessionNote: "", status: "active",
+  // ⚠ WEEKLY, ALWAYS, AND WITH NO ANCHOR. A new session repeats every week unless somebody says
+  // otherwise, which is what every session in this product has done since it was written.
+  recurrenceWeeks: 1, recurrenceAnchorDate: "",
 });
 
 const draftFrom = (s: any): Draft => ({
@@ -94,6 +108,8 @@ const draftFrom = (s: any): Draft => ({
   effectiveFrom: s.effectiveFrom ?? "", effectiveTo: s.effectiveTo ?? "",
   sessionNote: s.sessionNote ?? "",
   status: s.status === "suspended" ? "suspended" : "active",
+  recurrenceWeeks: Number(s.recurrenceWeeks ?? 1) || 1,
+  recurrenceAnchorDate: s.recurrenceAnchorDate ?? "",
 });
 
 /**
@@ -119,9 +135,18 @@ const copyOf = (s: any): Draft => ({
 const field = "mt-0.5 w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] text-gray-800";
 const labelCls = "flex flex-col text-[10px] font-semibold uppercase tracking-wide text-gray-500";
 
-export default function SessionWorkspace({ sessions, locations, clinics, today, defaultMinutes, mayEdit }: {
+export default function SessionWorkspace({
+  sessions, locations, clinics, today, defaultMinutes, mayEdit, recurrenceAvailable = false,
+}: {
   sessions: any[]; locations: any[]; clinics: any[];
   today: string; defaultMinutes: number | null; mayEdit: boolean;
+  /**
+   * ⚠ WHETHER THIS DATABASE CAN STORE A PATTERN OTHER THAN WEEKLY. Migration 274 is applied by hand, and
+   * a control offered against a database that cannot hold the answer would take the choice, fail on
+   * save, and leave a practitioner believing their Saturdays were now alternate. Where it is false the
+   * screen says what is true instead of drawing a dead switch.
+   */
+  recurrenceAvailable?: boolean;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -158,6 +183,61 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
 
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) =>
     setDraft(d => (d ? { ...d, [k]: v } : d));
+
+  // ── CPR-RECUR-001 ────────────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ CHANGING THE DAY MOVES THE ANCHOR ONTO THAT DAY AND LEAVES IT IN THE SAME WEEK. Without this, a
+  // practitioner moving an alternate-Saturday clinic to a Sunday would be sending a Saturday as the
+  // first occurrence of a Sunday session -- which the engine refuses and the database's own constraint
+  // refuses after it. The week is the part they chose, so the week is the part that survives.
+  const setWeekday = (n: number) => setDraft(d => (d ? {
+    ...d, weekday: n,
+    recurrenceAnchorDate: d.recurrenceAnchorDate && isDateIso(d.recurrenceAnchorDate)
+      ? alignAnchorToWeekday(d.recurrenceAnchorDate, n) : "",
+  } : d));
+
+  /**
+   * ⚠ CHOOSING AN INTERVAL PROPOSES A FIRST DATE AND SHOWS IT. The engine refuses an interval with no
+   * first date rather than picking a fortnight on somebody's behalf -- correct there, because a server
+   * cannot show its working. Here it can: the proposal appears in a control the practitioner can change
+   * and in a list of the dates it produces, so nothing is decided out of sight.
+   */
+  const setInterval = (n: number) => setDraft(d => (d ? {
+    ...d, recurrenceWeeks: n,
+    recurrenceAnchorDate: n > 1 && !d.recurrenceAnchorDate
+      ? nextWeekdayOnOrAfter(d.effectiveFrom && isDateIso(d.effectiveFrom) ? d.effectiveFrom : today, d.weekday)
+      : d.recurrenceAnchorDate,
+  } : d));
+
+  /** Where the pattern starts being drawn from: its own start date if that is still ahead, else today. */
+  const previewFrom = draft
+    ? (draft.effectiveFrom && isDateIso(draft.effectiveFrom) && draft.effectiveFrom > today
+      ? draft.effectiveFrom : today)
+    : today;
+
+  /**
+   * ⚠ REAL DATES, NOT A FREE-TEXT DATE FIELD. A date input cannot be told "Saturdays only", so it would
+   * happily take a Tuesday as the first occurrence of a Saturday clinic and hand the practitioner a
+   * refusal for something they could not have known. Every option here is an occurrence of the chosen
+   * day, so a mismatch is not reachable through this screen.
+   */
+  const anchorChoices = draft ? (() => {
+    const first = nextWeekdayOnOrAfter(previewFrom, draft.weekday);
+    const list = Array.from({ length: 10 }, (_, i) => addDaysIso(first, i * 7));
+    // A session already running keeps its own anchor on the list even when it is in the past -- dropping
+    // it would silently re-phase the pattern the moment somebody opened the form to change the room.
+    if (draft.recurrenceAnchorDate && !list.includes(draft.recurrenceAnchorDate))
+      list.unshift(draft.recurrenceAnchorDate);
+    return list;
+  })() : [];
+
+  /** What the practitioner is actually choosing, worked out by the generator's own function. */
+  const falls = draft
+    ? nextOccurrences(previewFrom, draft.weekday, {
+      everyWeeks: draft.recurrenceWeeks,
+      anchorDate: draft.recurrenceAnchorDate || null,
+    }, 5)
+    : [];
 
   async function send(payload: Record<string, unknown>, describe: (d: any) => string) {
     setBusy(true); setNotice(null);
@@ -200,10 +280,23 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
       effectiveTo: draft.effectiveTo || null,
       sessionNote: draft.sessionNote.trim() || null,
       status: draft.status,
+      recurrenceWeeks: draft.recurrenceWeeks,
+      // Null at weekly, because a weekly session has no on-week and off-week to tell apart.
+      recurrenceAnchorDate: draft.recurrenceWeeks > 1 ? (draft.recurrenceAnchorDate || null) : null,
+      todayDate: today,
     }, d => {
       const created = d.session?.created;
       const slots = d.generation?.slotsCreated ?? 0;
-      return `${created ? "Session created" : "Session saved"}.${slots ? ` ${slots} bookable slot${slots === 1 ? "" : "s"} rebuilt.` : ""}`;
+      // ⚠ THE SKIPPED WEEKS ARE NAMED. "3 bookable slots rebuilt" on a Saturday clinic reads like
+      // something went wrong until you know the other Saturdays were deliberately left out.
+      //
+      // ⚠ AND IT IS NOT SAID TO BE THIS SESSION'S. The generator counts every off-week it skipped across
+      // the whole regular week, so attributing the number to the session just saved would be a claim the
+      // figure does not support.
+      const skipped = d.generation?.occurrencesSkippedForInterval ?? 0;
+      return `${created ? "Session created" : "Session saved"}.`
+        + (slots ? ` ${slots} bookable slot${slots === 1 ? "" : "s"} rebuilt.` : "")
+        + (skipped ? ` ${skipped} off-week day${skipped === 1 ? "" : "s"} left out, because not every session repeats weekly.` : "");
     }).then(ok => { if (ok) setDraft(null); });
   }
 
@@ -275,7 +368,12 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
           <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-[14px] text-emerald-700">▦</span>
           <div className="min-w-0">
             <h2 className="text-[14px] font-bold text-gray-900">Your regular week at a glance</h2>
-            <p className="text-[11px] text-gray-500">A session is a day and a time, not fifty-two copies.</p>
+            {/* ⚠ THIS SENTENCE USED TO END AT "a day and a time", WHICH IS NO LONGER THE WHOLE OF IT. A
+                session now also carries how often it repeats, and a subtitle that says otherwise on the
+                very screen where the interval is chosen would contradict the control beneath it. */}
+            <p className="text-[11px] text-gray-500">
+              A session is a day, a time and how often it repeats — not fifty-two copies.
+            </p>
           </div>
           {mayEdit && (
             <button type="button"
@@ -320,6 +418,17 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
                             <p className="text-[10px] text-gray-600">
                               {toTime(s.startsMinute)} – {toTime(s.endsMinute)}
                             </p>
+                            {/* ⚠ THE GRID MUST NOT CLAIM A FORTNIGHTLY CLINIC IS WEEKLY. Its whole
+                                subject is when this practitioner is available, and a card that reads the
+                                same for both patterns is the lie the workaround produced -- a weekly
+                                Saturday corrected one closure at a time. The next date is named because
+                                "alternate weeks" alone still leaves WHICH weeks unanswered. */}
+                            {s.recurrenceBadge && (
+                              <p className="text-[9.5px] font-semibold text-violet-700">
+                                {s.recurrenceBadge}
+                                {s.nextOccurrences?.[0] ? ` · next ${shortDate(s.nextOccurrences[0])}` : ""}
+                              </p>
+                            )}
                             <p className="truncate text-[9.5px]" style={{ color: dim ? "var(--cp-slate-500)" : hue }}>
                               {s.activityType ? SESSION_ACTIVITY_LABEL[s.activityType as never] : "No activity type"}
                             </p>
@@ -435,7 +544,8 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <label className={labelCls}>
               Day of week
-              <select value={draft.weekday} onChange={e => set("weekday", Number(e.target.value))} className={field}>
+              {/* setWeekday, not set("weekday") -- the recurrence anchor has to move with the day. */}
+              <select value={draft.weekday} onChange={e => setWeekday(Number(e.target.value))} className={field}>
                 {[1, 2, 3, 4, 5, 6, 7].map(n => (
                   <option key={n} value={n}>
                     {["", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][n]}
@@ -514,6 +624,84 @@ export default function SessionWorkspace({ sessions, locations, clinics, today, 
             <legend className="px-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">
               When this pattern applies
             </legend>
+
+            {/* ── CPR-RECUR-001: HOW OFTEN, AND WHICH WEEKS ────────────────────────────────────────
+                The practice owner, walking the product: "I would like to set my weekly plan as
+                alternate Saturdays to be at TMR, not every Saturday. How do we do this?" -- and the
+                answer was that you could not. A session was a day and a time and it ran EVERY week.
+
+                ⚠ THE SECOND CONTROL IS THE WHOLE DESIGN. "Every other Saturday" is not a fact until you
+                say WHICH Saturday, and the tempting way to avoid asking -- odd and even ISO week numbers
+                -- is wrong: a 53-week year puts two odd weeks side by side and moves every session after
+                it, for ever. A first date cannot drift, and it is the thing a practitioner actually has
+                in mind. So the form asks for it, and then SHOWS the dates it produces, because
+                "alternate Saturdays" is a phrase and "Sat 15 Aug, Sat 29 Aug, Sat 12 Sep" is a fact
+                somebody can check against the calendar on their wall. */}
+            <div className="mb-3 rounded-lg border border-violet-200/70 bg-violet-50/40 p-2.5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className={labelCls}>
+                  Repeats
+                  <select value={draft.recurrenceWeeks} disabled={!recurrenceAvailable}
+                    onChange={e => setInterval(Number(e.target.value))}
+                    className={`${field} disabled:bg-slate-50 disabled:text-slate-400`}>
+                    {RECURRENCE_INTERVALS.map(n => (
+                      <option key={n} value={n}>
+                        {n === 1 ? "Every week" : n === 2 ? "Every other week" : `Every ${n} weeks`}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {draft.recurrenceWeeks > 1 && (
+                  <label className={labelCls}>
+                    First one on
+                    <select value={draft.recurrenceAnchorDate}
+                      onChange={e => set("recurrenceAnchorDate", e.target.value)} className={field}>
+                      {anchorChoices.map(d => (
+                        <option key={d} value={d}>{shortDate(d)}</option>
+                      ))}
+                    </select>
+                    <span className="mt-0.5 text-[9.5px] font-normal normal-case tracking-normal text-gray-500">
+                      Every week is counted from this one, so it never shifts at new year.
+                    </span>
+                  </label>
+                )}
+              </div>
+
+              {/* WHAT THE CHOICE ACTUALLY MEANS, in dates, worked out by the same function the generator
+                  uses. A phrase a practitioner has to trust is worse than four dates they can check. */}
+              <p className="mt-2 text-[10.5px] leading-relaxed text-gray-700">
+                <span className="font-semibold">
+                  {describeRecurrence(
+                    { everyWeeks: draft.recurrenceWeeks, anchorDate: draft.recurrenceAnchorDate || null },
+                    draft.weekday,
+                  )}
+                </span>
+                {falls.length > 0
+                  ? <> — falls on {falls.map(shortDate).join(", ")}…</>
+                  : <> — no dates fall in the period ahead.</>}
+              </p>
+
+              {!recurrenceAvailable && (
+                // ⚠ NOT "coming soon". What is TRUE is that this practice repeats every week, and the
+                // control is disabled rather than absent so the sentence has something to explain.
+                <p className="mt-1.5 text-[10px] leading-relaxed text-amber-700">
+                  Sessions here repeat every week. Alternate-week patterns are not yet switched on for
+                  this practice, so nothing else can be chosen.
+                </p>
+              )}
+
+              {draft.recurrenceWeeks > 1 && draft.templateId && (
+                // ⚠ SAID BEFORE THE SAVE, not discovered from a refusal afterwards. The server refuses
+                // the change while anybody is booked on a week it would drop, and a practitioner who
+                // reads that here can go and move the appointment first.
+                <p className="mt-1.5 text-[10px] leading-relaxed text-gray-500">
+                  The weeks this leaves out lose their bookable time. If a patient is already booked on
+                  one, the change is refused and says who — nothing is cancelled for you.
+                </p>
+              )}
+            </div>
+
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <label className={labelCls}>
                 From (optional)

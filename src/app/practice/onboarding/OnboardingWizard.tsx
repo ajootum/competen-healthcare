@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import {
   PROFESSIONS, LOCATION_TYPES, DATE_FORMATS, REGISTRATION_STATUSES, ENCOUNTER_TEMPLATES,
 } from "@/lib/practice/catalogs";
+import type { IdentitySetupView } from "@/lib/practice/identity-service";
+import BookingAddressStep from "./BookingAddressStep";
+import { handleOfferDecision, offerSkipKey, type IdentityProbeState } from "./handle-offer";
 
 // The onboarding wizard (PROV-001 s12). CATALOG-DRIVEN: steps, order and titles come from the onboarding
 // API, which reads practice_onboarding_step_catalog -- adding a step is a seed row, not a wizard rewrite.
@@ -39,6 +42,31 @@ function timezoneOptions(): string[] {
 const input = "mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-[var(--cp-primary)] focus:ring-4 focus:ring-[var(--cp-primary)]/10";
 const label = "text-xs font-semibold text-gray-600";
 
+type IdentityProbe = { view: IdentitySetupView | null; state: IdentityProbeState };
+
+/**
+ * What the identity endpoint says about this practitioner. PURE FETCH, NO STATE -- so it can be called
+ * from an effect through a promise callback rather than synchronously inside one.
+ *
+ * ⚠ FOUR OUTCOMES, AND NONE OF THEM IS FOLDED INTO ANOTHER. A 403 means this caller may not manage
+ * practice settings, so there is nothing to offer them and nothing is drawn. Any other failure is
+ * `unreadable`, which draws the honest panel and never the claim box -- offering to claim an address to
+ * somebody who may already have one is how a person ends up with two permanent names, and a handle can
+ * never be released.
+ */
+async function readIdentityProbe(): Promise<IdentityProbe> {
+  try {
+    const res = await fetch("/api/v1/practice/identity");
+    if (res.status === 403) return { view: null, state: "no_permission" };
+    if (!res.ok) return { view: null, state: "unreadable" };
+    const payload = await res.json();
+    const view = payload?.identity as IdentitySetupView | undefined;
+    return view ? { view, state: view.state } : { view: null, state: "unreadable" };
+  } catch {
+    return { view: null, state: "unreadable" };
+  }
+}
+
 export default function OnboardingWizard({ workspaceId }: { workspaceId: string }) {
   const [ob, setOb] = useState<State | null>(null);
   const [busy, setBusy] = useState(false);
@@ -67,10 +95,53 @@ export default function OnboardingWizard({ workspaceId }: { workspaceId: string 
 
   const api = `/api/v1/practice/workspaces/${workspaceId}/onboarding`;
 
+  // ── PIS-000 s3: THE BOOKING ADDRESS, OFFERED HERE -- OPTIONAL, AND NOT FIRST ────────────────────
+  //
+  // WHERE it appears is decided by handleOfferDecision in handle-offer.ts, on purpose: "not first" is a
+  // promise about an act that can never be undone, and a promise expressed as a condition inside JSX is
+  // one no test can hold anybody to. This component supplies the facts and renders the answer.
+  const [identity, setIdentity] = useState<IdentitySetupView | null>(null);
+  const [identityState, setIdentityState] = useState<IdentityProbeState>("checking");
+  const [dismissedNow, setDismissedNow] = useState(false);
+  const skipKey = offerSkipKey(workspaceId);
+
+  const applyProbe = useCallback((p: IdentityProbe) => {
+    setIdentity(p.view); setIdentityState(p.state);
+  }, []);
+  /** Re-read after a write, so what renders next is what the server actually holds. */
+  const readIdentity = useCallback(() => readIdentityProbe().then(applyProbe), [applyProbe]);
+
+  // ⚠ BOTH READS LAND IN THE SAME EFFECT, AND BOTH SET STATE FROM A PROMISE CALLBACK RATHER THAN FROM
+  // THE EFFECT BODY. React 19 refuses the latter (react-hooks/set-state-in-effect) and it is right to:
+  // a synchronous setState in an effect is a second render before the first has been shown.
   useEffect(() => {
     fetch(api).then(r => r.json()).then(setOb).catch(() => setError("Could not load onboarding state."));
+    readIdentityProbe().then(applyProbe);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
+
+  /**
+   * ⚠ WHETHER THE PRACTITIONER HAS ALREADY DECLINED, READ WITHOUT AN EFFECT AND WITHOUT A HYDRATION
+   * MISMATCH. localStorage does not exist on the server, so a lazy useState initialiser would return
+   * `false` during the server render and `true` in the browser -- two different trees for the same
+   * markup. useSyncExternalStore is the sanctioned way to read a browser store: `getServerSnapshot`
+   * answers for the render that has no window, and no state is set from an effect at all.
+   *
+   * The subscribe function is a no-op because nothing else in this tab writes this key; `dismissedNow`
+   * carries the change made by our own button, and the two are ORed.
+   */
+  const alreadyDeclined = useSyncExternalStore(
+    () => () => { },
+    () => { try { return window.localStorage.getItem(skipKey) === "dismissed"; } catch { return false; } },
+    () => false,
+  );
+  const offerDismissed = dismissedNow || alreadyDeclined;
+
+  /** Declining, or moving on after claiming. Writes nothing to the practice either way. */
+  function dismissOffer() {
+    try { window.localStorage.setItem(skipKey, "dismissed"); } catch { /* nothing to remember it with */ }
+    setDismissedNow(true);
+  }
 
   // PRE-FILL IS DERIVED, NOT STORED. An effect that seeded `form` when the step changed would call
   // setState from inside an effect -- a cascading render React tells you not to write -- and it would
@@ -95,6 +166,14 @@ export default function OnboardingWizard({ workspaceId }: { workspaceId: string 
   const step = ob.steps.find(s => s.step_code === current);
   const done = ob.completedSteps.length;
   const total = ob.steps.length;
+
+  const offer = handleOfferDecision({
+    steps: ob.steps.map(s => s.step_code),
+    completedSteps: ob.completedSteps,
+    currentStep: ob.currentStep,
+    identity: identityState,
+    skipped: offerDismissed,
+  });
 
   async function complete(stepCode: string, data: Record<string, unknown>) {
     setBusy(true); setError("");
@@ -156,19 +235,39 @@ export default function OnboardingWizard({ workspaceId }: { workspaceId: string 
     ? values.acknowledgement?.trim().toUpperCase() === "AGREE"
     : fields.every(f => (values[f.name] ?? "").trim().length > 0);
 
+  /* Progress: which of the catalog steps are done. ⚠ THE OFFER IS NOT ONE OF THEM and does not appear
+     in this rail as a step -- it has no catalogue row, no completion record, and no place in "step 3 of
+     6". While it is on screen it is labelled for what it is: an optional aside between two required
+     steps. Drawing it as a seventh chip would make an offer look like a requirement. */
+  const rail = (
+    <ol className="flex flex-wrap gap-1.5 mb-5" aria-label="Setup progress">
+      {ob.steps.map(s => (
+        <li key={s.step_code}
+          className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+            ob.completedSteps.includes(s.step_code) ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
+            : s.step_code === current ? "bg-[var(--cp-primary)] text-white" : "bg-gray-100 text-gray-400"}`}>
+          {s.title}
+        </li>
+      ))}
+    </ol>
+  );
+
+  // ⚠ THE OFFER TAKES THE SCREEN, AND IT IS STILL NOT A STEP. It sits between two required steps rather
+  // than beside one, because a permanent public name chosen out of the corner of an eye while filling in
+  // a timezone is not chosen. `complete()` is never called for it and the workspace cannot activate from
+  // here -- declining returns to exactly the step that was next.
+  if (offer.show) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-white p-6">
+        {rail}
+        <BookingAddressStep kind={offer.kind} view={identity} onRefresh={readIdentity} onSkip={dismissOffer} />
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-6">
-      {/* Progress: which of the catalog steps are done */}
-      <ol className="flex flex-wrap gap-1.5 mb-5" aria-label="Setup progress">
-        {ob.steps.map(s => (
-          <li key={s.step_code}
-            className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-              ob.completedSteps.includes(s.step_code) ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
-              : s.step_code === current ? "bg-[var(--cp-primary)] text-white" : "bg-gray-100 text-gray-400"}`}>
-            {s.title}
-          </li>
-        ))}
-      </ol>
+      {rail}
 
       {!step ? (
         <p className="text-sm text-gray-500">Setup is complete.</p>

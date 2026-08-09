@@ -245,6 +245,28 @@ const CATALOGUE: Entry[] = [
     capability: "parameter.view", domain: "operations",
   },
   {
+    // ⚠ MODULES 20 AND 21 EXIST AS SCREENS AND WERE NOT COUNTED, WHICH IS THIS FILE'S OWN STATED LIE.
+    //
+    // The note on module 18 says the denominator is "what a practice can actually configure" and that a
+    // module which exists and is not counted "would be the same lie in the other direction". Migration
+    // 275 shipped both of these screens under /practice/setup with nothing linking to them -- reachable
+    // only by typing the URL, which is exactly the defect the door sweep exists to find, arriving in the
+    // same week it was written.
+    //
+    // They are separate cards rather than one because they configure different things for different
+    // reasons: what a practitioner may REQUEST, and what they may PRESCRIBE.
+    n: 20, key: "investigations", title: "Investigations",
+    description: "Choose which investigations this practice requests, rename them, and build the sets you reuse.",
+    icon: "⚗", hue: "var(--cp-area-4)", href: "/practice/setup/investigations",
+    capability: "investigation.configure", domain: "operations",
+  },
+  {
+    n: 21, key: "treatment_lists", title: "Treatment Lists",
+    description: "Choose the doses, routes, frequencies and durations offered when prescribing, and keep your templates.",
+    icon: "℞", hue: "var(--cp-area-8)", href: "/practice/setup/treatments",
+    capability: "treatment.configure", domain: "operations",
+  },
+  {
     // ⚠ A NINETEENTH MODULE, IN administration, AND THE BREADCRUMB REFLECTS REALITY.
     //
     // CPR-LIFE-001 s8 says "Location: Practice Setup -> Security & Data -> Practice Lifecycle", and that
@@ -720,6 +742,34 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
   // REASON rather than left off. Removing it would make the list look complete; drawing it as an empty
   // circle beside three that can be filled would look like something the practitioner had failed to do.
   const domainState = (k: SetupDomainKey) => domains.find(d => d.key === k)!.state;
+
+  // ── WHERE A READINESS ROW ACTUALLY TAKES YOU ────────────────────────────────────────────────────
+  //
+  // ⚠ THESE ROWS NAMED WHAT WAS MISSING AND WENT NOWHERE, and the practice owner found it by walking the
+  // product: "Foundation complete ○ Your identity, your locations, your branding and your hospital
+  // numbering" tells somebody four things might be wrong and leaves them to guess which screen owns any
+  // of them. The four cards are elsewhere on the page, under a domain heading, behind a scroll.
+  //
+  // ⚠ COMPUTED, NEVER A FIXED DESTINATION PER ROW. `next` is the FIRST module actually contributing to
+  // this indicator that is not configured and that this caller can open -- so the link moves as the
+  // practice is configured, and disappears when there is nothing left to do. A row wired to a constant
+  // href would keep pointing at Locations after locations were added.
+  //
+  // ⚠ THREE STATES SURVIVE THE LINK. An `unreadable` module is NOT offered as somewhere to go: it may
+  // already be configured, and sending somebody to fix it would be acting on a failed read. Only
+  // `needs_attention` -- a module that answered, and answered "not yet" -- can be a destination.
+  const moduleByKey = new Map(modules.map(m => [m.key, m]));
+  /** The first of these keys that is openable AND genuinely unconfigured. Null when there is none. */
+  const nextOf = (keys: string[], label?: string): { label: string; href: string } | null => {
+    for (const k of keys) {
+      const m = moduleByKey.get(k);
+      if (m && m.href && m.state === "needs_attention") return { label: label ?? m.title, href: m.href };
+    }
+    return null;
+  };
+  const inDomain = (d: SetupDomainKey) => modules.filter(m => m.domain === d).map(m => m.key);
+  const bookingAddressHref = availabilityParts.find(p => p.key === "booking_address")?.href ?? null;
+
   const readiness = [
     {
       key: "foundation_complete", label: "Foundation complete",
@@ -727,6 +777,7 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
       indeterminate: domainState("foundation") === "unreadable",
       detail: "Your identity, your locations, your branding and your hospital numbering.",
       blockedReason: null as string | null,
+      next: nextOf(inDomain("foundation")),
     },
     {
       key: "operations_ready", label: "Operations ready",
@@ -734,6 +785,17 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
       indeterminate: !readable("availability") || offeredTypeCount === null || !readable("registration"),
       detail: "A regular week, an appointment type a session offers, and a registration form.",
       blockedReason: null as string | null,
+      // ⚠ NOT `nextOf(inDomain("operations"))`. Two of this row's three conditions are not module states
+      // at all: Appointment Types is permanently `configured` (the seven are built in) while the count
+      // this row cares about is how many a SESSION offers, and that is edited inside the availability
+      // workspace. Walking the domain would send somebody to a green card.
+      next: !done("availability")
+        ? nextOf(["availability"])
+        : (offeredTypeCount ?? 0) === 0
+          ? (availabilityParts.find(p => p.key === "appointment_types")?.href
+            ? { label: "Offer an appointment type from a session", href: availabilityParts.find(p => p.key === "appointment_types")!.href! }
+            : null)
+          : nextOf(["registration"]),
     },
     {
       key: "patient_booking_published", label: "Patient booking published",
@@ -745,6 +807,14 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
       blockedReason: claimedHandle
         ? "You have an address, but there is no patient-facing booking page behind it. CPR-V5-007 makes the public page, OTP verification and the publish state Phase 4, and they have not been started — so this cannot be met by configuring anything."
         : "There is no patient-facing booking page. Claiming your booking address is the one part that exists; the public page, OTP verification and the publish state are CPR-V5-007 Phase 4 and have not been started.",
+      // ⚠ A LINK ON A ROW THAT CAN NEVER BE MET, AND THE LABEL IS WHY IT IS HONEST. It does not say
+      // "finish this" -- it names the one part of this row that is built and can be done today. Offered
+      // only while the handle is genuinely unclaimed: `undefined` is a failed read, and sending somebody
+      // to claim a second address because the first could not be read is the exact error this file's
+      // three-state rule exists to prevent.
+      next: claimedHandle === null && bookingAddressHref
+        ? { label: "Claim your booking address", href: bookingAddressHref }
+        : null,
     },
     {
       key: "practice_ready", label: "Practice ready",
@@ -752,6 +822,9 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
       indeterminate: domains.some(d => d.state === "unreadable"),
       detail: "Every area you can configure is configured.",
       blockedReason: null as string | null,
+      // Everything, in the page's own domain order, so this row lands on the same screen the domain
+      // rows above it would.
+      next: nextOf(SETUP_DOMAINS.flatMap(d => inDomain(d.key))),
     },
   ];
 

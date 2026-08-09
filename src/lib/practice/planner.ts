@@ -5,6 +5,8 @@ import { practiceToday } from "@/lib/practice/practice-time";
 import { audit } from "@/lib/practice/audit";
 import type { EventSource } from "@/lib/practice/events";
 import { TRAVEL_BASIS_NOTE, WEEKDAY_NAME, WEEKDAY_SHORT } from "@/lib/practice/planner-constants";
+import { occursOn, readRecurrence } from "@/lib/practice/recurrence";
+import { MISSING_COLUMN_CODES, RECURRENCE_COLUMNS } from "@/lib/practice/availability-config";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the Supabase admin client is untyped; every
    engine in src/lib/practice does the same. */
@@ -443,10 +445,24 @@ export async function plannerWeek(
 
   // s6's template half, read and never written. Suspended and closed sessions are excluded: they
   // generate nothing and are not what the regular week currently says.
-  const { data: templates, error: tmplError } = await admin.from("practice_availability_template")
-    .select("id, weekday, starts_minute, ends_minute, location_id, slot_kind, note")
+  // ⚠ TRY THE RECURRENCE COLUMNS, THEN FALL BACK -- MIGRATION 274 IS APPLIED BY HAND.
+  //
+  // PostgREST refuses the WHOLE query when one selected column does not exist, and skeleton(true) turns
+  // that into an unavailable planner week. So naming migration 274's two columns unconditionally meant that
+  // on any database where 274 had not been applied, the entire planner went dark -- not merely
+  // un-recurrence-aware, which is all this change was supposed to risk. availability-config,
+  // practice-sessions and booking-rules all try-then-fall-back for exactly this reason, and
+  // readRecurrence() answers WEEKLY for a row without the columns, so the fallback degrades to the
+  // behaviour this file had before.
+  const TEMPLATE_BASE = "id, weekday, starts_minute, ends_minute, location_id, slot_kind, note";
+  const readTemplates = (columns: string) => admin.from("practice_availability_template")
+    .select(columns)
     .eq("workspace_id", ctx.workspaceId).eq("status", "active")
     .order("weekday").order("starts_minute");
+  let tmplRes = await readTemplates(`${TEMPLATE_BASE}, ${RECURRENCE_COLUMNS}`);
+  if (tmplRes.error && MISSING_COLUMN_CODES.has(String(tmplRes.error.code)))
+    tmplRes = await readTemplates(TEMPLATE_BASE);
+  const { data: templates, error: tmplError } = tmplRes;
   if (tmplError) return skeleton(true, tmplError.message);
 
   const byDate = new Map<string, PlannerActivity[]>();
@@ -607,8 +623,14 @@ function buildDay(
   // ---- s6: THE TEMPLATE BESIDE THE REALITY. `coveredByPlan` false is an override -- the regular week
   // says clinic and today's plan does not -- which is precisely what s6 means by "the daily plan
   // overrides the template without destroying it".
+  // ⚠ THE RECURRENCE, NOT JUST THE WEEKDAY. Migration 274 lets a session run every 2, 3 or 4 weeks from
+  // an anchor date, and matching on weekday alone would draw an alternate-Saturday clinic on EVERY
+  // Saturday -- a planner that shows a clinic the practitioner is not running. occursOn() is the same
+  // function the slot generator uses to decide which occurrences to materialise, so the planner and the
+  // diary cannot disagree about which Saturdays exist. readRecurrence() answers WEEKLY for any row
+  // without the columns, so this is unchanged for every session that is not fortnightly.
   day.templateSessions = templates
-    .filter(t => t.weekday === day.weekday)
+    .filter(t => t.weekday === day.weekday && occursOn(day.date, t.weekday, readRecurrence(t)))
     .map(t => ({
       id: t.id,
       startsMinute: t.starts_minute,

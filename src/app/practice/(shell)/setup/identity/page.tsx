@@ -17,10 +17,18 @@ import BookingAddressConsole from "./BookingAddressConsole";
 // So it is claimed here, deliberately, by the person whose name it is, with the finished URL on screen
 // before the button is pressed.
 //
-// ⚠ IT IS NOT A SIDEBAR ITEM AND MUST NOT BECOME ONE. PRIMARY_ORDER is nine flat items pinned by sixteen
-// assertions in practice-current-activity-harness, and the orphan scan reads the TOP-LEVEL directories
-// of (shell) -- so a child of /practice/setup needs no allowlist entry and changes no count.
+// ⚠ IT IS NOT A PRIMARY SIDEBAR ITEM AND MUST NOT BECOME ONE. PRIMARY_ORDER is nine flat items pinned
+// by sixteen assertions in practice-current-activity-harness, and the orphan scan reads the TOP-LEVEL
+// directories of (shell) -- so a child of /practice/setup needs no allowlist entry and changes no count.
 // /practice/setup/lifecycle and /practice/setup/clinical-parameters are the precedent.
+//
+// ⚠ THIS SENTENCE USED TO READ "it is not a sidebar item and must not become one", AND IT WAS WRONG IN A
+// WAY THAT COST SOMETHING. The reasoning under it was entirely about PRIMARY_ORDER, but the sentence
+// banned every kind of entry -- so this page shipped working and unreachable, and the practice owner
+// walked the product and reported that they could not see identity anywhere. It is now a CHILD of
+// Practice Setup in PRACTICE_NAV ("Identity & Address"), which leaves the frozen nine untouched. The
+// correction is recorded rather than tidied away, because the failure was a true clause guarding a
+// false one.
 //
 // ⚠ THE CAPABILITY IS practice.settings.manage, which is what the API enforces too. A page that rendered
 // for somebody the API would refuse is a page full of buttons that 403.
