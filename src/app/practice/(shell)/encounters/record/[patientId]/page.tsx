@@ -210,7 +210,16 @@ export default async function PatientRecordPage({ params }: { params: Promise<{ 
           <section className={CARD}>
             <h2 className="text-[13px] font-bold text-gray-900">Quick links</h2>
             <ul className="mt-2 flex flex-col gap-1.5 text-[12px]">
-              <li><Link href="/practice/patients" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Open an encounter</Link></li>
+              {/* ⚠ THIS SENT YOU TO /practice/patients TO SEARCH FOR THE PATIENT WHOSE RECORD YOU WERE
+                  READING. The page knows the patient -- it is in the URL -- and it threw that away. The
+                  same defect as "+ Start encounter" on the encounters board, and worse, because here
+                  there was nothing to work out.
+
+                  It goes to the patient's own page rather than starting one from here: PatientActions
+                  already carries a real Start encounter that resumes rather than duplicates and is gated
+                  on the capability. A second implementation beside it is a second place for the
+                  resume-before-create rule to be got wrong. */}
+              <li><Link href={`/practice/patients/${patientId}`} className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Start an encounter for this patient</Link></li>
               <li><Link href="/practice/follow-ups" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Follow-up board</Link></li>
               <li><Link href="/practice/documents" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Documents</Link></li>
               <li><Link href="/practice/inbox" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Arrived documents</Link></li>
