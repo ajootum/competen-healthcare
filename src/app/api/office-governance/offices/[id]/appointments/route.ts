@@ -15,7 +15,19 @@ async function loadOfficeInScope(c: any, id: string) {
   const { data: office, error } = await c.admin.from("ogs_offices").select("id, chair_id, hospital_id").eq("id", id).maybeSingle();
   if (error) return { resp: migrationGate(error) ?? NextResponse.json({ error: error.message }, { status: 500 }) };
   if (!office) return { resp: NextResponse.json({ error: "Office not found" }, { status: 404 }) };
-  if (!isSuper(c) && office.hospital_id && office.hospital_id !== c.hospitalId) return { resp: forbidden("Office out of scope") };
+  // ⚠ THE `office.hospital_id &&` TERM WAS A HOLE, AND IT OPENED ONTO HQ.
+  //
+  // It read "if the office belongs to a hospital, it must be yours" -- so an office belonging to NO hospital
+  // passed the guard for everybody. Every HQ space is exactly that: hospital_id is null by construction
+  // (migration 264 seeds them enterprise-scoped). Any hospital_admin holding an HQ office UUID could POST an
+  // appointment into a Competen HQ space. It was not yet exploitable for access -- `role` is coerced to one
+  // of the eight tenant committee roles, none of which is an hq_position code, so the capability resolver
+  // granted nothing -- but it was one constant away, and this table now gates /super-admin.
+  //
+  // An office with no hospital is an ENTERPRISE office. It is nobody's to staff except a platform owner, so
+  // the absent hospital is now a refusal rather than a pass. Checked against the data before changing: all 5
+  // ogs_offices rows are HQ spaces and none carries a hospital_id, so no existing flow loses anything.
+  if (!isSuper(c) && (!office.hospital_id || office.hospital_id !== c.hospitalId)) return { resp: forbidden("Office out of scope") };
   return { office };
 }
 

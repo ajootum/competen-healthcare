@@ -44,6 +44,25 @@ export const STATE_LABEL: Record<string, string> = {
 export const OFFICE_TYPES = ["competency", "quality", "hr", "education", "research", "executive", "governance", "ethics", "infection_prevention", "pharmacy", "medical_staff", "finance", "custom"] as const;
 export const SCOPE_TYPES = ["enterprise", "country", "organisation", "hospital", "department", "specialty"] as const;
 export const APPOINTMENT_ROLES = ["chair", "deputy_chair", "secretary", "governance_lead", "member", "reviewer", "observer", "external_adviser"] as const;
+
+/**
+ * Which appointment statuses actually GRANT ACCESS.
+ *
+ * ⚠ AN ALLOWLIST, BECAUSE THE DENYLIST IT REPLACES LET A SUSPENDED PERSON THROUGH.
+ *
+ * Both access checks used to read `status !== "removed" && status !== "expired"`, which admits every status
+ * nobody thought to name -- including `suspended`, the one a governance lead sets precisely BECAUSE they want
+ * somebody's access to stop. It also admitted `nominated`, which is a proposal rather than an appointment.
+ * An allowlist fails the other way: a status nobody has thought of yet grants nothing until somebody decides
+ * it should.
+ *
+ * ⚠ THIS IS THE ACCESS QUESTION ONLY, NOT THE ROSTER QUESTION. A suspended member must still be VISIBLE in
+ * their office's membership list -- suspension is a fact about a named person that the office needs to see.
+ * resolveOffices keeps listing them; only the viewer-role lookup and the HQ resolver consult this.
+ */
+export const ACCESS_GRANTING_STATUSES = ["active"] as const;
+export const appointmentGrantsAccess = (status: string | null | undefined): boolean =>
+  (ACCESS_GRANTING_STATUSES as readonly string[]).includes(String(status ?? ""));
 export const APPOINTMENT_ROLE_LABEL: Record<string, string> = {
   chair: "Chair", deputy_chair: "Deputy Chair", secretary: "Secretary", governance_lead: "Governance Lead",
   member: "Member", reviewer: "Reviewer", observer: "Observer", external_adviser: "External Adviser",

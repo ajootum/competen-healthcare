@@ -5,6 +5,7 @@
 // and upgrade automatically once the foundation migration runs.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NONE } from "@/app/office-governance/_ui";
+import { appointmentGrantsAccess } from "./lifecycle";
 
 export type Appointment = { personId: string | null; personName: string | null; role: string; status: string; createdAt: string | null };
 export type ResolvedOffice = {
@@ -188,7 +189,13 @@ export async function officeForWorkspace(admin: any, key: keyof typeof MATCHERS,
     chairId: null, chairName: null, quorum: 0, memberCount: 0, charterVersion: null,
     nextReview: null, establishedAt: null, appointments: [],
   };
-  const viewer = viewerId ? resolved.appointments.find(a => a.personId === viewerId) ?? null : null;
+  // ⚠ THE ACCESS LOOKUP, AND IT NOW ASKS ABOUT STATUS. resolved.appointments is the ROSTER: it deliberately
+  // still contains suspended and nominated people, because an office must be able to see who they are. This
+  // line is what turns a roster entry into workspace access for CMO, QAW and HEX, and until now it took any
+  // entry the roster held -- so a suspended office holder kept their workspace.
+  const viewer = viewerId
+    ? resolved.appointments.find(a => a.personId === viewerId && appointmentGrantsAccess(a.status)) ?? null
+    : null;
   return { ...resolved, bound: !!office, icon: m.icon, viewerRole: viewer?.role ?? null };
 }
 

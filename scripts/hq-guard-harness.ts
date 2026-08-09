@@ -306,6 +306,26 @@ ok("S3", classifyHqGate(naked).kind === "none",
         && !/hqPositions\.length/.test(layout),
     "the gate reads `capabilities`, so DEACTIVATING a position actually shuts this door");
 
+  // ── The appointments API's office scope, and the roster/access split ────────────────────────────────
+  const strip = (f: string) => readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n").filter(l => !l.trim().startsWith("//") && !l.trim().startsWith("*")).join("\n");
+  const apptRoute = strip("src/app/api/office-governance/offices/[id]/appointments/route.ts");
+
+  // ⚠ `office.hospital_id &&` meant "an office belonging to NO hospital is in everybody's scope", and every
+  // HQ space has hospital_id null by construction. Asserted on the ABSENCE of that term as well as the
+  // presence of the new one: a guard that merely gained a clause would otherwise read as fixed.
+  ok("G10", /!isSuper\(c\)\s*&&\s*\(!office\.hospital_id\s*\|\|\s*office\.hospital_id\s*!==\s*c\.hospitalId\)/.test(apptRoute)
+        && !/!isSuper\(c\)\s*&&\s*office\.hospital_id\s*&&/.test(apptRoute),
+    "⚠ an office with NO hospital is now out of scope for a non-super caller -- a hospital_admin can no longer appoint into an HQ space");
+
+  const officeLib = strip("src/lib/ogs/office.ts");
+  // ⚠ THE SPLIT IS THE POINT, SO BOTH HALVES ARE ASSERTED. The roster must still list a suspended member
+  // (an office needs to see who they are); only the viewer-role lookup that grants CMO/QAW/HEX may filter.
+  ok("G11", /personId === viewerId && appointmentGrantsAccess\(a\.status\)/.test(officeLib),
+    "the CMO/QAW/HEX viewer lookup asks appointmentGrantsAccess -- a suspended holder loses the workspace, not just HQ");
+  ok("G12", /const oa = \(byOffice\.get\(o\.id\) \?\? \[\]\)\.filter\(a => a\.status !== "removed" && a\.status !== "expired"\)/.test(officeLib),
+    "control: the ROSTER still lists suspended and nominated members -- the allowlist narrowed access, not visibility");
+
   // ── The control. Everything above is about admitting; this is the refusal it must be paired with. ──
   const nonOwners = (profs ?? []).filter((p: any) =>
     !((p.roles?.length ? p.roles : [p.role]) as string[]).includes("super_admin") && !p.platform_role);
@@ -337,6 +357,29 @@ ok("S3", classifyHqGate(naked).kind === "none",
         const after = await resolveHqPositions(admin, subject.id);
         ok("G5", after.capabilities.length > 0,
           `⚠ the door OPENS: one live ${position} appointment turns the same refused profile into ${after.capabilities.length} capabilit(ies) -- G4 is a real refusal, not a broken resolver`);
+
+        // ── The status allowlist, proven on the SAME row rather than by reading the source ─────────────
+        //
+        // ⚠ THIS IS THE CASE THE OLD DENYLIST GOT WRONG. `status !== "removed" && status !== "expired"`
+        // admitted `suspended` -- the status a governance lead sets BECAUSE they want access to stop. The
+        // row above is now walked through each status in turn, so the assertion is about what the resolver
+        // actually does to a real appointment, not about which words appear in a filter.
+        const withStatus = async (status: string) => {
+          const { error } = await admin.from("ogs_office_appointments").update({ status }).eq("id", ins.id);
+          if (error) return null;   // a failed update is not a refusal -- reported as such below
+          return (await resolveHqPositions(admin, subject.id)).capabilities.length;
+        };
+        const suspended = await withStatus("suspended");
+        ok("G7", suspended === 0,
+          `⚠ SUSPENDED grants nothing (${suspended === null ? "UPDATE FAILED -- unproven" : `${suspended} capabilities`}) -- suspending an office holder actually withdraws their access`);
+        const nominated = await withStatus("nominated");
+        ok("G8", nominated === 0,
+          `NOMINATED grants nothing (${nominated === null ? "UPDATE FAILED -- unproven" : `${nominated} capabilities`}) -- a proposal is not an appointment`);
+        // ⚠ THE CONTROL FOR BOTH. G7 and G8 also pass if the update broke the row, or if the resolver has
+        // stopped resolving anything at all. Restoring 'active' must bring the capabilities back.
+        const restored = await withStatus("active");
+        ok("G9", restored === after.capabilities.length && restored > 0,
+          `control: back to ACTIVE and the same ${restored} capabilit(ies) return -- G7/G8 are the status rule, not a broken fixture`);
       }
     } finally {
       // The tree has been left with orphaned fixture rows before. This is checked, not hoped for.

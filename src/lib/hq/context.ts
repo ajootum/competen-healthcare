@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { platformRolesOf, hasPlatformRole, type PlatformRole } from "@/lib/roles";
+import { appointmentGrantsAccess } from "@/lib/ogs/lifecycle";
 import {
   decideHq, activeGrants, capabilityForRoute, isHqOfficeType,
   type HqDecision, type HqMode,
@@ -79,8 +80,10 @@ async function currentRoute(): Promise<string> {
  * or teaching the tenant matchers about platform spaces, which is how an HQ appointment would have started
  * granting Hospital Executive access.
  *
- * The APPOINTMENT SEMANTICS are copied exactly: a row counts only when its status is not 'removed' or
- * 'expired'. ogs_office_appointments.role carries the hq_position code.
+ * The APPOINTMENT SEMANTICS are shared, not copied: both this and the tenant-workspace gate now ask
+ * appointmentGrantsAccess() in ogs/lifecycle. A row counts only when its status is on that ALLOWLIST --
+ * previously each site carried its own denylist and both admitted 'suspended'.
+ * ogs_office_appointments.role carries the hq_position code.
  */
 export async function resolveHqPositions(
   admin: ReturnType<typeof createAdminClient>,
@@ -107,7 +110,11 @@ export async function resolveHqPositions(
 
   const positions = [...new Set(
     (appts as { role: string | null; status: string | null }[])
-      .filter(a => a.status !== "removed" && a.status !== "expired" && !!a.role)
+      // ⚠ WAS A DENYLIST (status !== "removed" && status !== "expired") AND THAT ADMITTED `suspended`.
+      // Suspending an office holder is the action taken to stop their access; it did not stop it. It also
+      // admitted `nominated`, which is a proposal. The allowlist lives in ogs/lifecycle so this and the
+      // tenant-workspace gate cannot drift apart.
+      .filter(a => appointmentGrantsAccess(a.status) && !!a.role)
       .map(a => a.role as string),
   )].sort();
   if (!positions.length) return { positions: [], capabilities: [] };
