@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { BUTTON } from "@/lib/practice/palette";
-import { pathwayFor } from "@/lib/practice/encounter-start";
+import { startEncounterFor } from "@/lib/practice/encounter-start";
 import UniversalSearch from "../patients/UniversalSearch";
 import RegistrationForm from "../patients/RegistrationForm";
 
@@ -37,8 +37,12 @@ import RegistrationForm from "../patients/RegistrationForm";
 //                     A lighter "quick create" here would be a path to a SECOND record for a patient
 //                     who already exists -- exactly the failure the register defends.
 //
-// WHAT THIS FILE ITSELF DOES: decides the FLOW-001 pathway from the record (and refuses to guess when
-// the record could not be read -- see pathwayFor), launches, and lands on the consultation.
+//   the launch       startEncounterFor() -- the two reads, the pathway decision, the refusal when the
+//                     record could not be read, and the POST. It lived HERE and was then written again,
+//                     differently, on the patient's own page and in the register's summary panel. It is
+//                     one function now, in encounter-start.ts, where a harness can run every branch.
+//
+// WHAT THIS FILE ITSELF DOES: asks for the patient, says what came back, and lands on the consultation.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -239,59 +243,16 @@ export default function StartEncounter({ canStart, canRegisterPatient }: {
   /**
    * Choose a patient, and be in the consultation.
    *
-   * TWO READS, IN THIS ORDER, AND THE FIRST ONE CAN REFUSE THE SECOND. The pathway is written onto the
-   * encounter and never revised, so it is established before anything is created.
+   * THE TWO READS AND THE REFUSAL BETWEEN THEM ARE startEncounterFor's, not this file's. They were
+   * written here first and then written again, differently, in the patients workspace -- so they are one
+   * function now, and this component's job is to say what it returns and go where it points.
    */
   const startFor = useCallback(async (patientId: string) => {
     setBusy(true); setNotice(null);
     try {
-      let prior: { unavailable: boolean; count: number };
-      try {
-        const r = await fetch(`/api/v1/practice/encounters?status=all&patientId=${encodeURIComponent(patientId)}`);
-        if (!r.ok) {
-          setNotice({
-            kind: "err",
-            text: `This patient's history could not be read (HTTP ${r.status}), so the visit type cannot be `
-              + "determined and nothing was opened.",
-          });
-          return;
-        }
-        const d = await r.json();
-        prior = {
-          unavailable: d?.unavailable === true,
-          count: Array.isArray(d?.encounters) ? d.encounters.length : 0,
-        };
-      } catch (e) {
-        setNotice({
-          kind: "err",
-          text: `The patient's history did not reach the server: ${e instanceof Error ? e.message : String(e)}. Nothing was opened.`,
-        });
-        return;
-      }
-
-      const decided = pathwayFor(prior);
-      if (!decided.ok) { setNotice({ kind: "err", text: decided.message }); return; }
-
-      const res = await fetch("/api/v1/practice/encounters", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ patientId, pathway: decided.pathway }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.encounter?.id) {
-        // ⚠ THE SERVER'S OWN WORDS. "That did not work" over a refused launch sends somebody to press
-        // it again; "this patient record is not active (archived or merged)" sends them to the record.
-        setNotice({
-          kind: "err",
-          text: `The consultation did not open: ${data?.error?.message ?? data?.error ?? `HTTP ${res.status}`}. Nothing was created.`,
-        });
-        return;
-      }
-      window.location.assign(`/practice/encounters/${data.encounter.id}`);
-    } catch (e) {
-      setNotice({
-        kind: "err",
-        text: `The consultation did not open: ${e instanceof Error ? e.message : String(e)}. Nothing was created.`,
-      });
+      const r = await startEncounterFor(patientId);
+      if (!r.ok) { setNotice({ kind: "err", text: r.message }); return; }
+      window.location.assign(`/practice/encounters/${r.encounterId}`);
     } finally {
       setBusy(false);
     }

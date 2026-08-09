@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { IDENTIFIER_LABELS } from "@/lib/practice/patient-workspace-constants";
+import StartEncounterAction from "../encounters/StartEncounterAction";
 import { Absence, Boundary, CARD, day } from "./Honesty";
 import type { FamilyView, Probe, ScreenCapabilities, SummaryView } from "./types";
 
@@ -81,7 +82,6 @@ export default function SummaryPanel({ summary, summaryError, family, capabiliti
   }
   if (!summary) return null;
 
-  const s = summary;
   const p = summary.patient;
   const ids = summary.identifiers;
   const active = p.status === "active";
@@ -106,18 +106,17 @@ export default function SummaryPanel({ summary, summaryError, family, capabiliti
     }
   }
 
-  async function startConsultation() {
-    // FLOW-001 pathways 2 and 4, chosen from the record itself: a patient with a prior encounter here is
-    // a follow-up, one without is new. launchEncounter RESUMES a live encounter rather than opening a
-    // second one, so a double click cannot split a consultation in two.
-    const hasPrior = !s.recentEncounters.unavailable && s.recentEncounters.rows.length > 0;
-    const d = await post("/api/v1/practice/encounters", {
-      patientId: p.id,
-      pathway: hasPrior ? "walk_in_followup" : "new_walk_in",
-    });
-    const enc = d?.encounter as { id?: string } | undefined;
-    if (enc?.id) window.location.assign(`/practice/encounters/${enc.id}`);
-  }
+  // ⚠ THERE WAS A startConsultation() HERE AND IT WAS WRONG. It read
+  //     const hasPrior = !s.recentEncounters.unavailable && s.recentEncounters.rows.length > 0;
+  //   and launched on the result -- so a patient whose encounter list FAILED TO READ was filed as a
+  //   `new_walk_in`. entry_pathway is written onto the encounter and never revised: that is the screen
+  //   claiming a first visit for somebody who may have been coming here for years, made silently, on the
+  //   strength of a read that did not answer. The two sibling implementations refused this exact case,
+  //   and encounter-start.ts's own comment claimed this one did too.
+  //
+  //   It is <StartEncounterAction/> over startEncounterFor() now: one refusal, one place, in the module
+  //   the harness runs. The panel keeps its own notice line and its own busy state, so the queue button
+  //   still goes quiet while a consultation is opening.
 
   async function queue() {
     const d = await post("/api/v1/practice/registration-workspace", { queuePatientId: p.id });
@@ -154,12 +153,15 @@ export default function SummaryPanel({ summary, summaryError, family, capabiliti
             Open full record
           </Link>
           {capabilities.mayStartEncounter && active && (
-            <button
-              type="button" disabled={busy} onClick={() => void startConsultation()}
-              className="rounded-lg bg-violet-600 px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
-            >
-              Start consultation
-            </button>
+            <StartEncounterAction
+              patientId={p.id}
+              label="Start consultation"
+              tone="secondaryAction"
+              compact
+              disabled={busy}
+              onNotice={setNotice}
+              onBusy={setBusy}
+            />
           )}
           {capabilities.mayCreate && active && (
             <button

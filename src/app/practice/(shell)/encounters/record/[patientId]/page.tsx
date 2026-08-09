@@ -14,6 +14,7 @@ import { workspaceClock } from "@/lib/practice/practice-time";
 import { logAccess } from "@/lib/practice/privacy";
 import { formatDate } from "@/lib/datetime";
 import JourneyView from "./JourneyView";
+import StartEncounterAction from "../../StartEncounterAction";
 
 // /practice/encounters/record/{patientId} -- CPR-ENC-003, the longitudinal patient record.
 //
@@ -84,6 +85,9 @@ export default async function PatientRecordPage({ params }: { params: Promise<{ 
     ]);
 
   const p = snapshot.patient;
+  // ⚠ THE GATE ON THE ACT, READ ONCE HERE. A caller without it gets no control at all rather than a
+  // greyed one: a disabled button is still an offer, made to the one person who cannot accept it.
+  const canStartEncounter = hasCapability(shell.ctx, "encounter.create");
 
   const listState = (
     panel: { permitted: boolean; unavailable: boolean }, what: string, empty: string,
@@ -208,18 +212,46 @@ export default async function PatientRecordPage({ params }: { params: Promise<{ 
           </section>
 
           <section className={CARD}>
+            {/* ── THE ACT, HERE, ON THE RECORD THAT ALREADY NAMES THE PATIENT ──────────────────────
+                ⚠ THIS WAS A LINK. It said "Start an encounter for this patient" and navigated to
+                /practice/patients/{patientId} -- a control named for a clinical act that was really a
+                change of page, because the real action lived over there. It is the same defect the
+                practice owner found on the encounters board ("Start encounter takes me to patient
+                section") and a worse one, because the board at least had to ask WHO: this screen is
+                /practice/encounters/record/{patientId} and it was sending somebody away to search for a
+                patient whose record was open in front of them.
+
+                It is now the act. Nothing new was written to do it -- the rule is startEncounterFor(),
+                which is also what the board's picker, the patient's action panel and the register's
+                summary panel press, so there is one place for the resume-before-create rule to live.
+
+                ⚠ HIDDEN, NOT DISABLED, and there are THREE separate reasons it can be absent. They are
+                not the same reason and are not said as if they were. */}
+            {canStartEncounter && (
+              <div className="mb-3 border-b border-gray-100 pb-3">
+                {snapshot.unavailable ? (
+                  <p className="text-[11px] text-rose-700">
+                    <strong>The consultation cannot be opened from here.</strong> This record could not be
+                    read, so nothing on this page &mdash; including whether this patient is still an
+                    active record &mdash; is a fact you can act on. Reload and try again.
+                  </p>
+                ) : p?.status !== "active" ? (
+                  <p className="text-[11px] text-gray-500">
+                    This record is <strong>{p?.status}</strong>, so no consultation is opened on it. A
+                    merged record&rsquo;s clinical work belongs on the record it was merged into.
+                  </p>
+                ) : (
+                  <StartEncounterAction
+                    patientId={patientId}
+                    label={`Start a consultation with ${p?.displayName}`}
+                    note="Opens the consultation record now. If one is already open for this patient it is resumed, never duplicated."
+                  />
+                )}
+              </div>
+            )}
+
             <h2 className="text-[13px] font-bold text-gray-900">Quick links</h2>
             <ul className="mt-2 flex flex-col gap-1.5 text-[12px]">
-              {/* ⚠ THIS SENT YOU TO /practice/patients TO SEARCH FOR THE PATIENT WHOSE RECORD YOU WERE
-                  READING. The page knows the patient -- it is in the URL -- and it threw that away. The
-                  same defect as "+ Start encounter" on the encounters board, and worse, because here
-                  there was nothing to work out.
-
-                  It goes to the patient's own page rather than starting one from here: PatientActions
-                  already carries a real Start encounter that resumes rather than duplicates and is gated
-                  on the capability. A second implementation beside it is a second place for the
-                  resume-before-create rule to be got wrong. */}
-              <li><Link href={`/practice/patients/${patientId}`} className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Start an encounter for this patient</Link></li>
               <li><Link href="/practice/follow-ups" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Follow-up board</Link></li>
               <li><Link href="/practice/documents" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Documents</Link></li>
               <li><Link href="/practice/inbox" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Arrived documents</Link></li>

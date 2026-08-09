@@ -24,6 +24,13 @@
  *      candidates -- and an identifier collision is refused outright on both.
  *   8. THE FLOW-001 PATHWAY IS READ FROM THE RECORD and REFUSED when the record could not be read.
  *   9. A SECOND PRESS RESUMES rather than opening a second consultation, which is what the panel claims.
+ *  10. ⚠ THE SAME DEFECT ONE LAYER IN. The longitudinal record at /practice/encounters/record/{patientId}
+ *      offered "Start an encounter for this patient" and NAVIGATED to the patient's page -- from a screen
+ *      with the patient in its own URL. It starts the consultation in place now, hidden (not greyed) from
+ *      a caller without encounter.create; and the launch rule that four screens press is ONE function,
+ *      every branch of which is run here over a stubbed transport. That consolidation closed a live bug:
+ *      SummaryPanel decided the pathway from `!unavailable && rows.length > 0`, so an unreadable history
+ *      opened a `new_walk_in` on a patient who may have been coming here for years.
  *
  *   npx --yes tsx scripts/practice-encounter-start-harness.ts
  */
@@ -38,9 +45,10 @@ import { resolveWorkspaceContext, hasCapability, type WorkspaceContext } from ".
 import { register } from "../src/lib/practice/registration";
 import { launchEncounter } from "../src/lib/practice/encounters";
 import { universalSearch } from "../src/lib/practice/patient-workspace";
-import { pathwayFor, MIN_PICKER_QUERY } from "../src/lib/practice/encounter-start";
+import { pathwayFor, startEncounterFor, MIN_PICKER_QUERY } from "../src/lib/practice/encounter-start";
 import UniversalSearch from "../src/app/practice/(shell)/patients/UniversalSearch";
 import { StartEncounterPanel } from "../src/app/practice/(shell)/encounters/StartEncounter";
+import { StartEncounterActionView } from "../src/app/practice/(shell)/encounters/StartEncounterAction";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
@@ -186,7 +194,7 @@ async function main() {
   ok("1c. the picker never navigates to the register either",
     !picker.includes("/practice/patients"));
   ok("1d. it lands on the consultation it opened",
-    picker.includes("/practice/encounters/${data.encounter.id}"));
+    picker.includes("/practice/encounters/${r.encounterId}"));
 
   // ── 2. ONE SEARCH, AND IT IS THE ONE THAT ALREADY EXISTS ──────────────────────────────────────────
   section("2. the search is reused, not rewritten");
@@ -409,8 +417,16 @@ async function main() {
     encRouteSrc.includes('req.nextUrl.searchParams.get("patientId")')
     && encRouteSrc.includes("const { data: encounters, error } = await q")
     && encRouteSrc.includes("unavailable: !!error"));
-  ok("8f. and the picker acts on that field rather than on the length of the list",
-    picker.includes("d?.unavailable === true") && picker.includes("pathwayFor"));
+  // ⚠ THIS USED TO SCAN THE PICKER, and the picker no longer holds the rule -- startEncounterFor() does,
+  // for all four screens that start an encounter. Left pointing at the picker it would have gone green
+  // on a file that no longer contains a decision at all.
+  const startRule = src("src/lib/practice/encounter-start.ts");
+  // ⚠ AND THE THIRD CONJUNCT IS THE CALL, NOT THE IMPORT -- assertion 2b's lesson, learned again here.
+  // It read `picker.includes("startEncounterFor")` and survived a deliberate break that aliased the
+  // import (`startEncounterFor as launch`) and called something else: the word was still on line 6.
+  ok("8f. and the launcher acts on that field rather than on the length of the list",
+    startRule.includes("d?.unavailable === true") && startRule.includes("pathwayFor(prior)")
+    && picker.includes("await startEncounterFor(patientId)"));
 
   // ── 9. A SECOND PRESS RESUMES ─────────────────────────────────────────────────────────────────────
   section("9. resumed, never duplicated -- which is what the panel promises");
@@ -425,6 +441,130 @@ async function main() {
     String((liveRows ?? []).length));
   ok("9c. the panel says so before anybody presses it",
     renderPanel({}).includes("resumed rather than duplicated"));
+
+  // ── 10. THE SAME DEFECT, ONE LAYER IN: THE LONGITUDINAL RECORD ────────────────────────────────────
+  //
+  // /practice/encounters/record/{patientId} offered "Start an encounter for this patient" and NAVIGATED
+  // to the patient's page. The board's defect with the excuse removed: this screen has the patient in
+  // its URL, so there was nothing to work out -- it sent somebody away to search for a patient whose
+  // record was open in front of them.
+  section("10. the record starts the consultation it is standing on");
+  const record = src("src/app/practice/(shell)/encounters/record/[patientId]/page.tsx");
+  const control = src("src/app/practice/(shell)/encounters/StartEncounterAction.tsx");
+  const patientActions = src("src/app/practice/(shell)/patients/[patientId]/PatientActions.tsx");
+  const summaryPanel = src("src/app/practice/(shell)/patients/SummaryPanel.tsx");
+
+  ok("10a. the record no longer sends a clinical act to the patient register",
+    !record.includes("/practice/patients"));
+  ok("10b. it presses the act in place instead", record.includes("<StartEncounterAction"));
+  ok("10c. gated on encounter.create, and on no capability code that had to be invented",
+    record.includes('hasCapability(shell.ctx, "encounter.create")'));
+  // ⚠ HIDDEN, NOT DISABLED. The gate has to be a conditional RENDER: a greyed-out "Start a consultation"
+  // is still an offer, and the person it is offered to is the one who cannot accept it.
+  ok("10d. hidden rather than greyed -- the capability gates the render, not a disabled attribute",
+    record.includes("{canStartEncounter && (") && !record.includes("disabled={!canStartEncounter"));
+
+  const noStartCtx = await withoutCapabilities(ws, OWNER, ["encounter.create"]);
+  ok("10e. and that capability is a real revocable grant, false for a caller without it",
+    hasCapability(ctx, "encounter.create") && !hasCapability(noStartCtx, "encounter.create"));
+  await restoreCapabilities(ws, OWNER, ["encounter.create"]);
+
+  // ── ONE IMPLEMENTATION OF THE ACT, WHICH IS WHY THE RECORD COULD HAVE ITS OWN BUTTON AT ALL ───────
+  //
+  // The defence written against building this in place was that a second implementation is a second
+  // place for the resume-before-create rule to be got wrong. It was right, and by then there were three.
+  ok("10f. no screen writes its own launch any more -- the four call sites hold no encounter POST",
+    [record, patientActions, summaryPanel, picker, control]
+      .every(f => !f.includes("/api/v1/practice/encounters")));
+  ok("10g. and none of them decides a pathway, which is the thing that had drifted",
+    !summaryPanel.includes("new_walk_in") && !summaryPanel.includes("walk_in_followup")
+    && !patientActions.includes("new_walk_in") && !record.includes("new_walk_in"));
+  // ⚠ THE DRIFT, NAMED. SummaryPanel computed `!unavailable && rows.length > 0` and launched on it, so
+  // an unreadable history opened a `new_walk_in` -- the exact claim pathwayFor exists to refuse, on a
+  // field written onto the encounter permanently. Two siblings refused it; this one did not.
+  ok("10h. control: the panel that had the bug no longer reads a list length to decide anything",
+    !summaryPanel.includes("recentEncounters.rows.length > 0"));
+
+  // ── THE RULE ITSELF, EVERY BRANCH, OVER A STUBBED TRANSPORT ───────────────────────────────────────
+  const seen: { url: string; method: string; body: any }[] = [];
+  const reply = (status: number, body: unknown) => ({
+    ok: status >= 200 && status < 300, status, json: async () => body,
+  });
+  async function underFetch(
+    route: (url: string, init: any) => any, run: () => Promise<any>,
+  ) {
+    const real = (globalThis as any).fetch;
+    seen.length = 0;
+    (globalThis as any).fetch = async (u: any, init: any) => {
+      seen.push({
+        url: String(u), method: String(init?.method ?? "GET"),
+        body: init?.body ? JSON.parse(String(init.body)) : null,
+      });
+      return route(String(u), init);
+    };
+    try { return await run(); } finally { (globalThis as any).fetch = real; }
+  }
+  const posts = () => seen.filter(c => c.method.toUpperCase() === "POST");
+
+  const history = (body: unknown, status = 200) => (url: string) =>
+    url.includes("?status=all") ? reply(status, body) : reply(201, { encounter: { id: "enc-created", resumed: false } });
+
+  const unreadableHistory = await underFetch(history({ encounters: [], unavailable: true, detail: "connection refused" }),
+    () => startEncounterFor("pat-1"));
+  ok("10i. an unreadable history refuses the launch -- and NOTHING is posted",
+    !unreadableHistory.ok && /could not be read/.test(unreadableHistory.message) && posts().length === 0,
+    JSON.stringify({ r: unreadableHistory, posts: posts().length }));
+
+  const refusedRead = await underFetch(history({}, 500), () => startEncounterFor("pat-1"));
+  ok("10j. a history read that errored refuses too, in the server's own status, and posts nothing",
+    !refusedRead.ok && /HTTP 500/.test(refusedRead.message) && posts().length === 0,
+    JSON.stringify({ r: refusedRead, posts: posts().length }));
+
+  const firstVisit = await underFetch(history({ encounters: [], unavailable: false }),
+    () => startEncounterFor("pat-1"));
+  ok("10k. control: a history that ANSWERED empty is a first visit, and it is created",
+    firstVisit.ok && firstVisit.pathway === "new_walk_in" && firstVisit.encounterId === "enc-created"
+    && posts()[0]?.body?.pathway === "new_walk_in",
+    JSON.stringify({ r: firstVisit, body: posts()[0]?.body }));
+
+  const returningPatient = await underFetch(history({ encounters: [{ id: "e1" }, { id: "e2" }], unavailable: false }),
+    () => startEncounterFor("pat-1"));
+  ok("10l. control: a patient with encounters here is a follow-up, and the POST carries that",
+    returningPatient.ok && returningPatient.pathway === "walk_in_followup"
+    && posts()[0]?.body?.pathway === "walk_in_followup",
+    JSON.stringify({ r: returningPatient, body: posts()[0]?.body }));
+
+  ok("10m. the history is asked for BY PATIENT, encoded, and it is the patient asked about",
+    seen[0]?.url.includes("patientId=pat-1") && seen[0]?.url.includes("status=all")
+    && seen[0]?.method.toUpperCase() === "GET", seen[0]?.url);
+
+  const refusedLaunch = await underFetch(
+    (url: string) => url.includes("?status=all")
+      ? reply(200, { encounters: [], unavailable: false })
+      : reply(409, { error: { code: "PATIENT_NOT_ACTIVE", message: "this patient record is not active (archived or merged)" } }),
+    () => startEncounterFor("pat-1"));
+  // ⚠ THE SERVER'S OWN WORDS. "That did not work" over a refused launch sends somebody to press it
+  // again; naming the reason sends them to the record.
+  ok("10n. a refused launch carries the reason the server gave, and reaches no encounter",
+    !refusedLaunch.ok && /not active \(archived or merged\)/.test(refusedLaunch.message)
+    && !("encounterId" in refusedLaunch), JSON.stringify(refusedLaunch));
+
+  // ── AND THE CONTROL SAYS WHAT HAPPENED, WHERE IT WAS PRESSED ──────────────────────────────────────
+  const renderAction = (props: Record<string, unknown>) => renderToStaticMarkup(
+    React.createElement(StartEncounterActionView as any, {
+      label: "Start a consultation with Joseph Mugisha", busy: false, notice: null,
+      onStart: () => {}, ...props,
+    }),
+  );
+  const working = renderAction({ busy: true });
+  ok("10o. a press is not silent -- it says the consultation is opening, and cannot be pressed twice",
+    working.includes("Opening the consultation") && working.includes("disabled=\"\""));
+  const idle = renderAction({});
+  ok("10p. control: idle, it names the patient it will open a consultation with, and is pressable",
+    idle.includes("Start a consultation with Joseph Mugisha") && !idle.includes("disabled=\"\""));
+  const failed = renderAction({ notice: { kind: "err", text: unreadableHistory.ok ? "" : unreadableHistory.message } });
+  ok("10q. and a refusal is drawn AT the button, not on the page somebody was sent to",
+    failed.includes("could not be read") && !idle.includes("could not be read"));
 
   await cleanup();
 

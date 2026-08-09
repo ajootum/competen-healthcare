@@ -1,11 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import StartEncounterAction from "../../encounters/StartEncounterAction";
 
-// The patient's action panel: demographic edit (optimistic-concurrency guarded), book-for-patient
-// (writes the registry link, so the diary carries the registry's name), and the privileged merge --
-// which asks for the OTHER record's Practice ID rather than offering a browse, because merging is a
-// deliberate act performed on a known duplicate, not something to stumble into from a list.
+// The patient's action panel: starting a consultation, demographic edit (optimistic-concurrency
+// guarded), book-for-patient (writes the registry link, so the diary carries the registry's name), and
+// the privileged merge -- which asks for the OTHER record's Practice ID rather than offering a browse,
+// because merging is a deliberate act performed on a known duplicate, not something to stumble into
+// from a list.
+//
+// STARTING A CONSULTATION IS THE ONE ACT HERE THAT IS NOT THIS PANEL'S OWN. Four screens open an
+// encounter for a patient they can already name, and this was one of three hand-written copies of that
+// act; the copies had drifted. It is <StartEncounterAction/> over startEncounterFor() now, reporting
+// into this panel's existing notice line rather than drawing a second one.
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -14,8 +21,6 @@ const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] 
 export default function PatientActions(props: {
   patientId: string; displayName: string; sex: string; birthDate: string | null;
   ageEstimateYears: number | null; recordVersion: number;
-  /** null = the timeline could not be read, so the visit type is UNKNOWN and must not be guessed. */
-  hasPriorEncounter: boolean | null;
   canEdit: boolean; canMerge: boolean; canBook: boolean; canStartEncounter: boolean;
 }) {
   const [busy, setBusy] = useState(false);
@@ -50,35 +55,6 @@ export default function PatientActions(props: {
     }),
   }), "Booked.");
 
-  // FLOW-001 pathways 2 and 4: existing patient walks in, or a follow-up is seen without a booking. The
-  // pathway is chosen from the record itself -- a patient with prior encounters is a follow-up.
-  //
-  // ⚠ AND IT IS REFUSED WHEN THE RECORD COULD NOT BE READ. `hasPriorEncounter` comes from the clinical
-  // timeline, which used to return an empty list for a FAILED read -- so an unreadable history filed a
-  // returning patient as `new_walk_in`. Not a display slip: entry_pathway is WRITTEN onto the encounter
-  // and stays there, and "first visit" is a clinical claim about somebody with a history. `null` is the
-  // third state, and the action does not proceed on a guess.
-  async function startEncounter() {
-    if (props.hasPriorEncounter === null) {
-      setNotice({ kind: "err", text: "This patient's history could not be read, so the visit type cannot be determined. Reload before starting the consultation." });
-      return;
-    }
-    setBusy(true); setNotice(null);
-    const res = await fetch("/api/v1/practice/encounters", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        patientId: props.patientId,
-        pathway: props.hasPriorEncounter ? "walk_in_followup" : "new_walk_in",
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setNotice({ kind: "err", text: data?.error?.message ?? data?.error ?? "That did not work." });
-      setBusy(false); return;
-    }
-    window.location.assign(`/practice/encounters/${data.encounter.id}`);
-  }
-
   async function doMerge() {
     // Resolve the duplicate by its Practice ID first -- merging by uuid paste is error-prone.
     setBusy(true); setNotice(null);
@@ -99,17 +75,20 @@ export default function PatientActions(props: {
         <p className={`mb-3 rounded-lg px-3 py-2 text-[12px] ${notice.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{notice.text}</p>
       )}
 
+      {/* FLOW-001 pathways 2 and 4, and the refusal when the record could not be read, both now in
+          startEncounterFor(). This panel USED to decide the pathway from a `hasPriorEncounter` prop the
+          server computed at page load -- correct, and stale by however long the tab had been open. The
+          shared control reads the history at the moment somebody presses it. */}
       {props.canStartEncounter && (
-        <>
-          <button type="button" disabled={busy} onClick={startEncounter}
-            className="w-full rounded-lg bg-[var(--cp-primary)] py-2 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
-            Start encounter
-          </button>
-          <p className="mt-1 mb-4 text-[10px] text-gray-400">
-            Opens the consultation record now. If one is already open for this patient it is resumed,
-            never duplicated.
-          </p>
-        </>
+        <div className="mb-4">
+          <StartEncounterAction
+            patientId={props.patientId}
+            note="Opens the consultation record now. If one is already open for this patient it is resumed, never duplicated."
+            disabled={busy}
+            onNotice={setNotice}
+            onBusy={setBusy}
+          />
+        </div>
       )}
 
       {props.canBook && (

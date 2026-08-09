@@ -180,9 +180,9 @@ export default async function PatientPage({ params, searchParams }: {
           birthDate={patient.birth_date}
           ageEstimateYears={patient.age_estimate_years}
           recordVersion={patient.record_version}
-          // null when the history could not be READ -- PatientActions refuses to pick a visit type on a
-          // guess, because entry_pathway is written onto the encounter and stays there.
-          hasPriorEncounter={timeline.unavailable ? null : (timeline.encounters as any[]).length > 0}
+          // NO hasPriorEncounter. The visit type used to be decided from this page-load read and handed
+          // down; startEncounterFor() reads it when the button is pressed instead, so a tab left open
+          // through a consultation cannot file the next one as a first visit.
           canEdit={hasCapability(shell.ctx, "patient.edit")}
           canMerge={hasCapability(shell.ctx, "patient.merge")}
           canBook={hasCapability(shell.ctx, "appointment.manage")}
