@@ -83,6 +83,10 @@ export async function POST(req: NextRequest) {
     privacyNotice: nullableText(body.privacyNotice),
     consentText: nullableText(body.consentText),
     consentRequired: bool(body.consentRequired),
+    // ⚠ MIGRATION 272. It rides on practice.settings.manage like every other decision about what this
+    // practice exposes to strangers -- a front-desk delegate who may book patients in may not decide
+    // whether unverified strangers may write rows here.
+    unverifiedRequestsAllowed: bool(body.unverifiedRequestsAllowed),
     actorId: caller.userId, correlationId: caller.traceId,
   });
   return r.ok

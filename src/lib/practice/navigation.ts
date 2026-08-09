@@ -164,6 +164,11 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // ⚠ THIS AMENDS THE CPR-V5-002 FREEZE, and CPR-V5-005 is the product change control s17 requires.
   { href: "/practice/calendar", label: "Practice Planner", icon: "▦", capability: "practice.calendar.view", group: "Practice", phase: 1, built: true, primary: true },
   { href: "/practice/tasks", label: "Tasks", icon: "☑", capability: "task.view", group: "Practice", phase: 4, built: true, parent: "/practice/today" },
+  // ⚠ NOT PRIMARY, AND THE FREEZE IS WHY. CPR-V5-002 is a design freeze on the nine primary sections and
+  // this is not one of them -- so it is filed under the Planner, which is where somebody who reads a
+  // request goes next to act on it. It is here at all because the patient's own confirmation says the
+  // practice can see their request, and before this route nothing in this product could.
+  { href: "/practice/booking-requests", label: "Booking requests", icon: "✉", capability: "appointment.manage", group: "Practice", phase: 4, built: true, parent: "/practice/calendar" },
 
   // -- Patients: the people, and the record made about them -----------------------------------------
   { href: "/practice/encounters", label: "Encounters", icon: "✎", capability: "encounter.list", group: "Clinical", phase: 3, built: true, primary: true },

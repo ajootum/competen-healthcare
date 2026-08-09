@@ -1182,7 +1182,8 @@ export type RuleDecision = {
    * about.
    */
   intake: {
-    asked: { fieldKey: string; label: string; level: string }[];
+    /** ⚠ `condition` is present only where the rule carries one, and it is what lets a FORM narrow itself. */
+    asked: { fieldKey: string; label: string; level: string; condition?: unknown }[];
     missing: { fieldKey: string; label: string }[];
     discarded: { fieldKey: string; label: string }[];
     discardNotice: string | null;
@@ -1723,7 +1724,9 @@ export async function evaluateBooking(
 /** The resolution, flattened for the wire. ⚠ Strings and booleans only -- see the note below. */
 function intakeBlock(r: ReturnType<typeof resolveIntake>): NonNullable<RuleDecision["intake"]> {
   return {
-    asked: r.asked.map(a => ({ fieldKey: a.field.field_key, label: a.field.label, level: a.level })),
+    asked: r.asked.map(a => a.condition === undefined
+      ? { fieldKey: a.field.field_key, label: a.field.label, level: a.level }
+      : { fieldKey: a.field.field_key, label: a.field.label, level: a.level, condition: a.condition }),
     missing: r.missing.map(m => ({ fieldKey: m.field.field_key, label: m.field.label })),
     discarded: r.discarded.map(d => ({ fieldKey: d.field_key, label: d.label })),
     discardNotice: intakeDiscardNotice(r.discarded),

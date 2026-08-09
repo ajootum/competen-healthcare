@@ -431,6 +431,18 @@ export type BookingAccessProfile = {
   consentRequired: boolean;
   publishedAt: string | null;
   pausedAt: string | null;
+  /**
+   * ⚠ MIGRATION 272, AND IT IS NOT otp_required.
+   *
+   * otp_required governs BOOKING and practice_booking_access_publishable still refuses to publish a page
+   * without it. This governs whether a practice will accept an unverified REQUEST -- which becomes no
+   * appointment, holds no time and is a message somebody has to answer. Two decisions, two columns.
+   *
+   * ⚠ NULL MEANS THE COLUMN IS NOT THERE YET, WHICH IS NOT A NO AND IS NOT A YES. A screen must draw the
+   * absence rather than a false-looking switch nobody can move.
+   */
+  unverifiedRequestsAllowed: boolean | null;
+  unverifiedRequestsAllowedAt: string | null;
 };
 
 const profileFrom = (row: any): BookingAccessProfile => ({
@@ -451,12 +463,25 @@ const profileFrom = (row: any): BookingAccessProfile => ({
   consentRequired: !!row.consent_required,
   publishedAt: (row.published_at as string | null) ?? null,
   pausedAt: (row.paused_at as string | null) ?? null,
+  // ⚠ `undefined` FROM THE ROW BECOMES `null` AND NOT `false`. The column is absent until migration 272
+  // is applied, and a missing column read as "the practice said no" is a choice nobody made.
+  unverifiedRequestsAllowed: row.unverified_requests_allowed === undefined
+    ? null : row.unverified_requests_allowed === true,
+  unverifiedRequestsAllowedAt: (row.unverified_requests_allowed_at as string | null) ?? null,
 });
 
 const PROFILE_COLUMNS =
   "id, handle, mode, publish_state, otp_required, otp_channel, guest_booking_allowed, "
   + "existing_patient_matching, visible_location_ids, visible_appointment_types, brand_display_name, "
   + "instructions, privacy_notice, consent_text, consent_required, published_at, paused_at";
+
+/** Migration 272's two. Read separately so a practice with the migration unapplied still gets its page. */
+const PROFILE_COLUMNS_272 =
+  `${PROFILE_COLUMNS}, unverified_requests_allowed, unverified_requests_allowed_at`;
+
+/** PostgREST's answer when a column is not there yet. Code and sentence, because both have been seen. */
+const isUndefinedColumn = (e: { code?: string | null; message?: string | null } | null | undefined) =>
+  !!e && (String(e.code) === "42703" || /column .* does not exist/i.test(String(e.message ?? "")));
 
 /**
  * The practice's booking-access profile, or the honest absence of one.
@@ -470,7 +495,17 @@ export async function bookingAccessProfile(
   admin: any, workspaceId: string,
 ): Promise<Reading<BookingAccessProfile | null>> {
   const { data, error } = await admin.from("practice_booking_access")
-    .select(PROFILE_COLUMNS).eq("workspace_id", workspaceId).maybeSingle();
+    .select(PROFILE_COLUMNS_272).eq("workspace_id", workspaceId).maybeSingle();
+  // ⚠ A COLUMN THAT IS NOT THERE YET IS NOT AN UNREADABLE PAGE. Migration 272 adds two, and a practice
+  // that has not applied it must still be able to see and configure everything it had before -- so the
+  // read falls back to the older column list rather than reporting the whole profile unreadable.
+  // profileFrom() then reads the two as `null`, which is neither a yes nor a no.
+  if (isUndefinedColumn(error)) {
+    const older = await admin.from("practice_booking_access")
+      .select(PROFILE_COLUMNS).eq("workspace_id", workspaceId).maybeSingle();
+    if (older.error) return { state: "unreadable", reason: `your booking page could not be read: ${older.error.message}` };
+    return { state: "ok", value: older.data ? profileFrom(older.data) : null };
+  }
   if (error) return { state: "unreadable", reason: `your booking page could not be read: ${error.message}` };
   return { state: "ok", value: data ? profileFrom(data) : null };
 }
@@ -803,6 +838,15 @@ export type BookingAccessSave = {
   privacyNotice?: string | null;
   consentText?: string | null;
   consentRequired?: boolean;
+  /**
+   * ⚠ MIGRATION 272. TURNING THIS ON CHANGES WHO MAY WRITE A ROW AT THIS PRACTICE.
+   *
+   * With it on, somebody who has proved nothing at all may leave a booking request. It books nothing and
+   * holds no time, and it is still a stranger's name, telephone number and stated reason for a visit
+   * arriving in this practice's queue. It is off until somebody sets it, and the moment they do is
+   * recorded beside it.
+   */
+  unverifiedRequestsAllowed?: boolean;
 };
 
 /**
@@ -885,6 +929,23 @@ export async function saveBookingAccess(admin: any, ctx: WorkspaceContext, args:
   if (args.privacyNotice !== undefined) patch.privacy_notice = text(args.privacyNotice);
   if (args.consentText !== undefined) patch.consent_text = text(args.consentText);
   if (args.consentRequired !== undefined) patch.consent_required = args.consentRequired;
+
+  // ⚠ MIGRATION 272. THE TIMESTAMP MOVES ONLY WHEN THE DOOR IS OPENED, so "when did this practice start
+  // taking unverified requests" has one answer and it is the day somebody decided, not the day somebody
+  // last saved this form. Turning it off clears both, because a practice that has closed the door has no
+  // date on which it is open.
+  if (args.unverifiedRequestsAllowed !== undefined) {
+    patch.unverified_requests_allowed = args.unverifiedRequestsAllowed;
+    if (args.unverifiedRequestsAllowed) {
+      if (existing.value?.unverifiedRequestsAllowed !== true) {
+        patch.unverified_requests_allowed_at = new Date().toISOString();
+        patch.unverified_requests_allowed_by = args.actorId;
+      }
+    } else {
+      patch.unverified_requests_allowed_at = null;
+      patch.unverified_requests_allowed_by = null;
+    }
+  }
 
   if (existing.value) {
     const { data, error } = await admin.from("practice_booking_access")

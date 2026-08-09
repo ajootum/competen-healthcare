@@ -4405,6 +4405,19 @@
       }
     },
     {
+      "path": "/api/v1/practice/booking-requests",
+      "kind": "api",
+      "gate": {
+        "kind": "capability",
+        "roles": [],
+        "appointment": false,
+        "capabilities": [
+          "appointment.manage"
+        ],
+        "evidence": "requirePracticeContext: appointment.manage"
+      }
+    },
+    {
       "path": "/api/v1/practice/booking-rules",
       "kind": "api",
       "gate": {
@@ -5381,6 +5394,16 @@
       }
     },
     {
+      "path": "/api/v1/practice/portfolio/record",
+      "kind": "api",
+      "gate": {
+        "kind": "auth-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "getCaller() with no role predicate"
+      }
+    },
+    {
       "path": "/api/v1/practice/preferences",
       "kind": "api",
       "gate": {
@@ -5454,6 +5477,16 @@
         ],
         "appointment": false,
         "evidence": "isSuper"
+      }
+    },
+    {
+      "path": "/api/v1/practice/public/booking",
+      "kind": "api",
+      "gate": {
+        "kind": "unknown",
+        "roles": [],
+        "appointment": false,
+        "evidence": null
       }
     },
     {
@@ -11312,6 +11345,18 @@
       "inheritedFrom": null
     },
     {
+      "path": "/practice/(shell)/booking-requests",
+      "kind": "page",
+      "gate": {
+        "kind": "member-only",
+        "roles": [],
+        "appointment": false,
+        "evidence": "resolvePracticeShell() with AUTH_REQUIRED redirect"
+      },
+      "guard": "own",
+      "inheritedFrom": null
+    },
+    {
       "path": "/practice/(shell)/calendar",
       "kind": "page",
       "gate": {
@@ -12027,6 +12072,18 @@
         "roles": [],
         "appointment": false,
         "evidence": "no access check found in this file"
+      },
+      "guard": "own",
+      "inheritedFrom": null
+    },
+    {
+      "path": "/practice/book/[handle]/appointment",
+      "kind": "page",
+      "gate": {
+        "kind": "unknown",
+        "roles": [],
+        "appointment": false,
+        "evidence": null
       },
       "guard": "own",
       "inheritedFrom": null
@@ -19085,12 +19142,11 @@
       "path": "/super-admin",
       "kind": "workspace",
       "gate": {
-        "kind": "single-role",
-        "roles": [
-          "super_admin"
-        ],
-        "appointment": false,
-        "evidence": "if (!userRoles.includes(\"super_admin\"))"
+        "kind": "unknown",
+        "roles": [],
+        "appointment": true,
+        "capabilities": [],
+        "evidence": "2 requireHqContext call(s), 1 parsed"
       }
     },
     {

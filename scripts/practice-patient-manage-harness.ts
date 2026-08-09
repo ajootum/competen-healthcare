@@ -514,10 +514,23 @@ async function main() {
     !/rating|review|stars?\b|experience|years|photo|avatar|image/i.test(JSON.stringify(entry)),
     JSON.stringify(entry).slice(0, 300));
 
-  ok("5d. ⚠ AND WITH A DELIVERABLE CHANNEL AND A PUBLISHED PAGE, THE ONE REMAINING BLOCKER IS THE MISSING PATIENT SCREEN -- named, rather than a button that would dead-end at a form nobody built",
-    entry.canBook === false && entry.blockers.length === 1 && entry.blockers[0] === "NO_PATIENT_SCREEN"
-    && PATIENT_BOOKING_SCREENS_BUILT === false && entry.whyNot !== null,
-    JSON.stringify({ blockers: entry.blockers, whyNot: entry.whyNot }));
+  // ⚠ THIS ASSERTION IS TURNED ROUND, AND THE OLD ONE IS QUOTED SO THE CHANGE IS VISIBLE RATHER THAN
+  // TIDIED AWAY. It read: "with a deliverable channel and a published page, THE ONE REMAINING BLOCKER IS
+  // THE MISSING PATIENT SCREEN", and it was true while PATIENT_BOOKING_SCREENS_BUILT was false. The
+  // wizard at /practice/book/@handle/appointment and the public route behind it now exist, so the
+  // blocker is gone and this asserts the consequence: with everything else in place, a booking is
+  // OFFERED. If this ever fails, the screens have stopped existing or the flag has stopped being true --
+  // and either way a button somewhere is promising something that dead-ends.
+  ok("5d. ⚠ WITH A DELIVERABLE CHANNEL, A PUBLISHED PAGE AND THE PATIENT SCREENS BUILT, BOOKING IS OFFERED AND NO BLOCKER REMAINS",
+    entry.canBook === true && entry.blockers.length === 0
+    && PATIENT_BOOKING_SCREENS_BUILT === true && entry.whyNot === null,
+    JSON.stringify({ canBook: entry.canBook, blockers: entry.blockers, whyNot: entry.whyNot }));
+
+  // ⚠ AND A REQUEST IS A SEPARATE OFFER THAT THIS PRACTICE HAS NOT MADE. The fixture never turned the
+  // setting on, so the default is what is being asserted here: shut.
+  ok("5d-2. ⚠ AND AN UNVERIFIED REQUEST IS NOT OFFERED, BECAUSE NOBODY TURNED IT ON. The default is the shut position",
+    entry.canRequestWithoutCode === false && entry.requestNote === null,
+    JSON.stringify({ canRequestWithoutCode: entry.canRequestWithoutCode, requestNote: entry.requestNote }));
 
   // ⚠ ONE THING CHANGES: the page is paused. Everything else about the fixture stands.
   await admin.from("practice_booking_access").update({ publish_state: "paused" }).eq("workspace_id", ws);

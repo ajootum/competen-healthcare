@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { issueOtp, verifyOtp, type Transport } from "@/lib/practice/messaging";
 import { bookUnderRules, evaluateBooking } from "@/lib/practice/booking-rules";
 import { rescheduleAppointment, transitionAppointment, APPOINTMENT_TRANSITIONS } from "@/lib/practice/scheduling";
@@ -56,6 +57,18 @@ export type EngineResult<T> =
 
 /** s8's modes that admit a patient at all. Copied from migration 254's own constraint. */
 const MODES_ADMITTING = ["public", "link_only"];
+
+/**
+ * ⚠ ONE HASH FOR EVERY WRITE A STRANGER CAUSES ON THIS TABLE, SO THE COUNT SPANS BOTH PATHS.
+ *
+ * A source is an IP or whatever the edge can be trusted to give -- all of it personal data, none of it
+ * worth keeping. Only the digest is ever computed, and the caller's raw value never reaches a query, a
+ * log or a column. Exported so that the verified booking path and the unverified request path put their
+ * rows in the SAME register: two salts would be two limits, each blind to the other, and a caller would
+ * get both allowances.
+ */
+export const hashBookingSource = (sourceKey: string) =>
+  createHash("sha256").update(`booking-request-source:${sourceKey}`).digest("hex");
 
 // ── 1. IS THIS PRACTICE REACHABLE? ───────────────────────────────────────────────────────────────────
 
@@ -400,6 +413,13 @@ export async function submitBookingRequest(admin: any, args: {
     status: "verified",
     challenge_id: proof.proof.challengeId,
     verified_at: new Date().toISOString(),
+    // ⚠ `sourceKey` WAS AN ARGUMENT NOTHING USED, WHICH IS THE SHAPE OF A CONTROL THAT ISN'T ONE. It sat
+    // in this signature looking like per-source limiting while migration 254's source_hash column stayed
+    // null on every row this function ever wrote -- so a count over it would have read nought for ever.
+    // It is written now, hashed by the same function the request path hashes with, so the two share one
+    // register. Omitted entirely when no source was supplied, because a null is honest and a placeholder
+    // is a bucket everybody shares.
+    ...(args.sourceKey ? { source_hash: hashBookingSource(args.sourceKey) } : {}),
     // ⚠ EVERY ANSWER BELOW COMES FROM `kept`, NEVER FROM `args.intake`. That is the whole of s7.2's
     // "do not ask" being real: a question the rule withdrew has already been deleted from the map, so
     // there is no path by which an answer nobody was asked for reaches a column. Reading args.intake
@@ -1315,16 +1335,20 @@ export async function cancelManagedBooking(admin: any, args: {
 /**
  * ⚠ A FACT ABOUT THE BUILD, WRITTEN DOWN ONCE, WHERE A HARNESS CAN HOLD IT.
  *
- * The booking and management ENGINES exist and are proven end to end. What does not exist is a screen a
- * patient can use: there is no wizard at Location -> Service -> Time -> Details -> Verify, and no
- * public HTTP route that reaches any of the functions in this file. So no button on any public page may
- * offer booking yet, however well configured a practice is.
+ * ⚠ THIS WAS `false` AND IS NOW `true`, AND IT IS TRUE RATHER THAN CONVENIENT. What it asserts is
+ * narrow and each half is checkable:
  *
- * This is deliberately a constant rather than a condition each page re-derives. When the screens are
- * built this becomes `true` in one place, every page that asks changes together, and the harness
- * assertion that pairs it with the payload is what stops the two drifting apart.
+ *   THE WIZARD EXISTS. /practice/book/@handle/appointment walks Location and kind -> Time -> Details ->
+ *   Verify (or, where the practice allows it, an unverified request) -> Confirmation.
+ *   THE PUBLIC HTTP ROUTE EXISTS. /api/v1/practice/public/booking reaches bookableSlots,
+ *   requestBookingCode, confirmBookingCode, submitBookingRequest and submitUnverifiedRequest, with no
+ *   session and no capability, which is what a patient has.
+ *
+ * ⚠ IT DOES NOT ASSERT THAT A BOOKING CAN BE COMPLETED HERE TODAY. That is a separate question with a
+ * separate answer -- issueOtp still refuses in a deployment with no gateway and no mail provider -- and
+ * publicBookingEntry below is what answers it, from the stores, per practice.
  */
-export const PATIENT_BOOKING_SCREENS_BUILT = false;
+export const PATIENT_BOOKING_SCREENS_BUILT = true;
 
 export const PATIENT_BOOKING_SCREENS_NOTE =
   "Online booking is not open to patients yet. The booking is made by the practice; contact them the way "
@@ -1343,6 +1367,16 @@ export type PublicBookingEntry = {
    */
   canBook: boolean;
   canManage: boolean;
+  /**
+   * ⚠ MIGRATION 272. A REQUEST IS NOT A BOOKING, WHICH IS WHY IT IS A SEPARATE FIELD.
+   *
+   * True only where the practice DELIBERATELY turned the setting on, and where a request could actually
+   * be completed today. It needs no delivery channel, because nothing on that path sends anything -- and
+   * it books nothing, holds no time and becomes no appointment. See booking-request-unverified.ts.
+   */
+  canRequestWithoutCode: boolean;
+  /** What such a request is and is not, in the patient's words. Null when none is offered. */
+  requestNote: string | null;
   /** One sentence, true today, whenever either of the two above is false. */
   whyNot: string | null;
   /**
@@ -1370,7 +1404,9 @@ export async function publicBookingEntry(admin: any, handle: string): Promise<Pu
   const clean = (handle ?? "").trim().toLowerCase().replace(/^@/, "");
   const base = {
     reason: null as string | null, handle: clean,
-    canBook: false, canManage: false, whyNot: null as string | null,
+    canBook: false, canManage: false,
+    canRequestWithoutCode: false, requestNote: null as string | null,
+    whyNot: null as string | null,
     blockers: [] as PublicBookingEntry["blockers"],
     displayName: null as string | null, instructions: null as string | null,
     privacyNotice: null as string | null,
@@ -1408,6 +1444,20 @@ export async function publicBookingEntry(admin: any, handle: string): Promise<Pu
       whyNot: "Whether this practice can send you a confirmation code could not be checked just now.",
     };
 
+  // ⚠ MIGRATION 272's SETTING, READ RATHER THAN ASSUMED, AND AN UNREADABLE ONE IS NOT A NO.
+  //
+  // The policy has three answers and this page must not flatten them: `allowed` opens the request door,
+  // a definite `false` closes it, and a store that would not answer is reported as unreadable exactly as
+  // a failed delivery check is -- because "this practice does not take requests" and "nobody could tell"
+  // are different sentences, and a patient given the first when the second is true gives up.
+  const { unverifiedRequestPolicy, UNVERIFIED_REQUEST_NOTE } = await import("@/lib/practice/booking-request-unverified");
+  const policy = await unverifiedRequestPolicy(admin, p.workspaceId);
+  if (policy.state !== "ok")
+    return {
+      ...shared, state: "unreadable", reason: policy.reason, blockers: ["COULD_NOT_CHECK"],
+      whyNot: "What this practice takes online could not be checked just now.",
+    };
+
   const blockers: PublicBookingEntry["blockers"] = [];
 
   // ⚠ THE CODE IS NOT OPTIONAL ON A PUBLISHED PAGE. migration 254's practice_booking_access_publishable
@@ -1431,9 +1481,22 @@ export async function publicBookingEntry(admin: any, handle: string): Promise<Pu
   const ordered = (["NOTHING_OFFERED", "NO_WAY_TO_SEND_A_CODE", "NO_PATIENT_SCREEN"] as const)
     .filter(c => blockers.includes(c));
 
+  // ⚠ A REQUEST NEEDS THE PRACTICE'S PERMISSION AND SOMETHING TO ASK FOR, AND NOTHING ELSE.
+  //
+  // It deliberately does NOT need a delivery channel: the whole point of the setting is that a practice
+  // with no way to send a code may still take a message. It does need something offered, because a
+  // request naming no kind of appointment is a request nobody can act on.
+  const canRequestWithoutCode =
+    policy.value.allowed && !blockers.includes("NOTHING_OFFERED") && !blockers.includes("NO_PATIENT_SCREEN");
+
   return {
     ...shared, blockers: ordered as PublicBookingEntry["blockers"],
     canBook: ordered.length === 0, canManage: ordered.length === 0,
+    canRequestWithoutCode,
+    requestNote: canRequestWithoutCode ? UNVERIFIED_REQUEST_NOTE : null,
+    // ⚠ THE SENTENCE STILL EXPLAINS WHY A BOOKING IS SHUT, EVEN WHERE A REQUEST IS OPEN. The two are
+    // different offers, and telling somebody they may leave a message does not answer why they cannot
+    // book -- so both are said, and the screen shows the reason beside the request rather than instead.
     whyNot: ordered.length === 0 ? null : SENTENCE[ordered[0]],
   };
 }

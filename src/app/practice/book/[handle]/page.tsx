@@ -163,9 +163,26 @@ export default async function PractitionerPage({ params }: {
         )}
 
         {/* ⚠ NO BUTTON UNLESS A PATIENT COULD ACTUALLY FINISH. `canBook` is false whenever the practice
-            has published nothing, a code could not reach anybody, or no patient-facing screen exists --
-            and today the last of those is true everywhere. So this renders the reason, not a CTA that
-            would fail at its last step. */}
+            has published nothing or a code could not reach anybody, and `canRequestWithoutCode` is true
+            only where the practice deliberately turned that on. Both are derived from stores, so this
+            offers what can actually be completed and nothing else.
+
+            ⚠ AND THEY ARE TWO DIFFERENT OFFERS WITH TWO DIFFERENT WORDS. A request is not a booking: it
+            makes no appointment and holds no time, and a button that said "Book" and produced a message
+            would be the worst sentence on this page. */}
+        {entry?.canBook && (
+          <Link href={`/practice/book/@${p.handle}/appointment`}
+            className="mt-3 inline-block rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[12.5px] font-semibold text-white">
+            Book an appointment
+          </Link>
+        )}
+        {entry && !entry.canBook && entry.canRequestWithoutCode && (
+          <Link href={`/practice/book/@${p.handle}/appointment`}
+            className="mt-3 inline-block rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-[12.5px] font-semibold text-amber-900">
+            Request an appointment
+          </Link>
+        )}
+
         {entry && !entry.canBook && entry.whyNot && (
           <p className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-3 text-[12px] leading-relaxed text-gray-600">
             {entry.whyNot}

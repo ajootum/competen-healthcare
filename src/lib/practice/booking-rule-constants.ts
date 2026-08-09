@@ -790,8 +790,16 @@ export function levelFor(req: RequiredInformation, fieldKey: string): Requiremen
 }
 
 export type IntakeResolution = {
-  /** What is put to the patient, in catalogue order. */
-  asked: { field: BookingIntakeField; level: RequirementLevel }[];
+  /**
+   * What is put to the patient, in catalogue order.
+   *
+   * ⚠ THE CONDITION TRAVELS WITH THE QUESTION, so a FORM can narrow itself with the same evaluator the
+   * server used. Without it a patient-facing form draws the maximal set -- every conditional question,
+   * to everybody -- and the condition only ever decides whether the answer is thrown away afterwards,
+   * which is exactly the failure RegistrationForm.tsx already had and fixed. Undefined where the rule
+   * carries none.
+   */
+  asked: { field: BookingIntakeField; level: RequirementLevel; condition?: unknown }[];
   /** Set to `off`, or withdrawn by a condition. Their answers are thrown away -- see `discarded`. */
   notAsked: { field: BookingIntakeField; why: "off" | "condition" }[];
   /** Required and blank. Each one refuses the booking. */
@@ -860,7 +868,7 @@ export function resolveIntake(
       delete values[field.field_key];
       continue;
     }
-    asked.push({ field, level });
+    asked.push(condition === undefined || condition === null ? { field, level } : { field, level, condition });
     if (level === "required" && blank(values[field.field_key])) missing.push({ field });
   }
 

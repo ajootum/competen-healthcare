@@ -67,6 +67,9 @@ export default function PublishWorkspace({ readiness, locations, mayPublish }: {
     guestBookingAllowed: p?.guestBookingAllowed ?? true,
     existingPatientMatching: p?.existingPatientMatching ?? false,
     consentRequired: p?.consentRequired ?? true,
+    // ⚠ FALSE WHEN UNSET, ALWAYS. SessionWorkspace's blankDraft makes the same point about bookability:
+    // never default a control to the open position. A practice turns this on deliberately or not at all.
+    unverifiedRequestsAllowed: p?.unverifiedRequestsAllowed === true,
     brandDisplayName: p?.brandDisplayName ?? "",
     instructions: p?.instructions ?? "",
     visibleLocationIds: (p?.visibleLocationIds ?? []) as string[],
@@ -226,6 +229,45 @@ export default function PublishWorkspace({ readiness, locations, mayPublish }: {
                   {label}
                 </label>
               ))}
+            </div>
+
+            {/* ── MIGRATION 272: THE UNVERIFIED REQUEST ────────────────────────────────────────
+                ⚠ NOT A TICK BOX IN THE ROW ABOVE, AND THAT IS DELIBERATE. It is the only setting on this
+                screen that lets somebody who has proved nothing write a row at this practice, so it is
+                drawn with the consequence beside it rather than as a fifth checkbox somebody skims. */}
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+              <label className="flex items-start gap-2 text-[12px] font-semibold text-amber-950">
+                <input type="checkbox" className="mt-0.5"
+                  checked={draft.unverifiedRequestsAllowed}
+                  disabled={!mayPublish || p?.unverifiedRequestsAllowed === null}
+                  onChange={e => setDraft(d => ({ ...d, unverifiedRequestsAllowed: e.target.checked }))} />
+                Accept a request from somebody who has not entered a code
+              </label>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-amber-900">
+                Booking still needs a code, and this does not change that. This is a second, smaller
+                thing: a message asking for a time. It does <span className="font-bold">not</span> become
+                an appointment, it does <span className="font-bold">not</span> hold the time, and two
+                people may ask for the same one. What arrives is a name, a number and a reason that
+                nobody has checked &mdash; every request is permanently marked as unverified, and you
+                answer it yourself.
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-amber-900">
+                Turn it on if you have no way to send a code and would rather take messages than nothing.
+                Requests appear under <span className="font-semibold">Booking requests</span>.
+              </p>
+              {/* ⚠ THE ABSENCE IS DRAWN AS AN ABSENCE. A switch that cannot move because the column is
+                  not there must say so, not sit greyed out looking like a choice somebody made. */}
+              {p?.unverifiedRequestsAllowed === null && (
+                <p className="mt-1.5 rounded border border-slate-300 bg-white/70 px-2 py-1.5 text-[10.5px] leading-relaxed text-slate-700">
+                  This setting is not available on this deployment yet &mdash; the column it lives in has
+                  not been created. Nothing here is off because you chose it.
+                </p>
+              )}
+              {p?.unverifiedRequestsAllowedAt && (
+                <p className="mt-1.5 text-[10.5px] text-amber-900/80">
+                  Open since {new Date(p.unverifiedRequestsAllowedAt).toLocaleDateString()}.
+                </p>
+              )}
             </div>
 
             <div>
