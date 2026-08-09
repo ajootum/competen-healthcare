@@ -3,422 +3,490 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
-import { encountersDashboard, type DashboardEncounter, type DashboardSession } from "@/lib/practice/encounter-workspace";
+import { encountersLanding, type EncountersLanding } from "@/lib/practice/encounters-landing";
 import {
-  SESSION_FIGURES, DASHBOARD_PANELS, ENCOUNTER_STATUS_CHIP, ENCOUNTER_STATUS_LABEL,
-} from "@/lib/practice/encounter-workspace-constants";
-import { formatMinuteOfDay, formatTime, formatDate } from "@/lib/datetime";
-import RowMenu from "./RowMenu";
+  LANDING_TABS, HISTORY_PERIODS, HISTORY_STATES, HISTORY_PAGE_SIZE,
+  COMPLETION_OVERDUE_MINUTES, COMPLETION_THRESHOLD_IS_CONFIGURABLE,
+  PATHWAY_LABEL, isLandingTab, type LandingTabKey,
+} from "@/lib/practice/encounters-landing-constants";
+import { ENCOUNTER_STATUS_CHIP, ENCOUNTER_STATUS_LABEL } from "@/lib/practice/encounter-workspace-constants";
+import { formatDateTime, formatDate } from "@/lib/datetime";
 import StartEncounter from "./StartEncounter";
+import {
+  CARD, Figure, PanelState, patientLabel, ContextStrip, WorkSection, AttentionPanel,
+} from "./Board";
 
-// /practice/encounters -- CPR-ENC-001 s9's four panels: Today's Sessions, Open Encounters, Recently
-// Closed, and the attention counts the comp draws as an assistant.
+// /practice/encounters -- CPR-ENC-LANDING-001, the Encounters landing page.
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// EVERY PANEL DRAWS THREE STATES, AND THE THIRD ONE IS THE POINT.
+// THE FROZEN DECISION, AND WHAT IT COST THE PREVIOUS BOARD (spec s0, s17, s19)
 //
-//   not permitted    "You cannot see X here."           -- nothing was read
-//   could not read   "X could not be read."             -- a query failed; this is NOT an empty list
-//   empty            "There is no X."                   -- read succeeded, there is genuinely none
+//   "Do not reproduce the Current Session queue, appointment list, waiting-room management, or session
+//    dashboard on this page. Encounter context may be inherited from Current Session, but the Encounters
+//    workspace remains a clinical-record workbench."
 //
-// An empty Open Encounters panel means the day is finished. A failed one means there may be an unsigned
-// consultation from this morning that this screen cannot see. Drawing them the same way is how a
-// practitioner goes home with a record still open.
+// The board this replaces opened with "Today's sessions": one card per session, each carrying four
+// figures (Booked / Walk-ins / Completed / Open) and a "View patients" button. That IS a session
+// dashboard, and it was the first thing on the page. It is gone -- s4.2 asks for "a compact strip only",
+// and one strip is what there now is. The four figures were real and they still are; they live on the
+// command centre, which owns the day.
 //
-// COLOUR IS DOING SEMANTIC WORK, AND THE FIGURE TAKES THE CARD'S COLOUR. The four session figures are
-// read at a glance at the start of a clinic; four grey rectangles containing four numbers have to be
-// READ, one at a time. The swatches come from palette.ts through encounter-workspace-constants so the
-// hue of "walk-in" is the same here as it is on the command centre.
+// THREE OTHER THINGS MOVED OUT, ALL FROM THE ATTENTION PANEL. s4.6 excludes overdue follow-ups,
+// unreviewed incoming documents and draft letters BY NAME; the old panel counted all three. They are
+// real work and they are not encounter work.
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// ⚠ THE SCREEN MOST PEOPLE WILL MEET IS THE EMPTY ONE, AND IT IS DESIGNED FOR FIRST.
+//
+// The approved comp shows three named patients, three signed encounters and populated attention counts.
+// The live practice has two patients, one open encounter and nothing signed. So every empty state here
+// is compact, positive, and NAMES THE STATE IT IS EMPTY OF (s14, AC-12) -- an empty panel that does not
+// say which state it is empty of reads as a page that failed to load.
+//
+// EVERY FILTER IS IN THE URL rather than in component state: a practitioner who has narrowed the board
+// and then follows a link into an encounter must come back to the same view, and a filtered board
+// somebody is reading over a colleague's shoulder has to be a link they can be sent.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const dynamic = "force-dynamic";
 
-const CARD = "rounded-xl border border-gray-200 bg-white";
-
-/**
- * How many signed records "View all" reaches for, against the twelve the panel shows by default.
- *
- * ⚠ IT IS A CAP, NOT "ALL", AND THE PANEL SAYS SO WHEN IT IS REACHED. A link labelled "View all" over a
- * silently truncated list is the worst of both: the practitioner believes they have seen everything.
- * A practice with more than this many signed encounters needs the patient record or the register, not a
- * longer scroll on a dashboard panel.
- */
-const CLOSED_ALL_LIMIT = 100;
-
-function PanelHeading({ panel, title, subtitle, action }: {
-  panel: string; title: string; subtitle?: string; action?: React.ReactNode;
-}) {
-  const badge = DASHBOARD_PANELS[panel];
-  return (
-    <div className="flex items-start gap-2.5">
-      <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[13px] ${badge.badge}`}>
-        {badge.icon}
-      </span>
-      <div className="min-w-0">
-        <h2 className="text-[14px] font-bold text-gray-900">{title}</h2>
-        {subtitle && <p className="text-[11px] text-gray-500">{subtitle}</p>}
-      </div>
-      {action && <div className="ml-auto">{action}</div>}
-    </div>
-  );
-}
-
-/** The one place any of the three states is rendered, so no panel can invent a fourth. */
-function PanelState({ permitted, unavailable, empty, what }: {
-  permitted: boolean; unavailable: boolean; empty: string; what: string;
-}) {
-  if (!permitted) {
-    return (
-      <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[12px] text-gray-500">
-        You do not hold the permission to see {what} in this workspace. Nothing was read.
-      </p>
-    );
+function href(base: string, params: Record<string, string | number | null | undefined>) {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== null && v !== undefined && v !== "") q.set(k, String(v));
   }
-  if (unavailable) {
-    return (
-      <p className="mt-3 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
-        <strong>{what} could not be read.</strong> This is not an empty list &mdash; do not take it as one.
-      </p>
-    );
-  }
-  return <p className="mt-3 text-[12px] text-gray-400">{empty}</p>;
-}
-
-function patientLabel(e: DashboardEncounter) {
-  // ⚠ "Unknown patient" IS A CLAIM ABOUT THE RECORD. When the name read failed, the name is unknown to
-  // this screen, not missing from the record, and the two sentences are different.
-  if (e.patientNameUnavailable) return "Name could not be read";
-  return e.patientName ?? "Unnamed record";
-}
-
-function SessionCard({ s, active }: { s: DashboardSession; active: boolean }) {
-  const stateChip = s.state === "running"
-    ? "bg-violet-100 text-violet-700 ring-1 ring-violet-200"
-    : s.state === "done"
-      ? "bg-slate-100 text-slate-500 ring-1 ring-slate-200"
-      : "bg-sky-100 text-sky-700 ring-1 ring-sky-200";
-  const stateWord = s.state === "running" ? "In progress" : s.state === "done" ? "Finished" : "Upcoming";
-
-  return (
-    <li className={`${CARD} p-3.5`}>
-      <div className="flex items-start gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-[13px] font-bold text-gray-900">{s.title}</p>
-          <p className="text-[11px] text-gray-500">
-            {formatMinuteOfDay(s.plannedStartMinute)}&ndash;{formatMinuteOfDay(s.plannedEndMinute)}
-            {" · "}{s.activityType}
-            {s.facility ? ` · ${s.facility}` : ""}
-            {s.room ? ` · ${s.room}` : ""}
-          </p>
-        </div>
-        <span className={`ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${stateChip}`}>{stateWord}</span>
-      </div>
-
-      <div className="mt-3 grid grid-cols-4 gap-1.5">
-        {SESSION_FIGURES.map(f => {
-          const v = s.figures[f.key];
-          return (
-            <div key={f.key} className={`rounded-lg border px-2 py-1.5 text-center ${v === null ? "border-dashed border-slate-300 bg-white" : f.swatch.box}`}>
-              {/* ⚠ A FIGURE THAT COULD NOT BE COUNTED IS AN EM DASH, NEVER A NOUGHT. A nought is a claim
-                  that there were none of them. */}
-              <p className={`text-[17px] font-bold leading-none ${v === null ? "text-slate-300" : f.swatch.figure}`}>
-                {v === null ? "—" : String(v).padStart(2, "0")}
-              </p>
-              <p className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-gray-500">{f.label}</p>
-            </div>
-          );
-        })}
-      </div>
-
-      <p className="mt-2 text-[10px] text-gray-400">
-        Counted from the encounters filed against this session, not from the diary &mdash; nobody is
-        claimed to have arrived who has not.
-      </p>
-
-      {/* ⚠ ONE ACTION, AND IT IS NAMED FOR WHAT IT DOES. The comp gives each card a different verb --
-          "View patients", "Start round", "Open queue" -- chosen by the kind of session. Two of those
-          three describe STARTING something, and nothing here starts a session: an encounter is opened
-          from a patient or a checked-in appointment, and a button that only navigated while saying
-          "Start round" would be the screen making a claim the click does not honour. So all three become
-          the one they all actually were, and it filters the lists below to this session's own records. */}
-      <Link href={active ? "/practice/encounters" : `/practice/encounters?session=${s.id}`}
-        aria-pressed={active}
-        className={`mt-2.5 block rounded-lg border px-2 py-1.5 text-center text-[11px] font-semibold ${
-          active
-            ? "border-[var(--cp-primary)]/40 bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
-            : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
-        {active ? "Showing this session — clear" : "View patients"}
-      </Link>
-    </li>
-  );
+  const s = q.toString();
+  return s ? `${base}?${s}` : base;
 }
 
 export default async function EncountersPage({ searchParams }: {
-  searchParams: Promise<{ session?: string; closed?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const shell = await resolvePracticeShell();
   if (shell.state !== "READY") redirect("/practice");
   if (!hasCapability(shell.ctx, "encounter.list")) redirect("/practice/home");
 
-  // ⚠ BOTH OF THESE NARROW OR WIDEN WHAT IS ON SCREEN, so both are in the URL rather than in component
-  // state: a practitioner who has filtered to one session and then follows a link into an encounter must
-  // come back to the same list, and a filtered view somebody is reading over a colleague's shoulder has
-  // to be a link they can be sent.
-  const { session: sessionParam, closed: closedParam } = await searchParams;
-  const sessionFilter = sessionParam || null;
-  const showAllClosed = closedParam === "all";
+  const sp = await searchParams;
+  const one = (k: string) => { const v = sp[k]; return Array.isArray(v) ? v[0] : v; };
+
+  const tab: LandingTabKey = isLandingTab(one("tab")) ? (one("tab") as LandingTabKey) : "open";
+  const sessionFilter = one("session") ?? null;
+  const q = (one("q") ?? "").trim();
+  const historyPage = Number.parseInt(one("hpage") ?? "0", 10) || 0;
 
   const admin = createAdminClient();
   // THE CLOCK IS THE ENGINE'S, not this component's. Calling Date.now() during a render is an impure
   // call the React compiler rejects outright, and the elapsed time of a consultation is data the loader
-  // owns -- so encountersDashboard measures it once and hands each row its own `elapsedMinutes`.
-  const dash = await encountersDashboard(admin, shell.ctx, showAllClosed ? { closedLimit: CLOSED_ALL_LIMIT } : {});
+  // owns -- so encountersLanding measures it once and hands each row its own `elapsedMinutes`.
+  const d: EncountersLanding = await encountersLanding(admin, shell.ctx, {
+    tab, session: sessionFilter, q: q || null,
+    historyPeriod: one("hperiod") ?? null, historyState: one("hstate") ?? null,
+    historyFrom: one("hfrom") ?? null, historyTo: one("hto") ?? null,
+    historyPage,
+  });
 
-  // ⚠ THE FILTER IS APPLIED HERE AND NOT IN THE ENGINE, and that has a consequence worth naming rather
-  // than hiding: the loader reads a bounded window, so filtering it to one session shows that session's
-  // records WITHIN THAT WINDOW, not every record it ever had. The panels below say so when a filter is
-  // on. Pushing the filter into the query would fix the bound and cost a second read path for the same
-  // figures -- the thing the card/list agreement on this page exists to prevent.
-  const inFilter = (e: DashboardEncounter) => !sessionFilter || e.activityId === sessionFilter;
-  const live = dash.open.items.filter(e => e.status !== "COMPLETED" && inFilter(e));
-  const completedUnsigned = dash.open.items.filter(e => e.status === "COMPLETED" && inFilter(e));
-  const closedItems = dash.closed.items.filter(inFilter);
+  const tabDef = (k: LandingTabKey) => LANDING_TABS.find(t => t.key === k)!;
+  const keep = { session: sessionFilter, q: q || null };
+  // ⚠ THE PAGE GOES WHERE THE ACTION WENT. Every tab and every history control carries a fragment, so
+  // pressing one from halfway down a long board brings the thing it changed into view rather than
+  // silently re-rendering something above the fold. That defect was found and fixed twice this week.
+  const tabHref = (k: LandingTabKey) => href("/practice/encounters", { ...keep, tab: k === "open" ? null : k });
+  const historyHref = (over: Record<string, string | number | null>) => href("/practice/encounters", {
+    ...keep, tab: tab === "open" ? null : tab,
+    hperiod: d.historyFilter.period, hstate: d.historyFilter.state,
+    hfrom: d.historyFilter.from, hto: d.historyFilter.to, hpage: d.historyFilter.page || null,
+    ...over,
+  });
 
-  // The session's own words if it is one of today's; otherwise whatever an encounter calls it. Never an
-  // id: "Showing 8f3c-…" tells a practitioner nothing about what they are looking at.
-  const filterName = sessionFilter
-    ? dash.sessions.items.find(s => s.id === sessionFilter)?.title
-      ?? dash.open.items.concat(dash.closed.items).find(e => e.activityId === sessionFilter)?.sessionTitle
-      ?? null
-    : null;
-  const closedCapped = showAllClosed && dash.closed.items.length >= CLOSED_ALL_LIMIT;
-
-  // Read once here rather than per row: the row menu offers the patient record, and a link that 403s on
-  // arrival is worse than a line that says it cannot be followed.
-  const canSeePatient = hasCapability(shell.ctx, "patient.list");
-  // ⚠ COMPUTED HERE, ON THE SERVER, FROM THE CAPABILITY TABLE -- never inferred in the browser
-  // (SHELL-001 s9.1). The picker hides its register branch on the second of these; the API refuses it
-  // again on arrival, which is what makes the hiding a courtesy rather than the control.
-  const canStartEncounter = hasCapability(shell.ctx, "encounter.create");
-  const canRegisterPatient = hasCapability(shell.ctx, "patient.create");
-
-  const row = (e: DashboardEncounter) => {
-    const mins = e.elapsedMinutes;
-    return (
-      <li key={e.id} className="grid grid-cols-12 items-center gap-2 rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
-        <div className="col-span-12 min-w-0 sm:col-span-3">
-          <Link href={`/practice/encounters/${e.id}`} className="text-[13px] font-semibold text-gray-900 hover:underline">
-            {patientLabel(e)}
-          </Link>
-          {e.reasonForVisit && <p className="truncate text-[11px] text-gray-500">{e.reasonForVisit}</p>}
-        </div>
-        <p className="col-span-4 text-[11px] capitalize text-gray-600 sm:col-span-2">
-          {String(e.entryPathway).replace(/_/g, " ")}
-        </p>
-        <p className="col-span-8 truncate text-[11px] text-gray-500 sm:col-span-3">
-          {e.sessionTitle ?? <span className="text-gray-400">No session recorded</span>}
-          <span className="text-gray-400"> · {String(e.encounterMode).replace(/_/g, " ")}</span>
-        </p>
-        <p className="col-span-4 font-mono text-[11px] text-gray-500 sm:col-span-1">{formatTime(e.startedAt)}</p>
-        <p className="col-span-4 font-mono text-[11px] text-gray-400 sm:col-span-1">
-          {mins === null ? "—" : `${mins}m`}
-        </p>
-        <div className="col-span-4 flex items-center justify-end gap-2 sm:col-span-2">
-          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${ENCOUNTER_STATUS_CHIP[e.status] ?? "bg-gray-100 text-gray-500"}`}>
-            {ENCOUNTER_STATUS_LABEL[e.status] ?? e.status}
-          </span>
-          <Link href={`/practice/encounters/${e.id}`}
-            className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-semibold text-gray-700 hover:bg-white">
-            Continue
-          </Link>
-          <RowMenu encounterId={e.id} patientId={e.patientId} activityId={e.activityId}
-            sessionTitle={e.sessionTitle} canSeePatient={canSeePatient} />
-        </div>
-      </li>
-    );
-  };
+  const countFor = (k: LandingTabKey): number | null =>
+    k === "open" ? d.counts.open
+      : k === "ready" ? d.counts.ready
+        : k === "completed_today" ? d.counts.completedToday
+          : k === "attention" ? d.counts.attention
+            : d.counts.all;
 
   return (
     <div className="max-w-6xl">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+      {/* ── s4.1: header ───────────────────────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Encounters</h1>
-          <p className="text-[13px] text-gray-500">Your patient encounters today and recently.</p>
+          <p className="text-[13px] text-gray-500">Create, continue and review clinical encounters.</p>
         </div>
-        {/* ⚠ THIS WAS A LINK TO /practice/patients, AND THAT IS THE DEFECT THE OWNER FOUND WALKING THE
-            PRODUCT: "Start encounter takes me to patient section". The press started nothing. It
-            changed the page to a register that did not know why anybody had arrived, whose own
-            equivalent action lives in a panel that appears only after a patient is selected. An
-            encounter genuinely needs a patient -- so the button asks for one HERE, over this board,
-            and the next screen after choosing is the consultation itself. */}
-        <StartEncounter canStart={canStartEncounter} canRegisterPatient={canRegisterPatient} />
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* ⚠ A PLAIN GET FORM, NOT A CLIENT COMPONENT. The result is a URL, which is shareable, is in
+              the back button, and works from the keyboard before any JavaScript has loaded. */}
+          <form method="get" action="/practice/encounters" className="flex items-center gap-1.5">
+            {tab !== "open" && <input type="hidden" name="tab" value={tab} />}
+            {sessionFilter && <input type="hidden" name="session" value={sessionFilter} />}
+            <label htmlFor="enc-q" className="sr-only">Search patient or encounter</label>
+            <input id="enc-q" name="q" defaultValue={q} placeholder="Search patient or encounter…"
+              className="w-[240px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] text-gray-900 placeholder:text-gray-400 focus:border-[var(--cp-primary)] focus:outline-none" />
+            <button type="submit"
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+              Search
+            </button>
+          </form>
+
+          {/* ⚠ ALREADY BUILT AND DELIBERATELY UNTOUCHED (CPR-FLOW-001, commit c5de6f9b). The picker
+              opens over this board, reuses the register's own search and registration form, and lands on
+              the consultation. It IS s8's "lightweight encounter launcher" and it is not re-implemented
+              here. The comp draws a dropdown chevron beside it; a chevron opening the same panel the
+              button already opens would be two controls for one act. */}
+          <StartEncounter canStart={d.can.create} canRegisterPatient={hasCapability(shell.ctx, "patient.create")} />
+        </div>
       </div>
 
-      {/* ⚠ A FILTERED LIST SAYS SO, LOUDLY AND WITH A WAY OUT. A narrowed board that looks like the whole
-          board is how somebody goes home believing nothing is open. */}
+      {/* ── s4.2: the current context strip. COMPACT, AND ONE STRIP ONLY. ──────────────────────── */}
+      <div className="mt-4">
+        <ContextStrip context={d.context} />
+      </div>
+
+      {/* ⚠ A FILTERED BOARD SAYS SO, LOUDLY AND WITH A WAY OUT. A narrowed board that looks like the
+          whole board is how somebody goes home believing nothing is open. */}
       {sessionFilter && (
-        <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/5 px-3 py-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/5 px-3 py-2">
           <span className="text-[12px] text-gray-800">
-            Showing only <strong>{filterName ?? "one session"}</strong>. Everything below is this
-            session&rsquo;s records &mdash; it is not the whole day.
+            Showing only one session&rsquo;s records. Every figure and every list below is narrowed to it
+            &mdash; this is not the whole practice.
           </span>
-          <Link href="/practice/encounters"
+          <Link href={href("/practice/encounters", { tab: tab === "open" ? null : tab, q: q || null })}
             className="ml-auto rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
-            Clear filter
+            Clear session filter
           </Link>
         </div>
       )}
 
-      {/* ── Today's sessions ───────────────────────────────────────────────────────────────────── */}
-      <section className="mt-5">
-        <PanelHeading panel="sessions" title="Today's sessions"
-          subtitle={`${formatDate(`${dash.today}T00:00:00Z`, "UTC")} · ${dash.timezone}`}
-          action={<Link href="/practice/calendar" className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">View calendar</Link>} />
-        {dash.sessions.items.length === 0 ? (
-          <PanelState permitted={dash.sessions.permitted} unavailable={dash.sessions.unavailable}
-            what="today's sessions" empty="Nothing is planned for today. Encounters can still be opened without a session." />
-        ) : (
-          <ul className="mt-3 grid gap-3 md:grid-cols-3">
-            {dash.sessions.items.map(s => <SessionCard key={s.id} s={s} active={s.id === sessionFilter} />)}
-          </ul>
-        )}
-      </section>
+      {/* ── s4.3: the status tabs. EACH IS A FILTER, NOT A PASSIVE KPI. ────────────────────────── */}
+      <nav aria-label="Encounter filters" className="mt-4 flex flex-wrap gap-1 border-b border-gray-200">
+        {LANDING_TABS.map(t => {
+          const active = t.key === tab;
+          return (
+            <Link key={t.key} href={`${tabHref(t.key)}#work`} aria-current={active ? "page" : undefined}
+              className={`-mb-px rounded-t-lg border-b-2 px-3 py-2 text-[12.5px] font-semibold ${
+                active
+                  ? "border-[var(--cp-primary)] text-[var(--cp-primary-deep)]"
+                  : "border-transparent text-gray-500 hover:text-gray-800"}`}>
+              {t.label}
+              {t.key !== "all" && <span className="ml-1 text-gray-400">(<Figure value={countFor(t.key)} />)</span>}
+            </Link>
+          );
+        })}
+      </nav>
+      {d.countsUnavailable && (
+        <p className="mt-2 text-[11px] text-rose-700">
+          At least one of these figures could not be counted and is shown as an em dash. An em dash is
+          not nought &mdash; do not read the board as empty where one appears.
+        </p>
+      )}
 
-      {/* ── Open encounters ────────────────────────────────────────────────────────────────────── */}
-      <section className={`mt-5 ${CARD} p-4`}>
-        <PanelHeading panel="open" title={`Open encounters${dash.open.unavailable || !dash.open.permitted ? "" : ` (${live.length})`}`}
-          subtitle="Started and not finished. These are the records that still need you." />
-        {live.length === 0 ? (
-          <PanelState permitted={dash.open.permitted} unavailable={dash.open.unavailable}
-            what="open encounters"
-            empty={sessionFilter
-              // ⚠ TWO DIFFERENT SENTENCES. "This session has nothing open" and "nothing is open" are not
-              // the same fact, and only the second one means the practitioner is finished.
-              ? "Nothing is open for this session. Other sessions may still have open records — clear the filter to see them."
-              : "Nothing is open. Start one from a patient record or from a checked-in appointment."} />
-        ) : (
-          <ul className="mt-3 flex flex-col gap-1.5">{live.map(row)}</ul>
-        )}
-
-        {completedUnsigned.length > 0 && (
-          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
-            <p className="text-[12px] font-bold text-amber-800">
-              {completedUnsigned.length} completed, not signed
-            </p>
-            <p className="mt-0.5 text-[11px] text-gray-700">
-              The consultation is finished but the record is not final. Until it is signed it can still be edited.
-            </p>
-            <ul className="mt-2 flex flex-col gap-1.5">{completedUnsigned.map(row)}</ul>
+      {/* ── s4.1 / s9: what the search found ───────────────────────────────────────────────────── */}
+      {d.search && (
+        <section className={`mt-4 ${CARD} p-4`}>
+          <div className="flex flex-wrap items-baseline gap-2">
+            <h2 className="text-[15px] font-bold text-gray-900">
+              Results for &ldquo;{d.search.query}&rdquo;
+            </h2>
+            <Link href={href("/practice/encounters", { tab: tab === "open" ? null : tab, session: sessionFilter })}
+              className="ml-auto text-[11.5px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+              Clear search
+            </Link>
           </div>
-        )}
-      </section>
-
-      <div className="mt-5 grid gap-5 lg:grid-cols-3">
-        {/* ── Recently closed ──────────────────────────────────────────────────────────────────── */}
-        <section className={`lg:col-span-2 ${CARD} p-4`}>
-          <PanelHeading panel="closed"
-            title={showAllClosed ? "Closed encounters" : "Recently closed"}
-            subtitle="Signed and amended records, newest first."
-            action={
-              // ⚠ THE LINK CHANGES WHAT IS READ, not just what is shown. "View all" re-runs the loader
-              // with a bigger bound rather than revealing rows that were already fetched and hidden --
-              // a client-side reveal would have quietly capped at twelve however it was labelled.
-              dash.closed.permitted && !dash.closed.unavailable ? (
-                <Link href={showAllClosed
-                  ? `/practice/encounters${sessionFilter ? `?session=${sessionFilter}` : ""}`
-                  : `/practice/encounters?closed=all${sessionFilter ? `&session=${sessionFilter}` : ""}`}
-                  className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
-                  {showAllClosed ? "Show recent only" : "View all"}
-                </Link>
-              ) : undefined
-            } />
-          {closedItems.length === 0 ? (
-            <PanelState permitted={dash.closed.permitted} unavailable={dash.closed.unavailable}
-              what="closed encounters"
-              empty={sessionFilter
-                ? showAllClosed
-                  ? "Nothing signed for this session."
-                  : "Nothing signed for this session in the recent window. Try View all."
-                : "Nothing has been signed yet."} />
+          {!d.search.ran ? (
+            <p className="mt-2 text-[12px] text-gray-500">
+              Nothing has been searched yet &mdash; a search needs at least two characters. This is not a
+              result of nobody matching.
+            </p>
           ) : (
-            <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-              {closedItems.map(e => (
-                <li key={e.id}>
-                  <Link href={`/practice/encounters/${e.id}`}
-                    className="block rounded-lg border border-gray-100 p-2.5 hover:bg-gray-50">
-                    <p className="truncate text-[12px] font-semibold text-gray-900">{patientLabel(e)}</p>
-                    <p className="truncate text-[11px] text-gray-500">
-                      {e.reasonForVisit ?? String(e.entryPathway).replace(/_/g, " ")}
-                    </p>
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${ENCOUNTER_STATUS_CHIP[e.status] ?? "bg-gray-100 text-gray-500"}`}>
+            <>
+              {/* ⚠ A FAILED PROBE NEVER RENDERS AS "NOBODY MATCHES". That sentence is what sends
+                  somebody to register a patient who is already on the register -- a split clinical
+                  record, which is the harm the duplicate check exists to prevent. */}
+              {!d.search.patientsComplete && (
+                <p className="mt-2 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+                  <strong>Part of the patient search did not answer.</strong> {d.search.patientsDetail}{" "}
+                  Nobody can be said to be absent from this result.
+                </p>
+              )}
+              {d.search.encountersUnavailable && (
+                <p className="mt-2 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+                  <strong>The encounter search could not be run.</strong>{" "}
+                  {d.search.encountersDetail} This is not a search that matched nothing.
+                </p>
+              )}
+
+              <h3 className="mt-3 text-[12px] font-bold text-gray-700">Patients</h3>
+              {!d.search.patientsPermitted ? (
+                <p className="text-[12px] text-gray-500">
+                  Patients were not searched &mdash; your role does not carry patient.list.
+                </p>
+              ) : d.search.patients.length === 0 ? (
+                <p className="text-[12px] text-gray-500">
+                  {d.search.patientsComplete
+                    ? "Nobody on the register matches."
+                    : "No matching patient was returned by the probes that answered."}
+                </p>
+              ) : (
+                <ul className="mt-1 flex flex-col gap-1">
+                  {d.search.patients.map(p => (
+                    <li key={p.id}>
+                      <Link href={`/practice/patients/${p.id}`}
+                        className="block rounded-lg border border-gray-100 px-2.5 py-1.5 text-[12.5px] text-gray-800 hover:bg-gray-50">
+                        <span className="font-semibold">{p.displayName}</span>
+                        {p.practiceId && <span className="ml-2 font-mono text-[11px] text-gray-500">{p.practiceId}</span>}
+                        <span className="ml-2 text-[11px] text-gray-400">matched on {p.matchedBy}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <h3 className="mt-3 text-[12px] font-bold text-gray-700">Encounters</h3>
+              {!d.search.encountersPermitted ? (
+                <p className="text-[12px] text-gray-500">
+                  Encounters were not searched &mdash; your role does not carry encounter.list.
+                </p>
+              ) : d.search.encounters.length === 0 ? (
+                <p className="text-[12px] text-gray-500">
+                  {d.search.encountersUnavailable
+                    ? "No encounter result, because the query did not run."
+                    : "No encounter matches that text."}
+                </p>
+              ) : (
+                <ul className="mt-1 flex flex-col gap-1">
+                  {d.search.encounters.map(e => (
+                    <li key={e.id}>
+                      <Link href={`/practice/encounters/${e.id}`}
+                        className="block rounded-lg border border-gray-100 px-2.5 py-1.5 text-[12.5px] text-gray-800 hover:bg-gray-50">
+                        <span className="font-semibold">{patientLabel(e)}</span>
+                        <span className="ml-2 text-[11px] text-gray-500">
+                          {PATHWAY_LABEL[e.entryPathway] ?? e.entryPathway} · {formatDate(e.startedAt)}
+                        </span>
+                        <span className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-bold ${ENCOUNTER_STATUS_CHIP[e.status] ?? "bg-gray-100 text-gray-500"}`}>
+                          {ENCOUNTER_STATUS_LABEL[e.status] ?? e.status}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-2 text-[10.5px] text-gray-400">
+                This box searches patients and encounter records only. Documents, follow-ups, tasks and
+                messages are searched from the practice search, not here.
+              </p>
+            </>
+          )}
+        </section>
+      )}
+
+      <div id="work" className="mt-5 grid gap-5 lg:grid-cols-3">
+        <div className="flex flex-col gap-6 lg:col-span-2">
+          {tab === "open" ? (
+            <>
+              {/* ── s4.4: the hero work area ─────────────────────────────────────────────────── */}
+              <WorkSection id="open" title="Open encounters" subtitle={tabDef("open").note}
+                panel={d.open} what="open encounters" empty={tabDef("open").empty}
+                canSeePatient={d.can.patient} canSign={d.can.sign} count={d.counts.open} />
+
+              {/* ── s4.5: a SEPARATE state. "Do not mix these with incomplete drafts." ───────── */}
+              <WorkSection id="ready" title="Ready to sign" subtitle={tabDef("ready").note}
+                panel={d.ready} what="encounters ready to sign" empty={tabDef("ready").empty}
+                canSeePatient={d.can.patient} canSign={d.can.sign} count={d.counts.ready} />
+            </>
+          ) : (
+            <WorkSection id="filtered" title={tabDef(tab).label} subtitle={tabDef(tab).note}
+              panel={d.tabList} what={tabDef(tab).label.toLowerCase()} empty={tabDef(tab).empty}
+              canSeePatient={d.can.patient} canSign={d.can.sign} count={countFor(tab)} />
+          )}
+        </div>
+
+        {/* ── s4.6: encounter attention. ENCOUNTER-SPECIFIC ONLY. ────────────────────────────── */}
+        <AttentionPanel rows={d.attention} />
+      </div>
+
+      {/* ── s4.7: encounter history ────────────────────────────────────────────────────────────── */}
+      <section id="history" className={`mt-6 ${CARD} p-4`}>
+        <div className="flex flex-wrap items-start gap-3">
+          <div>
+            <h2 className="text-[15px] font-bold text-gray-900">Encounter history</h2>
+            <p className="text-[12px] text-gray-500">Completed and amended encounters, newest first.</p>
+          </div>
+
+          <div className="ml-auto flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1" role="group" aria-label="History period">
+              {HISTORY_PERIODS.map(p => (
+                <Link key={p.key} href={`${historyHref({ hperiod: p.key, hpage: null })}#history`}
+                  aria-current={d.historyFilter.period === p.key ? "true" : undefined}
+                  className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold ${
+                    d.historyFilter.period === p.key
+                      ? "border-[var(--cp-primary)]/40 bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  {p.label}
+                </Link>
+              ))}
+            </div>
+            <div className="flex items-center gap-1" role="group" aria-label="History state">
+              {HISTORY_STATES.map(s => (
+                <Link key={s.key} href={`${historyHref({ hstate: s.key, hpage: null })}#history`}
+                  aria-current={d.historyFilter.state === s.key ? "true" : undefined}
+                  className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold ${
+                    d.historyFilter.state === s.key
+                      ? "border-[var(--cp-primary)]/40 bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                  {s.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* s4.7's Custom range. The two boxes are always here rather than behind the Custom button:
+            a control that reveals the control that does the thing is two presses for one act. */}
+        <form method="get" action="/practice/encounters" className="mt-2 flex flex-wrap items-end gap-2">
+          <input type="hidden" name="hperiod" value="custom" />
+          {tab !== "open" && <input type="hidden" name="tab" value={tab} />}
+          {sessionFilter && <input type="hidden" name="session" value={sessionFilter} />}
+          {q && <input type="hidden" name="q" value={q} />}
+          <input type="hidden" name="hstate" value={d.historyFilter.state} />
+          <label className="text-[11px] text-gray-500">
+            From
+            <input type="date" name="hfrom" defaultValue={d.historyFilter.from ?? ""}
+              className="ml-1 rounded-lg border border-gray-200 px-2 py-1 text-[11.5px]" />
+          </label>
+          <label className="text-[11px] text-gray-500">
+            To
+            <input type="date" name="hto" defaultValue={d.historyFilter.to ?? ""}
+              className="ml-1 rounded-lg border border-gray-200 px-2 py-1 text-[11.5px]" />
+          </label>
+          <button type="submit"
+            className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11.5px] font-semibold text-gray-700 hover:bg-gray-50">
+            Apply custom range
+          </button>
+        </form>
+
+        {d.history.items.length === 0 ? (
+          <>
+            <PanelState permitted={d.history.permitted} unavailable={d.history.unavailable}
+              detail={d.history.detail} what="encounter history"
+              empty={
+                // ⚠ s14: "explain the active filter and offer reset". An empty register under a narrow
+                // filter is not an empty register, and the sentence names the state it is empty of.
+                d.historyFilter.state === "amended"
+                  ? "Nothing has been amended in this period. No signed record has been reopened and re-signed."
+                  : d.historyFilter.state === "signed"
+                    ? "Nothing has been signed in this period."
+                    : "Nothing has been signed or amended in this period."
+              } />
+            {d.history.permitted && !d.history.unavailable && (
+              <Link href={`${href("/practice/encounters", { ...keep, tab: tab === "open" ? null : tab, hperiod: "30d" })}#history`}
+                className="mt-2 inline-block text-[11.5px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                Reset to the last 30 days, all states →
+              </Link>
+            )}
+          </>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left">
+              <thead>
+                <tr className="border-b border-gray-200 text-[11px] uppercase tracking-wide text-gray-400">
+                  <th className="py-1.5 font-semibold">Patient</th>
+                  <th className="py-1.5 font-semibold">Encounter</th>
+                  <th className="py-1.5 font-semibold">Date &amp; time</th>
+                  <th className="py-1.5 font-semibold">Session</th>
+                  <th className="py-1.5 font-semibold">Status</th>
+                  <th className="py-1.5 font-semibold" />
+                </tr>
+              </thead>
+              <tbody>
+                {d.history.items.map(e => (
+                  <tr key={e.id} className="border-b border-gray-100 last:border-0">
+                    <td className="py-2 pr-3">
+                      <span className="text-[12.5px] font-semibold text-gray-900">{patientLabel(e)}</span>
+                      {e.patientIdentifier && (
+                        <span className="ml-2 font-mono text-[11px] text-gray-500">{e.patientIdentifier}</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-3 text-[12px] text-gray-600">
+                      {PATHWAY_LABEL[e.entryPathway] ?? e.entryPathway}
+                      {e.reasonForVisit && <span className="block text-[11px] text-gray-400">{e.reasonForVisit}</span>}
+                    </td>
+                    <td className="py-2 pr-3 text-[12px] text-gray-600">{formatDateTime(e.startedAt)}</td>
+                    <td className="py-2 pr-3 text-[12px] text-gray-500">
+                      {e.sessionTitle ?? <span className="text-gray-400">No session</span>}
+                    </td>
+                    <td className="py-2 pr-3">
+                      {/* ⚠ AC-11: SIGNED AND AMENDED ARE VISUALLY DISTINCT. The shared status chip gives
+                          both the same emerald, which is right for "closed" and wrong here -- an amended
+                          record is one that was signed and then changed, and a reader has to see that at
+                          a glance. */}
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                        e.status === "AMENDED"
+                          ? "bg-amber-100 text-amber-800 ring-1 ring-amber-300"
+                          : ENCOUNTER_STATUS_CHIP[e.status] ?? "bg-gray-100 text-gray-500"}`}>
                         {ENCOUNTER_STATUS_LABEL[e.status] ?? e.status}
                       </span>
-                      {/* ⚠ THE OUTCOME IS SHOWN ONLY WHEN ONE WAS RECORDED. A missing outcome is not
-                          "stable" and must never be drawn as one. */}
-                      {e.outcome && <span className="text-[10px] capitalize text-gray-500">outcome: {e.outcome}</span>}
-                      <span className="ml-auto font-mono text-[10px] text-gray-400">
-                        {e.signedAt ? formatDate(e.signedAt) : formatDate(e.startedAt)}
-                      </span>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
+                      {e.status === "AMENDED" && (
+                        <span className="mt-0.5 block text-[10.5px] text-gray-500">
+                          {/* ⚠ THERE IS NO amended_at COLUMN. This is derived from the immutable status
+                              history, and when THAT read failed the row says so rather than printing the
+                              signature date as though it were the amendment. */}
+                          {e.amendedAtUnavailable
+                            ? "amended — when could not be read"
+                            : e.amendedAt ? `amended ${formatDate(e.amendedAt)}` : "amended — no transition recorded"}
+                        </span>
+                      )}
+                      {e.status === "SIGNED" && e.signedAt && (
+                        <span className="mt-0.5 block text-[10.5px] text-gray-500">signed {formatDate(e.signedAt)}</span>
+                      )}
+                    </td>
+                    <td className="py-2 text-right">
+                      <Link href={`/practice/encounters/${e.id}`}
+                        className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11.5px] font-semibold text-gray-700 hover:bg-gray-50">
+                        View →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-          {/* ⚠ THE BOUND IS PRINTED WHENEVER IT COULD BE HIDING SOMETHING. "View all" that silently stops
-              at a hundred is worse than no link at all: the practitioner believes they have seen the lot. */}
-          {closedCapped && (
-            <p className="mt-2.5 text-[10px] text-gray-500">
-              Stopped at {CLOSED_ALL_LIMIT} records. There may be older signed encounters that are not
-              here &mdash; a patient&rsquo;s full history is on their record, not on this panel.
-            </p>
-          )}
-          {!showAllClosed && sessionFilter && closedItems.length > 0 && (
-            <p className="mt-2.5 text-[10px] text-gray-500">
-              Filtered from the most recent signed records only. One from this session outside that window
-              is not here &mdash; use <strong>View all</strong>.
-            </p>
-          )}
-        </section>
-
-        {/* ── What needs attention ─────────────────────────────────────────────────────────────── */}
-        <section className={`${CARD} p-4`}>
-          <PanelHeading panel="attention" title="What needs attention" />
-          {/* ⚠ THE COMP CALLS THIS PANEL "AI Practice Assistant". THESE ARE NOT AI, AND THE HEADING SAYS
-              SO. Every figure below is a count of rows that exist. Nothing is inferred, predicted or
-              ranked. Dressing four SQL counts as an intelligence is how a practitioner comes to trust an
-              inference that was never made -- so the assistant is a link at the bottom, where it belongs. */}
-          <ul className="mt-3 flex flex-col gap-1.5">
-            {dash.attention.map(a => (
-              <li key={a.key}>
-                {!a.permitted ? (
-                  <p className="rounded-lg bg-gray-50 px-2.5 py-2 text-[11px] text-gray-500">
-                    {a.label} &mdash; not visible to you
-                  </p>
-                ) : (
-                  <Link href={a.href}
-                    className="flex items-center gap-2 rounded-lg border border-gray-100 px-2.5 py-2 hover:bg-gray-50">
-                    <span className={`text-[15px] font-bold ${a.count === null ? "text-slate-300" : a.count > 0 ? "text-rose-700" : "text-gray-400"}`}>
-                      {a.count === null ? "—" : a.count}
-                    </span>
-                    <span className="text-[11px] text-gray-700">{a.label}</span>
-                  </Link>
-                )}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 text-[10px] text-gray-400">
-            Counts of records, not predictions. An em dash means the count could not be read &mdash; it does
-            not mean nought.
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <p className="text-[10.5px] text-gray-500">
+            Filtered on when the consultation <strong>started</strong>, in {d.timezone}. Page{" "}
+            {d.historyFilter.page + 1}, {HISTORY_PAGE_SIZE} records a page.
           </p>
-          <Link href="/practice/assistant"
-            className="mt-2 inline-block text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
-            Ask the practice assistant →
-          </Link>
-        </section>
-      </div>
+          <div className="ml-auto flex gap-2">
+            {d.historyFilter.page > 0 && (
+              <Link href={`${historyHref({ hpage: d.historyFilter.page - 1 })}#history`}
+                className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11.5px] font-semibold text-gray-700 hover:bg-gray-50">
+                ← Previous
+              </Link>
+            )}
+            {d.historyHasMore && (
+              <Link href={`${historyHref({ hpage: d.historyFilter.page + 1 })}#history`}
+                className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11.5px] font-semibold text-gray-700 hover:bg-gray-50">
+                Next →
+              </Link>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* ⚠ THE THRESHOLD IS PRINTED, AND SO IS THE FACT THAT IT IS NOT YET CONFIGURABLE. s7 asks for a
+          configurable completion-aging threshold; practice_configuration has no column for one and this
+          change carries no migration, so the default is stated here rather than left as an unexplained
+          colour change on a card at some hour of the night. */}
+      <p className="mt-4 text-[10.5px] text-gray-400">
+        An open encounter is marked <strong>Completion overdue</strong> after{" "}
+        {Math.round(COMPLETION_OVERDUE_MINUTES / 60)} hours. That is a records signal, not a clinical
+        one &mdash; it says a consultation was left unfinished, and nothing about the patient.
+        {COMPLETION_THRESHOLD_IS_CONFIGURABLE
+          ? ""
+          : " This practice cannot yet change it: there is no setting for it in this build."}
+      </p>
     </div>
   );
 }
