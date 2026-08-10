@@ -6,6 +6,7 @@ import MobileSidebar from "./MobileSidebar";
 import NavLink from "@/components/NavLink";
 import SidebarToggle from "@/components/SidebarToggle";
 import { highestRole, ROLE_CONFIG, ROLE_PRIORITY, type AppRole } from "@/lib/roles";
+import { admitToEstate, NO_MEMBERSHIP_DESTINATION } from "@/lib/platform-membership";
 import ActiveContextBanner from "./ActiveContextBanner";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
 import GlobalHeader from "@/components/platform/GlobalHeader";
@@ -32,8 +33,26 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const header = await loadHeaderContext(admin, user.id, { currentHref: "/dashboard" });
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
+
+  // -- CP-SPLIT-002 stage 3 -- GATE 1: THE ESTATE ADMITS COMPETEN PLATFORM MEMBERS ------------------
+  // COMP-ARCH-PSA-001 s7 and s14. An identity with no platform_membership row is a Competen Practice
+  // practitioner (or nobody yet), reaches no estate surface, and is sent to the product it DOES belong
+  // to -- not to a 404 and not to a dead "Access restricted" panel.
+  //
+  // The whole decision lives in one module so these eleven layouts cannot drift from each other: a
+  // super_admin is answered WITHOUT reading the table (the break-glass), and a store that cannot be
+  // read ADMITS and falls back to the estate role gate below rather than blanking the platform for all
+  // 47 people. Both choices are argued at length in src/lib/platform-membership.ts.
+  if (!(await admitToEstate(admin, user.id, userRoles)).admitted) redirect(NO_MEMBERSHIP_DESTINATION);
+
   const cookieStore = await cookies();
-  const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
+  // !! highestRole returns AppRole | null since CP-SPLIT-002, and `as AppRole` SWALLOWED that null --
+  // the cast was the reason the type system did not force this decision. The null is carried instead of
+  // replaced: an identity with no estate role gets no role label, rather than a fabricated one.
+  // (In practice the gate above has already redirected such a person, unless the membership store was
+  // unreadable and the estate fell back to its role gate. This line must still be honest in that case.)
+  const activeRole: AppRole | null =
+    (cookieStore.get("active_role")?.value as AppRole | undefined) ?? highestRole(userRoles);
 
   // Universal-landing context (PW-014 PW-AC-01/05): everyone lands here, so surface the user's primary functional
   // workspace for a one-click jump. Prefer their highest non-nurse AppRole portal, else their first org workspace.
@@ -144,7 +163,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div data-content className="flex-1 md:ml-56 min-h-screen flex flex-col">
           {/* PUI-002: the bespoke top bar is replaced by the shared GlobalHeader above. */}
 
-          <ActiveContextBanner roleLabel={ROLE_CONFIG[activeRole]?.label ?? activeRole} primary={primaryWorkspace} />
+          {/* The banner renders nothing without a primary workspace, and a person with no estate role
+              has none -- so the empty label is unreachable rather than displayed. It is written out
+              anyway because "unreachable" is what the old `as AppRole` cast also believed. */}
+          <ActiveContextBanner roleLabel={activeRole ? (ROLE_CONFIG[activeRole]?.label ?? activeRole) : ""} primary={primaryWorkspace} />
 
           <main id="main-content" className="flex-1 px-4 md:px-6 pt-16 md:pt-6 pb-8">{children}</main>
         </div>

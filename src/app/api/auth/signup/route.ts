@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { grantPlatformMembership } from "@/lib/platform-membership";
 
 // Public self-registration. Privileged roles (hospital_admin, super_admin)
 // are assigned by administrators in All Users — never via public signup.
@@ -59,6 +60,38 @@ export async function POST(request: Request) {
       email,
       role: safeRole,
     }, { onConflict: "id" });
+
+    // ════════════════════════════════════════════════════════════════════════════════════════════════
+    // !! GATE 1 IS NOW EXPLICIT, SO THIS IS WHERE IT IS OPENED. CP-SPLIT-002 stage 3.
+    //
+    // This route IS the "separate, explicitly initiated Competen Platform workflow" that
+    // COMP-ARCH-PSA-001 s11 requires before an identity gets Platform membership -- somebody filling in
+    // the estate's own signup form. Migration 279 backfilled every identity that existed on the day it
+    // was applied. Without this line, everybody who signs up AFTER it would hold a role and be refused
+    // by all eleven estate layouts, which is the lockout direction and the worse of the two failures.
+    //
+    // TWO WRITES, NOT ONE, AND THEY ARE NOT DERIVED FROM EACH OTHER. The role above is authorization.
+    // The membership here is belonging. grantPlatformMembership touches no role column and nothing that
+    // sets a role calls it implicitly.
+    //
+    // !! A FAILURE HERE IS LOUD BUT NOT FATAL, AND THE ORDER OF THOSE TWO WORDS MATTERS.
+    // Not fatal, because migration 279 is applied BY HAND and may not be applied yet -- rolling the
+    // signup back on a missing table would break estate registration for everybody until the owner runs
+    // the SQL, and the estate gate admits on an unreadable store precisely so that window is harmless.
+    // Loud, because once the table DOES exist a silently failed grant is an account that can sign in and
+    // reach nothing. It is returned to the caller and logged rather than swallowed.
+    // ════════════════════════════════════════════════════════════════════════════════════════════════
+    const membership = await grantPlatformMembership(admin, data.user.id, {
+      source: "platform_signup",
+      note: "Competen Platform self-registration",
+    });
+    if (!membership.ok) {
+      console.error(`[platform-membership] GRANT FAILED for ${data.user.id} at estate signup: ${membership.error}`);
+      return NextResponse.json({
+        success: true, role: safeRole, needsConfirmation: !data.session,
+        platformMembershipWarning: membership.error,
+      });
+    }
   }
 
   // No session ⇒ Supabase email confirmation is enabled — user must verify first

@@ -16,7 +16,8 @@ export type Entitlements = {
   organisationId: string | null;
   roles: AppRole[];
   orgRoles: (OrgRole | null)[];
-  activeRole: AppRole;
+  // null = this identity holds no estate role at all (a Competen Practice practitioner, CP-SPLIT-002).
+  activeRole: AppRole | null;
   scopes: { hospitalIds: string[] | null }; // null = unrestricted (super_admin)
   workspaces: EntitledWorkspace[];
   actingRoles: never[]; // placeholder — context_assignment (temporary/acting) resolves here in a later slice
@@ -33,7 +34,11 @@ function admit(w: RegisteredWorkspace, roles: AppRole[], userOrgRoles: (OrgRole 
 }
 
 export async function resolveEntitlements(admin: any, userId: string, activeRoleHint?: string | null): Promise<Entitlements> {
-  const empty: Entitlements = { userId, tenantId: null, hospitalId: null, organisationId: null, roles: ["nurse"], orgRoles: [null], activeRole: "nurse", scopes: { hospitalIds: [] }, workspaces: [], actingRoles: [] };
+  // !! THIS USED TO SAY roles: ["nurse"], activeRole: "nurse". It is the same defect as highestRole's
+  // old `?? "nurse"` fallback, arriving through a different door: an identity with NO PROFILE AT ALL was
+  // handed a nurse badge by the entitlement service. Nothing downstream needs it -- `workspaces` is
+  // empty here either way -- so it is now honest. CP-SPLIT-002.
+  const empty: Entitlements = { userId, tenantId: null, hospitalId: null, organisationId: null, roles: [], orgRoles: [null], activeRole: null, scopes: { hospitalIds: [] }, workspaces: [], actingRoles: [] };
   let profile: any = null;
   try {
     const { data } = await admin.from("profiles").select("role, roles, org_role, org_roles, hospital_id, tenant_id, organisation_id").eq("id", userId).maybeSingle();
@@ -44,7 +49,16 @@ export async function resolveEntitlements(admin: any, userId: string, activeRole
   const roles: AppRole[] = (profile.roles?.length ? profile.roles : [profile.role]).filter(Boolean) as AppRole[];
   const orgRoles = orgRolesOf({ org_role: profile.org_role, org_roles: profile.org_roles });
   const isSuper = roles.includes("super_admin");
-  const activeRole = (activeRoleHint && roles.includes(activeRoleHint as AppRole) ? activeRoleHint : highestRole(roles)) as AppRole;
+  // !! CP-SPLIT-002. highestRole returns AppRole | null, and the old `as AppRole` cast swallowed that
+  // null -- this was one of the four sites the changed signature was supposed to force, and did not.
+  //
+  // The null is NOT replaced with a role here. `activeRole` on Entitlements is nullable now, because
+  // this resolver is the answer to "what may this person enter" and inventing a role for somebody who
+  // holds none would make the answer wrong in the one direction that matters. Note the `workspaces`
+  // list below is already correct for such a person without any help: admit() matches on roles the user
+  // actually holds, so an empty roles array entitles them to the personal workspace and nothing else.
+  const activeRole: AppRole | null =
+    (activeRoleHint && roles.includes(activeRoleHint as AppRole) ? (activeRoleHint as AppRole) : highestRole(roles));
 
   const [registry, licensing] = await Promise.all([
     loadWorkspaceRegistry(admin),
@@ -63,7 +77,8 @@ export async function resolveEntitlements(admin: any, userId: string, activeRole
     tenantId: profile.tenant_id ?? null,
     hospitalId: profile.hospital_id ?? null,
     organisationId: profile.organisation_id ?? null,
-    roles: roles.length ? roles : ["nurse"],
+    // Reported as held, not as padded. `["nurse"]` here was the third copy of the same fabrication.
+    roles,
     orgRoles,
     activeRole,
     scopes: { hospitalIds: isSuper ? null : (profile.hospital_id ? [profile.hospital_id] : []) },

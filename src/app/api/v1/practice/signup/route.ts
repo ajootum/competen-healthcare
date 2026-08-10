@@ -6,6 +6,7 @@ import {
 } from "@/lib/practice/provisioning";
 import { audit } from "@/lib/practice/audit";
 import { isPracticeType, isProfession, LEGAL_VERSIONS } from "@/lib/practice/catalogs";
+import { practiceIdentityProfile } from "@/lib/platform-membership";
 
 // POST /api/v1/practice/signup -- CPR-IAM-001 s8, the minimum-friction individual practitioner flow.
 //
@@ -92,16 +93,64 @@ export async function POST(req: NextRequest) {
   // s8 step 3: create the pending identity on the CALLER's client, so a returned session is the new
   // user's own and lands in their cookies. That is a session hijack only when somebody was already
   // signed in, which the guard above has already refused.
+  //
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
+  // !! NO ESTATE ROLE IS NAMED HERE. THIS IS CP-SPLIT-002 STAGE 2 AND IT IS TWO WORDS LONG.
+  //
+  // This call used to pass `role: "nurse"` in the metadata and the upsert below used to write it again
+  // into profiles. COMP-ARCH-PSA-001 s11 lists exactly that under "The following MUST NOT occur":
+  // "Create Competen Platform User, Assign Platform Nurse, Provision Platform Membership". s5 states
+  // the general rule -- no product may create or infer membership or roles inside another product.
+  //
+  // It was not carelessness. profiles.role was NOT NULL with a CHECK admitting only estate roles, so
+  // this route had to write SOMETHING, and 'nurse' was the least-privileged thing it could write.
+  // Migration 279 removed that constraint, so there is now a correct value: none.
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-    email, password, options: { data: { full_name: fullName, role: "nurse" } },
+    email, password, options: { data: { full_name: fullName } },
   });
   if (signUpError) return err(400, "SIGNUP_FAILED", signUpError.message);
   const userId = signUpData.user?.id;
   if (!userId) return err(502, "SIGNUP_FAILED", "the account could not be created");
 
-  await admin.from("profiles").upsert(
-    { id: userId, full_name: fullName, email, role: "nurse" }, { onConflict: "id" },
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
+  // WHAT profiles.role HOLDS FOR A PERSON WHO REGISTERED HERE: NULL. AND WHY THE ROW STILL EXISTS.
+  //
+  // s3: "IDENTITY != PRODUCT MEMBERSHIP != PRODUCT ROLE". The profiles row is the IDENTITY -- name,
+  // email, the thing every foreign key on this database points at -- and this person genuinely has one.
+  // What they do not have is a place on the estate, and null is how that is now written down.
+  // highestRole() returns null for it, hasEstateRole() is false, and admitToEstate() refuses them from
+  // all eleven estate layouts because migration 279's backfill predicate skips a roleless row and
+  // nothing here creates a platform_membership.
+  //
+  // !! THE ROLE IS WRITTEN EXPLICITLY AS null RATHER THAN OMITTED, BECAUSE THE DATABASE ALREADY PUT
+  // 'nurse' THERE. public.handle_new_user() fires on the auth.users insert above and writes a profiles
+  // row with role = 'nurse' -- see migration 249 section 1, where the default is deliberate and must
+  // stay for the estate's own signup. Omitting the key would leave that 'nurse' standing. This upsert
+  // is the correction, and it has to name the column to make it.
+  //
+  // !! THE ERROR IS NOT DISCARDED. It used to be. An upsert whose failure is thrown away is how this
+  // codebase has already shipped two silent write failures, and the failure here is worse than most:
+  // it would leave a Practice registrant carrying a nurse badge on the identity table. Refusing is
+  // safe -- the person's estate access does NOT depend on this write. platform_membership is what
+  // admitToEstate reads, no row was created for them, and none will be. So even in the failure branch
+  // the gate holds. The refusal is about not storing a false fact, not about access.
+  //
+  // NOTHING HERE WRITES platform_membership. That is the point of the stage, and the harness asserts
+  // the absence with a control proving the same query sees a row when one exists.
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
+  const { error: profileError } = await admin.from("profiles").upsert(
+    practiceIdentityProfile(userId, fullName, email), { onConflict: "id" },
   );
+  if (profileError) {
+    await audit(admin, {
+      actorId: userId, eventType: "practice.signup_platform_role_not_cleared",
+      payload: { email, message: profileError.message }, correlationId: traceId,
+    });
+    return err(502, "SIGNUP_FAILED",
+      "Your account was created but its profile could not be completed. Sign in and it will resume.",
+      { nextUrl: `/practice/sign-in?return_to=${encodeURIComponent("/practice/home")}` });
+  }
 
   // s8 step 4: no session means verification is required. The Practice is NOT provisioned yet -- PROV-001
   // s10 provisions for a verified user, and provisioning now would create a workspace nobody can open.

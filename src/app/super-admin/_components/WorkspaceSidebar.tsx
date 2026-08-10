@@ -215,7 +215,11 @@ const SYS_NAV = [
 const OVERVIEW_HREFS = new Set(["/super-admin", "/super-admin/ckp", "/super-admin/ai", "/super-admin/governance", "/super-admin/system", "/super-admin/studio", "/super-admin/content"]);
 
 
-export default function WorkspaceSidebar({ profileName, roles, activeRole, workspaces }: { profileName: string | null; roles: AppRole[]; activeRole: AppRole; workspaces: any[] }) {
+// activeRole is NULLABLE as of CP-SPLIT-002. highestRole() returns null for an identity that holds no
+// estate role at all, and RoleSwitcher indexes ROLE_CONFIG[activeRole] -- so passing a fabricated role
+// to keep the type happy would print a badge the person does not hold, which is the exact defect this
+// arc removes. No role, no switcher.
+export default function WorkspaceSidebar({ profileName, roles, activeRole, workspaces }: { profileName: string | null; roles: AppRole[]; activeRole: AppRole | null; workspaces: any[] }) {
   const pathname = usePathname();
   const inCkp = pathname.startsWith("/super-admin/ckp");
   const inStudio = pathname.startsWith("/super-admin/studio") || pathname.startsWith("/super-admin/content") || pathname.startsWith("/super-admin/assessment-methods");
@@ -271,7 +275,7 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
             <p className="text-rose-300/60 text-[10px]">{inWorkspace ? "Platform Owner" : "Super Admin"}</p>
           </div>
         </div>
-        {(roles.length > 1 || workspaces.length > 0) && (
+        {activeRole !== null && (roles.length > 1 || workspaces.length > 0) && (
           <div className="mb-2" data-sb-label><RoleSwitcher roles={roles} activeRole={activeRole} workspaces={workspaces} /></div>
         )}
         <form action="/api/auth/logout" method="POST">

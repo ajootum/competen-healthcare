@@ -8,6 +8,7 @@ import GlobalHeader from "@/components/platform/GlobalHeader";
 import { loadHeaderContext } from "@/lib/platform/header";
 import WorkspaceSidebar from "./_components/WorkspaceSidebar";
 import { highestRole, hasPlatformRole, type AppRole } from "@/lib/roles";
+import { admitToEstate, NO_MEMBERSHIP_DESTINATION } from "@/lib/platform-membership";
 import { resolveHqPositions } from "@/lib/hq/context";
 import SessionIdentityNotice, { RememberSessionIdentity } from "@/components/SessionIdentityNotice";
 
@@ -28,8 +29,35 @@ export default async function SuperAdminLayout({ children }: { children: React.R
     .single();
 
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
+
+  // -- CP-SPLIT-002 stage 3 -- GATE 1: THE ESTATE ADMITS COMPETEN PLATFORM MEMBERS ------------------
+  // COMP-ARCH-PSA-001 s7 and s14, the same call the other ten estate layouts make.
+  //
+  // !! IT CANNOT SHUT THE OWNERS OUT, AND THAT IS WHY IT IS SAFE TO PUT IT AHEAD OF THE HQ DOOR BELOW.
+  // admitToEstate answers super_admin without reading platform_membership at all, and the second
+  // predicate passed here is the landlord axis this file already resolves -- so BOTH senses of "owner"
+  // are answered before any table is touched. It is the identical ordering the HQ block below uses and
+  // for the identical reason, restated rather than shared because the two gates read different stores.
+  //
+  // It differs from the HQ block in one respect, deliberately: an UNREADABLE platform_membership
+  // ADMITS, where an unreadable ogs_offices REFUSES. The argument is in src/lib/platform-membership.ts
+  // -- in short, a false refusal here would blank the estate for 47 people, and a false refusal there
+  // costs one owner one re-admission.
+  //
+  // A person refused here is a Competen Practice practitioner, so they are sent to their own product
+  // rather than shown the HQ refusal panel, which would tell them nothing they can act on.
+  if (!(await admitToEstate(admin, user.id, userRoles, { breakGlass: hasPlatformRole(profile, "platform_owner") })).admitted)
+    redirect(NO_MEMBERSHIP_DESTINATION);
+
   const cookieStore = await cookies();
-  const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
+  // !! THE NULL IS REAL NOW, AND THE CAST USED TO SWALLOW IT. highestRole returns AppRole | null since
+  // CP-SPLIT-002, and `as AppRole` would have handed the sidebar `null` typed as a role. Nobody reaches
+  // this line without an estate role today -- the gate above and the HQ door below both refuse first --
+  // but "nobody can get here" is exactly the assumption that decays. So the null is CARRIED, not
+  // replaced: WorkspaceSidebar takes AppRole | null and renders no role switcher when there is no role,
+  // because a fabricated one would print a badge the person does not hold.
+  const activeRole: AppRole | null = (cookieStore.get("active_role")?.value as AppRole | undefined)
+    ?? highestRole(userRoles);
   // Dedicated org-role workspaces this user can switch into (normally none for landlord-only super admins).
   const workspaces = await workspaceLinksForUser(admin, user.id, userRoles);
   // One resolver for every workspace, so the header cannot drift between them (PUI-002).

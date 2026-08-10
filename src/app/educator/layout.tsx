@@ -6,6 +6,7 @@ import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import { type AppRole } from "@/lib/roles";
+import { admitToEstate, NO_MEMBERSHIP_DESTINATION } from "@/lib/platform-membership";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
 import GlobalHeader from "@/components/platform/GlobalHeader";
 import { loadHeaderContext } from "@/lib/platform/header";
@@ -156,6 +157,18 @@ export default async function EducatorLayout({ children }: { children: React.Rea
   const header = await loadHeaderContext(adminClient, user.id, { currentHref: "/educator" });
 
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
+
+  // -- CP-SPLIT-002 stage 3 -- GATE 1: THE ESTATE ADMITS COMPETEN PLATFORM MEMBERS ------------------
+  // COMP-ARCH-PSA-001 s7 and s14. An identity with no platform_membership row is a Competen Practice
+  // practitioner (or nobody yet), reaches no estate surface, and is sent to the product it DOES belong
+  // to -- not to a 404 and not to a dead "Access restricted" panel.
+  //
+  // The whole decision lives in one module so these eleven layouts cannot drift from each other: a
+  // super_admin is answered WITHOUT reading the table (the break-glass), and a store that cannot be
+  // read ADMITS and falls back to the estate role gate below rather than blanking the platform for all
+  // 47 people. Both choices are argued at length in src/lib/platform-membership.ts.
+  if (!(await admitToEstate(adminClient, user.id, userRoles)).admitted) redirect(NO_MEMBERSHIP_DESTINATION);
+
   // Dedicated org-role workspaces this user can switch into.
   const workspaces = await workspaceLinksForUser(adminClient, user.id, userRoles);
 

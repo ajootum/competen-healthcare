@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { ORG_ROLE_CONFIG, type OrgRole } from "@/lib/roles";
+import { grantPlatformMembership } from "@/lib/platform-membership";
 
 import { currentTraceId } from "@/lib/trace";
 export async function PATCH(req: Request) {
@@ -105,13 +106,38 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Profile creation failed (rolled back): ${perr.message}` }, { status: 500 });
   }
 
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
+  // !! GATE 1, EXPLICITLY OPENED BY THE ADMINISTRATOR WHO CREATED THE ACCOUNT. CP-SPLIT-002 stage 3.
+  //
+  // An estate role no longer implies estate access -- src/lib/platform-membership.ts gates all eleven
+  // layouts on a platform_membership row. Migration 279 backfilled everybody who already existed, so
+  // this line is what keeps accounts created AFTERWARDS from being born locked out.
+  //
+  // TWO INDEPENDENT WRITES. The role above is what they may do, this is that they belong at all, and
+  // neither is derived from the other (COMP-ARCH-PSA-001 s5). granted_by names the administrator, which
+  // is the question a null in that column could never answer and the reason s7 asked for a table.
+  //
+  // NOT ROLLED BACK ON FAILURE, unlike the profile write above, and deliberately: migration 279 is
+  // applied by hand and may not be applied yet, and deleting a freshly created colleague's account
+  // because a table does not exist yet is a worse outcome than an account that needs one more click.
+  // The failure is RETURNED so the administrator sees it rather than discovering it from the colleague.
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
+  const membership = await grantPlatformMembership(admin, userId, {
+    grantedBy: actorId, source: "admin_grant",
+    note: mode === "invite" ? "Invited by a platform administrator" : "Created by a platform administrator",
+  });
+  if (!membership.ok) console.error(`[platform-membership] GRANT FAILED for ${userId} at admin create: ${membership.error}`);
+
   await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
     actor_id: actorId, actor_name: actorName,
     action: mode === "invite" ? "invite_user" : "create_user",
     entity_type: "user", entity_id: userId, entity_name: full_name,
   });
 
-  return NextResponse.json({ ok: true, userId, tempPassword }, { status: 201 });
+  return NextResponse.json({
+    ok: true, userId, tempPassword,
+    platformMembershipWarning: membership.ok ? undefined : membership.error,
+  }, { status: 201 });
 }
 
 // Permanently delete an account (auth login + profile; competency records

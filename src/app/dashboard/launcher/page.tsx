@@ -38,7 +38,12 @@ export default async function LauncherPage() {
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id, avatar_url").eq("id", user.id).single();
   const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
   const cookieStore = await cookies();
-  const activeRole = (cookieStore.get("active_role")?.value ?? highestRole(userRoles)) as AppRole;
+  // !! highestRole returns AppRole | null since CP-SPLIT-002, and `as AppRole` swallowed the null.
+  // Carried, not replaced -- an identity with no estate role has no active portal, and the launcher
+  // below already renders one card per role it actually holds, which for such a person is none.
+  // The estate gate in /dashboard/layout.tsx redirects them before this page renders.
+  const activeRole: AppRole | null =
+    (cookieStore.get("active_role")?.value as AppRole | undefined) ?? highestRole(userRoles);
 
   // Base portals (one per AppRole) + org-role workspaces.
   const portals = userRoles.map(r => ({ label: ROLE_CONFIG[r]?.label ?? r, icon: ROLE_CONFIG[r]?.icon ?? "🏥", href: ROLE_CONFIG[r]?.portal ?? "/dashboard", color: ROLE_CONFIG[r]?.color ?? "bg-[var(--cmp-color-information)]", description: APP_DESC[r] ?? "", badge: `${r === activeRole ? "Active" : "Portal"}`, role: r }));
@@ -77,7 +82,7 @@ export default async function LauncherPage() {
             </div>
             <div className="grid sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-gray-100 text-[12px]">
               <div><p className="text-gray-400">Signed in as</p><p className="font-medium text-gray-800">{profile?.full_name}</p></div>
-              <div><p className="text-gray-400">Active portal</p><p className="font-medium text-gray-800">{ROLE_CONFIG[activeRole]?.label ?? activeRole}</p></div>
+              <div><p className="text-gray-400">Active portal</p><p className="font-medium text-gray-800">{activeRole ? (ROLE_CONFIG[activeRole]?.label ?? activeRole) : "None"}</p></div>
               <div><p className="text-gray-400">Status</p><p className="font-medium text-[var(--cmp-text-success)]">All systems operational</p></div>
             </div>
           </div>
