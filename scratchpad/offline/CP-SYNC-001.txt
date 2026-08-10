@@ -1,0 +1,60 @@
+
+
+CP-SYNC-001 v1.0
+Competen Practice Synchronization Rules &amp; Workflow
+Developer Specification
+1. Purpose
+Defines how Competen Practice synchronizes offline data with the Competen Cloud, including synchronization order, validation, conflict handling, recovery and user feedback.
+2. Objectives
+Guarantee reliable synchronization of practitioner data.
+Preserve the longitudinal patient record.
+Minimize synchronization conflicts.
+Provide automatic background synchronization.
+3. Synchronization Principles
+Local-first writes.
+Event-driven synchronization.
+Incremental synchronization.
+Idempotent processing.
+Automatic retry after connectivity returns.
+4. Synchronization Order
+Practice configuration
+Patients &amp; identifiers
+Appointments &amp; calendar
+Encounters
+Diagnoses &amp; treatments
+Procedures
+Follow-ups &amp; tasks
+Documents &amp; attachments
+Practice intelligence cache
+5. Entity Rules
+Every entity has a UUID and version number.
+Every change generates a synchronization event.
+Attachments synchronize independently.
+Soft-deleted records synchronize before purge.
+6. Conflict Resolution
+Auto-merge non-conflicting field changes.
+Prompt user for clinically significant conflicts.
+Maintain complete audit history.
+Never silently overwrite practitioner data.
+7. User Experience
+Offline status indicator.
+Pending synchronization counter.
+Per-record synchronization status.
+Background synchronization progress.
+Manual 'Sync Now' option.
+8. Recovery
+Resume interrupted synchronization.
+Retry transient failures.
+Preserve unsent transactions.
+Validate consistency after recovery.
+9. Acceptance Criteria
+No accepted practitioner work is lost.
+Synchronization is automatic after reconnection.
+Conflicts are visible and traceable.
+Patient record remains consistent across devices.
+10. Related Documents
+CP-DATA-001
+CP-OFF-001
+COMP-SYNC-001
+COMP-CONF-001
+COMP-EVT-001

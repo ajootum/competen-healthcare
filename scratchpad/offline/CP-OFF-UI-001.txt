@@ -1,0 +1,59 @@
+
+
+CP-OFF-UI-001 v1.0
+Competen Practice Offline User Experience &amp; Interface Behaviour
+Developer Specification
+1. Purpose
+Defines how Competen Practice behaves from the user's perspective when internet connectivity changes, ensuring an intuitive, transparent and reliable offline-first experience.
+2. Objectives
+Keep all core clinical workflows usable offline.
+Clearly communicate synchronization status.
+Minimize interruptions to practitioner workflows.
+Build user confidence that work is never lost.
+3. Connectivity States
+Online – fully synchronized.
+Poor connection – degraded connectivity.
+Offline – working locally.
+Synchronizing – background synchronization in progress.
+Synchronization error – user attention required.
+4. Global UI Indicators
+Persistent connectivity indicator.
+Pending synchronization counter.
+Background synchronization progress.
+Last successful synchronization timestamp.
+Offline banner when disconnected.
+5. Workspace Behaviour
+Patients: full read/write using local data.
+Calendar: cached schedules with offline editing.
+Encounters: save immediately to local database.
+Documents: queue uploads until connectivity returns.
+Follow-ups &amp; Tasks: create and update offline.
+6. User Feedback
+Saved locally confirmation.
+Queued for synchronization status.
+Conflict notification with resolution action.
+Retry synchronization option.
+Clear success and failure messages.
+7. Synchronization Centre
+View pending items.
+View synchronization history.
+Resolve conflicts.
+Retry failed items.
+Manual 'Sync Now' action.
+8. Accessibility &amp; Usability
+Consistent colour and icon language.
+Keyboard accessibility.
+Touch-friendly controls.
+High-contrast status indicators.
+Minimal clicks for common actions.
+9. Acceptance Criteria
+Practitioners understand current connectivity state.
+Offline operation remains intuitive.
+Synchronization status is always visible.
+No workflow depends on continuous internet access.
+10. Related Documents
+CP-OFF-001
+CP-DATA-001
+CP-SYNC-001
+COMP-SYNC-001
+COMP-CONF-001

@@ -1,0 +1,61 @@
+
+
+CP-OFF-TEST-001 v1.0
+Competen Practice Offline Testing &amp; Acceptance Framework
+Developer Specification
+1. Purpose
+Defines the testing strategy, validation scenarios and acceptance criteria for Competen Practice's offline-first capabilities before production release.
+2. Objectives
+Verify all core CP workflows operate offline.
+Validate reliable synchronization and recovery.
+Ensure no accepted practitioner work is lost.
+Confirm consistent behaviour across Desktop and PWA.
+3. Test Categories
+Unit testing
+Integration testing
+Offline functional testing
+Synchronization testing
+Conflict resolution testing
+Performance testing
+Security testing
+User Acceptance Testing (UAT)
+4. Core Offline Scenarios
+Register a new patient offline.
+Edit an existing patient offline.
+Create encounters offline.
+Schedule appointments offline.
+Create follow-ups and tasks offline.
+Capture documents and queue attachments.
+Reconnect and synchronize automatically.
+5. Synchronization Validation
+Events uploaded in correct order.
+No duplicate records created.
+Version numbers updated correctly.
+Attachments synchronize independently.
+Interrupted synchronization resumes safely.
+6. Conflict Testing
+Concurrent updates from multiple devices.
+Auto-merge non-conflicting changes.
+Manual resolution for clinical conflicts.
+Complete audit trail preserved.
+7. Performance Targets
+Fast local patient search.
+Responsive offline navigation.
+Acceptable synchronization time.
+Low resource consumption.
+8. Security Validation
+Encrypted local storage verified.
+Session timeout enforced.
+Trusted device validation.
+RBAC enforced while offline.
+9. Release Acceptance Criteria
+All critical scenarios pass.
+No critical data loss defects.
+Synchronization success rate meets target.
+Product approved for pilot deployment.
+10. Related Documents
+CP-OFF-001
+CP-DATA-001
+CP-SYNC-001
+CP-OFF-UI-001
+COMP-TEST-001

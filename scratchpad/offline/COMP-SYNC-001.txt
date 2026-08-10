@@ -1,0 +1,93 @@
+
+
+COMP-SYNC-001 v1.0
+Competen Synchronization Engine &amp; Transaction Framework
+Developer Specification
+1. Purpose
+Defines the synchronization architecture used by all Competen applications to move data safely, efficiently and automatically between local devices and the Competen Cloud.
+2. Objectives
+Support online, offline and intermittent connectivity.
+Guarantee no accepted transaction is silently lost.
+Provide automatic background synchronization.
+Ensure idempotent processing of all transactions.
+Maintain complete auditability and traceability.
+3. High-Level Architecture
+Client Applications (Web, PWA, Desktop, Future Mobile)
+Local Data Engine
+Transaction Outbox
+Synchronization Engine
+Apply/Reconciliation Engine
+Competen Cloud APIs
+Tenant Database
+4. Standard Synchronization Workflow
+User performs an action.
+Validate using local business rules.
+Persist to encrypted local database.
+Create immutable transaction event.
+Add event to Transaction Outbox.
+Update UI immediately with 'Saved locally'.
+Detect connectivity.
+Upload queued events.
+Cloud validates and processes event.
+Acknowledge successful processing.
+Mark transaction as synchronized.
+Download remote updates and reconcile.
+5. Transaction Event Model
+Globally unique transaction ID (UUID).
+Entity type and entity identifier.
+Tenant ID, user ID and device ID.
+Timestamp and sequence number.
+Operation type (create/update/delete).
+Payload (delta where possible).
+Version number.
+Synchronization status.
+Retry count and last error.
+6. Supported Transaction Types
+Create / Update / Delete
+Appointments
+Patients
+Encounters
+Competencies
+Assessments
+Audits
+Tasks
+Documents
+Attachments
+Configuration changes
+7. Synchronization Modes
+Automatic background synchronization (default).
+Incremental (delta) synchronization.
+Full synchronization for first install or recovery.
+Selective synchronization by workspace or dataset.
+Manual synchronization for diagnostics.
+8. Conflict Resolution
+Automatically merge non-overlapping field changes.
+Detect conflicting edits to the same field.
+Use optimistic concurrency with record versioning.
+Preserve audit history.
+Never silently overwrite clinically or operationally significant data.
+9. Reliability Requirements
+Idempotent APIs.
+Retry with exponential backoff.
+Resume interrupted uploads.
+Ordered event processing.
+Independent attachment synchronization.
+Comprehensive synchronization logs.
+10. API Responsibilities
+Upload pending events.
+Download remote changes.
+Acknowledge processed events.
+Resolve synchronization conflicts.
+Provide synchronization status.
+Support health monitoring.
+11. Acceptance Criteria
+No accepted transaction is lost.
+Synchronization resumes automatically after reconnection.
+Duplicate submissions do not create duplicate records.
+Conflicts are detected and traceable.
+Platform behaviour is consistent across Web, PWA and Desktop.
+12. Dependencies
+COMP-OFF-001 — Offline-First Architecture
+COMP-DATA-001 — Local Data Engine
+COMP-SEC-001 — Offline Security &amp; Device Management
+CP-OFF-001 — Competen Practice Offline Capability Profile

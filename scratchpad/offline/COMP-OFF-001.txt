@@ -1,0 +1,61 @@
+
+
+COMP-OFF-001 v1.0Developer SpecificationCompeten Offline-First Architecture &amp; Synchronization Framework
+PurposeDefine the shared offline architecture used by every Competen product. This document is the implementation companion to the architectural specification and guides developers building the offline platform.
+Objectives
+Implement offline-first behaviour across all Competen products.
+Provide one shared offline engine reused by all workspaces.
+Guarantee reliable local persistence before cloud synchronization.
+Support Web, PWA, Desktop and future Mobile clients.
+Architecture
+Presentation Layer (Web/PWA/Desktop/Mobile).
+Application Services Layer.
+Offline Data Layer (IndexedDB for PWA, SQLite for Desktop/Mobile).
+Transaction Outbox.
+Synchronization Engine.
+Competen Cloud APIs and multi-tenant backend.
+Core Components
+Offline Data Engine
+Synchronization Engine
+Transaction Outbox
+Conflict Resolution Engine
+Offline Search Engine
+Attachment Sync Service
+Offline Status Service
+Device Management
+Offline Security Service
+Developer Requirements
+All writes must be committed locally before network transmission.
+Every write generates a durable transaction/event.
+Synchronization must be idempotent.
+Support automatic retry with exponential backoff.
+Never silently discard pending transactions.
+Maintain complete audit history.
+Security
+AES-256 encrypted local database.
+Secure key storage using OS facilities where available.
+Offline RBAC enforcement.
+Automatic session timeout and device lock.
+Device registration and revocation support.
+Synchronization Rules
+Incremental synchronization only.
+Separate structured data from large attachments.
+Background synchronization when connectivity returns.
+Conflict detection using object versioning.
+Safe merge of non-conflicting field changes.
+Recommended Development Order
+1. Shared Offline Engine
+2. Local Database
+3. Transaction Outbox
+4. Synchronization APIs
+5. Conflict Resolution
+6. Device Management
+7. Desktop Client
+8. PWA Client
+9. Competen Practice Offline Profile
+10. Rollout to remaining workspaces
+Acceptance Criteria
+User work survives loss of connectivity.
+No accepted action is lost.
+Automatic synchronization without manual intervention.
+Consistent behaviour across supported clients.

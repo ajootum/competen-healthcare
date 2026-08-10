@@ -348,7 +348,20 @@ export async function lastCachedWorkspace(): Promise<string | null> {
   }
 }
 
-/** Everything, every workspace. Used on sign-out, where no workspace id is in hand. */
+/**
+ * Everything, every workspace. Used on sign-out, where no workspace id is in hand.
+ *
+ * ⚠⚠ IT DELETES THE WHOLE CACHE DATABASE, AND IT MUST NEVER REACH THE OUTBOX.
+ *
+ * `outbox-store.ts` holds work the practitioner CAPTURED offline -- the only copy in existence -- and the
+ * user's rule of 2026-08-08 is that it is exempt from expiry, from revocation and from flag-off. This
+ * function is exactly the "one purge routine over one local database" that rule warns about.
+ *
+ * The protection is STRUCTURAL, not a condition below: the outbox is a SEPARATE INDEXEDDB DATABASE
+ * (`competen-practice-outbox`), so `deleteDatabase(DB_NAME)` cannot touch it. ⚠ Do not "tidy" the outbox
+ * into a store in this database. The harness asserts the two names differ and that this file never names
+ * the outbox database.
+ */
 export async function purgeAllOffline(): Promise<{ ok: boolean; reason: string }> {
   return new Promise(resolve => {
     try {

@@ -1,0 +1,70 @@
+
+
+CP-OFF-001 v1.0
+Competen Practice Offline Capability Profile
+Developer Specification
+1. Purpose
+Defines how the shared Competen Offline Platform is implemented within Competen Practice (CP), including offline workflows, synchronization rules, security and supported datasets.
+2. Objectives
+Enable practitioners to work normally without internet connectivity.
+Protect all locally stored practice data.
+Synchronize automatically when connectivity returns.
+Reuse the shared Competen Offline Platform architecture.
+3. Offline Workspaces
+Patient Workspace
+Registration
+Longitudinal Patient Record
+Encounter Workspace
+Calendar &amp; Scheduling
+Follow-ups
+Documents
+Tasks
+Practice Intelligence (supported offline calculations)
+4. Offline Data Capture
+Patient registration and demographics
+Hospital identifiers
+Anthropometrics and vital signs
+Diagnoses and current treatments
+Procedures
+Encounter summaries
+Follow-up plans
+Tasks and reminders
+Attachments queued for upload
+5. Synchronization Rules
+Save locally before any network request.
+Queue every transaction in the Outbox.
+Synchronize incrementally.
+Upload attachments independently.
+Maintain object version history.
+Detect and report conflicts.
+6. Conflict Policies
+Auto-merge independent field updates.
+Flag conflicting edits to the same field.
+Preserve audit history.
+Require user confirmation for clinically significant conflicts.
+7. Offline Clinical Tools
+BMI calculator
+Growth charts
+PEWS calculations
+Drug dose calculators
+Age calculations
+Cached practice guidelines
+8. Security
+Encrypted local storage.
+Offline RBAC enforcement.
+Automatic session timeout.
+Trusted device requirement.
+Secure attachment storage.
+9. Acceptance Criteria
+Core practitioner workflows function without internet.
+No accepted work is lost.
+Synchronization resumes automatically.
+Offline and online records remain consistent.
+10. Related Documents
+COMP-OFF-001
+COMP-SYNC-001
+COMP-DATA-001
+COMP-SEC-001
+COMP-DESK-001
+COMP-PWA-001
+COMP-API-001
