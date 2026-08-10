@@ -12,7 +12,16 @@ import { resolveWorkspaceContext, readActiveWorkspaceId, resolvePracticeAccess, 
 export type PracticeApiContext = { caller: Caller; ctx: WorkspaceContext };
 
 export async function requirePracticeContext(capability: string | null): Promise<PracticeApiContext | NextResponse> {
-  const c = await getCaller();
+  // ⚠ THE PRACTICE PLANE, DECLARED. COMP-ARCH-PSA-001 makes Platform and Practice SEPARATE PRODUCTS
+  // behind separate gates: platform_membership is gate 1 and practice_membership is gate 2. Asking for
+  // gate 1 here 403s every practitioner, because a Competen Practice account has no estate membership by
+  // definition -- which is exactly what happened on 2026-08-10, to 115 of 125 routes, invisibly, because
+  // pages resolve elsewhere and only WRITES failed.
+  //
+  // This is not a weaker check. Membership, workspace status, entitlement and the route's capability are
+  // all still enforced below, by resolveWorkspaceContext and hasCapability -- against the gate that
+  // actually governs this product.
+  const c = await getCaller({ plane: "practice" });
   if (isResponse(c)) return c;
 
   const preferred = await readActiveWorkspaceId();

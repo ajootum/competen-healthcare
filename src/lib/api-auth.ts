@@ -45,7 +45,7 @@ export const isSupervisor = (c: Caller) => hasRole(c, ...SUPERVISOR_ROLES);
 
 // Authenticate and load the caller's role + tenant. Returns a NextResponse on
 // failure (caller does `if (isResponse(c)) return c`).
-export async function getCaller(): Promise<Caller | NextResponse> {
+export async function getCaller(opts: { plane?: "estate" | "practice" } = {}): Promise<Caller | NextResponse> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return unauthorized();
@@ -56,18 +56,38 @@ export async function getCaller(): Promise<Caller | NextResponse> {
   // ── GATE 1 AT THE API BOUNDARY (COMP-ARCH-PSA-001 s7/s14) ──────────────────────────────────────────
   // ⚠ THE ELEVEN ESTATE LAYOUTS ALREADY ASK THIS AND NO API ROUTE DID. Platform membership was enforced
   // where pages are rendered and nowhere where data is written, so an identity the estate had stopped
-  // admitting could still drive all 430 route handlers directly. The two boundaries now agree.
+  // admitting could still drive the estate route handlers directly. The two boundaries now agree.
   //
-  // ⚠ IT REFUSES EXACTLY ONE CLASS OF PERSON, WHICH IS THE ENTIRE POINT: a Competen Practice
-  // practitioner, who stands behind gate 2 and was never on this estate. Measured live before this
-  // landed -- 46 of 46 estate-role holders carry an active membership and the single practice-only
-  // account carries none -- so this denies nobody who can use the product today.
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
+  // ⚠⚠ IT IS THE ESTATE PLANE'S GATE, AND APPLYING IT TO PRACTICE BROKE THE PRACTICE PRODUCT.
+  //
+  // What stood here said, in writing: "IT REFUSES EXACTLY ONE CLASS OF PERSON, WHICH IS THE ENTIRE
+  // POINT: a Competen Practice practitioner, who stands behind gate 2 and was never on this estate...
+  // so this denies nobody who can use the product today."
+  //
+  // That reasoning is correct for an ESTATE route and exactly inverted for a PRACTICE one. The measured
+  // fact -- "the single practice-only account carries no platform membership" -- was read as proof the
+  // change was safe. It was proof of the opposite: that account is the Competen Practice user, and
+  // requirePracticeContext calls this function, so 115 of the 125 practice API routes began answering
+  // 403 to the only person who uses them. COMP-ARCH-PSA-001 makes Platform and Practice SEPARATE
+  // PRODUCTS with separate gates; this put gate 1 in front of gate 2.
+  //
+  // Found on 2026-08-10 by the practice owner, who could not create a guidance document. It survived
+  // review, a harness and a scanner because PAGES were unaffected -- they resolve through
+  // resolvePracticeShell, not through here -- so the product looked entirely healthy until somebody
+  // tried to WRITE something.
+  //
+  // ⚠ SO THE PLANE IS NOW EXPLICIT AND THE DEFAULT IS THE STRICT ONE. A practice route passes
+  // `{ plane: "practice" }` and is gated by practice membership instead, in resolveWorkspaceContext --
+  // which is a real gate, not an absence of one. Anything that forgets to say gets the estate gate.
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
   //
   // Same three-state posture as the layouts, not a stricter one: super_admin short-circuits with NO read
   // at all, and an UNREADABLE membership store ADMITS and warns rather than refusing. A transient
   // database error must not turn every API in the product into a 403 for everybody at once; the role
   // predicates below are still the operative check in that case.
-  if (!(await admitToEstate(admin, user.id, roles as AppRole[])).admitted)
+  if (opts.plane !== "practice"
+      && !(await admitToEstate(admin, user.id, roles as AppRole[])).admitted)
     return forbidden("Not a member of this platform");
 
   // XWI P2-15 — one id per request, so the audit row, the domain event it raises and whatever the consumer

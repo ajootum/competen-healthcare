@@ -314,7 +314,17 @@ function NewGuidance({ onClose }: { onClose: () => void }) {
       }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { setError(data?.error?.message ?? "That did not work."); setBusy(false); return; }
+    // ⚠ BOTH SHAPES, AND THE MIDDLE TERM IS THE ONE THAT MATTERED. Engine refusals arrive as
+    // `{error: {code, message}}`, but every denial from requirePracticeContext -- Forbidden, Not found,
+    // No Practice workspace -- arrives as `{error: "<string>"}`. Reading only `.error.message` threw all
+    // of those away and printed "That did not work.", which is what a practice-wide 403 looked like on
+    // 2026-08-10: no code, no reason, nothing to search for. The other 26 consoles in this product
+    // already carried the middle term; this one did not.
+    if (!res.ok) {
+      setError(data?.error?.message ?? data?.error
+        ?? `That did not work, and the practice gave no reason (HTTP ${res.status}).`);
+      setBusy(false); return;
+    }
     window.location.href = `${GUIDANCE_ROUTE}/${data.id}`;
   }
 
