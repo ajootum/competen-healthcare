@@ -698,7 +698,11 @@ export const BUILT_FOR_AFRICA = {
     { title: "Works in private practice", body: "A solo clinician runs the whole thing without a receptionist." },
     { title: "Works on a phone", body: "The screens are built for the device most clinicians actually carry." },
     { title: "Built for low-resource settings", body: "Speed before completeness: record the minimum safely, finish the detail later." },
-    { title: "Offline working", body: "Specified in CPR-V2-019 and not yet built. It arrives with the mobile phase; it does not work today.", pending: true },
+    // ⚠ TWO HALVES, AND THE SECOND ONE IS STILL THE HEADLINE. Reading offline works today; RECORDING
+    // offline does not, and that is the capability this bullet is read as promising. `pending` stays true
+    // until a practitioner can write with no connection -- see CP-OFFLINE-SURVEY-001 s5 for the six
+    // preconditions that gates it.
+    { title: "Offline working", body: "Reading works today: your day's list and the practice's own guidance are held on the device and open with no connection at all. Recording offline -- notes, registration, prescriptions -- is specified in CPR-V2-019 and does not work yet.", pending: true },
   ],
 };
 

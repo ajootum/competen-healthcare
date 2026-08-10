@@ -6,8 +6,14 @@ import {
   offlineControls, offlineListRow, offlineRecordDetail,
   type OfflinePatient, type OfflineReadResult,
 } from "@/lib/practice/offline-projection";
+import {
+  offlineGuidanceControls, offlineGuidanceRow, offlineGuidanceReviewNote,
+  OFFLINE_GUIDANCE_MAX_DAYS,
+  type OfflineGuidanceDoc, type OfflineGuidanceReadResult,
+} from "@/lib/practice/offline-guidance";
+import { guidanceType } from "@/lib/practice/knowledge-constants";
 import { OFFLINE_ENCRYPTION_NOTE } from "@/lib/practice/offline-crypto";
-import { lastCachedWorkspace, loadOfflineDay } from "@/lib/practice/offline-store";
+import { lastCachedWorkspace, loadOfflineDay, loadOfflineGuidance } from "@/lib/practice/offline-store";
 
 // CP-OFFLINE-SURVEY-001 s3.4 — the cached clinic day, and its age, on one screen.
 //
@@ -61,16 +67,25 @@ const SESSION_STATE_LABEL: Record<string, string> = {
 
 export default function OfflineReader() {
   const [result, setResult] = useState<OfflineReadResult | null>(null);
+  const [guidance, setGuidance] = useState<OfflineGuidanceReadResult | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
+  const [openedDoc, setOpenedDoc] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
 
   const reread = useCallback(async () => {
     const workspaceId = await lastCachedWorkspace();
     if (!workspaceId) {
       setResult({ state: "none", purge: false, reason: "Nothing has been cached on this device yet." });
+      setGuidance({ state: "none", purge: false, reason: "No practice guidance has been stored on this device yet." });
       return;
     }
-    setResult(await loadOfflineDay(workspaceId, new Date()));
+    // ⚠ READ INDEPENDENTLY, AND THE DAY'S VERDICT NEVER DECIDES THE GUIDANCE'S. They expire on different
+    // clocks -- the day at the end of the clinic day, the guidance after a week -- so an expired day must
+    // still render a valid library. Reading them together and gating one on the other would throw away a
+    // week of protocols every midnight.
+    const now = new Date();
+    setResult(await loadOfflineDay(workspaceId, now));
+    setGuidance(await loadOfflineGuidance(workspaceId, now));
   }, []);
 
   useEffect(() => {
@@ -181,6 +196,17 @@ export default function OfflineReader() {
         </>
       )}
 
+      {/* ── PRACTICE GUIDANCE ─────────────────────────────────────────────────────────────────────
+          ⚠ RENDERED OUTSIDE THE DAY'S BLOCK ON PURPOSE. A device whose clinic day has expired still
+          holds a week of protocols, and the survey ranks a clinician who cannot look something up as a
+          real loss: "in a setting with intermittent connectivity a clinician who cannot look something
+          up simply does not look it up". Nesting this inside the day would delete that value nightly. */}
+      <GuidanceSection
+        guidance={guidance}
+        opened={openedDoc}
+        onToggle={id => setOpenedDoc(openedDoc === id ? null : id)}
+      />
+
       {/* A plain link, not an action. It navigates; it changes nothing. */}
       <p className="mt-5 text-[12px]">
         {online
@@ -190,6 +216,148 @@ export default function OfflineReader() {
           : <span className="text-gray-500">This device has no connection. It will keep checking on its own; there is nothing to send.</span>}
       </p>
     </div>
+  );
+}
+
+/**
+ * The cached guidance library.
+ *
+ * ⚠ IT NAMES NOBODY. Not a patient, not an author, not an approver — the projection drops all of them, so
+ * there is nothing on this part of the screen that a bystander reading over a shoulder could use. That is
+ * why it carries no equivalent of the list-row/detail split the patient list needs.
+ *
+ * ⚠ AND IT ACCEPTS NOTHING. The online version of this screen carries Edit, Send for approval, Publish
+ * and Withdraw, over a rich-text body. Reusing that component here would put a box on the screen that
+ * somebody could type a protocol revision into, believe they had updated the practice, and lose.
+ */
+function GuidanceSection(
+  { guidance, opened, onToggle }:
+  { guidance: OfflineGuidanceReadResult | null; opened: string | null; onToggle: (id: string) => void },
+) {
+  if (guidance === null) return null;
+
+  if (guidance.state !== "ok")
+    return (
+      <section className="mt-6" aria-labelledby="off-guidance">
+        <h2 id="off-guidance" className="text-[13px] font-bold text-gray-900">Practice guidance</h2>
+        <p className="mt-1 text-[12px] leading-relaxed text-gray-600">{guidance.reason}</p>
+      </section>
+    );
+
+  const { library, notice } = guidance;
+
+  return (
+    <section className="mt-6" aria-labelledby="off-guidance">
+      <h2 id="off-guidance" className="text-[13px] font-bold text-gray-900">Practice guidance</h2>
+
+      {/* The stamp, naming the hazard that actually applies to a protocol rather than a generic one. */}
+      <div className={`mt-2 rounded-xl border px-4 py-3 ${TONE[notice.tone]}`} role="status">
+        <p className="text-[13px] font-semibold">{notice.sentence}</p>
+        <p className="mt-1 text-[12px] opacity-90">
+          {library.documents.length} document{library.documents.length === 1 ? "" : "s"} held on this
+          device. Guidance is removed after {OFFLINE_GUIDANCE_MAX_DAYS} days without reaching the practice.
+        </p>
+      </div>
+
+      {/* ⚠ NO SILENT CAP. A reference library that quietly holds part of itself is worse than one that
+          holds none: the practitioner searches, does not find, and concludes there is no protocol. */}
+      {library.dropped && (
+        <p className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-[12px] text-gray-700">
+          {library.dropped.reason}
+        </p>
+      )}
+
+      {library.documents.length === 0 ? (
+        <p className="mt-2 text-[12px] text-gray-600">
+          No guidance was in force at this practice when this was captured. That is what the practice
+          library said — it is not a claim that this device failed to read it.
+        </p>
+      ) : (
+        <ul className="mt-2 divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white">
+          {library.documents.map(doc => (
+            <GuidanceRow
+              key={doc.id} doc={doc} timezone={library.timezone}
+              open={opened === doc.id} onToggle={() => onToggle(doc.id)}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function GuidanceRow(
+  { doc, timezone, open, onToggle }:
+  { doc: OfflineGuidanceDoc; timezone: string; open: boolean; onToggle: () => void },
+) {
+  // ⚠ `new Date()` AT RENDER, NOT AT CAPTURE. The review verdict has to be able to change while the
+  // device is away — a document can pass its review date offline, and a verdict frozen into the record
+  // would read "in date" for the rest of the week.
+  const row = offlineGuidanceRow(doc, new Date(), timezone);
+  const reviewNote = offlineGuidanceReviewNote(row);
+  const controls = offlineGuidanceControls(doc);
+  const readControl = controls.find(c => !c.mutating)!;
+  const mutating = controls.filter(c => c.mutating);
+
+  return (
+    <li className="px-3 py-2">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="font-mono text-[11px] text-gray-500">{row.code}</span>
+        <span className="text-[13px] font-semibold text-gray-900">{row.title}</span>
+        <span className="text-[11.5px] text-gray-600">{guidanceType(row.docType)?.label ?? row.docType}</span>
+        {row.specialty && <span className="text-[11.5px] text-gray-500">{row.specialty}</span>}
+        {row.reviewOverdue && (
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10.5px] font-semibold text-amber-900">
+            Past its review date
+          </span>
+        )}
+        <button
+          type="button" onClick={onToggle} aria-expanded={open}
+          className="ml-auto rounded border border-gray-300 px-2 py-0.5 text-[11px] font-semibold text-gray-700"
+        >
+          {open ? "Close" : readControl.label}
+        </button>
+      </div>
+
+      {row.summary && !open && (
+        <p className="mt-1 text-[12px] leading-relaxed text-gray-600">{row.summary}</p>
+      )}
+
+      {open && (
+        <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2">
+          <p className="text-[11px] text-gray-500">
+            Version {doc.version}
+            {doc.effectiveFrom ? ` · in force from ${doc.effectiveFrom}` : " · no effective date recorded"}
+          </p>
+          {reviewNote && (
+            <p className="mt-1 text-[11.5px] leading-relaxed text-amber-900">{reviewNote}</p>
+          )}
+
+          {doc.sections.map(s => (
+            <div key={s.key} className="mt-2">
+              <h3 className="text-[12px] font-bold text-gray-900">{s.heading}</h3>
+              {/* whitespace-pre-wrap: the bodies are authored prose with real paragraphing. */}
+              <p className="mt-0.5 whitespace-pre-wrap text-[12px] leading-relaxed text-gray-800">{s.body}</p>
+            </div>
+          ))}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {mutating.map(c => (
+              <span key={c.key} className="inline-flex flex-col">
+                {/* ⚠ DISABLED, NOT HIDDEN, AND NEVER AN INPUT — the same rule and the same data-driven
+                    mechanism as the patient controls above. `enabled` comes from offline-guidance.ts,
+                    where the harness asserts no mutating control is ever enabled. */}
+                <button type="button" disabled={!c.enabled}
+                  className="cursor-not-allowed rounded border border-gray-300 bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-400">
+                  {c.label}
+                </button>
+                <span className="mt-0.5 max-w-[16rem] text-[10.5px] leading-snug text-gray-500">{c.reason}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </li>
   );
 }
 

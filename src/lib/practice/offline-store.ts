@@ -2,6 +2,11 @@ import {
   OFFLINE_DAY_KEYS, OFFLINE_PATIENT_KEYS, OFFLINE_SESSION_KEYS,
   keysOutsideAllowList, readOfflineDay, type OfflineDay, type OfflineReadResult,
 } from "@/lib/practice/offline-projection";
+import {
+  OFFLINE_GUIDANCE_DOC_KEYS, OFFLINE_GUIDANCE_LIBRARY_KEYS, OFFLINE_GUIDANCE_SECTION_KEYS,
+  guidanceKeysOutsideAllowList, readOfflineGuidance,
+  type OfflineGuidanceLibrary, type OfflineGuidanceReadResult,
+} from "@/lib/practice/offline-guidance";
 import { generateCacheKey, openRecord, sealRecord, type SealedRecord } from "@/lib/practice/offline-crypto";
 
 // CP-OFFLINE-SURVEY-001 s3.3 step 1 — the browser store. ⚠ BROWSER ONLY: every function here touches
@@ -31,9 +36,27 @@ import { generateCacheKey, openRecord, sealRecord, type SealedRecord } from "@/l
 // writer is `cacheOfflineDay`, whose input comes from the server and is never edited by the browser.
 
 const DB_NAME = "competen-practice-offline";
-const DB_VERSION = 1;
+/**
+ * 2 adds the guidance stores. `onupgradeneeded` creates only what is missing, so a device holding a
+ * version-1 day keeps it — the upgrade adds stores and destroys nothing.
+ */
+const DB_VERSION = 2;
 const STORE_DAY = "day";
 const STORE_KEY = "key";
+/**
+ * The cached guidance library, and ⚠ ITS OWN KEY, SEPARATE FROM THE DAY'S.
+ *
+ * ⚠ THE TRAP THIS AVOIDS, WHICH LOOKS LIKE CORRECT CODE: the day and the guidance have DIFFERENT
+ * LIFETIMES on purpose — the day dies at the end of the clinic day, the guidance lasts a week. If they
+ * shared one AES key, `purgeOfflineDay` deleting that key on the nightly expiry would leave the guidance
+ * record encrypted under a key that no longer exists. It would then fail to decrypt, be treated as
+ * corrupt and be deleted — so the week-long guidance cache would silently evaporate every midnight, and
+ * every function involved would look right in isolation.
+ *
+ * Two keys, two purges, and `purgeOfflineDay` deliberately does not touch either guidance store.
+ */
+const STORE_GUIDANCE = "guidance";
+const STORE_GUIDANCE_KEY = "guidanceKey";
 /**
  * ⚠ WHICH WORKSPACE, AND NOTHING ELSE. The offline page cannot ask the server which practice the person
  * was in, so the last one written is remembered here -- an opaque uuid, no name, no membership, nothing
@@ -50,6 +73,8 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_DAY)) db.createObjectStore(STORE_DAY);
       if (!db.objectStoreNames.contains(STORE_KEY)) db.createObjectStore(STORE_KEY);
       if (!db.objectStoreNames.contains(STORE_META)) db.createObjectStore(STORE_META);
+      if (!db.objectStoreNames.contains(STORE_GUIDANCE)) db.createObjectStore(STORE_GUIDANCE);
+      if (!db.objectStoreNames.contains(STORE_GUIDANCE_KEY)) db.createObjectStore(STORE_GUIDANCE_KEY);
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error ?? new Error("IndexedDB could not be opened"));
@@ -161,7 +186,13 @@ export async function purgeOfflineDay(workspaceId: string): Promise<{ ok: boolea
     const db = await openDb();
     await tx(db, STORE_DAY, "readwrite", s => s.delete(workspaceId));
     await tx(db, STORE_KEY, "readwrite", s => s.delete(workspaceId));
-    await tx(db, STORE_META, "readwrite", s => s.delete(META_ACTIVE));
+    // ⚠ THE POINTER GOES ONLY IF NOTHING IS LEFT TO POINT AT, and getting this wrong is invisible.
+    // META_ACTIVE is how the offline page knows which workspace to load, for the guidance as well as the
+    // day. Deleting it unconditionally here — which is what this did before guidance existed — meant the
+    // nightly day expiry orphaned a perfectly valid week-long guidance cache: still stored, still
+    // decryptable, and unreachable because nothing could name its workspace.
+    const guidance = await tx<SealedRecord | undefined>(db, STORE_GUIDANCE, "readonly", s => s.get(workspaceId));
+    if (!guidance) await tx(db, STORE_META, "readwrite", s => s.delete(META_ACTIVE));
     db.close();
     return { ok: true, reason: "Anything held for this practice on this device has been removed." };
   } catch (e) {
@@ -169,6 +200,135 @@ export async function purgeOfflineDay(workspaceId: string): Promise<{ ok: boolea
     // practice believes the data is gone and it is not.
     return { ok: false, reason: `This device's offline store could not be cleared: ${String((e as Error)?.message ?? e).slice(0, 200)}` };
   }
+}
+
+// ── THE GUIDANCE LIBRARY ────────────────────────────────────────────────────────────────────────────
+//
+// Same shape as the day above, same allow-list-before-sealing discipline, and ⚠ DELIBERATELY NOT THE SAME
+// LIFETIME. See the STORE_GUIDANCE comment at the top for the trap that separation exists to avoid.
+//
+// ⚠ IT IS STILL SEALED EVEN THOUGH IT NAMES NOBODY. Guidance is not patient data, so the disclosure case
+// is much weaker than the day's -- but a practice's clinical protocols are its own work, they are not
+// public, and there is no reason to hold them in the clear when the sealing machinery is already here.
+// What sealing does and does not achieve is stated once, in OFFLINE_ENCRYPTION_NOTE, and not re-claimed.
+
+/** Fields on the guidance payload that are not on the allow-list. Empty means it is what was agreed. */
+export function guidanceFieldsNotAllowed(library: OfflineGuidanceLibrary): string[] {
+  const bad = guidanceKeysOutsideAllowList(library, OFFLINE_GUIDANCE_LIBRARY_KEYS as readonly string[])
+    .map(k => `library.${k}`);
+  for (const d of library.documents ?? []) {
+    for (const k of guidanceKeysOutsideAllowList(d, OFFLINE_GUIDANCE_DOC_KEYS as readonly string[]))
+      bad.push(`document.${k}`);
+    for (const s of d.sections ?? [])
+      for (const k of guidanceKeysOutsideAllowList(s, OFFLINE_GUIDANCE_SECTION_KEYS as readonly string[]))
+        bad.push(`section.${k}`);
+  }
+  return [...new Set(bad)];
+}
+
+export type GuidanceWriteResult =
+  | { ok: true; documents: number }
+  | { ok: false; reason: string };
+
+/** Write one workspace's guidance library, sealed. Replaces whatever was there. */
+export async function cacheOfflineGuidance(library: OfflineGuidanceLibrary): Promise<GuidanceWriteResult> {
+  const bad = guidanceFieldsNotAllowed(library);
+  if (bad.length > 0)
+    return { ok: false, reason: `nothing was stored: the guidance payload carried fields that are not on the offline allow-list (${bad.join(", ")})` };
+
+  try {
+    const db = await openDb();
+    let key = await tx<CryptoKey | undefined>(db, STORE_GUIDANCE_KEY, "readonly", s => s.get(library.workspaceId));
+    if (!key) {
+      key = await generateCacheKey();
+      await tx(db, STORE_GUIDANCE_KEY, "readwrite", s => s.put(key as CryptoKey, library.workspaceId));
+    }
+    const sealed = await sealRecord(key, library);
+    await tx(db, STORE_GUIDANCE, "readwrite", s => s.put(sealed, library.workspaceId));
+    // The same pointer the day uses. Written by whichever cache ran last; both name the same workspace.
+    await tx(db, STORE_META, "readwrite", s => s.put(library.workspaceId, META_ACTIVE));
+    db.close();
+    return { ok: true, documents: library.documents.length };
+  } catch (e) {
+    return { ok: false, reason: `nothing was stored: ${String((e as Error)?.message ?? e).slice(0, 200)}` };
+  }
+}
+
+/**
+ * Read the cached guidance, and DELETE it if it may not be shown.
+ *
+ * ⚠ Expiry is evaluated here, on every read, and it DELETES rather than hides -- the same rule as the day
+ * and for the same reason: it is the only control that reaches a device that never reconnects.
+ */
+export async function loadOfflineGuidance(
+  workspaceId: string, now: Date = new Date(),
+): Promise<OfflineGuidanceReadResult> {
+  let db: IDBDatabase;
+  try {
+    db = await openDb();
+  } catch (e) {
+    return { state: "none", purge: false, reason: `This device's offline store could not be opened: ${String((e as Error)?.message ?? e).slice(0, 120)}` };
+  }
+
+  try {
+    const sealed = await tx<SealedRecord | undefined>(db, STORE_GUIDANCE, "readonly", s => s.get(workspaceId));
+    const key = await tx<CryptoKey | undefined>(db, STORE_GUIDANCE_KEY, "readonly", s => s.get(workspaceId));
+    if (!sealed || !key) { db.close(); return readOfflineGuidance(null, now); }
+
+    const library = await openRecord<OfflineGuidanceLibrary>(key, sealed);
+    if (!library) {
+      await tx(db, STORE_GUIDANCE, "readwrite", s => s.delete(workspaceId));
+      db.close();
+      return { state: "none", purge: false, reason: "The guidance stored on this device could not be read back, so it has been removed." };
+    }
+
+    const result = readOfflineGuidance(library, now);
+    if (result.state !== "ok" && result.purge) {
+      await tx(db, STORE_GUIDANCE, "readwrite", s => s.delete(workspaceId));
+      await tx(db, STORE_GUIDANCE_KEY, "readwrite", s => s.delete(workspaceId));
+    }
+    db.close();
+    return result;
+  } catch (e) {
+    db.close();
+    return { state: "none", purge: false, reason: `This device's guidance store could not be read: ${String((e as Error)?.message ?? e).slice(0, 120)}` };
+  }
+}
+
+/** Remove the guidance held for a workspace -- the library AND its key. Leaves the day alone. */
+export async function purgeOfflineGuidance(workspaceId: string): Promise<{ ok: boolean; reason: string }> {
+  try {
+    const db = await openDb();
+    await tx(db, STORE_GUIDANCE, "readwrite", s => s.delete(workspaceId));
+    await tx(db, STORE_GUIDANCE_KEY, "readwrite", s => s.delete(workspaceId));
+    // Mirror of the rule in purgeOfflineDay: the pointer survives while the other cache still needs it.
+    const day = await tx<SealedRecord | undefined>(db, STORE_DAY, "readonly", s => s.get(workspaceId));
+    if (!day) await tx(db, STORE_META, "readwrite", s => s.delete(META_ACTIVE));
+    db.close();
+    return { ok: true, reason: "The practice guidance held on this device has been removed." };
+  } catch (e) {
+    // ⚠ REPORTED, NEVER SWALLOWED -- see purgeOfflineDay.
+    return { ok: false, reason: `This device's guidance store could not be cleared: ${String((e as Error)?.message ?? e).slice(0, 200)}` };
+  }
+}
+
+/**
+ * Everything held for a workspace: the day AND the guidance.
+ *
+ * ⚠ THIS IS WHAT "TURN IT OFF" MUST CALL, not `purgeOfflineDay`. s3.8.6's switch is a practice saying
+ * "do not hold my practice's data on that device", and a purge that left a week of protocols behind
+ * would be a purge that did not purge. `purgeOfflineDay` remains day-only because the nightly expiry
+ * calls it, and that must not take the guidance with it.
+ */
+export async function purgeOfflineWorkspace(workspaceId: string): Promise<{ ok: boolean; reason: string }> {
+  const day = await purgeOfflineDay(workspaceId);
+  const guidance = await purgeOfflineGuidance(workspaceId);
+  if (day.ok && guidance.ok)
+    return { ok: true, reason: "Anything held for this practice on this device has been removed." };
+  return {
+    ok: false,
+    reason: [day.ok ? null : day.reason, guidance.ok ? null : guidance.reason].filter(Boolean).join(" "),
+  };
 }
 
 /**
