@@ -100,6 +100,9 @@ export default async function MissionControl() {
         isOwner={ctx.isOwner}
         capabilities={ctx.capabilities}
         viewerName={ctx.fullName}
+        contexts={ctx.availableContexts}
+        activeContextId={ctx.activeContext?.appointmentId ?? null}
+        contextDefaulted={ctx.contextDefaulted}
       />
     );
 

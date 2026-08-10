@@ -1,5 +1,8 @@
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import {
+  resolveActiveGovernance, HQ_CONTEXT_COOKIE, type GovernanceContext,
+} from "./governance-context";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { platformRolesOf, hasPlatformRole, type PlatformRole } from "@/lib/roles";
 import { appointmentGrantsAccess } from "@/lib/ogs/lifecycle";
@@ -50,6 +53,15 @@ export type HqContext = {
   mode: HqMode;
   capability: string | null;
   decision: HqDecision;
+  /**
+   * PLAT-GOV-MC-001 s8. The ONE appointment this request is acting under, and every appointment it could
+   * switch to. Null / empty for an owner: ownership is not an appointment, and the owner branch below
+   * short-circuits before any of this is read so that no context resolution can lock them out.
+   */
+  activeContext: GovernanceContext | null;
+  availableContexts: GovernanceContext[];
+  /** Nothing was chosen and one was picked. The switcher says so rather than implying a decision. */
+  contextDefaulted: boolean;
 };
 
 type ProfileRow = {
@@ -226,15 +238,40 @@ export async function resolveHqContext(
       ctx: {
         admin, userId: user.id, fullName: me?.full_name ?? null, roles, platformRoles, isOwner: true,
         positions: [], capabilities: [], mode: "observe", capability: declared, decision: "allow_owner",
+        activeContext: null, availableContexts: [], contextDefaulted: false,
       },
     };
   }
 
-  const [{ positions, capabilities }, mode] = await Promise.all([
-    resolveHqPositions(admin, user.id),
+  // ── PLAT-GOV-MC-001 s8: ONE ACTIVE CONTEXT, NOT THE UNION ────────────────────────────────────────────
+  //
+  // ⚠ THIS IS THE NARROWING, AND IT IS THE POINT. Until now capabilities were the union of every position a
+  // person held, so an identity appointed to two products could act in both from one screen -- which
+  // acceptance criterion 4 forbids ("a Product Director cannot see another product merely because the same
+  // shell is used"). Authorization now answers from the ACTIVE appointment alone.
+  //
+  // ⚠ THE COOKIE IS A HINT AND CANNOT WIDEN ANYTHING. resolveActiveGovernance only ever selects from
+  // appointments this identity actually holds, re-read and re-checked on every request. An id belonging to
+  // somebody else, a revoked appointment, or pure noise all select nothing and fall back to their own
+  // default -- so the worst a forged cookie achieves is showing its owner less than they are entitled to.
+  //
+  // ⚠ AND THE DOOR IS STILL THE UNION, DELIBERATELY. /super-admin/layout.tsx keeps calling
+  // resolveHqPositions, so nobody is locked out of the building because their active context is narrow.
+  // Getting IN is "do you hold any live appointment"; what you may DO inside is this.
+  let selected: string | null = null;
+  try {
+    selected = (await cookies()).get(HQ_CONTEXT_COOKIE)?.value ?? null;
+  } catch {
+    // Outside a request scope (a harness, a script). No selection is a valid state, not an error.
+  }
+
+  const [governance, mode] = await Promise.all([
+    resolveActiveGovernance(admin, user.id, selected),
     // An enforcing call needs no config read: nothing hq_config could say would loosen it.
     opts.enforce ? Promise.resolve<HqMode>("enforce") : readHqMode(admin),
   ]);
+  const positions = governance.active ? [governance.active.positionCode] : [];
+  const capabilities = governance.active ? governance.active.capabilities : [];
   const verdict = decideHq({ isOwner: false, positions, capabilities, capability: declared, mode });
 
   if (verdict.decision !== "allow") {
@@ -251,6 +288,8 @@ export async function resolveHqContext(
     ctx: {
       admin, userId: user.id, fullName: me?.full_name ?? null, roles, platformRoles, isOwner: false,
       positions, capabilities, mode, capability: declared, decision: verdict.decision,
+      activeContext: governance.active, availableContexts: governance.available,
+      contextDefaulted: governance.defaulted,
     },
   };
 }

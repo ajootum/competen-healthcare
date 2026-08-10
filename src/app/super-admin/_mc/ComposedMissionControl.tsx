@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { runWidget, type WidgetResult } from "@/lib/hq/mission-widgets";
 import { compositionProductLine, type MissionComposition } from "@/lib/hq/mission-profile";
+import GovernanceContextSwitcher from "./GovernanceContextSwitcher";
+import type { GovernanceContext } from "@/lib/hq/governance-context";
 
 // PLAT-GOV-MC-001 - the composed Mission Control shell.
 //
@@ -77,12 +79,15 @@ function WidgetBody({ result }: { result: WidgetResult }) {
   );
 }
 
-export default async function ComposedMissionControl({ composition, admin, isOwner, capabilities, viewerName }: {
+export default async function ComposedMissionControl({ composition, admin, isOwner, capabilities, viewerName, contexts, activeContextId, contextDefaulted }: {
   composition: MissionComposition;
   admin: any;
   isOwner: boolean;
   capabilities: string[];
   viewerName: string | null;
+  contexts: GovernanceContext[];
+  activeContextId: string | null;
+  contextDefaulted: boolean;
 }) {
   const line = compositionProductLine(composition);
   const results = await Promise.all(
@@ -103,6 +108,20 @@ export default async function ComposedMissionControl({ composition, admin, isOwn
           Practice operations →
         </Link>
       </div>
+
+      {/* PLAT-GOV-MC-001 s4 "Command Header": identity and the CURRENT governance appointment. Rendered with
+          one context too -- "which authority am I acting under" is the question this screen exists to answer
+          when it shows somebody less than they expected. */}
+      <GovernanceContextSwitcher
+        contexts={contexts.map(c => ({
+          appointmentId: c.appointmentId,
+          positionName: c.positionName,
+          productLine: c.productLineCode,
+          capabilityCount: c.capabilities.length,
+        }))}
+        activeId={activeContextId}
+        defaulted={contextDefaulted}
+      />
 
       {/* ⚠ SAYS WHEN IT IS A FALLBACK. A minimal dashboard that looks deliberate is worse than one that
           admits it could not resolve -- somebody would spend an afternoon wondering where their widgets went. */}
