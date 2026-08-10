@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadEnterpriseIntelligence } from "@/lib/super-admin/ai-enterprise";
 import AskPanel from "../_components/AskPanel";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
@@ -23,8 +24,7 @@ export default async function EnterpriseIntelligence() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.platform.ai.view");
 
   const d = await loadEnterpriseIntelligence(admin);
   const sc = d.scorecard;

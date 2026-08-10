@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadReminderStatus } from "@/lib/delivery/reminders";
 import ReminderRunner from "./ReminderRunner";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CDP-011 — Scheduled reminders (operator view). Proactive expiry reminders + a scan control. The daily
 // learning_reminders cron runs it automatically; learners see the reminders in-app. Real over cdp_reminders
@@ -18,8 +19,7 @@ export default async function RemindersPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.delivery.view");
 
   const q = await loadReminderStatus(admin, null, true);
 

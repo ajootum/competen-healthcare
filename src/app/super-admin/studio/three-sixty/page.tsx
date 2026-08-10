@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadThreeSixty } from "@/lib/studio/three-sixty";
 import ThreeSixtyManager from "./ThreeSixtyManager";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CST-041 — 360° Assessment Designer. Multisource-feedback templates with weighted respondent groups,
 // rating scale and confidentiality settings (cst_360_assessments + cst_360_respondent_groups, migration
@@ -16,8 +17,7 @@ export default async function ThreeSixtyPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const ts = await loadThreeSixty(admin, profile?.hospital_id ?? null, true);
 

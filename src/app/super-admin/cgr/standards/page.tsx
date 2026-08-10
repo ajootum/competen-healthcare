@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadRegulatoryIntelligence, type StdEntry, type DomainGap } from "@/lib/cgr/standards";
 import type { GovRecord } from "@/lib/cgr/registry";
 import { Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-002 — Regulatory Intelligence & Standards Mapping. The intelligence lens over the competency↔standard
 // mappings: a Standards Library (distinct clauses in use), Compliance Gap detection (unmapped / weakly-mapped
@@ -40,8 +41,7 @@ export default async function RegulatoryIntelligencePage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadRegulatoryIntelligence(admin) as any;
   const k = d.kpis;

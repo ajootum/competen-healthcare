@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { loadPortfolioAdmin } from "@/lib/platform/portfolio-admin";
 import PortfolioConsole from "./PortfolioConsole";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // PCS-PORT-001 — Product Portfolio & Suite Configuration console. No-code management of the packaging hierarchy
 // (Portfolio → Suite → Product → Workspace) + the tenant licensing matrix that gates workspace access at runtime
@@ -15,8 +16,7 @@ export default async function ProductPortfolioPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.platform.operations.view");
 
   const data = await loadPortfolioAdmin(admin);
 

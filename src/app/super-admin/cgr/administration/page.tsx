@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceAdmin } from "@/lib/cgr/administration";
 import { Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-015 — Competency Governance Platform Administration & Configuration. The no-code governance config layer:
 // configuration inventory by category, the inherit-vs-override hierarchy, and advisory AI recommendations. Deep
@@ -27,8 +28,7 @@ export default async function GovernanceAdminPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadGovernanceAdmin(admin) as any;
   const k = d.kpis;

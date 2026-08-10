@@ -1,4 +1,4 @@
-import { requireHqContext } from "@/lib/hq/context";
+import { requireHqCapability } from "@/lib/hq/context";
 import { loadAiRecommendations } from "@/lib/ai/services";
 import { Head, Tabs, Card, Stat, Pill, Bars, Foot } from "../_ui";
 
@@ -11,7 +11,7 @@ const money = (n: number) => (n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${Math
 const IMPACT_TONE: Record<string, string> = { high: "rose", medium: "amber", low: "slate", critical: "rose" };
 
 export default async function RecommendationsPage() {
-  const { admin } = await requireHqContext("hq.platform.ai.view");
+  const { admin } = await requireHqCapability("hq.platform.ai.view");
   const d = await loadAiRecommendations(admin) as any;
   const head = <Head code="AIS-006 · AI Services Platform" title="Recommendation & Prediction Engine" sub="A unified, explainable view of every AI recommendation, prediction and risk the platform generates — aggregated across workspaces." />;
   if (!d.provisioned || !d.hasData) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="006" /><div className="bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-xl p-6 text-sm text-blue-800">No AI recommendation data yet — seed the Administration (ADM-009) and Performance (PA-007) sections; this engine aggregates their real output.</div></div>;

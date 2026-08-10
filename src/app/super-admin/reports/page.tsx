@@ -1,4 +1,4 @@
-import { requireHqContext } from "@/lib/hq/context";
+import { requireHqCapability } from "@/lib/hq/context";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -22,7 +22,7 @@ export default async function ReportTemplatesPage() {
 
   // Per-page guard (PLAT-ARCH-SURVEY-001 s2.5). Next 16: a layout auth check "will not prevent nested
   // route segments and Server Actions from being accessed" -- so the gate lives here, not upstairs.
-  const { admin } = await requireHqContext("hq.executive.reports.view");
+  const { admin } = await requireHqCapability("hq.executive.reports.view");
   const { data: templates } = await admin
     .from("report_templates")
     .select("id, name, description, report_type, columns, is_global, is_active, hospitals(name)")

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Layer, Mod, Status } from "../_engines";
 import { loadQieModules, qieSummary, type QieModule } from "@/lib/qie/engines";
 import { cardClass } from "@/components/ui/primitives";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // QIE-000 — Quality Intelligence Engine (platform architecture).
 //
@@ -44,8 +45,7 @@ export default async function QualityIntelligencePage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.intelligence.view");
 
   const mods = await loadQieModules(admin, profile?.hospital_id ?? null, true);
   const s = qieSummary(mods);

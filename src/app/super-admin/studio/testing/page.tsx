@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadReleaseReadiness } from "@/lib/studio/release-readiness";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CST-010 — Testing & Sandbox (release readiness gate). Composes the QA (CST-107), dependency (CST-105)
 // and traceability (CST-104) checks into one "ready to publish?" verdict per framework, with the blocking
@@ -24,8 +25,7 @@ export default async function StudioTestingPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const rr = await loadReleaseReadiness(admin, profile?.hospital_id ?? null, true);
 

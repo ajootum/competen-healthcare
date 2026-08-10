@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPackages, PACKAGE_TYPES, PKG_TYPE_LABEL, ITEM_TYPE_LABEL } from "@/lib/studio/packages";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CST-110 — Competency Marketplace. The discovery catalogue over PUBLISHED competency packages (the
 // output of the Package Manager, CST-109). Browse by category, preview contents, see the enterprise
@@ -16,8 +17,7 @@ export default async function StudioMarketplacePage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const pkg = await loadPackages(admin, profile?.hospital_id ?? null, true);
   const provisioned = pkg.provisioned;

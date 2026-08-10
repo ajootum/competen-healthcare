@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadKnowledgeEvidence } from "@/lib/cgr/knowledge";
 import { Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-012 — Competency Governance Knowledge Repository & Evidence Intelligence. The governance evidence lens:
 // knowledge inventory, the evidence-to-competency COVERAGE metric (via CPU), and the governed knowledge graph.
@@ -18,8 +19,7 @@ export default async function KnowledgeEvidencePage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadKnowledgeEvidence(admin) as any;
   const k = d.kpis;

@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CAP-000 — Competency Asset Platform. The enterprise asset-repository layer: "every competency asset
 // exists once, is governed once, and is reused everywhere." This hub is the single-source-of-truth view —
@@ -45,8 +46,7 @@ export default async function AssetPlatformPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const c = (q: PromiseLike<{ count: number | null }>) => Promise.resolve(q).then(r => r.count ?? 0);
   const [frameworks, competencies, skills, cpus, blueprints, banks, osce, sims, resources, knowledge, packages, publications] = await Promise.all([

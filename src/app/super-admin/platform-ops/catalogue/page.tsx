@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadCatalogue } from "@/lib/config/catalogue";
 import CatalogueBrowser from "./CatalogueBrowser";
 import { StatWide as Stat } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +21,7 @@ export default async function ModuleWidgetCatalogue() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.platform.operations.view");
 
   const d = await loadCatalogue(admin);
   const s = d.stats;

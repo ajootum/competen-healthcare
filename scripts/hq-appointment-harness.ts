@@ -90,7 +90,11 @@ function allHolders(board: HqAppointmentBoard): { readable: boolean; holders: { 
   try {
     // ── 1. The guards, read from source ──────────────────────────────────────────────────────────
     console.log("  -- 1. the guards, read from source --");
-    ok("S0-control", /resolveHqContext|requireHqContext/.test(routeSrc) && /requireHqContext/.test(pageSrc),
+    // ⚠ requireHqCapability IS THE SPELLING THE PAGE USES SINCE CP-HQ-NAV-001 STEP 3, and the reason is not
+    // cosmetic: requireHqContext honours hq_config.mode, and under `observe` a would_deny still PROCEEDS --
+    // which made THIS page, the one that grants HQ positions, reachable by an appointee holding none of its
+    // capability. Both spellings are accepted here because the control is about the STRIPPER, not the guard.
+    ok("S0-control", /resolveHqContext|requireHqC(?:ontext|apability)/.test(routeSrc) && /requireHqC(?:ontext|apability)/.test(pageSrc),
       "control: the stripper left the executable code intact -- both files still show their gate");
     // ⚠ THE NEEDLE IS BUILT FROM PIECES, AND THAT IS NOT FUSSINESS. The first version of this control
     // searched for a phrase spelled out in a regex literal ON THIS LINE — executable code, which the
@@ -115,7 +119,7 @@ function allHolders(board: HqAppointmentBoard): { readable: boolean; holders: { 
     // ── 2. The capability it names is real ───────────────────────────────────────────────────────
     console.log("\n  -- 2. the capability --");
     const named = routeSrc.match(/READ_CAPABILITY\s*=\s*"([^"]+)"/)?.[1]
-      ?? pageSrc.match(/requireHqContext\("([^"]+)"\)/)?.[1] ?? null;
+      ?? pageSrc.match(/requireHqC(?:ontext|apability)\("([^"]+)"\)/)?.[1] ?? null;
     ok("C0-control", !!named, `the gate names a capability (${named ?? "none found"})`);
     const cap = named ? await admin.from("hq_capability").select("code").eq("code", named).maybeSingle() : null;
     ok("C1", !!cap && !cap.error && !!cap.data,

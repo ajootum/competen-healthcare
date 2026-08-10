@@ -178,7 +178,29 @@ export type HqResolution =
  * The full resolution, without the redirect — so the decision can be tested directly and so an API route
  * can reuse it later without inheriting a page's navigation behaviour.
  */
-export async function resolveHqContext(capability: string | null): Promise<HqResolution> {
+export async function resolveHqContext(
+  capability: string | null,
+  opts: {
+    /**
+     * Force the SOFT gate to enforce for this call, whatever `hq_config.mode` says globally.
+     *
+     * ⚠ THIS EXISTS BECAUSE CONVERTING A PAGE THAT ALREADY HAD A GATE WOULD OTHERWISE WIDEN IT. Observe
+     * mode admits a `would_deny` -- that is what observe IS -- and it is the right default for a page whose
+     * only gate has ever been this one, because refusing on a capability map nobody has validated is how an
+     * appointee gets locked out of work they were appointed to do.
+     *
+     * It is exactly the wrong default for the 167 pages converted by CP-HQ-NAV-001 step 3. Those tested
+     * `super_admin` directly, so their live audience is owners and nobody else. Converting them under
+     * observe would have opened every one of them to any appointee holding any position -- a widening
+     * performed in the name of least privilege. Enforcing here preserves today's access exactly: owners
+     * still pass (isOwner short-circuits above), and nobody else gains anything they did not already have.
+     *
+     * ⚠ THE REFUSAL IS STILL RECORDED. record() runs on every non-allow decision regardless of mode, so
+     * the observation ledger keeps filling and the rollout data is not lost.
+     */
+    enforce?: boolean;
+  } = {},
+): Promise<HqResolution> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, redirectTo: "/login", decision: "deny", reason: "not authenticated" };
@@ -210,7 +232,8 @@ export async function resolveHqContext(capability: string | null): Promise<HqRes
 
   const [{ positions, capabilities }, mode] = await Promise.all([
     resolveHqPositions(admin, user.id),
-    readHqMode(admin),
+    // An enforcing call needs no config read: nothing hq_config could say would loosen it.
+    opts.enforce ? Promise.resolve<HqMode>("enforce") : readHqMode(admin),
   ]);
   const verdict = decideHq({ isOwner: false, positions, capabilities, capability: declared, mode });
 
@@ -241,6 +264,26 @@ export async function resolveHqContext(capability: string | null): Promise<HqRes
  */
 export async function requireHqContext(capability: string | null = null): Promise<HqContext> {
   const res = await resolveHqContext(capability);
+  if (!res.ok) redirect(res.redirectTo);
+  return res.ctx;
+}
+
+/**
+ * The page guard for a route that ALREADY HAD A GATE — CP-HQ-NAV-001 step 3.
+ *
+ * Identical to requireHqContext except that the capability is enforced now rather than when
+ * `hq_config.mode` is flipped. Use it when replacing a real access check; use requireHqContext when adding
+ * the first one to a page that had none. The distinction is not stylistic: see resolveHqContext's `enforce`
+ * option for why converting under observe would have widened 167 pages instead of narrowing them.
+ *
+ * ⚠ THE CAPABILITY IS PASSED EXPLICITLY AND MUST STAY THAT WAY. The no-argument form resolves the route
+ * from the `x-pathname` header and falls back to "/super-admin" when that header is absent — which maps to
+ * HQ_HOME_CAPABILITY, the one capability EVERY position holds. A header that failed to arrive would
+ * silently turn any of these pages into an open door for every appointee. A literal cannot fail that way,
+ * and it is greppable.
+ */
+export async function requireHqCapability(capability: string): Promise<HqContext> {
+  const res = await resolveHqContext(capability, { enforce: true });
   if (!res.ok) redirect(res.redirectTo);
   return res.ctx;
 }

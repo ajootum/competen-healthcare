@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Layer, Mod } from "../_engines";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CAPA-000 — Competency Assurance Platform. The ASSURANCE layer: continuously evaluates whether the competency
 // machinery itself (frameworks, assessments, evidence, assessors, governance) stays valid, reliable and compliant.
@@ -26,8 +27,7 @@ export default async function AssurancePlatformPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.assurance.view");
 
   const c = (q: PromiseLike<{ count: number | null }>) => Promise.resolve(q).then(r => r.count ?? 0).catch(() => 0);
   const [decisions, assessments, evidence, actions, auditEvents, expiring] = await Promise.all([

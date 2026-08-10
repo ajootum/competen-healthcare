@@ -1,11 +1,11 @@
-import { requireHqContext } from "@/lib/hq/context";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // ⚠ THE ONE PAGE IN THIS ESTATE THAT HAD NO ACCESS CHECK OF ANY KIND. It was a static server component with
 // no data access, so nothing in it read a session -- it was reachable through the layout alone, and Next 16
 // says plainly that a layout check "will not prevent nested route segments and Server Actions from being
 // accessed". It is now async solely so it can carry its own guard.
 export default async function PlatformSettingsPage() {
-  await requireHqContext("hq.platform.settings.view");
+  await requireHqCapability("hq.platform.settings.view");
   return (
     <div className="max-w-2xl">
       <div className="mb-6">

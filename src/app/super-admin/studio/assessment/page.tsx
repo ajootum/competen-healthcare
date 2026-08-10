@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ModuleCard } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CST-031..047 — Assessment Studio. The assessment authoring sub-platform of the Competency Studio:
 // framework design, blueprinting, question authoring, adaptive delivery, performance assessment (skills /
@@ -30,8 +31,7 @@ export default async function AssessmentStudioPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const c = (q: PromiseLike<{ count: number | null }>) => Promise.resolve(q).then(r => r.count ?? 0);
   const [assessments, banks, checklists, stations, blueprints, methods] = await Promise.all([

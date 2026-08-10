@@ -1,4 +1,4 @@
-import { requireHqContext } from "@/lib/hq/context";
+import { requireHqCapability } from "@/lib/hq/context";
 import { loadAiAgents } from "@/lib/ai/services";
 import { Head, Tabs, Card, Stat, Pill, Provision, Foot } from "../_ui";
 
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const AUTO_TONE: Record<string, string> = { assist: "blue", suggest: "amber", act: "violet" };
 
 export default async function AgentsPage() {
-  const { admin } = await requireHqContext("hq.platform.ai.view");
+  const { admin } = await requireHqCapability("hq.platform.ai.view");
   const d = await loadAiAgents(admin) as any;
   const head = <Head code="AIS-012 · AI Services Platform" title="Agent Framework" sub="The registry of specialist AI agents — each with a model, a governed skill set and an autonomy level — orchestrated across every workspace with human-in-the-loop." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="012" /><Provision /></div>;

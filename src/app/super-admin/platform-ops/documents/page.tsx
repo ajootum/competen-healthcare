@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadDocuments, humanSize } from "@/lib/platform/documents";
 import { KpiTile as Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
@@ -29,8 +30,7 @@ export default async function DocumentServiceConsole({ searchParams }: { searchP
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.platform.operations.view");
 
   const d = await loadDocuments(admin, { source });
 

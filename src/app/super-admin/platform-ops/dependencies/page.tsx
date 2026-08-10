@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadDependencyGraph } from "@/lib/config/dependency-graph";
 import DependencyExplorer from "./DependencyExplorer";
 import { Stat } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +22,7 @@ export default async function DependencyGraphPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.platform.operations.view");
 
   const g: any = await loadDependencyGraph(admin);
 

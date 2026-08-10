@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadDependencies } from "@/lib/studio/dependencies";
 import DependencyManager from "./DependencyManager";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CST-105 — Competency Dependency Manager. Defines and governs prerequisite / co-requisite /
 // recommended / inherited relationships between competencies (the progression graph). Reads the
@@ -18,8 +19,7 @@ export default async function StudioDependenciesPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const dep = await loadDependencies(admin, profile?.hospital_id ?? null, true);
   const { data: compData } = await admin.from("framework_competencies").select("id, name, framework_domains(name, frameworks(name))").order("name").limit(2000);

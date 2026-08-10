@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadRegistry, OBJECT_TYPE_LABEL } from "@/lib/config/registry";
 import StudioForm from "./StudioForm";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +21,7 @@ export default async function ConfigurationStudio() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.platform.operations.view");
 
   const reg: any = await loadRegistry(admin);
   const provisioned = reg.provisioned;

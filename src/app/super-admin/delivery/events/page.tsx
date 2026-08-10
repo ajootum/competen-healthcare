@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadEventStream } from "@/lib/delivery/consumer";
 import EventConsumerRunner from "./EventConsumerRunner";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CDP-015 — Event bus & consumer (operator view). The delivery outbox stream + a control that drains pending
 // events (auto-remediating failed assessments). The hourly delivery_event_consumer cron does the same. Real
@@ -31,8 +32,7 @@ export default async function EventsPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.delivery.view");
 
   const q = await loadEventStream(admin, null, true);
 

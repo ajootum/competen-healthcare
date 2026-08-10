@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadExecutiveCommand } from "@/lib/super-admin/executive-command";
 import ExecutiveContextBar from "./_ec/ExecutiveContextBar";
 import Sparkline from "../_mc/Sparkline";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
@@ -45,8 +46,7 @@ export default async function ExecutiveCommandCentre({ searchParams }: { searchP
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.executive.command_centre.view");
 
   const ec = await loadExecutiveCommand(admin, rangeDays);
   const { banner, attention, health, decisionQueue, intelligence, growth, metrics, spark } = ec;

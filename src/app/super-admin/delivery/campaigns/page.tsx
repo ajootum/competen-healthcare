@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadCampaigns } from "@/lib/delivery/campaigns";
 import CampaignManager from "./CampaignManager";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CDP-008 — Competency Assignment & Campaign Manager. Deadline-driven competency initiatives targeting a
 // cohort, with live compliance from competency decisions. Real over cdp_campaigns (144) + cmo_assignments +
@@ -16,8 +17,7 @@ export default async function CampaignsPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.delivery.view");
 
   const [q, compsRes, profsRes] = await Promise.all([
     loadCampaigns(admin, null, true),

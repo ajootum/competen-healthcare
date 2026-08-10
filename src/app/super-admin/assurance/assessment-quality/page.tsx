@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadAssessmentQuality } from "@/lib/assurance/assessment-quality";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CAPA-003 — Assessment Quality Engine (operator view). Classical item analysis: per-item difficulty and
 // discrimination over quiz_attempts + questions, with a flagged-item review queue and by-category quality.
@@ -20,8 +21,7 @@ export default async function AssessmentQualityPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.assurance.view");
 
   const q = await loadAssessmentQuality(admin, profile?.hospital_id ?? null, true);
   const card = "bg-white rounded-xl border border-gray-100";

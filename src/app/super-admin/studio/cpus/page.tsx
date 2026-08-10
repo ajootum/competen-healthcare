@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import CpuLibrary from "./CpuLibrary";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // Clinical Practice & CPU Library ("Clinical Practice and CPUs" spec §4):
 // Practices are the governance taxonomy; CPUs are the reusable
@@ -13,7 +14,7 @@ export default async function CpuLibraryPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const [{ data: practices }, { data: cpus }, { data: comps }, { data: skills }, { data: methods }] = await Promise.all([
     admin.from("practices")

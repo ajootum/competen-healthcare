@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadStandardSettings } from "@/lib/studio/standard-setting";
 import StandardSettingManager from "./StandardSettingManager";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CST-044 — Assessment Standard Setting Studio. Defensible cut-score studies (Angoff family): record
 // per-item judge ratings, compute the recommended cut, and see its real pass-rate impact against the
@@ -17,8 +18,7 @@ export default async function StandardSettingPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const ss = await loadStandardSettings(admin, profile?.hospital_id ?? null, true);
   const { data: bankData } = await admin.from("question_banks").select("id, name").eq("is_active", true).order("name").limit(400);

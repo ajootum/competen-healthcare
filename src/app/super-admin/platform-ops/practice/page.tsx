@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { loadPracticeOps, evaluateGate, FLAG_CONSEQUENCE, FLAG_ORDER } from "@/lib/practice/operations";
 import PracticeOpsConsole from "./PracticeOpsConsole";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // Practice Operations (CPR-IAM-001 s14 cutover, s14.1 launch ladder; CPR-PROV-001 s4 pilot pathway).
 //
@@ -25,8 +26,7 @@ export default async function PracticeOperations() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles").eq("id", user.id).single();
-  const roles: string[] = ((profile?.roles?.length ? profile.roles : [profile?.role]) as string[]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.practice.operations.view");
 
   const ops = await loadPracticeOps(admin);
   const gate = await evaluateGate(admin, ops);

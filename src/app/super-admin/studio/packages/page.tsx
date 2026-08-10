@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPackages } from "@/lib/studio/packages";
 import PackageManager from "./PackageManager";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CST-109 — Competency Package Manager. Bundles competency assets into named, versioned, governed
 // packages (competency_packages + competency_package_items, migration 130) that the Marketplace (CST-110)
@@ -17,8 +18,7 @@ export default async function StudioPackagesPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const pkg = await loadPackages(admin, profile?.hospital_id ?? null, true);
   const { data: compData } = await admin.from("framework_competencies").select("id, name, framework_domains(name, frameworks(name))").order("name").limit(2000);

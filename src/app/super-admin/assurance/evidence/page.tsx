@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadEvidenceIntegrity } from "@/lib/assurance/evidence-integrity";
 import EvidenceActions from "./EvidenceActions";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CAPA-004 — Evidence Integrity Platform (operator view). Verification backlog + integrity issues + chain-of-
 // custody over the real evidence store (with the migration-149 verification lifecycle). Super-admin, enterprise.
@@ -18,8 +19,7 @@ export default async function EvidenceIntegrityPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.assurance.view");
 
   const q = await loadEvidenceIntegrity(admin, profile?.hospital_id ?? null, true);
   const card = "bg-white rounded-xl border border-gray-100";

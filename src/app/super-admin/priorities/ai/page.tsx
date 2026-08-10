@@ -1,4 +1,4 @@
-import { requireHqContext } from "@/lib/hq/context";
+import { requireHqCapability } from "@/lib/hq/context";
 import { loadAiOrchestrator } from "@/lib/priorities/modules";
 import { Head, ModuleNav, Card, Stat, Pill, Provision, Foot } from "../_ui";
 import AiCopilotPanel from "@/components/AiCopilotPanel";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const KIND_TONE: Record<string, string> = { Conflict: "amber", Drift: "rose", Hygiene: "blue", Alignment: "violet", Capacity: "amber", Governance: "blue" };
 
 export default async function AiOrchestratorPage() {
-  const { admin } = await requireHqContext("hq.executive.priorities.view");
+  const { admin } = await requireHqCapability("hq.executive.priorities.view");
   const d = await loadAiOrchestrator(admin) as any;
   const head = <Head code="PPE-007 · Priority & Execution Framework" title="AI Priority Orchestrator" sub="Continuously analyse the strategic model for conflicts, drift, hygiene and capacity risks — every recommendation is explainable back to the objective or priority that triggered it." />;
   if (!d.provisioned) return <div className="max-w-[1400px] space-y-4">{head}<ModuleNav active="007" /><Provision module="the AI Orchestrator" /></div>;

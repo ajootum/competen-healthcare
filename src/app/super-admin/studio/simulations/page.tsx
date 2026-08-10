@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadSimulations } from "@/lib/studio/simulations";
 import SimulationManager from "./SimulationManager";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CST-006 — Simulation Studio. The persistent, versioned scenario store (simulation_scenarios, migration
 // 131): named, typed, competency-linked scenarios with a publish lifecycle. Delivery and AI-drafting live
@@ -17,8 +18,7 @@ export default async function StudioSimulationsPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const sim = await loadSimulations(admin, profile?.hospital_id ?? null, true);
   const { data: compData } = await admin.from("framework_competencies").select("id, name, framework_domains(name, frameworks(name))").order("name").limit(2000);

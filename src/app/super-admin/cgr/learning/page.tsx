@@ -6,6 +6,7 @@ import ProposeLink from "./ProposeLink";
 import LinkDecisions from "./LinkDecisions";
 import SuggestLinks from "./SuggestLinks";
 import { Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-027 — Organisational Learning & Knowledge Transformation. Two layers, kept honestly distinct:
 // CAUSAL (competency_learning_links, mig 150 — proven signal→change closure) above OPERATIONAL (op_incidents —
@@ -27,8 +28,7 @@ export default async function OrganisationalLearningPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadOrganisationalLearning(admin) as any;
   const k = d.kpis;

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceAnalytics } from "@/lib/cgr/analytics";
 import { Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-016 — Competency Governance Analytics, Metrics & Continuous Improvement. The trend + improvement layer:
 // governance readiness/compliance over time, maturity progression, and the ranked continuous-improvement
@@ -29,8 +30,7 @@ export default async function GovernanceAnalyticsPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadGovernanceAnalytics(admin) as any;
   const m = d.metrics;

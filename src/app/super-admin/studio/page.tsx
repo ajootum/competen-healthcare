@@ -4,6 +4,7 @@ import Link from "next/link";
 import QuickCreate from "./QuickCreate";
 import LibrarySearch from "@/app/dashboard/library/LibrarySearch";
 import { ModuleCard } from "./_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CST-000 — Competency Studio Platform. The no-code authoring platform and single source of truth
 // for the competency definitions every workspace consumes. This hub presents the 12 core studio
@@ -27,8 +28,7 @@ export default async function StudioPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const today = new Date().toISOString().slice(0, 10);
   // count-only queries; each fails soft to 0 if a table/column is not provisioned yet.

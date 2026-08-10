@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadStandardsMapping } from "@/lib/studio/standards-mapping";
 import StandardsMappingManager from "./StandardsMappingManager";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CST-108 — Standards Mapping Centre. Maps competencies to external standards (WHO / JCI / SafeCare /
 // MOH / councils) for regulatory traceability, over competency_standard_mappings (migration 129). Shows
@@ -19,8 +20,7 @@ export default async function StudioStandardsPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const std = await loadStandardsMapping(admin, profile?.hospital_id ?? null, true);
   const { data: compData } = await admin.from("framework_competencies").select("id, name, framework_domains(name, frameworks(name))").order("name").limit(2000);

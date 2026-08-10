@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadKnowledgeStudio } from "@/lib/super-admin/ckp-studio";
 import StudioBuilder from "./StudioBuilder";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
@@ -38,8 +39,7 @@ export default async function KnowledgeStudio() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.knowledge.view");
 
   const s = await loadKnowledgeStudio(admin);
   const k = s.kpis;

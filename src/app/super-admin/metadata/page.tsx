@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import MetadataManager from "./MetadataManager";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export default async function MetadataPage() {
   const supabase = await createClient();
@@ -9,7 +10,7 @@ export default async function MetadataPage() {
 
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") redirect("/dashboard");
+  await requireHqCapability("hq.platform.metadata.view");
 
   const [{ data: taxonomies }, { data: terms }, { data: tags }] = await Promise.all([
     admin.from("taxonomies").select("id, kind, label").order("label"),

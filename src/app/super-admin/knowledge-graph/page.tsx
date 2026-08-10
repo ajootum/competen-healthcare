@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { graphStats } from "@/lib/engines/graph";
 import { aiStatus } from "@/lib/ai/config";
 import GraphControls from "./GraphControls";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export default async function KnowledgeGraphPage() {
   const supabase = await createClient();
@@ -11,7 +12,7 @@ export default async function KnowledgeGraphPage() {
 
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") redirect("/dashboard");
+  await requireHqCapability("hq.learning.knowledge.view");
 
   const stats = await graphStats(admin);
   const ai = aiStatus();

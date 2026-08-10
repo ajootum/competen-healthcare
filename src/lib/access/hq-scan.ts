@@ -23,8 +23,20 @@ import { HQ_CAPABILITY_CODES } from "@/lib/hq/spaces";
 
 // Four spellings, matching how the guard is actually called: a literal capability, an explicit null, the
 // bare no-argument form, and a capability read off a local constant.
-const HQ_ANY = /requireHqContext\s*\(|resolveHqContext\s*\(/;
-const HQ_CALL = /(?:requireHqContext|resolveHqContext)\s*\(\s*(?:"([a-z0-9._]+)"|(null)|([A-Z][A-Za-z0-9_]*)\s*(?:\.\s*([A-Za-z0-9_]+))?)?\s*\)/g;
+//
+// ⚠ requireHqCapability MUST BE IN BOTH PATTERNS, and forgetting it would have been the third instance of
+// this exact bug. CP-HQ-NAV-001 step 3 converted 167 pages to that helper; a scanner that had never heard
+// of it would have fallen through to classifyGate, found no idiom it recognised, and reported all 167 as
+// `kind: "none"` -- "no access check of any kind - reachable without signing in". The generated matrix
+// would then have published the entire HQ estate to a manager as open to the world, one commit after it
+// was locked down. scan.ts records the same failure for 98 practice routes, and this file's own header
+// records it for requireHqContext. Any future guard helper goes here FIRST.
+const HQ_GUARDS = "requireHqContext|resolveHqContext|requireHqCapability";
+const HQ_ANY = new RegExp(`(?:${HQ_GUARDS})\\s*\\(`);
+const HQ_CALL = new RegExp(
+  `(?:${HQ_GUARDS})\\s*\\(\\s*(?:"([a-z0-9._]+)"|(null)|([A-Z][A-Za-z0-9_]*)\\s*(?:\\.\\s*([A-Za-z0-9_]+))?)?\\s*(?:,[^)]*)?\\)`,
+  "g",
+);
 
 export type HqGateKind = Gate["kind"] | "hq-position";
 export type HqGate = Omit<Gate, "kind"> & { kind: HqGateKind; capabilities?: string[] };
@@ -58,7 +70,7 @@ export function classifyHqGate(source: string, groups: RoleGroups = {}, caps: Ca
     else unresolved = `${m[3]}${m[4] ? "." + m[4] : ""}`;
   }
 
-  const calls = (source.match(/(?:requireHqContext|resolveHqContext)\s*\(/g) ?? []).length;
+  const calls = (source.match(new RegExp(`(?:${HQ_GUARDS})\\s*\\(`, "g")) ?? []).length;
   if (unresolved)
     return { kind: "unknown", roles: [], appointment: true, capabilities: codes,
       evidence: `requireHqContext(${unresolved}) — capability not in the HQ catalogue` };

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceApprovals } from "@/lib/cgr/approvals";
 import { Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-003 — Competency Approval & Governance Workflow Engine. The governance-scoped approval workspace over the
 // real approval stores: pending pipeline, turnaround & SLA, escalation, reviewer workload and a decision-audit
@@ -30,8 +31,7 @@ export default async function GovernanceApprovalsPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadGovernanceApprovals(admin) as any;
   const k = d.kpis;

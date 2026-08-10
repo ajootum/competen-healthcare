@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPolicyRules } from "@/lib/cgr/policy-rules";
 import { Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-008 — Competency Governance Policy & Rules Engine. Makes the enforced governance rules explicit with live
 // population compliance, the risk-tiered governance posture, and the real configured thresholds (review
@@ -25,8 +26,7 @@ export default async function PolicyRulesPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadPolicyRules(admin) as any;
 

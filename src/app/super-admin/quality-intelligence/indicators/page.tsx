@@ -5,6 +5,7 @@ import { loadIndicators } from "@/lib/qie/indicators";
 import ClassifyControl from "./ClassifyControl";
 import ThresholdEditor from "./ThresholdEditor";
 import { cardClass } from "@/components/ui/primitives";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // QIE-002 (Metrics & Indicators) + QIE-003 (Leading & Lagging) — one surface, because over this platform
 // they are one population. A Metric Registry and an Indicator Registry across the same 38 KPIs would be
@@ -29,8 +30,7 @@ export default async function IndicatorsPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.intelligence.view");
 
   const v = await loadIndicators(admin, profile?.hospital_id ?? null, true);
   const s = v.stats;

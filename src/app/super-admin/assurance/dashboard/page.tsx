@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadAssuranceDashboard } from "@/lib/assurance/assurance-dashboard";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CAPA-009 — Organizational Assurance Dashboard. One enterprise assurance score consolidating the live CAPA
 // engines + cross-linked signals, with a per-domain breakdown and a ranked risk list. Real over the assurance
@@ -21,8 +22,7 @@ export default async function AssuranceDashboardPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.assurance.view");
 
   const q = await loadAssuranceDashboard(admin, profile?.hospital_id ?? null, true);
   const card = "bg-white rounded-xl border border-gray-100";

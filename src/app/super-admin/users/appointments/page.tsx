@@ -1,4 +1,4 @@
-import { requireHqContext } from "@/lib/hq/context";
+import { requireHqCapability } from "@/lib/hq/context";
 import { loadHqAppointmentBoard, countHolders, type Read } from "@/lib/hq/appointments";
 import AppointmentsBoard, { type PersonOption } from "./AppointmentsBoard";
 
@@ -16,14 +16,20 @@ import AppointmentsBoard, { type PersonOption } from "./AppointmentsBoard";
  *
  * ⚠ THE GATE IS ON THE PAGE, NOT THE LAYOUT. Next 16's authentication guide: a check in a layout "will
  * not prevent nested route segments and Server Actions from being accessed", and layouts "don't re-render
- * on navigation". requireHqContext() runs here, and again inside every /api/hq/appointments handler.
+ * on navigation". The guard runs here, and again inside every /api/hq/appointments handler.
  *
- * ⚠ READING IS NOT WRITING. requireHqContext admits anyone the capability admits; `ctx.isOwner` is what
+ * ⚠ AND IT ENFORCES RATHER THAN OBSERVES, WHICH ON THIS PAGE IS THE WHOLE BALLGAME. It used to call
+ * requireHqContext, which honours hq_config.mode -- and under `observe` a would_deny still PROCEEDS. That
+ * made this screen, the one that grants HQ positions, reachable by anybody holding any position without
+ * hq.platform.users.view: an appointee could have appointed themselves Chief Executive. Measured live
+ * before CP-HQ-NAV-001 step 3 closed it. requireHqCapability refuses regardless of mode.
+ *
+ * ⚠ READING IS NOT WRITING. The guard admits anyone the capability admits; `ctx.isOwner` is what
  * decides whether the buttons do anything, and the API enforces the same thing again — the client's
  * `canAppoint` flag is a rendering hint and is never trusted by the server.
  */
 export default async function HqAppointmentsPage() {
-  const ctx = await requireHqContext("hq.platform.users.view");
+  const ctx = await requireHqCapability("hq.platform.users.view");
 
   const board = await loadHqAppointmentBoard(ctx.admin);
 

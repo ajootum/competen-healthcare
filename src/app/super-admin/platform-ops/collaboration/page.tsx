@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadCollaboration } from "@/lib/platform/collaboration";
 import { NoteComposer, DeleteComment } from "./CommentControls";
 import { KpiTile as Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -23,8 +24,7 @@ export default async function CollaborationConsole() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.platform.operations.view");
 
   const d = await loadCollaboration(admin, profile?.hospital_id ?? null, true) as any;
 

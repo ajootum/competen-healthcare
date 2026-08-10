@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadRootCause } from "@/lib/qie/root-cause";
 import { StartInvestigation, InvestigationPanel } from "./RootCauseActions";
 import { cardClass } from "@/components/ui/primitives";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // QIE-005 — Root Cause & Causal Intelligence.
 //
@@ -30,8 +31,7 @@ export default async function RootCausePage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.intelligence.view");
 
   const v = await loadRootCause(admin, profile?.hospital_id ?? null, true);
   const s = v.stats;

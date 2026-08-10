@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import AssetSearch from "./AssetSearch";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CAP-006 — Semantic / Vector Search. Hybrid keyword + vector asset search over the whole repository, with
 // a super-admin indexing panel. Keyword works today; semantic recall activates once assets are embedded
@@ -16,8 +17,7 @@ export default async function AssetSearchPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   return (
     <div className="max-w-4xl">

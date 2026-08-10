@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import CaseLibrary from "./CaseLibrary";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // Clinical Case Studies — worked scenarios for case-based learning.
 // Fails soft until migration 026 is applied.
@@ -12,7 +13,7 @@ export default async function CasesPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   let cases: unknown[] = [];
   let installed = true;

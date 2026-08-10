@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceWorkforce } from "@/lib/cgr/workforce";
 import { Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-025 — Governance Workforce Capability Intelligence. The capability of the workforce that GOVERNS
 // competency: governance load distribution + concentration (key-person risk), succession exposure (single-point
@@ -22,8 +23,7 @@ export default async function GovernanceWorkforcePage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadGovernanceWorkforce(admin) as any;
   const k = d.kpis;

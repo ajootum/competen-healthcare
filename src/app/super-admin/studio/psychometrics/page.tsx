@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPsychometricsOverview, loadBankPsychometrics, MIN_ATTEMPTS } from "@/lib/studio/psychometrics";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CST-045 — Quality & Psychometric Analysis Studio. Real item statistics computed from knowledge_attempts
 // (difficulty, point-biserial discrimination, distractor effectiveness, KR-20, SEM). Pick a question bank;
@@ -20,8 +21,7 @@ export default async function PsychometricsPage({ searchParams }: { searchParams
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const overview = await loadPsychometricsOverview(admin);
   const bankId = sp.bank || overview.banks[0]?.id || null;

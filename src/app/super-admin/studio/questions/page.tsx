@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import QuestionBuilder from "./QuestionBuilder";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // Question Builder — governed MCQ banks with pass marks and validity,
 // linked to CPUs so blueprint "knowledge" methods have a delivery engine.
@@ -12,7 +13,7 @@ export default async function QuestionBuilderPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const [{ data: banks }, { data: questions }, { data: cpus }, { data: attempts }] = await Promise.all([
     admin.from("question_banks")

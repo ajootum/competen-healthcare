@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadClinicalIntelligence } from "@/lib/cgr/clinical";
 import { KpiTile as Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-026 — Clinical Practice Intelligence & Outcome Correlation. Two lenses on "is competency improving
 // outcomes": the statistical correlation (CAPM-005, embedded with credit) and the case lens — competencies
@@ -25,8 +26,7 @@ export default async function ClinicalIntelligencePage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadClinicalIntelligence(admin, profile?.hospital_id ?? null, true) as any;
   const k = d.kpis;

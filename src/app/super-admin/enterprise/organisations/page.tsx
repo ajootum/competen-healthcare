@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadOrgDirectory } from "@/lib/enterprise/organisations";
 import OrgDirectory from "./OrgDirectory";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +17,7 @@ export default async function OrganisationsModule() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.executive.enterprise.view");
 
   const { rows, summary, networks } = await loadOrgDirectory(admin);
 

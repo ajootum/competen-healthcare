@@ -5,6 +5,7 @@ import { loadGovernance, REVIEW_LABEL } from "@/lib/config/governance";
 import { loadRegistry } from "@/lib/config/registry";
 import GovernanceConsole from "./GovernanceConsole";
 import { StatWide as Stat } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +23,7 @@ export default async function ConfigurationGovernance() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.platform.operations.view");
 
   const [gov, reg] = await Promise.all([loadGovernance(admin), loadRegistry(admin)]);
   const objectKeys = (reg.provisioned ? reg.objects : []).filter((o: any) => ["NAVIGATION_SECTION", "MODULE", "WIDGET"].includes(o.object_type)).map((o: any) => ({ key: o.object_key, name: o.display_name }));

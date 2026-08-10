@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import CpuImporter from "./CpuImporter";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CPU Document Import — paste an authored Clinical Practice Unit document,
 // review exactly what was extracted, then commit it to the library.
@@ -12,7 +13,7 @@ export default async function CpuImportPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const [{ data: practices }, { data: domains }] = await Promise.all([
     admin.from("practices").select("id, name, code, framework_domains(name, frameworks(name))").order("name"),

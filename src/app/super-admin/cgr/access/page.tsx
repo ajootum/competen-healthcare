@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceAccess } from "@/lib/cgr/access";
 import { Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-014 — Competency Governance Security, Privacy & Access Control. The governance access map, the
 // separation-of-duties check (author AND approver of the same object), assessor independence and permission
@@ -28,8 +29,7 @@ export default async function GovernanceAccessPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadGovernanceAccess(admin) as any;
   const k = d.kpis;

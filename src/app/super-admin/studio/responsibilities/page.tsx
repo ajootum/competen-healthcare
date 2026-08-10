@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import ResponsibilitiesManager from "./ResponsibilitiesManager";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // Ownership & Responsibilities (User Account Architecture §15) — every
 // published content object should have an identifiable, accountable owner.
@@ -12,7 +13,7 @@ export default async function ResponsibilitiesPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const [{ data: resp }, { data: staff }, { data: frameworks }, { data: cpus }, { data: banks }] = await Promise.all([
     admin.from("content_responsibilities")

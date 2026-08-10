@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadAdaptiveExams } from "@/lib/studio/adaptive";
 import AdaptiveManager from "./AdaptiveManager";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CST-036 — Adaptive Examination Designer. Adaptive exam blueprints over a question-bank item pool
 // (cst_adaptive_exams, migration 136): length, starting difficulty, mastery threshold and standard-error
@@ -18,8 +19,7 @@ export default async function AdaptivePage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const ad = await loadAdaptiveExams(admin, profile?.hospital_id ?? null, true);
   const { data: bankData } = await admin.from("question_banks").select("id, name").eq("is_active", true).order("name").limit(400);

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceRegistry, type GovRecord } from "@/lib/cgr/registry";
 import AiCopilotPanel from "@/components/AiCopilotPanel";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-007 — Governance Intelligence & Predictive Risk. A live copilot grounded in the Competency Governance
 // Registry (CGR-001) — it flags ownership, regulatory, review and evidence gaps and prioritises governance
@@ -28,8 +29,7 @@ export default async function CgrAiPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadGovernanceRegistry(admin);
   const k = d.kpis;

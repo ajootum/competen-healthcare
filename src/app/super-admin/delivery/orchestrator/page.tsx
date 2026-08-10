@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadDeliveryQueue } from "@/lib/delivery/orchestrator";
 import OrchestratorRunner from "./OrchestratorRunner";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CDP-001 — Delivery Orchestrator surface. The delivery queue over active assignment rules: which competency
 // is pending delivery to which population, and a Run control that materialises pending deliveries (+ emits
@@ -23,8 +24,7 @@ export default async function OrchestratorPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.delivery.view");
 
   const q = await loadDeliveryQueue(admin, null, true);
 

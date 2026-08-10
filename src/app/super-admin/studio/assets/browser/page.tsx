@@ -4,6 +4,7 @@ import Link from "next/link";
 import { listAssets, assetFacets, assetOrgOptions, assetsHaveOrgDimension, type AssetRow } from "@/lib/assets/service";
 import { assetIndexStatus, overlayLinkStatus } from "@/lib/assets/registry";
 import AssetBrowser from "./AssetBrowser";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CAP-001 — Asset Browser (Phase 3). The Repository Administration Console: browse, filter and search the
 // governed cap_assets index, refresh it from the 12 source tables, and drill through to each asset's home.
@@ -17,8 +18,7 @@ export default async function AssetBrowserPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   let facets: { byType: Record<string, number>; byStatus: Record<string, number>; total: number } = { byType: {}, byStatus: {}, total: 0 };
   let first: { rows: AssetRow[]; total: number; page: number; pageSize: number } = { rows: [], total: 0, page: 1, pageSize: 25 };

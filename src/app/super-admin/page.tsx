@@ -1,4 +1,4 @@
-import { requireHqContext } from "@/lib/hq/context";
+import { requireHqCapability } from "@/lib/hq/context";
 import { HQ_HOME_CAPABILITY } from "@/lib/hq/spaces";
 import Link from "next/link";
 import { loadMissionControl } from "@/lib/super-admin/mission-control";
@@ -65,14 +65,14 @@ export default async function MissionControl() {
   // super_admin ROLE, so the first non-owner ever appointed passed both gates, landed here, and was
   // bounced straight back to their old portal. The gate was right and the door behind it was not.
   //
-  // requireHqContext(HQ_HOME_CAPABILITY) asks the question the position matrix exists to answer, and
-  // hq.platform.home.view is granted to every seeded position for exactly this reason: migration 264's
-  // own note says a position that can reach nothing at all is a support ticket.
+  // The capability asks the question the position matrix exists to answer, and hq.platform.home.view is
+  // granted to every seeded position for exactly this reason: migration 264's own note says a position
+  // that can reach nothing at all is a support ticket.
   //
-  // ⚠ AND IT IS ONE OF 168. Only 36 of the 204 /super-admin pages carry requireHqContext; the rest still
-  // test the super_admin role directly, so an appointee will be refused by most of what the sidebar shows
-  // them. That is the nav-filtering work queued in CP-HQ-NAV-001, not a defect in this page.
-  const ctx = await requireHqContext(HQ_HOME_CAPABILITY);
+  // ⚠ AND ALL 205 PAGES NOW CARRY ONE. CP-HQ-NAV-001 step 3 converted the 167 that still tested the
+  // super_admin role directly, plus the 38 that honoured hq_config.mode -- see requireHqCapability for why
+  // the mode-honouring spelling was an escalation path rather than a safe default.
+  const ctx = await requireHqCapability(HQ_HOME_CAPABILITY);
   const admin = ctx.admin as any;
 
   const mc = await loadMissionControl(admin);

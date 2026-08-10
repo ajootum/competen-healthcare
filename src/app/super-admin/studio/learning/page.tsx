@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadLearningPaths } from "@/lib/studio/learning-paths";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CST-005 — Learning Path Studio. A Studio view over the authored learning structures: curricula
 // (programmes) with their competency and module counts, the governed learning-resource library by type,
@@ -17,8 +18,7 @@ export default async function StudioLearningPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const lp = await loadLearningPaths(admin, profile?.hospital_id ?? null, true);
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadRegistry } from "@/lib/config/registry";
 import { loadGovernance } from "@/lib/config/governance";
 import { loadCatalogue } from "@/lib/config/catalogue";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
@@ -113,8 +114,7 @@ export default async function NoCodePlatform() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.platform.operations.view");
 
   const [reg, gov, cat] = await Promise.all([
     loadRegistry(admin).catch(() => ({ provisioned: false })) as Promise<any>,

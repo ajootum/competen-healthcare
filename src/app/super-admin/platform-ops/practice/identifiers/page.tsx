@@ -5,6 +5,7 @@ import {
   getFormat, formatHistory, formatPractitionerNumber, FORMAT_CHANGE_ACKNOWLEDGEMENT,
 } from "@/lib/practice/identifier-format";
 import IdentifierFormatConsole from "./IdentifierFormatConsole";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // /super-admin/platform-ops/practice/identifiers -- the shape of the practitioner number.
 //
@@ -29,8 +30,7 @@ export default async function IdentifierFormats() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = ((profile?.roles?.length ? profile.roles : [profile?.role]) as string[]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.practice.operations.view");
 
   const [format, history] = await Promise.all([getFormat(admin), formatHistory(admin)]);
   const { count: issued } = await admin.from("practice_practitioner_identity")

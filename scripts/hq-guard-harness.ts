@@ -126,10 +126,45 @@ for (const bad of ["auth-only", "none", "unknown"] as const) {
   ok(`E2.${bad}`, hits.length === 0,
     `zero /super-admin pages classify as "${bad}"${hits.length ? ` -- ${hits.slice(0, 6).join(", ")}` : ""}`);
 }
-ok("E3", (byKind.get("hq-position") ?? []).length >= 36,
-  `${(byKind.get("hq-position") ?? []).length} pages now carry an HQ capability gate (the 36 that had no gate of their own)`);
-ok("E4", (byKind.get("single-role") ?? []).length > 0,
-  `control: ${(byKind.get("single-role") ?? []).length} pages still classify as single-role -- the classifier has not simply stopped distinguishing kinds`);
+ok("E3", (byKind.get("hq-position") ?? []).length === pages.length,
+  `ALL ${(byKind.get("hq-position") ?? []).length} of ${pages.length} pages carry an HQ capability gate (CP-HQ-NAV-001 step 3 converted the last 167)`);
+
+// ⚠ THIS CONTROL USED TO COUNT REAL PAGES, AND A GENUINE SUCCESS TURNED IT RED. It asserted that SOME page
+// still classified as `single-role`, which proved the classifier could tell the kinds apart -- a sound
+// control right up to the moment the last role-gated page was converted, at which point it began demanding
+// that the estate stay partly unconverted. The property it defends is real, so it is now asserted against a
+// FIXTURE rather than against however much work happens to be unfinished that week. Same lesson as
+// sidebar-active-harness C7/C8: when the live data stops exercising a property, exercise it directly.
+const roleGatedFixture = `import { redirect } from "next/navigation";
+export default async function P(){ const roles: string[] = []; if (!roles.includes("super_admin")) redirect("/dashboard"); return null }`;
+ok("E4", classifyHqGate(roleGatedFixture, {}, CAPABILITY_CONSTS).kind === "single-role",
+  `control: the classifier still returns single-role for the idiom the 167 carried (got ${classifyHqGate(roleGatedFixture, {}, CAPABILITY_CONSTS).kind}) -- it has not simply stopped distinguishing kinds`);
+
+// ⚠ AND THE ONE THAT REPLACES WHAT E4 WAS REALLY GUARDING. Every page enforcing is only meaningful if no
+// page quietly reverts to the mode-honouring guard: requireHqContext obeys hq_config.mode, and `observe`
+// ADMITS a would_deny. Before step 3 that left 37 pages -- including the appointment screen that grants HQ
+// positions -- reachable by an appointee holding none of their capabilities.
+// ⚠ COMMENTS STRIPPED FIRST, AND WITHOUT IT THIS ASSERTION IS A FALSE ALARM RATHER THAN A CONTROL. Two of
+// the converted pages EXPLAIN in prose why they no longer call requireHqContext, so a raw text search finds
+// the word in exactly the files that document having stopped using it.
+const stripComments = (s: string) =>
+  s.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter(l => !l.trim().startsWith("//") && !l.trim().startsWith("*")).join("\n");
+const modeHonouring = classified.filter(c =>
+  /requireHqContext\s*\(/.test(stripComments(readFileSync(c.file, "utf8"))));
+ok("E5", modeHonouring.length === 0,
+  `zero pages use the mode-honouring guard${modeHonouring.length ? ` -- ${modeHonouring.slice(0, 6).map(c => c.route).join(", ")}` : " -- none can be widened by flipping hq_config"}`);
+
+// ⚠ E3-E5 ARE ALL ABOUT WHICH SPELLING IS WRITTEN DOWN. None of them proves the spelling DOES anything.
+// These two close that gap: the mode distinction is real, and the enforcing guard actually asks for it.
+const holderOfSomethingElse = { isOwner: false, positions: ["p"], capabilities: ["hq.platform.ai.view"], capability: "hq.platform.users.view" as string | null };
+ok("E6", decideHq({ ...holderOfSomethingElse, mode: "enforce" }).allowed === false,
+  "an appointee lacking the route's capability is REFUSED under enforce -- which is what requireHqCapability asks for");
+ok("E6-control", decideHq({ ...holderOfSomethingElse, mode: "observe" }).allowed === true,
+  "control: the SAME input is ADMITTED under observe -- E6 is the mode doing work, not a decider that refuses everything");
+
+const contextSrc = stripComments(readFileSync("src/lib/hq/context.ts", "utf8"));
+ok("E7", /requireHqCapability[\s\S]{0,400}?resolveHqContext\([^)]*\{\s*enforce:\s*true\s*\}\s*\)/.test(contextSrc),
+  "requireHqCapability really passes enforce:true -- the 205 pages are not calling a guard that quietly observes");
 
 // ── 2. The intent map, in BOTH directions ───────────────────────────────────
 console.log("\n2. THE INTENT MAP -- a new route must fail, not disappear");

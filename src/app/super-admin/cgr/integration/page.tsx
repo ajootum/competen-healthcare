@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadIntegrationHealth } from "@/lib/cgr/integration";
 import { Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-013 — Competency Governance Interoperability & Integration. The event-driven integration health monitor
 // over the real governance event bus (domain_events): processing success, retry/dead-letter backlog, event flow
@@ -33,8 +34,7 @@ export default async function IntegrationHealthPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadIntegrationHealth(admin) as any;
   const k = d.kpis;

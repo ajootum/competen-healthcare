@@ -1,4 +1,4 @@
-import { requireHqContext } from "@/lib/hq/context";
+import { requireHqCapability } from "@/lib/hq/context";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import PolicyEditor from "./PolicyEditor";
@@ -10,7 +10,7 @@ export default async function PolicyManagerPage() {
 
   // Per-page guard (PLAT-ARCH-SURVEY-001 s2.5). Next 16: a layout auth check "will not prevent nested
   // route segments and Server Actions from being accessed" -- so the gate lives here, not upstairs.
-  const { admin } = await requireHqContext("hq.quality.policy.view");
+  const { admin } = await requireHqCapability("hq.quality.policy.view");
   const { data: policies } = await admin
     .from("policies")
     .select("id, title, policy_type, version, effective_date, review_date, is_active, created_at, hospitals(name), frameworks(name), departments(name)")

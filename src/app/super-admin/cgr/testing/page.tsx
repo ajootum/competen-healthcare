@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceTesting } from "@/lib/cgr/testing";
 import { Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-017 — Competency Governance Simulation, Testing & Validation. The validation backbone: release-readiness
 // gate, test-suite health and run history over configuration_test_suites/runs, with change-impact simulation
@@ -29,8 +30,7 @@ export default async function GovernanceTestingPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadGovernanceTesting(admin) as any;
   const k = d.kpis;

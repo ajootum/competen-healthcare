@@ -5,6 +5,7 @@ import { loadPlatformOps } from "@/lib/super-admin/platform-ops";
 import { loadPlatformOperations } from "@/lib/platform/operations";
 import PlatformOpsHeader from "./_po/PlatformOpsHeader";
 import MissionControlBoard from "./MissionControlBoard";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
@@ -64,8 +65,7 @@ export default async function PlatformOperations() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.platform.operations.view");
 
   const [po, ops] = await Promise.all([loadPlatformOps(admin), loadPlatformOperations(admin)]);
   const { kpis, services, servicesSummary, tenantSummary, workspaceSummary, licensing, activity, activityReady, version } = po;

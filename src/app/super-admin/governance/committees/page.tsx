@@ -1,4 +1,4 @@
-import { requireHqContext } from "@/lib/hq/context";
+import { requireHqCapability } from "@/lib/hq/context";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import CommitteesManager from "./CommitteesManager";
@@ -10,7 +10,7 @@ export default async function CommitteesPage() {
 
   // Per-page guard (PLAT-ARCH-SURVEY-001 s2.5). Next 16: a layout auth check "will not prevent nested
   // route segments and Server Actions from being accessed" -- so the gate lives here, not upstairs.
-  const { admin } = await requireHqContext("hq.quality.governance.view");
+  const { admin } = await requireHqCapability("hq.quality.governance.view");
   const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
   if (!["super_admin", "hospital_admin"].includes(profile?.role ?? "")) redirect("/dashboard");
 

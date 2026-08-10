@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadOutcomeCorrelation } from "@/lib/performance/outcome-correlation";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CAPM-005 — Competency-to-Outcome Correlation (operator view). Per-department competency coverage vs real
 // clinical-safety outcomes (observation compliance, escalation rate), with a Pearson correlation across
@@ -18,8 +19,7 @@ export default async function OutcomeCorrelationPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.executive.performance.view");
 
   const q = await loadOutcomeCorrelation(admin, profile?.hospital_id ?? null, true);
   const card = "bg-white rounded-xl border border-gray-100";

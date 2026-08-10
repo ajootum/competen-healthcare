@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadDeliveryConfig } from "@/lib/delivery/config";
 import DeliveryConfigForm from "./DeliveryConfigForm";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CDP-014 — Learning Governance & Delivery Configuration (operator view). The delivery engines used to carry
 // hard-coded policy; this surface makes that policy governable and the engines read it at runtime. Real over
@@ -17,8 +18,7 @@ export default async function DeliveryConfigPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.delivery.view");
 
   const q = await loadDeliveryConfig(admin);
 

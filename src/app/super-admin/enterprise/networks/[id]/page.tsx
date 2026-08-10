@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { loadNetworkProfile } from "@/lib/enterprise/networks";
 import NetworkProfileClient from "./NetworkProfileClient";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -13,8 +14,7 @@ export default async function NetworkProfilePage({ params }: { params: Promise<{
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.executive.enterprise.view");
 
   const data = await loadNetworkProfile(admin, id);
   if (!data) notFound();

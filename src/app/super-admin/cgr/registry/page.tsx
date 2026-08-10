@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceRegistry, type GovRecord, type GovState } from "@/lib/cgr/registry";
 import { Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-001 — Competency Governance Registry & Master Control. The Registry Explorer + Governance Profile:
 // one governance record per competency DEFINITION, joined live from the real governance spine (risk,
@@ -74,8 +75,7 @@ export default async function GovernanceRegistryPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadGovernanceRegistry(admin);
   const k = d.kpis;

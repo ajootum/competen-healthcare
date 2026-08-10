@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadAssessorReliability } from "@/lib/assurance/assessor-reliability";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CAPA-005 — Assessor Reliability Engine (operator view). Per-assessor scoring behaviour vs peers — leniency/
 // severity, consistency, inter-rater agreement — over real assessments + skill_scores. Super-admin, platform-wide.
@@ -17,8 +18,7 @@ export default async function AssessorReliabilityPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.assurance.view");
 
   const q = await loadAssessorReliability(admin, profile?.hospital_id ?? null, true);
   const card = "bg-white rounded-xl border border-gray-100";

@@ -5,6 +5,7 @@ import { loadControlPlane } from "@/lib/platform/control-plane";
 import { loadRuntimeStatus } from "@/lib/platform/runtime";
 import InfraStatusBar from "./InfraStatusBar";
 import RecordDeployment from "./RecordDeployment";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
@@ -51,8 +52,7 @@ export default async function ControlPlaneConsole() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.platform.operations.view");
 
   const [cp, runtime] = await Promise.all([loadControlPlane(admin), loadRuntimeStatus(admin)]);
   const { environment: env, release, map, regions, products, productsSummary, featureFlags, identity, events, eventsReady } = cp;

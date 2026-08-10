@@ -1,4 +1,4 @@
-import { requireHqContext } from "@/lib/hq/context";
+import { requireHqCapability } from "@/lib/hq/context";
 import { loadAiPrompts } from "@/lib/ai/services";
 import { Head, Tabs, Card, Stat, Pill, Provision, Foot } from "../_ui";
 
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const CAT_COLORS = ["#8b5cf6", "#3b82f6", "#22c55e", "#f59e0b", "#14b8a6", "#ef4444", "#6366f1", "#a855f7"];
 
 export default async function PromptsPage() {
-  const { admin } = await requireHqContext("hq.platform.ai.view");
+  const { admin } = await requireHqCapability("hq.platform.ai.view");
   const d = await loadAiPrompts(admin) as any;
   const head = <Head code="AIS-007 · AI Services Platform" title="Prompt & Conversation Framework" sub="The reusable prompt-template and persona registry the Global Copilot compiles from — system policy + persona + context + knowledge + request." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="007" /><Provision /></div>;

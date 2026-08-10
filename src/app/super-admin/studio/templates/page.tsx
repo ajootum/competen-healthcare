@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadTemplateLibrary } from "@/lib/studio/templates";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CST-102 — Competency Template Library. A governed catalogue of the reusable assets that can be cloned
 // as starting points (framework libraries, skill objects, question banks, checklists, CPUs) — real
@@ -16,8 +17,7 @@ export default async function StudioTemplatesPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const { total, categories, featured, libraryBreakdown } = await loadTemplateLibrary(admin, profile?.hospital_id ?? null, true);
 

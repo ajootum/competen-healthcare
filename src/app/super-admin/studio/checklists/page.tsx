@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import ChecklistBuilder from "./ChecklistBuilder";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // Checklist Builder — structured checklists with sections, scoring rules and
 // critical-fail items ("latest competen" §4).
@@ -12,7 +13,7 @@ export default async function ChecklistBuilderPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const [{ data: skills }, { data: checklists }, { data: items }] = await Promise.all([
     admin.from("competency_skills")

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadAssessmentCentre } from "@/lib/super-admin/ckp-assessment";
 import AssessmentBuilder from "./AssessmentBuilder";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
@@ -46,8 +47,7 @@ export default async function AssessmentValidationCentre() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.knowledge.view");
 
   const a = await loadAssessmentCentre(admin);
   const k = a.kpis;

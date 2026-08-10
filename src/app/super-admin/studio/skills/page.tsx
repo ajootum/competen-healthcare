@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import SkillBuilder from "./SkillBuilder";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // Skill Builder — skills as standalone reusable objects ("latest competen" §3).
 // One skill (e.g. "Verifies patient identity") attaches to many competencies.
@@ -12,7 +13,7 @@ export default async function SkillBuilderPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const [{ data: skills }, { data: instances }, { data: competencies }] = await Promise.all([
     admin.from("skill_library")

@@ -1,4 +1,4 @@
-import { requireHqContext } from "@/lib/hq/context";
+import { requireHqCapability } from "@/lib/hq/context";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -9,7 +9,7 @@ export default async function AllHospitalsPage() {
 
   // Per-page guard (PLAT-ARCH-SURVEY-001 s2.5). Next 16: a layout auth check "will not prevent nested
   // route segments and Server Actions from being accessed" -- so the gate lives here, not upstairs.
-  const { admin } = await requireHqContext("hq.platform.tenants.view");
+  const { admin } = await requireHqCapability("hq.platform.tenants.view");
 
   const { data: hospitals } = await admin
     .from("hospitals")

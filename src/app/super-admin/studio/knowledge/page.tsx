@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import KnowledgeLibrary from "./KnowledgeLibrary";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // Clinical Knowledge Objects — the governed home for authored clinical
 // knowledge (anatomy, physiology, classification, reasoning). Fails soft
@@ -13,7 +14,7 @@ export default async function KnowledgePage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   let objects: unknown[] = [];
   let cpus: { id: string; name: string }[] = [];

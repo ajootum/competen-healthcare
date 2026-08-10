@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadChangeControl } from "@/lib/cgr/change-control";
 import { Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-004 — Competency Change Control & Lifecycle Management. Change log + impact assessment + version/lifecycle
 // over the real stores. Change authoring cross-links to the review board / lifecycle management. Super-admin.
@@ -34,8 +35,7 @@ export default async function ChangeControlPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadChangeControl(admin) as any;
   const k = d.kpis;

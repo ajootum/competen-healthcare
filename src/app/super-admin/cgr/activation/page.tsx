@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadActivationReadiness } from "@/lib/cgr/activation";
 import { ProfileBuilder, ProfileStatus } from "./ProfileBuilder";
 import { KpiTile as Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-028 — Service Activation Readiness (§9, over migration 151). Service profiles state what a service
 // REQUIRES; the gate evaluates each active profile against every department's real workforce — current
@@ -28,8 +29,7 @@ export default async function ActivationReadinessPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const [d, compRes] = await Promise.all([
     loadActivationReadiness(admin) as any,

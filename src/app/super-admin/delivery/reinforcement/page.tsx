@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadReinforcementQueue } from "@/lib/delivery/reinforcement";
 import ReinforcementGenerator from "./ReinforcementGenerator";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CDP-004 — Reinforcement coverage (operator view). Spaced-repetition reach across the workforce + a control
 // to generate cards from achieved competency decisions. The learner review loop lives at /dashboard/reinforcement.
@@ -15,8 +16,7 @@ export default async function ReinforcementAdminPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.delivery.view");
 
   const q = await loadReinforcementQueue(admin, null, true);
 

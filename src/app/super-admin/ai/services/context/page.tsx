@@ -1,4 +1,4 @@
-import { requireHqContext } from "@/lib/hq/context";
+import { requireHqCapability } from "@/lib/hq/context";
 import { loadAiContext } from "@/lib/ai/services";
 import { Head, Tabs, Card, Stat, Pill, Provision, Foot } from "../_ui";
 
@@ -11,7 +11,7 @@ const DOMAIN_ICON: Record<string, string> = { user: "👤", workspace: "🖥️"
 const PIPELINE = ["Validate identity & tenant", "Resolve authorized role/workspace/object", "Screen for sensitive data & injection", "Retrieve authorized evidence", "Assemble & sign context envelope", "Hand to prompt compiler"];
 
 export default async function ContextPage() {
-  const { admin } = await requireHqContext("hq.platform.ai.view");
+  const { admin } = await requireHqCapability("hq.platform.ai.view");
   const d = await loadAiContext(admin) as any;
   const head = <Head code="AIS-002 · AI Services Platform" title="Context Resolution Engine" sub="Assembles the complete, permission-filtered context package — signed — before any AI model is invoked, so every interaction is safe, relevant and explainable." />;
   if (!d.provisioned) return <div className="max-w-[1500px] space-y-4">{head}<Tabs active="002" /><Provision /></div>;

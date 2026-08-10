@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadAssuranceDashboard } from "@/lib/assurance/assurance-dashboard";
 import AiCopilotPanel from "@/components/AiCopilotPanel";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CAPA-010 — AI Assurance Intelligence. A live copilot grounded in the consolidated enterprise assurance picture,
 // alongside the signals it reasons over. Predict / recommend / explain over the real assurance score + risks —
@@ -22,8 +23,7 @@ export default async function AssuranceAiPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.assurance.view");
 
   const q = await loadAssuranceDashboard(admin, profile?.hospital_id ?? null, true);
   const card = "bg-white rounded-xl border border-gray-100";

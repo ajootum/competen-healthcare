@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceMarketplace } from "@/lib/cgr/marketplace";
 import { Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-021 — Competency Governance Marketplace & External Standards Exchange. The governance-resource catalog:
 // packages by domain, the shared-vs-private split, publication readiness and licensing over the real package
@@ -34,8 +35,7 @@ export default async function GovernanceMarketplacePage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadGovernanceMarketplace(admin) as any;
   const k = d.kpis;

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadTranslations } from "@/lib/studio/translations";
 import TranslationManager from "./TranslationManager";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CAP-012 — Translation & Localisation Engine. Tracks asset translations into non-English locales
 // (cap_asset_translations, migration 137): register a translation, advance its status, and see locale
@@ -16,8 +17,7 @@ export default async function TranslationsPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const tr = await loadTranslations(admin, profile?.hospital_id ?? null, true);
 

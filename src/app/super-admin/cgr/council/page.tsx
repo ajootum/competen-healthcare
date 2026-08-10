@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadGovernanceCouncil } from "@/lib/cgr/council";
 import { Kpi } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CGR-010 — Competency Governance Operating Model & Council. The LIVE council structure (governance_committees +
 // members + what each governs) with accountability coverage, above the office's STATED operating model (decision
@@ -44,8 +45,7 @@ export default async function GovernanceCouncilPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.quality.regulation.view");
 
   const d = await loadGovernanceCouncil(admin) as any;
   const k = d.kpis;

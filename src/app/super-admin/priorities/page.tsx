@@ -1,4 +1,4 @@
-import { requireHqContext } from "@/lib/hq/context";
+import { requireHqCapability } from "@/lib/hq/context";
 import { loadStrategyManager } from "@/lib/priorities/strategy";
 import { Head, ModuleNav, Card, Stat, Pill, Progress, Ring, Provision, Foot, STATUS_TONE } from "./_ui";
 import { NewObjectiveButton, ObjectiveControls } from "./StrategyAuthor";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const KR_TONE: Record<string, string> = { on_track: "bg-[var(--cmp-color-success)]", at_risk: "bg-[var(--cmp-color-warning)]", off_track: "bg-[var(--cmp-color-error)]", achieved: "bg-teal-500" };
 
 export default async function StrategyManagerPage() {
-  const { admin } = await requireHqContext("hq.executive.priorities.view");
+  const { admin } = await requireHqCapability("hq.executive.priorities.view");
   const d = await loadStrategyManager(admin) as any;
 
   const head = <Head code="PPE-001 · Priority & Execution Framework" title="Organizational Objectives & Strategy Manager" sub="Define strategic themes, objectives and OKRs, cascade them through the hierarchy, and govern publishing — the authoritative source that feeds the platform priority cascade." />;

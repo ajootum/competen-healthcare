@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadContentQa } from "@/lib/studio/content-qa";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CST-107 — Competency Quality Assurance Centre. Systematic QA over the AUTHORED competency content:
 // completeness, assessment integrity, evidence coverage, metadata and structural checks — every score
@@ -25,8 +26,7 @@ export default async function StudioQaPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.studio.view");
 
   const qa = await loadContentQa(admin, profile?.hospital_id ?? null, true);
 

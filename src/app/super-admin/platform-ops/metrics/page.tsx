@@ -4,6 +4,7 @@ import Link from "next/link";
 import MetricEditor from "./MetricEditor";
 import { listDataFunctions } from "@/lib/config/metric-runtime";
 import { Stat } from "../_kit";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +21,7 @@ export default async function MetricsBuilder() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.platform.operations.view");
 
   const { data: metrics, error } = await admin.from("configuration_registry_objects")
     .select("object_key, display_name, description, data_source_key, status, definition")

@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { requireHqCapability } from "@/lib/hq/context";
 
 type AuditEntry = {
   id: string;
@@ -36,7 +37,7 @@ export default async function AuditLogPage() {
 
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "super_admin") redirect("/dashboard");
+  await requireHqCapability("hq.platform.audit.view");
 
   const { data: entries } = await admin
     .from("audit_log")

@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadSimDelivery } from "@/lib/delivery/simulation-practice";
+import { requireHqCapability } from "@/lib/hq/context";
 
 // CDP-005 — Clinical Simulation & Practice delivery (operator view). Practice participation + coverage by
 // scenario type + follow-up. Real over cdp_sim_sessions (147). Super-admin, platform-wide. Learners log
@@ -15,8 +16,7 @@ export default async function SimDeliveryPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles = (profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[];
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.learning.delivery.view");
 
   const q = await loadSimDelivery(admin, null, true);
 

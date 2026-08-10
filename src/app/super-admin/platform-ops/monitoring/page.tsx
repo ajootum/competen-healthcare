@@ -5,6 +5,7 @@ import { loadMonitoring } from "@/lib/platform/monitoring";
 import { loadJobs } from "@/lib/platform/jobs";
 import MonitoringHeader from "./MonitoringHeader";
 import JobsPanel from "./JobsPanel";
+import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
@@ -43,8 +44,7 @@ export default async function MonitoringOperations() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
-  if (!roles.includes("super_admin")) redirect("/dashboard");
+  await requireHqCapability("hq.platform.operations.view");
 
   const [m, jobs] = await Promise.all([loadMonitoring(admin), loadJobs(admin)]);
   const { kpis, services, servicesSummary, alerts, alertsSummary, events, eventsReady } = m;
