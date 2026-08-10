@@ -1,0 +1,939 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  WEIGHT_TONE, NOT_CHECKED_TONE, NOT_CHECKED_LABEL, doseSafetyNotice,
+  DOSE_BASES, WEIGHT_STATES_NEEDING_DECISION, weightDecisionHeadline, WEIGHT_DECISION_ASK,
+  BSA_NEEDS_MEASUREMENTS, ADULT_NO_WEIGHT_REFUSED,
+} from "@/lib/practice/medication-constants";
+import {
+  TREATMENT_REFUSALS, QUICK_ADD_NOT_A_RECOMMENDATION, TEMPLATES_ARE_REVALIDATED,
+  CUSTOM_WORDING_PRESERVED, OTHER_OPTION_CODE, treatmentShape, BATCH_BOUNDARY,
+  SAFETY_VERDICT_CHIP, SAFETY_VERDICT_MARK, ALLERGY_UNRESOLVED_ASK, NKDA_IS_SOMETHING_SOMEBODY_SAID,
+} from "@/lib/practice/treatment-capture-constants";
+import {
+  ALLERGY_SEVERITIES, ALLERGY_CERTAINTIES, BLOOD_GROUPS, type SafetyLine,
+} from "@/lib/practice/longitudinal-constants";
+import type { TreatmentCapturePayload, PendingTreatment, TreatmentOption } from "@/lib/practice/treatment-capture";
+import type { PatientMedications, DoseCalculationResult } from "@/lib/practice/medication";
+
+// CPR-TREAT-001 -- THE TREATMENT TAB.
+//
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// s2's INTERACTION MODEL, IN ORDER, TOP TO BOTTOM:
+//
+//   Safety checkpoint  ->  Quick add / templates  ->  Builder  ->  Pending plan  ->  Record N
+//
+// ⚠ THE SAFETY CHECKPOINT IS FIRST AND IT IS NOT A SUMMARY. s10 says the Treatment workflow CONSUMES the
+// Safety Snapshot rather than asking again, so the allergy line, the weight verdict and the nine
+// deferred checks are the SAME payload the snapshot at the top of the page renders -- one read, one
+// truth, no duplicate entry (s10's last line).
+//
+// ⚠ AN EMPTY ALLERGY LIST IS "UNKNOWN", NOT "CLEAR". AC-08. Nobody has said this patient has no
+// allergies; the list is simply empty, and a green tick over an empty list is the single most dangerous
+// thing this screen could draw.
+//
+// ⚠ NOTHING IN THIS FILE IS A CLINICAL LIST. s6 is a FROZEN REQUIREMENT. Every formulation, dose unit,
+// route, frequency, duration and non-drug category is read from configuration at request time and
+// rendered from props. The only strings here are the ones about the product's own boundaries.
+//
+// ⚠ THE DOSE ARITHMETIC IS medication.ts's, CALLED, NOT COPIED. The weight-based calculator posts to
+// /api/v1/practice/medications -- the same endpoint MedicationConsole uses -- and every rule that
+// component enforces is enforced here: the figure is never rendered without its working and its notice,
+// and a road that ends in a refusal is closed before it is walked rather than after.
+//
+// ⚠ WHAT WAS PRESCRIBED, NOT WHAT WAS ADMINISTERED. s16, printed on the tab from the engine's constant.
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+const CARD = "rounded-xl border border-gray-200 bg-white p-3.5";
+const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+const BTN = "rounded-lg bg-[var(--cp-primary)] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50";
+const QUIET = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50";
+const CHIP = "rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-gray-800 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/5 disabled:opacity-50";
+const CHIP_ON = "rounded-full border border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary-deep)]";
+const LABEL = "block text-[10px] font-semibold uppercase tracking-wide text-gray-500";
+
+const blankDraft = (treatmentType: string): PendingTreatment => ({
+  treatmentType, label: "", medicationRef: null, brandName: null, strengthText: null,
+  formulation: null, dose: null, doseUnit: null, route: null,
+  frequencyCode: null, frequencyText: null, frequencyPerDay: null,
+  duration: null, nonDrugCategory: null, reason: null, templateId: null,
+});
+
+export default function TreatmentCapture(props: {
+  encounterId: string;
+  patientId: string;
+  capture: TreatmentCapturePayload;
+  medication: PatientMedications;
+  recorded: { id: string; treatment_type: string; label: string; dose: string | null; route: string | null;
+    frequency: string | null; duration: string | null; status: string; notes?: string | null }[];
+  canRecord: boolean;
+  canPrescribe: boolean;
+  locked: boolean;
+  /**
+   * ── THE MEDICATION SAFETY STRIP -- CPR-TREAT-001 s10, and the owner's own comp ─────────────────
+   *
+   * ⚠ THESE COME FROM patientSnapshot, NOT FROM THE MEDICATION PAYLOAD, AND THE DIFFERENCE IS THE
+   * WHOLE POINT. An EMPTY allergy list means NOBODY ASKED. `allergyLine.safeToRead` is true only when
+   * a practitioner came through and ANSWERED the question, which stamps who and when. Deriving
+   * reassurance from `items.length === 0` is exactly the mistake longitudinal-constants.ts calls the
+   * single most safety-critical function in this build.
+   */
+  allergyLine: SafetyLine;
+  allergyList: { items: { id: string; substance: string; reaction: string | null; severity: string | null; certainty: string }[]; permitted: boolean; unavailable: boolean; detail: string | null };
+  bloodGroupLine: SafetyLine;
+  /** The capability the existing allergy route already declares. No new code was invented. */
+  canEditPatient: boolean;
+}) {
+  const router = useRouter();
+  const editable = props.canRecord && !props.locked;
+  const cap = props.capture;
+  const med = props.medication;
+
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [itemResults, setItemResults] = useState<{ label: string; ok: boolean; message: string | null }[]>([]);
+
+  const [plan, setPlan] = useState<PendingTreatment[]>([]);
+  const [draft, setDraft] = useState<PendingTreatment>(() =>
+    blankDraft(cap.options.byField.treatment_type?.[0]?.code ?? "medication"));
+  const [customFrequency, setCustomFrequency] = useState("");
+  const [medQuery, setMedQuery] = useState("");
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+
+  // ── The allergy answer, and the blood group that travels with it ─────────────────────────────────
+  const [allergyOpen, setAllergyOpen] = useState(false);
+  const [allergy, setAllergy] = useState({ substance: "", reaction: "", severity: "", certainty: "suspected" });
+  const [bloodGroup, setBloodGroup] = useState("");
+
+  const [calc, setCalc] = useState({ basis: "mg_per_kg", rateValue: "", fixedDose: "", doseUnit: "mg", dosesPerDay: "", weightDecision: "" });
+  const [calcOpen, setCalcOpen] = useState(false);
+  const [dose, setDose] = useState<DoseCalculationResult | null>(null);
+
+  const opts = (key: string): TreatmentOption[] => cap.options.byField[key] ?? [];
+  const shape = treatmentShape(draft.treatmentType);
+
+  // ── s4's search: the configured name list, plus what this practice actually prescribes ────────────
+  const medMatches = useMemo(() => {
+    const q = medQuery.trim().toLowerCase();
+    if (!q) return [];
+    return cap.picker.catalogue.items.filter(m =>
+      m.genericName.toLowerCase().includes(q)
+      || (m.brandName ?? "").toLowerCase().includes(q)
+      || (m.aliases ?? []).some(a => a.toLowerCase().includes(q))
+      || (m.defaultFormulation ?? "").toLowerCase().includes(q)).slice(0, 12);
+  }, [cap.picker.catalogue.items, medQuery]);
+
+  /**
+   * ⚠ THE REFUSAL IS SURFACED VERBATIM, NEVER SWALLOWED. The allergy route refuses `none_known` while
+   * allergies are listed -- the one combination that would print reassurance on top of contradicting
+   * evidence -- and the practitioner has to see that sentence rather than a button that did nothing.
+   */
+  async function post(url: string, payload: Record<string, unknown>, method = "POST"): Promise<Record<string, any> | null> {
+    setBusy(true); setNotice(null);
+    try {
+      const res = await fetch(url, {
+        method, headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNotice({ kind: "err", text: body?.error?.message ?? `That did not work (${res.status}).` });
+        return null;
+      }
+      return body;
+    } finally { setBusy(false); }
+  }
+
+  const addToPlan = (item: PendingTreatment) => {
+    if (plan.length >= cap.maxPending) {
+      setNotice({ kind: "err", text: `A plan holds at most ${cap.maxPending} treatments.` });
+      return;
+    }
+    setPlan(p => [...p, item]);
+  };
+
+  const commitDraft = () => {
+    if (!draft.label?.trim()) return;
+    const custom = draft.frequencyCode === OTHER_OPTION_CODE;
+    addToPlan({
+      ...draft,
+      // ⚠ s5's REQUIREMENT, HERE. Choosing Other keeps the practitioner's own wording as the frequency,
+      // and the engine leaves frequency_code NULL so a reader can tell it was typed rather than tapped.
+      frequencyText: custom ? customFrequency.trim() : (draft.frequencyText ?? null),
+      frequencyPerDay: custom ? null : draft.frequencyPerDay,
+    });
+    setDraft(blankDraft(draft.treatmentType));
+    setCustomFrequency(""); setMedQuery(""); setDose(null); setCalcOpen(false);
+  };
+
+  async function record() {
+    const body = await post("/api/v1/practice/treatment-capture", {
+      action: "record", encounterId: props.encounterId, items: plan,
+    });
+    if (!body) return;
+    const results = (body.results ?? []) as any[];
+    setItemResults(results.map(r => ({ label: r.label, ok: r.ok, message: r.message })));
+    const badIdx = new Set(results.filter(r => !r.ok).map(r => Number(r.index)));
+    setPlan(p => p.filter((_, i) => badIdx.has(i)));
+    setNotice({
+      kind: badIdx.size === 0 ? "ok" : "err",
+      text: badIdx.size === 0
+        ? `Recorded ${body.recorded} treatment${body.recorded === 1 ? "" : "s"}.`
+        : `Recorded ${body.recorded}. ${badIdx.size} was not.`,
+    });
+    router.refresh();
+  }
+
+  // ── s10's checkpoint. THREE VERDICTS. `unknown` is not `clear`. ───────────────────────────────────
+  //
+  // ⚠ THE VERDICT IS READ OFF THE SNAPSHOT'S SafetyLine, NEVER OFF A LIST LENGTH. `safeToRead` is true
+  // only when a practitioner ANSWERED the question. An empty list is `unknown`, forever, until somebody
+  // says otherwise -- which is AC-08 and is the reason the "No known drug allergies" button below
+  // exists at all.
+  const allergyVerdict: "clear" | "unknown" | "flagged" =
+    props.allergyLine.tone === "none" ? "clear"
+      : props.allergyLine.tone === "present" ? "flagged"
+        : "unknown";
+  const weightTone = WEIGHT_TONE[med.weight.state] ?? { chip: NOT_CHECKED_TONE, mark: "-", label: NOT_CHECKED_LABEL };
+
+  const needsWeight = calc.basis === "mg_per_kg" || calc.basis === "mg_per_kg_per_day" || calc.basis === "mg_per_m2";
+  const noWeightAtAll = needsWeight && (WEIGHT_STATES_NEEDING_DECISION as readonly string[]).includes(med.weight.state);
+  const bsaImpossible = noWeightAtAll && calc.basis === "mg_per_m2";
+  const adultNoWeight = noWeightAtAll && !bsaImpossible && !med.age.decisionPathOffered;
+  const decisionRequired = noWeightAtAll && !bsaImpossible && med.age.decisionPathOffered;
+  const decisionMissing = decisionRequired && !calc.weightDecision.trim();
+
+  return (
+    <section>
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <h3 className="text-[13px] font-bold text-gray-900">Treatment and plan</h3>
+        <span className="text-[11px] text-gray-500">
+          {props.recorded.length} recorded in this encounter
+        </span>
+      </div>
+
+      {/* ⚠ THE BOUNDARY, FROM THE ENGINE'S CONSTANT rather than retyped here. */}
+      <p className="mt-1 rounded-lg bg-gray-50 px-2.5 py-2 text-[11px] text-gray-600">{cap.boundary}</p>
+
+      {cap.options.storeState === "absent" && (
+        <p className="mt-2 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-[11.5px] text-[var(--cmp-text-warning)]">
+          {cap.options.storeNotice}
+        </p>
+      )}
+      {cap.options.unavailable && (
+        <p className="mt-2 rounded-lg bg-[var(--cmp-surface-critical)] px-3 py-2 text-[11.5px] text-[var(--cmp-text-critical)]">
+          {cap.options.detail}
+        </p>
+      )}
+      {notice && (
+        <p className={`mt-2 rounded-lg px-3 py-2 text-[11.5px] ${notice.kind === "ok"
+          ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
+          : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>
+          {notice.text}
+        </p>
+      )}
+
+      {/* ══ WHAT IS ALREADY RECORDED ═══════════════════════════════════════════════════════════════ */}
+      {props.recorded.length > 0 && (
+        <ul className="mt-3 flex flex-col gap-1">
+          {props.recorded.map(t => (
+            <li key={t.id} className="flex items-center gap-2 text-[12px] flex-wrap">
+              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
+                {String(t.treatment_type).replace(/_/g, " ")}
+              </span>
+              <span className="text-gray-800">{t.label}</span>
+              <span className="text-[11px] text-gray-500">
+                {[t.dose, t.route, t.frequency, t.duration].filter(Boolean).join(" · ")}
+              </span>
+              <span className="ml-auto text-[11px] text-gray-400">{t.status}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* ══ s10's SAFETY CHECKPOINT -- CONSUMED, NOT RE-ASKED ═════════════════════════════════════ */}
+      <div className={`${CARD} mt-3`}>
+        <h4 className="text-[12px] font-bold text-gray-900">Before you prescribe</h4>
+
+        {/* == THE ALLERGY LINE, AND THE TWO ACTIONS THAT ANSWER IT ==============================
+            WARNING: THIS WAS A DEAD END UNTIL NOW, AND THAT IS THE DEFECT BEING FIXED. The store
+            (practice_patient_allergy), the engines (addAllergy, recordAllergyReview) and the route
+            (/api/v1/practice/encounters/record/[patientId]/allergies) have all existed since migration
+            238. NOTHING IN THE PRODUCT CALLED THEM. The screen correctly said "nobody has asked" and
+            offered no way to answer, on the one field where the answer matters most.
+
+            WARNING: THE REASSURING SENTENCE IS PRINTED ONLY FROM safeToRead. An empty list is not an
+            answer. "No known drug allergies" becomes true when a practitioner presses the button below,
+            which stamps who said it and when -- never because a table came back with no rows.
+
+            WARNING: NO NEW STORE, ENGINE, ROUTE OR CAPABILITY. The button posts to the endpoint that
+            was already there, gated on the patient.edit it already declares. */}
+        <div className="mt-2 flex items-start gap-2">
+          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${SAFETY_VERDICT_CHIP[allergyVerdict]}`}>
+            {SAFETY_VERDICT_MARK[allergyVerdict]}
+          </span>
+          <div className="min-w-0 flex-1">
+            <span className="text-[11px] font-bold text-gray-900">Allergy status</span>{" "}
+            {/* The sentence is the ENGINE'S, never one composed here. allergyLine() is the function
+                longitudinal-constants.ts calls the most safety-critical in this build. */}
+            <span className={`text-[11px] ${props.allergyLine.tone === "unreadable"
+              ? "text-[var(--cmp-text-critical)]"
+              : props.allergyLine.tone === "present" ? "font-semibold text-gray-900" : "text-gray-700"}`}>
+              {props.allergyLine.text}
+            </span>
+
+            {props.allergyList.unavailable ? (
+              <p className="mt-0.5 text-[11px] text-[var(--cmp-text-critical)]">
+                The allergy list could not be read. Do <strong>not</strong> take this as none recorded.
+              </p>
+            ) : props.allergyList.items.length > 0 && (
+              <ul className="mt-1 flex flex-col gap-0.5">
+                {props.allergyList.items.map(a => (
+                  <li key={a.id} className="text-[11px] text-gray-800">
+                    <span className="font-semibold">{a.substance}</span>
+                    {a.reaction ? ` \u2014 ${a.reaction}` : ""}
+                    {a.severity ? ` \u00b7 ${a.severity}` : ""}
+                    <span className="ml-1 text-[10px] text-gray-400">{a.certainty}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {!props.allergyLine.safeToRead && props.allergyLine.tone !== "present" && (
+              <p className="mt-0.5 text-[10.5px] text-gray-600">{ALLERGY_UNRESOLVED_ASK}</p>
+            )}
+
+            {props.canEditPatient && !props.locked && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {/* WARNING: OFFERED ONLY WHERE IT COULD SUCCEED. The engine REFUSES none_known while
+                    allergies are listed, so the button is not drawn in that state -- a road that ends in
+                    a refusal is closed before it is walked. The refusal is still surfaced verbatim if it
+                    somehow happens. */}
+                {props.allergyList.items.filter(a => a.certainty !== "refuted").length === 0 && (
+                  <button type="button" data-step="nkda" className={QUIET} disabled={busy}
+                    onClick={async () => {
+                      const body = await post(`/api/v1/practice/encounters/record/${props.patientId}/allergies`,
+                        { status: "none_known" }, "PUT");
+                      if (body) { setNotice({ kind: "ok", text: "Recorded: no known drug allergies, by you, just now." }); router.refresh(); }
+                    }}>
+                    No known drug allergies
+                  </button>
+                )}
+                <button type="button" data-step="record-allergy" className={QUIET} disabled={busy}
+                  onClick={() => { setAllergyOpen(o => !o); setBloodGroup(""); }}>
+                  {allergyOpen ? "Close" : "Record allergy"}
+                </button>
+                {!props.allergyLine.safeToRead && props.allergyLine.tone !== "present" && (
+                  <p className="w-full text-[10px] text-gray-500">{NKDA_IS_SOMETHING_SOMEBODY_SAID}</p>
+                )}
+              </div>
+            )}
+
+            {allergyOpen && props.canEditPatient && !props.locked && (
+              <div className="mt-2 rounded-lg border border-gray-200 p-2.5">
+                <form className="grid gap-2 sm:grid-cols-2"
+                  onSubmit={async ev => {
+                    ev.preventDefault();
+                    const body = await post(`/api/v1/practice/encounters/record/${props.patientId}/allergies`, {
+                      substance: allergy.substance, reaction: allergy.reaction || null,
+                      severity: allergy.severity || null, certainty: allergy.certainty,
+                    }, "POST");
+                    if (body) {
+                      setAllergy({ substance: "", reaction: "", severity: "", certainty: "suspected" });
+                      setAllergyOpen(false);
+                      setNotice({ kind: "ok", text: "Allergy recorded." });
+                      router.refresh();
+                    }
+                  }}>
+                  <label className="sm:col-span-2">
+                    <span className={LABEL}>Substance</span>
+                    <input autoFocus required className={input} value={allergy.substance}
+                      onChange={e => setAllergy(a => ({ ...a, substance: e.target.value }))}
+                      placeholder="What are they allergic to?" />
+                  </label>
+                  <label className="sm:col-span-2">
+                    <span className={LABEL}>What happened (optional)</span>
+                    <input className={input} value={allergy.reaction}
+                      onChange={e => setAllergy(a => ({ ...a, reaction: e.target.value }))}
+                      placeholder="Rash, swelling, breathing difficulty" />
+                  </label>
+                  <div>
+                    <span className={LABEL}>Severity</span>
+                    <ul className="mt-1 flex flex-wrap gap-1">
+                      {ALLERGY_SEVERITIES.map(sv => (
+                        <li key={sv}>
+                          <button type="button" className={allergy.severity === sv ? CHIP_ON : CHIP}
+                            onClick={() => setAllergy(a => ({ ...a, severity: a.severity === sv ? "" : sv }))}>
+                            {sv}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    {/* WARNING: THE DEFAULT IS "suspected" AND IT STAYS THAT WAY. Something a patient
+                        reported is suspected until somebody establishes otherwise, and defaulting to
+                        confirmed would put a certainty on the record that nobody claimed. */}
+                    <span className={LABEL}>How certain</span>
+                    <ul className="mt-1 flex flex-wrap gap-1">
+                      {ALLERGY_CERTAINTIES.map(c => (
+                        <li key={c}>
+                          <button type="button" className={allergy.certainty === c ? CHIP_ON : CHIP}
+                            onClick={() => setAllergy(a => ({ ...a, certainty: c }))}>
+                            {c}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <button type="submit" className={`${BTN} sm:col-span-2`}
+                    disabled={busy || !allergy.substance.trim()}>
+                    Record this allergy
+                  </button>
+                </form>
+
+                {/* == BLOOD GROUP, IN THE SAME PANEL AND ON THE SAME ENDPOINT =======================
+                    WARNING: IT IS HERE RATHER THAN IN THE STRIP BECAUSE 45 SECONDS OUTRANKS A FIELD. A
+                    second permanent control on the prescribing strip would be paid for by every
+                    consultation, including the overwhelming majority that never touch it. The LINE is
+                    shown below the allergy line so nobody has to open anything to READ it; the CONTROL
+                    lives in the panel somebody already opened.
+
+                    WARNING: OPTIONAL, AND SEPARATE FROM THE ALLERGY ANSWER. The route takes bloodGroup
+                    with no status and returns early, so this is not a field anybody must clear to get
+                    past, and pressing it does not answer the allergy question. */}
+                <div className="mt-3 border-t border-gray-100 pt-2.5">
+                  <span className={LABEL}>Blood group (optional)</span>
+                  <p className="mt-0.5 text-[11px] text-gray-600">{props.bloodGroupLine.text}</p>
+                  <ul className="mt-1 flex flex-wrap gap-1">
+                    {BLOOD_GROUPS.map(g => (
+                      <li key={g}>
+                        <button type="button" data-step="blood-group" disabled={busy}
+                          className={bloodGroup === g ? CHIP_ON : CHIP}
+                          onClick={async () => {
+                            setBloodGroup(g);
+                            const body = await post(`/api/v1/practice/encounters/record/${props.patientId}/allergies`,
+                              { bloodGroup: g }, "PUT");
+                            if (body) { setNotice({ kind: "ok", text: `Blood group recorded as ${g}.` }); router.refresh(); }
+                          }}>
+                          {g}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {!props.canEditPatient && !props.allergyLine.safeToRead && (
+              <p className="mt-1 text-[10.5px] text-gray-500">
+                Answering the allergy question needs the patient-edit permission. It is granted in Team
+                and Permissions.
+              </p>
+            )}
+
+            <p className="mt-1 text-[10px] text-gray-500">{med.allergyNotice}</p>
+          </div>
+        </div>
+
+        {/* The blood group LINE, readable without opening anything. */}
+        <p className="mt-1.5 text-[11px] text-gray-600">
+          <span className="font-bold text-gray-900">Blood group</span> {props.bloodGroupLine.text}
+        </p>
+
+        <div className="mt-2 flex items-start gap-2">
+          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${weightTone.chip}`}>
+            {weightTone.mark} {weightTone.label}
+          </span>
+          <span className="text-[11px] text-gray-600">{med.weight.text}</span>
+        </div>
+
+        {med.active.length > 0 && (
+          <p className="mt-2 text-[11px] text-gray-700">
+            <span className="font-bold text-gray-900">Already taking:</span>{" "}
+            {med.active.map(m => `${m.genericName} ${m.doseText}`).join(" · ")}
+          </p>
+        )}
+
+        {/* ⚠ THE NINE DEFERRED CHECKS, ON THE PRESCRIBING SURFACE. An unwarned screen reads as a cleared
+            screen, and s11 forbids claiming safe merely because a rule could not be evaluated. */}
+        <details className="mt-2">
+          <summary className="cursor-pointer text-[11px] font-semibold text-gray-700">
+            {med.notChecked.length} checks this product does not run
+          </summary>
+          <ul className="mt-1 flex flex-col gap-1">
+            {med.notChecked.map(c => (
+              <li key={c.key} className="text-[10.5px] text-gray-600">
+                <span className="font-semibold text-gray-800">{c.label}</span> — {c.detail}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-[10px] font-semibold text-gray-700">
+            The absence of a warning on this screen carries no information about safety.
+          </p>
+        </details>
+      </div>
+
+      {!editable && (
+        <p className="mt-3 text-[11px] text-gray-500">
+          {props.locked
+            ? "This consultation is signed, so nothing can be added to it."
+            : "You do not have the permission that records a treatment."}
+        </p>
+      )}
+
+      {editable && (
+        <>
+          {/* ══ TEMPLATES -- s12. ONE TAP LOADS THE WHOLE THING. ════════════════════════════════ */}
+          {cap.templates.unavailable ? (
+            <p className="mt-3 text-[11px] text-[var(--cmp-text-critical)]">{cap.templates.detail}</p>
+          ) : cap.templates.items.length > 0 && (
+            <div className={`${CARD} mt-3`}>
+              <h4 className="text-[12px] font-bold text-gray-900">My templates</h4>
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {cap.templates.items.map(t => (
+                  <li key={t.id}>
+                    <button type="button" data-step="apply-template" className={CHIP} disabled={busy}
+                      onClick={() => {
+                        for (const i of t.items) {
+                          addToPlan({
+                            treatmentType: i.treatmentType, label: i.label,
+                            medicationRef: i.medicationRef, formulation: i.formulation,
+                            dose: i.doseText, doseUnit: i.doseUnit, route: i.route,
+                            frequencyCode: i.frequencyCode, frequencyText: i.frequencyText,
+                            frequencyPerDay: null, duration: i.durationText,
+                            nonDrugCategory: null, reason: i.reason, templateId: t.id,
+                            brandName: null, strengthText: null,
+                          });
+                        }
+                      }}>
+                      {t.name}
+                      <span className="ml-1 text-[9px] font-medium text-gray-400">
+                        {t.items.length} item{t.items.length === 1 ? "" : "s"}
+                        {t.ownerType === "practice" ? " · shared" : ""}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-[10px] text-gray-500">{TEMPLATES_ARE_REVALIDATED}</p>
+            </div>
+          )}
+
+          {/* ══ QUICK ADD -- s12's favourites and frequency, DERIVED ══════════════════════════════ */}
+          {(cap.picker.frequentlyUsed.items.length > 0 || cap.picker.recent.items.length > 0) && (
+            <div className={`${CARD} mt-3`}>
+              <h4 className="text-[12px] font-bold text-gray-900">What you prescribe most</h4>
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {cap.picker.frequentlyUsed.items.map(f => (
+                  <li key={`freq-${f.genericName}`}>
+                    <button type="button" data-step="quick-medication" className={CHIP} disabled={busy}
+                      onClick={() => {
+                        setDraft(d => ({ ...blankDraft("medication"), label: f.genericName, reason: d.reason ?? null }));
+                        setMedQuery("");
+                      }}>
+                      {f.genericName}
+                      <span className="ml-1 text-[9px] font-medium text-gray-400">{f.timesRecorded}x</span>
+                    </button>
+                  </li>
+                ))}
+                {cap.picker.recent.items
+                  .filter(r => !cap.picker.frequentlyUsed.items.some(f => f.genericName === r.genericName))
+                  .map(r => (
+                    <li key={`recent-${r.genericName}`}>
+                      <button type="button" data-step="quick-medication" className={CHIP} disabled={busy}
+                        onClick={() => { setDraft(blankDraft("medication")); setDraft(d => ({ ...d, label: r.genericName })); setMedQuery(""); }}>
+                        {r.genericName}
+                        <span className="ml-1 text-[9px] font-medium text-gray-400">recent</span>
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+              <p className="mt-1.5 text-[10px] text-gray-500">{QUICK_ADD_NOT_A_RECOMMENDATION}</p>
+            </div>
+          )}
+
+          {/* ══ THE BUILDER -- s3 and s5 ═════════════════════════════════════════════════════════ */}
+          <div className={`${CARD} mt-3`}>
+            <h4 className="text-[12px] font-bold text-gray-900">Add a treatment</h4>
+
+            {/* s3's types, CONFIGURED. Nothing in this component knows what a treatment type is. */}
+            {opts("treatment_type").length === 0 ? (
+              <p className="mt-1.5 text-[11px] text-gray-500">
+                This practice has no treatment types enabled, so there is nothing to choose. They are set
+                in Practice Setup.
+              </p>
+            ) : (
+              <ul className="mt-2 flex flex-wrap gap-1.5">
+                {opts("treatment_type").map(o => (
+                  <li key={o.id}>
+                    <button type="button" data-step="type" className={draft.treatmentType === o.code ? CHIP_ON : CHIP}
+                      onClick={() => setDraft(d => ({ ...blankDraft(o.code), label: d.label, reason: d.reason }))}>
+                      {o.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {shape.hint && <p className="mt-1.5 text-[10.5px] text-gray-500">{shape.hint}</p>}
+
+            {/* s4's medication picker. Search over the configured name list, brand names and aliases. */}
+            {shape.prescribing && (
+              <div className="mt-2">
+                <label className={LABEL}>Medication</label>
+                <input className={input} value={draft.label ?? ""}
+                  onChange={e => { setDraft(d => ({ ...d, label: e.target.value })); setMedQuery(e.target.value); }}
+                  placeholder="Search by generic name, brand or abbreviation" />
+                {cap.picker.catalogue.unavailable && (
+                  <p className="mt-1 text-[10.5px] text-[var(--cmp-text-warning)]">
+                    {cap.picker.catalogue.detail} You can still type the name.
+                  </p>
+                )}
+                {medMatches.length > 0 && (
+                  <ul className="mt-1 flex flex-wrap gap-1">
+                    {medMatches.map(m => (
+                      <li key={m.id}>
+                        <button type="button" data-step="pick-medication" className={CHIP}
+                          onClick={() => {
+                            setDraft(d => ({
+                              ...d, label: m.genericName, medicationRef: m.id,
+                              brandName: m.brandName, strengthText: m.defaultStrength,
+                              formulation: d.formulation ?? m.defaultFormulation,
+                            }));
+                            setMedQuery("");
+                          }}>
+                          {m.genericName}
+                          {m.brandName && <span className="ml-1 text-[9px] text-gray-400">{m.brandName}</span>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {!shape.prescribing && (
+              <div className="mt-2">
+                <label className={LABEL}>What</label>
+                <input className={input} value={draft.label ?? ""}
+                  onChange={e => setDraft(d => ({ ...d, label: e.target.value }))}
+                  placeholder={shape.nonDrug ? "What is being done" : "In your words"} />
+                {/* ⚠ THE ESCAPE HATCH KEEPS THE WORDS. s3's Other and s5's Other/custom. */}
+                {draft.treatmentType === OTHER_OPTION_CODE && (
+                  <p className="mt-1 text-[10px] text-gray-500">{CUSTOM_WORDING_PRESERVED}</p>
+                )}
+              </div>
+            )}
+
+            {/* s13's non-drug categories, CONFIGURED. */}
+            {shape.nonDrug && (
+              <OptionRow label="Category" options={opts("non_drug_category")}
+                value={draft.nonDrugCategory} step="non-drug-category"
+                onPick={(o) => setDraft(d => ({ ...d, nonDrugCategory: o?.code ?? null }))} />
+            )}
+
+            {/* s5's five tap-fields. EVERY ONE READ FROM CONFIGURATION. */}
+            {shape.prescribing && (
+              <>
+                <OptionRow label="Formulation" options={opts("formulation")} value={draft.formulation}
+                  step="formulation" onPick={(o) => setDraft(d => ({ ...d, formulation: o?.label ?? null }))} />
+
+                <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <label>
+                    <span className={LABEL}>Dose</span>
+                    <input className={input} value={draft.dose ?? ""}
+                      onChange={e => setDraft(d => ({ ...d, dose: e.target.value }))} placeholder="500" />
+                  </label>
+                  <OptionRow label="Unit" options={opts("dose_unit")} value={draft.doseUnit}
+                    step="dose-unit" onPick={(o) => setDraft(d => ({ ...d, doseUnit: o?.label ?? null }))} />
+                </div>
+
+                <OptionRow label="Route" options={opts("route")} value={draft.route}
+                  step="route" onPick={(o) => setDraft(d => ({ ...d, route: o?.label ?? null }))} />
+
+                <OptionRow label="Frequency" options={opts("frequency")} value={draft.frequencyCode}
+                  step="frequency" byCode
+                  onPick={(o) => setDraft(d => ({
+                    ...d, frequencyCode: o?.code ?? null,
+                    frequencyText: o && o.code !== OTHER_OPTION_CODE ? o.label : null,
+                    frequencyPerDay: o?.numericValue ?? null,
+                  }))} />
+                {/* ⚠ s5, VERBATIM: "Selecting Other for Frequency opens a compact custom-frequency field.
+                    The exact entered wording must be preserved in the encounter record." */}
+                {draft.frequencyCode === OTHER_OPTION_CODE && (
+                  <div className="mt-1">
+                    <input autoFocus className={input} value={customFrequency}
+                      onChange={e => setCustomFrequency(e.target.value)}
+                      placeholder="In your own words — for example: every other day, in the morning" />
+                    <p className="mt-0.5 text-[10px] text-gray-500">{CUSTOM_WORDING_PRESERVED}</p>
+                  </div>
+                )}
+
+                <OptionRow label="Duration" options={opts("duration")} value={draft.duration}
+                  step="duration" onPick={(o) => setDraft(d => ({ ...d, duration: o?.label ?? null }))} />
+              </>
+            )}
+
+            <label className="mt-2 block">
+              <span className={LABEL}>
+                Reason or notes {cap.reasonRequired ? "(required by this practice)" : "(optional)"}
+              </span>
+              <input className={input} value={draft.reason ?? ""}
+                onChange={e => setDraft(d => ({ ...d, reason: e.target.value }))} />
+            </label>
+
+            {/* ══ s8's WEIGHT-BASED DOSE. The arithmetic is medication.ts's, called not copied. ════ */}
+            {shape.prescribing && props.canPrescribe && (
+              <div className="mt-2">
+                <button type="button" className={QUIET} onClick={() => setCalcOpen(o => !o)}>
+                  {calcOpen ? "Close the dose calculator" : "Work out a weight-based dose"}
+                </button>
+                {calcOpen && (
+                  <div className="mt-2 rounded-lg border border-gray-200 p-2.5">
+                    <p className="text-[10.5px] text-gray-600">{med.weight.text}</p>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                      <label>
+                        <span className={LABEL}>Basis</span>
+                        <select className={input} value={calc.basis}
+                          onChange={e => setCalc(c => ({ ...c, basis: e.target.value }))}>
+                          {DOSE_BASES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                        </select>
+                      </label>
+                      {calc.basis === "fixed" ? (
+                        <label>
+                          <span className={LABEL}>Dose</span>
+                          <input className={input} inputMode="decimal" value={calc.fixedDose}
+                            onChange={e => setCalc(c => ({ ...c, fixedDose: e.target.value }))} />
+                        </label>
+                      ) : (
+                        <label>
+                          <span className={LABEL}>Rate</span>
+                          <input className={input} inputMode="decimal" value={calc.rateValue}
+                            onChange={e => setCalc(c => ({ ...c, rateValue: e.target.value }))} />
+                        </label>
+                      )}
+                      <label>
+                        <span className={LABEL}>Unit</span>
+                        <input className={input} value={calc.doseUnit}
+                          onChange={e => setCalc(c => ({ ...c, doseUnit: e.target.value }))} />
+                      </label>
+                      {calc.basis === "mg_per_kg_per_day" && (
+                        <label>
+                          <span className={LABEL}>Doses a day</span>
+                          <input className={input} inputMode="decimal" value={calc.dosesPerDay}
+                            onChange={e => setCalc(c => ({ ...c, dosesPerDay: e.target.value }))} />
+                        </label>
+                      )}
+                    </div>
+
+                    {/* ⚠ ROADS THAT END IN A REFUSAL ARE CLOSED BEFORE THEY ARE WALKED, exactly as
+                        MedicationConsole closes them. The same verdicts, from the same payload. */}
+                    {bsaImpossible && (
+                      <div className="mt-2 rounded-lg bg-[var(--cmp-surface-warning)] px-2.5 py-2">
+                        <p className="text-[11px] font-bold text-[var(--cmp-text-warning)]">
+                          A body surface area dose cannot be recorded for this patient.
+                        </p>
+                        <p className="mt-1 text-[11px] text-gray-700">{BSA_NEEDS_MEASUREMENTS}</p>
+                      </div>
+                    )}
+                    {adultNoWeight && (
+                      <div className="mt-2 rounded-lg bg-[var(--cmp-surface-warning)] px-2.5 py-2">
+                        <p className="text-[11px] font-bold text-[var(--cmp-text-warning)]">
+                          A weight-based dose cannot be worked out for this patient.
+                        </p>
+                        <p className="mt-1 text-[11px] text-gray-700">{ADULT_NO_WEIGHT_REFUSED}</p>
+                      </div>
+                    )}
+                    {decisionRequired && (
+                      <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5">
+                        <p className="text-[11px] font-bold text-amber-900">{weightDecisionHeadline(med.weight.state)}</p>
+                        <p className="mt-1 text-[11px] text-gray-700">{WEIGHT_DECISION_ASK}</p>
+                        <textarea className={`${input} mt-1 min-h-[52px]`} value={calc.weightDecision}
+                          onChange={e => setCalc(c => ({ ...c, weightDecision: e.target.value }))}
+                          placeholder="In your own words — what are you prescribing on?" />
+                      </div>
+                    )}
+
+                    <button type="button" className={`${BTN} mt-2`}
+                      disabled={busy || bsaImpossible || adultNoWeight || decisionMissing}
+                      onClick={async () => {
+                        const body = await post("/api/v1/practice/medications", {
+                          action: "calculateDose", patientId: props.patientId, encounterId: props.encounterId,
+                          basis: calc.basis, rateValue: calc.rateValue || null, fixedDose: calc.fixedDose || null,
+                          doseUnit: calc.doseUnit || "mg", dosesPerDay: calc.dosesPerDay || null,
+                          weightDecision: decisionRequired ? (calc.weightDecision || null) : null,
+                        });
+                        if (body) setDose(body as unknown as DoseCalculationResult);
+                      }}>
+                      {decisionRequired ? "Record this decision" : "Calculate"}
+                    </button>
+
+                    {/* ⚠ THE FIGURE, ITS WORKING AND ITS NOTICE ARE ONE BLOCK. Nothing renders the
+                        number alone -- MedicationConsole's rule 1, and it holds here for the same
+                        reason: a dose with no working beside it is unverifiable six months later. */}
+                    {dose && (
+                      <div className="mt-2 rounded-lg bg-gray-50 p-2.5">
+                        <p className="text-[13px] font-bold text-gray-900">
+                          {dose.perDose !== null ? `${dose.perDose} ${dose.unit} per dose`
+                            : dose.dailyTotal !== null ? `${dose.dailyTotal} ${dose.unit} per day`
+                              : dose.weightDecision ? "No dose figure — a decision was recorded instead"
+                                : "no figure"}
+                        </p>
+                        <ol className="mt-1 flex flex-col gap-0.5">
+                          {dose.working.map((w, i) => <li key={i} className="font-mono text-[10px] text-gray-700">{w}</li>)}
+                        </ol>
+                        <p className="mt-2 rounded bg-white px-2 py-1.5 text-[10px] text-slate-600">{doseSafetyNotice()}</p>
+                        {(dose.perDose !== null || dose.dailyTotal !== null) && (
+                          <button type="button" className={`${QUIET} mt-2`}
+                            onClick={() => setDraft(d => ({
+                              ...d,
+                              dose: d.dose || (dose.perDose !== null ? String(dose.perDose) : String(dose.dailyTotal)),
+                              doseUnit: d.doseUnit || dose.unit,
+                            }))}>
+                            Use this as the dose
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button type="button" data-step="add-to-plan" className={`${QUIET} mt-3`}
+              disabled={busy || !draft.label?.trim()} onClick={commitDraft}>
+              Add to the plan
+            </button>
+          </div>
+
+          {/* ══ s9's PENDING PLAN AND ONE BATCH RECORD ═══════════════════════════════════════════ */}
+          <div className={`${CARD} mt-3`}>
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <h4 className="text-[12px] font-bold text-gray-900">
+                {plan.length === 0 ? "Nothing in the plan yet" : `${plan.length} to record`}
+              </h4>
+            </div>
+
+            {plan.length > 0 && (
+              <ul className="mt-2 flex flex-col gap-1">
+                {plan.map((p, i) => (
+                  <li key={i} className="flex items-start gap-2 rounded-lg bg-gray-50 px-2.5 py-1.5">
+                    <div className="min-w-0">
+                      <span className="text-[12px] font-semibold text-gray-800">{p.label}</span>
+                      <span className="ml-1.5 rounded bg-white px-1.5 py-0.5 text-[9px] font-semibold text-gray-500">
+                        {String(p.treatmentType).replace(/_/g, " ")}
+                      </span>
+                      <p className="text-[11px] text-gray-600">
+                        {[p.formulation, [p.dose, p.doseUnit].filter(Boolean).join(" "), p.route,
+                          p.frequencyText, p.duration, p.nonDrugCategory].filter(Boolean).join(" · ")}
+                      </p>
+                      {p.reason && <p className="text-[10.5px] text-gray-500">{p.reason}</p>}
+                    </div>
+                    <div className="ml-auto flex shrink-0 gap-1">
+                      <button type="button" className={QUIET}
+                        onClick={() => { setDraft(p); setPlan(list => list.filter((_, n) => n !== i)); }}>
+                        Edit
+                      </button>
+                      <button type="button" className={QUIET}
+                        onClick={() => setPlan(list => list.filter((_, n) => n !== i))}>
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <p className="mt-2 text-[10px] text-gray-500">{BATCH_BOUNDARY}</p>
+
+            <button type="button" data-step="record-batch" className={`${BTN} mt-2`}
+              disabled={busy || plan.length === 0} onClick={record}>
+              {busy ? "Recording…" : `Record ${plan.length || ""} treatment${plan.length === 1 ? "" : "s"}`}
+            </button>
+
+            {itemResults.length > 0 && (
+              <ul className="mt-2 flex flex-col gap-1">
+                {itemResults.map((r, i) => (
+                  <li key={i} className={`text-[11px] ${r.ok ? "text-gray-600" : "text-[var(--cmp-text-critical)]"}`}>
+                    <strong>{r.label}</strong> — {r.ok ? (r.message ?? "recorded") : r.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {plan.length > 0 && (
+              <div className="mt-2">
+                {savingTemplate ? (
+                  <form className="flex flex-wrap items-center gap-1.5"
+                    onSubmit={async ev => {
+                      ev.preventDefault();
+                      const body = await post("/api/v1/practice/treatment-capture", {
+                        action: "saveTemplate", name: templateName, ownerType: "practitioner", items: plan,
+                      });
+                      if (body) { setSavingTemplate(false); setTemplateName(""); setNotice({ kind: "ok", text: "Template saved." }); router.refresh(); }
+                    }}>
+                    <input autoFocus className={`${input} max-w-[260px]`} value={templateName}
+                      onChange={e => setTemplateName(e.target.value)} placeholder="Name this template" />
+                    <button type="submit" className={QUIET} disabled={busy || !templateName.trim()}>Save</button>
+                    <button type="button" className={QUIET} onClick={() => setSavingTemplate(false)}>Cancel</button>
+                  </form>
+                ) : (
+                  <button type="button" className={QUIET} onClick={() => setSavingTemplate(true)}>
+                    Save this plan as a template
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ⚠ WHAT THIS CAPABILITY DECLINES TO DO, ON THE SCREEN. */}
+          <ul className="mt-3 flex flex-col gap-1">
+            {TREATMENT_REFUSALS.map(r => (
+              <li key={r.key} className="text-[10.5px] text-gray-500">
+                <span className="font-semibold text-gray-700">{r.what}</span> {r.why}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * One configured list, drawn as taps with the Other escape hatch already inside it.
+ *
+ * ⚠ IT TAKES THE OPTIONS AS DATA AND KNOWS NOTHING ABOUT WHAT THEY MEAN. That is CPR-TREAT-001 s6's
+ * frozen requirement expressed as a component boundary: this function cannot hard-code a clinical value
+ * because it has never been told what one looks like.
+ */
+function OptionRow({ label, options, value, onPick, step, byCode }: {
+  label: string;
+  options: TreatmentOption[];
+  value: string | null | undefined;
+  onPick: (o: TreatmentOption | null) => void;
+  step: string;
+  byCode?: boolean;
+}) {
+  if (options.length === 0) return null;
+  const isOn = (o: TreatmentOption) => (byCode ? value === o.code : value === o.label);
+  return (
+    <div className="mt-2">
+      <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">{label}</span>
+      <ul className="mt-1 flex flex-wrap gap-1">
+        {options.map(o => (
+          <li key={o.id}>
+            <button type="button" data-step={step}
+              className={isOn(o) ? "rounded-full border border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary-deep)]" : "rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-gray-800 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/5"}
+              onClick={() => onPick(isOn(o) ? null : o)}>
+              {o.label}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

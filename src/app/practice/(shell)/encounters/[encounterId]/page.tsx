@@ -22,6 +22,10 @@ import { encounterParameters } from "@/lib/practice/parameters";
 import ParameterCollection from "./ParameterCollection";
 import { patientMedications } from "@/lib/practice/medication";
 import MedicationConsole from "./MedicationConsole";
+import { investigationCatalogue, encounterInvestigations } from "@/lib/practice/investigations";
+import { treatmentCapture } from "@/lib/practice/treatment-capture";
+import InvestigationCapture from "./InvestigationCapture";
+import TreatmentCapture from "./TreatmentCapture";
 
 // /practice/encounters/{id} -- CPR-ENC-003's Clinical Decision Workspace.
 //
@@ -150,6 +154,21 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
   // "this patient is on nothing".
   const medicationRecord = await patientMedications(admin, shell.ctx, encounter.patient_id);
 
+  // ── CPR-TREAT-001 and CINV-CAP-001 (migration 275) ────────────────────────────────────────────────
+  //
+  // ⚠ FETCHED UNCONDITIONALLY, for the reason the two reads above are. Each engine reports permitted:
+  // false and storeState "absent" itself, and gating the call would turn "you may not see this" or
+  // "this deployment has not migrated" into "this practice has no catalogue" -- three different facts
+  // that lead a practitioner to three different actions.
+  //
+  // ⚠ THE PRACTITIONER IS THE CALLER. Favourites, frequently used and personal sets are that person's,
+  // and passing anything but shell.ctx.userId here is the subject-versus-caller bug class again.
+  const [investigationLibrary, encounterInvestigationList, treatmentPayload] = await Promise.all([
+    investigationCatalogue(admin, shell.ctx, shell.ctx.userId),
+    encounterInvestigations(admin, shell.ctx, encounter.id),
+    treatmentCapture(admin, shell.ctx, shell.ctx.userId),
+  ]);
+
   // ── THE WEIGHT PROMPT (the user's requirement and ruling of 2026-08-08) ────────────────────────────
   //
   // "Ensure that the weight is part of the data we collect", and "do not make it required, but prompt
@@ -275,6 +294,36 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
               patientId={encounter.patient_id}
               encounterId={encounter.id}
               canRecord={hasCapability(shell.ctx, "medication.record")}
+              locked={locked}
+            />
+          }
+          treatmentCapture={
+            <TreatmentCapture
+              encounterId={encounter.id}
+              patientId={encounter.patient_id}
+              capture={treatmentPayload}
+              medication={medicationRecord}
+              recorded={treatments as any}
+              canRecord={hasCapability(shell.ctx, "treatment.record")}
+              canPrescribe={hasCapability(shell.ctx, "medication.record")}
+              locked={locked}
+              /* ⚠ THE ALLERGY ANSWER CAME FROM patientSnapshot, WHICH THIS PAGE ALREADY LOADS. It is
+                 the SafetyLine, not a list length -- see the note on the prop. The store, the engine
+                 and the route have existed since migration 238 with no caller; the Treatment tab is
+                 now the caller. */
+              allergyLine={snapshot.allergies}
+              allergyList={snapshot.allergyList}
+              bloodGroupLine={snapshot.bloodGroup}
+              canEditPatient={hasCapability(shell.ctx, "patient.edit")}
+            />
+          }
+          investigationCapture={
+            <InvestigationCapture
+              encounterId={encounter.id}
+              catalogue={investigationLibrary}
+              recorded={encounterInvestigationList}
+              canEdit={hasCapability(shell.ctx, "encounter.edit")}
+              canConfigure={hasCapability(shell.ctx, "investigation.configure")}
               locked={locked}
             />
           }

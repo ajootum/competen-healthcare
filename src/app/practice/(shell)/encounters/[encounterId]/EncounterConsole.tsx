@@ -11,7 +11,7 @@ import {
 } from "@/lib/practice/procedure-constants";
 import {
   ENCOUNTER_TABS, QUICK_ACTIONS, QUICK_ACTION_ICON, ENCOUNTER_OUTCOMES, OUTCOME_SWATCH,
-  INVESTIGATION_CHIP, REFERRAL_CHIP, REFERRAL_STATUSES, CLINICAL_FLOW_BLOCKS, DECISION_CARDS,
+  REFERRAL_CHIP, REFERRAL_STATUSES, CLINICAL_FLOW_BLOCKS, DECISION_CARDS,
   type EncounterWarning, type WeightPromptState,
 } from "@/lib/practice/encounter-workspace-constants";
 import Dictation from "@/components/practice/Dictation";
@@ -81,11 +81,6 @@ const IMPRESSION_SEGMENTS: [string, string, string][] = [
 ];
 const PLAN_SEGMENT: [string, string, string] = ["plan", "Next steps / Plan", "What happens after today."];
 
-const TREATMENT_TYPES = [
-  ["medication", "Medication"], ["investigation", "Investigation"], ["procedure", "Procedure"],
-  ["advice", "Advice"], ["referral", "Referral"], ["monitoring", "Monitoring"],
-] as const;
-
 export default function EncounterConsole(props: {
   encounterId: string; patientId: string; status: string; reasonForVisit: string | null;
   notes: any[]; diagnoses: any[]; treatments: any[];
@@ -113,6 +108,18 @@ export default function EncounterConsole(props: {
   // it is not laziness, it is the safe way to move it.
   measurements: React.ReactNode;
   medication: React.ReactNode;
+  /**
+   * ── CPR-TREAT-001 and CPR-INV-001 SLOTS ──────────────────────────────────────────────────────
+   *
+   * ⚠ TWO MORE SERVER-RENDERED SLOTS, FOR THE REASON THE TWO ABOVE ARE SLOTS. The Treatment and
+   * Investigation tabs were a type dropdown with four text boxes, and one text box with a Record
+   * button. Both specs replace them with selection-first capture over configured catalogues, and both
+   * need a server read (the catalogue, the configured option lists, the practitioner's favourites and
+   * templates) that this client component cannot make. Passing the rendered element keeps the read on
+   * the server and leaves the tab machinery here untouched.
+   */
+  treatmentCapture: React.ReactNode;
+  investigationCapture: React.ReactNode;
   /**
    * s3's right column: patient summary and previous visits, authored in page.tsx because the
    * "first recorded encounter" claim is source-checked THERE and must not move.
@@ -144,7 +151,6 @@ export default function EncounterConsole(props: {
   const [showHistory, setShowHistory] = useState<Record<string, boolean>>({});
   const [templateId, setTemplateId] = useState("");
   const [dx, setDx] = useState({ label: "", certainty: "provisional", isPrimary: false, problemLabel: "" });
-  const [tx, setTx] = useState({ treatmentType: "medication", label: "", dose: "", route: "", frequency: "", duration: "" });
   const [doc, setDoc] = useState({ title: "", docType: "consultation_summary", addressedTo: "", composeFrom: true });
   const [fu, setFu] = useState({ reason: "", kind: "review", intervalCode: "2w", priority: "routine" });
   const [closingFu, setClosingFu] = useState<string | null>(null);
@@ -158,9 +164,6 @@ export default function EncounterConsole(props: {
   const [outcome, setOutcome] = useState({ outcomeType: "healing", severity: "mild", detail: "" });
   // migration 238
   const [decision, setDecision] = useState("");
-  const [inv, setInv] = useState({ label: "", summary: "" });
-  const [reviewing, setReviewing] = useState<string | null>(null);
-  const [reviewSummary, setReviewSummary] = useState("");
   const [ref, setRef] = useState({ referredTo: "", reason: "" });
   const [encOutcomeNote, setEncOutcomeNote] = useState(props.outcomeNote ?? "");
   // CPR-ENC-003 s5's "progressive disclosure for complex tasks". The prescribing console is the one
@@ -310,15 +313,6 @@ export default function EncounterConsole(props: {
     }),
   }), "Diagnosis recorded.", true);
 
-  const addTx = () => call(() => fetch(`/api/v1/practice/encounters/${props.encounterId}/treatments`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      treatmentType: tx.treatmentType, label: tx.label,
-      dose: tx.dose || undefined, route: tx.route || undefined,
-      frequency: tx.frequency || undefined, duration: tx.duration || undefined,
-    }),
-  }), "Treatment recorded.", true);
-
   // ── migration 238 writes ──────────────────────────────────────────────────────────────────────────
   const addDecision = () => call(() => fetch(`/api/v1/practice/encounters/${props.encounterId}/decisions`, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -328,16 +322,6 @@ export default function EncounterConsole(props: {
   const dropDecision = (id: string) => call(() =>
     fetch(`/api/v1/practice/encounters/${props.encounterId}/decisions?decisionId=${id}`, { method: "DELETE" }),
   "Decision removed.", true);
-
-  const addInvestigation = () => call(() => fetch(`/api/v1/practice/encounters/${props.encounterId}/investigations`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ label: inv.label, summary: inv.summary || undefined }),
-  }), "Investigation recorded.", true);
-
-  const markReviewed = (id: string) => call(() => fetch(`/api/v1/practice/encounters/${props.encounterId}/investigations`, {
-    method: "PATCH", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ investigationId: id, summary: reviewSummary || undefined }),
-  }), "Marked as reviewed.", true);
 
   const addReferral = () => call(() => fetch(`/api/v1/practice/encounters/${props.encounterId}/referrals`, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -921,53 +905,13 @@ export default function EncounterConsole(props: {
               </section>
             )}
 
-            {/* ══ TREATMENT ═════════════════════════════════════════════════════════════════════ */}
-            {tab === "treatment" && (
-              <section>
-                <h3 className="text-[13px] font-bold text-gray-900">Treatment and plan</h3>
-                {props.treatments.length === 0 ? (
-                  <p className="mt-2 text-[12px] text-gray-400">Nothing recorded for this encounter.</p>
-                ) : (
-                  <ul className="mt-2 flex flex-col gap-1">
-                    {props.treatments.map(t => (
-                      <li key={t.id} className="flex items-center gap-2 text-[12px] flex-wrap">
-                        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">{t.treatment_type}</span>
-                        <span className="text-gray-800">{t.label}</span>
-                        <span className="text-[11px] text-gray-500">
-                          {[t.dose, t.route, t.frequency, t.duration].filter(Boolean).join(" · ")}
-                        </span>
-                        <span className="ml-auto text-[11px] text-gray-400">{t.status}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {editable && props.canTreat && (
-                  <form className="mt-3 grid grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); addTx(); }}>
-                    <select aria-label="Treatment type" value={tx.treatmentType} onChange={e => setTx(p => ({ ...p, treatmentType: e.target.value }))} className={input}>
-                      {TREATMENT_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                    </select>
-                    <input required placeholder="What" value={tx.label} onChange={e => setTx(p => ({ ...p, label: e.target.value }))} className={input} />
-                    {tx.treatmentType === "medication" && (
-                      <>
-                        <input placeholder="Dose" value={tx.dose} onChange={e => setTx(p => ({ ...p, dose: e.target.value }))} className={input} />
-                        <input placeholder="Route" value={tx.route} onChange={e => setTx(p => ({ ...p, route: e.target.value }))} className={input} />
-                        <input placeholder="Frequency" value={tx.frequency} onChange={e => setTx(p => ({ ...p, frequency: e.target.value }))} className={input} />
-                        <input placeholder="Duration" value={tx.duration} onChange={e => setTx(p => ({ ...p, duration: e.target.value }))} className={input} />
-                      </>
-                    )}
-                    <button type="submit" disabled={busy || !tx.label.trim()}
-                      className="col-span-2 rounded-lg border border-gray-200 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                      Record
-                    </button>
-                    <p className="col-span-2 text-[10px] text-gray-400">
-                      A medication here records what was prescribed, not what was administered. Competen Practice
-                      does not hold an inpatient administration chart.
-                    </p>
-                  </form>
-                )}
-              </section>
-            )}
-
+            {/* ══ TREATMENT -- CPR-TREAT-001 ════════════════════════════════════════════════════
+                ⚠ THE OLD FORM IS GONE AND ITS CAPTURE PATH IS NOT. TreatmentCapture records the same
+                practice_treatment row through the same columns, plus the ones migration 275 added, and
+                it does it for a LIST rather than one at a time. The type dropdown, the What box and the
+                four medication fields all still exist -- as taps over configured lists, with an
+                Other/custom fallback on each, which is exactly what s5 asks for. */}
+            {tab === "treatment" && props.treatmentCapture}
             {/* ══ PROCEDURES ════════════════════════════════════════════════════════════════════
                 CPR-150. What was DONE, as distinct from the plan: a treatment row saying "excision,
                 planned" is not evidence anything happened, and a procedure row is. The patient's recent
@@ -1109,73 +1053,17 @@ export default function EncounterConsole(props: {
               </section>
             )}
 
-            {/* ══ INVESTIGATIONS ════════════════════════════════════════════════════════════════ */}
-            {tab === "investigations" && (
-              <section>
-                <h3 className="text-[13px] font-bold text-gray-900">Investigations</h3>
-                {/* ⚠ TYPE ONLY, AND THE SCREEN SAYS SO WHERE THE TYPING HAPPENS. CompetenPractice does
-                    not transmit a request, does not receive a structured result, and cannot tell anybody
-                    whether a test was performed. There is no result field here because there is no
-                    result column, and a nullable one is how this becomes the lab system it must not be:
-                    a half-populated result column is worse than none, because a clinician reads the
-                    blanks as normal. */}
-                <p className="mt-0.5 rounded-lg bg-gray-50 px-2.5 py-2 text-[11px] text-gray-600">
-                  This records <strong>what you asked for</strong> and <strong>that you have looked at what came
-                  back</strong>. It is not an order system: nothing is sent to a laboratory, no result is stored
-                  here, and nothing on this screen claims a test was performed. The report itself belongs in
-                  the <Link href="/practice/inbox" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">document inbox</Link>.
-                </p>
-                {props.investigations.items.length === 0
-                  ? panelState(props.investigations, "investigations", "None recorded in this encounter.")
-                  : (
-                    <ul className="mt-2 flex flex-col gap-1.5">
-                      {props.investigations.items.map(i => (
-                        <li key={i.id} className="rounded-lg border border-gray-100 px-2.5 py-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[12px] font-semibold text-gray-800">{i.label}</span>
-                            <span className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold ${INVESTIGATION_CHIP[i.status]}`}>
-                              {i.status}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-gray-400">
-                            requested {formatDate(i.requestedAt)}
-                            {i.reviewedAt ? ` · reviewed ${formatDate(i.reviewedAt)}` : ""}
-                          </p>
-                          {i.summary && <p className="mt-1 text-[11px] text-gray-700">{i.summary}</p>}
-                          {editable && i.status === "requested" && (
-                            <>
-                              <button type="button" disabled={busy}
-                                onClick={() => { setReviewSummary(""); setReviewing(reviewing === i.id ? null : i.id); }}
-                                className={`mt-1 ${QUIET_BTN}`}>
-                                Mark as reviewed
-                              </button>
-                              {reviewing === i.id && (
-                                <form className="mt-1.5 flex flex-col gap-1.5 rounded-lg bg-gray-50 p-2"
-                                  onSubmit={ev => { ev.preventDefault(); markReviewed(i.id); }}>
-                                  <input autoFocus value={reviewSummary} onChange={ev => setReviewSummary(ev.target.value)}
-                                    placeholder="What did you make of it? (your words, not a result)" className={input} />
-                                  <button type="submit" disabled={busy} className={`self-start ${QUIET_BTN}`}>Record</button>
-                                </form>
-                              )}
-                            </>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                {editable && (
-                  <form className="mt-3 grid gap-2" onSubmit={ev => { ev.preventDefault(); addInvestigation(); }}>
-                    <input required value={inv.label} onChange={ev => setInv(p => ({ ...p, label: ev.target.value }))}
-                      placeholder="What are you asking for? e.g. EEG (routine)" className={input} />
-                    <input value={inv.summary} onChange={ev => setInv(p => ({ ...p, summary: ev.target.value }))}
-                      placeholder="Why, in one line (optional)" className={input} />
-                    <button type="submit" disabled={busy || !inv.label.trim()} className={QUIET_BTN}>
-                      Record investigation
-                    </button>
-                  </form>
-                )}
-              </section>
-            )}
+            {/* ══ INVESTIGATIONS -- CPR-INV-001 ════════════════════════════
+                ⚠ THE ONE-AT-A-TIME TEXT BOX IS GONE AND EVERY CAPTURE PATH IT HAD REMAINS.
+                InvestigationCapture writes the same practice_encounter_investigation row, still records
+                the same optional sentence, and still refuses to hold a result. What changed is that a
+                practitioner selects several and confirms once, which is s2's whole point.
+
+                ⚠ THE BOUNDARY PARAGRAPH MOVED WITH IT AND IS NOW RENDERED FROM THE ENGINE'S OWN
+                CONSTANT. It used to be authored here in JSX, where it could drift from what the API and
+                the migration say. It is INVESTIGATION_BOUNDARY now, one string, asserted by the
+                harness. */}
+            {tab === "investigations" && props.investigationCapture}
 
             {/* ══ FOLLOW-UP ═════════════════════════════════════════════════════════════════════
                 CPR-140. The patient's LIVE obligations, not this encounter's -- one raised at the last
