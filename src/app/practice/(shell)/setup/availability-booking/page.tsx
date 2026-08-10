@@ -20,6 +20,7 @@ import ExceptionWorkspace from "./ExceptionWorkspace";
 import RuleWorkspace from "./RuleWorkspace";
 import RecallWorkspace from "./RecallWorkspace";
 import PublishWorkspace from "./PublishWorkspace";
+import { onSetupReadinessEvaluated } from "@/lib/practice/activation-hooks";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -118,6 +119,13 @@ export default async function AvailabilityBookingPage({ searchParams }: {
     practiceSessions(admin, ctx), scheduleChanges(admin, ctx), bookingRulesWorkspace(admin, ctx),
     recallQueue(admin, ctx.workspaceId), walkInPolicy(admin, ctx), publishReadiness(admin, ctx),
   ]);
+
+  // CPR-GROWTH-001 s2 "practice configured". ⚠ EMITTED FROM THE READINESS EVALUATION, NOT FROM A BUTTON.
+  // There is no single moment a practice becomes configured -- it becomes true when the last blocker
+  // clears, which may be a location saved on a different screen. This is where the product finds out, so
+  // this is where the milestone is recorded. Idempotent, so evaluating it on every visit costs one
+  // refused insert, and `cannot_say` never emits.
+  await onSetupReadinessEvaluated(admin, ctx.workspaceId, readiness.verdict, ctx.userId);
 
   const { layer } = await searchParams;
   const active = Number(layer) >= 1 && Number(layer) <= 3 ? Number(layer) : 1;

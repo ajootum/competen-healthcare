@@ -69,6 +69,38 @@ export async function onEncounterClosed(admin: any, workspaceId: string, actorId
 }
 
 /**
+ * Section 2's "practice configured" - the last north-star milestone, and the one that had no definition.
+ *
+ * ⚠ IT IS NOT A NEW DEFINITION. The product already decides whether a practice is ready to receive
+ * patients, in publishReadiness: twelve blocker checks covering an active location, a bookable session, a
+ * linked appointment type and the rest. Writing a second list here would have created two answers to one
+ * question, and the one nobody maintained would drift into telling a practitioner they were set up when the
+ * booking page still refused to publish.
+ *
+ * ⚠ "COULD PUBLISH", NOT "DID PUBLISH", WHICH IS WHY THIS IS NOT booking.link_created. Section 1 names
+ * configuration and link creation as SEPARATE conditions, so collapsing them would make one of the four
+ * north-star events decorative. Configured means every blocker passes. Created means they then went live.
+ *
+ * ⚠ AND `cannot_say` NEVER EMITS. It means nothing failed but a blocker could not be CHECKED -- the third
+ * state publishReadiness exists to preserve. Treating it as ready would mark a practice configured on the
+ * strength of a question nobody answered, and the customer-success queue would stop chasing them.
+ *
+ * The verdict is passed IN rather than read here, deliberately: patient-access imports this module, so
+ * calling publishReadiness from inside it would be a cycle.
+ */
+export async function onSetupReadinessEvaluated(
+  admin: any,
+  workspaceId: string,
+  verdict: "ready" | "ready_with_warnings" | "not_ready" | "cannot_say",
+  actorId?: string | null,
+): Promise<void> {
+  if (verdict !== "ready" && verdict !== "ready_with_warnings") return;
+  try {
+    await emitActivation(admin, { workspaceId, eventKey: "practice.setup_completed", actorId: actorId ?? null });
+  } catch { /* non-blocking */ }
+}
+
+/**
  * The booking page became LIVE - section 2's "booking link generated / distribution asset".
  *
  * ⚠ LIVE, NOT MERELY EXISTING. A handle is claimed at provisioning and a hidden page has a URL that
@@ -134,8 +166,10 @@ export async function onPracticeCreated(admin: any, workspaceId: string, actorId
 // Activated by the definition, however well it is doing. isActivated() is therefore correct and unusable
 // until these exist, which is a gap in the product rather than in the rule.
 export const UNHOOKED_MILESTONES = [
-  { key: "practice.setup_completed", why: "no single definition of setup completion exists in this product" },
-  { key: "intelligence.first_action", why: "the intelligence surface reads, so there is no action to record" },
+  { key: "intelligence.first_action", why: "the intelligence surface reads, so there is no act to record" },
+  // ⚠ practice.setup_completed HAS MOVED OFF THIS LIST TOO. The note said no single definition existed;
+  // in fact one already did, in publishReadiness, and nobody had connected it to the milestone. Every
+  // north-star event in section 1 now has an emitter, so a practice can finally BE Activated.
   // ⚠ booking.link_created AND booking.link_shared HAVE MOVED OFF THIS LIST. The reasoning above was that
   // "sharing happens outside this product and nothing observes it" -- true of the SEND, and wrong about the
   // ACT. Competen does observe the practitioner copying the link, opening a share window or downloading the

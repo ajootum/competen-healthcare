@@ -4,6 +4,7 @@ import {
   publishReadiness, saveBookingAccess, setPublishState,
 } from "@/lib/practice/patient-access";
 import { returnStrandedFollowUp } from "@/lib/practice/follow-ups";
+import { onSetupReadinessEvaluated } from "@/lib/practice/activation-hooks";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -39,6 +40,11 @@ export async function GET() {
   const { ctx, caller } = auth;
 
   const readiness = await publishReadiness(caller.admin, ctx);
+  // CPR-GROWTH-001 s2 "practice configured". Emitted from the READINESS EVALUATION rather than from a
+  // setup button, because there is no single moment a practice becomes configured -- it becomes true
+  // when the last blocker clears, and this is where the product finds that out. Idempotent, so
+  // evaluating it on every read costs one refused insert.
+  await onSetupReadinessEvaluated(caller.admin, ctx.workspaceId, readiness.verdict, ctx.userId);
 
   // 200 EVEN WHEN THE VERDICT IS not_ready OR cannot_say. A checklist that failed to be a checklist
   // would be a 4xx; a checklist reporting that the page is not ready is this endpoint working.

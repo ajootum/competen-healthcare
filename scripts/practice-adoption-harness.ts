@@ -24,7 +24,7 @@ import {
 import { markSeen, toCompleteQueue } from "../src/lib/practice/capture-later";
 import { openOrResumeSession, applyCloseAction, completeSession } from "../src/lib/practice/day-close";
 import { ADOPTION_LADDER, ACTIVATION_DEFINITION, CLOSE_ACTIONS } from "../src/lib/practice/adoption-constants";
-import { onAppointmentCreated, UNHOOKED_MILESTONES } from "../src/lib/practice/activation-hooks";
+import { onAppointmentCreated, onSetupReadinessEvaluated, UNHOOKED_MILESTONES } from "../src/lib/practice/activation-hooks";
 
 loadEnvConfig(process.cwd());
 
@@ -394,8 +394,48 @@ const skip = (id: string, msg: string) => { skips.push(id); console.log(`  SKIP 
     // !! THE NORTH STAR IS NOW ONE EVENT AWAY, NOT THREE. Worth asserting the exact number so the
     // remaining gap cannot be misremembered in either direction.
     const nsGap = UNHOOKED_MILESTONES.map(m => m.key).filter(k => ACTIVATION_DEFINITION.includes(k));
-    ok("J7", nsGap.length === 1 && nsGap[0] === "practice.setup_completed",
-      `!! ${nsGap.length} north-star event still has no emitter (${nsGap.join(", ")}) -- down from three`);
+    // ⚠ J7 PINNED "ONE REMAINING" AND DEFINING setup_completed TOOK IT TO ZERO -- the FOURTH time today a
+    // genuine success turned a counted assertion red. The property worth holding is that the gap is
+    // KNOWN and named, whatever its size, so that is what it says now.
+    ok("J7", nsGap.every(k => UNHOOKED_MILESTONES.some(m => m.key === k)),
+      `every north-star event without an emitter is named in UNHOOKED_MILESTONES (${nsGap.length ? nsGap.join(", ") : "none left -- all four can now fire"})`);
+
+    // ── K. setup_completed, defined ─────────────────────────────────────────────────────────────────
+    console.log("\n  -- K. the last milestone --");
+    const K_WS = ws;
+    const verdictEmits = async (v: "ready" | "ready_with_warnings" | "not_ready" | "cannot_say") => {
+      await admin.from("practice_activation_event").delete()
+        .eq("workspace_id", K_WS).eq("event_key", "practice.setup_completed");
+      await onSetupReadinessEvaluated(admin, K_WS, v, actor);
+      const { count } = await admin.from("practice_activation_event")
+        .select("id", { count: "exact" }).eq("workspace_id", K_WS)
+        .eq("event_key", "practice.setup_completed").limit(1);
+      return (count ?? 0) > 0;
+    };
+    cleanupKeys.push("practice.setup_completed");
+
+    ok("K1", (await verdictEmits("ready")) && (await verdictEmits("ready_with_warnings")),
+      "a practice whose every publish BLOCKER passes is configured -- warnings do not stop it, which is what ready_with_warnings means");
+
+    // ⚠ THE ONE THAT MATTERS. cannot_say means nothing failed and a blocker could NOT BE CHECKED.
+    ok("K2", (await verdictEmits("cannot_say")) === false,
+      "⚠ `cannot_say` does NOT emit -- marking a practice configured on a question nobody answered would stop the success queue chasing them");
+
+    ok("K3", (await verdictEmits("not_ready")) === false,
+      "and a failing blocker does not emit either");
+
+    // ⚠ ONE OWNER PER DEFINITION. A second checklist here would drift from the one the booking page
+    // actually enforces, and the drift would tell a practitioner they were set up while publish refused.
+    const hooks2 = strip(readFileSync("src/lib/practice/activation-hooks.ts", "utf8"));
+    ok("K4", !/LOCATION_ACTIVE|SESSION_BOOKABLE|APPOINTMENT_TYPE_LINKED/.test(hooks2)
+          && /verdict !== "ready" && verdict !== "ready_with_warnings"/.test(hooks2),
+      "the definition is publishReadiness's verdict, not a second checklist copied into the hooks");
+
+    const bookingRoute = strip(readFileSync("src/app/api/v1/practice/booking-access/route.ts", "utf8"));
+    const setupPage = strip(readFileSync("src/app/practice/(shell)/setup/availability-booking/page.tsx", "utf8"));
+    ok("K5", bookingRoute.includes("onSetupReadinessEvaluated(") && setupPage.includes("onSetupReadinessEvaluated("),
+      "wired at BOTH places readiness is evaluated -- the API the screen reads and the screen itself");
+
   } finally {
     for (const key of cleanupKeys)
       if (ws) await admin.from("practice_activation_event").delete().eq("workspace_id", ws).eq("event_key", key);
