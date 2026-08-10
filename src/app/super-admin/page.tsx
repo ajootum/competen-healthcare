@@ -3,6 +3,8 @@ import { HQ_HOME_CAPABILITY } from "@/lib/hq/spaces";
 import Link from "next/link";
 import { loadMissionControl } from "@/lib/super-admin/mission-control";
 import MissionControlHeader from "./_mc/MissionControlHeader";
+import ComposedMissionControl from "./_mc/ComposedMissionControl";
+import { resolveMissionProfile } from "@/lib/hq/mission-profile";
 import EnterpriseExplorer from "./_mc/EnterpriseExplorer";
 import Sparkline from "./_mc/Sparkline";
 
@@ -74,6 +76,32 @@ export default async function MissionControl() {
   // the mode-honouring spelling was an escalation path rather than a safe default.
   const ctx = await requireHqCapability(HQ_HOME_CAPABILITY);
   const admin = ctx.admin as any;
+
+  // ── PLAT-GOV-MC-001: the shell composes, it does not assume ──────────────────────────────────────────
+  //
+  // Everything below this branch measures the PLATFORM ESTATE -- enterprise tenants, active users across
+  // tenants, deployments, background jobs. A Practice Product Director governs none of it, and was being
+  // shown all of it because the HQ home capability is granted to every position so that nobody lands
+  // nowhere. The capability was right and the destination was not.
+  //
+  // ⚠ AN OWNER NEVER TAKES THIS BRANCH, WHATEVER THE REGISTRY SAYS. The composition can resolve to the
+  // minimum for reasons that have nothing to do with the viewer -- an unreadable table, an unapplied
+  // migration -- and an owner who lost their console to a failed read would have to fix the registry from
+  // a dashboard the registry just blanked. Ownership is tested first, before the state is consulted, for
+  // the same reason it is tested first in decideHq.
+  const composition = await resolveMissionProfile(admin, {
+    isOwner: ctx.isOwner, positions: ctx.positions, capabilities: ctx.capabilities,
+  });
+  if (!ctx.isOwner && (composition.profile.governanceLevel === "product" || composition.state !== "resolved"))
+    return (
+      <ComposedMissionControl
+        composition={composition}
+        admin={admin}
+        isOwner={ctx.isOwner}
+        capabilities={ctx.capabilities}
+        viewerName={ctx.fullName}
+      />
+    );
 
   const mc = await loadMissionControl(admin);
   const { kpis, spark, ops, explorer, unassignedFacilities, missionStatus, activity, activityReady, workspaces, totalUsers, onboarding, health, changedToday, systemAlerts, timeline, counts } = mc;
