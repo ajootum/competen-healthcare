@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { currentTraceId } from "@/lib/trace";
+import { admitToEstate } from "@/lib/platform-membership";
+import type { AppRole } from "@/lib/roles";
 
 // ── API authorization & tenant-scoping helpers ───────────────────────────────
 // Route handlers that use the service-role admin client BYPASS Supabase RLS, so
@@ -50,6 +52,24 @@ export async function getCaller(): Promise<Caller | NextResponse> {
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role, roles, hospital_id, organisation_id").eq("id", user.id).single();
   const roles = ((me?.roles?.length ? me.roles : [me?.role]) as (string | null)[]).filter(Boolean) as string[];
+
+  // ── GATE 1 AT THE API BOUNDARY (COMP-ARCH-PSA-001 s7/s14) ──────────────────────────────────────────
+  // ⚠ THE ELEVEN ESTATE LAYOUTS ALREADY ASK THIS AND NO API ROUTE DID. Platform membership was enforced
+  // where pages are rendered and nowhere where data is written, so an identity the estate had stopped
+  // admitting could still drive all 430 route handlers directly. The two boundaries now agree.
+  //
+  // ⚠ IT REFUSES EXACTLY ONE CLASS OF PERSON, WHICH IS THE ENTIRE POINT: a Competen Practice
+  // practitioner, who stands behind gate 2 and was never on this estate. Measured live before this
+  // landed -- 46 of 46 estate-role holders carry an active membership and the single practice-only
+  // account carries none -- so this denies nobody who can use the product today.
+  //
+  // Same three-state posture as the layouts, not a stricter one: super_admin short-circuits with NO read
+  // at all, and an UNREADABLE membership store ADMITS and warns rather than refusing. A transient
+  // database error must not turn every API in the product into a 403 for everybody at once; the role
+  // predicates below are still the operative check in that case.
+  if (!(await admitToEstate(admin, user.id, roles as AppRole[])).admitted)
+    return forbidden("Not a member of this platform");
+
   // XWI P2-15 — one id per request, so the audit row, the domain event it raises and whatever the consumer
   // does next can be joined.
   //
