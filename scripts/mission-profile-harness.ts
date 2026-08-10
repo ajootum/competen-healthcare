@@ -18,6 +18,7 @@ import {
   resolveMissionProfile, resolveMissionProfileByCode, listMissionProfiles, MINIMAL_PROFILE,
 } from "../src/lib/hq/mission-profile";
 import { runWidget, REGISTERED_SOURCES } from "../src/lib/hq/mission-widgets";
+import { planeVocabulary, checkWidgetPlanes, CAPABILITY_PLANES } from "../src/lib/hq/capability-planes";
 import { resolveHqPositions } from "../src/lib/hq/context";
 
 loadEnvConfig(process.cwd());
@@ -197,6 +198,76 @@ const strip = (s: string) =>
       "the page honours ?preview ONLY for owners");
     ok("P5", /searchParams/.test(pageSrc) && !/HQ_CONTEXT_COOKIE/.test(pageSrc),
       "preview travels as a query parameter and sets no cookie -- there is no preview state to get stuck in");
+
+    // ── 5c. Tenant and operational profiles (GOV-MC-001 s7) ──────────────────────────────────────
+    console.log("\n  -- 5c. tenant and operational profiles --");
+    const { data: allProfiles } = await admin.from("hq_mission_profile").select("code, governance_level, scope_type, product_line_code");
+    const rows = (allProfiles ?? []) as any[];
+    const levels = (l: string) => rows.filter(r => r.governance_level === l).map(r => r.code);
+    ok("N0-control", rows.length >= 9, `count control: ${rows.length} profiles configured`);
+    ok("N1", levels("tenant").length === 4 && levels("operational").length === 2,
+      `section 7's profiles exist: ${levels("tenant").length} tenant, ${levels("operational").length} operational`);
+    ok("N2", rows.filter(r => r.governance_level !== "hq" && r.governance_level !== "product")
+             .every(r => r.scope_type && r.scope_type !== "none"),
+      "every tenant/operational profile declares a SCOPE -- s7 roots them in the customer hierarchy");
+
+    // ⚠ THE ASSERTION THAT MATTERS MOST ABOUT SEEDING THEM: it changed nobody's dashboard. resolveMissionProfile
+    // only selects governance_level 'product', so six new rows are inert for resolution. If that ever stops
+    // being true, an appointee's console changes because somebody added a row.
+    const ownerAfter = await resolveMissionProfile(admin, { isOwner: true, positions: [], capabilities: [] });
+    const dirAfter = await resolveMissionProfile(admin, {
+      isOwner: false, positions: ["practice_product_director"], capabilities: ["hq.practice.operations.view"] });
+    ok("N3", ownerAfter.profile.code === "hq_super_admin" && dirAfter.profile.code === "product_practice",
+      `seeding six profiles changed nobody's resolution (owner -> ${ownerAfter.profile.code}, director -> ${dirAfter.profile.code})`);
+
+    // ⚠ NO WIDGETS, ASSERTED AS A DELIBERATE STATE. If somebody later seeds a tenant widget without also
+    // solving scope resolution, this goes red and asks them the question migration 282 wrote down: which
+    // tenant is it about, what renders it, and does an owner previewing it cross s8's data boundary.
+    const { data: pw2 } = await admin.from("hq_profile_widget").select("profile_code");
+    const tenantCodes = new Set(rows.filter(r => r.governance_level === "tenant" || r.governance_level === "operational").map(r => r.code));
+    const tenantWidgets = ((pw2 ?? []) as any[]).filter(r => tenantCodes.has(r.profile_code));
+    ok("N4", tenantWidgets.length === 0,
+      `no tenant or operational profile carries widgets yet (${tenantWidgets.length}) -- scope resolution, a consumer and a data-boundary decision all come first`);
+
+    // ── 5d. The compensating control for the dropped foreign key ─────────────────────────────────
+    console.log("\n  -- 5d. capability planes (migration 282 dropped the FK) --");
+    for (const plane of CAPABILITY_PLANES) {
+      const v = await planeVocabulary(admin, plane);
+      ok(`V.${plane}`, v.codes !== null && v.codes.length > 0,
+        `the ${plane} plane has a readable vocabulary (${v.codes?.length ?? "UNREADABLE"}) -- ${v.source}`);
+    }
+
+    const { data: allWidgets } = await admin.from("hq_mission_widget").select("code, capability_plane, required_capability");
+    const planeProblems = await checkWidgetPlanes(admin, (allWidgets ?? []) as any);
+    ok("V1", (allWidgets ?? []).length > 0 && planeProblems.length === 0,
+      `every seeded widget names a capability its declared plane contains (${(allWidgets ?? []).length} widget(s), ${planeProblems.length} problem(s))${planeProblems.length ? `: ${planeProblems.map(p => `${p.widget} ${p.problem}`).join("; ")}` : ""}`);
+
+    // ⚠ THE CONTROL. V1 passes trivially if the checker never rejects anything -- which is exactly what the
+    // dropped foreign key would let through unnoticed.
+    const wrongPlane = await checkWidgetPlanes(admin, [
+      { code: "__fixture_wrong_plane__", capability_plane: "practice", required_capability: "hq.practice.operations.view" },
+    ]);
+    ok("V2-control", wrongPlane.length === 1 && /not a practice capability/.test(wrongPlane[0].problem),
+      `CONTROL: an HQ code declared in the practice plane is rejected (${wrongPlane[0]?.problem ?? "NOT REJECTED"}) -- V1 is a check, not a function that approves everything`);
+
+    // ⚠ ASSERTED ON THE PROBLEM TEXT, NOT JUST THE COUNT, BECAUSE A BREAK PASSED ON THE COUNT. Removing the
+    // known-plane guard left an unknown plane falling through to the PRACTICE branch, where the code was
+    // rejected anyway -- so the fixture was still refused, for entirely the wrong reason. A control that
+    // only counts refusals cannot tell a working guard from a coincidence.
+    const unknownPlane = await checkWidgetPlanes(admin, [
+      { code: "__fixture_unknown_plane__", capability_plane: "landlord", required_capability: "hq.practice.operations.view" },
+    ]);
+    ok("V3-control", unknownPlane.length === 1 && unknownPlane[0].problem === "unknown plane",
+      `CONTROL: an unknown plane is rejected AS an unknown plane (${unknownPlane[0]?.problem ?? "NOT REJECTED"}), not incidentally by another branch`);
+
+    // ⚠ THE VACUITY GUARD, ON A FIXTURE. The practice plane has 52 live codes, so a break that let an EMPTY
+    // vocabulary read as valid changes nothing today and stayed green. The guard only matters when there
+    // are no grants at all -- which is precisely when every "names a known code" assertion would otherwise
+    // pass for any string.
+    const emptyStore = { from: () => ({ select: () => ({ limit: async () => ({ data: [], error: null }) }) }) };
+    const emptyVocab = await planeVocabulary(emptyStore, "practice");
+    ok("V4-control", emptyVocab.codes === null,
+      `CONTROL: a practice plane with NO grants yields null, not an empty set (${emptyVocab.codes === null ? "null" : `[${emptyVocab.codes.length}]`}) -- an empty set would approve every code`);
 
     // ── 6. Live ──────────────────────────────────────────────────────────────────────────────────
     console.log("\n  -- 6. live --");
