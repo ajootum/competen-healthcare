@@ -56,6 +56,12 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   { code: "hq.platform.metadata.view",        space: "platform"  },
   { code: "hq.platform.audit.view",           space: "platform"  },
   { code: "hq.practice.operations.view",      space: "practice"  },
+  // ⚠ ADDED BY MIGRATION 273, and this list had to follow it. The DB gained the capability and this
+  // catalogue did not, so B1 went red -- which is the drift control working: decideHq() answers from THIS
+  // list, so a capability the database grants and the code has never heard of grants nothing at runtime.
+  // It is the operator licence door (PLAT-OVERSIGHT-SURVEY-001 D5): a WRITE, and the only operator-side
+  // write over a practitioner identity, which is why it is its own code rather than folded into the view.
+  { code: "hq.practice.licence.verify",       space: "practice"  },
   { code: "hq.learning.competencies.view",    space: "learning"  },
   { code: "hq.learning.content.view",         space: "learning"  },
   { code: "hq.learning.studio.view",          space: "learning"  },

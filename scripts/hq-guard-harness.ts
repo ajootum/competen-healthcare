@@ -39,8 +39,16 @@ loadEnvConfig(process.cwd());
 // ── The count control. 204 page patterns under /super-admin, from the build manifest and confirmed by
 // walking the tree. If this number moves, a page was added or removed and every subset assertion below is
 // measuring a different estate than the one that was reviewed.
-const PAGE_BASELINE = 204;
+// 205 since the HQ appointment screen landed. ⚠ Moved deliberately after confirming that page calls
+// requireHqContext itself -- the count control exists so a /super-admin page cannot appear unnoticed, and
+// bumping it without checking the gate would defeat the only thing it does.
+const PAGE_BASELINE = 205;
 const MIGRATION = "supabase/migrations/264-hq-positions-and-spaces.sql";
+// ⚠ THE SEED IS NO LONGER ONE FILE. Migration 273 (the operator licence door) adds a capability AND a
+// grant, so parsing 264 alone made B1 and B5 red the moment 273 was applied -- the harness measuring a
+// catalogue the product had moved past. Every migration that seeds hq_capability or hq_position_capability
+// belongs here.
+const SEED_MIGRATIONS = [MIGRATION, "supabase/migrations/273-operator-licence-verification.sql"];
 const APP_ROOT = "src/app/super-admin";
 
 let pass = 0, fail = 0, pending = 0;
@@ -67,14 +75,30 @@ const routeOf = (file: string) =>
 
 // Parse the seed rows straight out of the migration, so the DDL and the TypeScript catalogue can never
 // quietly disagree and so the decision tests below run against the data that will actually ship.
-const sql = readFileSync(MIGRATION, "utf8");
+const sql = SEED_MIGRATIONS.map(f => readFileSync(f, "utf8")).join("\n");
+/**
+ * ⚠ EVERY `insert into <table>` ACROSS EVERY SEED FILE, NOT JUST THE FIRST.
+ *
+ * This took the first occurrence and stopped. That was correct while 264 was the only seed file, and became
+ * silently wrong the moment 273 added a capability and a grant: with both files concatenated it read 264's
+ * insert, stopped at that block's `on conflict`, and never saw 273 at all — so D1 reported "29 in the DDL,
+ * 30 in code" and looked like the CODE had drifted, when the parser had simply stopped reading.
+ */
 const rowsOf = (table: string): string[][] => {
-  const start = sql.indexOf(`insert into ${table} (`);
-  if (start < 0) return [];
-  const block = sql.slice(start, sql.indexOf("on conflict", start));
-  const body = block.slice(block.indexOf(" values") + 7);
-  return [...body.matchAll(/\(([^()]*)\)/g)].map(m =>
-    m[1].split(",").map(v => v.trim().replace(/^'/, "").replace(/'$/, "")));
+  const out: string[][] = [];
+  const needle = `insert into ${table} (`;
+  let from = 0;
+  for (;;) {
+    const start = sql.indexOf(needle, from);
+    if (start < 0) break;
+    const end = sql.indexOf("on conflict", start);
+    const block = sql.slice(start, end < 0 ? sql.length : end);
+    const body = block.slice(block.indexOf(" values") + 7);
+    for (const m of body.matchAll(/\(([^()]*)\)/g))
+      out.push(m[1].split(",").map(v => v.trim().replace(/^'/, "").replace(/'$/, "")));
+    from = end < 0 ? start + needle.length : end;
+  }
+  return out;
 };
 const ddlCapabilities = rowsOf("hq_capability").map(r => ({ code: r[0], space: r[1] }));
 const ddlPositions = rowsOf("hq_position").map(r => ({ code: r[0], space: r[1], name: r[2] }));
