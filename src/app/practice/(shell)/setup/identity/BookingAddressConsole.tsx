@@ -61,6 +61,22 @@ export default function BookingAddressConsole({ identity }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
+  /**
+   * CPR-GROWTH-001 s2 -- record that the practitioner took a share action.
+   *
+   * !! FIRE AND FORGET, AND DELIBERATELY NOT AWAITED. Copying a link must not wait on a milestone write,
+   * and must not fail if one fails. The route records nothing but the milestone.
+   *
+   * !! IT MEANS "THEY SHARED", NEVER "A PATIENT RECEIVED". This screen already says "Nothing was sent."
+   * and that stays true: Competen cannot observe a WhatsApp message or a poster on a wall.
+   */
+  const recordShare = (via: string) => {
+    void fetch("/api/v1/practice/identity", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "recordShare", via }),
+    }).catch(() => { /* a milestone nobody could record is not a share that did not happen */ });
+  };
+
   /** Which mode the practitioner has selected to publish AS. Never pre-selected — publishing is a choice. */
   const [chosenMode, setChosenMode] = useState<string | null>(null);
   const [publishConfirmed, setPublishConfirmed] = useState(false);
@@ -696,6 +712,7 @@ export default function BookingAddressConsole({ identity }: Props) {
                   <li key={t.key}>
                     {t.href ? (
                       <a href={t.href} target="_blank" rel="noopener noreferrer" title={t.detail}
+                        onClick={() => recordShare(t.key)}
                         className="inline-block rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-semibold text-gray-700 hover:border-[var(--cp-primary)]/40 hover:bg-[var(--cp-primary)]/5">
                         {t.label}
                         {/* ⚠ SAID ON THE BUTTON, not only in a tooltip. Facebook and LinkedIn receive
@@ -704,7 +721,7 @@ export default function BookingAddressConsole({ identity }: Props) {
                       </a>
                     ) : (
                       <button type="button" title={t.detail}
-                        onClick={() => { void navigator.clipboard?.writeText(view.sharing!.url); setDone("Link copied. Nothing was sent."); }}
+                        onClick={() => { void navigator.clipboard?.writeText(view.sharing!.url); recordShare(t.key); setDone("Link copied. Nothing was sent."); }}
                         className="rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-semibold text-gray-700 hover:border-[var(--cp-primary)]/40 hover:bg-[var(--cp-primary)]/5">
                         {t.label}
                       </button>
@@ -720,15 +737,17 @@ export default function BookingAddressConsole({ identity }: Props) {
 
               <div className="mt-3 flex flex-wrap gap-2">
                 <a href={view.sharing.qrPngDataUrl} download={`${view.sharing.handle}-booking-qr.png`}
+                  onClick={() => recordShare("qr_png")}
                   className="rounded-lg border border-gray-300 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
                   Download PNG
                 </a>
                 <a href={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(view.sharing.qrSvg)}`}
                   download={`${view.sharing.handle}-booking-qr.svg`}
+                  onClick={() => recordShare("qr_svg")}
                   className="rounded-lg border border-gray-300 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
                   Download SVG
                 </a>
-                <Link href={view.sharing.printPath} target="_blank"
+                <Link href={view.sharing.printPath} target="_blank" onClick={() => recordShare("print")}
                   className="rounded-lg border border-gray-300 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
                   Print assets
                 </Link>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
+import { onBookingLinkShared } from "@/lib/practice/activation-hooks";
 import {
   identitySetupView, issueIdentity, claimHandle, resolveDisplayName,
   publishIdentity, updateIdentity, DISCOVERY_MODES,
@@ -95,6 +96,26 @@ export async function POST(req: NextRequest) {
         message: `this endpoint does not set your lifecycle state, so ${named.join(", ")} was refused rather than ignored. Publishing moves it for you; licence verification is recorded by whoever checked the licence, and never from here.`,
       },
     }, { status: 400 });
+
+  // CPR-GROWTH-001 s2 "intent to acquire patients".
+  //
+  // ⚠ IT RECORDS THAT THE PRACTITIONER ACTED, NEVER THAT ANYBODY RECEIVED ANYTHING, and the screen that
+  // calls it already says so in as many words: "Link copied. Nothing was sent." Competen cannot observe a
+  // WhatsApp message or a poster on a wall. What it CAN observe is somebody copying the link, opening a
+  // share window or downloading the QR, and s2 names that milestone exactly that.
+  //
+  // ⚠ IT WRITES NOTHING BUT THE MILESTONE. No handle is changed, nothing is published, and the practice's
+  // own state is untouched -- so it is safe to fire from a button whose only other effect is a clipboard
+  // write. `via` is a channel name and carries nothing about any patient.
+  if (action === "recordShare") {
+    const via = typeof body.via === "string" ? body.via.slice(0, 40) : undefined;
+    await onBookingLinkShared(admin, ctx.workspaceId, ctx.userId, via);
+    return NextResponse.json({
+      ok: true,
+      note: "Recorded that you shared your booking address. Nothing was sent to anybody from here.",
+      correlationId: caller.traceId,
+    });
+  }
 
   if (action === "issue") {
     // ⚠ THE SUBJECT IS THE CALLER, NEVER A USER ID FROM THE BODY. An identity is keyed on a person and

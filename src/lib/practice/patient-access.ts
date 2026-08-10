@@ -12,6 +12,7 @@ import {
   PUBLISH_STATE_CODES, PUBLISH_STATES_LIVE, PUBLISHABLE_CONSTRAINT,
 } from "@/lib/practice/publish-constants";
 import type { WorkspaceContext } from "@/lib/practice/access";
+import { onBookingLinkCreated } from "./activation-hooks";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -1071,6 +1072,11 @@ export async function setPublishState(admin: any, ctx: WorkspaceContext, args: {
     payload: { from: existing.value.publishState, to: data.publish_state, acceptedWarnings },
     correlationId: args.correlationId,
   });
+
+  // CPR-GROWTH-001 s2 "booking link generated". ⚠ ON GOING LIVE, NOT ON HAVING A HANDLE. A handle is
+  // claimed at provisioning and a hidden page's URL answers "this page does not exist", so emitting any
+  // earlier would credit a practice with a distribution asset it cannot hand to anybody. Non-blocking.
+  if (goingLive) await onBookingLinkCreated(admin, ctx.workspaceId, args.actorId);
 
   return { ok: true, data: { publishState: data.publish_state as string, acceptedWarnings } };
 }

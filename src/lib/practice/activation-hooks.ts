@@ -68,6 +68,47 @@ export async function onEncounterClosed(admin: any, workspaceId: string, actorId
   } catch { /* non-blocking */ }
 }
 
+/**
+ * The booking page became LIVE - section 2's "booking link generated / distribution asset".
+ *
+ * ⚠ LIVE, NOT MERELY EXISTING. A handle is claimed at provisioning and a hidden page has a URL that
+ * answers "this page does not exist", so emitting on either would mark a practice as having a
+ * distribution asset it cannot give anybody.
+ */
+export async function onBookingLinkCreated(admin: any, workspaceId: string, actorId?: string | null): Promise<void> {
+  try {
+    await emitActivation(admin, { workspaceId, eventKey: "booking.link_created", actorId: actorId ?? null });
+  } catch { /* non-blocking */ }
+}
+
+/**
+ * The practitioner took a share action - section 2's "intent to acquire patients".
+ *
+ * ⚠ THIS RECORDS AN ACTION, NEVER A RECEIPT, AND THE SCREEN ALREADY SAYS SO. The copy button reads
+ * "Link copied. Nothing was sent." Competen cannot observe a WhatsApp message being sent or a poster being
+ * put on a wall, and it must not pretend otherwise: this fires when somebody copied the link, opened a
+ * share window or downloaded the QR. Section 2 names the milestone "intent to acquire patients", which is
+ * exactly and only what that evidences.
+ *
+ * ⚠ SO THE AMBER RULE IT FEEDS IS ABOUT INTENT TOO. "Link shared but no booking after an interval" means
+ * the practitioner took a step and no patient came -- which is worth a call. It does NOT mean patients saw
+ * the link and ignored it, and a customer-success script that assumed so would be telling them something
+ * untrue about their own practice.
+ *
+ * `via` records WHICH action, so the difference between copying a link and printing a poster stays visible.
+ * It is a channel name and carries nothing about any patient.
+ */
+export async function onBookingLinkShared(
+  admin: any, workspaceId: string, actorId?: string | null, via?: string,
+): Promise<void> {
+  try {
+    await emitActivation(admin, {
+      workspaceId, eventKey: "booking.link_shared", actorId: actorId ?? null,
+      metadata: via ? { via } : {},
+    });
+  } catch { /* non-blocking */ }
+}
+
 /** Provisioning. `practice.created` is the acquisition milestone in section 2. */
 export async function onPracticeCreated(admin: any, workspaceId: string, actorId?: string | null): Promise<void> {
   try {
@@ -94,7 +135,9 @@ export async function onPracticeCreated(admin: any, workspaceId: string, actorId
 // until these exist, which is a gap in the product rather than in the rule.
 export const UNHOOKED_MILESTONES = [
   { key: "practice.setup_completed", why: "no single definition of setup completion exists in this product" },
-  { key: "booking.link_created", why: "nothing distinguishes creating a link from provisioning the practice" },
-  { key: "booking.link_shared", why: "sharing happens outside this product and nothing observes it" },
   { key: "intelligence.first_action", why: "the intelligence surface reads, so there is no action to record" },
+  // ⚠ booking.link_created AND booking.link_shared HAVE MOVED OFF THIS LIST. The reasoning above was that
+  // "sharing happens outside this product and nothing observes it" -- true of the SEND, and wrong about the
+  // ACT. Competen does observe the practitioner copying the link, opening a share window or downloading the
+  // QR, and section 2 calls that milestone "intent to acquire patients", not "patients received it".
 ];

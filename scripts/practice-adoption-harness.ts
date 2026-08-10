@@ -331,11 +331,13 @@ const skip = (id: string, msg: string) => { skips.push(id); console.log(`  SKIP 
     ok("H4c-control", (afterReal ?? 0) === 1,
       `CONTROL: the same hook against the real client DOES emit (${afterReal}) -- H4b is the failed count, not a hook that never emits`);
 
-    // !! THE HONEST GAP, ASSERTED SO IT CANNOT BE FORGOTTEN.
-    const unhookedInDefinition = UNHOOKED_MILESTONES
-      .map(m => m.key).filter(k => ACTIVATION_DEFINITION.includes(k));
-    ok("H5", unhookedInDefinition.length === 3,
-      `!! ${unhookedInDefinition.length} of the 4 north-star events have NO emitter (${unhookedInDefinition.join(", ")}) -- so no practice can be Activated today. A gap in the product, not the rule`);
+    // ⚠ THIS PINNED THE NUMBER 3 AND A GENUINE SUCCESS TURNED IT RED -- adding the share action took the
+    // north-star gap from three events to one, and the assertion called that a failure. Same shape as
+    // hq-guard E4 and access-scanner S1. J7 owns the count now, and this owns the property that actually
+    // has to hold: an unhooked milestone must SAY WHY, or the list decays into bare names nobody can act
+    // on and the gap stops being a decision.
+    ok("H5", UNHOOKED_MILESTONES.length > 0 && UNHOOKED_MILESTONES.every(m => m.why.trim().length > 20),
+      `every remaining unhooked milestone states why (${UNHOOKED_MILESTONES.length} left: ${UNHOOKED_MILESTONES.map(m => m.key).join(", ")})`);
 
     // -- I. Capture Later has a button --------------------------------------------------------------
     console.log("\n-- I. Capture Later has a button --");
@@ -359,6 +361,41 @@ const skip = (id: string, msg: string) => { skips.push(id); console.log(`  SKIP 
     ok("I4", todaySrc.includes(`canCapture={hasCapability(shell.ctx, "encounter.edit")}`),
       "offered on encounter.edit -- and the route gates on it again, which is the actual control");
 
+
+    // -- J. link_created and link_shared now have emitters --------------------------------------
+    console.log("\n-- J. the share action --");
+    const hooksSrc = strip(readFileSync("src/lib/practice/activation-hooks.ts", "utf8"));
+    const accessSrc = strip(readFileSync("src/lib/practice/patient-access.ts", "utf8"));
+    const idRoute = strip(readFileSync("src/app/api/v1/practice/identity/route.ts", "utf8"));
+    const shareUi = strip(readFileSync("src/app/practice/(shell)/setup/identity/BookingAddressConsole.tsx", "utf8"));
+
+    ok("J1", accessSrc.includes("if (goingLive) await onBookingLinkCreated("),
+      "the booking link milestone fires when the page GOES LIVE -- not when a handle is claimed, which would credit a practice with an asset it cannot hand anybody");
+
+    ok("J2", idRoute.includes('action === "recordShare"') && idRoute.includes("onBookingLinkShared("),
+      "a share action exists at the API boundary and emits the milestone");
+
+    // !! THE HONESTY CONSTRAINT, ASSERTED. The screen says nothing was sent, and the event must not
+    // claim otherwise -- it records that the practitioner ACTED, which is what s2 calls it.
+    ok("J3", shareUi.includes("Nothing was sent.") && shareUi.includes("recordShare("),
+      "the screen still says nothing was sent, AND records the action -- the event is intent, never receipt");
+
+    ok("J4", shareUi.includes('recordShare("qr_png")') && shareUi.includes('recordShare("print")') && shareUi.includes("recordShare(t.key)"),
+      "every distribution affordance is instrumented -- copy, outbound targets, QR and print");
+
+    // !! AND THE UNHOOKED LIST MUST SHRINK WITH THE CODE, or it becomes a stale apology.
+    const stillUnhooked = UNHOOKED_MILESTONES.map(m => m.key);
+    ok("J5", !stillUnhooked.includes("booking.link_shared") && !stillUnhooked.includes("booking.link_created"),
+      `the unhooked list no longer claims these two (${stillUnhooked.join(", ")})`);
+
+    ok("J6", hooksSrc.includes("export async function onBookingLinkShared") && hooksSrc.includes("metadata: via ?"),
+      "the channel is recorded so copying a link stays distinguishable from printing a poster");
+
+    // !! THE NORTH STAR IS NOW ONE EVENT AWAY, NOT THREE. Worth asserting the exact number so the
+    // remaining gap cannot be misremembered in either direction.
+    const nsGap = UNHOOKED_MILESTONES.map(m => m.key).filter(k => ACTIVATION_DEFINITION.includes(k));
+    ok("J7", nsGap.length === 1 && nsGap[0] === "practice.setup_completed",
+      `!! ${nsGap.length} north-star event still has no emitter (${nsGap.join(", ")}) -- down from three`);
   } finally {
     for (const key of cleanupKeys)
       if (ws) await admin.from("practice_activation_event").delete().eq("workspace_id", ws).eq("event_key", key);
