@@ -19,6 +19,16 @@ const GENERAL_NAV = [
   { group: "MISSION CONTROL", items: [
     { label: "Overview", href: "/super-admin", icon: "🎛️" },
     { label: "Command Centre", href: "/super-admin/command-centre", icon: "📡" },
+    // ⚠ MISSION CONTROL, NOT ENTERPRISE ADMINISTRATION, AND THE DISTINCTION IS THE POINT.
+    //
+    // "People & Roles" below is the hospital ESTATE: who works in the organisations and facilities this
+    // platform serves. HQ positions are the opposite direction -- who governs the PLATFORM ITSELF, through
+    // the five spaces migration 264 seeded. Filing it beside estate people would conflate the two planes
+    // the whole HQ programme exists to separate, on the one screen where that mistake is expensive.
+    //
+    // It shipped with no link at all and was reachable only by typing the URL -- the fourth screen this
+    // week to be built and left doorless, which is why scripts/practice-door-sweep.ts exists.
+    { label: "HQ Positions", href: "/super-admin/users/appointments", icon: "🏛️" },
   ]},
   { group: "ENTERPRISE ADMINISTRATION", items: [
     { label: "Overview", href: "/super-admin/enterprise", icon: "🏢" },

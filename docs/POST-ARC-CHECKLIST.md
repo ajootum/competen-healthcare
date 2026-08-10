@@ -32,15 +32,15 @@ The door sweep exists because this keeps happening. Each of these is built and r
 - `/practice/setup/capabilities` — needs a tile on the Setup landing (`src/lib/practice/setup.ts`)
 - `/practice/setup/investigations` and `/practice/setup/treatments` — modules 20/21 were added to `setup.ts`,
   confirm they render
-- `/super-admin/users/appointments` — the HQ appointment screen, not linked from the sidebar
+- ~~`/super-admin/users/appointments`~~ — DONE: linked as "HQ Positions" under MISSION CONTROL (not Enterprise Administration, which is the hospital estate)
 
 Then re-run `npx --yes tsx scripts/practice-door-sweep.ts` and check the "NO WAY IN" list shrank.
 
-## 3. The HQ page-count baseline
+## 3. ~~The HQ page-count baseline~~ — DONE
 
-`scripts/hq-guard-harness.ts` `E1` is red: **205** page patterns under `/super-admin` against a baseline of
-**204**. The extra is the appointments screen. ⚠ Move the baseline deliberately, after confirming the new
-page carries its own gate — the count control exists precisely so a page cannot be added unnoticed.
+Moved 204 -> 205 after confirming the appointments page calls requireHqContext itself. ⚠ Also fixed in the
+same pass: applying migration 273 had made B1/D1/D2/B5 red, because the DB gained a capability the code
+catalogue had never heard of AND the seed parser only read the FIRST insert across what is now two files.
 
 ## 4. `SessionIdentityNotice` on every workspace shell
 
