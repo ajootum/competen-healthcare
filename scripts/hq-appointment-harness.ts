@@ -194,10 +194,20 @@ function allHolders(board: HqAppointmentBoard): { readable: boolean; holders: { 
   } finally {
     // ⚠ IN A finally, BECAUSE A SHAPE ERROR STRANDED THIS FIXTURE THREE TIMES WHILE THIS FILE WAS WRITTEN.
     console.log("\n  -- 6. fixtures --");
+    // ⚠ THE FIXTURE'S OWN ROW, BY ID, AND NEVER THE TABLE. This deletes only what it inserted -- which is
+    // what saved it when real appointments appeared: the cleanup was right and only the ASSERTION below
+    // was wrong.
     if (apptId) await admin.from("ogs_office_appointments").delete().eq("id", apptId);
-    const left = await admin.from("ogs_office_appointments").select("id").limit(10);
-    ok("Z1", (left.data ?? []).length === 0,
-      `no appointment row survives this run (${(left.data ?? []).length} found) -- nobody is appointed in this deployment, so any row here is ours`);
+    const gone = apptId
+      ? (await admin.from("ogs_office_appointments").select("id").eq("id", apptId).limit(1)).data ?? []
+      : [];
+    const left = await admin.from("ogs_office_appointments").select("id").limit(50);
+    // ⚠ THIS ASSERTED AN EMPTY TABLE, AND WENT RED THE DAY THE OWNER APPOINTED SOMEBODY THROUGH THE SCREEN
+    // -- the product being used, not a regression. Worse, an "empty table" cleanup assertion invites a
+    // future fix that DELETES the table to make it pass, which would wipe real governance appointments.
+    // The claim that matters is narrower and permanent: OUR row is gone.
+    ok("Z1", gone.length === 0,
+      `this run's fixture row is gone (${(left.data ?? []).length} real appointment(s) remain, untouched -- the delete is by id, never a table wipe)`);
     if (subject) ok("Z2", (await resolveHqPositions(admin, subject.id)).capabilities.length === 0,
       "and the subject is back to holding nothing");
 
