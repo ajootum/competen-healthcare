@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { BUTTON } from "@/lib/practice/palette";
 import {
   GUIDANCE_STATE_SWATCH, GUIDANCE_CHECK_SWATCH, GUIDANCE_ROUTE, guidanceSection,
@@ -223,8 +224,13 @@ export default function GuidanceDocument({ detail, canManage, colleagues }: Prop
             <span aria-hidden className="mr-1.5">◌</span>This document cannot be edited.
           </p>
           <p className="mt-1 max-w-3xl text-[12px] leading-relaxed text-slate-600">
+            {/* ⚠ "It is with a colleague" IS FALSE IN A ONE-PERSON PRACTICE, and that is who this
+                product is sold to. The owner read it on 2026-08-11 while waiting for a colleague who
+                does not exist. The freezing reason is the same either way; who is holding it is not. */}
             {doc.status === "in_review"
-              ? "It is with a colleague. A document that changes while somebody is reading it is not the document they approved, so the text is frozen until it is withdrawn or decided."
+              ? colleagues.length === 0
+                ? "It is waiting for YOUR decision — you are the only member of this practice. A document that changes while somebody is reading it is not the document they approved, so the text is frozen until it is withdrawn or decided."
+                : "It is with a colleague. A document that changes while somebody is reading it is not the document they approved, so the text is frozen until it is withdrawn or decided."
               : doc.status === "approved"
               ? "It has been approved. Any further change would invalidate that approval, so re-opening it is a deliberate act that clears the approval with it."
               : doc.status === "published"
@@ -336,9 +342,16 @@ export default function GuidanceDocument({ detail, canManage, colleagues }: Prop
                       className={`${BUTTON.quiet} rounded-lg px-3 py-1.5 text-[12px] font-semibold`}>
                       Check the approval queue
                     </button>
-                    <p className="mt-1 text-[11.5px] text-gray-500">
-                      The decision is made on the approval request itself, in People &rsaquo; Approvals.
-                      This only brings the document into line with it.
+                    {/* ⚠ A LINK, AND THE NAME THE NAV ACTUALLY USES. This said "People > Approvals",
+                        which is not a screen in this product -- the entry is Practice Setup > Team and
+                        Permissions. The owner sent a document for approval on 2026-08-11, went looking
+                        for the place to decide it, and stopped. A sentence naming a screen the sidebar
+                        does not is the same defect as calling this section Knowledge Studio. */}
+                    <p className="mt-1 text-[11.5px] leading-relaxed text-gray-500">
+                      The decision is made on the approval request itself, in{" "}
+                      <Link href="/practice/people" className="font-semibold text-[var(--cp-primary)] underline">
+                        Practice Setup &rsaquo; Team and Permissions
+                      </Link>. This only brings the document into line with it.
                     </p>
                   </div>
                 )}
