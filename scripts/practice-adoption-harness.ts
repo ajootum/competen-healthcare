@@ -24,6 +24,7 @@ import {
 import { markSeen, toCompleteQueue } from "../src/lib/practice/capture-later";
 import { openOrResumeSession, applyCloseAction, completeSession } from "../src/lib/practice/day-close";
 import { ADOPTION_LADDER, ACTIVATION_DEFINITION, CLOSE_ACTIONS } from "../src/lib/practice/adoption-constants";
+import { onAppointmentCreated, UNHOOKED_MILESTONES } from "../src/lib/practice/activation-hooks";
 
 loadEnvConfig(process.cwd());
 
@@ -245,6 +246,118 @@ const skip = (id: string, msg: string) => { skips.push(id); console.log(`  SKIP 
     // ⚠ AN UNREADABLE QUEUE MUST NOT RENDER AS AN EMPTY DAY, and that is a property of the screen.
     ok("G6", /queueFailed/.test(console_) && /not an empty day/i.test(console_),
       "the screen distinguishes a failed read from a finished day in so many words");
+
+
+    // -- H. The emitters are wired to real write paths ---------------------------------------------
+    console.log("\n-- H. activation emitters --");
+    const WIRED: [string, string][] = [
+      ["src/lib/practice/booking-rules.ts", "onAppointmentCreated"],
+      ["src/lib/practice/scheduling.ts", "onAppointmentCreated"],
+      ["src/lib/practice/follow-ups.ts", "onFollowUpCreated"],
+      ["src/lib/practice/follow-up-plans.ts", "onFollowUpCreated"],
+      ["src/lib/practice/day-close.ts", "onEncounterClosed"],
+    ];
+    const unwired = WIRED.filter(([file, hook]) => {
+      const s = strip(readFileSync(file, "utf8"));
+      // ⚠ A PLAIN STRING TEST, NOT A REGEX. `new RegExp(hook + "(admin")` reads the bracket as a capturing
+      // GROUP, so it matches "onAppointmentCreatedadmin" and never the real call -- H1 would then have
+      // reported every wired file as unwired, which reads as a finding rather than a broken assertion.
+      return !(s.includes('from "./activation-hooks"') && s.includes(hook + "(admin"));
+    }).map(([file]) => file);
+    ok("H0-control", WIRED.length === 5, `count control: ${WIRED.length} write paths checked`);
+    ok("H1", unwired.length === 0,
+      `every write path emits its milestone${unwired.length ? " -- unwired: " + unwired.join(", ") : ""}`);
+
+    // !! COUNT-BASED, NOT CALL-COUNTED. The hook is right however often it runs and whatever ran before
+    // it -- a backfill or an import that never touched this code still moves the practice up the ladder.
+    await admin.from("practice_activation_event").delete().eq("workspace_id", ws)
+      .in("event_key", ["booking.first_received", "booking.tenth_received"]);
+    cleanupKeys.push("booking.first_received", "booking.tenth_received");
+    await onAppointmentCreated(admin, ws, actor);
+    const { data: afterHook } = await admin.from("practice_activation_event")
+      .select("event_key").eq("workspace_id", ws)
+      .in("event_key", ["booking.first_received", "booking.tenth_received"]);
+    const emitted = ((afterHook ?? []) as any[]).map(r => r.event_key);
+    const { count: apptCount } = await admin.from("practice_appointment")
+      .select("id", { count: "exact" }).eq("workspace_id", ws).limit(1);
+    ok("H2", (apptCount ?? 0) >= 1 ? emitted.includes("booking.first_received") : emitted.length === 0,
+      `emitted from the COUNT (${apptCount} appointment(s) -> ${emitted.join(", ") || "nothing"}), not from having been called`);
+
+    // !! A HOOK THAT THROWS MUST NOT THROW. Telemetry can never fail the booking that triggered it.
+    const throwingAdmin = { from: () => { throw new Error("down"); } };
+    let threw = false;
+    try { await onAppointmentCreated(throwingAdmin, ws, actor); } catch { threw = true; }
+    ok("H3", threw === false, "a hook whose read throws does NOT throw out to its caller");
+
+    // !! AND A FAILED COUNT EMITS NOTHING. Claiming a milestone the data cannot support is worse than
+    // missing it -- the success queue would stop chasing a practice that never activated.
+    const { count: tenth } = await admin.from("practice_activation_event")
+      .select("id", { count: "exact" }).eq("workspace_id", ws)
+      .eq("event_key", "booking.tenth_received").limit(1);
+    ok("H4", (tenth ?? 0) === 0 || (apptCount ?? 0) >= 10,
+      `no tenth-booking milestone without ten bookings (${tenth} row(s), ${apptCount} appointments)`);
+
+    // ⚠ H3 AND H4 BOTH PASSED UNDER A DELIBERATE BREAK, AND THE REASON IS WORTH KEEPING. countFor has its
+    // OWN try/catch, so the outer one in onAppointmentCreated is dead code for a throwing client -- H3 was
+    // proving countFor's guard, not the one it named. And the only path where the count is null used a
+    // client that ALSO failed the write, so "emit anyway" produced no row and looked correct.
+    //
+    // This stub fails ONLY the appointment count. The write path still works, so if a failed count ever
+    // emits, the row appears and this goes red.
+    const countBlind = {
+      from: (table: string) => {
+        if (table !== "practice_appointment") return admin.from(table);
+        const chain: Record<string, unknown> = {};
+        for (const m of ["select", "eq", "in", "order", "is"]) chain[m] = () => chain;
+        chain.limit = async () => ({ data: null, count: null, error: { message: "simulated count outage" } });
+        chain.then = (resolve: (v: unknown) => unknown) => resolve({ data: null, count: null, error: { message: "simulated count outage" } });
+        return chain;
+      },
+    };
+    await admin.from("practice_activation_event").delete().eq("workspace_id", ws)
+      .in("event_key", ["booking.first_received", "booking.tenth_received"]);
+    await onAppointmentCreated(countBlind, ws, actor);
+    const { count: afterBlind } = await admin.from("practice_activation_event")
+      .select("id", { count: "exact" }).eq("workspace_id", ws)
+      .in("event_key", ["booking.first_received", "booking.tenth_received"]).limit(1);
+    ok("H4b", (afterBlind ?? 0) === 0,
+      `⚠ a count that FAILED emits nothing (${afterBlind} row(s)) -- claiming a milestone the data cannot support is worse than missing it, because the success queue then stops chasing a practice that never activated`);
+
+    // Restore the real state for anything downstream, and prove the same call DOES emit when it can count.
+    await onAppointmentCreated(admin, ws, actor);
+    const { count: afterReal } = await admin.from("practice_activation_event")
+      .select("id", { count: "exact" }).eq("workspace_id", ws)
+      .eq("event_key", "booking.first_received").limit(1);
+    ok("H4c-control", (afterReal ?? 0) === 1,
+      `CONTROL: the same hook against the real client DOES emit (${afterReal}) -- H4b is the failed count, not a hook that never emits`);
+
+    // !! THE HONEST GAP, ASSERTED SO IT CANNOT BE FORGOTTEN.
+    const unhookedInDefinition = UNHOOKED_MILESTONES
+      .map(m => m.key).filter(k => ACTIVATION_DEFINITION.includes(k));
+    ok("H5", unhookedInDefinition.length === 3,
+      `!! ${unhookedInDefinition.length} of the 4 north-star events have NO emitter (${unhookedInDefinition.join(", ")}) -- so no practice can be Activated today. A gap in the product, not the rule`);
+
+    // -- I. Capture Later has a button --------------------------------------------------------------
+    console.log("\n-- I. Capture Later has a button --");
+    const sessionSrc = strip(readFileSync("src/lib/practice/session.ts", "utf8"));
+    const cardSrc = strip(readFileSync("src/app/practice/(shell)/today/WaitingQueueCard.tsx", "utf8"));
+    const wrapSrc = strip(readFileSync("src/app/practice/(shell)/today/QueueWithActions.tsx", "utf8"));
+    const todaySrc = strip(readFileSync("src/app/practice/(shell)/today/page.tsx", "utf8"));
+
+    // !! THE QUEUE DID NOT SELECT patient_id AT ALL -- it returned the queue-entry id and a denormalised
+    // patient_name, so nothing could act on the patient. The button had nothing to attach to.
+    ok("I1", sessionSrc.includes(`select("id, patient_id, patient_name`)
+          && sessionSrc.includes("patientId: q.patient_id"),
+      "waitingQueue selects patient_id and carries it through");
+
+    ok("I2", cardSrc.includes("onMarkSeen && p.patientId &&"),
+      "Seen is drawn only with a handler AND a patient to attach an encounter to");
+
+    ok("I3", wrapSrc.includes(`op: "seen"`) && wrapSrc.includes("router.refresh()"),
+      "the wrapper posts the seen op and refreshes, so the tick and the server figures cannot disagree");
+
+    ok("I4", todaySrc.includes(`canCapture={hasCapability(shell.ctx, "encounter.edit")}`),
+      "offered on encounter.edit -- and the route gates on it again, which is the actual control");
 
   } finally {
     for (const key of cleanupKeys)

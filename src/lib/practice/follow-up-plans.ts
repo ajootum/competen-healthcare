@@ -2,6 +2,7 @@ import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { workspaceClock, dueDateFrom } from "@/lib/practice/practice-time";
 import { deriveFollowUp } from "@/lib/practice/follow-ups";
+import { onFollowUpCreated } from "./activation-hooks";
 import {
   CLOSED_FOLLOW_UP_STATUSES, FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES, FOLLOW_UP_OUTCOMES,
 } from "@/lib/practice/follow-up-constants";
@@ -246,6 +247,9 @@ export async function createPlan(admin: any, args: {
     payload: { planId: plan.id, patientId: args.patientId, templateId, steps: rows.length, startsOn },
     correlationId: args.correlationId,
   });
+  // CPR-GROWTH-001 s2. Non-blocking and count-based -- see activation-hooks.
+  await onFollowUpCreated(admin, args.workspaceId, args.actorId);
+
   return {
     ok: true,
     data: { id: plan.id as string, steps: rows.map(r => ({ id: r.id, dueOn: r.due_on, reason: r.reason })) },

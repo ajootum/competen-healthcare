@@ -40,6 +40,11 @@ export type QueuePerson = {
   /** Arrival time, already formatted by the caller in the practice's timezone. */
   timeLabel: string | null;
   href: string | null;
+  /**
+   * The PATIENT this row is about -- `id` above is the queue entry. Null for somebody in the corridor
+   * who is not registered yet, and a row with no patient cannot be marked Seen, so no button is drawn.
+   */
+  patientId: string | null;
 };
 
 export type WaitingQueueCardProps = {
@@ -50,6 +55,11 @@ export type WaitingQueueCardProps = {
   href: string | null;
   /** Drawn per row only when a handler is given -- a button that cannot act is not drawn at all. */
   onStartEncounter?: (id: string) => void;
+  /**
+   * CPR-ADOPT-001 s2 Capture Later: one tap records that the patient was seen and creates an encounter
+   * shell asserting nothing clinical. Same rule as above -- no handler, no button.
+   */
+  onMarkSeen?: (patientId: string) => void;
   /** The row currently mid-action, so one click cannot become three. */
   busyId: string | null;
   error: string | null;
@@ -72,7 +82,7 @@ const GROUP_DOT: Record<QueueGroupKey, string> = {
 };
 
 export default function WaitingQueueCard(props: WaitingQueueCardProps) {
-  const { people, unavailableReason, href, onStartEncounter, busyId, error } = props;
+  const { people, unavailableReason, href, onStartEncounter, onMarkSeen, busyId, error } = props;
   const [tab, setTab] = useState<QueueTabKey>("all");
 
   const countFor = (k: QueueTabKey) => k === "all" ? people.length : people.filter(p => p.group === k).length;
@@ -150,6 +160,16 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
                         title={p.timeLabel ? `Arrived ${p.timeLabel}` : undefined}>
                         {p.waitingMinutes} min
                       </span>
+                    )}
+                    {/* CPR-ADOPT-001 s2. Drawn only when this row HAS a patient to attach an encounter
+                        to -- a queue entry for somebody not yet registered has nothing to mark. */}
+                    {onMarkSeen && p.patientId && (
+                      <button type="button" disabled={busyId === p.id}
+                        onClick={() => onMarkSeen(p.patientId!)}
+                        title="Record that you saw this patient. Complete the details later."
+                        className="shrink-0 rounded-md border border-[var(--cp-primary)]/30 px-1.5 py-0.5 text-[11px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
+                        Seen ✓
+                      </button>
                     )}
                     {onStartEncounter && (
                       <button type="button" disabled={busyId === p.id}

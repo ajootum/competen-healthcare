@@ -216,13 +216,23 @@ export async function sessionMetrics(
 // what a walk-in is.
 
 export type QueueGroup = { key: string; label: string; entries: QueueRow[] };
-export type QueueRow = { id: string; name: string; timeLabel: string; waitingMinutes: number; status: string };
+export type QueueRow = {
+  id: string; name: string; timeLabel: string; waitingMinutes: number; status: string;
+  /**
+   * !! THE PATIENT, NOT THE QUEUE ENTRY. `id` above is the queue row's own id, and `name` is a
+   * DENORMALISED copy on that row -- so before this field the corridor knew who was waiting only as text.
+   * Anything wanting to act on the patient (Capture Later's one-tap Seen creates an encounter linked to
+   * them) had nothing to act on. Nullable because a walk-in can be in the queue before being registered,
+   * and a button that cannot act must not be drawn rather than guess.
+   */
+  patientId: string | null;
+};
 
 export async function waitingQueue(
   admin: any, ctx: WorkspaceContext, at: Date = new Date(),
 ): Promise<{ groups: QueueGroup[]; total: number | null; unavailable: boolean }> {
   const { data, error } = await admin.from("practice_queue_entry")
-    .select("id, patient_name, status, entered_at, appointment_id, practice_appointment:appointment_id(appointment_type)")
+    .select("id, patient_id, patient_name, status, entered_at, appointment_id, practice_appointment:appointment_id(appointment_type)")
     .eq("workspace_id", ctx.workspaceId)
     .in("status", ["WAITING", "READY", "IN_CONSULTATION"])
     .order("entered_at", { ascending: true });
@@ -231,7 +241,7 @@ export async function waitingQueue(
 
   const rows = (data ?? []) as any[];
   const shape = (q: any): QueueRow => ({
-    id: q.id, name: q.patient_name, status: q.status,
+    id: q.id, name: q.patient_name, status: q.status, patientId: q.patient_id ?? null,
     timeLabel: new Date(q.entered_at).toISOString().slice(11, 16),
     waitingMinutes: Math.max(0, Math.round((at.getTime() - Date.parse(q.entered_at)) / 60000)),
   });

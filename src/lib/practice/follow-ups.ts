@@ -7,6 +7,7 @@ import {
   DUE_WEEK_DAYS, type FollowUpDueState, type FollowUpView,
 } from "@/lib/practice/follow-up-constants";
 import { dueDateFrom, workspaceClock } from "@/lib/practice/practice-time";
+import { onFollowUpCreated } from "./activation-hooks";
 import {
   RECALLABLE_FOLLOW_UP_STATUSES, DEAD_APPOINTMENT_STATUSES,
 } from "@/lib/practice/recall-constants";
@@ -239,6 +240,9 @@ export async function createFollowUp(admin: any, args: {
     patientId: args.patientId, encounterId: originEncounterId,
     payload: { followUpId: f.id, dueOn, kind, followUpSource: source, status },
   }]);
+
+  // CPR-GROWTH-001 s2. Non-blocking and count-based -- see activation-hooks.
+  await onFollowUpCreated(admin, args.workspaceId, args.actorId);
 
   return {
     ok: true,

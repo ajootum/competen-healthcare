@@ -8,7 +8,7 @@ import { formatMinuteOfDay, formatDate } from "@/lib/datetime";
 import SessionControls from "./SessionControls";
 import SessionTiles from "./SessionTiles";
 import SessionSummaryCard from "./SessionSummaryCard";
-import WaitingQueueCard from "./WaitingQueueCard";
+import QueueWithActions from "./QueueWithActions";
 import SessionPerformance from "./SessionPerformance";
 import LiveRefresh from "../LiveRefresh";
 import OfflineCacheWriter from "../OfflineCacheWriter";
@@ -168,11 +168,12 @@ export default async function CurrentSessionPage() {
 
       {/* ── RUN YOUR CLINIC: the queue, and the session's own summary ─────────────────────────── */}
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <WaitingQueueCard
+        {/* CPR-ADOPT-001 s2. The client wrapper supplies the handlers a server component cannot --
+            see QueueWithActions for why the card's action props were never once drawn before this. */}
+        <QueueWithActions
           href="/practice/calendar"
-          busyId={null}
-          error={null}
           unavailableReason={queue.unavailable ? "The queue could not be read just now." : null}
+          canCapture={hasCapability(shell.ctx, "encounter.edit")}
           people={queue.groups.flatMap(g => g.entries.map(e => ({
             id: e.id,
             name: e.name,
@@ -182,6 +183,7 @@ export default async function CurrentSessionPage() {
             waitingReason: null,
             timeLabel: e.timeLabel,
             href: null,
+            patientId: e.patientId,
           })))}
         />
 

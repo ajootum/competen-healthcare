@@ -8,6 +8,7 @@
 
 import { CLOSE_ACTIONS, CLOSE_ACTION_CODES, DEFER_ACTION } from "./adoption-constants";
 import { emitActivation } from "./activation";
+import { onEncounterClosed } from "./activation-hooks";
 import type { EngineResult } from "./capture-later";
 
 export const DAY_CLOSE_TABLE = "practice_day_close";
@@ -116,6 +117,12 @@ export async function applyCloseAction(admin: any, args: {
 
   const { error } = await admin.from("practice_encounter").update(patch).eq("id", args.encounterId);
   if (error) return { ok: false, status: 500, code: "WRITE_FAILED", message: error.message };
+
+  // CPR-GROWTH-001 s2 "continuity adoption". Only a COMPLETING action can have produced a closed
+  // encounter -- a deferral leaves it open, so firing here would claim the milestone for the one action
+  // that explicitly declines to finish anything. onEncounterClosed counts settled encounters itself, so
+  // it is right even if this condition is ever wrong.
+  if (spec.confirmsReview) await onEncounterClosed(admin, args.workspaceId, args.actorId);
 
   return { ok: true, data: { encounterId: args.encounterId, action: args.action, completed: spec.confirmsReview } };
 }

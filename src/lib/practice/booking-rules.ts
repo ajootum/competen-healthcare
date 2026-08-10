@@ -23,6 +23,7 @@ import {
 // which scheduling.ts checked when it took the same import for the same reason -- the per-session
 // walk-in limit and the cutoff have ONE resolver, shared with the screen that reports them.
 import { walkInAllowance } from "@/lib/practice/practice-sessions";
+import { onAppointmentCreated } from "./activation-hooks";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -2007,6 +2008,10 @@ export async function bookUnderRules(
     },
     correlationId: args.correlationId,
   });
+
+  // CPR-GROWTH-001 s2. Count-based, so it is right however often it runs and whatever ran before it,
+  // and non-blocking: a commercial metric that could not be written must never cost a booking.
+  await onAppointmentCreated(admin, ctx.workspaceId, args.actorId);
 
   return {
     ok: true,

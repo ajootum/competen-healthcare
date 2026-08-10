@@ -9,6 +9,7 @@ import { walkInAllowance, sessionBookingModeAt } from "@/lib/practice/practice-s
 import { bookingBlock } from "@/lib/practice/lifecycle-constants";
 // CPR-V5-007 s7.7 (migration 268). ⚠ Constants only, and the ONE definition of the cutoff boundary.
 import { walkInCutoff } from "@/lib/practice/booking-rule-constants";
+import { onAppointmentCreated } from "./activation-hooks";
 
 // PEN-001 Appointment & Scheduling Engine -- the business rules, separated from every UI that uses them
 // (PEN-001 "separate scheduling logic from user interfaces"). CPR-V2-003 V3 is one consumer; the command
@@ -464,6 +465,9 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
     workspaceId: input.workspaceId, actorId: input.actorId, eventType: "practice.appointment_booked",
     payload: { appointmentId: appt.id, type: input.appointmentType }, correlationId: input.correlationId,
   });
+  // CPR-GROWTH-001 s2. Count-based, so it is right however often it runs and whatever ran before it,
+  // and non-blocking: a commercial metric that could not be written must never cost a booking.
+  await onAppointmentCreated(admin, input.workspaceId, input.actorId);
   return { ok: true, data: { id: appt.id as string, status: appt.status as string } };
 }
 
