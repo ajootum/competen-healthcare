@@ -4,7 +4,8 @@ import Link from "next/link";
 import { loadMissionControl } from "@/lib/super-admin/mission-control";
 import MissionControlHeader from "./_mc/MissionControlHeader";
 import ComposedMissionControl from "./_mc/ComposedMissionControl";
-import { resolveMissionProfile } from "@/lib/hq/mission-profile";
+import MissionProfilePreview from "./_mc/MissionProfilePreview";
+import { resolveMissionProfile, resolveMissionProfileByCode, listMissionProfiles } from "@/lib/hq/mission-profile";
 import EnterpriseExplorer from "./_mc/EnterpriseExplorer";
 import Sparkline from "./_mc/Sparkline";
 
@@ -60,7 +61,8 @@ function Panel({ title, href, linkLabel, children, className = "" }: { title: st
 
 const TONE_TEXT: Record<string, string> = { amber: "text-[var(--cmp-text-warning)]", orange: "text-[var(--cmp-text-warning)]", rose: "text-[var(--cmp-text-error)]", red: "text-[var(--cmp-text-critical)]", violet: "text-violet-600", teal: "text-teal-600", indigo: "text-indigo-600" };
 
-export default async function MissionControl() {
+export default async function MissionControl({ searchParams }: { searchParams: Promise<{ preview?: string }> }) {
+  const { preview } = await searchParams;
   // ⚠ THE CAPABILITY, NOT THE ROLE -- AND THIS PAGE WAS WHY THE FIRST REAL APPOINTMENT DID NOTHING.
   //
   // The layout admits an HQ appointee. This page then read `roles` and redirected anyone without the
@@ -106,7 +108,41 @@ export default async function MissionControl() {
       />
     );
 
+  // ── OWNER PREVIEW ────────────────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ A VIEW, NOT AN AUTHORITY SWITCH, AND THE DISTINCTION IS NOT PEDANTRY. An owner already holds
+  // everything, so "switching context" cannot reduce what they may do without breaking the break-glass this
+  // whole programme protects -- and pretending on screen that it had would be a lie about their own
+  // authority. So this changes what is COMPOSED and nothing else. The banner says so.
+  //
+  // ⚠ A QUERY PARAMETER, DELIBERATELY NOT A COOKIE. A preview must not persist: an owner who wandered off
+  // mid-look and came back to a Practice dashboard would reasonably conclude their console had broken. The
+  // non-owner context switch is a cookie because it IS their standing context; this is a glance.
+  //
+  // ⚠ OWNERS ONLY, AND AN UNKNOWN CODE FALLS THROUGH. Not an error page: a stale bookmark should land on
+  // Mission Control, not on a dead end.
+  if (ctx.isOwner && preview) {
+    const previewed = await resolveMissionProfileByCode(admin, preview, {
+      isOwner: true, positions: [], capabilities: [],
+    });
+    if (previewed)
+      return (
+        <ComposedMissionControl
+          composition={previewed}
+          admin={admin}
+          isOwner
+          capabilities={ctx.capabilities}
+          viewerName={ctx.fullName}
+          contexts={[]}
+          activeContextId={null}
+          contextDefaulted={false}
+          previewing
+        />
+      );
+  }
+
   const mc = await loadMissionControl(admin);
+  const previewProfiles = ctx.isOwner ? await listMissionProfiles(admin) : [];
   const { kpis, spark, ops, explorer, unassignedFacilities, missionStatus, activity, activityReady, workspaces, totalUsers, onboarding, health, changedToday, systemAlerts, timeline, counts } = mc;
 
   const kpiCards = [
@@ -139,6 +175,9 @@ export default async function MissionControl() {
   return (
     <div data-wide className="space-y-4">
       <MissionControlHeader generatedAt={mc.generatedAt} />
+
+      {/* Owners only — the list is empty for everybody else, so this renders nothing for them. */}
+      <MissionProfilePreview profiles={previewProfiles} />
 
       {/* 1) Executive KPI ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">

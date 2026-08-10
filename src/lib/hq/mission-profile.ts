@@ -165,3 +165,44 @@ async function readProfileWidgets(admin: any, profileCode: string, viewer: Missi
 
 /** The product line a composition is about, for the header. Null for HQ-level profiles. */
 export const compositionProductLine = (c: MissionComposition) => productLine(c.profile.productLineCode);
+
+/** Every configured profile, for the owner's preview picker. Empty on any read failure. */
+export async function listMissionProfiles(admin: any): Promise<MissionProfile[]> {
+  try {
+    const { data, error } = await admin
+      .from("hq_mission_profile")
+      .select("code, name, governance_level, product_line_code, description")
+      .eq("status", "active").order("priority").limit(200);
+    if (error || !data) return [];
+    return (data as any[]).map(r => ({
+      code: r.code, name: r.name, governanceLevel: r.governance_level,
+      productLineCode: r.product_line_code ?? null, description: r.description ?? null,
+    }));
+  } catch { return []; }
+}
+
+/**
+ * Compose a NAMED profile - PLAT-GOV-MC-001 acceptance 1, "the same shell renders materially different
+ * dashboards". Used only by the owner preview.
+ *
+ * ⚠ THIS IS A VIEW, NOT AN AUTHORITY, AND THE DIFFERENCE IS THE WHOLE SAFETY ARGUMENT. It composes a
+ * profile the viewer may not hold; it does NOT hand them that profile's capabilities. Widgets are still
+ * filtered and then re-checked by the viewer's OWN capabilities, so previewing a profile shows what its
+ * shape is, never data the previewer could not already read. A non-owner calling this would see the
+ * profile's frame and none of its widgets - which is why the page gates it to owners anyway rather than
+ * relying on that.
+ *
+ * ⚠ AND IT NEVER CHANGES WHAT THE VIEWER MAY DO. GOV-001's acceptance is that "a Super Admin can govern all
+ * four products from Competen HQ without being treated as the routine operator of each product" -- previewing
+ * a Product Director's dashboard must not make an owner into one, and must not stop them being an owner.
+ */
+export async function resolveMissionProfileByCode(
+  admin: any,
+  code: string,
+  viewer: MissionViewer,
+): Promise<MissionComposition | null> {
+  const all = await listMissionProfiles(admin);
+  const profile = all.find(p => p.code === code) ?? null;
+  if (!profile) return null;
+  return { profile, widgets: await readProfileWidgets(admin, profile.code, viewer), state: "resolved" };
+}

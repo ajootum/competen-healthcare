@@ -79,7 +79,7 @@ function WidgetBody({ result }: { result: WidgetResult }) {
   );
 }
 
-export default async function ComposedMissionControl({ composition, admin, isOwner, capabilities, viewerName, contexts, activeContextId, contextDefaulted }: {
+export default async function ComposedMissionControl({ composition, admin, isOwner, capabilities, viewerName, contexts, activeContextId, contextDefaulted, previewing }: {
   composition: MissionComposition;
   admin: any;
   isOwner: boolean;
@@ -88,6 +88,8 @@ export default async function ComposedMissionControl({ composition, admin, isOwn
   contexts: GovernanceContext[];
   activeContextId: string | null;
   contextDefaulted: boolean;
+  /** Owner preview. Changes what is COMPOSED and nothing about what the viewer may do. */
+  previewing?: boolean;
 }) {
   const line = compositionProductLine(composition);
   const results = await Promise.all(
@@ -108,6 +110,26 @@ export default async function ComposedMissionControl({ composition, admin, isOwn
           Practice operations →
         </Link>
       </div>
+
+      {/* ⚠ SAYS PLAINLY THAT NOTHING CHANGED. An owner looking at a Product Director's dashboard must not be
+          able to mistake it for a reduction in their own authority -- they still hold everything, and any
+          screen implying otherwise would be telling them something untrue about themselves. The reverse
+          matters too: this is not a way to acquire a position. */}
+      {previewing && (
+        <div className="bg-white rounded-xl border border-[var(--cmp-color-information)] p-3 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-blue-700">Preview</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              This is what the profile composes for the position that holds it. You are still a platform
+              owner — nothing about your authority, capabilities or data access has changed, and previewing
+              does not appoint you to anything.
+            </p>
+          </div>
+          <Link href="/super-admin" className="text-xs text-teal-700 hover:underline shrink-0">
+            Back to Mission Control →
+          </Link>
+        </div>
+      )}
 
       {/* PLAT-GOV-MC-001 s4 "Command Header": identity and the CURRENT governance appointment. Rendered with
           one context too -- "which authority am I acting under" is the question this screen exists to answer

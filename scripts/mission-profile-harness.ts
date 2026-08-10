@@ -14,7 +14,9 @@ import { readFileSync } from "node:fs";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { PRODUCT_LINES, SAAS_PRODUCT_LINES, NOT_PRODUCT_LINES } from "../src/lib/governance/product-lines";
-import { resolveMissionProfile, MINIMAL_PROFILE } from "../src/lib/hq/mission-profile";
+import {
+  resolveMissionProfile, resolveMissionProfileByCode, listMissionProfiles, MINIMAL_PROFILE,
+} from "../src/lib/hq/mission-profile";
 import { runWidget, REGISTERED_SOURCES } from "../src/lib/hq/mission-widgets";
 import { resolveHqPositions } from "../src/lib/hq/context";
 
@@ -169,6 +171,32 @@ const strip = (s: string) =>
     const orphan = (widgets ?? []).filter((w: any) => !REGISTERED_SOURCES.includes(w.data_source));
     ok("W4", (widgets ?? []).length > 0 && orphan.length === 0,
       `every seeded widget has an implemented data source (${(widgets ?? []).length} seeded, ${orphan.length} orphan${orphan.length ? `: ${orphan.map((o: any) => o.data_source).join(", ")}` : ""})`);
+
+    // ── 5b. Owner preview ────────────────────────────────────────────────────────────────────────
+    console.log("\n  -- 5b. owner preview (acceptance 1) --");
+    const profiles = await listMissionProfiles(admin);
+    ok("P0-control", profiles.length >= 2, `count control: ${profiles.length} profile(s) an owner may preview`);
+
+    const asOwner = await resolveMissionProfileByCode(admin, "product_practice", { isOwner: true, positions: [], capabilities: [] });
+    ok("P1", !!asOwner && asOwner.widgets.length > 0,
+      `an owner can compose a profile they do NOT hold (${asOwner?.widgets.length ?? 0} widget(s)) -- checking acceptance 1 no longer requires appointing somebody and signing in as them`);
+
+    // ⚠ DEFENCE IN DEPTH BEHIND THE PAGE GATE. The page only honours ?preview for owners, but the resolver
+    // must not be a way to read another profile's widgets either -- a preview composes a FRAME, it never
+    // grants the capabilities the profile implies.
+    const asStranger = await resolveMissionProfileByCode(admin, "product_practice", { isOwner: false, positions: [], capabilities: [] });
+    ok("P2", !!asStranger && asStranger.widgets.length === 0,
+      `a viewer holding nothing composes the same profile with ZERO widgets (${asStranger?.widgets.length ?? 0}) -- previewing shows shape, never data`);
+
+    ok("P3", (await resolveMissionProfileByCode(admin, "no_such_profile", { isOwner: true, positions: [], capabilities: [] })) === null,
+      "an unknown profile code returns null, so a stale bookmark falls through to Mission Control rather than erroring");
+
+    // ⚠ OWNERS ONLY, AND A GLANCE RATHER THAN A STATE. A cookie would persist: an owner who wandered off and
+    // came back to a Practice dashboard would reasonably conclude their console had broken.
+    ok("P4", /if \(ctx\.isOwner && preview\)/.test(pageSrc),
+      "the page honours ?preview ONLY for owners");
+    ok("P5", /searchParams/.test(pageSrc) && !/HQ_CONTEXT_COOKIE/.test(pageSrc),
+      "preview travels as a query parameter and sets no cookie -- there is no preview state to get stuck in");
 
     // ── 6. Live ──────────────────────────────────────────────────────────────────────────────────
     console.log("\n  -- 6. live --");
