@@ -105,6 +105,60 @@ const PREDICATES: { re: RegExp; group: string | null; roles?: string[] }[] = [
   { re: /!\s*isSuper\s*\(/,       group: null, roles: ["super_admin"] },
 ];
 
+// ── The INLINE role-array idiom ───────────────────────────────────────────────
+//
+// ⚠ THIS WAS A BLIND SPOT AND IT REPORTED SIX WORKING ROUTES AS OPEN. `/api/ai/assistant`,
+// `/api/ai/governance`, `/api/knowledge-objects`, `/api/osce/exams`, `/api/quality/capa` and `/api/studio`
+// all gate on a role array written INLINE rather than through requireRole or a named *_ROLES group:
+//
+//     if (!roles.some(r => ["super_admin", "hospital_admin", "educator"].includes(r))) return 403
+//     if (!["super_admin", "hospital_admin"].includes(profile?.role ?? "")) return 403
+//     if (!c.roles.some(r => AUTHOR_ROLES.includes(r))) return forbidden()   // a LOCAL const
+//
+// The scanner recognised none of them, so all six classified as `auth-only` — "signed in, no role
+// restriction" — and were reported as reachable by any signed-in user. They are not: no nurse passes any
+// of them. That is the OPPOSITE direction from this file's famous failure (98 practice routes reported as
+// `none`), and it is milder, but it is not harmless: a matrix that cries wolf gets acted on, and acting on
+// this one would have meant "fixing" six routes that were never broken.
+//
+// ⚠ A LIST IS ONLY TREATED AS ROLES IF IT CONTAINS A CANONICAL AppRole. Without that test this would
+// classify `["draft","published"]` or a set of CPU kinds as a role gate, which would invent protection
+// where there is none — the failure this whole file exists to prevent.
+const CANONICAL_ROLES = ["super_admin", "hospital_admin", "educator", "assessor", "nurse"];
+const looksLikeRoles = (roles: string[]) => roles.length > 0 && roles.some(r => CANONICAL_ROLES.includes(r));
+
+/** Role arrays declared as local constants in the same file (AUTHOR_ROLES, ALLOWED_ROLES, …). */
+function localRoleArrays(source: string): RoleGroups {
+  const out: RoleGroups = {};
+  for (const m of source.matchAll(/const\s+([A-Z][A-Z0-9_]*)\s*(?::[^=]+)?=\s*\[([^\]]*)\]/g)) {
+    const roles = parseList(m[2]);
+    if (looksLikeRoles(roles)) out[m[1]] = roles;
+  }
+  return out;
+}
+
+// Two spellings, both NEGATED — the `if (!…)` is what makes it a refusal rather than a filter.
+//
+// ⚠ THE ARROW PARAMETER MAY CARRY A TYPE ANNOTATION, and the first version of this regex required a bare
+// identifier. `.some(r => …)` matched and `.some((r: string) => …)` did not, which is the same blind spot
+// one layer down — a gate that resolves or not depending on whether somebody annotated a lambda.
+const INLINE_SOME = /!\s*[\w$.?]*\.some\s*\(\s*\(?\s*\w+(?:\s*:\s*[\w<>[\]|\s]+)?\s*\)?\s*=>\s*(?:\[([^\]]*)\]|([A-Z][A-Z0-9_]*))\s*\.includes\s*\(/g;
+const INLINE_INCLUDES = /!\s*(?:\[([^\]]*)\]|([A-Z][A-Z0-9_]*))\s*\.includes\s*\(\s*[^)]*\brole\b/g;
+
+/** The union of roles admitted by any inline role-array gate in the file, or [] when there is none. */
+function inlineRoleGate(source: string, groups: RoleGroups): string[] {
+  const locals = { ...groups, ...localRoleArrays(source) };
+  const found: string[] = [];
+  for (const re of [INLINE_SOME, INLINE_INCLUDES]) {
+    re.lastIndex = 0;
+    for (const m of source.matchAll(re)) {
+      const roles = m[1] ? parseList(m[1]) : (locals[m[2]] ?? []);
+      if (looksLikeRoles(roles)) found.push(...roles);
+    }
+  }
+  return [...new Set(found)];
+}
+
 function classifyApiAuth(source: string, groups: RoleGroups): Gate | null {
   if (!/getCaller\s*\(/.test(source)) return null;
   const appointment = APPOINTMENT.test(source);
@@ -132,6 +186,13 @@ function classifyApiAuth(source: string, groups: RoleGroups): Gate | null {
     if (unresolved || roles.length === 0) return { kind: "unknown", roles, appointment, evidence: "api-auth predicate with unresolved role group" };
     return { kind: "role-list", roles, appointment, evidence: hit.map(p => p.group ?? "isSuper").join(" | ") || "hasRole" };
   }
+
+  // ⚠ ASKED BEFORE CONCLUDING auth-only, NOT AFTER. /api/studio calls getCaller and then gates on a LOCAL
+  // AUTHOR_ROLES array; every branch above misses that, so the route was reported as having no role
+  // restriction at all while refusing four of the five roles.
+  const inline = inlineRoleGate(source, groups);
+  if (inline.length)
+    return { kind: "role-list", roles: inline, appointment, evidence: `inline role array: ${inline.join(", ")}`.slice(0, 120) };
 
   // getCaller() with no role predicate: authenticated, no role restriction. That IS the gate, and saying so
   // is the point — an authenticated-only write route is a finding a manager should be able to see.
@@ -242,6 +303,12 @@ export function classifyGate(source: string, groups: RoleGroups = {}, caps: Capa
     if (!enforced) return { kind: "unknown", roles, appointment, evidence: list[0].slice(0, 120) };
     return { kind: "role-list", roles, appointment, evidence: list[0].slice(0, 120) };
   }
+
+  // The same idiom on a route that never calls getCaller — five of the six false positives were here,
+  // authenticating with a raw supabase.auth.getUser() and then testing an inline role array.
+  const inlineStandalone = inlineRoleGate(source, groups);
+  if (inlineStandalone.length)
+    return { kind: "role-list", roles: inlineStandalone, appointment, evidence: `inline role array: ${inlineStandalone.join(", ")}`.slice(0, 120) };
 
   if (LANDLORD_ANY.test(source)) {
     const m = source.match(LANDLORD);
