@@ -66,13 +66,19 @@ CPR-CAP-001 §2 wants capability-driven navigation and dashboard composition. �
   committed `search.ts` and getting the identical count
 - `practice-setup-domains` **6a/6d/6g** — pins the availability parts at six named keys; a seventh
   (`booking_address`) was added and the harness was left stale
+- `practice-capability-harness` **13-1** — ⚠ NEW, and it is a PRECONDITION failure, not a product defect:
+  the clinical fixture could not build ("a patient exists"), so section 13 (*history survives
+  deactivation*) **SKIPPED rather than passing vacuously**. The control behaved correctly and section 13
+  is therefore **unproven, not green**. 132 pass around it. Worth an hour to make the fixture build.
 
 ⚠ None of these is a product defect anybody has demonstrated. Each is worth an hour to either fix or delete —
 a red harness nobody trusts is worse than no harness, because it trains people to ignore red.
 
 ## 7. Migrations
 
-Applied: 274, 275, 276, 278. Sent, awaiting apply: none.
-⚠ **273 is written but NOT sent** — the operator licence door. It waits for the oversight agent to report and
-for validation against live data.
-Reserved: **277** (booking-request states), **279/280** (platform membership + the one-account migration).
+Applied: 273, 274, 275, 276, 278, 279, 280. Sent, awaiting apply: none.
+Reserved: **277** (booking-request states) — still unwritten.
+
+⚠ **All in-flight arcs are now committed and pushed** (`7e2d498e` treatment/investigations,
+`267c9674` capability registry, `dce9d091` booking routes, `f739b938` period navigator). The tree that had
+carried four uncommitted arcs is clean, so item 1 below is finally runnable.
