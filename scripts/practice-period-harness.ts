@@ -294,7 +294,14 @@ async function main() {
   // replacement can agree with the replacement and disagree with what users had.
   section("2. rolling still means rolling (the before is extracted from git)");
 
-  const headSource = execFileSync("git", ["show", "HEAD:src/lib/practice/encounters-landing.ts"],
+  // ⚠ PINNED TO THE COMMIT BEFORE THE CHANGE, NOT TO HEAD, AND HEAD WAS SELF-DEFEATING. Extracting the
+  // "before" from git rather than re-typing it is the right instinct -- a re-typed baseline proves the
+  // author's memory, not the shipped code. But `HEAD` only means "before" while the change is uncommitted.
+  // The moment CP-PERIOD-001 landed as f739b938, HEAD became the AFTER, and this comparison would have been
+  // the new implementation checked against itself. 2a-control caught it -- it went red because the
+  // extracted source no longer contained the old arithmetic -- which is exactly what that control is for.
+  const BEFORE_REF = "f739b938^:src/lib/practice/encounters-landing.ts";
+  const headSource = execFileSync("git", ["show", BEFORE_REF],
     { cwd: process.cwd(), encoding: "utf8", maxBuffer: 8 * 1024 * 1024 });
   const oldFn = headSource.match(/^function resolveHistoryFilter[\s\S]*?\n\}/m)?.[0] ?? "";
   ok("2a-control. the shipped implementation was found in git and it contains the arithmetic that "
