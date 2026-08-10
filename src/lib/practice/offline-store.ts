@@ -109,18 +109,55 @@ export type CacheWriteResult =
   | { ok: true; patients: number }
   | { ok: false; reason: string };
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// ⚠⚠ `derived` IS ACCEPTED AND NOTHING PASSES IT YET. READ THIS BEFORE WIRING THE DEVICE PIN.
+//
+// offline-lock.ts derives an AES key from a PIN and never stores it -- the honest design offline-crypto.ts
+// has asked for since it was written. Wiring it looks like a small change and IT IS NOT, because the two
+// halves of this cache live in different places:
+//
+//   THE WRITER  OfflineCacheWriter.tsx, inside the practice (shell). Online, on every page load.
+//   THE READER  /practice/offline, deliberately OUTSIDE the shell so it renders with no connection.
+//
+// A PIN prompt on the reader gives the READER a derived key. The WRITER, in the shell, has no PIN and
+// would keep sealing with the per-workspace random key. The reader would then fail to decrypt -- and
+// `loadOfflineDay` DELETES what it cannot decrypt, on the correct reasoning that an unreadable cache is
+// the same as an absent one.
+//
+// So the naive wiring means: a practitioner sets a PIN to protect their device, and every cached day and
+// every cached protocol is silently destroyed on the next read. Every file involved is correct on its
+// own. This was built, caught before it shipped on 2026-08-11, and reverted.
+//
+// ⚠ WHAT WOULD ACTUALLY CLOSE IT, so this is a decision rather than a hole: the unlock has to live where
+// the WRITING happens -- the shell -- and the derived key has to survive navigation, which a
+// non-extractable CryptoKey cannot. The usual shape is a key-encryption-key: the PIN derives a KEK, the
+// KEK wraps a random data key, and the WRAPPED key is what is stored. Unlocking unwraps it once per
+// session. That still needs the shell to hold the session, and it is a real piece of work rather than a
+// parameter.
+//
+// Until then this argument stays unused, because a PIN that protects nothing is worse than no PIN: it
+// tells a practitioner their device is safe.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
 /** Write one workspace's clinic day, sealed. Replaces whatever was there. */
-export async function cacheOfflineDay(day: OfflineDay): Promise<CacheWriteResult> {
+export async function cacheOfflineDay(day: OfflineDay, derived?: CryptoKey): Promise<CacheWriteResult> {
   const bad = fieldsNotAllowed(day);
   if (bad.length > 0)
     return { ok: false, reason: `nothing was stored: the payload carried fields that are not on the offline allow-list (${bad.join(", ")})` };
 
   try {
     const db = await openDb();
-    let key = await tx<CryptoKey | undefined>(db, STORE_KEY, "readonly", s => s.get(day.workspaceId));
+    // ⚠ A SUPPLIED KEY IS NEVER STORED. It is derived from the PIN and exists only while this session is
+    // unlocked -- writing it beside the ciphertext would put the key back next to the lock and undo the
+    // whole point of deriving it. When there is no PIN the old behaviour stands, and offline-crypto.ts
+    // is candid about what that defends against.
+    let key = derived;
     if (!key) {
-      key = await generateCacheKey();
-      await tx(db, STORE_KEY, "readwrite", s => s.put(key as CryptoKey, day.workspaceId));
+      key = await tx<CryptoKey | undefined>(db, STORE_KEY, "readonly", s => s.get(day.workspaceId));
+      if (!key) {
+        key = await generateCacheKey();
+        await tx(db, STORE_KEY, "readwrite", s => s.put(key as CryptoKey, day.workspaceId));
+      }
     }
     const sealed = await sealRecord(key, day);
     await tx(db, STORE_DAY, "readwrite", s => s.put(sealed, day.workspaceId));
@@ -140,7 +177,9 @@ export async function cacheOfflineDay(day: OfflineDay): Promise<CacheWriteResult
  * practice's own switch all need the device to come online. A record that is merely hidden is a record
  * still on the disk.
  */
-export async function loadOfflineDay(workspaceId: string, now: Date = new Date()): Promise<OfflineReadResult> {
+export async function loadOfflineDay(
+  workspaceId: string, now: Date = new Date(), derived?: CryptoKey,
+): Promise<OfflineReadResult> {
   let db: IDBDatabase;
   try {
     db = await openDb();
@@ -150,7 +189,7 @@ export async function loadOfflineDay(workspaceId: string, now: Date = new Date()
 
   try {
     const sealed = await tx<SealedRecord | undefined>(db, STORE_DAY, "readonly", s => s.get(workspaceId));
-    const key = await tx<CryptoKey | undefined>(db, STORE_KEY, "readonly", s => s.get(workspaceId));
+    const key = derived ?? await tx<CryptoKey | undefined>(db, STORE_KEY, "readonly", s => s.get(workspaceId));
     if (!sealed || !key) { db.close(); return readOfflineDay(null, now); }
 
     const day = await openRecord<OfflineDay>(key, sealed);
@@ -231,17 +270,22 @@ export type GuidanceWriteResult =
   | { ok: false; reason: string };
 
 /** Write one workspace's guidance library, sealed. Replaces whatever was there. */
-export async function cacheOfflineGuidance(library: OfflineGuidanceLibrary): Promise<GuidanceWriteResult> {
+export async function cacheOfflineGuidance(
+  library: OfflineGuidanceLibrary, derived?: CryptoKey,
+): Promise<GuidanceWriteResult> {
   const bad = guidanceFieldsNotAllowed(library);
   if (bad.length > 0)
     return { ok: false, reason: `nothing was stored: the guidance payload carried fields that are not on the offline allow-list (${bad.join(", ")})` };
 
   try {
     const db = await openDb();
-    let key = await tx<CryptoKey | undefined>(db, STORE_GUIDANCE_KEY, "readonly", s => s.get(library.workspaceId));
+    let key = derived;
     if (!key) {
-      key = await generateCacheKey();
-      await tx(db, STORE_GUIDANCE_KEY, "readwrite", s => s.put(key as CryptoKey, library.workspaceId));
+      key = await tx<CryptoKey | undefined>(db, STORE_GUIDANCE_KEY, "readonly", s => s.get(library.workspaceId));
+      if (!key) {
+        key = await generateCacheKey();
+        await tx(db, STORE_GUIDANCE_KEY, "readwrite", s => s.put(key as CryptoKey, library.workspaceId));
+      }
     }
     const sealed = await sealRecord(key, library);
     await tx(db, STORE_GUIDANCE, "readwrite", s => s.put(sealed, library.workspaceId));
@@ -261,7 +305,7 @@ export async function cacheOfflineGuidance(library: OfflineGuidanceLibrary): Pro
  * and for the same reason: it is the only control that reaches a device that never reconnects.
  */
 export async function loadOfflineGuidance(
-  workspaceId: string, now: Date = new Date(),
+  workspaceId: string, now: Date = new Date(), derived?: CryptoKey,
 ): Promise<OfflineGuidanceReadResult> {
   let db: IDBDatabase;
   try {
@@ -272,7 +316,7 @@ export async function loadOfflineGuidance(
 
   try {
     const sealed = await tx<SealedRecord | undefined>(db, STORE_GUIDANCE, "readonly", s => s.get(workspaceId));
-    const key = await tx<CryptoKey | undefined>(db, STORE_GUIDANCE_KEY, "readonly", s => s.get(workspaceId));
+    const key = derived ?? await tx<CryptoKey | undefined>(db, STORE_GUIDANCE_KEY, "readonly", s => s.get(workspaceId));
     if (!sealed || !key) { db.close(); return readOfflineGuidance(null, now); }
 
     const library = await openRecord<OfflineGuidanceLibrary>(key, sealed);
