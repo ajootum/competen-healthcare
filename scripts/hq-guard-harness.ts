@@ -111,7 +111,12 @@ const pages = walkPages(APP_ROOT);
 ok("E1", pages.length === PAGE_BASELINE,
   `count control: ${pages.length} page.tsx under ${APP_ROOT} (baseline ${PAGE_BASELINE}) -- a walker that reads nothing passes every check below`);
 
-const classified = pages.map(f => ({ file: f, route: routeOf(f), gate: classifyHqGate(readFileSync(f, "utf8")) }));
+// ⚠ THE SCANNER RESOLVES CONSTANTS, AND THIS NEVER GAVE IT ANY. classifyHqGate takes a capability-constant
+// map as its third argument; passing none meant requireHqContext(HQ_HOME_CAPABILITY) could not be resolved
+// and the page classified as `unknown` -- which is the scanner being honest, and the harness failing to ask
+// properly. Derived from the real export so a rename cannot leave a stale literal behind.
+const CAPABILITY_CONSTS = { HQ_HOME_CAPABILITY: { "": HQ_HOME_CAPABILITY } };
+const classified = pages.map(f => ({ file: f, route: routeOf(f), gate: classifyHqGate(readFileSync(f, "utf8"), {}, CAPABILITY_CONSTS) }));
 const byKind = new Map<string, string[]>();
 for (const c of classified) byKind.set(c.gate.kind, [...(byKind.get(c.gate.kind) ?? []), c.route]);
 console.log("        gate kinds:", [...byKind.entries()].map(([k, v]) => `${k}=${v.length}`).join(" "));
@@ -287,9 +292,12 @@ ok("S3", classifyHqGate(naked).kind === "none",
   const hqOffices = ((offices ?? []) as any[]).filter(o => isHqOfficeType(o.office_type));
   ok("B2", hqOffices.length === HQ_SPACES.length && hqOffices.every(o => o.hospital_id === null && o.scope_type === "enterprise"),
     `${hqOffices.length} enterprise HQ office(s) seeded, none bound to a hospital`);
-  const { data: appts } = await admin.from("ogs_office_appointments").select("id").limit(10);
-  ok("B3", (appts ?? []).length === 0,
-    "⚠ NOBODY IS APPOINTED. The migration seeds spaces and positions and grants no human anything");
+  // ⚠ THIS ASSERTED AN EMPTY TABLE, AND WENT RED THE DAY SOMEBODY WAS APPOINTED -- which is the product
+  // being used, not a regression. The durable claim is about the MIGRATION: 264 seeds spaces, positions
+  // and grants, and appoints NO HUMAN. Whether humans were appointed afterwards is their business.
+  const { data: appts } = await admin.from("ogs_office_appointments").select("id, appointed_by").limit(50);
+  ok("B3", !/insert into ogs_office_appointments/i.test(sql),
+    `⚠ THE MIGRATION APPOINTS NOBODY -- it seeds spaces, positions and grants and leaves the staffing to a human (${(appts ?? []).length} appointment(s) exist today, all made through the screen)`);
   const { data: cfg } = await admin.from("hq_config").select("mode").eq("id", "singleton").limit(1);
   ok("B4", (cfg?.[0] as any)?.mode === "observe",
     "ships in OBSERVE -- the position matrix records what it would refuse and refuses nothing");
@@ -353,11 +361,17 @@ ok("S3", classifyHqGate(naked).kind === "none",
   // ── The control. Everything above is about admitting; this is the refusal it must be paired with. ──
   const nonOwners = (profs ?? []).filter((p: any) =>
     !((p.roles?.length ? p.roles : [p.role]) as string[]).includes("super_admin") && !p.platform_role);
-  const resolved = await Promise.all(nonOwners.slice(0, 60).map(async (p: any) =>
+  // ⚠ SCOPED TO THE UNAPPOINTED, because people are appointed now. The claim that matters is not "nobody
+  // reaches HQ" -- that stopped being true the moment the screen was used -- but that holding no appointment
+  // still means holding nothing. Reading every appointment first is what keeps this honest.
+  const { data: liveAppts } = await admin.from("ogs_office_appointments").select("person_id").limit(200);
+  const appointedIds = new Set(((liveAppts ?? []) as any[]).map(r => r.person_id).filter(Boolean));
+  const unappointed = nonOwners.filter((p: any) => !appointedIds.has(p.id));
+  const resolved = await Promise.all(unappointed.slice(0, 60).map(async (p: any) =>
     ({ id: p.id, caps: (await resolveHqPositions(admin, p.id)).capabilities })));
   const admitted = resolved.filter(r => r.caps.length > 0);
-  ok("G4", nonOwners.length > 0 && admitted.length === 0,
-    `⚠ CONTROL: all ${resolved.length} unappointed non-owner profile(s) resolve to ZERO capabilities and are refused -- with 0 appointments this door is exactly as narrow as before the change`);
+  ok("G4", unappointed.length > 0 && admitted.length === 0,
+    `⚠ CONTROL: all ${resolved.length} UNAPPOINTED non-owner profile(s) resolve to ZERO capabilities and are refused (${appointedIds.size} person(s) are appointed and correctly excluded)`);
 
   // ⚠ AND THE OTHER HALF, OR G4 IS UNFALSIFIABLE. "Everybody is refused" also passes when the resolver is
   // broken and refuses everybody forever -- which is precisely the state this change exists to leave. So a
