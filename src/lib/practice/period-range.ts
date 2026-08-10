@@ -34,6 +34,39 @@
 // A YYYY-MM-DD string is a DAY, not an instant. Parsed at midnight and shifted by whole days it can slip
 // into the day before under a runtime offset; noon is twelve hours from either edge and cannot. This is
 // the same convention recurrence.ts uses, spelled the same way on purpose.
+//
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// ⚠ THERE ARE THREE ANCHORINGS AND THEY ARE NOT INTERCHANGEABLE. THIS IS THE MOST IMPORTANT PARAGRAPH
+// IN THE FILE.
+//
+//   calendar   "August 2026", "this week", "3-9 Aug". Named days, navigated with prev/next. What the
+//              planner has always meant.
+//   rolling    "the days from N back up to today". MEASURED FROM TODAY AND MOVING WITH IT. What
+//              encounters-landing-constants.ts's HISTORY_PERIODS has always meant, and what
+//              reports.ts's `days` has always meant.
+//   all        NO BOUND AT ALL. Not a period; the ABSENCE of one, named so that a screen whose register
+//              has always shown everything can keep doing exactly that while still offering the control.
+//              `bounded: false`, and a loader that reads fromDate/toDate off one of these has a bug.
+//
+// ⚠ "LAST 30 DAYS" IS NOT "THIS MONTH", AND SWAPPING ONE FOR THE OTHER IS A CLINICAL CHANGE WEARING THE
+// COSTUME OF A REFACTOR. On 3 August, "last 30 days" reaches back into July and "this month" shows three
+// days. A clinician who asked for their recent register and got a three-day one would conclude the
+// records had gone. This module exists so BOTH can be said, not so one can quietly replace the other.
+//
+// ---- ⚠ AND "N DAYS" IS ALREADY AMBIGUOUS IN THIS CODEBASE, WHICH IS WHY THE PARAMETER IS AN OFFSET ---
+//
+// Two live callers disagree about what "30 days" means, and both are shipped:
+//
+//   encounters-landing.ts   from = today - 30, to = today   -> 31 calendar days inclusive
+//   reports.ts              from = today - 29, to = today   -> 30 calendar days inclusive
+//
+// Neither is corrected here. A period control is not the place to quietly change how much of a register
+// a clinician sees, and either edit would do that to somebody. So the rolling constructor takes
+// `backDays` -- THE OFFSET, unambiguous -- rather than a "number of days" that the two callers would
+// each read differently. encounters passes 30, reports passes 29, and both keep the range they had.
+// periodLabel prints the caller's own name for the window AND the two real dates beside it, so nobody
+// has to know any of this to read the screen correctly. periodSpanDays() is there for a screen that
+// wants to say the true inclusive span out loud, and the encounters footnote does.
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 
 const DAY_MS = 86400000;
@@ -115,6 +148,15 @@ export const isPeriodView = (v: unknown): v is PeriodView =>
 
 export const DEFAULT_PERIOD_VIEW: PeriodView = "week";
 
+/**
+ * How a period is pinned to the calendar. See the header -- these are not interchangeable.
+ *
+ * ⚠ `all` IS A REAL MEMBER AND NOT A NULL OBJECT. Three screens in this product have always shown their
+ * whole register, and encounters' own "Custom" with both boxes empty has always meant exactly this. A
+ * codebase that had no word for "no period" grew one per screen instead.
+ */
+export type PeriodAnchoring = "calendar" | "rolling" | "all";
+
 /** A period being looked at: the days that will actually be READ. Both ends inclusive. */
 export type PeriodRange = {
   view: PeriodView;
@@ -126,6 +168,19 @@ export type PeriodRange = {
   /** For Month: the first and last day of the month ITSELF, so a grid can grey the rest. */
   focusFromDate: string;
   focusToDate: string;
+  /** calendar / rolling / all. Every period made before this field existed is `calendar`. */
+  anchoring: PeriodAnchoring;
+  /**
+   * ⚠ FALSE ONLY FOR `all`, AND IT IS AN INSTRUCTION TO THE LOADER RATHER THAN A DECORATION. When it is
+   * false the read must NOT be bounded: fromDate and toDate are still filled in, because the header, the
+   * arrows and the quick chips all need somewhere to stand, and a query that used them would silently
+   * hide every row outside one month of a register that has always shown everything.
+   */
+  bounded: boolean;
+  /** rolling only: how many days BACK from `todayDate` the window starts. Null otherwise. */
+  backDays: number | null;
+  /** rolling only: the practice's today this window was measured from. Null otherwise. */
+  todayDate: string | null;
 };
 
 /**
@@ -138,28 +193,77 @@ export type PeriodRange = {
  * indistinguishable from a genuinely empty Monday.
  */
 export function resolvePeriod(
-  view: PeriodView, anchorDate: string, custom?: { from?: string | null; to?: string | null },
+  view: PeriodView, anchorDate: string, custom?: {
+    from?: string | null; to?: string | null;
+    /** Omitted is `calendar`, which is what every caller written before this field meant. */
+    anchoring?: PeriodAnchoring | null;
+    /** rolling only, and REQUIRED for it: days back from `todayDate`. 0 is today alone. */
+    backDays?: number | null;
+    /** rolling only, and REQUIRED for it: THE PRACTICE'S today. Never the renderer's. */
+    todayDate?: string | null;
+  },
 ): PeriodRange {
   const anchor = isPeriodDate(anchorDate) ? anchorDate : "1970-01-01";
+  const calendarBase = { anchoring: "calendar" as const, bounded: true, backDays: null, todayDate: null };
+
+  // ── ROLLING: the days from N back up to TODAY, and today is the caller's, never this machine's. ────
+  //
+  // ⚠ AN UNUSABLE ROLLING REQUEST FALLS BACK TO THE CALENDAR RATHER THAN INVENTING A TODAY. A window
+  // measured from `new Date()` inside a shared module is the wrong window for three hours of every
+  // morning in Kampala, and those are the hours somebody opens the app to see what the day holds.
+  if (custom?.anchoring === "rolling") {
+    const today = isPeriodDate(custom.todayDate) ? custom.todayDate : null;
+    const back = Number.isInteger(custom.backDays) && (custom.backDays as number) >= 0
+      ? (custom.backDays as number) : null;
+    if (today !== null && back !== null) {
+      const from = addDaysIso(today, -back);
+      return {
+        view: "agenda", anchorDate: from, fromDate: from, toDate: today,
+        focusFromDate: from, focusToDate: today,
+        anchoring: "rolling", bounded: true, backDays: back, todayDate: today,
+      };
+    }
+  }
+
+  // ── ALL: no bound. The dates are here for the header and the arrows and for NOTHING ELSE. ──────────
+  if (custom?.anchoring === "all") {
+    const first = monthStartOf(anchor), last = monthEndOf(anchor);
+    return {
+      view: "agenda", anchorDate: anchor, fromDate: first, toDate: last,
+      focusFromDate: first, focusToDate: last,
+      anchoring: "all", bounded: false, backDays: null, todayDate: null,
+    };
+  }
+
   if (view === "day")
-    return { view, anchorDate: anchor, fromDate: anchor, toDate: anchor, focusFromDate: anchor, focusToDate: anchor };
+    return { view, anchorDate: anchor, fromDate: anchor, toDate: anchor, focusFromDate: anchor, focusToDate: anchor, ...calendarBase };
   if (view === "week") {
     const from = mondayOf(anchor), to = addDaysIso(from, 6);
-    return { view, anchorDate: anchor, fromDate: from, toDate: to, focusFromDate: from, focusToDate: to };
+    return { view, anchorDate: anchor, fromDate: from, toDate: to, focusFromDate: from, focusToDate: to, ...calendarBase };
   }
   if (view === "month") {
     const first = monthStartOf(anchor), last = monthEndOf(anchor);
     const gridFrom = mondayOf(first);
     const gridTo = addDaysIso(gridFrom, Math.ceil(daysBetweenIso(gridFrom, last) / 7) * 7 - 1);
-    return { view, anchorDate: anchor, fromDate: gridFrom, toDate: gridTo, focusFromDate: first, focusToDate: last };
+    return { view, anchorDate: anchor, fromDate: gridFrom, toDate: gridTo, focusFromDate: first, focusToDate: last, ...calendarBase };
   }
   // AGENDA. A custom period if one was given and it is the right way round; otherwise the month the
   // anchor is in, which is the widest period a single press can produce and is what "This month" means.
   const from = custom?.from && isPeriodDate(custom.from) ? custom.from : monthStartOf(anchor);
   const toRaw = custom?.to && isPeriodDate(custom.to) ? custom.to : monthEndOf(anchor);
   const to = toRaw < from ? from : toRaw;
-  return { view, anchorDate: anchor, fromDate: from, toDate: to, focusFromDate: from, focusToDate: to };
+  return { view, anchorDate: anchor, fromDate: from, toDate: to, focusFromDate: from, focusToDate: to, ...calendarBase };
 }
+
+/**
+ * The TRUE inclusive span of a bounded period, in days. Null for an unbounded one, because "all dates"
+ * has no length and answering 31 would be a fiction.
+ *
+ * ⚠ THIS IS THE FUNCTION THAT TELLS THE TRUTH ABOUT "30 days". For encounters' 30d it returns 31, and
+ * the footnote on that page prints it. See the header.
+ */
+export const periodSpanDays = (p: PeriodRange): number | null =>
+  p.bounded ? daysBetweenIso(p.fromDate, p.toDate) : null;
 
 /**
  * Previous / Next. Returns the ANCHOR (and, for Agenda, the range) of the neighbouring period.
@@ -170,6 +274,20 @@ export function resolvePeriod(
 export function shiftPeriod(p: PeriodRange, direction: 1 | -1): {
   anchorDate: string; from: string | null; to: string | null;
 } {
+  // ⚠ AN UNBOUNDED PERIOD HAS NO NEIGHBOUR, so the arrows step by MONTHS off the month the header is
+  // standing on -- and the result is a bounded calendar month, which the label then says. The
+  // alternative, shifting "all dates" by the length of the month it happens to be displaying, produces
+  // 1 Sep - 1 Oct: a period nobody asked for, with an off-by-one nobody would ever notice.
+  if (!p.bounded) {
+    const start = addMonthsIso(monthStartOf(p.anchorDate), direction);
+    return { anchorDate: start, from: start, to: monthEndOf(start) };
+  }
+  // ⚠ AND A ROLLING WINDOW HAS NO NEIGHBOUR EITHER, because its other end is today and today does not
+  // move when you press an arrow. It shifts by its own length like any other range, and what comes back
+  // is a FIXED period: `from` and `to` are returned, so the caller's URL carries dates rather than
+  // "rolling", and periodLabel then reads "11 Jun - 10 Jul 2026" instead of "Last 30 days". Nobody is
+  // ever looking at a window headed "Last 30 days" that is not the last 30 days. (This is the agenda
+  // branch at the bottom; it is called out here because the consequence is not obvious.)
   if (p.view === "day")
     return { anchorDate: addDaysIso(p.anchorDate, direction), from: null, to: null };
   if (p.view === "week")
@@ -200,13 +318,29 @@ const yr = (d: string) => d.slice(0, 4);
  * the browser hydration, and Intl's data is not guaranteed to be byte-identical in both.
  */
 export function periodLabel(p: PeriodRange): string {
+  // ⚠ THE LABEL SAYS WHICH ANCHORING IT IS, AND FOR A ROLLING WINDOW IT PRINTS THE DATES TOO.
+  //
+  // "Last 30 days" and "August 2026" are different claims and a header that could not tell them apart
+  // would let a screen change what it shows without changing what it says. And because "30 days" already
+  // means two different spans in this codebase (see the file header), the rolling label carries the
+  // caller's own number AND the two real dates -- so the name can be loose and the screen still cannot
+  // mislead anybody about which days are on it.
+  if (p.anchoring === "all") return ALL_DATES_LABEL;
+  if (p.anchoring === "rolling") {
+    const window = p.backDays === 0 ? "Today" : `Last ${p.backDays} days`;
+    return `${window} · ${rangeLabel(p.fromDate, p.toDate)}`;
+  }
   if (p.view === "day") {
     const wd = WEEKDAY_LONG[isoWeekdayOf(p.anchorDate)] ?? "";
     return `${wd} ${dayNum(p.anchorDate)} ${monShort(p.anchorDate)} ${yr(p.anchorDate)}`.trim();
   }
   if (p.view === "month")
     return `${MONTH_LONG[Number(p.anchorDate.slice(5, 7)) - 1] ?? ""} ${yr(p.anchorDate)}`.trim();
-  const a = p.fromDate, b = p.toDate;
+  return rangeLabel(p.fromDate, p.toDate);
+}
+
+/** Two dates as one phrase, in the shortest form that is still unambiguous. */
+function rangeLabel(a: string, b: string): string {
   // A whole calendar year reads as the year. "01 Jan - 31 Dec 2026" is the same fact spelled longer.
   if (a === yearStartOf(a) && b === yearEndOf(a) && yr(a) === yr(b)) return yr(a);
   if (a === b) return `${dayNum(a)} ${monShort(a)} ${yr(a)}`;
@@ -214,6 +348,13 @@ export function periodLabel(p: PeriodRange): string {
   if (yr(a) === yr(b)) return `${dayNum(a)} ${monShort(a)} - ${dayNum(b)} ${monShort(b)} ${yr(a)}`;
   return `${dayNum(a)} ${monShort(a)} ${yr(a)} - ${dayNum(b)} ${monShort(b)} ${yr(b)}`;
 }
+
+/**
+ * ⚠ "All dates" AND NOT "All time". A register holds what somebody entered into it, and this product's
+ * registers are also capped and paged; "all time" is a claim about history, "all dates" is a claim about
+ * a filter that is switched off. The second one is the one that is true.
+ */
+export const ALL_DATES_LABEL = "All dates";
 
 // ── QUICK PERIODS ────────────────────────────────────────────────────────────────────────────────────
 
@@ -310,4 +451,134 @@ export function capPeriod(fromDate: string, toDate: string, cap = PERIOD_DAY_CAP
   const to = fromDate <= toDate ? toDate : fromDate;
   const capped = daysBetweenIso(from, to) > cap;
   return { fromDate: from, toDate: capped ? addDaysIso(from, cap - 1) : to, capped };
+}
+
+// ── ROLLING PERIODS, AND "ALL DATES" ─────────────────────────────────────────────────────────────────
+//
+// ⚠ A THIRD LIST, FOR THE SAME REASON LONG_PERIODS IS A SECOND ONE. QUICK_PERIODS is asserted to be
+// EXACTLY the six CP-PLAN-002 s3 names, and that assertion is worth more than the tidiness of one array.
+//
+// ⚠ AND THE NUMBER IN THE LABEL IS THE OFFSET, NOT THE SPAN. "Last 7 days" here is today-7 .. today,
+// which is EIGHT calendar days. That is the arithmetic HISTORY_PERIODS has always used and the register
+// a clinician has been reading for months; correcting it here would quietly shorten what they see. The
+// header explains it, periodLabel prints both real dates, and periodSpanDays() says the true span for a
+// screen that wants to print it. The one thing that does not happen is a silent change.
+
+export const ROLLING_PERIODS = [
+  { key: "today", label: "Today", backDays: 0 },
+  { key: "7d", label: "Last 7 days", backDays: 7 },
+  { key: "30d", label: "Last 30 days", backDays: 30 },
+  { key: "90d", label: "Last 90 days", backDays: 90 },
+  { key: "365d", label: "Last 365 days", backDays: 365 },
+] as const;
+
+export type RollingPeriodKey = (typeof ROLLING_PERIODS)[number]["key"];
+
+export const isRollingPeriodKey = (v: unknown): v is RollingPeriodKey =>
+  typeof v === "string" && ROLLING_PERIODS.some(r => r.key === v);
+
+/** Where any chip takes you, in the one shape a screen turns into a URL. */
+export type PeriodTarget = {
+  view: PeriodView;
+  anchorDate: string;
+  from: string | null;
+  to: string | null;
+  anchoring: PeriodAnchoring;
+  backDays: number | null;
+};
+
+export function rollingPeriodTarget(backDays: number, todayDate: string): PeriodTarget {
+  const today = isPeriodDate(todayDate) ? todayDate : "1970-01-01";
+  const back = Number.isInteger(backDays) && backDays >= 0 ? backDays : 0;
+  return {
+    view: "agenda", anchorDate: addDaysIso(today, -back),
+    from: addDaysIso(today, -back), to: today, anchoring: "rolling", backDays: back,
+  };
+}
+
+/** Switching the filter OFF. The anchor stays where the reader was, so the header does not jump. */
+export const allDatesTarget = (anchorDate: string): PeriodTarget => ({
+  view: "agenda", anchorDate: isPeriodDate(anchorDate) ? anchorDate : "1970-01-01",
+  from: null, to: null, anchoring: "all", backDays: null,
+});
+
+// ── THE URL CONTRACT ─────────────────────────────────────────────────────────────────────────────────
+//
+// ⚠ ONE SET OF QUERY KEYS FOR EVERY SCREEN THAT ADOPTS THIS, so a period is bookmarkable, survives a
+// link into a record and back, and means the same thing on all of them. Six screens each inventing
+// `?from=&to=` is six parsers, and the two that already exist in this product -- encounters' hperiod /
+// hfrom / hto and reports' from / to / days -- ALREADY DISAGREE with each other.
+//
+// ⚠ THE TWO LEGACY SPELLINGS ARE NOT BROKEN BY THIS. Their screens map their own keys onto these
+// functions rather than being re-addressed; a bookmark somebody made last week still opens what it did.
+
+export const PERIOD_PARAMS = {
+  view: "pv", date: "pd", from: "pf", to: "pt", anchoring: "pa", back: "pb",
+} as const;
+
+/** A period as query values. Null means "leave this key out", never "empty string". */
+export function periodToParams(t: {
+  view: PeriodView; anchorDate: string; from: string | null; to: string | null;
+  anchoring?: PeriodAnchoring | null; backDays?: number | null;
+}): Record<string, string | null> {
+  const anchoring = t.anchoring ?? "calendar";
+  return {
+    [PERIOD_PARAMS.anchoring]: anchoring === "calendar" ? null : anchoring,
+    [PERIOD_PARAMS.view]: anchoring === "calendar" ? t.view : null,
+    [PERIOD_PARAMS.date]: t.anchorDate,
+    [PERIOD_PARAMS.from]: anchoring === "calendar" ? t.from : null,
+    [PERIOD_PARAMS.to]: anchoring === "calendar" ? t.to : null,
+    [PERIOD_PARAMS.back]: anchoring === "rolling" && t.backDays !== null && t.backDays !== undefined
+      ? String(t.backDays) : null,
+  };
+}
+
+/**
+ * A URL back into a period, with the screen's own default when the URL says nothing.
+ *
+ * ⚠ `fallback` IS REQUIRED AND HAS NO DEFAULT VALUE. Every screen that adopts this control already had a
+ * default -- three of them showed their whole register and two ran a rolling window -- and a shared
+ * parser that quietly picked one of those would change the other four the day it shipped. Making the
+ * caller say it is what keeps "the default did not move" a provable claim rather than a hope.
+ *
+ * ⚠ AND AN UNREADABLE VALUE FALLS BACK RATHER THAN NARROWING. `?pa=banana` resolving to an empty period
+ * would render as a register with nothing in it, which is this codebase's oldest sin in a new costume.
+ */
+export function periodFromParams(
+  get: (key: string) => string | null | undefined,
+  todayDate: string,
+  fallback: PeriodTarget,
+): PeriodRange {
+  const raw = (k: string) => {
+    const v = get(k);
+    return typeof v === "string" && v.trim() !== "" ? v.trim() : null;
+  };
+  const anchorRaw = raw(PERIOD_PARAMS.date);
+  const anchor = isPeriodDate(anchorRaw) ? anchorRaw : null;
+  const anchoringRaw = raw(PERIOD_PARAMS.anchoring);
+
+  if (anchoringRaw === "all") return resolvePeriod("agenda", anchor ?? todayDate, { anchoring: "all" });
+
+  if (anchoringRaw === "rolling") {
+    const back = Number.parseInt(raw(PERIOD_PARAMS.back) ?? "", 10);
+    if (Number.isInteger(back) && back >= 0)
+      return resolvePeriod("agenda", todayDate, { anchoring: "rolling", backDays: back, todayDate });
+    // A rolling window with no length is not a period. Falling back is the honest move.
+    return resolveTarget(fallback, todayDate);
+  }
+
+  const viewRaw = raw(PERIOD_PARAMS.view);
+  if (isPeriodView(viewRaw) && anchor)
+    return resolvePeriod(viewRaw, anchor, { from: raw(PERIOD_PARAMS.from), to: raw(PERIOD_PARAMS.to) });
+
+  return resolveTarget(fallback, todayDate);
+}
+
+/** A target as the range it stands for. The one place a chip and a URL agree about what they mean. */
+export function resolveTarget(t: PeriodTarget, todayDate: string): PeriodRange {
+  if (t.anchoring === "rolling")
+    return resolvePeriod("agenda", todayDate, { anchoring: "rolling", backDays: t.backDays, todayDate });
+  if (t.anchoring === "all")
+    return resolvePeriod("agenda", t.anchorDate, { anchoring: "all" });
+  return resolvePeriod(t.view, t.anchorDate, { from: t.from, to: t.to });
 }

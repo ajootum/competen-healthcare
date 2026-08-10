@@ -4,7 +4,10 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { followUpWorkspace } from "@/lib/practice/follow-ups";
 import { recallQueue } from "@/lib/practice/follow-up-plans";
+import { workspaceClock } from "@/lib/practice/practice-time";
+import { periodFromParams, allDatesTarget } from "@/lib/practice/period-range";
 import FollowUpsWorkspace from "./FollowUpsWorkspace";
+import FollowUpsNavigator from "./FollowUpsNavigator";
 import RecallQueue from "./RecallQueue";
 
 // /practice/follow-ups -- CPR-FUP-001, the continuity-of-care workspace.
@@ -26,14 +29,21 @@ import RecallQueue from "./RecallQueue";
 export const dynamic = "force-dynamic";
 
 export default async function FollowUpsPage({ searchParams }: {
-  searchParams: Promise<{ view?: string; q?: string; priority?: string; source?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const shell = await resolvePracticeShell();
   if (shell.state !== "READY") redirect("/practice");
   if (!hasCapability(shell.ctx, "followup.view")) redirect("/practice/home");
 
-  const sp = await searchParams;
+  const raw = await searchParams;
+  const one = (k: string) => { const v = raw[k]; return Array.isArray(v) ? v[0] : v; };
+  const sp = { view: one("view"), q: one("q"), priority: one("priority"), source: one("source") };
   const admin = createAdminClient();
+  const clock = await workspaceClock(admin, shell.ctx.workspaceId);
+
+  // ⚠ THE DEFAULT IS "All dates" AND IT HAS TO BE. See FollowUpsNavigator: a default period on a work
+  // queue would hide the longest-overdue people first, which is the opposite of what this board is for.
+  const period = periodFromParams(one, clock.today, allDatesTarget(clock.today));
 
   const [workspace, recall] = await Promise.all([
     followUpWorkspace(admin, shell.ctx.workspaceId, {
@@ -41,12 +51,40 @@ export default async function FollowUpsPage({ searchParams }: {
       search: sp.q ?? null,
       priority: sp.priority ?? null,
       source: sp.source ?? null,
+      // ⚠ THE READ IS BOUNDED, NOT JUST THE URL. Every card below is counted from this same narrowed
+      // read, so no figure can disagree with the list it opens.
+      dueFrom: period.bounded ? period.fromDate : null,
+      dueTo: period.bounded ? period.toDate : null,
     }),
     recallQueue(admin, shell.ctx.workspaceId),
   ]);
 
   return (
     <div className="max-w-[1400px]">
+      <div className="mb-4">
+        <FollowUpsNavigator
+          period={period} todayDate={clock.today} timezone={clock.timezone}
+          keep={{
+            view: sp.view ?? null, q: sp.q ?? null,
+            priority: sp.priority ?? null, source: sp.source ?? null,
+          }}
+        />
+        {/* ⚠ THE THREE STATES. A narrowed queue that could not be read must not look like a period with
+            nobody in it, and a period with genuinely nobody in it must not look like a fault. */}
+        {workspace.unavailable ? (
+          <p className="mt-2 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+            <strong>The follow-up queue could not be read.</strong> {workspace.detail}{" "}
+            Nothing below is a statement that nobody is waiting.
+          </p>
+        ) : period.bounded && workspace.readCount === 0 ? (
+          <p className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[12px] text-gray-600">
+            Nothing is due between <strong>{period.fromDate}</strong> and <strong>{period.toDate}</strong>.
+            The read succeeded &mdash; this period is genuinely empty. Obligations due outside it are not
+            counted here.
+          </p>
+        ) : null}
+      </div>
+
       {/* ⚠ initialView IS THE ENGINE'S RESOLVED KEY, NOT THE RAW QUERY STRING. `?view=nonsense` made the
           engine fall back to "all" and show that list while this prop still said "nonsense" -- so the
           rows were the All tab's and no tab was lit. The fallback is one rule and it lives in the

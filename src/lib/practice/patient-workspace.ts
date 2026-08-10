@@ -729,6 +729,18 @@ export async function myPatients(
     /** The bridge from a worklist tile to a filtered patient list. Rule 2. */
     patientIds?: string[];
     includeInactive?: boolean;
+    /**
+     * ⚠ WHEN THEY WERE REGISTERED, AND THAT IS THE ONLY DATE A PATIENT RECORD OWNS.
+     *
+     * A patient is not an event. `created_at` is when the record was made -- not when the person was
+     * seen, which lives on encounters, and not when they are due, which lives on follow-ups. So a period
+     * on this register can honestly answer "who did we register that week" and nothing else, and the
+     * screen says exactly that rather than letting a reader take it for "who did we see".
+     *
+     * Absent by default. A register whose whole purpose is finding a person must not hide people by
+     * default because of when their record happens to have been created.
+     */
+    registeredFrom?: string; registeredTo?: string;
   } = {},
 ): Promise<CohortResult> {
   const ws = ctx.workspaceId;
@@ -736,7 +748,10 @@ export async function myPatients(
   const pageSize = Math.min(Math.max(opts.pageSize ?? DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE);
   const scope = opts.scope ?? "practice";
   const sort = opts.sort ?? "registered";
-  const { today } = await workspaceClock(admin, ws);
+  // ⚠ THE TIMEZONE IS TAKEN HERE TOO, because the registration window below is a pair of CALENDAR
+  // DAYS and created_at is a timestamp. A day boundary read in UTC puts the first hours of a Kampala
+  // day in the day before, which on a one-day period is the whole of it.
+  const { today, timezone } = await workspaceClock(admin, ws);
   const mayName = hasCapability(ctx, "patient.view");
   const enrichment: CohortResult["enrichment"] = {};
   const sortOptions = [
@@ -785,6 +800,10 @@ export async function myPatients(
     // but askable for -- "we archived them" is a different fact from "they do not exist".
     out = opts.includeInactive ? out.neq("status", "merged") : out.eq("status", "active");
     if (restrictTo !== null) out = out.in("id", restrictTo);
+    // ⚠ APPLIED TO THE PAGE READ AND TO THE COUNT, because both go through this function. A period that
+    // narrowed the rows and not the total would print "42 patients" over a table of three.
+    if (opts.registeredFrom) out = out.gte("created_at", zonedDayRange(opts.registeredFrom, timezone).startIso);
+    if (opts.registeredTo) out = out.lt("created_at", zonedDayRange(opts.registeredTo, timezone).endIso);
     return out;
   };
 
@@ -1441,7 +1460,11 @@ export type PatientsWorkspace = {
 /** The whole landing surface in one call: the worklists and the first page of the cohort. */
 export async function patientsWorkspace(
   admin: any, ctx: WorkspaceContext,
-  opts: { page?: number; pageSize?: number; scope?: "practice" | "mine"; sort?: "registered" | "name" } = {},
+  opts: {
+    page?: number; pageSize?: number; scope?: "practice" | "mine"; sort?: "registered" | "name";
+    /** The register's period, on registration date. See myPatients -- the worklists are NOT narrowed. */
+    registeredFrom?: string; registeredTo?: string;
+  } = {},
 ): Promise<PatientsWorkspace> {
   const [lists, cohort] = await Promise.all([
     worklists(admin, ctx),

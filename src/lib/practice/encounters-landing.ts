@@ -9,8 +9,10 @@ import type { EncounterWarning } from "@/lib/practice/encounter-workspace-consta
 import {
   outstandingComponents, agingState, COMPONENT_LABEL, HISTORY_PAGE_SIZE,
   HISTORY_PERIODS, HISTORY_STATES, DEFAULT_HISTORY_PERIOD,
+  historyPeriodRange, historyPeriodKeyFor,
   type AgingState, type ContextState, type HistoryPeriodKey, type HistoryStateKey,
 } from "@/lib/practice/encounters-landing-constants";
+import { periodFromParams, type PeriodRange } from "@/lib/practice/period-range";
 
 // CPR-ENC-LANDING-001 -- the reads behind the Encounters landing page.
 //
@@ -151,9 +153,18 @@ export type LandingCounts = {
 export type HistoryFilter = {
   period: HistoryPeriodKey;
   state: HistoryStateKey;
+  /** ⚠ THE BOUNDS THE QUERY ACTUALLY APPLIED. Null on either side means that end is not bounded. */
   from: string | null;
   to: string | null;
   page: number;
+  /**
+   * The same window as the shared period control sees it, for the navigator on the page.
+   *
+   * ⚠ IT IS A DESCRIPTION, NOT THE QUERY'S SOURCE. `from` and `to` above are what bounded the read; a
+   * one-sided custom range is expressible there and not here. Two fields rather than one because the
+   * alternative is a control that draws a period the query did not use.
+   */
+  range: PeriodRange;
 };
 
 export type EncountersLanding = {
@@ -472,26 +483,66 @@ export type LandingOptions = {
   historyFrom?: string | null;
   historyTo?: string | null;
   historyPage?: number;
+  /**
+   * The SHARED period contract's query values (period-range.ts's PERIOD_PARAMS), when the URL carries
+   * them. They take precedence over hperiod/hfrom/hto; those keep working when these are absent.
+   */
+  periodParams?: Record<string, string | null | undefined>;
 };
 
+/**
+ * s4.7's filter, resolved.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ THE ARITHMETIC MOVED TO period-range.ts AND THE ANSWER DID NOT MOVE WITH IT.
+ *
+ * This function used to subtract days from `today` itself. It now asks the shared module for a ROLLING
+ * period, because the practice owner asked for the same period control on every screen that reviews data
+ * over time and a second copy of "what does last week mean" is how two screens come to disagree.
+ *
+ * The shared module expresses BOTH anchorings. It had to: "last 30 days" is not "this month", and a
+ * calendar-only module would have quietly turned a clinician's month of records into three days on the
+ * third of August. `historyPeriodRange` asks for rolling, gets rolling, and returns the SAME two dates
+ * this function used to compute -- proved by running both implementations side by side in the harness
+ * rather than by asserting the label.
+ *
+ * ⚠ A ONE-SIDED CUSTOM RANGE IS UNTOUCHED AND IS STILL ONE-SIDED. `?hperiod=custom&hfrom=2026-01-01`
+ * with no `hto` bounds the register at one end only, exactly as it always has. A PeriodRange has two
+ * ends, so it cannot say that; filling the missing end would put a ceiling on somebody's register that
+ * they did not ask for, and the page prints the one-sided bound in words instead.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ */
 function resolveHistoryFilter(opts: LandingOptions, today: string): HistoryFilter {
-  const period = (HISTORY_PERIODS.find(p => p.key === opts.historyPeriod)?.key ?? DEFAULT_HISTORY_PERIOD);
   const state = (HISTORY_STATES.find(s => s.key === opts.historyState)?.key ?? "all");
-  const days = HISTORY_PERIODS.find(p => p.key === period)?.days ?? null;
-
-  let from: string | null = null;
-  let to: string | null = null;
-  if (period === "custom") {
-    from = opts.historyFrom ?? null;
-    to = opts.historyTo ?? null;
-  } else if (days !== null) {
-    const end = new Date(`${today}T00:00:00Z`);
-    const start = new Date(end.getTime() - days * 86400000);
-    from = start.toISOString().slice(0, 10);
-    to = today;
-  }
   const page = Number.isFinite(opts.historyPage) && (opts.historyPage ?? 0) > 0 ? Math.floor(opts.historyPage!) : 0;
-  return { period, state, from, to, page };
+
+  // ── The generic period contract, when the URL carries it. ────────────────────────────────────────
+  //
+  // Six screens now share one spelling of "which days am I looking at" (PERIOD_PARAMS). s4.7's own
+  // hperiod / hfrom / hto keep working underneath it, because a link somebody sent a colleague last week
+  // has to open what it opened last week.
+  const generic = opts.periodParams
+    ? periodFromParams(k => opts.periodParams?.[k] ?? null, today,
+      { view: "agenda", anchorDate: today, from: null, to: null, anchoring: "rolling", backDays: 30 })
+    : null;
+  const usedGeneric = !!(opts.periodParams && Object.values(opts.periodParams).some(v => !!v));
+
+  if (usedGeneric && generic) {
+    return {
+      period: historyPeriodKeyFor(generic), state, page, range: generic,
+      from: generic.bounded ? generic.fromDate : null,
+      to: generic.bounded ? generic.toDate : null,
+    };
+  }
+
+  const period = (HISTORY_PERIODS.find(p => p.key === opts.historyPeriod)?.key ?? DEFAULT_HISTORY_PERIOD);
+  const range = historyPeriodRange(period, today, { from: opts.historyFrom, to: opts.historyTo });
+
+  if (period === "custom") {
+    // ⚠ THE RAW VALUES, NOT THE RANGE'S. This is the branch that keeps a one-sided custom one-sided.
+    return { period, state, from: opts.historyFrom ?? null, to: opts.historyTo ?? null, page, range };
+  }
+  return { period, state, from: range.fromDate, to: range.toDate, page, range };
 }
 
 /**

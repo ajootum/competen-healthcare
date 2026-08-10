@@ -1,5 +1,7 @@
 import { encounterWarnings, WARNING_TEXT, type EncounterWarning } from "@/lib/practice/encounter-workspace-constants";
 import { DEFERRED_SAFETY_CHECKS, NOT_CHECKED_LABEL, NOT_CHECKED_TONE } from "@/lib/practice/medication-constants";
+// period-range.ts imports NOTHING, which is why this file may import it and stay client-safe.
+import { resolvePeriod, isPeriodDate, type PeriodRange } from "@/lib/practice/period-range";
 
 // CPR-ENC-LANDING-001's vocabulary, in a module with NO SERVER IMPORTS.
 //
@@ -88,6 +90,62 @@ export const HISTORY_PERIOD_KEYS = HISTORY_PERIODS.map(p => p.key);
 
 /** s4.7's default. Thirty days, not "everything": a register is not a dashboard panel. */
 export const DEFAULT_HISTORY_PERIOD: HistoryPeriodKey = "30d";
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// ⚠ THESE FOUR ARE A ROLLING VOCABULARY AND THEY STAY ONE. READ THIS BEFORE CHANGING ANYTHING ABOVE.
+//
+// "30 days" here has always meant TODAY MINUS 30 UP TO TODAY, measured from the practice's own today and
+// moving with it. It does NOT mean "this month". On 3 August the first reaches back into July and the
+// second shows three days, and a clinician who opened their register expecting the last month of work
+// and got three days would conclude the records had gone.
+//
+// The arithmetic now lives in period-range.ts, which expresses BOTH anchorings, and this file names the
+// offsets rather than repeating the subtraction. What did NOT change is the answer: historyPeriodRange
+// returns byte-identical dates to the arithmetic this file's caller used before, and the harness proves
+// it by comparing the two implementations rather than by trusting this paragraph.
+//
+// ⚠ AND `days: 30` IS AN OFFSET, WHICH MAKES THE WINDOW 31 DAYS INCLUSIVE. That is not corrected here.
+// reports.ts means 30 days inclusive by the same words, so the two are already inconsistent, and
+// silently shortening a clinical register by a day to tidy that up is not a refactor. period-range.ts's
+// header records both, periodSpanDays() says the true span, and the page prints it.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One of s4.7's periods as the days it actually covers.
+ *
+ * A preset is ROLLING. "Custom" is whatever the URL says: a calendar range when both ends are given, and
+ * NO BOUND AT ALL when neither is -- which is what an empty custom has always done, and is why
+ * period-range.ts has a name for an absent period rather than pretending every screen has one.
+ *
+ * ⚠ A ONE-SIDED CUSTOM (an end and no start, or the reverse) IS DELIBERATELY NOT REPRESENTABLE HERE, and
+ * the loader keeps applying it directly. A PeriodRange has two ends; forcing the missing one would put a
+ * bound on the register that nobody asked for. The screen prints the one-sided bound in words instead.
+ */
+export function historyPeriodRange(
+  period: HistoryPeriodKey, todayDate: string, custom: { from?: string | null; to?: string | null } = {},
+): PeriodRange {
+  if (period === "custom") {
+    const from = isPeriodDate(custom.from) ? custom.from : null;
+    const to = isPeriodDate(custom.to) ? custom.to : null;
+    if (from && to) return resolvePeriod("agenda", from, { from, to });
+    return resolvePeriod("agenda", from ?? to ?? todayDate, { anchoring: "all" });
+  }
+  const backDays = HISTORY_PERIODS.find(p => p.key === period)?.days ?? 30;
+  return resolvePeriod("agenda", todayDate, { anchoring: "rolling", backDays, todayDate });
+}
+
+/** The default as a range, so "the default did not move" is one call rather than an argument. */
+export const defaultHistoryRange = (todayDate: string): PeriodRange =>
+  historyPeriodRange(DEFAULT_HISTORY_PERIOD, todayDate);
+
+/**
+ * Which preset a rolling window IS, if any. `?pb=90` is a legitimate rolling window that s4.7 does not
+ * name, and it lights no chip rather than lighting the nearest one.
+ */
+export function historyPeriodKeyFor(range: PeriodRange): HistoryPeriodKey {
+  if (range.anchoring !== "rolling") return "custom";
+  return HISTORY_PERIODS.find(p => p.days !== null && p.days === range.backDays)?.key ?? "custom";
+}
 
 export type HistoryStateKey = "all" | "signed" | "amended";
 

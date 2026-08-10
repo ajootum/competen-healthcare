@@ -143,9 +143,34 @@ export async function recordActivity(admin: any, args: {
   return { ok: true, data: { id: data.id as string } };
 }
 
-export async function listActivities(admin: any, workspaceId: string, filter: {
+export type ActivityListFilter = {
   performedBy?: string; kind?: string; fromDay?: string; toDay?: string; limit?: number;
-} = {}) {
+};
+
+/**
+ * The activity log, WITH THE THREE STATES KEPT APART.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ THIS FUNCTION EXISTS BECAUSE listActivities BELOW DISCARDED THE ERROR AND RETURNED [].
+ *
+ * `const { data } = await q` then `data ?? []` is this codebase's oldest bug, and it is worse on a page
+ * that now carries a PERIOD: an unreadable query and a genuinely quiet fortnight render identically, so
+ * a practitioner reviewing what they did in July would read an outage as "I did nothing in July" -- and
+ * on a portfolio, "I did nothing" is a claim somebody submits to a regulator.
+ *
+ * ⚠ AND THE ROW CAP IS REPORTED RATHER THAN APPLIED IN SILENCE. The old call took 100 rows and said
+ * nothing; a year of a busy clinician's work is more than 100, so "what did I do in 2026" would have
+ * stopped somewhere in March with no mark on the screen. PostgREST also caps at 1000 whatever is asked
+ * for, so the request is made for one MORE than the caller wants and the surplus is the proof there is
+ * more -- rather than the guess that a full page means a full table.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ */
+export async function listActivitiesResult(admin: any, workspaceId: string, filter: ActivityListFilter = {}): Promise<{
+  items: any[]; unavailable: boolean; detail: string | null; truncated: boolean; limit: number;
+}> {
+  // ⚠ NEVER ABOVE 999. PostgREST returns 1000 rows and no error whatever `.limit()` says, so a limit of
+  // 1000 would come back full and the "one over" trick would report "no more" on a truncated read.
+  const limit = Math.min(Math.max(filter.limit ?? 100, 1), 999);
   let q = admin.from("practice_clinical_activity")
     .select("id, performed_by, kind, title, detail, occurred_at, duration_minutes, participation, location_id, encounter_id, cpd_minutes, portfolio, created_at")
     .eq("workspace_id", workspaceId);
@@ -160,16 +185,43 @@ export async function listActivities(admin: any, workspaceId: string, filter: {
     if (filter.toDay) q = q.lt("occurred_at", zonedDayRange(filter.toDay, timezone).endIso);
   }
 
-  const { data } = await q.order("occurred_at", { ascending: false }).limit(filter.limit ?? 100);
-  const rows = (data ?? []) as any[];
-  if (rows.length === 0) return [];
+  const { data, error } = await q.order("occurred_at", { ascending: false }).limit(limit + 1);
+  if (error) return { items: [], unavailable: true, detail: error.message, truncated: false, limit };
+
+  const all = (data ?? []) as any[];
+  const truncated = all.length > limit;
+  const rows = truncated ? all.slice(0, limit) : all;
+  if (rows.length === 0) return { items: [], unavailable: false, detail: null, truncated: false, limit };
 
   const ids = [...new Set(rows.map(r => r.performed_by))];
-  const { data: profiles } = await admin.from("profiles").select("id, full_name").in("id", ids);
-  const nameOf = new Map(((profiles ?? []) as any[]).map(p => [p.id, p.full_name]));
+  const { data: profiles, error: profileError } = await admin.from("profiles").select("id, full_name").in("id", ids);
+  // A NAME THAT COULD NOT BE READ IS NOT AN ANONYMOUS ACTIVITY. The row still counts; only the name is
+  // missing, and the screen says which of the two it is looking at.
+  const nameOf = profileError
+    ? new Map<string, string>()
+    : new Map(((profiles ?? []) as any[]).map(p => [p.id, p.full_name]));
 
   const labelOf = Object.fromEntries(ACTIVITY_KINDS.map(([k, l]) => [k, l])) as Record<string, string>;
-  return rows.map(r => ({ ...r, performedByName: nameOf.get(r.performed_by) ?? null, kindLabel: labelOf[r.kind] ?? r.kind }));
+  return {
+    items: rows.map(r => ({
+      ...r,
+      performedByName: nameOf.get(r.performed_by) ?? null,
+      performedByNameUnavailable: !!profileError,
+      kindLabel: labelOf[r.kind] ?? r.kind,
+    })),
+    unavailable: false, detail: null, truncated, limit,
+  };
+}
+
+/**
+ * The same list as a plain array, for the callers that predate the three-state result.
+ *
+ * ⚠ KEPT DELIBERATELY, NOT LEFT BEHIND. The API route and two harnesses read `.length` off this, and a
+ * type change would have made each of them a separate edit in somebody else's file on the same day three
+ * other agents are working here. It delegates, so there is one query and not two that drift.
+ */
+export async function listActivities(admin: any, workspaceId: string, filter: ActivityListFilter = {}) {
+  return (await listActivitiesResult(admin, workspaceId, filter)).items;
 }
 
 // ── PROCEDURE TEAM AND INSTRUMENTS ───────────────────────────────────────────────────────────────────
@@ -385,17 +437,32 @@ export async function portfolioSummary(admin: any, workspaceId: string, userId: 
     return out;
   };
 
-  const [{ data: procedures }, { data: activities }] = await Promise.all([
+  // ⚠ 999, NOT 1000, AND THE OVERFLOW IS THE PROOF. PostgREST returns at most 1000 rows and reports no
+  // error when it does, so a limit of 1000 coming back full is indistinguishable from a table with
+  // exactly 1000 rows in it. Asking for one more than is wanted makes "there was more" knowable. This
+  // matters here because a portfolio is a claim about EVERYTHING somebody did, and a portfolio that
+  // silently stopped at a thousand understates the person it belongs to.
+  const PORTFOLIO_ROW_CAP = 999;
+  const [procRes, actRes] = await Promise.all([
     range("performed_at")(admin.from("practice_procedure")
       .select("id, status, procedure_type_id, label, performed_at, cpd_minutes, portfolio")
-      .eq("workspace_id", workspaceId).eq("performed_by", userId)).limit(1000),
+      .eq("workspace_id", workspaceId).eq("performed_by", userId)).limit(PORTFOLIO_ROW_CAP + 1),
     range("occurred_at")(admin.from("practice_clinical_activity")
       .select("id, kind, title, occurred_at, duration_minutes, participation, cpd_minutes, portfolio")
-      .eq("workspace_id", workspaceId).eq("performed_by", userId)).limit(1000),
+      .eq("workspace_id", workspaceId).eq("performed_by", userId)).limit(PORTFOLIO_ROW_CAP + 1),
   ]);
 
-  const procs = (procedures ?? []) as any[];
-  const acts = (activities ?? []) as any[];
+  // ⚠ AN UNREADABLE HALF IS NOT AN EMPTY HALF. The error was discarded here, so a failed procedure read
+  // rendered as "0 procedures, 0 complications" -- a portfolio that says somebody has done nothing and
+  // had no complications, on the strength of a query that never answered.
+  const proceduresUnavailable = !!procRes.error;
+  const activitiesUnavailable = !!actRes.error;
+  const allProcs = (procRes.data ?? []) as any[];
+  const allActs = (actRes.data ?? []) as any[];
+  const proceduresTruncated = allProcs.length > PORTFOLIO_ROW_CAP;
+  const activitiesTruncated = allActs.length > PORTFOLIO_ROW_CAP;
+  const procs = allProcs.slice(0, PORTFOLIO_ROW_CAP);
+  const acts = allActs.slice(0, PORTFOLIO_ROW_CAP);
 
   const performed = procs.filter(p => p.status === "PERFORMED");
   const { data: outcomes } = performed.length
@@ -411,6 +478,14 @@ export async function portfolioSummary(admin: any, workspaceId: string, userId: 
   })).filter(r => r.total > 0);
 
   return {
+    // ⚠ CARRIED ON THE PAYLOAD, NOT ONLY LOGGED. A screen cannot distinguish an empty portfolio from an
+    // unreadable one unless the payload says which, and this is the field that lets it.
+    unavailable: proceduresUnavailable || activitiesUnavailable,
+    unavailableDetail: [
+      procRes.error ? `procedures: ${procRes.error.message}` : null,
+      actRes.error ? `activities: ${actRes.error.message}` : null,
+    ].filter(Boolean).join("; ") || null,
+    truncated: proceduresTruncated || activitiesTruncated,
     procedures: {
       total: procs.length,
       performed: performed.length,

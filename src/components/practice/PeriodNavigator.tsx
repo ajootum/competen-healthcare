@@ -2,8 +2,10 @@
 
 import { useState, type ReactNode } from "react";
 import {
-  PERIOD_VIEWS, QUICK_PERIODS, LONG_PERIODS, periodLabel, shiftPeriod, quickPeriodTarget,
-  isPeriodDate, type PeriodRange, type PeriodView, type QuickPeriodKey,
+  PERIOD_VIEWS, QUICK_PERIODS, LONG_PERIODS, ROLLING_PERIODS, ALL_DATES_LABEL,
+  periodLabel, shiftPeriod, quickPeriodTarget, rollingPeriodTarget, allDatesTarget,
+  isPeriodDate, periodSpanDays,
+  type PeriodRange, type PeriodView, type QuickPeriodKey, type PeriodAnchoring,
 } from "@/lib/practice/period-range";
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -38,11 +40,19 @@ export type PeriodChange = {
   anchorDate: string;
   from: string | null;
   to: string | null;
+  /**
+   * ⚠ OPTIONAL, AND ABSENT MEANS `calendar`. Every caller written before rolling existed -- the planner
+   * is the only one -- keeps meaning exactly what it meant, and no href builder has to be touched to
+   * stay correct.
+   */
+  anchoring?: PeriodAnchoring;
+  /** rolling only: days back from today. See period-range.ts's header on why this is an OFFSET. */
+  backDays?: number | null;
 };
 
 export default function PeriodNavigator({
   period, todayDate, onChange, href, timezone, trailing, views = PERIOD_VIEWS.map(v => v.key),
-  showLongPeriods = true,
+  showLongPeriods = true, showRollingPeriods = false, showAllDates = false, note,
 }: {
   period: PeriodRange;
   todayDate: string;
@@ -56,6 +66,16 @@ export default function PeriodNavigator({
   /** Optional: a screen with no month grid can offer fewer views. Defaults to all four. */
   views?: readonly PeriodView[];
   showLongPeriods?: boolean;
+  /**
+   * ⚠ BOTH OFF BY DEFAULT, WHICH IS DELIBERATE AND IS NOT TIMIDITY. The planner mounts this control and
+   * has no rolling window and no unbounded state; switching them on for everybody would put two rows of
+   * chips on a screen whose behaviour nobody asked to change. A screen that has a rolling default asks
+   * for them.
+   */
+  showRollingPeriods?: boolean;
+  showAllDates?: boolean;
+  /** Optional: one line under the controls, for a screen that must say what its period does NOT cover. */
+  note?: ReactNode;
 }) {
   const [goTo, setGoTo] = useState("");
   const [customFrom, setCustomFrom] = useState(period.fromDate);
@@ -64,7 +84,11 @@ export default function PeriodNavigator({
 
   const prev = shiftPeriod(period, -1);
   const next = shiftPeriod(period, 1);
-  const inPeriod = todayDate >= period.fromDate && todayDate <= period.toDate;
+  // ⚠ "All dates" CONTAINS TODAY BY DEFINITION. Comparing today against fromDate/toDate on an unbounded
+  // period would read the two dates the header is standing on -- which bounded NOTHING -- and light
+  // "Today" only for one month of the year.
+  const inPeriod = !period.bounded || (todayDate >= period.fromDate && todayDate <= period.toDate);
+  const span = periodSpanDays(period);
 
   const plain = "rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50";
   const chip = "rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-semibold text-gray-600 hover:border-[var(--cp-primary)] hover:text-[var(--cp-primary-deep)]";
@@ -78,8 +102,14 @@ export default function PeriodNavigator({
     <section className="rounded-2xl border border-gray-200 bg-white p-3">
       <div className="flex flex-wrap items-center gap-2">
         {/* ── TODAY. The PRACTICE's today, which is not the browser's for three hours every morning. ── */}
+        {/* ⚠ FROM A ROLLING OR UNBOUNDED PERIOD, "Today" MEANS THE DAY. Keeping `period.view` would hand
+            back an Agenda -- and from "All dates" that is a whole month, which is not what the word
+            says. From a calendar view it keeps the view, which is the planner's long-standing
+            behaviour and is not disturbed. */}
         <Control href={href} onChange={onChange}
-          to={{ view: period.view, anchorDate: todayDate, from: null, to: null }}
+          to={period.anchoring === "calendar"
+            ? { view: period.view, anchorDate: todayDate, from: null, to: null }
+            : { view: "day", anchorDate: todayDate, from: null, to: null, anchoring: "calendar" }}
           label="Today"
           className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold ${inPeriod
             ? "border-[var(--cp-primary-border)] bg-[var(--cp-primary)]/5 text-[var(--cp-primary-deep)]"
@@ -115,9 +145,13 @@ export default function PeriodNavigator({
                   anchorDate: period.anchorDate,
                   from: v.key === "agenda" ? period.fromDate : null,
                   to: v.key === "agenda" ? period.toDate : null,
+                  // Pressing a VIEW is a calendar act. Said outright so a rolling or unbounded period
+                  // cannot survive the press and leave the switcher lit over a window it does not describe.
+                  anchoring: "calendar",
                 }}
-                label={v.label} title={v.purpose} current={period.view === v.key}
-                className={`rounded-md px-2.5 py-1 text-[12px] font-semibold ${period.view === v.key
+                label={v.label} title={v.purpose}
+                current={period.anchoring === "calendar" && period.view === v.key}
+                className={`rounded-md px-2.5 py-1 text-[12px] font-semibold ${period.anchoring === "calendar" && period.view === v.key
                   ? "bg-[var(--cp-primary)] text-white"
                   : "text-gray-600 hover:bg-gray-100"}`}
               />
@@ -144,6 +178,32 @@ export default function PeriodNavigator({
           <Control href={href} onChange={onChange} key={q.key} to={quick(q.key)} label={q.label} className={chip} />
         ))}
 
+        {/* ── THE ROLLING WINDOWS. A DIFFERENT KIND OF PERIOD, DRAWN DIFFERENTLY ON PURPOSE. ─────────
+            "Last 30 days" and "This month" are not two spellings of one thing, and a reader who cannot
+            see which sort they pressed is one press away from believing a three-day register is empty.
+            The lit chip is the ROLLING one only when the period actually is rolling. */}
+        {showRollingPeriods && ROLLING_PERIODS.map(r => (
+          <Control href={href} onChange={onChange} key={r.key}
+            to={{ ...rollingPeriodTarget(r.backDays, todayDate) }}
+            label={r.label}
+            title={`From ${r.backDays} days back up to today, and it moves with today.`}
+            current={period.anchoring === "rolling" && period.backDays === r.backDays}
+            className={`${chip} ${period.anchoring === "rolling" && period.backDays === r.backDays
+              ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]" : ""}`}
+          />
+        ))}
+
+        {showAllDates && (
+          <Control href={href} onChange={onChange}
+            to={{ ...allDatesTarget(period.anchorDate) }}
+            label={ALL_DATES_LABEL}
+            title="No date filter at all. This is what this screen shows when nobody has chosen a period."
+            current={!period.bounded}
+            className={`${chip} ${!period.bounded
+              ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]" : ""}`}
+          />
+        )}
+
         <label className="ml-auto flex items-center gap-1.5 text-[12px] text-gray-600">
           <span className="font-semibold">Go to date</span>
           <input
@@ -163,6 +223,19 @@ export default function PeriodNavigator({
           />
         </label>
       </div>
+
+      {/* ⚠ THE TRUE SPAN, SAID OUT LOUD, FOR A ROLLING WINDOW ONLY. "Last 30 days" is today-30 up to
+          today, which is 31 days -- see period-range.ts's header on why the arithmetic is preserved
+          rather than corrected. A label that names 30 beside a window of 31 is only honest if the screen
+          is willing to print the 31. */}
+      {(period.anchoring === "rolling" || note) && (
+        <p className="mt-2 text-[11px] text-gray-500">
+          {period.anchoring === "rolling" && span !== null && (
+            <span>{span} {span === 1 ? "day" : "days"}, today included, from {period.fromDate} to {period.toDate}. It moves with today. </span>
+          )}
+          {note}
+        </p>
+      )}
 
       {customOpen && (
         <div className="mt-2 flex flex-wrap items-end gap-2 rounded-xl border border-gray-200 bg-gray-50 p-2">

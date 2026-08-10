@@ -5,7 +5,9 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { reportsDashboard } from "@/lib/practice/document-generation";
 import { TEMPLATE_KINDS } from "@/lib/practice/document-constants";
-import PeriodPicker from "./PeriodPicker";
+import { workspaceClock } from "@/lib/practice/practice-time";
+import { periodFromParams, type PeriodTarget } from "@/lib/practice/period-range";
+import ReportsNavigator from "./ReportsNavigator";
 import GenerateConsole from "./GenerateConsole";
 
 // /practice/reports -- CPR-330 REPORTS, DOCUMENTS & CORRESPONDENCE.
@@ -32,17 +34,40 @@ const STATUS_TONE: Record<string, string> = {
 };
 
 export default async function ReportsPage({ searchParams }: {
-  searchParams: Promise<{ from?: string; to?: string; days?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const shell = await resolvePracticeShell();
   if (shell.state !== "READY") redirect("/practice");
   if (!hasCapability(shell.ctx, "report.view")) redirect("/practice/home");
 
-  const { from, to, days } = await searchParams;
+  const sp = await searchParams;
+  const one = (k: string) => { const v = sp[k]; return Array.isArray(v) ? v[0] : v; };
+  const from = one("from"), to = one("to"), days = one("days");
   const admin = createAdminClient();
+  const clock = await workspaceClock(admin, shell.ctx.workspaceId);
+
+  // ── THE PERIOD, AND WHY THE OLD PARAMETERS ARE READ FIRST ─────────────────────────────────────────
+  //
+  // ⚠ `days=30` HAS ALWAYS MEANT THIRTY DAYS INCLUSIVE HERE -- reports.ts subtracts `days - 1` -- so it
+  // maps to a rolling window of TWENTY-NINE BACK, which is the same two dates. Mapping it to 30 back
+  // would add a day to every bookmarked report in the practice, quietly, and a count with a different
+  // denominator from the one somebody wrote down last week is worse than no count.
+  //
+  // ⚠ AND THE DEFAULT IS THE SAME DEFAULT: no parameters at all is still the last thirty days ending
+  // today, because reports.ts's own default is `days ?? 30`. The harness compares the resolved dates
+  // against that function rather than trusting this comment.
+  const legacyDays = days ? Math.min(Math.max(Number(days) || 30, 1), 366) : null;
+  const legacy: PeriodTarget = from && to
+    ? { view: "agenda", anchorDate: from, from, to, anchoring: "calendar", backDays: null }
+    : {
+      view: "agenda", anchorDate: clock.today, from: null, to: null,
+      anchoring: "rolling", backDays: (legacyDays ?? 30) - 1,
+    };
+  const period = periodFromParams(one, clock.today, legacy);
+
   const board = await reportsDashboard(admin, shell.ctx, {
-    fromDay: from, toDay: to,
-    days: days ? Math.min(Math.max(Number(days) || 30, 1), 366) : undefined,
+    // The read is bounded by the RESOLVED range, so the address bar and the query cannot disagree.
+    fromDay: period.fromDate, toDay: period.toDate,
   });
   const canAuthor = hasCapability(shell.ctx, "document.author");
 
@@ -67,7 +92,9 @@ export default async function ReportsPage({ searchParams }: {
         </div>
       </div>
 
-      <PeriodPicker fromDay={board.period.fromDay} toDay={board.period.toDay} />
+      <div className="mt-3">
+        <ReportsNavigator period={period} todayDate={clock.today} timezone={clock.timezone} />
+      </div>
 
       {/* ── KPI strip: six tiles, comp order, two of them deliberately empty ── */}
       <div className="mt-4 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">

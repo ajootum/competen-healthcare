@@ -1,6 +1,6 @@
 import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
-import { workspaceClock } from "@/lib/practice/practice-time";
+import { workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
 import { INCOMING_DOC_TYPES } from "@/lib/practice/communication-constants";
 import {
   DOC_AUDIT_EVENTS, DOC_CARD_KEYS, DOC_CARD_VIEW, authoredStatus, receivedStatus,
@@ -96,6 +96,16 @@ export type Register = {
   unreadable: { source: string; detail: string }[];
   /** A source that returned exactly its limit. PostgREST caps at 1000; this says so rather than lying. */
   truncated: string[];
+  /**
+   * ⚠ HOW MANY ROWS THE THREE QUERIES ACTUALLY RETURNED, BEFORE applyFilter TOUCHED THEM.
+   *
+   * It exists so a harness can prove the PERIOD REACHED THE DATABASE. Every other observable is
+   * identical whether the range bounds the query or only the in-memory predicate -- the rows come out
+   * the same either way -- and "identical either way" is precisely the shape of a period control that
+   * moves the address bar and reads everything. Under a bounded period with nothing in it this is
+   * nought; with the push-down removed it is the whole recent register.
+   */
+  sourceRowsRead: number;
   today: string;
   timezone: string;
 };
@@ -119,16 +129,51 @@ export async function documentRegister(
 ): Promise<Register> {
   const { timezone, today } = await workspaceClock(admin, workspaceId);
 
+  /* ── ⚠ THE PERIOD IS PUSHED INTO THE QUERIES, NOT ONLY APPLIED TO WHAT CAME BACK ─────────────────
+   *
+   * applyFilter already honoured `from` and `to`. That was not enough and it was the defect worth
+   * finding: these three reads take the FIVE HUNDRED NEWEST rows each and the filter then ran over
+   * those. So asking for last March returned nothing at all in any practice with 500 documents since --
+   * a period control that changed the address bar while the query still said "the recent 500", and an
+   * empty screen that read as "nothing happened in March".
+   *
+   * ⚠ THE DATABASE FILTER IS A SUPERSET AND applyFilter IS STILL THE AUTHORITY. Each row's `at` is a
+   * COALESCE across two columns (signed_at ?? created_at, received_on ?? created_at) which PostgREST
+   * cannot express, so the query asks for rows where EITHER column falls in the window and the one
+   * predicate over the merged array then narrows it exactly. One predicate, as the header insists --
+   * this only decides which rows are worth fetching.
+   */
+  const dayStart = (d: string) => zonedDayRange(d, timezone).startIso;
+  const dayEnd = (d: string) => zonedDayRange(d, timezone).endIso;
+  /** One column's window as a PostgREST `and(...)` clause. Values are quoted: they carry colons. */
+  const within = (col: string, isDate: boolean) => {
+    const parts: string[] = [];
+    if (filter.from) parts.push(`${col}.gte."${isDate ? filter.from : dayStart(filter.from)}"`);
+    if (filter.to) parts.push(isDate ? `${col}.lte."${filter.to}"` : `${col}.lt."${dayEnd(filter.to)}"`);
+    return parts.length ? `and(${parts.join(",")})` : null;
+  };
+  const eitherWithin = (a: string, aIsDate: boolean, b: string) => {
+    const clauses = [within(a, aIsDate), within(b, false)].filter(Boolean) as string[];
+    return clauses.length ? clauses.join(",") : null;
+  };
+  const bounded = !!(filter.from || filter.to);
+
+  const authoredQ = admin.from("practice_clinical_document")
+    .select("id, patient_id, doc_type, title, status, version, signed_at, created_at, created_by, supersedes_document_id")
+    .eq("workspace_id", workspaceId);
+  const incomingQ = admin.from("practice_incoming_document")
+    .select("id, patient_id, doc_type, source, title, summary, received_on, where_held, priority, status, created_at, created_by")
+    .eq("workspace_id", workspaceId);
+  const attachmentQ = admin.from("practice_attachment")
+    .select("id, patient_id, encounter_id, file_name, kind, caption, created_at, created_by")
+    .eq("workspace_id", workspaceId).is("removed_at", null);
+
   const [authored, incoming, attachments] = await Promise.all([
-    admin.from("practice_clinical_document")
-      .select("id, patient_id, doc_type, title, status, version, signed_at, created_at, created_by, supersedes_document_id")
-      .eq("workspace_id", workspaceId).order("created_at", { ascending: false }).limit(PER_SOURCE_LIMIT),
-    admin.from("practice_incoming_document")
-      .select("id, patient_id, doc_type, source, title, summary, received_on, where_held, priority, status, created_at, created_by")
-      .eq("workspace_id", workspaceId).order("received_on", { ascending: false }).limit(PER_SOURCE_LIMIT),
-    admin.from("practice_attachment")
-      .select("id, patient_id, encounter_id, file_name, kind, caption, created_at, created_by")
-      .eq("workspace_id", workspaceId).is("removed_at", null)
+    (bounded ? authoredQ.or(eitherWithin("signed_at", false, "created_at")!) : authoredQ)
+      .order("created_at", { ascending: false }).limit(PER_SOURCE_LIMIT),
+    (bounded ? incomingQ.or(eitherWithin("received_on", true, "created_at")!) : incomingQ)
+      .order("received_on", { ascending: false }).limit(PER_SOURCE_LIMIT),
+    (bounded ? attachmentQ.or(within("created_at", false)!) : attachmentQ)
       .order("created_at", { ascending: false }).limit(PER_SOURCE_LIMIT),
   ]);
 
@@ -241,7 +286,9 @@ export async function documentRegister(
 
   return {
     rows: applyFilter(rows, filter, today).sort((a, b) => b.at.localeCompare(a.at)),
-    unreadable, truncated, today, timezone,
+    unreadable, truncated,
+    sourceRowsRead: authoredRows.length + incomingRows.length + attachmentRows.length,
+    today, timezone,
   };
 }
 
@@ -317,6 +364,10 @@ export type DocumentsOverview = {
   templates: Reading<{ id: string; title: string; kind: string; used: number }[]>;
   /** True when this practice is genuinely empty, so s4.1's guidance is the honest filler. */
   empty: boolean;
+  /** True when a period narrowed everything above. The page must say so; see `empty`. */
+  periodBounded: boolean;
+  periodFrom: string | null;
+  periodTo: string | null;
 };
 
 /**
@@ -341,8 +392,15 @@ function priorMonthWindow(today: string): { from: string; to: string; label: str
 
 export async function documentsOverview(admin: any, workspaceId: string, opts: {
   userId: string; capabilities: string[];
+  /**
+   * ⚠ THE PERIOD, AND IT IS ABSENT BY DEFAULT. This dashboard has always shown the whole register, and
+   * "what needs me" is a question about now rather than about a window. A default period would have
+   * emptied the attention queues on the day the control shipped.
+   */
+  from?: string; to?: string;
 }): Promise<DocumentsOverview> {
-  const register = await documentRegister(admin, workspaceId);
+  const bounded = !!(opts.from || opts.to);
+  const register = await documentRegister(admin, workspaceId, { from: opts.from, to: opts.to });
   const { rows, today } = register;
 
   // A source that failed makes every card DERIVED FROM IT unreadable. Which cards those are is not a
@@ -356,7 +414,16 @@ export async function documentsOverview(admin: any, workspaceId: string, opts: {
   };
   const ALL = ["authored documents", "incoming register", "patient files"];
 
-  const created = applyFilter(rows, { origin: ["created_in_cp"], window: "this_month" }, today);
+  // ⚠ UNDER A CHOSEN PERIOD THE "this month" SUB-WINDOW IS DROPPED, AND THE COMPARISON WITH IT.
+  //
+  // The register is ALREADY the period the reader picked. Intersecting it with "this month" as well
+  // would make the card read nought whenever somebody looked at July -- a nought produced by two filters
+  // agreeing to exclude everything, which is exactly the shape of figure this codebase refuses. The
+  // page relabels the card when a period is on, so it never says "this month" over another month's
+  // count, and the prior-month comparison is withheld because "last month" has no meaning beside a
+  // window the reader chose.
+  const created = applyFilter(rows,
+    bounded ? { origin: ["created_in_cp"] } : { origin: ["created_in_cp"], window: "this_month" }, today);
   const awaiting = applyFilter(rows, { status: ["awaiting_review"] }, today);
   const drafts = applyFilter(rows, { status: ["draft", "approved"] }, today);
   const unlinked = applyFilter(rows, { link: "unlinked" }, today);
@@ -377,7 +444,7 @@ export async function documentsOverview(admin: any, workspaceId: string, opts: {
     {
       key: "created_this_month",
       count: reading(["authored documents"], created.length),
-      against: priorWindowExisted && !failed.has("authored documents")
+      against: !bounded && priorWindowExisted && !failed.has("authored documents")
         ? { label: prior.label, count: priorCount } : null,
       href: DOC_CARD_VIEW.created_this_month,
     },
@@ -426,7 +493,14 @@ export async function documentsOverview(admin: any, workspaceId: string, opts: {
     // ⚠ EMPTY ONLY WHEN EVERY SOURCE WAS READ. A workspace whose three reads all failed has no rows
     // either, and drawing s4.1's "here is how to get started" over an outage is the first doctrine's
     // failure in its friendliest costume.
-    empty: rows.length === 0 && register.unreadable.length === 0,
+    //
+    // ⚠ AND ONLY WHEN NO PERIOD IS ON. "This practice has no documents yet -- here is how to make one"
+    // is a claim about the practice, and a reader who has narrowed to last March has not made it. A
+    // third way for an empty screen to lie, and the one the period control introduced.
+    empty: rows.length === 0 && register.unreadable.length === 0 && !bounded,
+    periodBounded: bounded,
+    periodFrom: opts.from ?? null,
+    periodTo: opts.to ?? null,
   };
 }
 

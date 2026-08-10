@@ -70,6 +70,21 @@ export default function PatientsScreen(props: {
   sort: "registered" | "name";
   /** The registration console, rendered on the server and handed in as the drawer's contents. */
   registration: React.ReactNode;
+  /**
+   * The register's period control, rendered on the server and mounted immediately above the register.
+   *
+   * ⚠ IT IS NOT AT THE TOP OF THE PAGE, AND THAT IS THE POINT. It narrows the register and nothing else;
+   * a period control sitting above the worklist tiles would look like it narrowed them too.
+   */
+  registerNavigator: React.ReactNode;
+  /**
+   * ⚠ THE PERIOD RIDES ALONG WITH EVERY OTHER NAVIGATION ON THIS SCREEN, AND THIS PROP IS WHY.
+   *
+   * `go()` rebuilds the query string from scratch. Without these, choosing a period and then paging,
+   * sorting or opening a patient would silently drop it -- the register would widen back out under a
+   * control still lit as though it were narrow.
+   */
+  periodParams: Record<string, string>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -101,9 +116,11 @@ export default function PatientsScreen(props: {
     if (next.sort !== "registered") sp.set("sort", next.sort);
     if (next.register) sp.set("register", "1");
     if (next.register && next.intent) sp.set("intent", next.intent);
+    // ⚠ THE PERIOD SURVIVES EVERY OTHER CONTROL ON THIS SCREEN. See the prop's note.
+    for (const [k, v] of Object.entries(props.periodParams)) if (v) sp.set(k, v);
     const qs = sp.toString();
     startTransition(() => router.push(`/practice/patients${qs ? `?${qs}` : ""}`, { scroll: false }));
-  }, [router, selectedList, patientId, query, page, scope, sort, registerOpen, registerIntent]);
+  }, [router, selectedList, patientId, query, page, scope, sort, registerOpen, registerIntent, props.periodParams]);
 
   const worklist = selectedList ? props.lists.worklists.find(w => w.key === selectedList) ?? null : null;
 
@@ -176,6 +193,8 @@ export default function PatientsScreen(props: {
           {props.summary && (
             <ContextBanner banner={props.summary.banner} onClose={() => go({ patient: null })} />
           )}
+          {/* The period control sits WITH the register it narrows, not at the top of the page. */}
+          {props.registerNavigator}
           <CohortTable
             cohort={props.cohort}
             worklist={worklist}

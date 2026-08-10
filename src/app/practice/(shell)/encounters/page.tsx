@@ -5,13 +5,15 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { encountersLanding, type EncountersLanding } from "@/lib/practice/encounters-landing";
 import {
-  LANDING_TABS, HISTORY_PERIODS, HISTORY_STATES, HISTORY_PAGE_SIZE,
+  LANDING_TABS, HISTORY_STATES, HISTORY_PAGE_SIZE,
   COMPLETION_OVERDUE_MINUTES, COMPLETION_THRESHOLD_IS_CONFIGURABLE,
   PATHWAY_LABEL, isLandingTab, type LandingTabKey,
 } from "@/lib/practice/encounters-landing-constants";
+import { PERIOD_PARAMS, periodSpanDays, periodToParams } from "@/lib/practice/period-range";
 import { ENCOUNTER_STATUS_CHIP, ENCOUNTER_STATUS_LABEL } from "@/lib/practice/encounter-workspace-constants";
 import { formatDateTime, formatDate } from "@/lib/datetime";
 import StartEncounter from "./StartEncounter";
+import HistoryNavigator from "./HistoryNavigator";
 import {
   CARD, Figure, PanelState, patientLabel, ContextStrip, WorkSection, AttentionPanel,
 } from "./Board";
@@ -83,6 +85,11 @@ export default async function EncountersPage({ searchParams }: {
     historyPeriod: one("hperiod") ?? null, historyState: one("hstate") ?? null,
     historyFrom: one("hfrom") ?? null, historyTo: one("hto") ?? null,
     historyPage,
+    // ⚠ THE SHARED CONTRACT WINS WHEN IT IS PRESENT AND THE OLD KEYS STILL WORK WHEN IT IS NOT. A link
+    // to `?hperiod=7d` that a practitioner sent a colleague last week opens the same seven days today.
+    periodParams: Object.fromEntries(
+      Object.values(PERIOD_PARAMS).map(k => [k, one(k) ?? null]),
+    ),
   });
 
   const tabDef = (k: LandingTabKey) => LANDING_TABS.find(t => t.key === k)!;
@@ -91,10 +98,31 @@ export default async function EncountersPage({ searchParams }: {
   // pressing one from halfway down a long board brings the thing it changed into view rather than
   // silently re-rendering something above the fold. That defect was found and fixed twice this week.
   const tabHref = (k: LandingTabKey) => href("/practice/encounters", { ...keep, tab: k === "open" ? null : k });
+  // ⚠ THE PERIOD RIDES ALONG IN THE SHARED SPELLING, NOT THE LEGACY ONE, AND THAT IS NOT A TIDY-UP.
+  //
+  // The generic keys take precedence over hperiod/hfrom/hto. So a Next-page link that re-emitted the
+  // legacy keys would carry an hperiod the loader then IGNORED -- and, worse, would drop the generic
+  // keys entirely, so paging out of a named calendar day would silently return the reader to the
+  // default thirty days with the header still lit as though it had not moved. The period is written
+  // back exactly as it was resolved, from the resolved range rather than from the query string.
+  // ⚠ AND THE ONE-SIDED CUSTOM RANGE KEEPS THE OLD KEYS, because it is the one window a PeriodRange
+  // cannot express. Rewriting it in the shared spelling would put a second bound on somebody's register
+  // the moment they turned a page.
+  const oneSided = (d.historyFilter.from === null) !== (d.historyFilter.to === null);
+  const periodHere: Record<string, string | null> = oneSided
+    ? { hperiod: "custom", hfrom: d.historyFilter.from, hto: d.historyFilter.to }
+    : periodToParams({
+      view: d.historyFilter.range.view,
+      anchorDate: d.historyFilter.range.anchorDate,
+      from: d.historyFilter.range.bounded ? d.historyFilter.range.fromDate : null,
+      to: d.historyFilter.range.bounded ? d.historyFilter.range.toDate : null,
+      anchoring: d.historyFilter.range.anchoring,
+      backDays: d.historyFilter.range.backDays,
+    });
   const historyHref = (over: Record<string, string | number | null>) => href("/practice/encounters", {
     ...keep, tab: tab === "open" ? null : tab,
-    hperiod: d.historyFilter.period, hstate: d.historyFilter.state,
-    hfrom: d.historyFilter.from, hto: d.historyFilter.to, hpage: d.historyFilter.page || null,
+    ...periodHere,
+    hstate: d.historyFilter.state, hpage: d.historyFilter.page || null,
     ...over,
   });
 
@@ -314,18 +342,6 @@ export default async function EncountersPage({ searchParams }: {
           </div>
 
           <div className="ml-auto flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1" role="group" aria-label="History period">
-              {HISTORY_PERIODS.map(p => (
-                <Link key={p.key} href={`${historyHref({ hperiod: p.key, hpage: null })}#history`}
-                  aria-current={d.historyFilter.period === p.key ? "true" : undefined}
-                  className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold ${
-                    d.historyFilter.period === p.key
-                      ? "border-[var(--cp-primary)]/40 bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
-                      : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                  {p.label}
-                </Link>
-              ))}
-            </div>
             <div className="flex items-center gap-1" role="group" aria-label="History state">
               {HISTORY_STATES.map(s => (
                 <Link key={s.key} href={`${historyHref({ hstate: s.key, hpage: null })}#history`}
@@ -341,29 +357,38 @@ export default async function EncountersPage({ searchParams }: {
           </div>
         </div>
 
-        {/* s4.7's Custom range. The two boxes are always here rather than behind the Custom button:
-            a control that reveals the control that does the thing is two presses for one act. */}
-        <form method="get" action="/practice/encounters" className="mt-2 flex flex-wrap items-end gap-2">
-          <input type="hidden" name="hperiod" value="custom" />
-          {tab !== "open" && <input type="hidden" name="tab" value={tab} />}
-          {sessionFilter && <input type="hidden" name="session" value={sessionFilter} />}
-          {q && <input type="hidden" name="q" value={q} />}
-          <input type="hidden" name="hstate" value={d.historyFilter.state} />
-          <label className="text-[11px] text-gray-500">
-            From
-            <input type="date" name="hfrom" defaultValue={d.historyFilter.from ?? ""}
-              className="ml-1 rounded-lg border border-gray-200 px-2 py-1 text-[11.5px]" />
-          </label>
-          <label className="text-[11px] text-gray-500">
-            To
-            <input type="date" name="hto" defaultValue={d.historyFilter.to ?? ""}
-              className="ml-1 rounded-lg border border-gray-200 px-2 py-1 text-[11.5px]" />
-          </label>
-          <button type="submit"
-            className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11.5px] font-semibold text-gray-700 hover:bg-gray-50">
-            Apply custom range
-          </button>
-        </form>
+        {/* ── s4.7's PERIOD, now the control the practice owner asked for on every reviewing screen. ──
+            The three chips this section used to draw by hand (Today / 7 days / 30 days) are ROLLING
+            windows and they still are: PeriodNavigator draws them from ROLLING_PERIODS, resolved by the
+            same module the planner uses. What is new is that the calendar periods -- a named day, a
+            week, a month, a year -- are offered beside them, which is what "select any day of the week
+            or month or year and see what happened" asks for. The two kinds are drawn differently and
+            the header says which one is on. */}
+        <div className="mt-3">
+          <HistoryNavigator
+            period={d.historyFilter.range}
+            todayDate={d.today}
+            timezone={d.timezone}
+            keep={{
+              tab: tab === "open" ? null : tab, session: sessionFilter, q: q || null,
+              hstate: d.historyFilter.state === "all" ? null : d.historyFilter.state,
+            }}
+          />
+        </div>
+
+        {/* ⚠ A ONE-SIDED RANGE IS SAID IN WORDS, because the control above cannot draw one. A PeriodRange
+            has two ends; `?hperiod=custom&hfrom=...` with no `hto` bounds the register at one end only
+            and has always been allowed. Rather than invent the missing end -- which would put a ceiling
+            on somebody's register that they did not ask for -- the bound that IS applied is printed. */}
+        {(d.historyFilter.from === null) !== (d.historyFilter.to === null) && (
+          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] text-amber-900">
+            This register is bounded at one end only:{" "}
+            {d.historyFilter.from
+              ? <>everything from <strong>{d.historyFilter.from}</strong> onwards.</>
+              : <>everything up to <strong>{d.historyFilter.to}</strong>.</>}{" "}
+            The period control above shows no bound because it cannot draw a half-open one.
+          </p>
+        )}
 
         {d.history.items.length === 0 ? (
           <>
@@ -455,8 +480,17 @@ export default async function EncountersPage({ searchParams }: {
 
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <p className="text-[10.5px] text-gray-500">
-            Filtered on when the consultation <strong>started</strong>, in {d.timezone}. Page{" "}
-            {d.historyFilter.page + 1}, {HISTORY_PAGE_SIZE} records a page.
+            Filtered on when the consultation <strong>started</strong>, in {d.timezone}.{" "}
+            {/* ⚠ THE TRUE SPAN, NOT THE CHIP'S NAME. "30 days" on this screen has always meant today
+                minus 30 up to today, which is 31 days. That arithmetic is preserved rather than
+                corrected -- shortening a clinical register by a day to tidy up a name is not a
+                refactor -- so the number of days actually read is printed. */}
+            {d.historyFilter.range.bounded && periodSpanDays(d.historyFilter.range) !== null
+              ? <>Reading {periodSpanDays(d.historyFilter.range)} days, {d.historyFilter.from} to {d.historyFilter.to}. </>
+              : d.historyFilter.from === null && d.historyFilter.to === null
+                ? <>No date bound: every signed and amended record this register holds. </>
+                : null}
+            Page {d.historyFilter.page + 1}, {HISTORY_PAGE_SIZE} records a page.
           </p>
           <div className="ml-auto flex gap-2">
             {d.historyFilter.page > 0 && (

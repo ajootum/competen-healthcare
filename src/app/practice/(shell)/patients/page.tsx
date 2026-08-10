@@ -7,7 +7,10 @@ import {
   patientsWorkspace, worklists, myPatients, patientSummary, familyRelationships, universalSearch,
 } from "@/lib/practice/patient-workspace";
 import { WORKLIST_KEYS, DEFAULT_PAGE_SIZE } from "@/lib/practice/patient-workspace-constants";
+import { workspaceClock } from "@/lib/practice/practice-time";
+import { PERIOD_PARAMS, periodFromParams, allDatesTarget } from "@/lib/practice/period-range";
 import PatientsScreen from "./PatientsScreen";
+import RegisterNavigator from "./RegisterNavigator";
 import RegistryConsole from "./RegistryConsole";
 import ContextPanel from "./ContextPanel";
 import type {
@@ -75,6 +78,16 @@ export default async function PatientsPage({ searchParams }: {
   const admin = createAdminClient();
   const ctx = shell.ctx;
   const canCreate = hasCapability(ctx, "patient.create");
+  const clock = await workspaceClock(admin, ctx.workspaceId);
+
+  // ⚠ THE REGISTER'S PERIOD, ON REGISTRATION DATE, AND DEFAULTING TO "All dates" -- which is what this
+  // screen has always shown. See RegisterNavigator: a patient is not an event, so this is the only date
+  // the record owns, and it narrows the REGISTER and never the worklist tiles.
+  const period = periodFromParams(one2 => {
+    const v = sp[one2]; return Array.isArray(v) ? v[0] : v ?? null;
+  }, clock.today, allDatesTarget(clock.today));
+  const registeredFrom = period.bounded ? period.fromDate : undefined;
+  const registeredTo = period.bounded ? period.toDate : undefined;
 
   const capabilities: ScreenCapabilities = {
     mayList: true,
@@ -93,7 +106,9 @@ export default async function PatientsPage({ searchParams }: {
     (async () => {
       // The unfiltered landing surface is one call, which parallelises the worklists and the cohort.
       if (!selectedList) {
-        const w = await patientsWorkspace(admin, ctx, { page, pageSize: DEFAULT_PAGE_SIZE, scope, sort });
+        const w = await patientsWorkspace(admin, ctx, {
+          page, pageSize: DEFAULT_PAGE_SIZE, scope, sort, registeredFrom, registeredTo,
+        });
         return { lists: w.worklists, cohort: w.cohort as CohortView | null };
       }
       // A FILTERED VIEW HAS TO KNOW WHO IS ON THE LIST BEFORE IT CAN ASK FOR THEM, so these are ordered
@@ -104,6 +119,7 @@ export default async function PatientsPage({ searchParams }: {
       if (!wl || wl.unavailable) return { lists, cohort: null as CohortView | null };
       const cohort = await myPatients(admin, ctx, {
         page, pageSize: DEFAULT_PAGE_SIZE, scope, sort, patientIds: wl.patientIds,
+        registeredFrom, registeredTo,
         // A FILTERED LIST MUST NOT BE SHORTER THAN THE TILE THAT OPENED IT. myPatients defaults to
         // active records; somebody archived who is nonetheless sitting in the waiting room would drop
         // out silently and make the count above disagree with the table below. Archived people are
@@ -152,6 +168,18 @@ export default async function PatientsPage({ searchParams }: {
           page={page}
           scope={scope}
           sort={sort}
+          periodParams={Object.fromEntries(
+            Object.values(PERIOD_PARAMS).map(k => [k, one(sp[k])]).filter(([, v]) => !!v),
+          ) as Record<string, string>}
+          registerNavigator={
+            <RegisterNavigator
+              period={period} todayDate={clock.today} timezone={clock.timezone}
+              keep={{
+                list: selectedList, patient: selectedPatientId, q: query || null,
+                scope: scope === "practice" ? null : scope, sort: sort === "registered" ? null : sort,
+              }}
+            />
+          }
           registration={regWorkspace ? (
             <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
               <RegistryConsole

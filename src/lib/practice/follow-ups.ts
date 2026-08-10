@@ -546,7 +546,21 @@ export async function settleFollowUpsForEncounter(admin: any, args: {
   return { ok: true, data: { completed, skipped } };
 }
 
-type ListFilter = { patientId?: string; status?: string[]; limit?: number };
+type ListFilter = {
+  patientId?: string; status?: string[]; limit?: number;
+  /**
+   * ⚠ BOUNDS ON due_on, THE ONE DATE A FOLLOW-UP ACTUALLY OWNS, AND BOTH ARE OPTIONAL FOR A REASON.
+   *
+   * The practice owner asked for a period control on every screen that reviews data over time, and this
+   * queue's date is the day the obligation falls due. `created_at` would be "when somebody typed it" and
+   * `closed_at` exists only for the settled ones -- neither answers "what was owed that week".
+   *
+   * When neither bound is given, NOTHING is applied and this queue reads exactly as it always has. That
+   * is not timidity: this is a work queue, and a default period on it would hide overdue people from the
+   * board that exists to say who has been forgotten.
+   */
+  dueFrom?: string; dueTo?: string;
+};
 
 /** A follow-up as the board and the panels see it: derived state, plus the two names a screen needs. */
 export type ListedFollowUp = ReturnType<typeof deriveFollowUp> & {
@@ -574,6 +588,10 @@ export async function listFollowUps(admin: any, workspaceId: string, filter: Lis
     .eq("workspace_id", workspaceId);
   if (filter.patientId) q = q.eq("patient_id", filter.patientId);
   if (filter.status?.length) q = q.in("status", filter.status);
+  // due_on is a DATE column, so the bounds are plain days and there is no timezone arithmetic to get
+  // wrong here -- unlike every timestamp column in this product, which needs zonedDayRange.
+  if (filter.dueFrom) q = q.gte("due_on", filter.dueFrom);
+  if (filter.dueTo) q = q.lte("due_on", filter.dueTo);
 
   // ⚠ THE ERROR USED TO BE DISCARDED HERE, AND THAT MADE THIS THE WORST PLACE IN THE PRODUCT TO HAVE
   // THE BUG. `const { data } = await q` returns undefined on failure, `data ?? []` turns it into an empty
@@ -722,6 +740,12 @@ const WORKSPACE_READ_LIMIT = 500;
 export async function followUpWorkspace(admin: any, workspaceId: string, options: {
   view?: string | null; patientId?: string | null; search?: string | null;
   priority?: string | null; source?: string | null;
+  /**
+   * ⚠ THE PERIOD, ON due_on, AND ABSENT BY DEFAULT. See ListFilter. Every card and every tab is
+   * computed from the SAME narrowed read, so a figure is still the length of the list it opens -- which
+   * is this file's oldest rule and the reason the filters are applied before the predicates.
+   */
+  dueFrom?: string | null; dueTo?: string | null;
 } = {}): Promise<FollowUpWorkspace> {
   const { timezone, today } = await workspaceClock(admin, workspaceId);
   const view = FOLLOW_UP_VIEWS.find(v => v.key === options.view) ?? FOLLOW_UP_VIEWS[0];
@@ -730,6 +754,7 @@ export async function followUpWorkspace(admin: any, workspaceId: string, options
   // and a row that moved between them would be counted twice or not at all.
   const all = await listFollowUps(admin, workspaceId, {
     patientId: options.patientId ?? undefined, limit: WORKSPACE_READ_LIMIT,
+    dueFrom: options.dueFrom ?? undefined, dueTo: options.dueTo ?? undefined,
   });
 
   const ctx = { today };

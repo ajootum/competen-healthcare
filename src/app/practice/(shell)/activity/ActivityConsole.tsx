@@ -21,8 +21,17 @@ const card = "rounded-xl border border-gray-200 bg-white p-4";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export default function ActivityConsole({ activities, portfolio, locations, onlyMine, kind, me }: {
+export default function ActivityConsole({ activities, portfolio, locations, onlyMine, kind, me, periodQuery = "" }: {
   activities: any[]; portfolio: any; locations: any[]; onlyMine: boolean; kind: string; me: string;
+  /**
+   * ⚠ THE PERIOD, AS QUERY TEXT, ON EVERY LINK THIS CONSOLE BUILDS.
+   *
+   * These three links rebuild the URL from scratch. Without this, choosing a period and then pressing
+   * "Show everyone's" or a kind filter would silently widen the log back out to every date, under a
+   * period control still lit as though it were narrow. Content filters and the range are separate
+   * controls, and separate means neither resets the other.
+   */
+  periodQuery?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -129,7 +138,7 @@ export default function ActivityConsole({ activities, portfolio, locations, only
         <div className="flex items-baseline justify-between gap-2 flex-wrap">
           <h2 className="text-[13px] font-bold text-gray-900">Activity log</h2>
           <span className="flex items-center gap-2">
-            <Link href={`/practice/activity?mine=${onlyMine ? "0" : "1"}`}
+            <Link href={`/practice/activity?mine=${onlyMine ? "0" : "1"}${periodQuery}`}
               className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
               {onlyMine ? "Show everyone's" : "Show only mine"}
             </Link>
@@ -204,14 +213,14 @@ export default function ActivityConsole({ activities, portfolio, locations, only
         {/* The kind filter. Links rather than JavaScript, so the state is in the URL and a filtered log
             is something somebody can bookmark or send. */}
         <div className="mt-2 flex flex-wrap gap-1">
-          <Link href={`/practice/activity?mine=${onlyMine ? "1" : "0"}`}
+          <Link href={`/practice/activity?mine=${onlyMine ? "1" : "0"}${periodQuery}`}
             aria-current={kind === "" ? "page" : undefined}
             className={`rounded px-2 py-0.5 text-[11px] font-semibold ${
               kind === "" ? "bg-[var(--cp-primary-soft)] text-[var(--cp-primary-deep)]" : "text-gray-500 hover:text-gray-800"}`}>
             All
           </Link>
           {ACTIVITY_KINDS.map(([k, l]) => (
-            <Link key={k} href={`/practice/activity?mine=${onlyMine ? "1" : "0"}&kind=${k}`}
+            <Link key={k} href={`/practice/activity?mine=${onlyMine ? "1" : "0"}&kind=${k}${periodQuery}`}
               aria-current={kind === k ? "page" : undefined}
               className={`rounded px-2 py-0.5 text-[11px] font-semibold ${
                 kind === k ? "bg-[var(--cp-primary-soft)] text-[var(--cp-primary-deep)]" : "text-gray-500 hover:text-gray-800"}`}>

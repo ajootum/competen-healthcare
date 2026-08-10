@@ -4,7 +4,9 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { practiceReport } from "@/lib/practice/reports";
-import PeriodPicker from "../PeriodPicker";
+import { workspaceClock } from "@/lib/practice/practice-time";
+import { periodFromParams, type PeriodTarget } from "@/lib/practice/period-range";
+import ReportsNavigator from "../ReportsNavigator";
 
 // /practice/reports/analytics -- AN EARLY SLICE OF CPR-270 ANALYTICS & REPORTING.
 //
@@ -26,17 +28,31 @@ import PeriodPicker from "../PeriodPicker";
 export const dynamic = "force-dynamic";
 
 export default async function ReportsPage({ searchParams }: {
-  searchParams: Promise<{ from?: string; to?: string; days?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const shell = await resolvePracticeShell();
   if (shell.state !== "READY") redirect("/practice");
   if (!hasCapability(shell.ctx, "report.view")) redirect("/practice/home");
 
-  const { from, to, days } = await searchParams;
+  const sp = await searchParams;
+  const one = (k: string) => { const v = sp[k]; return Array.isArray(v) ? v[0] : v; };
+  const from = one("from"), to = one("to"), days = one("days");
   const admin = createAdminClient();
+  const clock = await workspaceClock(admin, shell.ctx.workspaceId);
+
+  // The same legacy mapping as /practice/reports, and for the same reason: `days=30` means THIRTY DAYS
+  // INCLUSIVE in reports.ts, so it is a rolling window of twenty-nine BACK. See ReportsNavigator.
+  const legacyDays = days ? Math.min(Math.max(Number(days) || 30, 1), 366) : null;
+  const legacy: PeriodTarget = from && to
+    ? { view: "agenda", anchorDate: from, from, to, anchoring: "calendar", backDays: null }
+    : {
+      view: "agenda", anchorDate: clock.today, from: null, to: null,
+      anchoring: "rolling", backDays: (legacyDays ?? 30) - 1,
+    };
+  const period = periodFromParams(one, clock.today, legacy);
+
   const report = await practiceReport(admin, shell.ctx, {
-    fromDay: from, toDay: to,
-    days: days ? Math.min(Math.max(Number(days) || 30, 1), 366) : undefined,
+    fromDay: period.fromDate, toDay: period.toDate,
   });
 
   const { activity, diagnoses, backlog } = report;
@@ -57,7 +73,13 @@ export default async function ReportsPage({ searchParams }: {
         </a>
       </div>
 
-      <PeriodPicker fromDay={report.period.fromDay} toDay={report.period.toDay} />
+      {/* ⚠ basePath IS THIS PAGE AND THAT IS A FIX. The picker this replaces hardcoded /practice/reports,
+          so changing the period here threw the reader onto a different screen with the period applied to
+          that one instead of to this one. */}
+      <div className="mt-3">
+        <ReportsNavigator period={period} todayDate={clock.today} timezone={clock.timezone}
+          basePath="/practice/reports/analytics" />
+      </div>
 
       {/* Activity */}
       <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">

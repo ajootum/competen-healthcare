@@ -66,7 +66,19 @@ export default function OverviewBoard({ overview, capabilities }: {
       {/* ── s4's METRIC CARDS ─────────────────────────────────────────────────────────────────────── */}
       <section aria-label="Document metrics" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {cards.map(c => {
-          const meta = DOC_CARD_LABEL[c.key];
+          const base = DOC_CARD_LABEL[c.key];
+          // ⚠ THE "Created this month" CARD MAY NOT SAY "this month" UNDER ANOTHER MONTH'S PERIOD.
+          //
+          // With a period on, the register IS the reader's window and the engine drops the this-month
+          // sub-filter -- so the figure is right and only the words would be wrong. A card headed
+          // "Created this month" printing July's count is the kind of small lie somebody quotes.
+          const meta = overview.periodBounded && c.key === "created_this_month"
+            ? {
+              ...base, label: "Created in this period",
+              caption: `Authored here between ${overview.periodFrom} and ${overview.periodTo}`,
+              blurb: "Documents this practice authored, dated within the period chosen above.",
+            }
+            : base;
           // ⚠ THE NARROWED READING, not a boolean beside it. `const live = c.count.state === "ok"` does
           // not narrow the union for TypeScript, and the shape that compiles by casting is the shape in
           // which a future edit reads `.value` off an unreadable card and prints `undefined` as a figure.
