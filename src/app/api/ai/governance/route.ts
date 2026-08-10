@@ -1,27 +1,29 @@
 // Pro plan: allow up to 60s for AI generation (Hobby capped at 10s)
 export const maxDuration = 60;
 
-import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { frameworkImpact } from "@/lib/engines/impact";
+import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 
 import { currentTraceId } from "@/lib/trace";
 // POST — AI Governance Assistant: plain-language impact summary of a proposed
 // framework change, for governance committees (Book IV Ch.17). Body: { frameworkId }.
-export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+//
+// ⚠ NARROWED FROM A ROLE LIST TO THE CAPABILITY ITS CONSOLE REQUIRES (CP-HQ-NAV-001 follow-up). It admitted
+// every hospital_admin, and it runs a paid model over a framework named by id with no tenant scoping -- so
+// an admin of one tenant could brief themselves on another's framework AND spend the platform's AI quota
+// doing it. Its only caller is /super-admin/content/[frameworkId], which requires hq.learning.content.view.
+const CAPABILITIES = ["hq.learning.content.view"];
 
-  const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("role, full_name").eq("id", user.id).single();
-  if (!["super_admin", "hospital_admin"].includes(profile?.role ?? "")) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-  const quota = await checkAiQuota(admin, user.id);
+export async function POST(req: Request) {
+  const ctx = await hqApiGate(CAPABILITIES);
+  if (isHqRefusal(ctx)) return ctx;
+  const { admin, userId, fullName } = ctx;
+
+  const quota = await checkAiQuota(admin, userId);
   if (!quota.ok) {
     return NextResponse.json({ error: "AI rate limit reached (" + quota.limit + " requests/hour). Try again later." }, { status: 429 });
   }
@@ -54,7 +56,7 @@ export async function POST(req: Request) {
   }
 
   await admin.from("audit_log").insert({ trace_id: await currentTraceId(),
-    actor_id: user.id, actor_name: profile?.full_name ?? null,
+    actor_id: userId, actor_name: fullName,
     action: "ai_governance_brief", entity_type: "framework", entity_id: frameworkId,
     entity_name: report.entity.name, new_value: { total_affected: total, model: result.model },
   });

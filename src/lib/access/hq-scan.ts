@@ -31,7 +31,12 @@ import { HQ_CAPABILITY_CODES } from "@/lib/hq/spaces";
 // would then have published the entire HQ estate to a manager as open to the world, one commit after it
 // was locked down. scan.ts records the same failure for 98 practice routes, and this file's own header
 // records it for requireHqContext. Any future guard helper goes here FIRST.
-const HQ_GUARDS = "requireHqContext|resolveHqContext|requireHqCapability";
+// ⚠ hqApiGate WAS ADDED HERE ONLY AFTER IT HAD ALREADY SHIPPED WITHOUT IT, WHICH IS THE FOURTH INSTANCE.
+// Four API routes were narrowed to capability gates and every one of them immediately classified as
+// `kind: "none"` -- the note above predicts this failure, an assertion in access-scanner-harness pins it,
+// and it happened anyway in the very next change. The lesson is not "remember"; it is that the guard list
+// and the guard must land in the SAME commit.
+const HQ_GUARDS = "requireHqContext|resolveHqContext|requireHqCapability|hqApiGate";
 const HQ_ANY = new RegExp(`(?:${HQ_GUARDS})\\s*\\(`);
 const HQ_CALL = new RegExp(
   `(?:${HQ_GUARDS})\\s*\\(\\s*(?:"([a-z0-9._]+)"|(null)|([A-Z][A-Za-z0-9_]*)\\s*(?:\\.\\s*([A-Za-z0-9_]+))?)?\\s*(?:,[^)]*)?\\)`,
@@ -45,8 +50,27 @@ export type HqGate = Omit<Gate, "kind"> & { kind: HqGateKind; capabilities?: str
  * ⚠ AN UNRESOLVED CAPABILITY IS `unknown`, NEVER AN EMPTY LIST — scan.ts's rule, applied here. A gate
  * carrying no codes reads as "gated, nothing to see here" while proving nothing about what passes.
  */
+/**
+ * Capability arrays declared as a local constant in the same file — `const CAPABILITIES = ["a", "b"]`.
+ *
+ * ⚠ WITHOUT THIS, hqApiGate(CAPABILITIES) RESOLVES TO NOTHING. The call passes an array variable rather
+ * than a string literal, so HQ_CALL sees an unresolved identifier and reports `unknown`. That is honest and
+ * safe -- unknown is never read as open -- but it puts a question mark over four correctly-gated routes,
+ * and a matrix full of question marks is one nobody reads. Only entries that are real catalogue codes are
+ * accepted, so an array of anything else resolves to nothing rather than inventing a capability.
+ */
+function localCapabilityArrays(source: string): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const m of source.matchAll(/const\s+([A-Z][A-Z0-9_]*)\s*(?::[^=]+)?=\s*\[([^\]]*)\]/g)) {
+    const codes = [...m[2].matchAll(/"([a-z0-9._]+)"/g)].map(x => x[1]).filter(c => HQ_CAPABILITY_CODES.includes(c));
+    if (codes.length) out[m[1]] = codes;
+  }
+  return out;
+}
+
 export function classifyHqGate(source: string, groups: RoleGroups = {}, caps: CapabilityConsts = {}): HqGate {
   if (!HQ_ANY.test(source)) return classifyGate(source, groups, caps);
+  const localArrays = localCapabilityArrays(source);
 
   const codes: string[] = [];
   let parsed = 0;
@@ -65,9 +89,37 @@ export function classifyHqGate(source: string, groups: RoleGroups = {}, caps: Ca
     // requireHqContext(null) and requireHqContext() both defer to the route intent map, which DENIES an
     // unmapped route. That is a real gate whose codes this scanner cannot see from the file alone.
     if (m[2] || (!m[1] && !m[3])) continue;
+    // ⚠ AN ANY-OF ARRAY CONTRIBUTES EVERY CODE, NOT ITS FIRST. hqApiGate(CAPABILITIES) admits a caller
+    // holding ANY entry, so reporting one would understate the audience -- and this scanner's contract is
+    // to report the UNION, the widest way in. Only when the call reads a PROPERTY off the constant
+    // (FOO.bar) does the single-value path below apply.
+    const localArray = !m[4] ? localArrays[m[3]!] : undefined;
+    if (localArray) { codes.push(...localArray); continue; }
     const resolved = caps[m[3]!]?.[m[4] ?? ""];
     if (resolved) codes.push(resolved);
     else unresolved = `${m[3]}${m[4] ? "." + m[4] : ""}`;
+  }
+
+  // ⚠ CALLING THE GATE IS NOT THE SAME AS OBEYING IT, and this scanner could not tell the difference.
+  // hqApiGate RETURNS a refusal rather than throwing -- unlike requireHqCapability, which redirects -- so a
+  // route that calls it and ignores the result is completely ungated while still containing the call. A
+  // deliberate break proved it: replacing `if (isHqRefusal(ctx)) return ctx` with `if (false)` left the
+  // route classified as hq-position. scan.ts already refuses to count an ALLOWED list that is never tested
+  // (line ~239); this is the same rule for the same reason, one plane over.
+  // ⚠ PER EXPORTED VERB, NOT PER FILE, and the file-level version of this check was itself caught by a
+  // deliberate break. /api/knowledge-objects exports POST and PATCH; disabling PATCH's `if (isHqRefusal…)`
+  // left the file still containing the phrase -- from POST -- so the route read as fully gated with one of
+  // its two write verbs wide open. A route is only as gated as its weakest entry point.
+  //
+  // A verb that does not mention hqApiGate itself is not flagged: it may delegate to a local gate() helper,
+  // which is how /api/hq/appointments is written.
+  if (/hqApiGate\s*\(/.test(source)) {
+    const ungatedVerbs = source.split(/export\s+async\s+function\s+/).slice(1)
+      .filter(v => /hqApiGate\s*\(/.test(v) && !/isHqRefusal\s*\(/.test(v))
+      .map(v => v.slice(0, v.indexOf("(")).trim());
+    if (ungatedVerbs.length)
+      return { kind: "unknown", roles: [], appointment: true, capabilities: codes,
+        evidence: `hqApiGate called but its refusal is never returned in: ${ungatedVerbs.join(", ")}` };
   }
 
   const calls = (source.match(new RegExp(`(?:${HQ_GUARDS})\\s*\\(`, "g")) ?? []).length;
