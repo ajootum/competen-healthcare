@@ -674,12 +674,46 @@ async function main() {
     // The page ships BEFORE any entry, never after: 9f requires every nav entry to point at a page that
     // exists, and a sidebar item added first is a 404 in a practitioner's sidebar. Reached from the
     // Medications panel on every patient page and from the encounter prescribing console.
+    // ── ROUTES THAT ARE NOT PRACTITIONER WORKSPACE PAGES ─────────────────────────────────────────
+    // ⚠ These surfaced when the scan was widened beyond the (shell) group, and every one of them is
+    // correctly absent from a practitioner sidebar: they are reached BEFORE there is a practitioner, or
+    // by somebody who is not one. Listing them is not a formality -- if any ever gained a sidebar entry
+    // it would be promising a signed-in user a screen about signing in.
+    "sign-in": "Pre-authentication. Reached before there is a session to draw a sidebar for.",
+    "sign-up": "Pre-authentication, and gated shut besides -- see the signup decision.",
+    login: "Pre-authentication.",
+    join: "Invitation acceptance. Reached from an emailed link by somebody who is not yet a member.",
+    start: "Pre-authentication entry point.",
+    onboarding: "Runs BEFORE the workspace exists; the shell redirects here rather than linking to it.",
+    "select-workspace": "Defensive only. D2 makes one practitioner one workspace, so this should never be reached.",
+    "access-status": "Shown when access is refused. A sidebar entry would be a link to being refused.",
+    book: "PATIENT-facing booking. Not a practitioner surface at all.",
+    "patient-booking": "PATIENT-facing.",
+    "patient-login": "PATIENT-facing.",
+    // ⚠ NOT "by design" in the sense the others are: it has no SIDEBAR entry because it lives outside
+    // the shell, but it must still be reachable, and now is -- linked from the cache line on
+    // /practice/today and from the Synchronisation Centre. Both are asserted below.
+    offline: "Outside the (shell) group so it renders with no connection. Linked from OfflineCacheWriter and the Synchronisation Centre.",
     medications: "CPR-MED-001 has no navigation section. Nine primary items, no submenus. Linked from the patient workspace and the encounter console.",
   };
-  const shellDirs = readdirSync(join(process.cwd(), "src", "app", "practice", "(shell)"), { withFileTypes: true })
-    .filter(d => d.isDirectory() && !d.name.startsWith("[") && !d.name.startsWith("_"))
-    .map(d => d.name)
-    .filter(name => existsSync(join(process.cwd(), "src", "app", "practice", "(shell)", name, "page.tsx")));
+  // ⚠ BOTH TREES, AND THE SECOND ONE IS WHY THIS WAS EXTENDED ON 2026-08-11. This scanned only
+  // src/app/practice/(shell). /practice/offline lives OUTSIDE that group on purpose -- it must render
+  // with no connection, so it cannot sit under a layout that runs six database reads -- and the
+  // consequence nobody drew is that it fell out of this check entirely. It was not excused by the
+  // allowlist; it was invisible to it. It had no nav entry AND nothing in the product linked to it, and
+  // the owner went looking for it and found no way in.
+  //
+  // A page deliberately placed outside the shell still has to be REACHABLE. Where it lives in the route
+  // tree is an argument about layouts, not a licence to be unreachable.
+  const dirsIn = (...segments: string[]) =>
+    readdirSync(join(process.cwd(), ...segments), { withFileTypes: true })
+      .filter(d => d.isDirectory() && !d.name.startsWith("[") && !d.name.startsWith("_"))
+      .map(d => d.name)
+      .filter(name => existsSync(join(process.cwd(), ...segments, name, "page.tsx")));
+  const shellDirs = [
+    ...dirsIn("src", "app", "practice", "(shell)"),
+    ...dirsIn("src", "app", "practice"),
+  ];
   const unlisted = shellDirs.filter(name =>
     !PRACTICE_NAV.some(i => i.href === `/practice/${name}` || i.href.startsWith(`/practice/${name}?`))
     && !(name in NO_NAV_ENTRY_BY_DESIGN));

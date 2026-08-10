@@ -165,8 +165,20 @@ export default function SyncCentre() {
               <span className="text-[11px] text-gray-500">
                 There is nothing on this device waiting to be sent.
               </span>
+              {/* ⚠ The offline view lives outside the shell so it renders with no connection, which is
+                  also why nothing linked to it. This screen is about this device; it is the right door. */}
+              {/* ⚠ A PLAIN <a>, NOT next/link, AND ESLINT IS OVERRULED ON PURPOSE. A Link does a
+                  client-side navigation: it fetches an RSC payload, which is exactly what is NOT
+                  available when the network is down -- the moment this destination matters most. A full
+                  document navigation is what the service worker can answer from cache. OfflineReader
+                  already carries prefetch={false} on its link back, for the same family of reason. */}
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+              <a href="/practice/offline"
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+                See what is held on this device
+              </a>
               <button type="button" onClick={download}
-                className="ml-auto rounded-lg border border-gray-300 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
                 Export what has not been sent
               </button>
             </div>

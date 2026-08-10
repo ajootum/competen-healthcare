@@ -92,10 +92,8 @@ export default function OfflineCacheWriter(
         // The server may refuse between render and fetch -- a switch thrown in the meantime. Its answer
         // wins over the prop, including its instruction to purge.
         if (body.gate?.purge) {
-          // ⚠ WORKSPACE, NOT DAY. The switch means "hold nothing for this practice", and the guidance
-        // library lives a week rather than a day -- purging only the day would leave protocols behind
-        // for six more days after somebody switched caching off.
-        const purged = await purgeOfflineWorkspace(workspaceId);
+          // ⚠ WORKSPACE, NOT DAY -- see the first purge above.
+          const purged = await purgeOfflineWorkspace(workspaceId);
           if (!cancelled) setOutcome(purged.ok
             ? { kind: "purged", reason: body.gate.reason ?? gate.reason }
             : { kind: "failed", reason: purged.reason });
@@ -159,5 +157,17 @@ export default function OfflineCacheWriter(
       : null;
 
   if (!line) return null;
-  return <p className="text-[10.5px] text-gray-400">{line}</p>;
+  // ⚠ THE ONLY PLACE THIS WAS EVER MENTIONED, AND IT WAS NOT A LINK. /practice/offline sits outside the
+  // (shell) group so it can render with no connection -- correct -- and the consequence nobody drew is
+  // that it had no route in at all: not in the nav, and not linked from anywhere in the product. The
+  // owner went looking for it on 2026-08-11 and there was nothing to click.
+  return (
+    <p className="text-[10.5px] text-gray-400">
+      {line}{" "}
+      {/* ⚠ A plain <a>: a client-side navigation needs an RSC fetch, which is unavailable exactly when
+          this destination matters. A document navigation is what the service worker can serve. */}
+      {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+      <a href="/practice/offline" className="underline hover:text-gray-600">See what is held on this device</a>
+    </p>
+  );
 }
