@@ -80,6 +80,18 @@ export type SyncVerdict = {
    * ⚠ THE TWO VOCABULARIES ARE NOT THE SAME AND CONFLATING THEM LOSES WORK. Asserted by the harness.
    */
   retryable: boolean;
+  /**
+   * ⚠ PRESENT ONLY ON A CONFLICT, AND NEVER PERSISTED. COMP-CONF-001 s6 second rule: "preserve both
+   * values until resolved". The device holds `mine`; this is the other side, sent back so the device can
+   * build the comparison. It is not written to the ledger -- migration 284 keeps clinical payloads out
+   * of it on purpose, and this is a clinical payload.
+   */
+  conflict?: {
+    currentVersion: number | null;
+    theirs: Record<string, unknown>;
+    labels: Record<string, string>;
+    insignificant: string[];
+  };
 };
 
 /**
@@ -95,8 +107,24 @@ export type SyncApplier = (
   | { ok: true; version: number | null }
   /** The server understood and will not do it. Retrying cannot help. */
   | { ok: false; conflict?: false; code: string; message: string }
-  /** Somebody else changed the record first. CP-SYNC-001 s6 -- never silently overwrite. */
-  | { ok: false; conflict: true; code: string; message: string; currentVersion: number | null }
+  /**
+   * Somebody else changed the record first. CP-SYNC-001 s6 -- never silently overwrite.
+   *
+   * ⚠ IT RETURNS THE CURRENT VALUES OF THE CONTESTED FIELDS, AND THE ENGINE DOES NOT STORE THEM.
+   * COMP-CONF-001 s6 requires "display clear comparison to the user", and the comparison needs both
+   * sides. The device already holds `mine` -- it is the only copy. So `theirs` travels back in the
+   * upload response and the comparison is built ON THE DEVICE, which keeps migration 284's decision
+   * intact: the ledger records verdicts, never clinical payloads.
+   */
+  | {
+      ok: false; conflict: true; code: string; message: string; currentVersion: number | null;
+      /** Current server values, keyed like the submitted delta. */
+      theirs?: Record<string, unknown>;
+      /** Human labels per field. ⚠ Without these the screen shows column names. */
+      labels?: Record<string, string>;
+      /** Fields this applier declares NOT clinically significant. Everything unlisted is. */
+      insignificant?: string[];
+    }
 >;
 
 /**
@@ -232,7 +260,18 @@ export async function applyTransaction(
   await recordVerdict(admin, ctx, tx, opts.actorId, {
     status, appliedVersion: null, errorCode: outcome.code, errorMessage: outcome.message,
   });
-  return { id: tx.id, status, appliedVersion: null, errorCode: outcome.code, errorMessage: outcome.message, duplicate: false, retryable: false };
+  return {
+    id: tx.id, status, appliedVersion: null, errorCode: outcome.code, errorMessage: outcome.message,
+    duplicate: false, retryable: false,
+    conflict: outcome.conflict
+      ? {
+          currentVersion: outcome.currentVersion,
+          theirs: outcome.theirs ?? {},
+          labels: outcome.labels ?? {},
+          insignificant: outcome.insignificant ?? [],
+        }
+      : undefined,
+  };
 }
 
 /**

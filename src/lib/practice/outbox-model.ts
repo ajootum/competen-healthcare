@@ -63,13 +63,22 @@ export const OUTBOX_SCHEMA_VERSION = 1;
 //                  never discarded. COMP-OFF-001 Principle 4: "No accepted user action shall be
 //                  silently discarded."
 export type OutboxState =
-  | "pending" | "sending" | "delivered" | "failed" | "refused" | "undeliverable";
+  | "pending" | "sending" | "delivered" | "failed" | "refused" | "undeliverable"
+  /**
+   * ⚠ SEPARATE FROM `refused`, AND THE DIFFERENCE IS THAT THIS ONE HAS A WAY OUT.
+   *
+   * A refusal means the practice will not take this, ever, as written. A conflict means somebody else
+   * changed the record while the practitioner was away, so BOTH values are valid work and a person has
+   * to choose. Collapsing them would present a solvable problem as a dead end -- and the practitioner
+   * would stop looking at the queue.
+   */
+  | "conflicted";
 
 /** The states in which the record still holds work nobody has dealt with. Drives the pending counter. */
 export const OUTBOX_UNRESOLVED: readonly OutboxState[] = ["pending", "sending", "failed"] as const;
 
 /** ⚠ The states that need a PERSON, not a retry. These are what the queue must shout about. */
-export const OUTBOX_NEEDS_A_HUMAN: readonly OutboxState[] = ["refused", "undeliverable"] as const;
+export const OUTBOX_NEEDS_A_HUMAN: readonly OutboxState[] = ["refused", "undeliverable", "conflicted"] as const;
 
 /** ⚠ `delivered` is the ONLY state in which the local copy may be removed. Asserted by the harness. */
 export const OUTBOX_SAFE_TO_REMOVE: readonly OutboxState[] = ["delivered"] as const;
@@ -117,6 +126,20 @@ export type OutboxRecord = {
   lastAttemptAt: string | null;
   /** When it stopped being a retry problem and became somebody's problem. Null until it escalates. */
   escalatedAt: string | null;
+  /**
+   * ⚠ PRESENT ONLY WHEN `state === "conflicted"`. COMP-CONF-001 s6: "preserve both values until
+   * resolved". `payload` above is what the practitioner recorded; this is what the practice held when
+   * the upload was refused. The device is the only place both sides exist -- the ledger deliberately
+   * stores no clinical payload -- so losing this loses the comparison.
+   */
+  conflict?: {
+    currentVersion: number | null;
+    theirs: Record<string, unknown>;
+    labels: Record<string, string>;
+    insignificant: string[];
+    /** Recorded when a person settles it. ⚠ Kept on the record, never replaced by the outcome. */
+    decision?: { resolution: string; reason: string; decidedAt: string };
+  };
 };
 
 // ── ORDERING ────────────────────────────────────────────────────────────────────────────────────────
@@ -150,7 +173,7 @@ export function outboxSendOrder(records: OutboxRecord[]): OutboxRecord[] {
 export function outboxSendable(records: OutboxRecord[]): OutboxRecord[] {
   const blocked = new Set<string>();
   for (const r of outboxSendOrder(records))
-    if (r.state === "refused" || r.state === "undeliverable") blocked.add(`${r.entityType}:${r.entityId}`);
+    if (OUTBOX_NEEDS_A_HUMAN.includes(r.state)) blocked.add(`${r.entityType}:${r.entityId}`);
   return outboxSendOrder(records)
     .filter(r => r.state === "pending" || r.state === "failed")
     .filter(r => !blocked.has(`${r.entityType}:${r.entityId}`));
@@ -160,7 +183,7 @@ export function outboxSendable(records: OutboxRecord[]): OutboxRecord[] {
 export function outboxBlocked(records: OutboxRecord[]): OutboxRecord[] {
   const blocked = new Set<string>();
   for (const r of outboxSendOrder(records))
-    if (r.state === "refused" || r.state === "undeliverable") blocked.add(`${r.entityType}:${r.entityId}`);
+    if (OUTBOX_NEEDS_A_HUMAN.includes(r.state)) blocked.add(`${r.entityType}:${r.entityId}`);
   return outboxSendOrder(records)
     .filter(r => (r.state === "pending" || r.state === "failed") && blocked.has(`${r.entityType}:${r.entityId}`));
 }
@@ -266,6 +289,22 @@ export function outboxMarkRefused(record: OutboxRecord, reason: string, now: Dat
   };
 }
 
+/**
+ * Somebody else changed the record first.
+ *
+ * ⚠ IT DOES NOT INCREMENT `attempts`. A conflict is not a failed attempt -- the upload arrived, was
+ * understood and was answered. Counting it would push a solvable problem toward the attempt ceiling and
+ * escalate it as though the connection were bad.
+ */
+export function outboxMarkConflict(
+  record: OutboxRecord, reason: string, detail: NonNullable<OutboxRecord["conflict"]>, now: Date,
+): OutboxRecord {
+  return {
+    ...record, state: "conflicted", lastError: reason.slice(0, 500),
+    lastAttemptAt: now.toISOString(), escalatedAt: now.toISOString(), conflict: detail,
+  };
+}
+
 /** It can never be applied as written. Kept, exportable, and never deleted by anything automatic. */
 export function outboxMarkUndeliverable(record: OutboxRecord, reason: string, now: Date): OutboxRecord {
   return {
@@ -360,6 +399,12 @@ export function outboxRecordLabel(record: OutboxRecord): { label: string; detail
     case "refused": return {
       label: "The practice refused this",
       detail: record.lastError ? `${record.lastError} Retrying will not change this on its own.` : "Retrying will not change this on its own.",
+    };
+    case "conflicted": return {
+      label: "Someone else changed this",
+      detail: record.lastError
+        ? `${record.lastError} Both values are kept until you decide.`
+        : "The practice changed while you were offline. Both values are kept until you decide.",
     };
     case "undeliverable": return {
       label: "Cannot be filed as written",

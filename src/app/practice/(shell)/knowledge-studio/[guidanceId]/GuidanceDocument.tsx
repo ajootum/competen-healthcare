@@ -39,9 +39,11 @@ const FIELD = "w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[13px
 
 export default function GuidanceDocument({ detail, canManage, colleagues }: Props) {
   const doc = detail.document;
-  const [bodies, setBodies] = useState<Record<string, string>>(
-    Object.fromEntries(detail.sections.filter(s => s.source === "authored").map(s => [s.key, s.body ?? ""])),
-  );
+  // ⚠ THE VALUES AS LOADED, kept so "you have unsaved changes" is a comparison rather than a flag
+  // somebody has to remember to set on every input. A flag drifts; a comparison cannot.
+  const loadedBodies = Object.fromEntries(
+    detail.sections.filter(s => s.source === "authored").map(s => [s.key, s.body ?? ""]));
+  const [bodies, setBodies] = useState<Record<string, string>>(loadedBodies);
   const [effectiveFrom, setEffectiveFrom] = useState<string>(doc?.effective_from ?? "");
   const [reviewOn, setReviewOn] = useState<string>(doc?.review_on ?? "");
   const [assignee, setAssignee] = useState("");
@@ -49,6 +51,16 @@ export default function GuidanceDocument({ detail, canManage, colleagues }: Prop
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  // ⚠ WHY THIS EXISTS. The publication checklist below is computed on the SERVER from the SAVED
+  // document. A practitioner who fills six sections and two dates, then looks up at a list saying
+  // "Empty: purpose, scope, procedure", reasonably concludes the product cannot read what they wrote.
+  // That happened during the walkthrough of 2026-08-10 and cost real time. The checklist was correct
+  // and said nothing about which version of the document it was describing.
+  const unsaved =
+    Object.keys(loadedBodies).some(k => (bodies[k] ?? "") !== (loadedBodies[k] ?? ""))
+    || effectiveFrom !== (doc?.effective_from ?? "")
+    || reviewOn !== (doc?.review_on ?? "");
 
   if (detail.state !== "ok" || !doc)
     return (
@@ -232,6 +244,15 @@ export default function GuidanceDocument({ detail, canManage, colleagues }: Prop
               : `${detail.readiness.blockers} of these has to be settled first.`}
             {" "}Two rows can never be answered by anything in this build and say so rather than passing.
           </p>
+          {/* ⚠ SAID BEFORE THE LIST, NOT AFTER IT. Somebody reading a blocker they have already fixed
+              needs to know why it is still there BEFORE they start doubting what they typed. */}
+          {unsaved && (
+            <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] leading-relaxed text-amber-900">
+              This list describes the document as it is <strong>saved</strong>. You have changes on this
+              screen that have not been saved yet — use <strong>Save the draft</strong> below, and this
+              list will catch up.
+            </p>
+          )}
           <ul className="mt-2 space-y-1.5">
             {detail.readiness.checks.map(c => {
               const mark = GUIDANCE_CHECK_SWATCH[c.state] ?? GUIDANCE_CHECK_SWATCH.not_checked;
