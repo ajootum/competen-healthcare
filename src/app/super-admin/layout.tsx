@@ -153,8 +153,10 @@ export default async function SuperAdminLayout({ children }: { children: React.R
       {/* Records who opened this tab. Writes once; see the module header for why first-write-wins. */}
       <RememberSessionIdentity userId={user.id} displayName={profile?.full_name ?? null} />
       <div className="hidden md:block md:ml-56">
+        {/* workspaceTitle matches the sidebar's spaceLabel: an appointee is not a super admin, so the
+            header must not call their console one. See WorkspaceSidebar. */}
         <GlobalHeader
-          workspaceTitle="Platform Super Admin"
+          workspaceTitle={isOwner ? "Platform Super Admin" : "Competen HQ"}
           workspaceHref="/super-admin"
           user={header.user}
           workspaces={header.workspaces}
@@ -168,7 +170,11 @@ export default async function SuperAdminLayout({ children }: { children: React.R
       <div className="flex">
         <aside data-sidebar className="hidden md:flex w-56 h-screen bg-[#0f1923] flex-col py-6 px-4 fixed top-0 left-0 z-20">
           <SidebarToggle />
-          <WorkspaceSidebar profileName={profile?.full_name ?? null} roles={userRoles} activeRole={activeRole} workspaces={workspaces} />
+          {/* CP-HQ-NAV-001. ⚠ isOwner IS PASSED SEPARATELY AND THAT IS LOAD-BEARING: hqCapabilities is []
+              for an owner, because the resolution above short-circuits before reading any HQ table. The
+              filter must not infer ownership from the list, or every owner gets an empty sidebar. */}
+          <WorkspaceSidebar profileName={profile?.full_name ?? null} roles={userRoles} activeRole={activeRole} workspaces={workspaces}
+            isOwner={isOwner} hqCapabilities={hqCapabilities} />
         </aside>
 
         {/* Pages stay readable at max-w-6xl; a workspace page opts out of the

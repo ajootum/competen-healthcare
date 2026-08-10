@@ -1,4 +1,12 @@
 import { orgRolesOf, workspacesFor, WORKSPACE_CATALOGUE, type AppRole, type WorkspaceLink } from "@/lib/roles";
+import { resolveHqPositions } from "@/lib/hq/context";
+
+// ⚠ NOT "Super Admin". CP-HQ-NAV-001. The people this link exists for are HQ APPOINTEES -- they hold a
+// position, not the super_admin role, and most of them never will. A switcher entry labelled "Super Admin"
+// would tell somebody they hold the most powerful role in the product on the strength of an appointment
+// that opens three pages. The href is unchanged because the /hq rename comes later, once every page carries
+// its own guard (see src/lib/hq/spaces.ts).
+const HQ_WORKSPACE: WorkspaceLink = { label: "Competen HQ", icon: "🏛️", href: "/super-admin" };
 
 // Server helper: the dedicated org-role workspaces a user can switch into, given
 // the AppRole portals they already hold. Reads org_role/org_roles off the profile
@@ -25,6 +33,43 @@ export async function workspaceLinksForUser(
   if (userRoles.includes("nurse") && !links.some(l => l.href === "/healthcare-worker")) {
     const hww = WORKSPACE_CATALOGUE.find(w => w.href === "/healthcare-worker");
     if (hww) links.unshift({ label: hww.label, icon: hww.icon, href: hww.href });
+  }
+  // ── CP-HQ-NAV-001: the way IN to Competen HQ for somebody who is not a super admin ──────────────────
+  //
+  // /super-admin is not in WORKSPACE_CATALOGUE and never was: super admins reach it through ROLE_CONFIG,
+  // which maps the ROLE to the portal. An HQ appointment grants no AppRole, so an appointee held a live
+  // position that opened the door and had no link to it anywhere in the product -- they landed in their
+  // estate portal (/admin) with no way across. That is the fifth "engine built, screen missing" of this
+  // programme, and this is the screen.
+  //
+  // Adding it here rather than in each layout means the ONE resolver feeds both switchers: the sidebar's
+  // RoleSwitcher and GlobalHeader's workspace menu (loadHeaderContext calls this function).
+  if (!userRoles.includes("super_admin") && !links.some(l => l.href === HQ_WORKSPACE.href)) {
+    try {
+      // ⚠ A CHEAP PROBE FIRST, BECAUSE THIS RUNS ON EVERY AUTHENTICATED PAGE LOAD FOR EVERY USER.
+      // resolveHqPositions costs up to four queries and begins by reading ogs_offices; almost nobody holds
+      // an appointment of any kind, so one indexed lookup by person_id ends it for them. Only somebody who
+      // holds SOME office appointment pays for the full HQ resolution.
+      const { data: anyAppointment } = await admin
+        .from("ogs_office_appointments")
+        .select("id")
+        .eq("person_id", userId)
+        .limit(1);
+      if (anyAppointment?.length) {
+        // ⚠ CAPABILITIES, NOT POSITIONS -- the same distinction the /super-admin door turns on. A
+        // DEACTIVATED position still reports a non-empty `positions` list while granting nothing
+        // (src/lib/hq/context.ts:128), so offering the link on `positions` would keep advertising a door
+        // that has been shut. It also matches the layout gate exactly, so the switcher cannot offer a
+        // destination that gate then refuses.
+        const { capabilities } = await resolveHqPositions(admin, userId);
+        if (capabilities.length) links.unshift(HQ_WORKSPACE);
+      }
+    } catch {
+      // ⚠ FAIL-SOFT TOWARD NO LINK, and unusually that is the safe direction here rather than the harmful
+      // one. This function only decides what is OFFERED; the /super-admin layout decides what is admitted.
+      // A missing link costs an appointee a URL they can still type and the owner can still send. A link
+      // added on a failed read would advertise a console to someone the gate will refuse.
+    }
   }
   return links;
 }

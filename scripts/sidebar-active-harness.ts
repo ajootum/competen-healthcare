@@ -21,6 +21,12 @@ import { readFileSync } from "node:fs";
 // therefore stayed green under every break applied to the real component. These are the functions the
 // sidebar actually runs.
 import { parentHrefs, pathMatches } from "../src/lib/nav/active";
+// ⚠ IMPORTED SINCE CP-HQ-NAV-001, WHERE THE TABLES MOVED OUT OF THE COMPONENT. This harness used to regex
+// them out of WorkspaceSidebar.tsx, and when they moved to nav-tables.ts the regex matched nothing -- which
+// C1/C2/C3 caught immediately and loudly. That is exactly what those count controls are for, and it is the
+// second time a floor has stopped a silent no-op reading as green. Importing the real tables removes the
+// failure mode altogether: there is no longer a regex that can quietly stop matching.
+import { ALL_NAV_TABLES, OVERVIEW_HREFS as OVERVIEW } from "../src/app/super-admin/_components/nav-tables";
 
 const FILE = "src/app/super-admin/_components/WorkspaceSidebar.tsx";
 // Floors, not exact counts: adding a nav entry is routine and should not turn this red. Reading NOTHING is
@@ -30,16 +36,9 @@ const NAV_FLOOR = 6;
 
 const src = readFileSync(FILE, "utf8");
 
-/**
- * The explicit floor set, read OUT OF THE SOURCE rather than copied here. A duplicated literal is how a
- * harness starts testing its own copy of the thing instead of the thing.
- */
-const overviewLiteral = src.match(/const OVERVIEW_HREFS = new Set\(\[([^\]]*)\]\)/);
-const OVERVIEW = new Set([...(overviewLiteral?.[1] ?? "").matchAll(/"([^"]+)"/g)].map(m => m[1]));
-
-const navs: Record<string, string[]> = {};
-for (const m of src.matchAll(/const (\w*NAV)\b[\s\S]*?\n\];/g))
-  navs[m[1]] = [...m[0].matchAll(/href: "([^"]+)"/g)].map(x => x[1]);
+const navs: Record<string, string[]> = Object.fromEntries(
+  ALL_NAV_TABLES.map(t => [t.name, t.sections.flatMap(s => s.items.map(i => i.href))]),
+);
 
 let pass = 0, fail = 0;
 const failures: string[] = [];
@@ -49,10 +48,10 @@ const ok = (id: string, cond: boolean, msg: string) => {
 };
 
 console.log("\nSIDEBAR ACTIVE-STATE");
-ok("C1", Object.keys(navs).length >= NAV_FLOOR,
-  `count control: ${Object.keys(navs).length} nav tables parsed (floor ${NAV_FLOOR}) -- a regex that matches nothing passes everything below`);
+ok("C1", Object.keys(navs).length >= NAV_FLOOR && Object.values(navs).every(h => h.length > 0),
+  `count control: ${Object.keys(navs).length} nav tables loaded, none empty (floor ${NAV_FLOOR}) -- a table set that shrank to nothing passes everything below`);
 ok("C2", OVERVIEW.size > 0,
-  `count control: the OVERVIEW_HREFS floor set was read from source (${OVERVIEW.size} entries), not assumed`);
+  `count control: the OVERVIEW_HREFS floor set came from the shipped module (${OVERVIEW.size} entries), not a copy`);
 
 const isActive = (href: string, path: string, exact: boolean) => pathMatches(href, path, exact);
 
@@ -84,8 +83,13 @@ ok("C5", unlit.length === 0,
 // The component must actually USE the derivation. Comments stripped first: the commonest cause of a vacuous
 // assertion in this codebase is scanning source for a phrase that also appears in a comment about it.
 const code = src.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter(l => !l.trim().startsWith("//") && !l.trim().startsWith("*")).join("\n");
-ok("C6", /exactHrefs\s*=\s*parentHrefs\(nav\.flatMap\(/.test(code) && /exact=\{OVERVIEW_HREFS\.has\(href\) \|\| exactHrefs\.has\(/.test(code),
-  "the component derives its parent set across the FLATTENED nav and unions it with the floor list -- the fix is wired in, not just defined");
+// ⚠ `table`, NOT `nav`, SINCE CP-HQ-NAV-001 -- AND THE DISTINCTION IS LOAD-BEARING, NOT COSMETIC. `nav` is
+// now the CAPABILITY-FILTERED sidebar and `table` is the whole one. Deriving parents from the filtered set
+// would make highlighting depend on who is looking: a viewer whose children are hidden would see the parent
+// revert to prefix matching and light up while they stand on a hidden child, which observe mode still
+// renders. The parent set must be a property of the nav, not of the viewer.
+ok("C6", /exactHrefs\s*=\s*parentHrefs\(table\.flatMap\(/.test(code) && /exact=\{OVERVIEW_HREFS\.has\(href\) \|\| exactHrefs\.has\(/.test(code),
+  "the component derives its parent set across the FLATTENED, UNFILTERED table and unions it with the floor list");
 
 // ⚠ ASSERTED DIRECTLY, BECAUSE THE LIVE NAV DOES NOT EXERCISE IT. Removing the `+ "/"` boundary from
 // parentHrefs changes NOTHING about today's 119 paths -- no current sidebar has an /x and an /x-suffix
