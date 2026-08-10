@@ -81,6 +81,9 @@ export default function GuidanceDocument({ detail, canManage, colleagues }: Prop
       </div>
     );
 
+  // ⚠ The approval RECORD, not the document status. They move separately and that is the whole trap:
+  // a decided approval leaves the document at in_review until somebody records it.
+  const decided = detail.approval?.status === "APPROVED";
   const swatch = GUIDANCE_STATE_SWATCH[doc.status] ?? GUIDANCE_STATE_SWATCH.draft;
   const editable = !!doc.editable && canManage;
 
@@ -338,20 +341,32 @@ export default function GuidanceDocument({ detail, canManage, colleagues }: Prop
 
                 {m.to === "approved" && (
                   <div className="mt-2">
+                    {/* ⚠ THIS IS THE ONLY WAY FORWARD ONCE THE APPROVAL IS DECIDED, AND IT USED TO BE
+                        THE QUIETEST CONTROL ON THE SCREEN. It was labelled "Check the approval queue" --
+                        which sounds like a diagnostic, not the step that advances the document -- while
+                        the transition's own label, "Record the approval", was ignored. Every other move
+                        renders {m.label}. The owner approved their own request on 2026-08-11, came back
+                        looking for Publish, and there is no Publish from `in_review`: this button is what
+                        makes it appear. It now says what it does and looks like the next step, which it
+                        is once the decision exists. */}
                     <button disabled={busy} onClick={() => move("sync")}
-                      className={`${BUTTON.quiet} rounded-lg px-3 py-1.5 text-[12px] font-semibold`}>
-                      Check the approval queue
+                      className={`${decided ? BUTTON.primary : BUTTON.quiet} rounded-lg px-3 py-1.5 text-[12px] font-semibold`}>
+                      {m.label}
                     </button>
                     {/* ⚠ A LINK, AND THE NAME THE NAV ACTUALLY USES. This said "People > Approvals",
                         which is not a screen in this product -- the entry is Practice Setup > Team and
                         Permissions. The owner sent a document for approval on 2026-08-11, went looking
                         for the place to decide it, and stopped. A sentence naming a screen the sidebar
                         does not is the same defect as calling this section Knowledge Studio. */}
+                    {/* ⚠ STATE-AWARE. Telling somebody where to make a decision they have already made
+                        is how a screen reads as broken. */}
                     <p className="mt-1 text-[11.5px] leading-relaxed text-gray-500">
-                      The decision is made on the approval request itself, in{" "}
-                      <Link href="/practice/people" className="font-semibold text-[var(--cp-primary)] underline">
-                        Practice Setup &rsaquo; Team and Permissions
-                      </Link>. This only brings the document into line with it.
+                      {decided
+                        ? "The approval has been decided. This brings the document into line with it — and Publish appears once it has."
+                        : <>The decision is made on the approval request itself, in{" "}
+                            <Link href="/practice/people" className="font-semibold text-[var(--cp-primary)] underline">
+                              Practice Setup &rsaquo; Team and Permissions
+                            </Link>. This only brings the document into line with it.</>}
                     </p>
                   </div>
                 )}
