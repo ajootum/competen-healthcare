@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { PriorityStripData } from "@/lib/practice/intelligence";
-import { PRIORITY_SWATCH, PRIORITY_UNSUPPLIED } from "@/lib/practice/intelligence-constants";
+import { PRIORITY_SWATCH, PRIORITY_UNSUPPLIED, INSIGHT_ACTIONS } from "@/lib/practice/intelligence-constants";
+import InsightAction from "./InsightAction";
 
 // CPR-PI-001 s7.2's PRIORITY STRIP -- five tiles, always five.
 //
@@ -34,10 +35,19 @@ export default function PriorityStrip({ strip }: { strip: PriorityStripData }) {
           // heavier treatment is spent only where there is something to act on. A red nought teaches
           // people to stop seeing red, and takes the tile that matters down with it.
           const quiet = ok && t.count === 0;
+          // !! THE BUTTON CANNOT LIVE INSIDE THE LINK. A <button> nested in an <a> is invalid markup, and
+          // a click would follow the link as well as raise the task. The tile is now a container: the Link
+          // is still the whole readable body, and the action sits under it.
+          //
+          // !! AND IT IS ABSENT WHERE THERE IS NOTHING TO DO. patients_attention leads to another
+          // intelligence tab, so an "Act on this" there would only mean "look at more" -- the exact thing
+          // this feature exists to stop pretending is an action.
+          const actionable = !!INSIGHT_ACTIONS[t.key];
           return (
-            <Link key={t.key} href={t.href}
+            <div key={t.key}
               className={`group relative overflow-hidden rounded-xl border p-3 transition hover:shadow-sm ${s.box} ${quiet ? "opacity-70" : ""}`}>
               <span aria-hidden className={`absolute inset-y-0 left-0 w-[3px] ${s.accent}`} />
+              <Link href={t.href} className="block">
               <div className="flex items-start gap-2">
                 <span aria-hidden className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg text-[13px] ${s.badge}`}>
                   {PRIORITY_SWATCH[t.key]?.icon ?? "?"}
@@ -55,7 +65,11 @@ export default function PriorityStrip({ strip }: { strip: PriorityStripData }) {
                   ? (t.reason ?? t.definition)
                   : t.reason ?? "not computed"}
               </p>
-            </Link>
+              </Link>
+              {/* !! NOT DRAWN ON A TILE THAT COULD NOT BE COMPUTED. Raising work off a figure nobody could
+                  read would be acting on a question rather than on an answer. */}
+              {actionable && <InsightAction insightKey={t.key} disabled={!ok} />}
+            </div>
           );
         })}
       </div>

@@ -25,6 +25,8 @@ import { markSeen, toCompleteQueue } from "../src/lib/practice/capture-later";
 import { openOrResumeSession, applyCloseAction, completeSession } from "../src/lib/practice/day-close";
 import { ADOPTION_LADDER, ACTIVATION_DEFINITION, CLOSE_ACTIONS } from "../src/lib/practice/adoption-constants";
 import { onAppointmentCreated, onSetupReadinessEvaluated, UNHOOKED_MILESTONES } from "../src/lib/practice/activation-hooks";
+import { ACTIONABLE_INSIGHT_KEYS, INSIGHTS_WITHOUT_AN_ACTION } from "../src/lib/practice/intelligence-constants";
+import { PRIORITY_KEYS } from "../src/lib/practice/intelligence";
 
 loadEnvConfig(process.cwd());
 
@@ -336,8 +338,15 @@ const skip = (id: string, msg: string) => { skips.push(id); console.log(`  SKIP 
     // hq-guard E4 and access-scanner S1. J7 owns the count now, and this owns the property that actually
     // has to hold: an unhooked milestone must SAY WHY, or the list decays into bare names nobody can act
     // on and the gap stops being a decision.
-    ok("H5", UNHOOKED_MILESTONES.length > 0 && UNHOOKED_MILESTONES.every(m => m.why.trim().length > 20),
-      `every remaining unhooked milestone states why (${UNHOOKED_MILESTONES.length} left: ${UNHOOKED_MILESTONES.map(m => m.key).join(", ")})`);
+    // ⚠ THIS REQUIRED AT LEAST ONE UNHOOKED MILESTONE, AND WIRING THE LAST ONE MADE IT RED -- the FIFTH
+    // time today a genuine success failed a counted assertion. It is now vacuously true, which is only
+    // acceptable because L8 asserts the list is EMPTY rather than merely well-formed. What this still
+    // guards is the SHAPE of the next entry somebody adds: a bare key with no reason turns a recorded
+    // decision back into an oversight.
+    ok("H5", UNHOOKED_MILESTONES.every(m => m.why.trim().length > 20),
+      UNHOOKED_MILESTONES.length === 0
+        ? "vacuous today -- nothing is unhooked (L8 owns that); it guards the shape of any future entry"
+        : `every remaining unhooked milestone states why (${UNHOOKED_MILESTONES.map(m => m.key).join(", ")})`);
 
     // -- I. Capture Later has a button --------------------------------------------------------------
     console.log("\n-- I. Capture Later has a button --");
@@ -435,6 +444,54 @@ const skip = (id: string, msg: string) => { skips.push(id); console.log(`  SKIP 
     const setupPage = strip(readFileSync("src/app/practice/(shell)/setup/availability-booking/page.tsx", "utf8"));
     ok("K5", bookingRoute.includes("onSetupReadinessEvaluated(") && setupPage.includes("onSetupReadinessEvaluated("),
       "wired at BOTH places readiness is evaluated -- the API the screen reads and the screen itself");
+
+    // ── L. "Act on this" -- the last milestone gets something real to hang on ───────────────────────
+    console.log("\n  -- L. act on this --");
+    const intelRoute = strip(readFileSync("src/app/api/v1/practice/intelligence/route.ts", "utf8"));
+    const stripSrc = strip(readFileSync("src/app/practice/(shell)/intelligence/PriorityStrip.tsx", "utf8"));
+    const actionUi = strip(readFileSync("src/app/practice/(shell)/intelligence/InsightAction.tsx", "utf8"));
+
+    // ⚠ ONE OWNER OF THE INSIGHT VOCABULARY. Every priority tile is either actionable or explicitly
+    // declared as having no action -- a tile in neither list is one nobody decided about.
+    const declared = [...ACTIONABLE_INSIGHT_KEYS, ...INSIGHTS_WITHOUT_AN_ACTION.map(i => i.key)];
+    ok("L0-control", PRIORITY_KEYS.length >= 5, `count control: ${PRIORITY_KEYS.length} priority tiles`);
+    // ⚠ AND THE TWO LISTS MUST BE DISJOINT, which a coverage check alone does not catch -- a deliberate
+    // break that declared patients_attention as BOTH actionable and not-actionable left this green, because
+    // every key was still accounted for and none was invented. A tile in both lists is a contradiction: the
+    // button would be drawn on the one tile whose absence is the whole point of the exercise.
+    const bothLists = ACTIONABLE_INSIGHT_KEYS.filter(k => INSIGHTS_WITHOUT_AN_ACTION.some(i => i.key === k));
+    ok("L1", PRIORITY_KEYS.every(k => declared.includes(k)) && declared.every(k => PRIORITY_KEYS.includes(k))
+          && bothLists.length === 0,
+      `the action catalogue and the priority tiles agree exactly and do not overlap (unaccounted: ${PRIORITY_KEYS.filter(k => !declared.includes(k)).join(", ") || "none"}; invented: ${declared.filter(k => !PRIORITY_KEYS.includes(k)).join(", ") || "none"}; in both: ${bothLists.join(", ") || "none"})`);
+
+    // ⚠ THE ABSENCE IS A DECISION, NOT A GAP. patients_attention leads to another intelligence tab.
+    ok("L2", INSIGHTS_WITHOUT_AN_ACTION.length > 0 && INSIGHTS_WITHOUT_AN_ACTION.every(i => i.why.length > 20),
+      `every tile without an action says why (${INSIGHTS_WITHOUT_AN_ACTION.map(i => i.key).join(", ")})`);
+
+    // ⚠ NOTHING THE CLIENT SENDS REACHES THE TASK. Accepting a title would write arbitrary text into a
+    // practice work item through an endpoint whose gate is about intelligence.
+    ok("L3", intelRoute.includes("const spec = INSIGHT_ACTIONS[key]")
+          && intelRoute.includes("title: spec.title") && !intelRoute.includes("String(body.title"),
+      "the task title and detail are SERVER-derived from the tile key -- the client sends a key and nothing else");
+
+    ok("L4", intelRoute.includes('requirePracticeContext("task.manage")'),
+      "raising work needs task.manage, not the report.view that reading the insights needs");
+
+    // ⚠ THE MILESTONE FOLLOWS THE WRITE. A task that could not be raised is not an action.
+    ok("L5", intelRoute.indexOf("if (!result.ok)") < intelRoute.indexOf("onInsightActioned("),
+      "the milestone is emitted only AFTER createTask succeeded, never on the request");
+
+    ok("L6", stripSrc.includes("const actionable = !!INSIGHT_ACTIONS[t.key]")
+          && stripSrc.includes("{actionable && <InsightAction") && stripSrc.includes("disabled={!ok}"),
+      "the button is absent where there is nothing to do, and on any tile that could not be computed");
+
+    // ⚠ AND IT IS NOT A LINK. The whole reason this feature exists is that emitting from navigation would
+    // have marked every practice that opened the page as having reached the top of the ladder.
+    ok("L7", actionUi.includes('method: "POST"') && !/<Link|<a href/.test(actionUi),
+      "acting POSTs and raises work -- it does not navigate, which is what made the milestone dishonest before");
+
+    ok("L8", UNHOOKED_MILESTONES.length === 0,
+      `every milestone in section 2 now has an emitter (${UNHOOKED_MILESTONES.length} unhooked)`);
 
   } finally {
     for (const key of cleanupKeys)

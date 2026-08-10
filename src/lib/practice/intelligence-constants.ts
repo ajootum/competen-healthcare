@@ -426,3 +426,59 @@ export const STATE_COPY = {
     body: "Everything else on this page is arithmetic over your own records and is unaffected. §12: unavailable AI must not block dashboards.",
   },
 } as const;
+
+// ── CPR-GROWTH-001 s2: "first insight actioned" ──────────────────────────────────────────────────────
+//
+// ⚠ THIS EXISTS BECAUSE THE MILESTONE HAD NOTHING TO HANG ON. Every interactive element on the
+// intelligence surface was a link to somewhere else, a range picker or the Ask field -- so the only things
+// that COULD have been wired were a page view, a date change or a click on "All patients". Emitting on any
+// of those would have said a practitioner acted on intelligence when they had only looked at it, and
+// intelligence.first_action is stage 7 of the adoption ladder: every practice that ever opened the page
+// would have shown as having reached the top rung.
+//
+// So the action had to become real first. "Act on this" raises a TASK -- tracked work, assigned to
+// somebody, that outlives the page. That is a state change attributable to the insight, which is what the
+// milestone claims.
+//
+// ⚠ FOUR OF THE FIVE PRIORITY TILES, NOT FIVE. `patients_attention` links back into another intelligence
+// tab, so its only "next step" is to look at more detail -- and a button offering to act, which merely
+// navigates, is the thing this whole exercise exists to avoid. It is absent on purpose, and the harness
+// asserts that the omission is deliberate rather than a gap.
+//
+// ⚠ AND NO COUNT APPEARS IN A TITLE. "Clear 7 overdue follow-ups" is wrong the moment one is cleared, and
+// a task carrying a stale figure is worse than one carrying none.
+export const INSIGHT_ACTIONS: Record<string, {
+  title: string; detail: string; href: string; category: string;
+}> = {
+  overdue_followups: {
+    title: "Work through overdue follow-ups",
+    detail: "Raised from Practice Intelligence. These are obligations this practice recorded whose date has passed.",
+    href: "/practice/follow-ups",
+    category: "follow_up",
+  },
+  awaiting_review: {
+    title: "Review results and letters that have arrived",
+    detail: "Raised from Practice Intelligence. Incoming documents nobody has reviewed, plus clinical documents not yet issued.",
+    href: "/practice/inbox",
+    category: "documents",
+  },
+  open_encounters: {
+    title: "Finish and sign open consultations",
+    detail: "Raised from Practice Intelligence. Consultations still open or recorded but not signed are not yet a record. Close My Day works through them one at a time.",
+    href: "/practice/close-my-day",
+    category: "clinical",
+  },
+  pathway_milestones: {
+    title: "Review pathway milestones that are due",
+    detail: "Raised from Practice Intelligence. Stages of an active plan that are due soon or have gone past their date.",
+    href: "/practice/pathways",
+    category: "clinical",
+  },
+};
+
+export const ACTIONABLE_INSIGHT_KEYS = Object.keys(INSIGHT_ACTIONS);
+
+/** Named so the absence is a decision on the record rather than an oversight somebody has to infer. */
+export const INSIGHTS_WITHOUT_AN_ACTION = [
+  { key: "patients_attention", why: "its next step is another intelligence tab, so acting would only mean looking" },
+];

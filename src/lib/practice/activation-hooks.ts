@@ -141,6 +141,32 @@ export async function onBookingLinkShared(
   } catch { /* non-blocking */ }
 }
 
+/**
+ * Section 2's "first insight actioned" - stage 7 of the adoption ladder, and the last milestone to get an
+ * emitter.
+ *
+ * ⚠ IT FOLLOWS A WRITE, NOT A VIEW, AND THAT DISTINCTION IS WHY THIS TOOK A FEATURE RATHER THAN A HOOK.
+ * Before "Act on this" existed, every control on the intelligence surface was a link, a range picker or
+ * the Ask field. Emitting from any of those would have marked every practice that ever opened the page as
+ * having reached the TOP of the ladder -- a figure that would then be quoted.
+ *
+ * The caller emits only after createTask has succeeded. A task that could not be raised is not an action,
+ * and the milestone must not outrun the work it claims.
+ *
+ * `insight` records WHICH observation drove it, so "practitioners act on overdue follow-ups but never on
+ * pathway milestones" stays answerable. It is a tile key and carries nothing about any patient.
+ */
+export async function onInsightActioned(
+  admin: any, workspaceId: string, actorId?: string | null, insight?: string,
+): Promise<void> {
+  try {
+    await emitActivation(admin, {
+      workspaceId, eventKey: "intelligence.first_action", actorId: actorId ?? null,
+      metadata: insight ? { insight } : {},
+    });
+  } catch { /* non-blocking */ }
+}
+
 /** Provisioning. `practice.created` is the acquisition milestone in section 2. */
 export async function onPracticeCreated(admin: any, workspaceId: string, actorId?: string | null): Promise<void> {
   try {
@@ -165,8 +191,11 @@ export async function onPracticeCreated(admin: any, workspaceId: string, actorId
 // first booking, and THREE of those four cannot be emitted today -- so no practice can currently be
 // Activated by the definition, however well it is doing. isActivated() is therefore correct and unusable
 // until these exist, which is a gap in the product rather than in the rule.
-export const UNHOOKED_MILESTONES = [
-  { key: "intelligence.first_action", why: "the intelligence surface reads, so there is no act to record" },
+// ⚠ EMPTY, AND THAT IS THE POINT OF KEEPING IT. Every one of section 2's ten milestones now has an
+// emitter. The list stays because the next milestone somebody adds without one belongs here, named and
+// explained, rather than quietly absent -- which is how three of them sat unemittable for a week while the
+// north star reported that no practice had ever activated.
+export const UNHOOKED_MILESTONES: { key: string; why: string }[] = [
   // ⚠ practice.setup_completed HAS MOVED OFF THIS LIST TOO. The note said no single definition existed;
   // in fact one already did, in publishReadiness, and nobody had connected it to the milestone. Every
   // north-star event in section 1 now has an emitter, so a practice can finally BE Activated.

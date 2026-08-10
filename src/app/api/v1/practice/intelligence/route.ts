@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { intelligenceSuite, isCohortDimension, COHORT_DIMENSIONS } from "@/lib/practice/intelligence";
 import { INTELLIGENCE_TABS, DEFAULT_RANGE_DAYS } from "@/lib/practice/intelligence-constants";
+import { INSIGHT_ACTIONS, ACTIONABLE_INSIGHT_KEYS } from "@/lib/practice/intelligence-constants";
+import { createTask } from "@/lib/practice/tasks";
+import { onInsightActioned } from "@/lib/practice/activation-hooks";
 
 // GET /api/v1/practice/intelligence -- CPR-PI-002's engine, as one read model.
 //
@@ -30,6 +33,61 @@ export const dynamic = "force-dynamic";
  *  silently become today, because a window nobody chose is a figure nobody can check (s15). */
 const day = (raw: string | null): string | undefined =>
   raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : undefined;
+
+/**
+ * POST /api/v1/practice/intelligence -- CPR-GROWTH-001 s2, "first insight actioned".
+ *
+ * !! IT RAISES A TASK, IT DOES NOT NAVIGATE. Every other control on the intelligence surface is a link,
+ * and emitting a milestone called "actioned" from a link would say a practitioner acted when they had
+ * only looked. This creates tracked work that outlives the page, which is a state change the insight can
+ * honestly be credited with.
+ *
+ * !! THE TITLE AND DETAIL ARE SERVER-DERIVED FROM THE KEY. Nothing the client sends reaches the task.
+ * Accepting a title would let any caller write arbitrary text into a practice work item through an
+ * endpoint whose gate is about intelligence, and a task is read as something the practice decided.
+ *
+ * !! task.manage, NOT report.view. Reading the insights is a report capability; creating work is not, and
+ * inheriting the GET gate would let a read-only account raise tasks.
+ */
+export async function POST(req: NextRequest) {
+  const auth = await requirePracticeContext("task.manage");
+  if (isDenied(auth)) return auth;
+  const { caller, ctx } = auth;
+
+  let body: Record<string, unknown>;
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
+
+  const key = String(body.key ?? "");
+  const spec = INSIGHT_ACTIONS[key];
+  // An unknown key is refused rather than defaulted. A default would raise a task about the wrong thing.
+  if (!spec)
+    return NextResponse.json({
+      error: `${key || "(none)"} is not an insight that can be acted on`,
+      actionable: ACTIONABLE_INSIGHT_KEYS,
+    }, { status: 400 });
+
+  const result = await createTask(caller.admin, {
+    workspaceId: ctx.workspaceId,
+    title: spec.title,
+    detail: spec.detail,
+    // Unassigned means yours -- the same reading /api/v1/practice/tasks takes.
+    assignedTo: caller.userId,
+    category: spec.category,
+    actorId: caller.userId,
+    correlationId: caller.traceId,
+  });
+  if (!result.ok)
+    return NextResponse.json({ error: result.message, code: result.code }, { status: result.status });
+
+  // The milestone follows the WRITE, never the request. A task that could not be raised is not an action.
+  await onInsightActioned(caller.admin, ctx.workspaceId, caller.userId, key);
+
+  return NextResponse.json({
+    ok: true, taskId: result.data.id, href: spec.href, title: spec.title,
+    note: "Raised as a task assigned to you.",
+    correlationId: caller.traceId,
+  }, { status: 201 });
+}
 
 export async function GET(req: NextRequest) {
   // report.view is the gate CPR-V5-003 and migration 191 already agree on, and the same one the page
