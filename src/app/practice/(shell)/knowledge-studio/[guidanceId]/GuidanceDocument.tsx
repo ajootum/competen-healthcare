@@ -285,10 +285,18 @@ export default function GuidanceDocument({ detail, canManage, colleagues }: Prop
                       {m.label}
                     </button>
                     {colleagues.length === 0 && (
+                      // ⚠ THIS SENTENCE USED TO SAY THE DOCUMENT "cannot be approved until somebody else
+                      // joins". That was true, and it made practice guidance unusable for the solo
+                      // clinician this product is sold to -- send for approval worked, deciding refused,
+                      // publishing refused for want of a decision. The user's decision of 2026-08-10
+                      // opened the loop: a sole member may decide their own request, and the document
+                      // records that it was self-approved. See delegation.ts.
                       <p className="w-full text-[11.5px] text-slate-600">
                         <span aria-hidden className="mr-1">◌</span>
-                        There is nobody else active in this practice to send it to. Nobody may approve
-                        their own work, so this document cannot be approved until somebody else joins.
+                        There is nobody else active in this practice to send it to. Send it anyway and
+                        you can decide it yourself in Practice&nbsp;Setup &rsaquo; Team&nbsp;and&nbsp;Permissions
+                        &mdash; the document will record that it was approved by its author, with nobody
+                        else having read it.
                       </p>
                     )}
                   </div>

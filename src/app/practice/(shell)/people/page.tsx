@@ -36,7 +36,7 @@ export default async function TeamPage() {
   const canManage = hasCapability(ctx, "practice.members.manage");
   const admin = createAdminClient();
 
-  const [board, queues, approvals, templates, team, invitations, history] = await Promise.all([
+  const [board, queues, approvals, templates, team, invitations, history, members] = await Promise.all([
     delegationBoard(admin, ctx.workspaceId),
     workQueues(admin, ctx.workspaceId, ctx.userId),
     listApprovals(admin, ctx.workspaceId, { status: "PENDING" }),
@@ -44,7 +44,22 @@ export default async function TeamPage() {
     canManage ? listTeam(admin, ctx.workspaceId) : Promise.resolve([]),
     canManage ? listInvitations(admin, ctx.workspaceId) : Promise.resolve([]),
     canManage ? membershipHistory(admin, ctx.workspaceId) : Promise.resolve([]),
+    admin.from("practice_membership").select("user_id").eq("workspace_id", ctx.workspaceId).eq("status", "active"),
   ]);
+
+  // ⚠ COMPUTED HERE RATHER THAN FROM `team`, WHICH IS ONLY LOADED FOR SOMEBODY WHO CAN MANAGE MEMBERS.
+  // A practitioner without practice.members.manage would see an empty team and a screen that concluded
+  // they were alone -- which is exactly the state that unlocks self-approval below.
+  //
+  // ⚠ DISTINCT PEOPLE, NOT MEMBERSHIP ROWS. Capabilities are granted per membership, so one person holds
+  // several active rows; both live practices show two rows for one human. Counting rows would report
+  // every solo practice as a pair and put the wall straight back.
+  //
+  // ⚠ A FAILED READ IS NOT A SOLO PRACTICE. `null` means unknown, and the console then offers nothing --
+  // the strict answer, because the permissive one waives segregation of duties on a database blip.
+  const soloPractice = members.error || members.data == null
+    ? null
+    : new Set((members.data as { user_id: string }[]).map(m => m.user_id)).size <= 1;
 
   return (
     <div className="max-w-6xl">
@@ -62,6 +77,7 @@ export default async function TeamPage() {
         team={team}
         canManage={canManage}
         me={ctx.userId}
+        soloPractice={soloPractice}
       />
 
       {canManage && (

@@ -413,10 +413,26 @@ export function renderSections(
         body: null, state: "not_checked" as const,
         note: `An approval was requested and it is ${approval.status.toLowerCase()}. Until somebody decides it, there is no approval to show.`,
       };
-    const who = approval.decidedByName ?? "a colleague";
+    // ⚠ SELF-APPROVAL IS DERIVED AND PRINTED, NEVER INFERRED AWAY.
+    //
+    // delegation.ts permits an author to decide their own request when they are the ONLY member of the
+    // practice -- the user's decision of 2026-08-10, because in a one-person practice segregation of
+    // duties is unachievable rather than skipped. The condition of permitting it was that the document
+    // SAYS SO, permanently, so a reader can never mistake it for a second person's judgement.
+    //
+    // It is derived from `decided_by === requested_by`, both of which are already stored, so there is no
+    // flag to forget to set and nothing to edit away without rewriting who asked or who decided. And
+    // "a colleague" is NOT the fallback in that branch: calling the author a colleague would be the
+    // product asserting a review that did not happen.
+    const selfApproved = !!approval.decided_by && approval.decided_by === approval.requested_by;
+    const who = selfApproved ? "the author" : approval.decidedByName ?? "a colleague";
+    const when = approval.decided_at ? ` on ${approval.decided_at.slice(0, 10)}` : "";
+    const said = approval.decision_note ? ` "${approval.decision_note}"` : "";
     return {
       key: def.key, heading: def.heading, source: "derived" as const, position, required: false,
-      body: `Approved by ${who}${approval.decided_at ? ` on ${approval.decided_at.slice(0, 10)}` : ""}.${approval.decision_note ? ` "${approval.decision_note}"` : ""}`,
+      body: selfApproved
+        ? `Approved by ${who}${when}, who was the only member of this practice at the time. Nobody else has read this document.${said}`
+        : `Approved by ${who}${when}.${said}`,
       state: "derived" as const, note: null,
     };
   });

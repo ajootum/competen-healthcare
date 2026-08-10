@@ -379,8 +379,41 @@ export async function decideApproval(admin: any, args: {
 
   // NOBODY APPROVES THEIR OWN WORK. The whole point of the queue is a second pair of eyes; a request
   // somebody can wave through themselves is a form they fill in twice.
-  if (r.requested_by === args.actorId)
-    return { ok: false, status: 422, code: "SELF_APPROVAL", message: "you cannot decide your own request" };
+  //
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
+  // ⚠ EXCEPT IN A ONE-PERSON PRACTICE, WHERE THE SECOND PAIR OF EYES DOES NOT EXIST.
+  //
+  // The user's decision of 2026-08-10, after a walkthrough found that a solo practitioner could never
+  // publish a guidance document: send for approval succeeded, deciding it refused here, and publishing
+  // refused for want of a decision. A closed loop with no way out, in a product whose own marketing says
+  // "a solo clinician runs the whole thing without a receptionist".
+  //
+  // ⚠ THE CONTROL IS NOT BEING SKIPPED, IT IS UNACHIEVABLE. Segregation of duties needs two duties to
+  // segregate. Refusing here does not produce a second reviewer; it produces a practitioner who keeps
+  // their protocols on paper, where nothing records who stood behind them at all.
+  //
+  // ⚠ SO IT IS PERMITTED AND RECORDED, NEVER PERMITTED AND HIDDEN. `decided_by` already equals
+  // `requested_by` in exactly this case, so self-approval is DERIVED from what is stored rather than
+  // trusted to a new flag somebody must remember to set -- and it cannot be edited away without
+  // rewriting who asked or who decided. The guidance document prints it: see renderSections.
+  //
+  // ⚠ DISTINCT PEOPLE, NOT MEMBERSHIP ROWS. Capabilities are granted per membership here, so one person
+  // routinely holds two active rows in one workspace -- both live practices do. Counting rows would make
+  // every solo practice look like a pair and reinstate the wall this removes.
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
+  if (r.requested_by === args.actorId) {
+    const { data: members, error: mErr } = await admin.from("practice_membership")
+      .select("user_id").eq("workspace_id", args.workspaceId).eq("status", "active");
+    // ⚠ A FAILED READ REFUSES. If we cannot tell how many people are in this practice, the safe answer
+    // is the strict one -- admitting a self-approval on an unreadable membership list would let a
+    // transient fault waive segregation of duties in a practice that has colleagues.
+    if (mErr || members == null)
+      return { ok: false, status: 422, code: "SELF_APPROVAL", message: "you cannot decide your own request, and this practice's member list could not be read to check whether you are its only member" };
+
+    const people = new Set((members as { user_id: string }[]).map(m => m.user_id));
+    if (people.size > 1)
+      return { ok: false, status: 422, code: "SELF_APPROVAL", message: "you cannot decide your own request" };
+  }
 
   const note = (args.note ?? "").trim();
   // A REJECTION WITHOUT WORDS IS A DECISION NOBODY CAN ACT ON. The person who did the work has to know

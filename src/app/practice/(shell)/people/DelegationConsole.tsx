@@ -22,10 +22,12 @@ const card = "rounded-xl border border-gray-200 bg-white p-4";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export default function DelegationConsole({
-  board, queues, approvals, templates, team, canManage, me,
+  board, queues, approvals, templates, team, canManage, me, soloPractice,
 }: {
   board: any; queues: any; approvals: any[]; templates: any[]; team: any[];
   canManage: boolean; me: string;
+  /** ⚠ null = the member list could not be read. Treated as NOT solo, never as solo. */
+  soloPractice: boolean | null;
 }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err" | "part"; text: string } | null>(null);
@@ -188,12 +190,29 @@ export default function DelegationConsole({
                     {a.requestedByName ?? "Someone"} · {String(a.subject_kind).replace(/_/g, " ")}
                     {" · "}{new Date(a.created_at).toLocaleDateString()}
                   </p>
-                  {a.requested_by === me ? (
+                  {a.requested_by === me && soloPractice !== true ? (
                     // Nobody approves their own work, so the buttons are not offered rather than
                     // offered-and-refused.
-                    <p className="mt-1 text-[10px] text-gray-400">Yours &mdash; somebody else decides it.</p>
+                    // ⚠ `soloPractice !== true` rather than `=== false`: an UNKNOWN member count (a
+                    // failed read) keeps the strict behaviour. Waiving segregation of duties on a
+                    // database blip is the one outcome this must not produce.
+                    <p className="mt-1 text-[10px] text-gray-400">
+                      Yours &mdash; somebody else decides it.
+                      {soloPractice === null && " (This practice's member list could not be read just now.)"}
+                    </p>
                   ) : decidingId === a.id ? (
                     <div className="mt-1 flex flex-col gap-1">
+                      {/* ⚠ SAID BEFORE THEY DECIDE, NOT AFTER. The user's decision of 2026-08-10 permits
+                          a sole member to decide their own request, on the condition that it is recorded
+                          as self-approved and the document says so permanently. A practitioner is
+                          entitled to know that before they click, not to discover it on the printout. */}
+                      {a.requested_by === me && soloPractice === true && (
+                        <p className="rounded-lg border border-amber-300 bg-amber-50 px-2 py-1.5 text-[10.5px] leading-relaxed text-amber-900">
+                          This is your own request, and you are the only member of this practice. You may
+                          decide it — and the record will say it was approved by its author, with nobody
+                          else having read it. That sentence stays on the document.
+                        </p>
+                      )}
                       <input value={decisionNote} onChange={e => setDecisionNote(e.target.value)}
                         placeholder="What needs to change? (required to send back)" className={input} />
                       <span className="flex gap-2">
