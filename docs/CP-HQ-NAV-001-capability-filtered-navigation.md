@@ -1,6 +1,6 @@
 # CP-HQ-NAV-001 — Capability-filtered navigation for Competen HQ
 
-**Status:** steps 1 and 2 SHIPPED (`9c4f4ce1`). Step 3 is the substantive remainder and is not started.
+**Status:** steps 1, 2 and 3 SHIPPED (`9c4f4ce1`, `fc1a584d`). All 205 pages enforce a capability.
 **Date:** 2026-08-10
 **Predecessors:** PLAT-ARCH-SURVEY-001 (the space/position model), COMP-ARCH-PSA-001 (the two gates),
 CP-SPLIT-002 (platform membership).
@@ -108,38 +108,59 @@ portal (`/admin`) with no way across. Fifth "engine built, screen missing" of th
 
 ---
 
-## 5. Step 3 — convert the 167 role-gated pages (NOT STARTED)
+## 5. Step 3 — every page enforces its capability (SHIPPED, `fc1a584d`)
 
-⚠ **This is what makes step 1 more than decoration.** Until a page checks the capability itself, hiding its
-link is security theatre: the URL still works for anyone holding the role. Today the filter is *honest* for
-both audiences — it removes links that would refuse the person who clicked them — but it guarantees nothing.
+Classifier after: **`hq-position=205, single-role=0`**. Done by codemod (`scripts/hq-convert-pages.ts`),
+which verifies each edit by re-classifying its own output and is re-runnable — a second run finds nothing.
 
-The work is mechanical, because the classification already exists: every one of the 205 routes resolves to a
-capability under `HQ_ROUTE_INTENT`. Each page replaces its `roles.includes("super_admin")` test with
-`requireHqContext()` (null argument → the intent map supplies the capability).
+### ⚠ The plan above was wrong, and the way it was wrong is the point
 
-**Batch by space, and only where somebody is appointed**, so each batch has a real person who can say whether
-the result is usable:
+It said to convert to `requireHqContext()`. **That would have widened all 167 pages, not narrowed them.**
+`requireHqContext` honours `hq_config.mode`; the mode is `observe`; and observe **admits** a `would_deny` —
+that is what observe *is*. Every converted page would have become reachable by any appointee holding any
+position, in the name of least privilege.
 
-| batch | routes | appointee today |
-|---|---|---|
-| practice | 2 | yes — Practice Product Director |
-| executive | 26 | Chief Executive (owner, so no behaviour change) |
-| platform | 76 | none |
-| learning | 55 | none |
-| quality | 46 | none |
+### ⚠ And the 38 already-converted pages were already doing it
 
-⚠ **Order matters and `platform` is not first despite being largest.** It contains
-`/super-admin/users/appointments` (who may appoint) and `/super-admin/system/*` (identity and security), so a
-conversion error there widens the blast radius of every other batch.
+Measured against live data before the conversion, with one non-owner appointee holding 3 capabilities:
 
-⚠ **`hq_config.mode` is still `observe`.** Converting a page does not refuse anybody yet — it records to
-`hq_access_observation`. The migration path is: convert, read the observations, correct the intent map, and
-only then flip the mode. Flipping it early is how an owner gets locked out of the console they would use to
-unflip it.
+| | |
+|---|---|
+| pages he held the capability for | 3 |
+| **pages he could reach WITHOUT holding their capability** | **37** |
+
+The 37 included `/super-admin/settings`, `/super-admin/hospitals`, `/super-admin/organisations` and —
+decisively — **`/super-admin/users/appointments`, the screen that grants HQ positions.** Anybody holding any
+position could have appointed themselves Chief Executive. After: **3 held, 0 over-reach.**
+
+### The resolution
+
+`requireHqCapability(capability)` — identical to `requireHqContext` except the capability is enforced
+regardless of rollout mode.
+
+- **Use `requireHqCapability` when REPLACING a real access check.** Observe must not loosen a door that was
+  already shut.
+- **Use `requireHqContext` when adding the first check to a page that had none.** There, observe is doing its
+  intended job: not refusing somebody on a capability map nobody has validated.
+- Refusals are **still recorded** either way, so the observation ledger keeps filling.
+- Owners are unaffected by both: `isOwner` short-circuits before mode is read.
+- **`hq_config.mode` is untouched and still `observe`.** No data was changed. It now governs nothing under
+  `/super-admin`, which is why flipping it can no longer widen anything — asserted by `E5`.
+
+### ⚠ The scanner had to learn the new helper FIRST
+
+`hq-scan.ts` matched only `requireHqContext|resolveHqContext`. A scanner that had never heard of
+`requireHqCapability` would have fallen through to `classifyGate`, matched no idiom, and reported all 167 as
+`kind: "none"` — *"no access check of any kind — reachable without signing in"* — publishing the entire HQ
+estate to a manager as open to the world, one commit after locking it down. **That is the third instance of
+this exact bug in this codebase** (98 practice routes, then `requireHqContext` itself). Any future guard
+helper goes into `HQ_GUARDS` before it goes into a page.
+
+### Still open
 
 ⚠ **The 174 `isAdmin`/`isSuper` API routes are a separate, unstarted problem.** Membership is enforced at the
-layout boundary, not the API boundary.
+layout and page boundary, not the API boundary. `/api/hq/appointments` is the exception — it checks
+`ctx.isOwner` on every write verb.
 
 ## 6. Open — not answered here
 
@@ -158,7 +179,15 @@ layout boundary, not the API boundary.
 - `scripts/sidebar-active-harness.ts` — **8/0**. It went red the moment the nav tables moved, which is its
   count controls working; it now imports the tables rather than regexing them out of the component, so that
   failure mode is gone.
-- `scripts/hq-guard-harness.ts` — **60/0**, unchanged.
+- `scripts/hq-guard-harness.ts` — **64/0**. `E3` (all 205 gated), `E5` (zero pages honour the mode),
+  `E6`+`E6-control` (the mode distinction does work), `E7` (the guard really asks for enforce) are new, each
+  proven failable by a deliberate break.
+  ⚠ `E4` was a control that counted real `single-role` pages to prove the classifier still told kinds apart.
+  Converting the last one turned a **genuine success into a red**, so it now asserts against a fixture rather
+  than demanding the estate stay partly unconverted. Same lesson as `sidebar-active` C7/C8: when live data
+  stops exercising a property, exercise it directly.
+- `scripts/hq-appointment-harness.ts` — **26/0**.
+- `npx next build` — clean.
 - `npx tsc --noEmit` clean; eslint clean.
 
 ⚠ **Not verified in a browser.** The signed-in view of the filtered sidebar has not been looked at by a
