@@ -67,9 +67,20 @@ function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState }: 
         ? "border-[var(--cp-primary-border)] bg-[var(--cp-primary)]/[0.04] ring-1 ring-[var(--cp-primary)]/20"
         : "border-gray-200 bg-white"}`}
     >
-      <div className="flex items-center gap-2 px-3 py-2">
+      {/* ⚠ TWO CONTROLS SIT HERE AND THEY DO DIFFERENT THINGS. The LINK reviews the day -- it drives the
+          centre panel and the Day panel through ?date=. The CHEVRON only expands this row in place. Both
+          already worked, and a practitioner driving the product asked whether reviewing another day was
+          possible at all, because the link carried NO hover state, NO cursor affordance and NO label: it
+          rendered as a bold heading that happened to be clickable, next to a chevron that looked like the
+          interactive thing and did something else. Correct code, invisible to the person using it. */}
+      <div className="flex items-center gap-1 px-2 py-2">
         <Link href={plannerHref({ ...urlState, date: day.date, sel: null })} scroll={false}
-          className="flex min-w-0 flex-1 items-baseline gap-2 text-left">
+          aria-current={selected ? "page" : undefined}
+          aria-label={selected
+            ? `${day.weekdayName} ${shortDate(day.date)}, currently being reviewed`
+            : `Review ${day.weekdayName} ${shortDate(day.date)}`}
+          className={`group flex min-w-0 flex-1 items-baseline gap-2 rounded-lg px-2 py-1 text-left transition-colors
+            ${selected ? "bg-[var(--cp-primary)]/[0.06]" : "hover:bg-gray-100 focus-visible:bg-gray-100"}`}>
           <span className={`text-[13px] font-bold ${day.isToday ? "text-[var(--cp-primary-deep)]" : "text-gray-900"}`}>
             {day.weekdayShort}
           </span>
@@ -84,11 +95,22 @@ function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState }: 
               {day.conflicts.length} conflict{day.conflicts.length === 1 ? "" : "s"}
             </span>
           )}
+          {/* The state, in words. The ring around the card said which day was selected only to somebody who
+              already knew the ring meant that -- and said nothing at all about the other six being openable. */}
+          <span className="ml-auto shrink-0 pl-2 text-[10px] font-semibold uppercase tracking-wide">
+            {selected
+              ? <span className="text-[var(--cp-primary-deep)]">Reviewing</span>
+              : <span className="text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">Review →</span>}
+          </span>
         </Link>
         <button type="button" onClick={onToggle}
           aria-expanded={open}
-          aria-label={`${open ? "Collapse" : "Expand"} ${day.weekdayName} ${shortDate(day.date)}`}
-          className="rounded-md px-1.5 py-0.5 text-[12px] text-gray-500 hover:bg-gray-100">
+          // ⚠ SAYS WHAT IT DOES, not just which way it points. "Expand" beside a link that navigates is
+          // ambiguous; this names the difference so the two controls cannot be confused by a screen reader
+          // either.
+          aria-label={`${open ? "Hide" : "Show"} ${day.weekdayName} ${shortDate(day.date)} detail in this list`}
+          title={open ? "Hide detail here" : "Show detail here"}
+          className="shrink-0 rounded-md px-1.5 py-0.5 text-[12px] text-gray-500 hover:bg-gray-100">
           {open ? "⌃" : "⌄"}
         </button>
       </div>

@@ -1074,6 +1074,45 @@ async function main() {
     + "helpers were not what made anything pass",
     !isPlannerDate("2026-02-30") && isPlannerDate("2026-02-28"));
 
+  // ══ 14. THE WEEK PANEL'S DAY LINK IS DISCOVERABLE ════════════════════════════════════════════════
+  //
+  // ⚠ THIS SECTION EXISTS BECAUSE A WORKING FEATURE WAS INVISIBLE. Choosing a day in My Week has always
+  // driven the centre and Day panels through ?date=, and a practitioner driving the planner asked whether
+  // reviewing another day was possible at all -- because the link carried no hover state, no cursor
+  // affordance and no accessible name. It rendered as a bold heading that happened to be clickable, beside
+  // a chevron that looked like the interactive control and did something else entirely.
+  //
+  // WeekPanel had NO harness coverage of any kind, so nothing would have noticed the affordance being
+  // dropped again. These assert the affordance, not the styling: a hover treatment, a name a screen reader
+  // can announce, and the two controls being distinguishable from one another.
+  const weekPanel = readFileSync("src/app/practice/(shell)/calendar/WeekPanel.tsx", "utf8");
+  const code = weekPanel.replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n").filter(l => !l.trim().startsWith("//")).join("\n");
+
+  ok("14a. count control: WeekPanel was read and contains the day link",
+    code.length > 500 && code.includes("plannerHref({ ...urlState, date: day.date"),
+    `${code.length} chars`);
+
+  // ⚠ ANCHORED TO THE LINK'S OWN CLASS EXPRESSION, AND A BREAK PROVED WHY. A bare /hover:bg-gray-100/ was
+  // satisfied by the CHEVRON, which has the same class -- so deleting the affordance from the link left this
+  // green. The needle was elsewhere in the haystack, which is the recurring shape of a vacuous assertion in
+  // this codebase.
+  ok("14b. ⚠ the day LINK has its own hover affordance -- without one it reads as a heading, which is "
+    + "exactly how a working feature became undiscoverable",
+    /selected \? "bg-\[var\(--cp-primary\)\][^"]*" : "hover:bg-gray-100/.test(code));
+
+  // The visible cue, as opposed to the colour change: hovering an unselected day says what clicking does.
+  ok("14b2. an unselected day shows a 'Review' cue on hover, and the selected one says it is being reviewed",
+    /Review →/.test(code) && /Reviewing/.test(code));
+
+  ok("14c. it has an accessible name that says what it does, and the selected day is marked aria-current",
+    /aria-label=\{selected/.test(code) && /aria-current=\{selected \? "page"/.test(code));
+
+  // ⚠ THE TWO CONTROLS MUST NOT BOTH ANNOUNCE AS THE SAME THING. The chevron expands this row in place and
+  // the link navigates. A screen reader hearing "Expand Wednesday" then "Wednesday" cannot tell them apart.
+  ok("14d. the chevron says it acts on THIS LIST, so it cannot be confused with the link that navigates",
+    /detail in this list/.test(code));
+
   report();
 }
 
