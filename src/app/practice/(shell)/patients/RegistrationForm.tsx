@@ -656,9 +656,24 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
                 <Link href={`/practice/patients/${c.id}`} className="text-[13px] font-semibold text-gray-800 hover:underline">
                   {c.displayName}{c.practiceId ? ` · ${c.practiceId}` : ""}{c.birthDate ? ` · b. ${c.birthDate}` : ""} ({c.matchedBy})
                 </Link>
+                {/* ⚠ A BLANK PRACTICE ID AND AN UNREADABLE ONE LOOKED IDENTICAL HERE, on the one screen
+                    where somebody decides whether this is the same patient. The practice id is what they
+                    match on, so a failed read made a real match look like a stranger -- and the button
+                    below then creates the second record. */}
+                {c.practiceIdUnknown && (
+                  <span className="ml-1 text-[11px] font-semibold text-[var(--cmp-text-critical)]">
+                    · practice ID could not be read
+                  </span>
+                )}
               </li>
             ))}
           </ul>
+          {candidates.some((c: any) => c.practiceIdUnknown) && (
+            <p className="mt-1.5 text-[12px] text-[var(--cmp-text-critical)]">
+              Some practice IDs could not be read, so this list may be harder to judge than usual. Open the
+              patient before deciding they are a different person.
+            </p>
+          )}
           {!candidates[0]?.hardBlock && (
             // ⚠ THE CONFIRMATION RETURNS TO THE ACT IT CAME FROM. A duplicate warning raised while
             // booking must resume the booking -- sending it to the plain registration would silently

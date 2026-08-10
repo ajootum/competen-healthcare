@@ -67,19 +67,49 @@ export type RegisterInput = {
 };
 
 export type Candidate = {
-  id: string; displayName: string; birthDate: string | null; matchedBy: string; practiceId: string | null;
+  id: string; displayName: string; birthDate: string | null; matchedBy: string;
+  practiceId: string | null;
+  /**
+   * !! practiceId NULL MEANS TWO DIFFERENT THINGS AND ONLY ONE OF THEM IS SAFE. "This patient has no
+   * practice id" and "we could not read it" look identical on a screen, and the screen that shows them is
+   * the duplicate-registration decision. REQUIRED, not optional, so the compiler makes every construction
+   * site say which it is.
+   */
+  practiceIdUnknown: boolean;
 };
 
 export type EngineResult<T> =
   | { ok: true; data: T }
   | { ok: false; status: number; code: string; message: string; candidates?: Candidate[] };
 
-async function practiceIdsFor(admin: any, workspaceId: string, patientIds: string[]): Promise<Map<string, string>> {
-  if (patientIds.length === 0) return new Map();
-  const { data } = await admin.from("practice_patient_identifier")
+/**
+ * The practice ID for each patient.
+ *
+ * ⚠ IT USED TO DISCARD ITS ERROR AND RETURN AN EMPTY MAP, WHICH IS THE SAME BUG THIS FILE ALREADY FIXED
+ * TWICE -- and it survived both because it is PRIVATE, so a search for exported engines never saw it.
+ *
+ * The harm is not cosmetic and it is worst at the two registration call sites. When registerPatient
+ * answers DUPLICATE_IDENTIFIER or POSSIBLE_DUPLICATE it shows candidates and asks a person to decide
+ * whether this is the same patient. The practice ID is THE detail they decide on. A failed read blanked it
+ * for every candidate, so a real match looked unidentifiable, the person confirmed "different patient",
+ * and a second record was created -- the split clinical record that whole duplicate check exists to
+ * prevent, produced by the check itself.
+ *
+ * The SHAPE changes rather than a flag being added, so the compiler finds all three call sites and each
+ * has to say what it does with a failure. A Map that is empty for two reasons is a Map that lies.
+ */
+async function practiceIdsFor(admin: any, workspaceId: string, patientIds: string[]): Promise<{
+  ids: Map<string, string>;
+  /** False when the read did not complete. An absent id is then UNKNOWN, not absent. */
+  ok: boolean;
+  detail: string | null;
+}> {
+  if (patientIds.length === 0) return { ids: new Map(), ok: true, detail: null };
+  const { data, error } = await admin.from("practice_patient_identifier")
     .select("patient_id, value").eq("workspace_id", workspaceId)
     .eq("identifier_type", "practice_id").in("patient_id", patientIds).is("valid_to", null);
-  return new Map(((data ?? []) as any[]).map(r => [r.patient_id, r.value]));
+  if (error) return { ids: new Map(), ok: false, detail: error.message };
+  return { ids: new Map(((data ?? []) as any[]).map(r => [r.patient_id, r.value])), ok: true, detail: null };
 }
 
 /** Ranked search (CPR-V2-004): identifier exact beats phone exact beats name. Never fuzzy-merges anything. */
@@ -141,9 +171,12 @@ export async function searchPatients(admin: any, workspaceId: string, q: string,
   probe("name-partial", partialErr);
   for (const h of (partial ?? []) as any[]) add(h.id, 40, "name-partial");
 
-  const detail = failures.length ? failures.join("; ") : null;
+  // ⚠ COMPUTED AT EACH RETURN, NOT ONCE HERE. Two probes still run below -- the hydrate and the practice
+  // id -- so a `detail` frozen at this point would report the failures of the first five reads and
+  // silently omit the last two. It was already recomputed for `complete`; it was not for `detail`.
+  const detailNow = () => (failures.length ? failures.join("; ") : null);
   const ids = [...hits.keys()];
-  if (ids.length === 0) return { results: [], complete: failures.length === 0, detail };
+  if (ids.length === 0) return { results: [], complete: failures.length === 0, detail: detailNow() };
   // ⚠ THE TENANT FILTER WAS MISSING HERE and on this read alone. Not a leak today -- every id came from
   // a workspace-scoped probe above -- but it was the one read in this function keyed on ids alone, and
   // "safe because of where the ids came from" is a property of the CALLER, not of this query. A future
@@ -153,11 +186,15 @@ export async function searchPatients(admin: any, workspaceId: string, q: string,
     .eq("workspace_id", workspaceId).in("id", ids).neq("status", "merged");
   probe("hydrate", rowsErr);
   const pids = await practiceIdsFor(admin, workspaceId, ids);
+  // ⚠ A FAILED PRACTICE-ID READ MAKES THE ANSWER INCOMPLETE, and it folds into the vocabulary this
+  // function already has rather than inventing a second one. Search results whose practice ids are all
+  // blank look like patients who have none -- and the practice id is what a desk matches on.
+  probe("practice-id", pids.ok ? null : { message: pids.detail ?? "the practice id read did not complete" });
 
   const results = ((rows ?? []) as any[])
     .map(r => ({
       id: r.id, displayName: r.display_name, birthDate: r.birth_date, sex: r.sex, status: r.status,
-      practiceId: pids.get(r.id) ?? null, matchedBy: hits.get(r.id)!.matchedBy,
+      practiceId: pids.ids.get(r.id) ?? null, practiceIdUnknown: !pids.ok, matchedBy: hits.get(r.id)!.matchedBy,
       _score: hits.get(r.id)!.score,
     }))
     .sort((a, b) => b._score - a._score)
@@ -166,7 +203,7 @@ export async function searchPatients(admin: any, workspaceId: string, q: string,
   // `complete` is recomputed from the same failures list, not assumed true because rows came back: a
   // partial answer with two hits in it is still a partial answer, and it is the dangerous kind, because
   // results on screen read as "the search worked".
-  return { results, complete: failures.length === 0, detail };
+  return { results, complete: failures.length === 0, detail: detailNow() };
 }
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -234,12 +271,17 @@ export async function screenRegistration(admin: any, input: {
       // read threw a TypeError out of a function whose callers expect a result object.
       const { data: p } = await admin.from("practice_patient")
         .select("id, display_name, birth_date").eq("id", clash.patient_id).maybeSingle();
-      const pids = p ? await practiceIdsFor(admin, input.workspaceId, [p.id]) : new Map<string, string>();
+      // !! THE CANDIDATE ON THIS SCREEN IS WHAT SOMEBODY DECIDES "same patient or not" ON. If the
+      // practice id could not be read we say so rather than showing a blank, which reads as a patient
+      // who has none and makes a real match look like a stranger.
+      const pids = p
+        ? await practiceIdsFor(admin, input.workspaceId, [p.id])
+        : { ids: new Map<string, string>(), ok: true, detail: null };
       return {
         ok: false, status: 409, code: "DUPLICATE_IDENTIFIER",
         message: `that ${ident.type} already belongs to a registered patient`,
         candidates: p
-          ? [{ id: p.id, displayName: p.display_name, birthDate: p.birth_date, matchedBy: `identifier:${ident.type}`, practiceId: pids.get(p.id) ?? null }]
+          ? [{ id: p.id, displayName: p.display_name, birthDate: p.birth_date, matchedBy: `identifier:${ident.type}`, practiceId: pids.ids.get(p.id) ?? null, practiceIdUnknown: !pids.ok }]
           : [],
       };
     }
@@ -272,12 +314,15 @@ export async function screenRegistration(admin: any, input: {
         phoneMatch = !!c;
       }
       if (dobMatch || phoneMatch) {
-        candidates.push({ id: p.id, displayName: p.display_name, birthDate: p.birth_date, matchedBy: dobMatch ? "name+dob" : "name+phone", practiceId: null });
+        // practiceId is filled in below once every candidate is known -- one read for all of them.
+        candidates.push({ id: p.id, displayName: p.display_name, birthDate: p.birth_date, matchedBy: dobMatch ? "name+dob" : "name+phone", practiceId: null, practiceIdUnknown: false });
       }
     }
     if (candidates.length > 0) {
       const pids = await practiceIdsFor(admin, input.workspaceId, candidates.map(c => c.id));
-      candidates.forEach(c => { c.practiceId = pids.get(c.id) ?? null; });
+      // !! EVERY candidate is marked unknown when the one read failed, not just the ones that came back
+      // empty -- because on a failure they ALL came back empty and none of them is evidence of anything.
+      candidates.forEach(c => { c.practiceId = pids.ids.get(c.id) ?? null; c.practiceIdUnknown = !pids.ok; });
       return {
         ok: false, status: 409, code: "POSSIBLE_DUPLICATE",
         message: "a very similar patient exists; open them, or confirm this is a different person",

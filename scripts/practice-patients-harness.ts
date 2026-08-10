@@ -203,6 +203,65 @@ async function main() {
     goodSearch.complete === true && goodSearch.detail === null && goodSearch.results.length > 0,
     JSON.stringify({ n: goodSearch.results.length, complete: goodSearch.complete, detail: goodSearch.detail }));
 
+  // ── THE PRACTICE ID THE DESK ACTUALLY MATCHES ON ────────────────────────────────────────────────
+  //
+  // ⚠ practiceIdsFor DISCARDED ITS ERROR AND RETURNED AN EMPTY MAP, and it survived two previous passes
+  // over this exact bug class in this exact file because it is PRIVATE -- a search for exported engines
+  // never saw it. A failed read blanked the practice id for every result and every duplicate CANDIDATE,
+  // and a blank there is indistinguishable from a patient who has none. On the registration screen that
+  // is the field somebody decides "same patient or not" on, so the failure made a real match look like a
+  // stranger and the next click created the second record.
+  // ⚠ A SECOND STUB, BECAUSE THE FIRST ONE CANNOT BREAK THIS READ. failingIdentifierProbe terminates on
+  // `.limit()`, and practiceIdsFor has no `.limit()` -- it awaits the chain after `.is()`. Awaiting a
+  // plain object resolves to the object, so `error` came back undefined and the probe "succeeded". The
+  // assertions below were right and the fixture was wrong, which is the harder of the two to notice: a
+  // fixture that cannot produce the failure makes a real assertion look satisfied.
+  const failIdentifierRead = { data: null, error: { message: "simulated identifier table outage" } };
+  const failingPracticeId = {
+    from: (table: string) => {
+      if (table !== "practice_patient_identifier") return admin.from(table);
+      const chain: Record<string, unknown> = {};
+      for (const m of ["select", "eq", "is", "in", "order"]) chain[m] = () => chain;
+      chain.limit = async () => failIdentifierRead;
+      // The terminal for a chain nobody calls .limit() on.
+      chain.then = (resolve: (v: unknown) => unknown) => resolve(failIdentifierRead);
+      return chain;
+    },
+  };
+  const blindPid = await searchPatients(failingPracticeId as never, wsA, "Amina Nakato");
+
+  ok("pid-1. ⚠ a failed practice-id read makes the search INCOMPLETE and says so by name",
+    blindPid.complete === false && /practice-id: /.test(blindPid.detail ?? ""),
+    blindPid.detail ?? "(no detail)");
+
+  ok("pid-2. ⚠ and every result is marked practiceIdUnknown -- a blank id is not evidence of anything "
+    + "when the read that would have filled it failed",
+    blindPid.results.length > 0 && blindPid.results.every(r => r.practiceIdUnknown === true),
+    `${blindPid.results.length} results, unknown=${blindPid.results.filter(r => r.practiceIdUnknown).length}`);
+
+  ok("pid-control. the same query through the real client marks NOTHING unknown",
+    goodSearch.results.length > 0 && goodSearch.results.every(r => r.practiceIdUnknown === false),
+    `${goodSearch.results.filter(r => r.practiceIdUnknown).length} of ${goodSearch.results.length} flagged`);
+
+  // ⚠ `detail` WAS COMPUTED BEFORE TWO PROBES HAD RUN. It was frozen at the fifth probe while `complete`
+  // kept counting -- so a failed HYDRATE produced complete:false with detail:null, an incomplete answer
+  // that could not say why. Found while wiring the practice-id probe, not by anything that was watching.
+  const failingHydrate = {
+    from: (table: string) => {
+      if (table !== "practice_patient") return admin.from(table);
+      const chain: Record<string, unknown> = {};
+      for (const m of ["select", "eq", "is", "in", "order", "ilike", "neq"]) chain[m] = () => chain;
+      chain.limit = async () => ({ data: null, error: { message: "simulated hydrate failure" } });
+      chain.then = undefined;
+      return chain;
+    },
+  };
+  const blindHydrate = await searchPatients(failingHydrate as never, wsA, "cm880412001");
+  ok("detail-1. ⚠ a failure in a LATE probe reaches `detail` -- it used to be frozen before the last two "
+    + "ran, so an incomplete answer could not say what broke",
+    blindHydrate.complete === false && (blindHydrate.detail ?? "").length > 0,
+    JSON.stringify({ complete: blindHydrate.complete, detail: blindHydrate.detail }));
+
   // The tenant filter that was missing on the hydrate read. Not a leak before -- the ids came from
   // workspace-scoped probes -- but it was the only read in the function keyed on ids alone, and "safe
   // because of where the ids came from" is a property of the caller, not of the query.
