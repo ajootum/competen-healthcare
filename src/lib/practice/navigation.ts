@@ -172,6 +172,11 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
 
   // -- Patients: the people, and the record made about them -----------------------------------------
   { href: "/practice/encounters", label: "Encounters", icon: "✎", capability: "encounter.list", group: "Clinical", phase: 3, built: true, primary: true },
+  // ⚠ NOT PRIMARY, AND THE FREEZE IS WHY -- the same reason booking-requests is not. CPR-V5-002 froze the
+  // nine primary sections and Close My Day is not one of them, so it is filed under Encounters, which is
+  // what it closes. CPR-ADOPT-001 s3 wants it entered from Current Activity, the Command Centre and the
+  // Planner as well, and those are links INTO this route rather than three more nav entries.
+  { href: "/practice/close-my-day", label: "Close My Day", icon: "☾", capability: "encounter.list", group: "Clinical", phase: 4, built: true, parent: "/practice/encounters" },
   { href: "/practice/activity", label: "Procedures", icon: "◷", capability: "procedure.record", group: "Clinical", phase: 4, built: true, parent: "/practice/encounters" },
   { href: "/practice/search", label: "Search", icon: "⌕", capability: "search.use", group: "Practice", phase: 5, built: true, parent: "/practice/patients" },
 

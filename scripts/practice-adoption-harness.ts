@@ -15,6 +15,7 @@
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { readFileSync } from "node:fs";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -99,6 +100,12 @@ const skip = (id: string, msg: string) => { skips.push(id); console.log(`  SKIP 
       workspaceId: ws, eventKey: "booking.link_created", actorId: actor, metadata: { source: "harness", channel: "qr" },
     });
     ok("A5-control", benign.ok === true, `CONTROL: ordinary metadata is accepted (${JSON.stringify(benign)})`);
+
+    // The ledger read round-trips what was emitted -- otherwise every derivation below reasons over a list
+    // that never reflects a write.
+    const led = await readActivationLedger(admin, ws);
+    ok("A6", led.ok && led.keys.includes(testKey) && !!led.at[testKey],
+      `the ledger reads back what was emitted (${led.ok ? `${led.keys.length} milestone(s)` : "READ FAILED"})`);
 
     // ── B. The adoption ladder, derived (ADOPT s1) ──────────────────────────────────────────────────
     console.log("\n  -- B. the adoption ladder --");
@@ -207,6 +214,37 @@ const skip = (id: string, msg: string) => { skips.push(id); console.log(`  SKIP 
     console.log("\n  -- F. quick actions --");
     ok("F1", CLOSE_ACTIONS.filter(a => !a.confirmsReview).map(a => a.code).join(",") === "defer",
       "exactly one action -- defer -- does not confirm review. Every other quick action is a clinical assertion");
+
+    // ── G. The screen is wired, and gated (the engine-with-no-screen pattern) ───────────────────────
+    console.log("\n  -- G. wiring --");
+    const strip = (s: string) =>
+      s.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").filter(l => !l.trim().startsWith("//") && !l.trim().startsWith("*")).join("\n");
+    const nav = strip(readFileSync("src/lib/practice/navigation.ts", "utf8"));
+    const api = strip(readFileSync("src/app/api/v1/practice/day-close/route.ts", "utf8"));
+    const page = strip(readFileSync("src/app/practice/(shell)/close-my-day/page.tsx", "utf8"));
+    const console_ = strip(readFileSync("src/app/practice/(shell)/close-my-day/CloseMyDayConsole.tsx", "utf8"));
+
+    ok("G1", /href: "\/practice\/close-my-day"/.test(nav),
+      "the route is in the navigation -- an engine with no way in is the pattern this project keeps removing");
+
+    // ⚠ THE FREEZE. CPR-V5-002 pinned PRIMARY_ORDER at nine sections and 16 assertions hold it there.
+    const navLine = nav.split("\n").find(l => l.includes('"/practice/close-my-day"')) ?? "";
+    ok("G2", /parent: "\/practice\/encounters"/.test(navLine) && !/primary: true/.test(navLine),
+      "...as a CHILD of Encounters, not a tenth primary section -- the CPR-V5-002 freeze is untouched");
+
+    ok("G3", /requirePracticeContext\("encounter\.edit"\)/.test(api) && /requirePracticeContext\("encounter\.list"\)/.test(api),
+      "writes gate on encounter.edit and the queue read on encounter.list, at the API boundary");
+
+    // ⚠ THE SECTION 7 STRUCTURAL ASSERTION. No verb may close everything.
+    ok("G4", !/close_all|closeAll|bulkComplete/i.test(api) && !/close_all|closeAll/i.test(console_),
+      "neither the route nor the screen has a close-all verb -- s7 forbids destructive bulk completion");
+
+    ok("G5", /shell\.state !== "READY"/.test(page) && /hasCapability\(shell\.ctx, "encounter\.list"\)/.test(page),
+      "the page narrows ShellState before reading ctx and checks the capability itself");
+
+    // ⚠ AN UNREADABLE QUEUE MUST NOT RENDER AS AN EMPTY DAY, and that is a property of the screen.
+    ok("G6", /queueFailed/.test(console_) && /not an empty day/i.test(console_),
+      "the screen distinguishes a failed read from a finished day in so many words");
 
   } finally {
     for (const key of cleanupKeys)
