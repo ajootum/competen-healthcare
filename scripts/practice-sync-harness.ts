@@ -165,12 +165,24 @@ async function main() {
     }
     return bad;
   };
-  const captureReaches = reaches("src/lib/practice/offline-capture.ts");
-  ok("0d. ⚠⚠ the capture module reaches NO server-only API, however far down the import graph",
-    captureReaches.length === 0, captureReaches.join(", "));
+  // ⚠ EVERY BROWSER MODULE IN THE OFFLINE PATH, not just the one that broke. The uploader is the newest
+  // and the most tempting to get wrong: it needs SYNC_MAX_BATCH, which lives in sync-engine.ts -- the
+  // very module whose import chain reaches next/headers. That is why sync-limits.ts exists.
+  const CLIENT_MODULES = [
+    "src/lib/practice/offline-capture.ts",
+    "src/lib/practice/sync-uploader.ts",
+    "src/lib/practice/offline-store.ts",
+    "src/lib/practice/outbox-store.ts",
+  ];
+  const clientReaches = CLIENT_MODULES.flatMap(m => reaches(m).map(r => `${m} :: ${r}`));
+  ok("0d. ⚠⚠ no browser module reaches a server-only API, however far down the import graph",
+    clientReaches.length === 0, clientReaches.join(" | "));
   ok("0d-control. the walker does find one when there is one to find",
     reaches("src/lib/practice/sync-appliers/parameter-measurement.ts").length > 0,
-    "the graph walk is not following imports at all, so 0c proves nothing");
+    "the graph walk is not following imports at all, so 0d proves nothing");
+  ok("0d-control-b. and every module in the list actually exists to be walked",
+    CLIENT_MODULES.every(m => { try { readFileSync(m, "utf8"); return true; } catch { return false; } }),
+    "a renamed module would let 0d pass by reading nothing");
   const unknown = validateTransaction(tx());
   ok("0b. so an upload is refused, and the refusal NAMES the type",
     !unknown.ok && unknown.code === "ENTITY_NOT_SYNCABLE" && unknown.message.includes("harness_note"));

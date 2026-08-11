@@ -6,6 +6,7 @@ import {
   OUTBOX_UNRESOLVED, type OutboxRecord,
 } from "@/lib/practice/outbox-model";
 import { outboxExport, outboxLoad, outboxSave } from "@/lib/practice/outbox-store";
+import { uploadOutbox, uploadSentence } from "@/lib/practice/sync-uploader";
 import {
   CONFLICT_NOTHING_IS_DISCARDED, CONFLICT_RESOLUTIONS, compareConflict, conflictSentence,
   resolutionLabel, validateDecision, type ConflictResolution,
@@ -53,12 +54,30 @@ export default function SyncCentre() {
   const [reason, setReason] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendNote, setSendNote] = useState<string | null>(null);
 
   const reread = useCallback(async () => {
     const loaded = await outboxLoad();
     setRecords(loaded.records);
     setOutboxDetail(loaded.detail);
   }, []);
+
+  /**
+   * ⚠ THE THING THAT MAKES CAPTURE HONEST. Until this existed, /api/v1/practice/sync/upload had ZERO
+   * callers: work was accepted, the practitioner was told it was held, and nothing ever sent it.
+   *
+   * ⚠ IT IS SAFE TO CALL AT ANY TIME, including with an empty queue and including twice at once from the
+   * mount and the `online` event -- `uploadOutbox` sends only what is due, and migration 284's ledger
+   * makes a duplicate transaction a no-op rather than a second consultation.
+   */
+  const send = useCallback(async () => {
+    setSending(true);
+    const outcome = await uploadOutbox();
+    setSending(false);
+    setSendNote(uploadSentence(outcome));
+    await reread();
+  }, [reread]);
 
   useEffect(() => {
     queueMicrotask(() => { void reread(); });
@@ -68,6 +87,22 @@ export default function SyncCentre() {
       .then(r => r.json()).then(setLedger)
       .catch(() => setLedger(null));
   }, [reread]);
+
+  /**
+   * ⚠ SENT ON ARRIVAL AND WHENEVER THE CONNECTION RETURNS, because the promise capture makes is "it will
+   * be filed with the practice when there is a connection". A queue that only drains when somebody
+   * remembers to press a button does not keep that promise -- and the person who would press it is in a
+   * clinic.
+   *
+   * ⚠ The BUTTON stays anyway. `navigator.onLine` reports the network interface, not reachability, so a
+   * device on wifi with no route never fires the event and needs a way to be told to try.
+   */
+  useEffect(() => {
+    const attempt = () => { void send(); };
+    queueMicrotask(attempt);
+    window.addEventListener("online", attempt);
+    return () => window.removeEventListener("online", attempt);
+  }, [send]);
 
   const now = new Date();
   const summary = records ? outboxSummary(records, now) : null;
@@ -181,7 +216,21 @@ export default function SyncCentre() {
                 className="rounded-lg border border-gray-300 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
                 Export what has not been sent
               </button>
+              {/* ⚠ THE CONTROL THAT MAKES CAPTURE HONEST. Phase one had no "send" because there was
+                  nothing to send and a button implying a queue that did not exist would have been a lie.
+                  There is now. It runs automatically on arrival and when the connection returns; this is
+                  for the case navigator.onLine cannot see -- wifi with no route home. */}
+              <button type="button" disabled={sending} onClick={() => { void send(); }}
+                className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
+                {sending ? "Sending…" : "Send what is waiting"}
+              </button>
             </div>
+            {/* ⚠ THE RESULT OF THE LAST RUN, IN WORDS. `uploadSentence` deliberately never says "synced":
+                a run sends at most one batch and may leave work waiting, blocked or needing a person, so
+                a blanket success would tell a practitioner their work arrived when some of it did not. */}
+            {sendNote && (
+              <p className="mt-2 text-[12px] leading-relaxed text-gray-700">{sendNote}</p>
+            )}
           </>
         )}
       </section>

@@ -171,8 +171,15 @@ export const SYNC_APPLIERS: Record<string, SyncApplier> = {
 
 export const SYNC_ENTITY_TYPES: string[] = Object.keys(SYNC_APPLIERS);
 
-/** Bounded so one upload cannot hold a connection open indefinitely. COMP-SYNC-001 s7 is incremental. */
-export const SYNC_MAX_BATCH = 100;
+/**
+ * Bounded so one upload cannot hold a connection open indefinitely. COMP-SYNC-001 s7 is incremental.
+ *
+ * ⚠ DEFINED IN sync-limits.ts AND RE-EXPORTED HERE, not declared twice. The browser uploader needs this
+ * number and cannot import this module -- sync-engine reaches next/headers through the applier, which is
+ * the import chain that put /practice/offline on a 500. Re-exporting keeps ONE definition, so the client
+ * batch size and the ceiling this server enforces cannot drift apart.
+ */
+export { SYNC_MAX_BATCH } from "@/lib/practice/sync-limits";
 
 // ── VALIDATION ──────────────────────────────────────────────────────────────────────────────────────
 //
