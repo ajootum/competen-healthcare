@@ -14,7 +14,7 @@ import RegisterNavigator from "./RegisterNavigator";
 import RegistryConsole from "./RegistryConsole";
 import ContextPanel from "./ContextPanel";
 import type {
-  CohortView, FamilyView, ScreenCapabilities, SearchView, SummaryView, WorklistsView,
+  CohortSortView, CohortView, FamilyView, ScreenCapabilities, SearchView, SummaryView, WorklistsView,
 } from "./types";
 
 // /practice/patients -- CPR-PAT-002, the Patients workspace dashboard (CPR-V5-006's engine, unchanged).
@@ -73,7 +73,14 @@ export default async function PatientsPage({ searchParams }: {
   const parsedPage = Number.parseInt(one(sp.page), 10);
   const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 0;
   const scope: "practice" | "mine" = one(sp.scope) === "mine" ? "mine" : "practice";
-  const sort: "registered" | "name" = one(sp.sort) === "name" ? "name" : "registered";
+  // The sort token carries column AND direction (see CohortSort in the engine). An unknown token falls
+  // back to the default rather than erroring a shared link.
+  const SORTS: readonly CohortSortView[] = [
+    "registered", "registered_oldest", "name", "name_desc",
+    "last_seen", "last_seen_oldest", "next_review", "next_review_latest",
+  ];
+  const sort: CohortSortView = (SORTS as readonly string[]).includes(one(sp.sort))
+    ? one(sp.sort) as CohortSortView : "registered";
 
   const admin = createAdminClient();
   const ctx = shell.ctx;

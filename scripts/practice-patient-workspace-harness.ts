@@ -675,10 +675,55 @@ async function main() {
   ok("19e. and the default is stated once, in the constants",
     (await myPatients(admin, a, {})).pageSize === DEFAULT_PAGE_SIZE);
 
-  ok("20. SORTING BY LAST SEEN IS DECLARED UNAVAILABLE rather than quietly wrong across pages",
-    cohort.sortOptions.find(s => s.key === "lastSeen")?.available === false &&
-    /only be true within one page/i.test(cohort.sortOptions.find(s => s.key === "lastSeen")!.note ?? ""),
-    JSON.stringify(cohort.sortOptions));
+  // ── 20. THE DERIVED SORTS (2026-08-11): ordered at the SOURCE, true across pages ──────────────────
+  // The old assertion here pinned the refusal ("declared unavailable"). The refusal was about sorting
+  // the PAGE after fetching it; what ships now builds the ordered id-list from the encounter or
+  // follow-up table first and pages over THAT, which is exactly the property these assertions demand.
+  ok("20. LAST SEEN AND NEXT REVIEW SORTS ARE OFFERED, and the one-page refusal is gone",
+    cohort.sortOptions.find(s => s.key === "last_seen")?.available === true &&
+    cohort.sortOptions.find(s => s.key === "next_review")?.available === true &&
+    !cohort.sortOptions.some(s => /only be true within one page/i.test(s.note ?? "")),
+    JSON.stringify(cohort.sortOptions.map(s => `${s.key}:${s.available}`)));
+
+  // ⚠ ASSERTED ACROSS PAGES, because within-one-page correctness is the failure the old refusal named.
+  // Three pages of three are concatenated and the ORDER OF THE CONCATENATION is what must hold.
+  const seenPages: Awaited<ReturnType<typeof myPatients>>[] = [];
+  for (let p = 0; p < 3; p++) seenPages.push(await myPatients(admin, a, { sort: "last_seen", pageSize: 3, page: p }));
+  const seenConcat = seenPages.flatMap(pg => pg.rows);
+  const firstNull = seenConcat.findIndex(r => r.lastSeen === null);
+  const seenHead = seenConcat.filter(r => r.lastSeen !== null);
+  ok("20b. sort=last_seen ACROSS THREE PAGES: every seen patient precedes every never-seen one",
+    seenConcat.length === 9 && new Set(seenConcat.map(r => r.patientId)).size === 9 &&
+    (firstNull === -1 || seenConcat.slice(firstNull).every(r => r.lastSeen === null)),
+    JSON.stringify(seenConcat.map(r => `${r.name}:${r.lastSeen ?? "never"}`)));
+  ok("20c. and the seen ones are in most-recent-first order across the page boundary",
+    seenHead.length >= 2 &&
+    seenHead.every((r, i) => i === 0 || r.lastSeen! <= seenHead[i - 1].lastSeen!),
+    JSON.stringify(seenHead.map(r => r.lastSeen)));
+  ok("20d. the payload reports the sort that applied and no degrade note",
+    seenPages[0].sort === "last_seen" && seenPages[0].sortNote === null && seenPages[0].total === 9,
+    JSON.stringify({ sort: seenPages[0].sort, note: seenPages[0].sortNote, total: seenPages[0].total }));
+
+  const seenOldest = await myPatients(admin, a, { sort: "last_seen_oldest", pageSize: MAX_PAGE_SIZE });
+  const oldestHead = seenOldest.rows.filter(r => r.lastSeen !== null);
+  ok("20e. THE FLIPPED DIRECTION REVERSES THE SEEN ONES and still keeps never-seen LAST, not first",
+    oldestHead.map(r => r.patientId).join("|") === [...seenHead].reverse().map(r => r.patientId).join("|") &&
+    seenOldest.rows.findIndex(r => r.lastSeen === null) >= oldestHead.length - 1,
+    JSON.stringify(seenOldest.rows.map(r => `${r.name}:${r.lastSeen ?? "never"}`)));
+
+  const byReview = await myPatients(admin, a, { sort: "next_review", pageSize: MAX_PAGE_SIZE });
+  const reviewHead = byReview.rows.filter(r => r.nextFollowUp !== null);
+  ok("20f. sort=next_review: soonest due first (the OVERDUE one leads), none-open last",
+    reviewHead.length >= 2 && reviewHead[0].patientId === adult.data.id &&
+    reviewHead.every((r, i) => i === 0 || r.nextFollowUp!.dueOn >= reviewHead[i - 1].nextFollowUp!.dueOn) &&
+    byReview.rows.slice(reviewHead.length).every(r => r.nextFollowUp === null),
+    JSON.stringify(byReview.rows.map(r => `${r.name}:${r.nextFollowUp?.dueOn ?? "none"}`)));
+
+  const zToA = await myPatients(admin, a, { sort: "name_desc", pageSize: MAX_PAGE_SIZE });
+  const aToZ = await myPatients(admin, a, { sort: "name", pageSize: MAX_PAGE_SIZE });
+  ok("20g. name_desc IS name REVERSED, so a header click flips rather than re-deals",
+    zToA.rows.map(r => r.patientId).join("|") === [...aToZ.rows].reverse().map(r => r.patientId).join("|"),
+    JSON.stringify({ aToZ: aToZ.rows.map(r => r.name), zToA: zToA.rows.map(r => r.name) }));
 
   // THE BRIDGE FROM A FIGURE TO A LIST.
   const fromTile = await myPatients(admin, a, { patientIds: w("waiting").patientIds });

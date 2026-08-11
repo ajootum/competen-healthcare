@@ -197,6 +197,15 @@ export const WORKLIST_ROW_LIMIT = 50;
 export const ENRICHMENT_ROW_CAP = 1000;
 
 /**
+ * The bound on the id-lists a DERIVED SORT (last seen, next review) is built from: the register itself
+ * and the ordering read both stay under it. 900, not 1000, because PostgREST silently truncates an
+ * unbounded select at 1000 -- asking for cap+1 must still be answerable, or "truncated" becomes
+ * undetectable at exactly the size where it starts mattering. When either read exceeds the cap the
+ * sort DEGRADES to registered order with the reason in `sortNote`, never a quietly incomplete ordering.
+ */
+export const SORT_ORDER_CAP = 900;
+
+/**
  * What this workspace will not claim.
  *
  * Each entry is something CPR-V5-006, its review, or the comp asks for that the record cannot honestly

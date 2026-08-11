@@ -122,6 +122,13 @@ export type CohortRowView = {
   recordStatus: string;
 };
 
+/** Mirrors the engine's CohortSort: one token carries the column and the direction. */
+export type CohortSortView =
+  | "registered" | "registered_oldest"
+  | "name" | "name_desc"
+  | "last_seen" | "last_seen_oldest"
+  | "next_review" | "next_review_latest";
+
 export type CohortView = {
   rows: CohortRowView[];
   page: number;
@@ -129,8 +136,11 @@ export type CohortView = {
   hasMore: boolean;
   total: number | null;
   scope: "practice" | "mine";
-  sort: "registered" | "name";
+  /** The sort ACTUALLY applied -- a derived sort that degraded reports "registered" here. */
+  sort: CohortSortView;
   sortOptions: { key: string; label: string; available: boolean; note?: string }[];
+  /** Set when a requested ordering could not be honoured; says what happened instead. */
+  sortNote: string | null;
   today: string;
   unavailable: boolean;
   reason: Unavailable;

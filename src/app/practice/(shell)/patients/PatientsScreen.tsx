@@ -14,7 +14,7 @@ import InsightsPanel from "./InsightsPanel";
 import RegistrationDrawer from "./RegistrationDrawer";
 import { BUTTON } from "@/lib/practice/palette";
 import type {
-  CohortView, FamilyView, ScreenCapabilities, SearchView, SummaryView, WorklistsView,
+  CohortSortView, CohortView, FamilyView, ScreenCapabilities, SearchView, SummaryView, WorklistsView,
 } from "./types";
 
 // CPR-PAT-002 -- the Patients workspace dashboard, assembled in the specification's own order.
@@ -67,7 +67,7 @@ export default function PatientsScreen(props: {
   registerIntent: string | null;
   page: number;
   scope: "practice" | "mine";
-  sort: "registered" | "name";
+  sort: CohortSortView;
   /** The registration console, rendered on the server and handed in as the drawer's contents. */
   registration: React.ReactNode;
   /**

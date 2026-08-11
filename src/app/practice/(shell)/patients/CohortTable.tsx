@@ -4,7 +4,7 @@ import Link from "next/link";
 import { PLACE_BOUNDARY, MEDICATION_NOT_CURRENT_REASON } from "@/lib/practice/patient-workspace-constants";
 import { Absence, CARD, day } from "./Honesty";
 import { UNSUPPLIED_COLUMN } from "./refusals";
-import type { CohortRowView, CohortView, WorklistView } from "./types";
+import type { CohortRowView, CohortSortView, CohortView, WorklistView } from "./types";
 import { COHORT_RING, JOURNEY_ICON, PATIENT_STATUS_SWATCH } from "@/lib/practice/palette";
 
 // CPR-PAT-002 s4 -- the Longitudinal Patient Register.
@@ -100,10 +100,36 @@ export default function CohortTable({
   selectedPatientId: string | null;
   onSelect: (patientId: string) => void;
   onScope: (scope: "practice" | "mine") => void;
-  onSort: (sort: "registered" | "name") => void;
+  onSort: (sort: CohortSortView) => void;
   onPage: (page: number) => void;
   pending: boolean;
 }) {
+  // ── SORTABLE COLUMN HEADERS (the owner, 2026-08-11) ───────────────────────────────────────────────
+  // A header's first click applies the pair's most useful direction; a second click flips it. The
+  // ordering itself is built at the SOURCE by the engine (true across pages) -- see myPatients(); when
+  // it cannot be, the payload's sortNote is rendered below the header row rather than sorting wrongly.
+  // `firstDir` names the direction the FIRST click applies, because the pairs differ: names read best
+  // A to Z (ascending), last seen reads best most-recent-first (descending), reviews soonest-due first.
+  const sortableTh = (label: string, first: CohortSortView, flipped: CohortSortView, firstDir: "asc" | "desc") => {
+    const current = cohort?.sort;
+    const active = current === first || current === flipped;
+    const dir = current === first ? firstDir : current === flipped ? (firstDir === "asc" ? "desc" : "asc") : null;
+    return (
+      <th className={th} aria-sort={dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none"}>
+        <button
+          type="button"
+          onClick={() => onSort(current === first ? flipped : first)}
+          title={`Sort by ${label.toLowerCase()}`}
+          className={`inline-flex items-center gap-1 uppercase tracking-[0.06em] ${active ? "text-[var(--cp-primary-deep)]" : "hover:text-gray-800"}`}
+        >
+          {label}
+          <span aria-hidden className={active ? "" : "text-gray-300"}>
+            {dir === "asc" ? "▲" : dir === "desc" ? "▼" : "⇅"}
+          </span>
+        </button>
+      </th>
+    );
+  };
   const heading = worklist ? worklist.title : "Longitudinal patient register";
   const reasonOnList = new Map<string, { note: string; when: string | null }>();
   for (const r of worklist?.rows ?? []) {
@@ -156,7 +182,7 @@ export default function CohortTable({
             Sort{" "}
             <select
               value={cohort?.sort ?? "registered"}
-              onChange={e => onSort(e.target.value === "name" ? "name" : "registered")}
+              onChange={e => onSort(e.target.value as CohortSortView)}
               className="rounded-lg border border-gray-200 px-2 py-1 text-[12px] text-gray-700"
             >
               {(cohort?.sortOptions ?? []).map(o => (
@@ -176,6 +202,14 @@ export default function CohortTable({
             ? "Patients you have opened an encounter for, most recently registered first."
             : "Everybody on this practice's register, with the continuity of care recorded against them."}
       </p>
+
+      {/* A REQUESTED ORDERING THAT COULD NOT BE HONOURED SAYS SO, where the table is read. The engine
+          degraded to registered order rather than showing an ordering with rows missing from it. */}
+      {cohort?.sortNote && (
+        <p className="border-b border-gray-100 bg-amber-50/60 px-4 py-2 text-[11.5px] text-amber-800">
+          {cohort.sortNote}
+        </p>
+      )}
 
       {/* "Only mine" means the patients this practitioner has CONSULTED -- the one practitioner-to-patient
           link this schema holds. Said here, because a scope whose meaning is guessed is a scope that is
@@ -217,7 +251,7 @@ export default function CohortTable({
           <table className="w-full min-w-[1080px] border-collapse">
             <thead className="bg-gray-50/80">
               <tr>
-                <th className={th}>Patient</th>
+                {sortableTh("Patient", "name", "name_desc", "asc")}
                 <th className={th}>Active problems</th>
                 <th className={th}>
                   Treatments decided
@@ -227,9 +261,12 @@ export default function CohortTable({
                     not &ldquo;current&rdquo;
                   </span>
                 </th>
-                <th className={th}>Last seen</th>
-                <th className={th}>Next review</th>
+                {sortableTh("Last seen", "last_seen", "last_seen_oldest", "desc")}
+                {sortableTh("Next review", "next_review", "next_review_latest", "asc")}
                 <th className={th}>Journey snapshot</th>
+                {/* Status is not sortable: it is DERIVED per row from the queue and encounter reads, so
+                    an ordering on it would have the exact within-one-page problem the derived sorts
+                    were built to avoid. The worklist tiles are the way to see one status as a list. */}
                 <th className={th}>Status</th>
                 {worklist && <th className={th}>On this list because</th>}
               </tr>

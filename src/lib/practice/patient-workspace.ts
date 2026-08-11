@@ -5,7 +5,7 @@ import { ageFrom, relationshipExpectation, RELATIONSHIP_TYPES } from "@/lib/prac
 import { logAccess } from "@/lib/practice/privacy";
 import {
   WORKLIST_KEYS, RECENT_WINDOW_DAYS, WORKLIST_META, HOSPITAL_IDENTIFIER_TYPES, MATCH_RANK,
-  COHORT_STATUS_LABELS, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, WORKLIST_ROW_LIMIT, ENRICHMENT_ROW_CAP,
+  COHORT_STATUS_LABELS, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, WORKLIST_ROW_LIMIT, ENRICHMENT_ROW_CAP, SORT_ORDER_CAP,
   REFUSES, PENDING_RESULTS_BOUNDARY, MEDICATION_BOUNDARY, MEDICATION_NOT_CURRENT_REASON, PLACE_BOUNDARY,
   type WorklistKey, type CohortStatus,
 } from "@/lib/practice/patient-workspace-constants";
@@ -694,6 +694,16 @@ export type CohortRow = {
   recordStatus: string;
 };
 
+/**
+ * One token carries the column AND the direction, because the URL carries one `sort` value and a
+ * separate `dir` param would let the two disagree ("name" + a direction meant for dates).
+ */
+export type CohortSort =
+  | "registered" | "registered_oldest"
+  | "name" | "name_desc"
+  | "last_seen" | "last_seen_oldest"
+  | "next_review" | "next_review_latest";
+
 export type CohortResult = {
   rows: CohortRow[];
   page: number;
@@ -703,8 +713,11 @@ export type CohortResult = {
   /** The exact size of the cohort, or null if it could not be counted. Never inferred from the page. */
   total: number | null;
   scope: "practice" | "mine";
-  sort: "registered" | "name";
+  /** The sort that was ACTUALLY applied -- a derived sort that degraded reports "registered" here. */
+  sort: CohortSort;
   sortOptions: { key: string; label: string; available: boolean; note?: string }[];
+  /** Set when a requested ordering could not be honoured; says what happened instead. Never silent. */
+  sortNote: string | null;
   today: string;
   unavailable: boolean;
   reason: Unavailable;
@@ -717,15 +730,20 @@ export type CohortResult = {
  * The paginated cohort: Name, Practice ID, Hospital Numbers, Last Seen, Next Follow-up, Current Status,
  * Location -- CPR-V5-006's seven columns, four of them derived at read time.
  *
- * SORTING BY LAST SEEN IS NOT OFFERED, and the payload says so rather than omitting the control.
- * Last seen is computed AFTER the page is fetched, from a separate table; sorting on it would order
- * twenty-five rows correctly and produce a page-two that overlapped page one. An ordering that is only
- * true within a page is worse than an ordering that is honest about what it can do.
+ * ⚠ SORTING BY LAST SEEN AND NEXT REVIEW IS ORDERED AT THE SOURCE, NOT WITHIN THE PAGE. The refusal
+ * this function used to carry ("an ordering that is only true within a page") was about sorting the
+ * PAGE after fetching it -- which would give page two rows that belong on page one. What ships instead
+ * (2026-08-11, the owner asked for clickable column sorting): the ordered patient-id list is built from
+ * the encounter or follow-up table FIRST, bounded by SORT_ORDER_CAP, and the page is a slice of that
+ * list -- so the ordering is true across every page or it is not offered at all. A register or an
+ * ordering read that exceeds the cap DEGRADES, loudly: the payload's `sort` says what actually applied
+ * and `sortNote` says why. Patients with nothing to order by (never seen, no open follow-up) come LAST
+ * in both directions -- a direction flip must not bury the register under its own blank rows.
  */
 export async function myPatients(
   admin: any, ctx: WorkspaceContext,
   opts: {
-    page?: number; pageSize?: number; scope?: "practice" | "mine"; sort?: "registered" | "name";
+    page?: number; pageSize?: number; scope?: "practice" | "mine"; sort?: CohortSort;
     /** The bridge from a worklist tile to a filtered patient list. Rule 2. */
     patientIds?: string[];
     includeInactive?: boolean;
@@ -756,14 +774,25 @@ export async function myPatients(
   const enrichment: CohortResult["enrichment"] = {};
   const sortOptions = [
     { key: "registered", label: "Most recently registered", available: true },
-    { key: "name", label: "Name", available: true },
+    { key: "registered_oldest", label: "Oldest registered first", available: true },
+    { key: "name", label: "Name A to Z", available: true },
+    { key: "name_desc", label: "Name Z to A", available: true },
     {
-      key: "lastSeen", label: "Last seen", available: false,
-      note: "Last seen is derived from the encounter table after the page is fetched, so ordering on it would only be true within one page.",
+      key: "last_seen", label: "Last seen, most recent first", available: true,
+      note: "Ordered from the encounter table itself, so it is true across pages. Patients never seen here come last either way.",
     },
+    { key: "last_seen_oldest", label: "Last seen, longest ago first", available: true },
+    {
+      key: "next_review", label: "Next review, soonest due first", available: true,
+      note: "Ordered by the earliest open follow-up. Patients with none open come last either way.",
+    },
+    { key: "next_review_latest", label: "Next review, furthest away first", available: true },
   ];
+  /** What was actually applied; a degraded derived sort reports "registered" + a sortNote. */
+  let effSort: CohortSort = sort;
+  let sortNote: string | null = null;
   const shell = (reason: Unavailable, error: string | null): CohortResult => ({
-    rows: [], page, pageSize, hasMore: false, total: null, scope, sort, sortOptions, today,
+    rows: [], page, pageSize, hasMore: false, total: null, scope, sort: effSort, sortOptions, sortNote, today,
     unavailable: true, reason, error, enrichment,
   });
 
@@ -789,7 +818,7 @@ export async function myPatients(
   }
   if (restrictTo !== null && restrictTo.length === 0) {
     return {
-      rows: [], page, pageSize, hasMore: false, total: 0, scope, sort, sortOptions, today,
+      rows: [], page, pageSize, hasMore: false, total: 0, scope, sort: effSort, sortOptions, sortNote, today,
       unavailable: false, reason: null, error: null, enrichment,
     };
   }
@@ -808,28 +837,97 @@ export async function myPatients(
   };
 
   const from = page * pageSize;
-  const { data: pageData, error: pageError } = await applyFilters(
-    admin.from("practice_patient").select("id, display_name, sex, birth_date, age_estimate_years, status, created_at"),
-  )
-    .order(sort === "name" ? "name_normalised" : "created_at", { ascending: sort === "name" })
-    // ONE ROW MORE THAN THE PAGE, so hasMore is a fact rather than a guess from a count that may be stale.
-    .range(from, from + pageSize);
-  if (pageError) return shell("read_failed", String(pageError.message ?? pageError));
+  const PAGE_COLS = "id, display_name, sex, birth_date, age_estimate_years, status, created_at";
+  let rows: any[] = [];
+  let hasMore = false;
+  let totalOut: number | null = null;
 
-  const all = (pageData ?? []) as any[];
-  const hasMore = all.length > pageSize;
-  const rows = all.slice(0, pageSize);
+  // ── THE DERIVED ORDERINGS: last seen and next review ──────────────────────────────────────────────
+  // The whole ordered id-list is built first and the page is a slice of it, so page two continues page
+  // one instead of overlapping it. Both reads are bounded; hitting a bound DEGRADES to the registered
+  // order with the reason in sortNote -- an ordering that might be missing rows is not an ordering.
+  if (sort === "last_seen" || sort === "last_seen_oldest" || sort === "next_review" || sort === "next_review_latest") {
+    const byLastSeen = sort === "last_seen" || sort === "last_seen_oldest";
+    const reg = await lookup(SORT_ORDER_CAP, () => applyFilters(admin.from("practice_patient").select("id"))
+      .order("created_at", { ascending: false }).limit(SORT_ORDER_CAP + 1));
+    enrichment.sortRegister = { ok: reg.ok, error: reg.error, truncated: reg.truncated };
+    const src = reg.ok && !reg.truncated
+      ? await lookup(SORT_ORDER_CAP, () => byLastSeen
+        ? admin.from("practice_encounter").select("patient_id, started_at")
+          .eq("workspace_id", ws).order("started_at", { ascending: false }).limit(SORT_ORDER_CAP + 1)
+        : admin.from("practice_follow_up").select("patient_id, due_on")
+          .eq("workspace_id", ws).in("status", ["OPEN", "SCHEDULED"]).order("due_on").limit(SORT_ORDER_CAP + 1))
+      : null;
+    if (src) enrichment.sortOrdering = { ok: src.ok, error: src.error, truncated: src.truncated };
 
-  const { count: total, error: countError } = await applyFilters(
-    admin.from("practice_patient").select("id", { count: "exact", head: true }),
-  );
-  enrichment.total = { ok: !countError, error: countError ? String(countError.message ?? countError) : null, truncated: false };
+    if (!reg.ok || reg.truncated || !src || !src.ok || src.truncated) {
+      effSort = "registered";
+      const why = !reg.ok ? (reg.error ?? "the register could not be read")
+        : reg.truncated ? `the register is larger than the ${SORT_ORDER_CAP}-row bound this ordering can hold`
+          : !src!.ok ? (src!.error ?? "the ordering read failed")
+            : `more than ${SORT_ORDER_CAP} ${byLastSeen ? "encounters" : "open follow-ups"} exist, so the ordering could be missing rows`;
+      sortNote = `Could not order by ${byLastSeen ? "last seen" : "next review"}: ${why}. Showing most recently registered instead.`;
+    } else {
+      const registerIds = (reg.rows as any[]).map(r => r.id as string);
+      const inRegister = new Set(registerIds);
+      // First occurrence wins: the source is already ordered, so a patient's first row IS their most
+      // recent encounter (or their earliest open follow-up).
+      const head: string[] = [];
+      const placed = new Set<string>();
+      for (const r of src.rows as any[]) {
+        const id = r.patient_id as string | null;
+        if (!id || placed.has(id) || !inRegister.has(id)) continue;
+        placed.add(id); head.push(id);
+      }
+      if (sort === "last_seen_oldest" || sort === "next_review_latest") head.reverse();
+      const combined = head.concat(registerIds.filter(id => !placed.has(id)));
 
-  if (rows.length === 0) {
-    return {
-      rows: [], page, pageSize, hasMore: false, total: countError ? null : (total ?? 0),
-      scope, sort, sortOptions, today, unavailable: false, reason: null, error: null, enrichment,
-    };
+      totalOut = combined.length;
+      hasMore = combined.length > from + pageSize;
+      const slice = combined.slice(from, from + pageSize);
+      enrichment.total = { ok: true, error: null, truncated: false };
+      if (slice.length === 0) {
+        return {
+          rows: [], page, pageSize, hasMore: false, total: totalOut, scope, sort: effSort, sortOptions,
+          sortNote, today, unavailable: false, reason: null, error: null, enrichment,
+        };
+      }
+      const { data: sliceData, error: sliceError } = await admin.from("practice_patient")
+        .select(PAGE_COLS).eq("workspace_id", ws).in("id", slice);
+      if (sliceError) return shell("read_failed", String(sliceError.message ?? sliceError));
+      const at = new Map(slice.map((id, i) => [id, i]));
+      rows = ((sliceData ?? []) as any[]).sort((a, b) => (at.get(a.id) ?? 0) - (at.get(b.id) ?? 0));
+    }
+  }
+
+  // ── THE DIRECT ORDERINGS (and the landing place of a degraded derived one) ────────────────────────
+  if (rows.length === 0 && totalOut === null) {
+    const orderCol = effSort === "name" || effSort === "name_desc" ? "name_normalised" : "created_at";
+    const ascending = effSort === "name" || effSort === "registered_oldest";
+    const { data: pageData, error: pageError } = await applyFilters(
+      admin.from("practice_patient").select(PAGE_COLS),
+    )
+      .order(orderCol, { ascending })
+      // ONE ROW MORE THAN THE PAGE, so hasMore is a fact rather than a guess from a count that may be stale.
+      .range(from, from + pageSize);
+    if (pageError) return shell("read_failed", String(pageError.message ?? pageError));
+
+    const all = (pageData ?? []) as any[];
+    hasMore = all.length > pageSize;
+    rows = all.slice(0, pageSize);
+
+    const { count: total, error: countError } = await applyFilters(
+      admin.from("practice_patient").select("id", { count: "exact", head: true }),
+    );
+    enrichment.total = { ok: !countError, error: countError ? String(countError.message ?? countError) : null, truncated: false };
+    totalOut = countError ? null : (total ?? 0);
+
+    if (rows.length === 0) {
+      return {
+        rows: [], page, pageSize, hasMore: false, total: totalOut,
+        scope, sort: effSort, sortOptions, sortNote, today, unavailable: false, reason: null, error: null, enrichment,
+      };
+    }
   }
 
   const ids = rows.map(r => r.id);
@@ -913,8 +1011,8 @@ export async function myPatients(
   });
 
   return {
-    rows: cohort, page, pageSize, hasMore, total: countError ? null : (total ?? null),
-    scope, sort, sortOptions, today, unavailable: false, reason: null, error: null, enrichment,
+    rows: cohort, page, pageSize, hasMore, total: totalOut,
+    scope, sort: effSort, sortOptions, sortNote, today, unavailable: false, reason: null, error: null, enrichment,
   };
 }
 
@@ -1461,7 +1559,7 @@ export type PatientsWorkspace = {
 export async function patientsWorkspace(
   admin: any, ctx: WorkspaceContext,
   opts: {
-    page?: number; pageSize?: number; scope?: "practice" | "mine"; sort?: "registered" | "name";
+    page?: number; pageSize?: number; scope?: "practice" | "mine"; sort?: CohortSort;
     /** The register's period, on registration date. See myPatients -- the worklists are NOT narrowed. */
     registeredFrom?: string; registeredTo?: string;
   } = {},
