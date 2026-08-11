@@ -73,8 +73,13 @@ export default function OfflineFrame({ children }: { children: React.ReactNode }
           </span>
         </header>
 
+        {/* ⚠ LEFT-ALIGNED, NOT CENTRED, because that is what every other page does. The shell renders
+            `main.practice-scale.flex-1.min-w-0.p-5` and its pages constrain themselves with a bare
+            `max-w-*` — no `mx-auto`. Centring here put a wide empty band between the sidebar and the
+            content and made the offline page look like a different application again, which is the exact
+            thing this frame exists to stop. Parity is the whole point of it. */}
         <main className="practice-scale min-w-0 flex-1 p-5">
-          <div className="mx-auto w-full max-w-3xl">{children}</div>
+          <div className="w-full max-w-3xl">{children}</div>
         </main>
       </div>
     </div>

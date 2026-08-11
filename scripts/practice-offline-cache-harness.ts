@@ -341,6 +341,23 @@ async function main() {
     && !frameSrc.includes("ctx.") && !frameSrc.includes("profile"));
   ok("6k-control. it DOES render the product mark, so 6i is not passing over an empty file",
     frameSrc.includes("competen") && frameSrc.includes("cp-shell"));
+  // ⚠ PARITY IS THE FRAME'S ONLY PURPOSE, so a layout that differs from the shell defeats it. The shell
+  // renders `main.practice-scale.flex-1.min-w-0.p-5` and its pages use a bare `max-w-*` with no
+  // `mx-auto`. Centring here left a wide empty band between the sidebar and the content and made the
+  // page look like a different application again -- which is what the owner saw on 2026-08-11.
+  // ⚠ STRIPPED. This assertion went red against CORRECT code because the only `mx-auto` left in the file
+  // is the COMMENT saying there must not be one. That is the EIGHTH time in this session that a needle
+  // has matched its own documentation, and the eighth is where it stops being bad luck: any source
+  // assertion in this repository reads stripped text, without exception.
+  const frameCode = frameSrc
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split(/\r?\n/).filter(l => !/^\s*(\/\/|\*|\{\/\*)/.test(l)).join("\n");
+  ok("6l-control. stripping comments left the frame's markup behind",
+    frameCode.includes("max-w-3xl") && frameCode.includes("aside"));
+  ok("6l. ⚠ the frame left-aligns its content, as every other page does",
+    !frameCode.includes("mx-auto"), "centred content re-opens the gap the frame exists to close");
+  ok("6m-control. and it still uses the shell's own main classes",
+    frameCode.includes("practice-scale") && frameCode.includes("flex-1") && frameCode.includes("p-5"));
   ok("6d. the offline screen contains no form and no input of any kind",
     !/<form\b/i.test(offlineTree) && !/<input\b/i.test(offlineTree)
     && !/<textarea\b/i.test(offlineTree) && !/<select\b/i.test(offlineTree));
