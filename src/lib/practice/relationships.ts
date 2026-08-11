@@ -40,8 +40,9 @@ export const RELATIONSHIP_TYPES = [
   ["other", "Other"],
 ] as const;
 
-/** The types that can carry legal authority for somebody who cannot decide for themselves. */
-const GUARDIAN_TYPES = new Set(["guardian", "mother", "father", "grandparent", "carer", "social_worker"]);
+/** The types that can carry legal authority for somebody who cannot decide for themselves.
+ *  Exported for the patient import, which must judge a CSV guardian by THIS list and no copy of it. */
+export const GUARDIAN_TYPES = new Set(["guardian", "mother", "father", "grandparent", "carer", "social_worker"]);
 
 export const CONSENT_TYPES = [
   ["data_processing", "Holding and processing their information"],

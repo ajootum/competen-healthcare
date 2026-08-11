@@ -81,8 +81,12 @@ export default function QuickActions({
         : "Select the record that will SURVIVE the merge. Merging is irreversible and is performed on that record, which is why it lives there and not here.",
     },
     {
+      // Built 2026-08-11 (CPR-IMP-001) after shipping disabled-with-a-reason since the screen landed:
+      // the import goes through the SAME engines as this screen's own drawer, duplicate detection
+      // included, so enabling it did not create a second way of deciding anything.
       key: "import_patients", label: "Import patients",
-      blocked: "Not built. There is no bulk-import endpoint under /api/v1/practice — registration is one record at a time, through the path that runs duplicate detection.",
+      href: capabilities.mayCreate ? "/practice/patients/import" : undefined,
+      blocked: capabilities.mayCreate ? undefined : "Your role does not carry patient.create.",
     },
   ];
 

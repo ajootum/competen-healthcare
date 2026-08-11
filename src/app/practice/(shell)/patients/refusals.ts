@@ -71,12 +71,9 @@ export const SCREEN_REFUSES: readonly ScreenRefusal[] = [
     detail:
       "The comp's tab strip reads All patients / Active care / Follow-ups due / Recently seen / Inactive. \"Active care\" is not a state this record holds — there is no episode of care, no caseload and no named responsible clinician, and inferring one from having an open follow-up would put a label on the patient rather than on the follow-up. The tabs that survive are the ones backed by a worklist the engine actually answers, plus the record's own archived flag, which is a different and much narrower fact than \"inactive\".",
   },
-  {
-    key: "bulk_import",
-    label: "Import patients",
-    detail:
-      "s7 lists it and the action is drawn, disabled, with this reason on it rather than being left off the row. There is no bulk-import endpoint anywhere under /api/v1/practice — registration is one record at a time through POST /api/v1/practice/registration, which runs duplicate detection per patient. A bulk path that skipped that check is the fastest way to fill a register with duplicates, so it is not being improvised here.",
-  },
+  // "bulk_import" LEFT THIS LIST 2026-08-11: CPR-IMP-001 built the import at /practice/patients/import,
+  // through the registration engines themselves — the refusal's own condition ("through the path that
+  // runs duplicate detection") is exactly what got built, so the entry retired rather than soured.
 ] as const;
 
 /**
