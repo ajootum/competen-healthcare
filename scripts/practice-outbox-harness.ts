@@ -189,10 +189,17 @@ function main() {
   ok("7h-control. an ordinary failure does not",
     outboxNeedingAttention([outboxMarkFailed(make(), "x", T0)], T0).length === 0);
 
-  // ── 8. NOTHING IS WIRED YET, AND THAT IS DELIBERATE ──────────────────────────────────────────────
-  // ⚠ s5: the line is crossed by ACCEPTANCE. Until all seven preconditions hold, no screen may call
-  // outboxAccept. This asserts the queue is still inert -- and it is expected to go red the day capture
-  // ships, which is the moment somebody must re-read the seven.
+  // ── 8. ⚠ THE QUEUE IS WIRED, AND THIS IS THE ASSERTION THAT CHANGED WHEN IT WAS ─────────────────
+  //
+  // This said "nothing calls outboxAccept yet" and was written to GO RED the day capture shipped -- "the
+  // moment somebody must re-read the seven". It went red on 2026-08-11 and the seven were re-read: all
+  // hold, precondition 1 last, proven in a real browser by practice-outbox-durability-harness.ts.
+  //
+  // ⚠ THE REPLACEMENT IS NOT A RELAXATION. Deleting it would leave `outboxAccept` -- the one function in
+  // this product that accepts a clinical record it cannot deliver -- callable from anywhere, and a second
+  // caller added in six months would pass silently. The rule now is that there is exactly ONE sanctioned
+  // producer, `offline-capture.ts`, which is where the seven preconditions are written down and where the
+  // bedside refusals live. Anything else calling it is a write path that has not been reasoned about.
   const callers = ["src/app", "src/lib"].flatMap(dir => {
     const out: string[] = [];
     const walk = (p: string) => {
@@ -206,8 +213,13 @@ function main() {
     walk(dir);
     return out;
   });
-  ok("8a. ⚠ nothing calls outboxAccept yet -- the queue accepts nothing until the seven hold",
-    callers.length === 0, callers.join(", "));
+  const SANCTIONED = "src/lib/practice/offline-capture.ts";
+  const unsanctioned = callers.filter(c => !c.replace(/\\/g, "/").endsWith(SANCTIONED));
+  ok("8a. ⚠ outboxAccept has exactly ONE sanctioned caller -- no unreasoned write path",
+    unsanctioned.length === 0, `also called from: ${unsanctioned.join(", ")}`);
+  ok("8a-control. and that caller EXISTS, so 8a is not passing over a list of none",
+    callers.some(c => c.replace(/\\/g, "/").endsWith(SANCTIONED)),
+    "capture is unwired -- if that is intended, this assertion is the record of it");
 
   report();
 }

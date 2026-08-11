@@ -18,7 +18,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { loadEnvConfig } from "@next/env";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import {
   SYNC_APPLIERS, SYNC_ENTITY_TYPES, SYNC_MAX_BATCH, SYNC_TABLE,
   applyBatch, applyTransaction, syncStatus, validateTransaction,
@@ -84,8 +84,45 @@ async function main() {
   await cleanup();
 
   // ── 0. THE SHIPPED STATE ─────────────────────────────────────────────────────────────────────────
-  ok("0a. ⚠ the applier registry ships EMPTY -- no speculative write path into the record",
-    SYNC_ENTITY_TYPES.length === 0, SYNC_ENTITY_TYPES.join(", "));
+  // ⚠⚠ THIS PINNED "EMPTY" AND THE PROPERTY WAS NEVER EMPTINESS -- it was "NO SPECULATIVE WRITE PATH
+  // INTO THE RECORD", which its own name says. The registry was empty only because no capture existed.
+  // Registering the first real applier, once all seven preconditions held, turned it red against exactly
+  // the work it was written to permit. THIRD TIME IN THIS REPOSITORY that a tally was pinned in place of
+  // a property; see harness-assertion-shapes.
+  //
+  // The real rule, from sync-engine.ts's own header: "adding an applier without a capture screen that
+  // produces it creates a write path into the patient record that nothing exercises." So: every
+  // registered entity type must have a PRODUCER -- something that actually enqueues it.
+  //
+  // ⚠ IT MATCHES THE CONSTANT AS WELL AS THE LITERAL, and that is not leniency. A producer that hard-codes
+  // "parameter_measurement" would be a second source of truth for the entity type, and the two could
+  // drift silently -- uploads refused as ENTITY_NOT_SYNCABLE for a type the registry does say it takes.
+  // Importing the constant is the CORRECT shape, so the assertion has to recognise it.
+  //
+  // ⚠⚠ IMPORT LINES ARE STRIPPED, AND A BREAK TEST IS WHY. The first version scanned the whole file, so
+  // changing the producer's `entityType:` to something unregistered LEFT IT GREEN -- the constant was
+  // still named on the `import` line at the top. The assertion was matching the import rather than the
+  // use, which is the same family as a needle matching its own documentation. It now reads only the code
+  // that does something.
+  const producers = readFileSync("src/lib/practice/offline-capture.ts", "utf8")
+    .split(/\r?\n/).filter(l => !/^\s*import\b/.test(l)).join("\n");
+  const applierDir = "src/lib/practice/sync-appliers";
+  const constantsByValue = new Map<string, string>();
+  for (const f of readdirSync(applierDir)) {
+    if (!f.endsWith(".ts")) continue;
+    const src = readFileSync(`${applierDir}/${f}`, "utf8");
+    for (const m of src.matchAll(/export const ([A-Z_]+ENTITY_TYPE) = "([^"]+)"/g))
+      constantsByValue.set(m[2], m[1]);
+  }
+  const orphaned = SYNC_ENTITY_TYPES.filter(t => {
+    const constant = constantsByValue.get(t);
+    return !producers.includes(`"${t}"`) && !(constant && producers.includes(constant));
+  });
+  ok("0a. ⚠ every registered applier has a producer -- no speculative write path into the record",
+    orphaned.length === 0,
+    orphaned.length ? `no capture path enqueues: ${orphaned.join(", ")}` : SYNC_ENTITY_TYPES.join(", "));
+  ok("0a-control. there is at least one registered applier, so 0a is not scanning an empty list",
+    SYNC_ENTITY_TYPES.length > 0);
   const unknown = validateTransaction(tx());
   ok("0b. so an upload is refused, and the refusal NAMES the type",
     !unknown.ok && unknown.code === "ENTITY_NOT_SYNCABLE" && unknown.message.includes("harness_note"));
@@ -109,7 +146,14 @@ async function main() {
 
   // From here the harness registers its own appliers. ⚠ Removed in `finally` so a crash cannot leave a
   // test applier live in a module other code imports.
+  //
+  // ⚠ SNAPSHOT FIRST -- see assertion 9. The registry is no longer empty: the product's own appliers
+  // arrived once all seven of s5's preconditions held. What has to stay true is that THE HARNESS LEAVES
+  // NOTHING BEHIND, which is a comparison against this snapshot rather than against zero.
+  const applierKeysBefore = Object.keys(SYNC_APPLIERS).sort().join(",");
   SYNC_APPLIERS.harness_note = counting;
+  ok("0-control. the harness's own applier is registered, so assertion 9 has something to remove",
+    Object.keys(SYNC_APPLIERS).includes("harness_note"));
 
   try {
     // ── 1. ⚠ THE HEADLINE: A RETRY DOES NOT DUPLICATE ──────────────────────────────────────────────
@@ -262,8 +306,17 @@ async function main() {
     delete SYNC_APPLIERS.harness_note;
   }
 
-  ok("9. ⚠ the registry is empty again -- the harness left no write path behind",
-    Object.keys(SYNC_APPLIERS).length === 0, Object.keys(SYNC_APPLIERS).join(", "));
+  // ⚠ NOT `length === 0` ANY MORE, AND THE OLD SPELLING WAS THE MISTAKE THIS REPOSITORY KEEPS MAKING.
+  //
+  // It pinned a TALLY the build was deliberately going to change: the registry was empty only until
+  // capture shipped, and registering the first real applier -- the entire point of the work -- turned a
+  // green assertion red against correct code. Its own NAME says the property: "the harness left no write
+  // path behind". That is a comparison against what was there before it started.
+  ok("9. ⚠ the harness left no write path behind",
+    Object.keys(SYNC_APPLIERS).sort().join(",") === applierKeysBefore,
+    `before=[${applierKeysBefore}] after=[${Object.keys(SYNC_APPLIERS).sort().join(",")}]`);
+  ok("9-control. and there IS a product applier registered, so 9 is not comparing two empty sets",
+    applierKeysBefore.length > 0, "the registry was empty -- capture may have been unregistered");
 
   await cleanup();
   report();

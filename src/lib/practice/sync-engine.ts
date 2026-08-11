@@ -1,4 +1,7 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
+import {
+  MEASUREMENT_ENTITY_TYPE, parameterMeasurementApplier,
+} from "@/lib/practice/sync-appliers/parameter-measurement";
 
 // CP-OFFLINE-SURVEY-001 s5 precondition 3 (IDEMPOTENT SERVER ACCEPTANCE) — the apply side, over
 // migration 284's practice_sync_transaction. COMP-SYNC-001 s4/s5/s9, CP-SYNC-001 s3/s6.
@@ -149,10 +152,22 @@ export type SyncApplier = (
 >;
 
 /**
- * ⚠ EMPTY ON PURPOSE. See the header. Adding an entry here without a capture screen that produces it
- * creates a write path into the patient record that nothing exercises.
+ * ⚠ ONE ENTRY, AND IT ARRIVED WITH ITS CAPTURE SCREEN. The rule this file shipped with stands: adding an
+ * applier without a producer creates a write path into the patient record that nothing exercises. It was
+ * empty from `af83915a` until all seven of CP-OFFLINE-SURVEY-001 s5's preconditions held -- the last of
+ * them, durability, proved in a real browser by `practice-outbox-durability-harness.ts`.
+ *
+ * ⚠ REGISTERED HERE RATHER THAN BY THE APPLIER CALLING BACK INTO THIS MAP, because `SYNC_ENTITY_TYPES`
+ * below is a SNAPSHOT taken at module load. An applier that registered itself on import would populate
+ * the map after that line had already run, leaving the status endpoint reporting no syncable entities
+ * while uploads of that very type succeeded -- true, green, and silently inconsistent.
+ *
+ * ⚠ The applier imports `SyncApplier` from this file with `import type`, which TypeScript erases, so the
+ * two-way reference is a compile-time one and there is no runtime cycle.
  */
-export const SYNC_APPLIERS: Record<string, SyncApplier> = {};
+export const SYNC_APPLIERS: Record<string, SyncApplier> = {
+  [MEASUREMENT_ENTITY_TYPE]: parameterMeasurementApplier,
+};
 
 export const SYNC_ENTITY_TYPES: string[] = Object.keys(SYNC_APPLIERS);
 
