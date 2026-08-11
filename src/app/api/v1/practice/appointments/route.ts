@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { bookAppointment, loadDay } from "@/lib/practice/scheduling";
 import { appointmentNotice } from "@/lib/practice/messaging";
+import { workspaceClock, instantInZone } from "@/lib/practice/practice-time";
 
 // GET  /api/v1/practice/appointments?date=YYYY-MM-DD -- the day's diary + live queue + blocks.
 // POST /api/v1/practice/appointments -- book (PEN-001 rules: double-booking refused unless exempt type
@@ -27,8 +28,28 @@ export async function POST(req: NextRequest) {
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
-  if ((!body.patientName && !body.patientId) || !body.scheduledAt || !body.appointmentType)
-    return NextResponse.json({ error: "patientName (or patientId), appointmentType and scheduledAt are required" }, { status: 400 });
+  const hasWallClock = typeof body.date === "string" && typeof body.time === "string";
+  if ((!body.patientName && !body.patientId) || !body.appointmentType || (!body.scheduledAt && !hasWallClock))
+    return NextResponse.json({ error: "patientName (or patientId), appointmentType and either scheduledAt or date+time are required" }, { status: 400 });
+
+  // ⚠ WALL-CLOCK TIMES ARE COMPOSED HERE, IN THE PRACTICE TIMEZONE -- never on the client. The booking
+  // widgets used to send `${date}T${time}:00.000Z`, which DECLARES a Kampala 09:00 to be 09:00 UTC and
+  // puts it in the diary at 12:00. A client cannot compose an instant: it does not know the practice
+  // timezone (and its own machine's zone is not evidence of it). `scheduledAt` remains accepted for
+  // callers that hold a real instant -- a server-offered slot, or a walk-in booked at "now".
+  let scheduledAt: string;
+  if (body.scheduledAt) {
+    scheduledAt = String(body.scheduledAt);
+  } else {
+    const { timezone } = await workspaceClock(auth.caller.admin, auth.ctx.workspaceId);
+    const instant = instantInZone(String(body.date), String(body.time), timezone);
+    if (!instant)
+      return NextResponse.json(
+        { error: `date and time could not be read as a moment in ${timezone} -- date must be YYYY-MM-DD and time HH:MM (24-hour)` },
+        { status: 400 },
+      );
+    scheduledAt = instant;
+  }
 
   const result = await bookAppointment(auth.caller.admin, {
     workspaceId: auth.ctx.workspaceId,
@@ -36,7 +57,7 @@ export async function POST(req: NextRequest) {
     patientName: String(body.patientName ?? ""),
     patientPhone: body.patientPhone ? String(body.patientPhone) : undefined,
     appointmentType: String(body.appointmentType),
-    scheduledAt: String(body.scheduledAt),
+    scheduledAt,
     durationMinutes: body.durationMinutes ? Number(body.durationMinutes) : undefined,
     locationId: body.locationId ? String(body.locationId) : null,
     reason: body.reason ? String(body.reason) : undefined,

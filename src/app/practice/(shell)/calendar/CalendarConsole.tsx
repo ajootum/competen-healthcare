@@ -39,8 +39,11 @@ const QUEUE_TONE: Record<string, string> = {
 
 const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 
-export default function CalendarConsole({ date, canManage, canQueue, canStartEncounter, initial, locations = [] }: {
-  date: string; canManage: boolean; canQueue: boolean; canStartEncounter: boolean; initial: Day;
+export default function CalendarConsole({ date, timezone, canManage, canQueue, canStartEncounter, initial, locations = [] }: {
+  date: string;
+  /** The practice's own timezone -- every time on this console renders in it, never in UTC slices. */
+  timezone: string;
+  canManage: boolean; canQueue: boolean; canStartEncounter: boolean; initial: Day;
   /** Where this practice works. Empty when none has been set up, and the picker then hides itself. */
   locations?: { id: string; name: string; type: string; facility: { name: string } | null }[];
 }) {
@@ -67,12 +70,15 @@ export default function CalendarConsole({ date, canManage, canQueue, canStartEnc
     setBusy(false);
   }
 
+  // ⚠ A SCHEDULED BOOKING SENDS WALL-CLOCK date+time; the server composes the instant in the practice
+  // timezone. This used to send `${date}T${form.time}:00.000Z` -- declaring the practice's 09:00 to be
+  // 09:00 UTC, three hours wrong in Kampala. A walk-in still sends a real instant: it is happening NOW.
   const book = (walkIn: boolean) => act(() => fetch("/api/v1/practice/appointments", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       patientName: form.patientName, patientPhone: form.patientPhone || undefined,
       appointmentType: walkIn ? "walk_in" : form.appointmentType,
-      scheduledAt: walkIn ? new Date().toISOString() : `${date}T${form.time}:00.000Z`,
+      ...(walkIn ? { scheduledAt: new Date().toISOString() } : { date, time: form.time }),
       durationMinutes: Number(form.durationMinutes) || 20,
       reason: form.reason || undefined,
       locationId: form.locationId || undefined,
@@ -109,7 +115,10 @@ export default function CalendarConsole({ date, canManage, canQueue, canStartEnc
     window.location.assign(`/practice/encounters/${data.encounter.id}`);
   }
 
-  const fmt = (iso: string) => new Date(iso).toISOString().slice(11, 16);
+  // ⚠ IN THE PRACTICE TIMEZONE, not a UTC slice. The old `.toISOString().slice(11, 16)` rendered a
+  // correctly-stored Kampala 09:30 as 06:30 on this one console while every other screen said 09:30.
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: timezone });
 
   return (
     <div className="max-w-6xl">
@@ -233,7 +242,11 @@ export default function CalendarConsole({ date, canManage, canQueue, canStartEnc
                 <input required placeholder="Patient name" value={form.patientName} onChange={e => setForm(p => ({ ...p, patientName: e.target.value }))} className={input} />
                 <input placeholder="Phone (optional)" value={form.patientPhone} onChange={e => setForm(p => ({ ...p, patientPhone: e.target.value }))} className={input} />
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="time" required value={form.time} onChange={e => setForm(p => ({ ...p, time: e.target.value }))} className={input} />
+                  {/* 24-hour text input, not type="time" -- the native picker renders 12-hour on many
+                      machines and the owner asked for the 24-hour clock. */}
+                  <input required value={form.time} onChange={e => setForm(p => ({ ...p, time: e.target.value }))}
+                    pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="09:00" inputMode="numeric"
+                    title="24-hour clock, HH:MM — for example 09:00 or 14:30" className={input} />
                   <input type="number" min={5} max={480} value={form.durationMinutes} onChange={e => setForm(p => ({ ...p, durationMinutes: e.target.value }))} className={input} title="Duration in minutes" />
                 </div>
                 <select value={form.appointmentType} onChange={e => setForm(p => ({ ...p, appointmentType: e.target.value }))} className={input}>

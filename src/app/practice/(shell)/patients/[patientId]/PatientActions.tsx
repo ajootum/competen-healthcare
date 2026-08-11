@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import StartEncounterAction from "../../encounters/StartEncounterAction";
 
 // The patient's action panel: starting a consultation, demographic edit (optimistic-concurrency
@@ -23,19 +24,26 @@ export default function PatientActions(props: {
   ageEstimateYears: number | null; recordVersion: number;
   canEdit: boolean; canMerge: boolean; canBook: boolean; canStartEncounter: boolean;
 }) {
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [edit, setEdit] = useState({ displayName: props.displayName, sex: props.sex, birthDate: props.birthDate ?? "" });
   const [book, setBook] = useState({ date: new Date().toISOString().slice(0, 10), time: "09:00", type: "scheduled_followup" });
   const [mergeTarget, setMergeTarget] = useState("");
 
-  async function call(fn: () => Promise<Response>, okText: string, reloadOnOk = true) {
+  // ⚠ SUCCESS IS SAID, NOT IMPLIED (the owner, 2026-08-11: "give a message to let us know it has been
+  // saved"). This used to window.location.reload() on success -- which wiped the "Saved." notice before
+  // a human could see it, so only FAILURES ever showed a message and a successful save looked like
+  // nothing happening. router.refresh() re-fetches the server-rendered record while keeping this
+  // panel's state, so the confirmation and the updated page arrive together.
+  async function call(fn: () => Promise<Response>, okText: string) {
     setBusy(true); setNotice(null);
     const res = await fn();
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { setNotice({ kind: "err", text: data?.error?.message ?? data?.error ?? "That did not work." }); setBusy(false); return; }
-    if (reloadOnOk) { window.location.reload(); return; }
-    setNotice({ kind: "ok", text: okText }); setBusy(false);
+    setNotice({ kind: "ok", text: okText });
+    setBusy(false);
+    router.refresh();
   }
 
   const saveEdit = () => call(() => fetch(`/api/v1/practice/patients/${props.patientId}`, {
@@ -46,12 +54,15 @@ export default function PatientActions(props: {
     }),
   }), "Saved.");
 
+  // ⚠ WALL-CLOCK SENT AS date+time, COMPOSED ON THE SERVER in the practice timezone. This used to send
+  // `${date}T${time}:00.000Z` -- declaring a Kampala 09:00 to be 09:00 UTC, which the diary then
+  // honestly rendered as 12:00. A client must never stamp a zone it does not know.
   const bookAppt = () => call(() => fetch("/api/v1/practice/appointments", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       patientId: props.patientId,
       appointmentType: book.type,
-      scheduledAt: `${book.date}T${book.time}:00.000Z`,
+      date: book.date, time: book.time,
     }),
   }), "Booked.");
 
@@ -96,7 +107,12 @@ export default function PatientActions(props: {
           <h2 className="text-[13px] font-bold text-gray-900">Book for this patient</h2>
           <form className="mt-2 grid grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); bookAppt(); }}>
             <input type="date" value={book.date} onChange={e => setBook(p => ({ ...p, date: e.target.value }))} className={input} />
-            <input type="time" value={book.time} onChange={e => setBook(p => ({ ...p, time: e.target.value }))} className={input} />
+            {/* A TEXT INPUT, NOT type="time": the native picker renders 12-hour on many machines and
+                the owner asked for the 24-hour clock. The pattern holds it to HH:MM; the server
+                composes the instant in the practice timezone either way. */}
+            <input value={book.time} onChange={e => setBook(p => ({ ...p, time: e.target.value }))}
+              required pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="09:00" inputMode="numeric"
+              title="24-hour clock, HH:MM — for example 09:00 or 14:30" className={input} />
             <select value={book.type} onChange={e => setBook(p => ({ ...p, type: e.target.value }))} className={`${input} col-span-2`}>
               {[["scheduled_followup", "Scheduled follow-up"], ["new_consultation", "New consultation"], ["teleconsultation", "Teleconsultation"], ["home_visit", "Home visit"]].map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </select>

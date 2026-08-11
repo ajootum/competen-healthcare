@@ -87,6 +87,29 @@ export function zonedDayRange(dateIso: string, timezone: string | null | undefin
   };
 }
 
+/**
+ * The UTC instant of a wall-clock date and time in a practice's timezone, or null when the inputs or
+ * the zone cannot be read -- the caller must REFUSE then, because the alternative is booking a
+ * silently-UTC time, which is the exact bug this function exists to end (a 09:00 Kampala booking
+ * stored as 09:00Z and rendered as 12:00). DST-correct: the offset is read at the guessed instant and
+ * re-read once, which settles transition boundaries.
+ *
+ * ⚠ The unknown-zone answer is NULL, not UTC. zoneOffsetMinutes falls back to 0 for a broken zone
+ * because a rendering must not take a page down -- but a WRITE composed against the wrong zone is a
+ * wrong appointment, so this function checks the zone itself and refuses.
+ */
+export function instantInZone(dateIso: string, timeHHMM: string, timezone: string | null | undefined): string | null {
+  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateIso.trim());
+  const t = /^(\d{1,2}):(\d{2})$/.exec(timeHHMM.trim());
+  if (!d || !t || +t[1] > 23 || +t[2] > 59) return null;
+  const tz = timezone || "UTC";
+  try { new Intl.DateTimeFormat("en-CA", { timeZone: tz }); } catch { return null; }
+  const wallUtc = Date.UTC(+d[1], +d[2] - 1, +d[3], +t[1], +t[2]);
+  let guess = wallUtc - zoneOffsetMinutes(tz, new Date(wallUtc)) * 60000;
+  guess = wallUtc - zoneOffsetMinutes(tz, new Date(guess)) * 60000;
+  return new Date(guess).toISOString();
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /** The workspace's own today. One query, so callers do not each re-read the timezone. */

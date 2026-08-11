@@ -6,6 +6,7 @@ import { bookAppointment } from "./scheduling";
 import { RELATIONSHIP_TYPES, GUARDIAN_TYPES, MAJORITY_AGE } from "./relationships";
 import { audit } from "./audit";
 import { IMPORT_COLUMNS, MAX_IMPORT_ROWS, MAX_IMPORT_BYTES } from "./import-columns";
+import { instantInZone } from "./practice-time";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -338,32 +339,10 @@ export function parseImportCsv(text: string): ParseResult {
 
 // ── Practice-timezone instant ───────────────────────────────────────────────────────────────────────
 // The CSV carries a wall-clock time in the practice timezone (the only honest reading of a column a
-// receptionist typed). Converting it to an instant needs the zone offset AT that moment, which Intl
-// can state and a fixed offset cannot (DST).
-
-function zoneOffsetMs(atMs: number, timeZone: string): number {
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone, hour12: false,
-    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
-  });
-  const p = Object.fromEntries(dtf.formatToParts(new Date(atMs)).map(x => [x.type, x.value]));
-  const asUtc = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
-  return asUtc - atMs;
-}
-
-export function instantInZone(dateStr: string, timeStr: string, timeZone: string): string | null {
-  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
-  const t = /^(\d{1,2}):(\d{2})$/.exec(timeStr);
-  if (!d || !t) return null;
-  const wallUtc = Date.UTC(+d[1], +d[2] - 1, +d[3], +t[1], +t[2]);
-  try {
-    let guess = wallUtc - zoneOffsetMs(wallUtc, timeZone);
-    guess = wallUtc - zoneOffsetMs(guess, timeZone);   // second pass settles DST boundaries
-    return new Date(guess).toISOString();
-  } catch {
-    return null;   // unknown zone: the caller reports it rather than booking a silently-UTC time
-  }
-}
+// receptionist typed). instantInZone MOVED to practice-time.ts -- the one-clock module -- when the
+// appointments API needed the same conversion (the patient-page booking widget had been stamping a
+// literal Z onto wall-clock time). Re-exported so this engine's callers and harness keep one import.
+export { instantInZone };
 
 // ── Shared row context ─────────────────────────────────────────────────────────────────────────────
 

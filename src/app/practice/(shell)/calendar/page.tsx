@@ -209,6 +209,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
         <CalendarConsole
           date={c.day}
+          timezone={c.timezone}
           canManage={canManage}
           canQueue={hasCapability(shell.ctx, "queue.manage")}
           canStartEncounter={hasCapability(shell.ctx, "encounter.create")}
