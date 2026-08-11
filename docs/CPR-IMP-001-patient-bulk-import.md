@@ -43,9 +43,16 @@ location, appointment_date, appointment_time, appointment_type,
 external_id
 ```
 
-- `date_of_birth` and `appointment_date` are **YYYY-MM-DD only** (03/04 reads two ways).
-- `appointment_time` is **HH:MM, 24-hour, in the practice's own timezone** (`practice_workspace.timezone`);
-  the DST-correct instant is computed server-side (`instantInZone`).
+- `date_of_birth` and `appointment_date` accept (v1.1, the owner 2026-08-11): **YYYY-MM-DD**,
+  **all-numeric day-first** (`14-03-1988`, `14/03/1988`, `14.03.1988` — dd-mm-yyyy is this import's
+  declared convention), and **written-month** forms (`14 Mar 1988`, `March 14 1988`). Where day-first
+  is genuinely ambiguous (day ≤ 12) the reading is applied **and announced** — a note at preview and
+  in the ledger detail says how the date was read. A month-first file betrays itself on any day > 12
+  (month 13 refused with a message naming the convention). **Two-digit years are refused** — a century
+  is not guessable.
+- `appointment_time` accepts **HH:MM 24-hour** (`14:30`) or **12-hour am/pm** (`2:30 pm`, `9am`), in
+  the practice's own timezone (`practice_workspace.timezone`); the DST-correct instant is computed
+  server-side (`instantInZone`).
 - `location` is matched by name (case-insensitive) against the practice's **active** locations; an
   unmatched name drops the appointment (decision 2), never the patient.
 - `guardian_relationship` must be one of the registration engine's 15 relationship types; legal

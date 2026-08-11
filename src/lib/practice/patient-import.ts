@@ -70,6 +70,8 @@ export type ParsedRow = {
   problems: string[];
   /** Problems that only drop the APPOINTMENT (decision 2: the person still registers). */
   appointmentProblems: string[];
+  /** Announcements, not problems: how an ambiguous value was read (the day-first convention). */
+  notes: string[];
   /** True when appointment_date/time were supplied at all. */
   wantsAppointment: boolean;
 };
@@ -110,6 +112,87 @@ function splitCsvLine(line: string, lineNo: number, fileProblems: string[]): str
 
 const canon = (h: string) => h.replace(/^﻿/, "").trim().toLowerCase().replace(/[\s-]+/g, "_");
 
+// ── Dates and times, as people actually type them ──────────────────────────────────────────────────
+// A migrated spreadsheet rarely carries ISO dates. The rules (the owner, 2026-08-11, incl. "e.g.
+// dd-mm-yyyy"): ISO, written-month forms, and all-numeric dates read DAY FIRST -- dd-mm-yyyy is the
+// declared convention of this import, stated on the screen, in the spec and in every error message.
+// The one genuine ambiguity (day <= 12, where 03-04-1988 could be either) is not guessed silently:
+// the day-first reading is APPLIED and ANNOUNCED -- a note at preview and in the ledger says exactly
+// how the date was read, so a month-first file is caught by a human at the preview instead of
+// discovered in a birthday years later. A month-first file with any day over 12 refuses itself
+// loudly (month 13 does not exist). Two-digit years are refused: a century is not guessable.
+
+const MONTH_NAMES = new Map<string, number>([
+  ["jan", 1], ["feb", 2], ["mar", 3], ["apr", 4], ["may", 5], ["jun", 6],
+  ["jul", 7], ["aug", 8], ["sep", 9], ["sept", 9], ["oct", 10], ["nov", 11], ["dec", 12],
+  ["january", 1], ["february", 2], ["march", 3], ["april", 4], ["june", 6], ["july", 7],
+  ["august", 8], ["september", 9], ["october", 10], ["november", 11], ["december", 12],
+]);
+
+const HOW_TO_DATE = "use YYYY-MM-DD, day-first dd-mm-yyyy, or a written month -- 1988-03-14, 14-03-1988, 14 Mar 1988";
+
+const MONTH_LABEL = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/**
+ * Reads one date in any accepted format; returns ISO YYYY-MM-DD, plus a `note` when a convention was
+ * applied that the file's author might not share (the day-first reading of an ambiguous numeric date).
+ */
+export function readDate(raw: string): { iso: string; note?: string } | { error: string } {
+  const s = raw.trim();
+  let y = 0, m = 0, d = 0, hit;
+  let note: string | undefined;
+  if ((hit = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(s))) {
+    [y, m, d] = [+hit[1], +hit[2], +hit[3]];
+  } else if ((hit = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(s))) {
+    // DAY FIRST, by declared convention.
+    [y, m, d] = [+hit[3], +hit[2], +hit[1]];
+    if (m > 12)
+      return { error: `"${s}" read day-first (dd-mm-yyyy, this import's stated convention) makes the month ${m}, which does not exist -- if this file is month-first, rewrite it as YYYY-MM-DD or a written month` };
+    if (d <= 12 && d !== m)
+      note = `"${s}" was read day-first as ${d} ${MONTH_LABEL[m]} ${y} -- if this file is month-first, that is the wrong date: rewrite as YYYY-MM-DD or a written month`;
+  } else if (/^\d{1,2}[/.-]\d{1,2}[/.-]\d{2}$/.test(s)) {
+    return { error: `"${s}" has a two-digit year, and a century is not something to guess -- ${HOW_TO_DATE}` };
+  } else if ((hit = /^(\d{1,2})[ -]([a-zA-Z]+),?[ -]+(\d{4})$/.exec(s))) {
+    const mm = MONTH_NAMES.get(hit[2].toLowerCase());
+    if (!mm) return { error: `"${s}": "${hit[2]}" is not a month name this import knows` };
+    [y, m, d] = [+hit[3], mm, +hit[1]];
+  } else if ((hit = /^([a-zA-Z]+)[ -](\d{1,2}),?[ -]+(\d{4})$/.exec(s))) {
+    const mm = MONTH_NAMES.get(hit[1].toLowerCase());
+    if (!mm) return { error: `"${s}": "${hit[1]}" is not a month name this import knows` };
+    [y, m, d] = [+hit[3], mm, +hit[2]];
+  } else {
+    return { error: `"${s}" is not a date this import can read -- ${HOW_TO_DATE}` };
+  }
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d)
+    return { error: `"${s}" is not a real calendar date` };
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return { iso: `${y}-${pad(m)}-${pad(d)}`, note };
+}
+
+/** Reads one time: 24-hour HH:MM, or 12-hour with am/pm (2:30 pm, 9am). Returns HH:MM. */
+export function readTime(raw: string): { hhmm: string } | { error: string } {
+  const s = raw.trim().toLowerCase();
+  const hit = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/.exec(s);
+  const how = `"${raw.trim()}" is not a time this import can read -- use 24-hour HH:MM (14:30) or am/pm (2:30 pm)`;
+  if (!hit) return { error: how };
+  let h = +hit[1];
+  const min = hit[2] === undefined ? 0 : +hit[2];
+  const half = hit[3];
+  // A bare number with no minutes AND no am/pm ("14") is refused: it is as likely a typo as a time.
+  if (hit[2] === undefined && !half) return { error: how };
+  if (min > 59) return { error: how };
+  if (half) {
+    if (h < 1 || h > 12) return { error: how };
+    if (half === "am") h = h === 12 ? 0 : h;
+    else h = h === 12 ? 12 : h + 12;
+  } else if (h > 23) {
+    return { error: how };
+  }
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return { hhmm: `${pad(h)}:${pad(min)}` };
+}
+
 export function parseImportCsv(text: string): ParseResult {
   const fileProblems: string[] = [];
   const lines = text.split(/\r\n|\n|\r/).filter((l, i) => i === 0 || l.trim() !== "");
@@ -145,6 +228,7 @@ export function parseImportCsv(text: string): ParseResult {
 
     const problems: string[] = [];
     const appointmentProblems: string[] = [];
+    const notes: string[] = [];
     const fields: ImportFields = {
       firstName: get("first_name"), middleName: get("middle_name"), lastName: get("last_name"),
       dateOfBirth: get("date_of_birth"), sex: get("sex"),
@@ -171,10 +255,17 @@ export function parseImportCsv(text: string): ParseResult {
       else fields.estimatedAge = n;
     }
     if (fields.dateOfBirth) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(fields.dateOfBirth) || Number.isNaN(Date.parse(fields.dateOfBirth)))
-        problems.push(`date_of_birth "${fields.dateOfBirth}" is not a real date in YYYY-MM-DD form (this format is required because 03/04 reads two ways)`);
-      else if (Date.parse(fields.dateOfBirth) > Date.now())
+      const read = readDate(fields.dateOfBirth);
+      if ("error" in read) problems.push(`date_of_birth ${read.error}`);
+      else if (Date.parse(read.iso) > Date.now())
         problems.push(`date_of_birth "${fields.dateOfBirth}" is in the future`);
+      else {
+        // NORMALISED HERE, so everything downstream -- the age judgement, the engines, the duplicate
+        // screen -- sees one canonical form whatever the file carried. An applied convention is
+        // ANNOUNCED, at preview and in the ledger, never silent.
+        if (read.note) notes.push(`date_of_birth ${read.note}`);
+        fields.dateOfBirth = read.iso;
+      }
     }
     if (!fields.dateOfBirth && fields.estimatedAge === undefined)
       problems.push("date_of_birth or estimated_age is required");
@@ -216,17 +307,30 @@ export function parseImportCsv(text: string): ParseResult {
     fields.appointmentType = fields.appointmentType ? canon(fields.appointmentType) : undefined;
     const wantsAppointment = !!(fields.appointmentDate || fields.appointmentTime);
     if (wantsAppointment) {
-      if (!fields.appointmentDate || !/^\d{4}-\d{2}-\d{2}$/.test(fields.appointmentDate) || Number.isNaN(Date.parse(fields.appointmentDate)))
-        appointmentProblems.push(`appointment_date "${fields.appointmentDate ?? ""}" must be a real date in YYYY-MM-DD form`);
-      if (!fields.appointmentTime || !/^([01]?\d|2[0-3]):[0-5]\d$/.test(fields.appointmentTime))
-        appointmentProblems.push(`appointment_time "${fields.appointmentTime ?? ""}" must be HH:MM in 24-hour form, in the practice timezone`);
+      if (!fields.appointmentDate) {
+        appointmentProblems.push("appointment_time is filled but appointment_date is empty");
+      } else {
+        const read = readDate(fields.appointmentDate);
+        if ("error" in read) appointmentProblems.push(`appointment_date ${read.error}`);
+        else {
+          if (read.note) notes.push(`appointment_date ${read.note}`);
+          fields.appointmentDate = read.iso;
+        }
+      }
+      if (!fields.appointmentTime) {
+        appointmentProblems.push("appointment_date is filled but appointment_time is empty -- the practice clock needs a time of day");
+      } else {
+        const read = readTime(fields.appointmentTime);
+        if ("error" in read) appointmentProblems.push(`appointment_time ${read.error} (times are read in the practice timezone)`);
+        else fields.appointmentTime = read.hhmm;
+      }
       if (fields.appointmentType && !APPOINTMENT_TYPES.has(fields.appointmentType))
         appointmentProblems.push(`appointment_type "${fields.appointmentType}" is not one of: ${[...APPOINTMENT_TYPES].join(", ")}`);
     } else if (fields.location) {
       appointmentProblems.push("location is filled but there is no appointment_date -- a location alone books nothing");
     }
 
-    rows.push({ rowNumber: li + 1, fields, problems, appointmentProblems, wantsAppointment });
+    rows.push({ rowNumber: li + 1, fields, problems, appointmentProblems, notes, wantsAppointment });
   }
 
   return { rows, fileProblems };
@@ -358,7 +462,7 @@ export async function previewPatientImport(
   for (const row of parsed.rows) {
     const f = row.fields;
     const name = [f.firstName, f.middleName, f.lastName].filter(Boolean).join(" ") || "(no name)";
-    const notes: string[] = [...row.appointmentProblems.map(p => `appointment will be dropped: ${p}`)];
+    const notes: string[] = [...row.notes, ...row.appointmentProblems.map(p => `appointment will be dropped: ${p}`)];
 
     if (row.fields.externalId && rc.claimed.has(row.fields.externalId)) {
       out.push({ rowNumber: row.rowNumber, name, verdict: "skip_already_imported", problems: row.problems, notes: [`external_id "${row.fields.externalId}" already created a patient in an earlier import`] });
@@ -466,7 +570,9 @@ export async function commitPatientImport(
   for (const row of parsed.rows) {
     const f = row.fields;
     const name = [f.firstName, f.middleName, f.lastName].filter(Boolean).join(" ") || "(no name)";
-    const details: string[] = [];
+    // The day-first announcements travel into the ledger detail: the reconciliation record must show
+    // HOW an ambiguous date was read, not merely what it became.
+    const details: string[] = [...row.notes];
     let outcome: CommitOutcome; let patientId: string | null = null; let appointmentId: string | null = null;
 
     if (f.externalId && rc.claimed.has(f.externalId)) {

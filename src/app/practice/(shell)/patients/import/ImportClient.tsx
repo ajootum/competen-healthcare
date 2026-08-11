@@ -151,10 +151,18 @@ export default function ImportClient() {
         <p className="mt-3 text-[12px] leading-relaxed text-gray-500">
           Any one name column is enough; each row needs a date of birth or an estimated age, and a phone
           or email (a guardian&apos;s contact counts for a child). <strong>location</strong>,{" "}
-          <strong>appointment_date</strong> (YYYY-MM-DD) and <strong>appointment_time</strong> (HH:MM,
-          your practice&apos;s own clock) are optional — if an appointment cannot be honoured, the patient
-          is still registered and the report says why. <strong>external_id</strong> is your own row key
-          from the old system: rows that carry one can never import twice.
+          <strong>appointment_date</strong> and <strong>appointment_time</strong> are optional — if an
+          appointment cannot be honoured, the patient is still registered and the report says why.{" "}
+          <strong>external_id</strong> is your own row key from the old system: rows that carry one can
+          never import twice.
+        </p>
+        <p className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-[12px] leading-relaxed text-gray-600">
+          <strong>Date formats</strong> — <code>1988-03-14</code>, <code>14-03-1988</code> (or with
+          slashes), <code>14 Mar 1988</code>. All-numeric dates are read <strong>day-first</strong>;
+          where that could go two ways the check step shows exactly how each date was read, so look
+          there before importing a file from a month-first system. Two-digit years are refused.{" "}
+          <strong>Times</strong> — <code>14:30</code> or <code>2:30 pm</code>, in your practice&apos;s
+          own clock.
         </p>
         <div className="mt-3 flex gap-2">
           <button type="button" disabled={!csv || busy !== null} onClick={() => run("preview")}

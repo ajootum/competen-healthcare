@@ -25,7 +25,7 @@ import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import {
-  parseImportCsv, previewPatientImport, commitPatientImport, instantInZone,
+  parseImportCsv, previewPatientImport, commitPatientImport, instantInZone, readDate, readTime,
 } from "../src/lib/practice/patient-import";
 import { IMPORT_TEMPLATE_HEADER } from "../src/lib/practice/import-columns";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
@@ -106,6 +106,36 @@ async function main() {
   ok("11c. an unknown zone returns null rather than a silently-UTC booking",
     instantInZone("2026-08-20", "09:30", "Mars/Olympus_Mons") === null);
 
+  // ── 12. The tolerant formats (v1.1: "e.g. dd-mm-yyyy") ─────────────────────
+  const iso = (r: ReturnType<typeof readDate>) => ("iso" in r ? r.iso : `ERR:${r.error}`);
+  ok("12. EVERY UNAMBIGUOUS DATE FORM READS TO THE SAME DAY",
+    iso(readDate("1988-03-14")) === "1988-03-14" && iso(readDate("14-03-1988")) === "1988-03-14" &&
+    iso(readDate("14/03/1988")) === "1988-03-14" && iso(readDate("14 Mar 1988")) === "1988-03-14" &&
+    iso(readDate("March 14, 1988")) === "1988-03-14" && iso(readDate("14 march 1988")) === "1988-03-14",
+    [readDate("14-03-1988"), readDate("14 Mar 1988")].map(r => JSON.stringify(r)).join(" / "));
+  const ambiguous = readDate("03-04-1988");
+  ok("12b. THE AMBIGUOUS NUMERIC DATE IS READ DAY-FIRST AND ANNOUNCED, never silent",
+    "iso" in ambiguous && ambiguous.iso === "1988-04-03" &&
+    /read day-first as 3 April 1988/.test(ambiguous.note ?? ""),
+    JSON.stringify(ambiguous));
+  ok("12c. and the unambiguous day-first date carries NO note -- an announcement of nothing is noise",
+    "iso" in readDate("14-03-1988") && (readDate("14-03-1988") as any).note === undefined);
+  ok("12d. A MONTH-FIRST FILE BETRAYS ITSELF: month 13 is refused NAMING the convention",
+    "error" in readDate("04/13/1988") && /day-first/.test((readDate("04/13/1988") as any).error) &&
+    /month 13/.test((readDate("04/13/1988") as any).error),
+    JSON.stringify(readDate("04/13/1988")));
+  ok("12e. a two-digit year is refused -- a century is not guessable",
+    "error" in readDate("14-03-88") && /two-digit year/.test((readDate("14-03-88") as any).error));
+  ok("12f. an impossible calendar date is refused",
+    "error" in readDate("31-02-2020") && "error" in readDate("2020-02-31"));
+  const t = (r: ReturnType<typeof readTime>) => ("hhmm" in r ? r.hhmm : `ERR`);
+  ok("12g. TIMES: 24-hour, am/pm and bare-hour am/pm all read; noon and midnight land right",
+    t(readTime("14:30")) === "14:30" && t(readTime("2:30 pm")) === "14:30" && t(readTime("9am")) === "09:00" &&
+    t(readTime("12:00 am")) === "00:00" && t(readTime("12:00 pm")) === "12:00",
+    [readTime("2:30 pm"), readTime("12:00 am")].map(r => JSON.stringify(r)).join(" / "));
+  ok("12h. a bare number with no am/pm is refused (as likely a typo as a time), and 24:00 is refused",
+    "error" in readTime("14") && "error" in readTime("24:00") && "error" in readTime("13 pm"));
+
   const ws = await provision();
   const resolved = await resolveWorkspaceContext(admin, OWNER, ws);
   if (!resolved.ok) { ok("workspace context resolves", false, (resolved as any).code); return report(); }
@@ -114,14 +144,15 @@ async function main() {
   const apptDate = daysOut(10);
   const fileOne = [
     IMPORT_TEMPLATE_HEADER,
-    // an adult with a phone and an external id
-    `Amina,,Okello,1988-03-14,,female,+256772100001,,,,,,,,,,,,IMP-A`,
+    // an adult with a phone and an external id -- DOB in numeric day-first form (v1.1)
+    `Amina,,Okello,14-03-1988,,female,+256772100001,,,,,,,,,,,,IMP-A`,
     // a child with a guardian carrying the contact
     `Kato,,Ssebunya,,6,male,,,,Grace Ssebunya,mother,+256772100002,,,,,,,IMP-B`,
-    // an adult whose appointment names a location this practice does not have -> decision 2
-    `Joan,,Adeke,1979-06-02,,female,+256772100003,,,,,,,Follow-up,Nonexistent Clinic,${apptDate},10:00,scheduled_followup,IMP-C`,
-    // an adult with a bookable appointment (no location -- placement rules only)
-    `Peter,,Okot,1965-11-23,,male,+256772100004,,,,,,,Chest pain review,,${apptDate},14:30,new_consultation,IMP-D`,
+    // an adult whose appointment names a location this practice does not have -> decision 2.
+    // DOB is the AMBIGUOUS day-first form, so the announcement must reach the ledger.
+    `Joan,,Adeke,03-04-1979,,female,+256772100003,,,,,,,Follow-up,Nonexistent Clinic,${apptDate},10:00,scheduled_followup,IMP-C`,
+    // an adult with a bookable appointment (no location -- placement rules only), time in pm form
+    `Peter,,Okot,1965-11-23,,male,+256772100004,,,,,,,Chest pain review,,${apptDate},2:30 pm,new_consultation,IMP-D`,
   ].join("\n") + "\n";
 
   // ── 2. Preview writes nothing ──────────────────────────────────────────────
@@ -157,6 +188,14 @@ async function main() {
     byRow(3).outcome === "REGISTERED" && !!byRow(3).patientId && byRow(3).appointmentId === null &&
     byRow(3).detail.includes("appointment dropped") && byRow(3).detail.includes("Nonexistent Clinic"),
     byRow(3).detail);
+  ok("4b. THE DAY-FIRST ANNOUNCEMENT REACHES THE LEDGER: how 03-04-1979 was read is on the row",
+    byRow(3).detail.includes("read day-first as 3 April 1979") &&
+    ((await admin.from("practice_patient").select("birth_date").eq("id", byRow(3).patientId!).single()).data?.birth_date === "1979-04-03"),
+    byRow(3).detail);
+  ok("4c. and the UNAMBIGUOUS day-first DOB stored right with NO announcement",
+    !byRow(1).detail.includes("day-first") &&
+    ((await admin.from("practice_patient").select("birth_date").eq("id", byRow(1).patientId!).single()).data?.birth_date === "1988-03-14"),
+    byRow(1).detail);
   ok("5. THE GOOD APPOINTMENT BOOKED", byRow(4).outcome === "REGISTERED_AND_BOOKED" && !!byRow(4).appointmentId,
     byRow(4).detail);
   if (byRow(4).appointmentId) {
