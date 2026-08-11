@@ -6,7 +6,7 @@ import {
   checkPin, enrolLock, lockMessage, lockStateOf, unlock, type LockRecord, type LockState,
 } from "@/lib/practice/offline-lock";
 import { forgetLock, loadLock, saveLock } from "@/lib/practice/offline-lock-store";
-import { holdSessionKey, sessionKey } from "@/lib/practice/offline-session";
+import { clearSessionKey, holdSessionKey, sessionKey } from "@/lib/practice/offline-session";
 import { lastCachedWorkspace, purgeOfflineWorkspace } from "@/lib/practice/offline-store";
 
 // CP-OFFLINE-SURVEY-001 s5 precondition 0 — the PIN, on screen, in the two places it is needed.
@@ -62,6 +62,13 @@ export default function DeviceLockPrompt({ variant, onUnlocked, children }: Prop
     const held = sessionKey();
     if (held) { setUnlocked(true); setState("unlocked"); onUnlocked?.(held); return; }
     setUnlocked(false); setState(loaded.state);
+    // ⚠ A NOTICE DESCRIBES A COMPLETED ACTION, SO IT EXPIRES WHEN THE DEVICE RE-LOCKS. "A PIN is now set
+    // on this device... will be fetched again while you are online" is true the moment it is written and
+    // stale once the session has timed out. Carrying it onto a locked screen would have the product
+    // reassuring somebody about a copy while asking them to unlock the thing holding it.
+    // ⚠ Cleared HERE, in the callback that observes the transition -- not in an effect keyed on `state`,
+    // which is a setState-in-effect cascade and is rejected by the lint rule for good reason.
+    if (loaded.state !== "not_enrolled") setNotice(null);
   }, [onUnlocked]);
 
   useEffect(() => { queueMicrotask(() => { void reread(); }); }, [reread]);
@@ -148,6 +155,21 @@ export default function DeviceLockPrompt({ variant, onUnlocked, children }: Prop
     const ws = await lastCachedWorkspace();
     if (ws) await purgeOfflineWorkspace(ws);
     await forgetLock();
+    // ════════════════════════════════════════════════════════════════════════════════════════════════
+    // ⚠⚠ THE KEY IN MEMORY MUST GO WITH THE RECORD THAT WRAPS IT, AND IT USED NOT TO.
+    //
+    // forgetLock() deletes the stored record. The unwrapped data key sat in module state untouched, and
+    // TWO things followed from that, both silent:
+    //
+    //   1. reread() consults sessionKey() BEFORE the stored state, so a device whose PIN had just been
+    //      removed still reported "This device is unlocked" -- offering to remove a PIN that was
+    //      already gone, and never offering to set a new one.
+    //   2. ⚠ WORSE: the writer kept sealing new records under a key whose wrapping record no longer
+    //      existed. Nothing could unwrap them after a reload, so loadOfflineDay would delete them on
+    //      sight -- the device filling with ciphertext nobody can account for, which is precisely the
+    //      "rubble" the writer's own comment says it holds off to avoid.
+    // ════════════════════════════════════════════════════════════════════════════════════════════════
+    clearSessionKey();
     setBusy(false); setUnlocked(false);
     setNotice("The PIN has been removed from this device, and what was stored under it has been cleared.");
     void reread();
@@ -156,6 +178,16 @@ export default function DeviceLockPrompt({ variant, onUnlocked, children }: Prop
   // ── THE OFFLINE PAGE: nothing to show until it is open ───────────────────────────────────────────
   if (variant === "page") {
     if (state === "not_enrolled" || unlocked) return <>{children}</>;
+
+    // ⚠ NOTHING IS ASSERTED UNTIL THE DEVICE HAS BEEN READ. `state` is null on the server and until the
+    // first store read resolves, and this branch used to fall through to the heading below -- so EVERY
+    // visitor, including one with no PIN set at all, was served "This device is locked" and then had it
+    // swapped out on hydration. Measured in the rendered HTML on 2026-08-11: the phrase is in the server
+    // response for a device the server knows nothing about. A screen may not name a state it has not
+    // checked; that is the same rule as the checklist that described the saved document.
+    if (state === null)
+      return <p className="text-[12.5px] leading-relaxed text-gray-600">Checking this device&hellip;</p>;
+
     return (
       <div className="max-w-md">
         <h1 className="text-xl font-bold text-gray-900">This device is locked</h1>
@@ -172,8 +204,9 @@ export default function DeviceLockPrompt({ variant, onUnlocked, children }: Prop
         {problem ? (
           <p className="mt-2 text-[12.5px] leading-relaxed text-rose-700">{problem}</p>
         ) : (
+          // `state` cannot be null here -- the branch above returns on null.
           <p className="mt-2 text-[12.5px] leading-relaxed text-gray-700">
-            {state === null ? "Checking this device…" : lockMessage(state, record, new Date())}
+            {lockMessage(state, record, new Date())}
           </p>
         )}
         {/* ⚠ SAID ON THE LOCK SCREEN, WHERE THE FEAR IS. Somebody who has forgotten their PIN needs to
@@ -205,18 +238,43 @@ export default function DeviceLockPrompt({ variant, onUnlocked, children }: Prop
   }
 
   // ── THE SHELL: one quiet line, never a wall ──────────────────────────────────────────────────────
-  if (notice) return <p className="text-[10.5px] text-gray-400">{notice}</p>;
+  //
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
+  // ⚠⚠ THIS USED TO BE `if (notice) return <p>{notice}</p>` -- AN EARLY RETURN, ABOVE EVERYTHING.
+  //
+  // A notice is set by exactly two actions: enrolling a PIN, and removing one. Once either had
+  // happened, that one static sentence replaced the ENTIRE prompt for the life of the component, and
+  // nothing ever cleared it.
+  //
+  // ⚠ SO ENROLLING A PIN REMOVED THE ONLY WAY TO USE IT. The unlock session lasts LOCK_SESSION_MS --
+  // fifteen minutes. When it expired the writer correctly reported `locked` and rendered this prompt
+  // to get the practitioner back in, and this prompt answered with "A PIN is now set on this
+  // device..." and NO INPUT. The device then stored nothing for the rest of the tab, with no visible
+  // control to change that and no sentence saying anything was wrong. Removing a PIN had the mirror
+  // failure: the "Set a PIN" affordance vanished permanently.
+  //
+  // It is now a line rendered BESIDE the live state, never in place of it. The state always wins,
+  // because the state is the thing with a control attached.
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
+  const noticeLine = notice
+    ? <p className="text-[10.5px] leading-relaxed text-gray-400">{notice}</p>
+    : null;
 
   if (state === "not_enrolled") {
     if (!enrolling)
       return (
-        <p className="text-[10.5px] text-gray-400">
-          No PIN is set on this device, so anything held here for offline use can be read by anyone who
-          opens this browser.{" "}
-          <button type="button" onClick={() => setEnrolling(true)} className="underline hover:text-gray-600">
-            Set a PIN
-          </button>
-        </p>
+        <div className="flex flex-col gap-1">
+          {/* ⚠ BESIDE, NOT INSTEAD OF. Removing a PIN sets a notice, and while that notice replaced this
+              branch the practitioner could never set another one. */}
+          {noticeLine}
+          <p className="text-[10.5px] text-gray-400">
+            No PIN is set on this device, so anything held here for offline use can be read by anyone who
+            opens this browser.{" "}
+            <button type="button" onClick={() => setEnrolling(true)} className="underline hover:text-gray-600">
+              Set a PIN
+            </button>
+          </p>
+        </div>
       );
     return (
       <div className="mt-2 flex max-w-md flex-col gap-2 rounded-lg border border-gray-200 bg-white p-3">
@@ -256,12 +314,19 @@ export default function DeviceLockPrompt({ variant, onUnlocked, children }: Prop
 
   if (unlocked)
     return (
-      <p className="text-[10.5px] text-gray-400">
-        This device is unlocked, so the offline copy is being kept up to date.{" "}
-        <button type="button" disabled={busy} onClick={doForget} className="underline hover:text-gray-600">
-          Remove the PIN and clear what is stored
-        </button>
-      </p>
+      <div className="flex flex-col gap-1">
+        {/* Enrolment's notice lands here -- it says the device was cleared and will be fetched again.
+            ⚠ The CONFIRMATION that it came back is the writer's own line, not this one: this component
+            knows about the PIN and nothing about what was stored under it. Claiming a copy exists from
+            here would be asserting something this file cannot see. */}
+        {noticeLine}
+        <p className="text-[10.5px] text-gray-400">
+          This device is unlocked, so the offline copy is being kept up to date.{" "}
+          <button type="button" disabled={busy} onClick={doForget} className="underline hover:text-gray-600">
+            Remove the PIN and clear what is stored
+          </button>
+        </p>
+      </div>
     );
 
   // Locked, cooling down or locked out. ⚠ One line and an input -- never a wall.
