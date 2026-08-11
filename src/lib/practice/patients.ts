@@ -585,7 +585,7 @@ export async function getPatient(admin: any, workspaceId: string, patientId: str
     admin.from("practice_patient_contact")
       .select("id, contact_type, value, preferred, verified").eq("patient_id", patientId).order("created_at"),
     admin.from("practice_appointment")
-      .select("id, scheduled_at, appointment_type, status, duration_minutes")
+      .select("id, scheduled_at, appointment_type, status, duration_minutes, location_id")
       .eq("patient_id", patientId).order("scheduled_at", { ascending: false }).limit(25),
   ]);
   return { patient, identifiers: identifiers ?? [], contacts: contacts ?? [], appointments: appointments ?? [] };

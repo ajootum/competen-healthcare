@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { getPatient, registerNeighbours } from "@/lib/practice/patients";
+import { workspaceClock } from "@/lib/practice/practice-time";
 import { patientTimeline } from "@/lib/practice/encounters";
 import { listFollowUps } from "@/lib/practice/follow-ups";
 import { patientFollowUps } from "@/lib/practice/follow-up-plans";
@@ -112,6 +113,33 @@ export default async function PatientPage({ params, searchParams }: {
   // record renders its signpost and returns before the header exists.
   const neighbours = await registerNeighbours(admin, shell.ctx.workspaceId, patientId);
 
+  // ── THE BOOKED BANNER (the owner, 2026-08-12: "how can we show that this patient is already
+  // booked?") ─────────────────────────────────────────────────────────────────────────────────────
+  // The appointments were ALWAYS fetched -- and rendered at the very bottom of the page, below the
+  // access log, in raw UTC slices. A booking that exists but cannot be seen where the decision is made
+  // is the REACHABLE-but-not-DISCOVERABLE failure this product keeps re-finding. What is upcoming now
+  // renders directly under the name, in the practice's own clock.
+  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
+  const fmtWhen = (iso: string) => {
+    try {
+      return new Intl.DateTimeFormat("en-GB", {
+        timeZone: timezone, weekday: "short", day: "numeric", month: "short", year: "numeric",
+        hour: "2-digit", minute: "2-digit", hour12: false,
+      }).format(new Date(iso));
+    } catch { return String(iso).slice(0, 16).replace("T", " ") + " (zone unreadable, shown as UTC)"; }
+  };
+  // A server component runs once per request, so "now" is the request's own moment.
+  // eslint-disable-next-line react-hooks/purity -- request-scoped clock read in a server component
+  const nowMs = Date.now();
+  const upcoming = (appointments as any[])
+    .filter(a => ["REQUESTED", "CONFIRMED", "ARRIVED"].includes(a.status) && Date.parse(a.scheduled_at) >= nowMs)
+    .sort((a, b) => Date.parse(a.scheduled_at) - Date.parse(b.scheduled_at));
+  const locIds = [...new Set(upcoming.map(a => a.location_id).filter(Boolean))] as string[];
+  const { data: locRows } = locIds.length
+    ? await admin.from("practice_location").select("id, name").eq("workspace_id", shell.ctx.workspaceId).in("id", locIds)
+    : { data: [] };
+  const locName = new Map(((locRows ?? []) as any[]).map(l => [l.id, l.name as string]));
+
   if (patient.status === "merged") {
     return (
       <div className="max-w-3xl">
@@ -172,6 +200,31 @@ export default async function PatientPage({ params, searchParams }: {
           <Link href="/practice/patients" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">← Registry</Link>
         </div>
       </div>
+
+      {/* ⚠ WHETHER THIS PATIENT IS ALREADY BOOKED, WHERE THE BOOKING DECISION IS MADE. Without this,
+          the desk books a second appointment because the first one was only visible at the bottom of
+          the page. Times are the practice's own clock, never a UTC slice. */}
+      {upcoming.length > 0 && (
+        <div className="mt-3 rounded-xl border border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/[0.06] px-4 py-3">
+          <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--cp-primary-deep)]">
+            Booked — {upcoming.length === 1 ? "1 upcoming appointment" : `${upcoming.length} upcoming appointments`}
+          </p>
+          <ul className="mt-1.5 flex flex-col gap-1">
+            {upcoming.map((a: any) => (
+              <li key={a.id} className="flex flex-wrap items-baseline gap-x-2 text-[13px] text-gray-800">
+                <span className="font-semibold">{fmtWhen(a.scheduled_at)}</span>
+                <span className="text-gray-600">{String(a.appointment_type).replace(/_/g, " ")}</span>
+                {a.location_id && locName.get(a.location_id) && (
+                  <span className="text-gray-600">· {locName.get(a.location_id)}</span>
+                )}
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${a.status === "CONFIRMED" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>
+                  {a.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="mt-4 grid lg:grid-cols-2 gap-4">
         <section className="rounded-xl border border-gray-200 bg-white p-4">
@@ -320,9 +373,11 @@ export default async function PatientPage({ params, searchParams }: {
           </p>
         ) : (
           <ul className="mt-2 flex flex-col gap-1">
+            {/* ⚠ THE PRACTICE CLOCK, NOT A UTC SLICE. The old `.slice(0, 16)` printed a correctly
+                stored Kampala 09:00 as 06:00 -- the same display bug CalendarConsole carried. */}
             {(appointments as any[]).map(a => (
               <li key={a.id} className="flex items-center gap-2 text-[12px]">
-                <span className="font-mono text-gray-500">{String(a.scheduled_at).slice(0, 16).replace("T", " ")}</span>
+                <span className="font-mono text-gray-500">{fmtWhen(a.scheduled_at)}</span>
                 <span className="text-gray-700">{String(a.appointment_type).replace(/_/g, " ")}</span>
                 <span className="ml-auto text-gray-500">{a.status}</span>
               </li>
