@@ -32,6 +32,7 @@ import { admitToEstate } from "../src/lib/platform-membership";
 // ⚠ From enterprise-constants.ts, never enterprise-shell.ts -- the shell imports next/headers through
 // the supabase server client, and an import pulls the module, not the binding.
 import { ENTERPRISE_BUILT_SUBPRODUCTS } from "../src/lib/enterprise-constants";
+import { workspaceLinksForUser } from "../src/lib/workspace-links";
 import { classifyGate } from "../src/lib/access/scan";
 import type { AppRole } from "../src/lib/roles";
 
@@ -206,6 +207,31 @@ async function main() {
     const phantom = ENTERPRISE_BUILT_SUBPRODUCTS.filter(c => !catalogue.has(c));
     ok("8c. ⚠ every code the shell claims is BUILT exists in the live catalogue",
       phantom.length === 0 && ENTERPRISE_BUILT_SUBPRODUCTS.length > 0, phantom.join(", "));
+  }
+
+  // ── 9. ⚠ DISCOVERABILITY, PROVEN BY CALLING THE RESOLVER -- REACHABLE IS NOT DISCOVERABLE ───────
+  //
+  // /enterprise shipped gated and reachable and NOTHING LINKED TO IT: the owner signed in as a seeded
+  // administrator and asked "where do I find enterprise?" -- the sixth engine-built-screen-missing of
+  // this programme. These run workspaceLinksForUser against the LIVE database, so the link's condition
+  // and the gate's condition cannot drift apart silently.
+  const memberAdmin = admins.find(a => held.has(`${a.id}:${a.tenant_id}`));
+  if (memberAdmin) {
+    const memberLinks = await workspaceLinksForUser(admin, memberAdmin.id, []);
+    ok("9a. ⚠ a seeded tenant administrator is OFFERED the Competen Enterprise workspace link",
+      memberLinks.some(l => l.href === "/enterprise"),
+      `${memberAdmin.full_name}: ${memberLinks.map(l => l.href).join(", ") || "(no links)"}`);
+  } else {
+    ok("9a. ⚠ a seeded tenant administrator is OFFERED the Competen Enterprise workspace link",
+      false, "no seeded admin with membership found to test with");
+  }
+  const nonMember = (profiles ?? []).find(p =>
+    !p.tenant_id || ![...held].some(h => h.startsWith(`${p.id}:`)));
+  if (nonMember) {
+    const nonLinks = await workspaceLinksForUser(admin, nonMember.id, []);
+    ok("9b-control. ⚠ a non-member is NOT offered it -- the link matches the gate, not a role",
+      !nonLinks.some(l => l.href === "/enterprise"),
+      String(nonMember.full_name));
   }
 
   report();

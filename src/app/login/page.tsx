@@ -68,7 +68,14 @@ export default function LoginPage() {
       // PW-014 §1 / PW-AC-01 — universal landing: every authenticated user lands in the Personal
       // Workspace, which aggregates their work across all entitled workspaces. Functional portals are
       // reached from there via the Workspace Launcher, not at login.
-      window.location.href = "/dashboard";
+      //
+      // ⚠ UNLESS THEY WERE ON THEIR WAY SOMEWHERE. A gate that redirects here (`/login?next=/enterprise`)
+      // used to lose the destination -- the owner typed /enterprise and surfaced on /dashboard with no
+      // idea why. `next` restores it, VALIDATED: a single leading slash only, so this cannot become an
+      // open redirect ("//evil.example" parses as protocol-relative and is refused by the double-slash
+      // test; anything with a scheme fails the leading-slash test).
+      const next = new URLSearchParams(window.location.search).get("next");
+      window.location.href = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
     }
   }
 

@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolveEnterpriseShell } from "@/lib/enterprise-shell";
 
@@ -21,7 +20,10 @@ export const dynamic = "force-dynamic";
 
 export default async function EnterpriseWorkforcePage() {
   const shell = await resolveEnterpriseShell();
-  if (shell.state !== "READY") redirect("/enterprise");
+  // ⚠ NULL, NOT redirect() -- see /enterprise/page.tsx: a thrown redirect beats the layout's refusal
+  // sentence, and redirecting under the same layout is a loop. The layout explains; this contributes
+  // nothing.
+  if (shell.state !== "READY") return null;
 
   const admin = createAdminClient();
   const [{ data: people, error: pErr }, { data: hospitals }] = await Promise.all([

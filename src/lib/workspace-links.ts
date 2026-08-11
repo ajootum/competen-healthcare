@@ -1,5 +1,6 @@
 import { orgRolesOf, workspacesFor, WORKSPACE_CATALOGUE, type AppRole, type WorkspaceLink } from "@/lib/roles";
 import { resolveHqPositions } from "@/lib/hq/context";
+import { readEnterpriseMembership } from "@/lib/enterprise-membership";
 
 // ⚠ NOT "Super Admin". CP-HQ-NAV-001. The people this link exists for are HQ APPOINTEES -- they hold a
 // position, not the super_admin role, and most of them never will. A switcher entry labelled "Super Admin"
@@ -18,9 +19,11 @@ export async function workspaceLinksForUser(
   userId: string,
   userRoles: AppRole[],
 ): Promise<WorkspaceLink[]> {
+  // ⚠ tenant_id rides the read that already happens, so the Enterprise probe below costs nothing for
+  // the majority who carry none.
   const { data } = await admin
     .from("profiles")
-    .select("org_role, org_roles")
+    .select("org_role, org_roles, tenant_id")
     .eq("id", userId)
     .maybeSingle();
   // `admin` is loosely typed (service-role client), so `data` is `any` — orgRolesOf
@@ -69,6 +72,27 @@ export async function workspaceLinksForUser(
       // one. This function only decides what is OFFERED; the /super-admin layout decides what is admitted.
       // A missing link costs an appointee a URL they can still type and the owner can still send. A link
       // added on a failed read would advertise a console to someone the gate will refuse.
+    }
+  }
+  // ── ENT-DEC-001 D5: the way IN to Competen Enterprise ───────────────────────────────────────────
+  //
+  // /enterprise shipped gated and REACHABLE and nothing linked to it -- the owner signed in as a seeded
+  // administrator and asked "where do I find enterprise?". That is the SIXTH "engine built, screen
+  // missing" of this programme (the HQ block above records the fifth), and /practice/offline was the
+  // fourth. Reachable is not discoverable.
+  //
+  // ⚠ THE CONDITION IS THE GATE'S OWN CONDITION, no looser and no tighter: a tenant on the profile AND
+  // an active membership of that tenant, read by the same module the gate reads. Offering the link on
+  // anything else -- the hospital_admin role, say -- would advertise a door gate 3 then refuses.
+  if (data?.tenant_id && !links.some(l => l.href === "/enterprise")) {
+    try {
+      const membership = await readEnterpriseMembership(admin, userId, data.tenant_id as string);
+      if (membership.state === "member")
+        links.push({ label: "Competen Enterprise", icon: "🏢", href: "/enterprise" });
+    } catch {
+      // ⚠ FAIL-SOFT TOWARD NO LINK -- the HQ block's reasoning, unchanged: this function decides what is
+      // OFFERED, the gate decides what is admitted, and a link added on a failed read advertises a door
+      // the fail-closed gate will refuse.
     }
   }
   return links;

@@ -18,7 +18,9 @@ export const dynamic = "force-dynamic";
 export default async function EnterpriseLayout({ children }: { children: React.ReactNode }) {
   const shell = await resolveEnterpriseShell();
 
-  if (shell.state === "AUTH_REQUIRED") redirect("/login");
+  // ⚠ WITH THE DESTINATION, or signing in strands the person on /dashboard and they arrive back here
+  // only by typing the URL again -- which is how the owner experienced it on 2026-08-11.
+  if (shell.state === "AUTH_REQUIRED") redirect("/login?next=/enterprise");
 
   if (shell.state === "NO_TENANT")
     return (

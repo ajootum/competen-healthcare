@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { resolveEnterpriseShell } from "@/lib/enterprise-shell";
 import { ENTERPRISE_BUILT_SUBPRODUCTS, ENTERPRISE_NOT_BUILT_REASON } from "@/lib/enterprise-constants";
 
@@ -17,7 +16,12 @@ export const dynamic = "force-dynamic";
 
 export default async function EnterpriseHome() {
   const shell = await resolveEnterpriseShell();
-  if (shell.state !== "READY") redirect("/enterprise");
+  // ⚠ NULL, NOT redirect(). A page executes even when its layout declines to render children -- the
+  // layout gets children as a prop it may ignore, but the page has already run, and a redirect THROWN
+  // here beats the layout's output. The first version redirected to /enterprise, which from under
+  // /enterprise is an infinite loop for every non-member. The layout's refusal sentence is the answer;
+  // this page's only job in a non-READY state is to contribute nothing.
+  if (shell.state !== "READY") return null;
 
   return (
     <div className="max-w-4xl">
