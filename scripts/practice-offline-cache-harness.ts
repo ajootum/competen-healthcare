@@ -333,9 +333,20 @@ async function main() {
   const importsTheShell = offlineTree.includes("(shell)/") || offlineTree.includes("(shell)\"");
   ok("6h. ⚠ nothing in the offline tree imports from the (shell) group",
     !importsTheShell, "the shell sits behind six database reads and redirects on failure");
-  ok("6i. ⚠ the frame offers NO navigation -- offline every other route redirects back here",
+  // ⚠ THE ASSERTION AND THE RULE BOTH MOVED ON 2026-08-11, and the old wording would have gone on
+  // passing while describing something the code no longer does. The frame LISTS the practitioner's
+  // sections -- leaving the column empty made the page read as broken -- but none of them is a link,
+  // because offline every /practice/* route redirects straight back here.
+  ok("6i. ⚠ no section in the frame is a LINK -- offline they all redirect back to this page",
     !frameSrc.includes("<Link") && !frameSrc.includes("href="),
-    "nine links that all bounce to this page look normal and behave bizarrely");
+    "links that bounce to this page look normal and behave bizarrely");
+  ok("6i2. ⚠ but the sections ARE listed, disabled with a reason, as every other control here is",
+    frameSrc.includes("aria-disabled") && frameSrc.includes("cursor-not-allowed")
+    && frameSrc.includes("Needs a connection"),
+    "an empty sidebar reads as a broken product rather than a reduced one");
+  ok("6i3. ⚠ and the list is the one CACHED FOR THIS ACCOUNT, not all nine",
+    frameSrc.includes("cachedNav") && !frameSrc.includes("PRIMARY_ORDER"),
+    "eight of the nine sections are capability-gated");
   ok("6j. ⚠ and it names no practice and no person",
     !frameSrc.includes("workspaceName") && !frameSrc.includes("fullName")
     && !frameSrc.includes("ctx.") && !frameSrc.includes("profile"));

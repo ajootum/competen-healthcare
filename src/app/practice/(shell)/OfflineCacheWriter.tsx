@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { cacheOfflineDay, cacheOfflineGuidance, purgeOfflineWorkspace } from "@/lib/practice/offline-store";
+import { cacheNav, cacheOfflineDay, cacheOfflineGuidance, purgeOfflineWorkspace, type CachedNavItem } from "@/lib/practice/offline-store";
 import { loadLock } from "@/lib/practice/offline-lock-store";
 import { sessionKey } from "@/lib/practice/offline-session";
 import DeviceLockPrompt from "../_offline/DeviceLockPrompt";
@@ -47,13 +47,15 @@ type Outcome =
   | { kind: "locked" };
 
 export default function OfflineCacheWriter(
-  { workspaceId, gate, showStatus = false }:
-  { workspaceId: string; gate: OfflineWriterGate; showStatus?: boolean },
+  { workspaceId, gate, nav, showStatus = false }:
+  { workspaceId: string; gate: OfflineWriterGate; nav?: CachedNavItem[]; showStatus?: boolean },
 ) {
   const [outcome, setOutcome] = useState<Outcome>({ kind: "idle" });
   // ⚠ Bumped when the device is unlocked, so the effect re-runs and the cache is written immediately
   // rather than at the next navigation. Without it, unlocking would appear to do nothing.
   const [attempt, setAttempt] = useState(0);
+  // A stable identity for the sections list -- see the dependency note at the end of the effect.
+  const navKey = (nav ?? []).map(i => i.href).join("|");
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +92,11 @@ export default function OfflineCacheWriter(
           // page from a cold start. Reported through the outcome below rather than thrown.
         }
       }
+
+      // ⚠ THE SIDEBAR IS REMEMBERED BEFORE THE LOCK CHECK, because it is not sealed and a LOCKED device
+      // still has to draw its chrome. Sealing it, or writing it later, would leave a locked practitioner
+      // looking at a blank navy column -- the "this looks broken" state the frame exists to remove.
+      if (nav && nav.length) await cacheNav(nav);
 
       // ── 3. THE DEVICE PIN, IF THERE IS ONE ────────────────────────────────────────────────────
       // ⚠ A LOCKED DEVICE STORES NOTHING, AND THAT IS NOT A FAILURE. The caches are sealed with a key
@@ -157,7 +164,12 @@ export default function OfflineCacheWriter(
     })();
 
     return () => { cancelled = true; };
-  }, [workspaceId, gate.state, gate.purge, gate.reason, attempt]);
+    // ⚠ `navKey`, NOT `nav`. The prop is built fresh by the server on every render, so a new array
+    // identity arrives each time -- putting `nav` itself in this list would re-run the whole effect, and
+    // therefore re-fetch and re-write the cache, on every single render. The key is derived from the
+    // hrefs, so it changes exactly when the practitioner's sections change and not otherwise.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceId, gate.state, gate.purge, gate.reason, attempt, navKey]);
 
   if (!showStatus) return null;
 

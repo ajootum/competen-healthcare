@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { primaryNav } from "@/lib/practice/navigation";
 import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
@@ -315,6 +316,7 @@ export default async function CurrentSessionPage() {
       <OfflineCacheWriter
         workspaceId={shell.ctx.workspaceId}
         gate={{ state: offline.state, reason: offline.reason, purge: offline.purge }}
+        nav={primaryNav(shell.ctx.capabilities).map(i => ({ href: i.href, label: i.label, icon: i.icon }))}
         showStatus
       />
     </div>

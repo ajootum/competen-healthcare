@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { cachedNav, type CachedNavItem } from "@/lib/practice/offline-store";
 // The offline page's chrome. CP-OFFLINE-SURVEY-001 s3.3, and the owner's decision of 2026-08-11.
 //
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -21,10 +25,15 @@
 // cheap side of that trade. The colours come from the same CSS variables, so the two cannot drift apart
 // on the thing that actually matters.
 //
-// ⚠ AND THERE IS NO NAVIGATION IN IT, DELIBERATELY. Offline, sw.js redirects every other /practice/*
-// route back to this page. Nine sidebar links that all bounce the practitioner here would look entirely
-// normal and behave bizarrely -- worse than having none, because the failure would be silent and would
-// read as the product being broken rather than as the network being gone.
+// ⚠ THE SECTIONS ARE LISTED BUT NONE OF THEM IS A LINK, AND THAT POSITION MOVED ONCE. The first version
+// listed nothing at all, reasoning that offline sw.js redirects every /practice/* route back here, so
+// nine working links would look normal and behave bizarrely. The links must indeed not work -- but
+// leaving the column EMPTY made the page read as a broken product rather than a reduced one, which is
+// what the owner reported on seeing it. Every other control on this screen is disabled-with-a-reason
+// rather than removed; the sidebar now follows the same rule the rest of the page already followed.
+//
+// They are rendered as spans, not disabled anchors: there is no such thing as a disabled anchor, it stays
+// clickable and focusable, and clicking one offline lands the practitioner straight back here.
 //
 // ⚠ IT NAMES NO PRACTICE AND NO PERSON. The shell footer prints the workspace name; this cannot, and
 // must not pretend to. The offline store deliberately keeps only an opaque workspace uuid -- no name, no
@@ -32,6 +41,12 @@
 // here would mean caching one, which is a disclosure nobody agreed to for the sake of a heading.
 
 export default function OfflineFrame({ children }: { children: React.ReactNode }) {
+  // ⚠ READ IN THE BROWSER, UNSEALED, AND BEFORE ANYTHING IS UNLOCKED. The sidebar has to draw on a
+  // LOCKED device too -- that is the whole point of it -- so it cannot live behind the PIN. It holds
+  // section names and nothing else: no patient, no person, no practice name.
+  const [nav, setNav] = useState<CachedNavItem[]>([]);
+  useEffect(() => { void cachedNav().then(setNav); }, []);
+
   return (
     <div className="flex min-h-screen bg-[var(--cp-canvas,#f7f8fa)]">
       {/* The frame, matching the shell's aside: same width, same surface, same mark. */}
@@ -43,14 +58,46 @@ export default function OfflineFrame({ children }: { children: React.ReactNode }
           <span className="text-[15px] font-bold">competen<span className="text-blue-300">Practice</span></span>
         </div>
 
-        {/* Where the nav would be. It says what it is instead of pretending to be a menu. */}
-        <div className="px-4 py-4">
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-blue-200/50">Offline</p>
-          <p className="mt-1.5 text-[12.5px] leading-relaxed text-blue-100/70">
-            This device only. The rest of the practice needs a connection, so it is not shown rather than
-            shown and broken.
+        {/* ⚠ THE PRACTITIONER'S OWN SECTIONS, DISABLED WITH A REASON -- not hidden, and not omitted.
+            The first version left this space empty on the reasoning that nine links which all redirect
+            back here would look normal and behave bizarrely. That was half right: the links must not
+            WORK, but leaving the column blank made the page look like a broken product rather than a
+            reduced one, which is what the owner reported. Disabled-with-a-reason is what every other
+            control on this screen already does -- the consultation buttons, the guidance buttons -- so
+            this is the established rule rather than a new idea.
+            ⚠ The list is the one CACHED FOR THIS ACCOUNT: eight of the nine sections are
+            capability-gated, so rendering all of them would show a practice manager sections they do not
+            hold. Empty means the sidebar was never remembered, and it says so instead of inventing one. */}
+        <nav className="px-3 py-3" aria-label="Practice sections, unavailable offline">
+          <p className="px-1 pb-1.5 text-[9.5px] font-bold uppercase tracking-[0.14em] text-blue-200/40">
+            Needs a connection
           </p>
-        </div>
+          {nav.length === 0 ? (
+            <p className="px-1 text-[12px] leading-relaxed text-blue-100/60">
+              This device has not stored which sections you use, so none are listed. Opening Practice
+              while online will remember them.
+            </p>
+          ) : (
+            <ul>
+              {nav.map(item => (
+                <li key={item.href}>
+                  {/* ⚠ A <span>, NOT A DISABLED LINK. There is no such thing as a disabled anchor -- it
+                      stays clickable and keyboard-focusable -- and offline every one of these redirects
+                      straight back to this page, which reads as the product being broken. */}
+                  <span aria-disabled="true"
+                    className="mb-0.5 flex cursor-not-allowed items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] text-blue-100/35">
+                    <span aria-hidden className="w-4 text-center">{item.icon}</span>
+                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-2 px-1 text-[11px] leading-relaxed text-blue-100/50">
+            These need a connection to the practice. They are shown so you can see what is waiting, not
+            because they can be opened from here.
+          </p>
+        </nav>
 
         <div className="mt-auto border-t border-white/10 px-4 py-3">
           {/* ⚠ No practice name and no person: see the header. */}

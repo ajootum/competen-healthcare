@@ -64,6 +64,19 @@ const STORE_GUIDANCE_KEY = "guidanceKey";
  */
 const STORE_META = "meta";
 const META_ACTIVE = "activeWorkspace";
+/**
+ * The practitioner's OWN primary navigation, so the offline shell can look like the shell.
+ *
+ * ⚠ STORED UNENCRYPTED, DELIBERATELY, AND THE REASONING MATTERS. These are the product's own section
+ * names -- "Patients", "Encounters" -- filtered to the ones this account holds. They contain no patient
+ * data, name nobody, and a device holding them discloses nothing about any person's care. `META_ACTIVE`
+ * above already keeps an opaque workspace id on the same terms.
+ *
+ * ⚠ AND IT HAS TO BE READABLE WITHOUT THE PIN. The frame is drawn before anything is unlocked; sealing
+ * this would mean a locked device shows a blank navy column, which is exactly the "looks broken" problem
+ * the frame exists to fix. The rule holds where it matters: the DAY and the GUIDANCE stay sealed.
+ */
+const META_NAV = "primaryNav";
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -373,6 +386,38 @@ export async function purgeOfflineWorkspace(workspaceId: string): Promise<{ ok: 
     ok: false,
     reason: [day.ok ? null : day.reason, guidance.ok ? null : guidance.reason].filter(Boolean).join(" "),
   };
+}
+
+/** One primary section, as the practitioner's own sidebar shows it. No hrefs are followed offline. */
+export type CachedNavItem = { href: string; label: string; icon: string };
+
+/**
+ * Remember the practitioner's primary navigation.
+ *
+ * ⚠ WRITTEN EVEN WHEN THE DEVICE IS LOCKED, because the frame needs it before anything is unlocked, and
+ * it is not sealed. Called by the cache writer alongside the day.
+ */
+export async function cacheNav(items: CachedNavItem[]): Promise<void> {
+  try {
+    const db = await openDb();
+    await tx(db, STORE_META, "readwrite", s => s.put(items, META_NAV));
+    db.close();
+  } catch {
+    // ⚠ Silent, and it is the one place in this file that is. A sidebar that could not be remembered
+    // costs a plainer offline screen; nothing about the day or the guidance depends on it.
+  }
+}
+
+/** The remembered navigation, or an empty list. ⚠ Empty means UNKNOWN, and the frame says so. */
+export async function cachedNav(): Promise<CachedNavItem[]> {
+  try {
+    const db = await openDb();
+    const items = await tx<CachedNavItem[] | undefined>(db, STORE_META, "readonly", s => s.get(META_NAV));
+    db.close();
+    return Array.isArray(items) ? items : [];
+  } catch {
+    return [];
+  }
 }
 
 /**

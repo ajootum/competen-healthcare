@@ -11,6 +11,7 @@ import StartYourDay from "./StartYourDay";
 import LiveRefresh from "../LiveRefresh";
 import OfflineCacheWriter from "../OfflineCacheWriter";
 import { offlineCacheGate } from "@/lib/practice/offline-gate";
+import { primaryNav } from "@/lib/practice/navigation";
 import {
   PANEL, GLANCE_SWATCH, LENS_SWATCH, FOLLOWUP_SWATCH, COHORT_RING,
   QUEUE_SWATCH, QUICK_SWATCH, QUICK_ICON, PERFORMANCE_SWATCH, SEVERITY,
@@ -918,6 +919,7 @@ export default async function PracticeCommandCentre() {
         <OfflineCacheWriter
           workspaceId={ctx.workspaceId}
           gate={{ state: offline.state, reason: offline.reason, purge: offline.purge }}
+          nav={primaryNav(ctx.capabilities).map(i => ({ href: i.href, label: i.label, icon: i.icon }))}
         />
       </div>
     </div>
