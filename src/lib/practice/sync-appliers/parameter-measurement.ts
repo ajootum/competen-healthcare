@@ -46,8 +46,11 @@ import { recordMeasurement } from "@/lib/practice/parameters";
 //   status >= 500  -> THROW. Transient. Nothing is recorded, the device keeps its copy, the retry runs.
 //   status <  500  -> return ok:false. The server understood and will not do it. Retrying cannot help.
 
-/** ⚠ APPEND-ONLY MEANS CREATE-ONLY. An update or delete here would contradict the table's own doctrine. */
-export const MEASUREMENT_ENTITY_TYPE = "parameter_measurement";
+// ⚠ THE ENTITY TYPE LIVES IN entity-types.ts, NOT HERE, AND IT MOVED BECAUSE OF A LIVE 500.
+// A "use client" module importing it from this file pulled parameters.ts -> access.ts -> next/headers
+// into the browser bundle. See that file's header. Re-exported so callers that legitimately load this
+// module (the engine) need only one import.
+export { MEASUREMENT_ENTITY_TYPE } from "@/lib/practice/sync-appliers/entity-types";
 
 type MeasurementPayload = {
   patientId?: unknown;

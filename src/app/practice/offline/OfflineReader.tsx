@@ -20,8 +20,13 @@ import type { SafetyLine } from "@/lib/practice/longitudinal-constants";
 import { guidanceType } from "@/lib/practice/knowledge-constants";
 import { OFFLINE_ENCRYPTION_NOTE } from "@/lib/practice/offline-crypto";
 import {
-  lastCachedWorkspace, loadOfflineClinical, loadOfflineDay, loadOfflineGuidance,
+  cachedIdentity, cachedOfflineParameters, lastCachedWorkspace, loadOfflineClinical, loadOfflineDay,
+  loadOfflineGuidance, type DeviceIdentity,
 } from "@/lib/practice/offline-store";
+import {
+  offlinePlausibility, type OfflineParametersReadResult,
+} from "@/lib/practice/offline-parameters";
+import { captureMeasurement, CAPTURE_HELD_NOTE } from "@/lib/practice/offline-capture";
 
 // CP-OFFLINE-SURVEY-001 s3.4 — the cached clinic day, and its age, on one screen.
 //
@@ -77,12 +82,15 @@ export default function OfflineReader({ cacheKey }: { cacheKey?: CryptoKey | nul
   const [result, setResult] = useState<OfflineReadResult | null>(null);
   const [guidance, setGuidance] = useState<OfflineGuidanceReadResult | null>(null);
   const [clinical, setClinical] = useState<OfflineClinicalReadResult | null>(null);
+  /** Held so a capture can name the workspace it belongs to. Opaque uuid, nothing else. */
+  const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
   const [openedDoc, setOpenedDoc] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
 
   const reread = useCallback(async () => {
     const workspaceId = await lastCachedWorkspace();
+    setWorkspaceId(workspaceId ?? null);
     if (!workspaceId) {
       setResult({ state: "none", purge: false, reason: "Nothing has been cached on this device yet." });
       setGuidance({ state: "none", purge: false, reason: "No practice guidance has been stored on this device yet." });
@@ -214,6 +222,7 @@ export default function OfflineReader({ cacheKey }: { cacheKey?: CryptoKey | nul
                     // ⚠ THE PACK, NOT A LOOKED-UP RECORD. The lookup happens inside the row, behind the
                     // "open" toggle, so a rendered list never touches the clinical data at all.
                     clinicalPack={clinical?.state === "ok" ? clinical.pack : null}
+                    workspaceId={workspaceId}
                     open={opened === p.id}
                     onToggle={() => setOpened(opened === p.id ? null : p.id)}
                   />
@@ -405,8 +414,11 @@ function GuidanceRow(
  * function's return type rather than a flipped boolean.
  */
 function PatientRow(
-  { patient, clinicalPack, open, onToggle }:
-  { patient: OfflinePatient; clinicalPack: OfflineClinicalPack | null; open: boolean; onToggle: () => void },
+  { patient, clinicalPack, workspaceId, open, onToggle }:
+  {
+    patient: OfflinePatient; clinicalPack: OfflineClinicalPack | null;
+    workspaceId: string | null; open: boolean; onToggle: () => void;
+  },
 ) {
   const row = offlineListRow(patient);
   const detail = offlineRecordDetail(patient);
@@ -467,9 +479,198 @@ function PatientRow(
               today" rule -- a stale reassurance about what is NOT stored is as dangerous as a stale
               clinical fact, because it tells a practitioner not to bother looking. */}
           <ClinicalPanel pack={clinicalPack} patientId={detail.patientId} />
+
+          {/* ⚠ THE ONLY ENABLED WRITE ON THIS SCREEN, and it sits BELOW the clinical panel on purpose:
+              allergies and current medication are what a reading should be taken in the light of. */}
+          <CaptureReading
+            workspaceId={workspaceId} patientId={detail.patientId} patientName={row.name}
+          />
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * ⚠⚠ THE ONE PLACE IN THIS PRODUCT THAT ACCEPTS A CLINICAL WRITE WITH NO CONNECTION.
+ *
+ * It may exist because all seven of CP-OFFLINE-SURVEY-001 s5's preconditions hold -- they are listed,
+ * with what proves each, at the top of offline-capture.ts. If one is ever weakened this component is what
+ * has to be withdrawn.
+ *
+ * ── THE SENTENCES, WHICH ARE THE PART MOST LIKELY TO GO WRONG ───────────────────────────────────────
+ *
+ * ⚠ NOTHING HERE SAYS "SAVED", "SENT" OR "SYNCED". Nothing has left the device. The only true statement
+ * is CAPTURE_HELD_NOTE's -- held here, filed when there is a connection, kept until that is confirmed.
+ * s5: the line is crossed by the ACCEPTANCE, so a screen that announces success optimistically has
+ * crossed it whatever the store did.
+ *
+ * ⚠ AND THE BUTTON SAYS SO TOO. "Save" would be the wrong verb before anything is saved anywhere.
+ */
+function CaptureReading(
+  { workspaceId, patientId, patientName }:
+  { workspaceId: string | null; patientId: string | null; patientName: string },
+) {
+  const [params, setParams] = useState<OfflineParametersReadResult | null>(null);
+  const [identity, setIdentity] = useState<DeviceIdentity | null>(null);
+  const [open, setOpen] = useState(false);
+  const [definitionId, setDefinitionId] = useState("");
+  const [value, setValue] = useState("");
+  const [unit, setUnit] = useState("");
+  const [takenAt, setTakenAt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [held, setHeld] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    void cachedOfflineParameters().then(setParams);
+    void cachedIdentity().then(setIdentity);
+  }, [open]);
+
+  /**
+   * Now, in the shape a datetime-local input wants, on the LOCAL clock -- which is the one the
+   * practitioner is reading off their own watch.
+   *
+   * ⚠ Computed when the form is OPENED rather than in an effect. A setState in an effect body is a
+   * cascading render the lint rule rejects, and the value is genuinely a consequence of the click.
+   */
+  function nowForInput(): string {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  }
+
+  const chosen = params?.state === "ok"
+    ? params.set.parameters.find(p => p.id === definitionId) ?? null
+    : null;
+  // ⚠ WARNS, NEVER BLOCKS -- migration 246's rule, and offline the argument is stronger, not weaker: a
+  // form that locks in a clinic with no signal cannot be argued with and the reading is simply lost.
+  const plausibility = chosen && chosen.dataType !== "text"
+    ? offlinePlausibility(chosen, value.trim() === "" ? null : Number(value))
+    : { level: "ok" as const, text: null };
+
+  async function submit() {
+    if (!workspaceId || !patientId || !identity || !chosen) return;
+    setBusy(true); setProblem(null); setHeld(null);
+    const numeric = chosen.dataType === "decimal" || chosen.dataType === "integer";
+    const result = await captureMeasurement({
+      workspaceId, deviceId: identity.deviceId, userId: identity.userId,
+      patientId, definitionId: chosen.id,
+      value: numeric ? Number(value) : value.trim(),
+      unit: unit || chosen.canonicalUnit,
+      // ⚠ THE PRACTITIONER'S TIME, CONVERTED TO AN ABSOLUTE INSTANT. A datetime-local carries no zone;
+      // sending it raw would let the server read a 09:00 reading as 09:00 UTC and file it hours out.
+      effectiveAt: takenAt ? new Date(takenAt).toISOString() : "",
+    });
+    setBusy(false);
+    if (!result.ok) { setProblem(result.reason); return; }
+    // ⚠ ONLY AFTER `ok: true`. See captureMeasurement's contract.
+    setHeld(CAPTURE_HELD_NOTE);
+    setValue("");
+  }
+
+  if (!patientId) return null;
+
+  if (!open)
+    return (
+      <button type="button" onClick={() => { setTakenAt(nowForInput()); setOpen(true); }}
+        className="mt-2 rounded-lg border border-[var(--cp-primary)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary)]">
+        Record a reading
+      </button>
+    );
+
+  // ⚠ EVERY REASON THE FORM CANNOT BE SHOWN IS SAID, NOT LEFT AS AN ABSENCE. A missing form on a screen
+  // that offered a button reads as a broken product; each of these is a different, fixable state.
+  if (params && params.state !== "ok")
+    return <p className="mt-2 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">{params.reason}</p>;
+  if (params?.state === "ok" && params.set.parameters.length === 0)
+    return <p className="mt-2 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">This practice has no measurements set up that can be recorded, so there is nothing to record here.</p>;
+  if (params && !identity)
+    return <p className="mt-2 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">This device does not know who is signed in, so a reading recorded now could not say who took it. Open Practice once while online and it will remember.</p>;
+  if (!params) return <p className="mt-2 text-[11.5px] text-gray-500">Reading what this device can record&hellip;</p>;
+
+  return (
+    <div className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-2">
+      <p className="text-[11px] font-semibold text-gray-500">Record a reading for {patientName}</p>
+
+      <label className="mt-1.5 block">
+        <span className="text-[11px] text-gray-600">Measurement</span>
+        <select value={definitionId} onChange={e => { setDefinitionId(e.target.value); setUnit(""); setHeld(null); }}
+          className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]">
+          <option value="">Choose&hellip;</option>
+          {params.set.parameters.map(p => (
+            <option key={p.id} value={p.id}>{p.displayName}{p.canonicalUnit ? ` (${p.canonicalUnit})` : ""}</option>
+          ))}
+        </select>
+      </label>
+      {/* ⚠ NO SILENT CAP -- a practitioner who cannot find one must know the list is partial. */}
+      {params.set.dropped && <p className="mt-1 text-[10.5px] text-gray-600">{params.set.dropped.reason}</p>}
+
+      {chosen && (
+        <>
+          <label className="mt-1.5 block">
+            <span className="text-[11px] text-gray-600">Value</span>
+            {chosen.dataType === "single_choice" || chosen.dataType === "multi_choice" ? (
+              <select value={value} onChange={e => { setValue(e.target.value); setHeld(null); }}
+                className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]">
+                <option value="">Choose&hellip;</option>
+                {chosen.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            ) : (
+              <input
+                type={chosen.dataType === "decimal" || chosen.dataType === "integer" ? "number" : "text"}
+                inputMode={chosen.dataType === "integer" ? "numeric" : undefined}
+                value={value} onChange={e => { setValue(e.target.value); setHeld(null); }}
+                className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
+            )}
+          </label>
+
+          {chosen.permittedUnits.length > 0 && (
+            <label className="mt-1.5 block">
+              <span className="text-[11px] text-gray-600">Unit</span>
+              {/* ⚠ THE DEVICE DOES NOT CONVERT. It records the unit chosen; the server converts once, at
+                  write time. offline-parameters.ts withholds the conversion table for that reason -- a
+                  third copy of it on hardware that may not reconnect is how a wrong dose happens. */}
+              <select value={unit || (chosen.canonicalUnit ?? "")} onChange={e => setUnit(e.target.value)}
+                className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]">
+                {[...new Set([chosen.canonicalUnit, ...chosen.permittedUnits].filter(Boolean))].map(u => (
+                  <option key={u as string} value={u as string}>{u}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <label className="mt-1.5 block">
+            {/* ⚠ REQUIRED AND EDITABLE. The applier refuses a reading with no time rather than stamping
+                it with today's date, because a three-day-old observation filed as today is a lie
+                recorded as a clinical fact. So it must be possible to correct it here. */}
+            <span className="text-[11px] text-gray-600">When it was taken</span>
+            <input type="datetime-local" value={takenAt} onChange={e => setTakenAt(e.target.value)}
+              className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
+          </label>
+
+          {plausibility.text && (
+            <p className="mt-1 rounded border border-amber-400 bg-amber-50 px-2 py-1 text-[11px] leading-relaxed text-amber-900">
+              {plausibility.text}
+            </p>
+          )}
+        </>
+      )}
+
+      {problem && <p className="mt-1.5 text-[11.5px] leading-relaxed text-rose-700">{problem}</p>}
+      {held && <p className="mt-1.5 rounded border border-gray-300 bg-gray-50 px-2 py-1 text-[11.5px] leading-relaxed text-gray-800">{held}</p>}
+
+      <div className="mt-2 flex items-center gap-2">
+        <button type="button" disabled={busy || !chosen || value.trim() === "" || !takenAt} onClick={submit}
+          className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
+          {/* ⚠ NOT "Save". Nothing is saved anywhere until this device reaches the practice. */}
+          {busy ? "Holding…" : "Hold on this device"}
+        </button>
+        <button type="button" onClick={() => { setOpen(false); setHeld(null); setProblem(null); }}
+          className="text-[11.5px] text-gray-500 hover:underline">Close</button>
+      </div>
+    </div>
   );
 }
 

@@ -369,17 +369,64 @@ async function main() {
     !frameCode.includes("mx-auto"), "centred content re-opens the gap the frame exists to close");
   ok("6m-control. and it still uses the shell's own main classes",
     frameCode.includes("practice-scale") && frameCode.includes("flex-1") && frameCode.includes("p-5"));
-  ok("6d. the offline screen contains no form and no input of any kind",
-    !/<form\b/i.test(offlineTree) && !/<input\b/i.test(offlineTree)
-    && !/<textarea\b/i.test(offlineTree) && !/<select\b/i.test(offlineTree));
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
+  // ⚠⚠ 6d AND 6g GUARDED s5's LINE, AND THE LINE MOVED ON 2026-08-11. THEY ARE REPOINTED, NOT RELAXED.
+  //
+  // They asserted that the offline screen contains NO input and NO enabled button, because phase one
+  // could deliver nothing and s5 is explicit that the harm is done by the ACCEPTANCE: "an offline screen
+  // that renders a form because the component was reused from the online page, and merely fails on
+  // submit. The user typed. The input was accepted. The duty felt discharged. Nothing arrived."
+  //
+  // Capture now exists for ONE entity, because all seven preconditions hold for it. So the property is
+  // no longer "no input anywhere" -- it is:
+  //
+  //     THE ONLY INPUTS ON THIS SCREEN ARE INSIDE THE SANCTIONED CAPTURE COMPONENT, WHICH ENQUEUES WHAT
+  //     IT ACCEPTS. Everywhere else the old rule stands, unchanged and unweakened.
+  //
+  // ⚠ That is what keeps the assertion dangerous. A form added to the clinical panel tomorrow -- the
+  // most likely way this goes wrong, because that panel already renders allergies and somebody will want
+  // to add one -- still fails, exactly as it did yesterday.
+  // ════════════════════════════════════════════════════════════════════════════════════════════════
+  const captureStart = readerSrc.indexOf("function CaptureReading(");
+  const captureEnd = readerSrc.indexOf("\nfunction ", captureStart + 1);
+  const captureBody = readerSrc.slice(captureStart, captureEnd);
+  ok("6d-control. the capture component was located and is a bounded slice",
+    captureStart > 0 && captureEnd > captureStart && !captureBody.includes("\nfunction "),
+    `${captureBody.length} chars`);
+  ok("6d-control-b. ⚠ and it is genuinely a producer -- it enqueues what it accepts",
+    captureBody.includes("captureMeasurement("),
+    "the exemption below would be carved for a component that accepts input and delivers nothing");
+
+  // Everything on the screen EXCEPT that component.
+  const outsideCapture = readerSrc.slice(0, captureStart) + readerSrc.slice(captureEnd) + pageSrc + frameSrc;
+  ok("6d. ⚠ no form or input anywhere on the offline screen OUTSIDE the sanctioned capture component",
+    !/<form\b/i.test(outsideCapture) && !/<input\b/i.test(outsideCapture)
+    && !/<textarea\b/i.test(outsideCapture) && !/<select\b/i.test(outsideCapture),
+    "an input that does not enqueue is input accepted and lost");
+  ok("6d2. ⚠ and there is still NO <form> even inside it -- nothing here submits anywhere",
+    !/<form\b/i.test(captureBody),
+    "a form element implies a submit target, and there is none");
   ok("6e. it sends nothing: no fetch, no mutating method, no server action",
     !/\bfetch\s*\(/.test(offlineTree) && !/"(POST|PATCH|PUT|DELETE)"/.test(offlineTree)
     && !/use server/.test(offlineTree));
   const buttons = offlineTree.match(/<button[\s\S]*?>/g) ?? [];
   ok("6f-control. there are buttons on the screen to judge", buttons.length > 0, `${buttons.length}`);
-  ok("6g. every button is either disabled or the non-mutating disclosure toggle",
-    buttons.every(b => /\bdisabled\b/.test(b) || /aria-expanded/.test(b)),
-    buttons.filter(b => !/\bdisabled\b/.test(b) && !/aria-expanded/.test(b)).join(" | "));
+  // ⚠ SAME REPOINTING AS 6d, AND THE SAME LIMIT ON IT. Outside the capture component every button must
+  // still be disabled or a disclosure toggle -- that is what stops "Start a consultation" quietly
+  // becoming clickable. Inside it, the buttons are the capture controls, which enqueue.
+  const outsideButtons = (readerSrc.slice(0, captureStart) + readerSrc.slice(captureEnd) + pageSrc + frameSrc)
+    .match(/<button[\s\S]*?>/g) ?? [];
+  ok("6f-control-b. there are buttons OUTSIDE the capture component too",
+    outsideButtons.length > 0, `${outsideButtons.length}`);
+  ok("6g. ⚠ outside capture, every button is still disabled or the non-mutating disclosure toggle",
+    outsideButtons.every(b => /\bdisabled\b/.test(b) || /aria-expanded/.test(b)),
+    outsideButtons.filter(b => !/\bdisabled\b/.test(b) && !/aria-expanded/.test(b)).join(" | "));
+  // ⚠ THE SAME `controls` 6b JUDGED, RE-JUDGED HERE ON PURPOSE. 6b proves the list is clean; this proves
+  // it STAYED clean after capture shipped -- i.e. that capture was not smuggled in as an enabled entry,
+  // which would have retired 6b silently while leaving it green.
+  ok("6g2. ⚠ capture was NOT added to the shared control list -- it is still entirely disabled",
+    enabledMutatingControls(controls).length === 0,
+    enabledMutatingControls(controls).map(c => c.key).join(","));
 
   // ⚠ THE PAGE THAT DEPENDS ON THE WORKER MUST BE ABLE TO UPDATE IT. Registration lived only in
   // OfflineCacheWriter, inside the (shell), behind auth and the feature flag -- so a device holding an

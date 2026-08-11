@@ -315,6 +315,7 @@ export default async function CurrentSessionPage() {
           and its one line of status says what is held and when it goes. */}
       <OfflineCacheWriter
         workspaceId={shell.ctx.workspaceId}
+        userId={shell.ctx.userId}
         gate={{ state: offline.state, reason: offline.reason, purge: offline.purge }}
         nav={primaryNav(shell.ctx.capabilities).map(i => ({ href: i.href, label: i.label, icon: i.icon }))}
         showStatus

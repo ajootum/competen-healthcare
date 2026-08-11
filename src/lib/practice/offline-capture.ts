@@ -1,7 +1,10 @@
 "use client";
 
 import { outboxAccept } from "@/lib/practice/outbox-store";
-import { MEASUREMENT_ENTITY_TYPE } from "@/lib/practice/sync-appliers/parameter-measurement";
+// ⚠ FROM entity-types.ts, NEVER FROM THE APPLIER. Importing the constant from parameter-measurement.ts
+// pulled parameters.ts -> access.ts -> next/headers into this client bundle and put /practice/offline on
+// a 500. tsc, eslint and every harness stayed green. See entity-types.ts for the rule.
+import { MEASUREMENT_ENTITY_TYPE } from "@/lib/practice/sync-appliers/entity-types";
 
 // CP-OFFLINE-SURVEY-001 s5 — THE PRODUCER. The first thing in this product that accepts a write it
 // cannot deliver today.

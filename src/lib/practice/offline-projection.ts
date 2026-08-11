@@ -382,7 +382,31 @@ export function offlineControls(p: OfflinePatient): OfflineControl[] {
   ];
 }
 
-/** ⚠ MUST BE EMPTY. The harness asserts it, over the real control list rather than over a mock. */
+/**
+ * ⚠ MUST BE EMPTY. The harness asserts it, over the real control list rather than over a mock.
+ *
+ * ════════════════════════════════════════════════════════════════════════════════════════════════════
+ * ⚠⚠ THIS STAYS EMPTY EVEN THOUGH OFFLINE CAPTURE NOW EXISTS, AND THE DISTINCTION IS THE WHOLE POINT.
+ *
+ * The rule was written as "a mutating control is NEVER enabled offline" when NOTHING could be delivered,
+ * so the two properties -- "changes a server record" and "cannot be delivered" -- were the same property.
+ * They are not the same any more. Since 2026-08-11 one entity can be captured offline, because all seven
+ * of CP-OFFLINE-SURVEY-001 s5's preconditions hold for it.
+ *
+ * The rule it becomes is NOT weaker:
+ *
+ *     A CONTROL MAY BE ENABLED OFFLINE ONLY IF WHAT IT ACCEPTS IS TAKEN INTO THE OUTBOX AND CAN BE
+ *     DELIVERED. Anything else is disabled with a reason.
+ *
+ * Every control in THIS list still fails that test and every one stays disabled: starting a consultation,
+ * opening one and marking a patient arrived all write to records with no applier and no capture path.
+ * Enabling any of them would be s5's accident exactly -- input accepted, believed recorded, never
+ * arriving. So this function must keep returning nothing, and the assertion over it keeps its full force.
+ *
+ * ⚠ CAPTURE IS DELIBERATELY NOT ROUTED THROUGH THIS LIST. Adding it here as `mutating: true, enabled:
+ * true` would make this function non-empty and silently retire the assertion that guards the other three.
+ * It has its own component, its own refusals and its own precondition ledger in offline-capture.ts.
+ */
 export function enabledMutatingControls(controls: OfflineControl[]): OfflineControl[] {
   return controls.filter(c => c.mutating && c.enabled);
 }

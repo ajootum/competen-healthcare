@@ -5,7 +5,9 @@ import {
   cacheNav, cacheOfflineClinical, cacheOfflineDay, cacheOfflineGuidance, purgeOfflineWorkspace,
   type CachedNavItem,
 } from "@/lib/practice/offline-store";
+import { cacheOfflineParameters, deviceIdentity } from "@/lib/practice/offline-store";
 import type { OfflineClinicalPack } from "@/lib/practice/offline-clinical";
+import type { OfflineParameterSet } from "@/lib/practice/offline-parameters";
 import { loadLock } from "@/lib/practice/offline-lock-store";
 import { sessionKey } from "@/lib/practice/offline-session";
 import DeviceLockPrompt from "../_offline/DeviceLockPrompt";
@@ -58,8 +60,13 @@ type Outcome =
   | { kind: "locked" };
 
 export default function OfflineCacheWriter(
-  { workspaceId, gate, nav, showStatus = false }:
-  { workspaceId: string; gate: OfflineWriterGate; nav?: CachedNavItem[]; showStatus?: boolean },
+  { workspaceId, userId, gate, nav, showStatus = false }:
+  {
+    workspaceId: string;
+    /** ⚠ Written to the device so the offline page, which has no session, can attribute a capture. */
+    userId?: string;
+    gate: OfflineWriterGate; nav?: CachedNavItem[]; showStatus?: boolean;
+  },
 ) {
   const [outcome, setOutcome] = useState<Outcome>({ kind: "idle" });
   // ⚠ Bumped when the device is unlocked, so the effect re-runs and the cache is written immediately
@@ -108,6 +115,32 @@ export default function OfflineCacheWriter(
       // still has to draw its chrome. Sealing it, or writing it later, would leave a locked practitioner
       // looking at a blank navy column -- the "this looks broken" state the frame exists to remove.
       if (nav && nav.length) await cacheNav(nav);
+
+      // ⚠ WHO THIS DEVICE IS, WRITTEN WHILE THERE IS STILL A SESSION TO ASK. /practice/offline has none
+      // -- that is the whole point of it -- so if this is not recorded here, nothing captured offline can
+      // say who took it. Before the lock check, like the nav and the measurements, because a locked
+      // device must still be able to record.
+      if (userId) { try { await deviceIdentity(userId); } catch { /* reported through capture, not here */ } }
+
+      // ── 2b. THE RECORDABLE MEASUREMENTS ───────────────────────────────────────────────────────
+      // ⚠ BEFORE THE LOCK CHECK, AND FOR A REASON THAT IS THE OWNER'S RULE RATHER THAN CONVENIENCE.
+      //
+      // These are not sealed (offline-parameters.ts: they name nobody). If they were written after the
+      // lock check, a LOCKED device would hold no measurement list -- so it could not RECORD, which
+      // reverses the decision of 2026-08-10 that the PIN gates COPIES and never CAPTURED WORK. The
+      // outbox is exempt by living in its own database; this is the other half of the same door.
+      //
+      // ⚠ A failure here is swallowed for the same reason the guidance fetch's is: it must not cost the
+      // practitioner their cached day. What it costs is the picker, and the offline screen says so.
+      try {
+        const pRes = await fetch("/api/v1/practice/offline/parameters", { cache: "no-store" });
+        if (pRes.ok) {
+          const pBody = await pRes.json() as { set: OfflineParameterSet | null };
+          if (pBody.set) await cacheOfflineParameters(pBody.set);
+        }
+      } catch {
+        // Already offline, or the route refused. Whatever list is already here keeps its own expiry.
+      }
 
       // ── 3. THE DEVICE PIN, IF THERE IS ONE ────────────────────────────────────────────────────
       // ⚠ A LOCKED DEVICE STORES NOTHING, AND THAT IS NOT A FAILURE. The caches are sealed with a key

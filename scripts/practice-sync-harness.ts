@@ -123,6 +123,54 @@ async function main() {
     orphaned.length ? `no capture path enqueues: ${orphaned.join(", ")}` : SYNC_ENTITY_TYPES.join(", "));
   ok("0a-control. there is at least one registered applier, so 0a is not scanning an empty list",
     SYNC_ENTITY_TYPES.length > 0);
+
+  // ── ⚠⚠ 0d. NO "use client" MODULE MAY REACH A SERVER-ONLY API, TRANSITIVELY ──────────────────────
+  //
+  // This exists because it happened. offline-capture.ts is "use client" and imported ONE STRING -- the
+  // entity type -- from parameter-measurement.ts. An import pulls the module, not the binding, so the
+  // browser bundle transitively required parameters.ts -> access.ts -> next/headers, and BOTH
+  // /practice/offline and the parameters route answered 500.
+  //
+  // ⚠ tsc WAS CLEAN. eslint WAS CLEAN. EVERY HARNESS WAS GREEN. Only a real request found it. This is
+  // the "clean tsc, clean eslint, clean harness, dead page" failure this repository has already lost a
+  // board to, and a CONSTANT is what carried it in -- it looked far too small to be dangerous.
+  //
+  // So the graph is walked rather than trusted.
+  const SERVER_ONLY = ["next/headers", "next/server", "server-only"];
+  const resolveModule = (spec: string): string | null => {
+    if (!spec.startsWith("@/")) return null;
+    const base = `src/${spec.slice(2)}`;
+    for (const ext of [".ts", ".tsx", "/index.ts"]) {
+      try { readFileSync(base + ext, "utf8"); return base + ext; } catch { /* try the next */ }
+    }
+    return null;
+  };
+  const reaches = (entry: string): string[] => {
+    const seen = new Set<string>();
+    const stack = [entry];
+    const bad: string[] = [];
+    while (stack.length) {
+      const file = stack.pop()!;
+      if (seen.has(file)) continue;
+      seen.add(file);
+      let src: string;
+      try { src = readFileSync(file, "utf8"); } catch { continue; }
+      for (const s of SERVER_ONLY) if (src.includes(`"${s}"`)) bad.push(`${file} -> ${s}`);
+      // ⚠ `import type` is ERASED at build time and cannot drag a module into a bundle. Counting it
+      // would make this assertion fire on perfectly safe type-only references and get it disabled.
+      for (const m of src.matchAll(/^\s*import\s+(?!type\b)[^;]*?from\s+"(@\/[^"]+)"/gm)) {
+        const next = resolveModule(m[1]);
+        if (next) stack.push(next);
+      }
+    }
+    return bad;
+  };
+  const captureReaches = reaches("src/lib/practice/offline-capture.ts");
+  ok("0d. ⚠⚠ the capture module reaches NO server-only API, however far down the import graph",
+    captureReaches.length === 0, captureReaches.join(", "));
+  ok("0d-control. the walker does find one when there is one to find",
+    reaches("src/lib/practice/sync-appliers/parameter-measurement.ts").length > 0,
+    "the graph walk is not following imports at all, so 0c proves nothing");
   const unknown = validateTransaction(tx());
   ok("0b. so an upload is refused, and the refusal NAMES the type",
     !unknown.ok && unknown.code === "ENTITY_NOT_SYNCABLE" && unknown.message.includes("harness_note"));

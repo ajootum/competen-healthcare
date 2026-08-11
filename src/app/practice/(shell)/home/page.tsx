@@ -918,6 +918,7 @@ export default async function PracticeCommandCentre() {
             fourteen widgets already, and /practice/today carries the status line. */}
         <OfflineCacheWriter
           workspaceId={ctx.workspaceId}
+          userId={ctx.userId}
           gate={{ state: offline.state, reason: offline.reason, purge: offline.purge }}
           nav={primaryNav(ctx.capabilities).map(i => ({ href: i.href, label: i.label, icon: i.icon }))}
         />

@@ -12,6 +12,10 @@ import {
   clinicalKeysOutsideAllowList, readOfflineClinical,
   type OfflineClinicalPack, type OfflineClinicalReadResult,
 } from "@/lib/practice/offline-clinical";
+import {
+  OFFLINE_PARAMETER_KEYS, parameterKeysOutsideAllowList, readOfflineParameters,
+  type OfflineParameterSet, type OfflineParametersReadResult,
+} from "@/lib/practice/offline-parameters";
 import { generateCacheKey, openRecord, sealRecord, type SealedRecord } from "@/lib/practice/offline-crypto";
 
 // CP-OFFLINE-SURVEY-001 s3.3 step 1 — the browser store. ⚠ BROWSER ONLY: every function here touches
@@ -99,6 +103,18 @@ const META_ACTIVE = "activeWorkspace";
  * the frame exists to fix. The rule holds where it matters: the DAY and the GUIDANCE stay sealed.
  */
 const META_NAV = "primaryNav";
+/**
+ * The practice's recordable measurements.
+ *
+ * ⚠ IN META, UNSEALED, BESIDE THE NAV RATHER THAN IN A SEALED STORE -- and that is the decision, not a
+ * shortcut. See offline-parameters.ts: sealing these would mean a practitioner who has forgotten their
+ * PIN has nothing to choose from, and therefore cannot RECORD -- which reverses the owner's rule that the
+ * PIN gates copies and never captured work. The outbox is already exempt by living in its own database;
+ * this closes the same door on the other side.
+ *
+ * They name nobody and disclose only that a practice measures blood pressure.
+ */
+const META_PARAMETERS = "parameterSet";
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -543,6 +559,118 @@ export async function loadOfflineClinical(
   } catch (e) {
     db.close();
     return { state: "none", purge: false, reason: `This device's clinical store could not be read: ${String((e as Error)?.message ?? e).slice(0, 120)}` };
+  }
+}
+
+// ── WHO THIS DEVICE IS ──────────────────────────────────────────────────────────────────────────────
+//
+// ⚠ WHY THIS HAS TO BE CACHED AT ALL: /practice/offline SITS OUTSIDE THE SHELL AND HAS NO SESSION.
+//
+// `outboxAccept` records who captured a reading and on what device. Online that comes from the session;
+// on the offline page there is none -- no cookie is read, no server is reachable, and the page renders
+// precisely because neither is available. So the shell writes it down while it can.
+//
+// ⚠ THE USER ID IS ADVISORY, AND THE SERVER DOES NOT TRUST IT. The applier uses `ctx.userId` from the
+// authenticated upload, never the value on the transaction (see parameter-measurement.ts). This copy
+// exists so the DEVICE can say "you recorded this" on its own sync screen, and so an exported outbox is
+// readable by a human. Nothing authorises anything with it.
+//
+// It is an opaque uuid of the device's own user, held on the same terms as META_ACTIVE's workspace id.
+
+const META_IDENTITY = "deviceIdentity";
+
+export type DeviceIdentity = { userId: string; deviceId: string };
+
+/**
+ * The device's own id, minted here and kept.
+ *
+ * ⚠ NOT THE SECURITY COOKIE'S DEVICE ID, deliberately. That one is read server-side and is unavailable
+ * to the offline page. It is also the wrong lifetime: clearing cookies would change it while outbox
+ * records minted under the old one are still waiting, and migration 284 already refuses to put a unique
+ * index on (device_id, client_sequence) for exactly that reason -- "a reinstalled device restarts at 1
+ * and uniqueness would lock it out for ever". A locally minted id is honest about what it identifies:
+ * this browser profile's outbox.
+ */
+export async function deviceIdentity(userId: string): Promise<DeviceIdentity> {
+  const db = await openDb();
+  const held = await tx<DeviceIdentity | undefined>(db, STORE_META, "readonly", s => s.get(META_IDENTITY));
+  if (held && held.deviceId && held.userId === userId) { db.close(); return held; }
+  const next: DeviceIdentity = {
+    userId,
+    deviceId: held?.deviceId ?? (globalThis as unknown as { crypto: Crypto }).crypto.randomUUID(),
+  };
+  await tx(db, STORE_META, "readwrite", s => s.put(next, META_IDENTITY));
+  db.close();
+  return next;
+}
+
+/** What the offline page knows about itself. Null when the shell has never run on this device. */
+export async function cachedIdentity(): Promise<DeviceIdentity | null> {
+  try {
+    const db = await openDb();
+    const held = await tx<DeviceIdentity | undefined>(db, STORE_META, "readonly", s => s.get(META_IDENTITY));
+    db.close();
+    return held ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ── THE RECORDABLE MEASUREMENTS ─────────────────────────────────────────────────────────────────────
+//
+// ⚠ NOT SEALED, AND READABLE ON A LOCKED DEVICE. See META_PARAMETERS above: this is what makes capture
+// possible without the PIN, which is the owner's rule rather than a convenience.
+
+/** Fields on the parameter set that are not on the allow-list. Empty means it is what was agreed. */
+export function parameterFieldsNotAllowed(set: OfflineParameterSet): string[] {
+  const bad: string[] = [];
+  for (const p of set.parameters ?? [])
+    for (const k of parameterKeysOutsideAllowList(p, OFFLINE_PARAMETER_KEYS as readonly string[]))
+      bad.push(`parameter.${k}`);
+  return [...new Set(bad)];
+}
+
+export async function cacheOfflineParameters(
+  set: OfflineParameterSet,
+): Promise<{ ok: boolean; parameters: number; reason: string | null }> {
+  const bad = parameterFieldsNotAllowed(set);
+  if (bad.length > 0)
+    return { ok: false, parameters: 0, reason: `nothing was stored: the measurement list carried fields that are not on the offline allow-list (${bad.join(", ")})` };
+  try {
+    const db = await openDb();
+    await tx(db, STORE_META, "readwrite", s => s.put(set, META_PARAMETERS));
+    db.close();
+    return { ok: true, parameters: set.parameters.length, reason: null };
+  } catch (e) {
+    return { ok: false, parameters: 0, reason: `nothing was stored: ${String((e as Error)?.message ?? e).slice(0, 200)}` };
+  }
+}
+
+/**
+ * The recordable measurements this device holds, with expiry applied.
+ *
+ * ⚠ EXPIRY DELETES HERE TOO. A retired parameter offered for ever would produce readings the server
+ * refuses days later -- the exact failure the welded query exists to prevent, reintroduced by a stale
+ * cache instead of a loose filter.
+ */
+export async function cachedOfflineParameters(
+  now: Date = new Date(),
+): Promise<OfflineParametersReadResult> {
+  try {
+    const db = await openDb();
+    const stored = await tx<OfflineParameterSet | undefined>(
+      db, STORE_META, "readonly", s => s.get(META_PARAMETERS));
+    const result = readOfflineParameters(stored ?? null, now);
+    if (result.state !== "ok" && result.purge)
+      await tx(db, STORE_META, "readwrite", s => s.delete(META_PARAMETERS));
+    db.close();
+    return result;
+  } catch (e) {
+    // ⚠ Not "this practice measures nothing". An unreadable store is unknown.
+    return {
+      state: "none", purge: false,
+      reason: `The measurement list on this device could not be read: ${String((e as Error)?.message ?? e).slice(0, 120)}`,
+    };
   }
 }
 
