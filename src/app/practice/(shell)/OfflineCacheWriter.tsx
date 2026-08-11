@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { cacheNav, cacheOfflineDay, cacheOfflineGuidance, purgeOfflineWorkspace, type CachedNavItem } from "@/lib/practice/offline-store";
+import {
+  cacheNav, cacheOfflineClinical, cacheOfflineDay, cacheOfflineGuidance, purgeOfflineWorkspace,
+  type CachedNavItem,
+} from "@/lib/practice/offline-store";
+import type { OfflineClinicalPack } from "@/lib/practice/offline-clinical";
 import { loadLock } from "@/lib/practice/offline-lock-store";
 import { sessionKey } from "@/lib/practice/offline-session";
 import DeviceLockPrompt from "../_offline/DeviceLockPrompt";
@@ -38,8 +42,15 @@ export type OfflineWriterGate = {
 
 type Outcome =
   | { kind: "idle" }
-  /** ⚠ `documents: null` means the guidance library was NOT stored -- never render it as zero. */
-  | { kind: "stored"; patients: number; at: string; documents: number | null }
+  /**
+   * ⚠ `documents: null` means the guidance library was NOT stored -- never render it as zero. `clinical`
+   * follows the same rule, and `clinicalWithheld` carries the REASON when it is null, because for this
+   * one cache "not stored" has a specific and actionable cause: no PIN is set on the device.
+   */
+  | {
+    kind: "stored"; patients: number; at: string; documents: number | null;
+    clinical: number | null; clinicalWithheld: string | null;
+  }
   | { kind: "purged"; reason: string }
   | { kind: "withheld"; reason: string }
   | { kind: "failed"; reason: string }
@@ -154,7 +165,58 @@ export default function OfflineCacheWriter(
           // already on the device keeps its own expiry -- nothing here deletes it.
         }
 
-        if (!cancelled) setOutcome({ kind: "stored", patients: wrote.patients, at: body.day.asOf, documents });
+        // ── 5. THE CLINICAL CARRY ─────────────────────────────────────────────────────────────────
+        //
+        // ════════════════════════════════════════════════════════════════════════════════════════
+        // ⚠⚠ THE ONLY CACHE IN THIS PRODUCT THAT REFUSES A DEVICE WITH NO PIN, AND THE REFUSAL LIVES
+        // HERE BECAUSE THIS IS THE ONLY PLACE THAT CAN KNOW.
+        //
+        // The day and the guidance fall back to a random key generated in the browser and stored
+        // beside the ciphertext. offline-crypto.ts is honest about what that buys: it "raises cost; it
+        // does not change the category". For a list of names and times, and for protocols that name
+        // nobody, that trade was accepted.
+        //
+        // It is NOT accepted for allergies and current medication for a named cohort. A PIN-derived
+        // key is the one arrangement where the ciphertext on a lost device is genuinely unreadable
+        // rather than merely un-navigated-to, and this is the payload that needs it. So: no device
+        // credential, no clinical carry -- and the practitioner is TOLD, with the action that fixes
+        // it, rather than left to wonder why their allergy lists never appear.
+        //
+        // ⚠ IT DOES NOT BLOCK ANYTHING. The day still caches, the guidance still caches, the clinic
+        // still runs. What is withheld is one cache, and setting a PIN is a single visible step.
+        //
+        // ⚠ `derived` IS THREE-VALUED HERE AND ALL THREE MATTER: undefined = no PIN is set at all
+        // (this branch); a CryptoKey = enrolled and unlocked; null = enrolled but locked, which
+        // returned early above and never reaches this line.
+        // ════════════════════════════════════════════════════════════════════════════════════════
+        let clinical: number | null = null;
+        let clinicalWithheld: string | null = null;
+        if (derived === undefined) {
+          clinicalWithheld =
+            "Allergies, current medication and the last visit are NOT held on this device, because no PIN is set on it. Those need a PIN to be stored, because it is the only thing that makes them unreadable if this device is lost.";
+        } else {
+          try {
+            const cRes = await fetch("/api/v1/practice/offline/clinical", { cache: "no-store" });
+            if (cRes.ok) {
+              const cBody = await cRes.json() as { gate?: { reason?: string }; pack: OfflineClinicalPack | null };
+              if (cBody.pack) {
+                const cWrote = await cacheOfflineClinical(cBody.pack, derived);
+                if (cWrote.ok) clinical = cWrote.records;
+                else clinicalWithheld = `The clinical records were not stored on this device: ${cWrote.reason}`;
+              } else {
+                clinicalWithheld = cBody.gate?.reason ?? null;
+              }
+            }
+          } catch {
+            // ⚠ SWALLOWED, LIKE THE GUIDANCE FETCH ABOVE, AND FOR THE SAME REASON. The device may
+            // already be offline. The day is stored either way, and whatever clinical pack is already
+            // here keeps its own five-day expiry -- nothing in this branch deletes it.
+          }
+        }
+
+        if (!cancelled) setOutcome({
+          kind: "stored", patients: wrote.patients, at: body.day.asOf, documents, clinical, clinicalWithheld,
+        });
       } catch (e) {
         // ⚠ A DEVICE THAT IS ALREADY OFFLINE LANDS HERE, and it must not purge. What is already stored is
         // the only thing that will be shown when the page next fails to load; throwing it away because
@@ -183,6 +245,11 @@ export default function OfflineCacheWriter(
         // has none; not storing them is a different fact and this line does not know which.
         + (outcome.documents === null ? ""
           : ` ${outcome.documents} guidance ${outcome.documents === 1 ? "document is" : "documents are"} held with it.`)
+        // ⚠ SILENT WHEN `clinical` IS NULL, for the guidance line's reason and one more: when it is null
+        // there is a REASON, and the reason gets its own line below rather than being crushed into this
+        // one. "0 clinical records" would be a claim that the cohort has no allergies.
+        + (outcome.clinical === null ? ""
+          : ` Allergies, current medication and the last visit are held for ${outcome.clinical} ${outcome.clinical === 1 ? "patient" : "patients"}.`)
       : outcome.kind === "purged" ? outcome.reason
       : outcome.kind === "withheld" ? outcome.reason
       : outcome.kind === "failed" ? `Nothing new was stored on this device: ${outcome.reason}`
@@ -211,8 +278,17 @@ export default function OfflineCacheWriter(
   // (shell) group so it can render with no connection -- correct -- and the consequence nobody drew is
   // that it had no route in at all: not in the nav, and not linked from anywhere in the product. The
   // owner went looking for it on 2026-08-11 and there was nothing to click.
+  // ⚠ ITS OWN LINE, AND NOT GREY-ON-GREY LIKE THE REST. A practitioner who never sets a PIN would
+  // otherwise reach a clinic with no signal believing they had allergies on the device, and discover
+  // there that they do not -- which is the worst possible moment and place to find out. It says what is
+  // missing, why, and what fixes it. The PIN prompt itself is rendered directly below by `prompt`.
+  const clinicalNote = outcome.kind === "stored" && outcome.clinicalWithheld
+    ? <p className="text-[10.5px] leading-relaxed text-amber-700">{outcome.clinicalWithheld}</p>
+    : null;
+
   return (
     <div className="flex flex-col gap-1">
+    {clinicalNote}
     <p className="text-[10.5px] text-gray-400">
       {line}{" "}
       {/* ⚠ A plain <a>: a client-side navigation needs an RSC fetch, which is unavailable exactly when

@@ -141,6 +141,9 @@ export async function todaysCohort(
     const id = r.patient_id ? idById.get(r.patient_id) ?? null : null;
     return {
       appointmentId: r.id,
+      // Null for a name-only booking: there is no patient record, so there is nothing to point at and
+      // nothing clinical will ever be held for it.
+      patientId: r.patient_id ?? null,
       name: r.patient_name,
       identifierType: id?.type ?? null,
       identifierValue: id?.value ?? null,

@@ -11,9 +11,17 @@ import {
   OFFLINE_GUIDANCE_MAX_DAYS,
   type OfflineGuidanceDoc, type OfflineGuidanceReadResult,
 } from "@/lib/practice/offline-guidance";
+import {
+  lookupOfflineClinical, offlineAllergySentence, offlineBloodGroupSentence, offlineMedicationSentence,
+  OFFLINE_CLINICAL_MAX_DAYS,
+  type OfflineClinicalPack, type OfflineClinicalReadResult,
+} from "@/lib/practice/offline-clinical";
+import type { SafetyLine } from "@/lib/practice/longitudinal-constants";
 import { guidanceType } from "@/lib/practice/knowledge-constants";
 import { OFFLINE_ENCRYPTION_NOTE } from "@/lib/practice/offline-crypto";
-import { lastCachedWorkspace, loadOfflineDay, loadOfflineGuidance } from "@/lib/practice/offline-store";
+import {
+  lastCachedWorkspace, loadOfflineClinical, loadOfflineDay, loadOfflineGuidance,
+} from "@/lib/practice/offline-store";
 
 // CP-OFFLINE-SURVEY-001 s3.4 — the cached clinic day, and its age, on one screen.
 //
@@ -68,6 +76,7 @@ const SESSION_STATE_LABEL: Record<string, string> = {
 export default function OfflineReader({ cacheKey }: { cacheKey?: CryptoKey | null }) {
   const [result, setResult] = useState<OfflineReadResult | null>(null);
   const [guidance, setGuidance] = useState<OfflineGuidanceReadResult | null>(null);
+  const [clinical, setClinical] = useState<OfflineClinicalReadResult | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
   const [openedDoc, setOpenedDoc] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
@@ -77,6 +86,7 @@ export default function OfflineReader({ cacheKey }: { cacheKey?: CryptoKey | nul
     if (!workspaceId) {
       setResult({ state: "none", purge: false, reason: "Nothing has been cached on this device yet." });
       setGuidance({ state: "none", purge: false, reason: "No practice guidance has been stored on this device yet." });
+      setClinical({ state: "none", purge: false, reason: "No clinical records have been stored on this device yet." });
       return;
     }
     // ⚠ READ INDEPENDENTLY, AND THE DAY'S VERDICT NEVER DECIDES THE GUIDANCE'S. They expire on different
@@ -90,6 +100,10 @@ export default function OfflineReader({ cacheKey }: { cacheKey?: CryptoKey | nul
     // finds nothing openable, and never runs again -- the screen would sit empty behind a solved lock.
     setResult(await loadOfflineDay(workspaceId, now, cacheKey ?? undefined));
     setGuidance(await loadOfflineGuidance(workspaceId, now, cacheKey ?? undefined));
+    // ⚠ INDEPENDENT AGAIN, AND ON ITS OWN FIVE-DAY CLOCK. An expired day must not take the clinical pack
+    // with it: the pack is what makes a patient in front of you safe to prescribe for, and it is valid
+    // for days after the schedule that named them stopped being true.
+    setClinical(await loadOfflineClinical(workspaceId, now, cacheKey ?? undefined));
   }, [cacheKey]);
 
   useEffect(() => {
@@ -168,6 +182,14 @@ export default function OfflineReader({ cacheKey }: { cacheKey?: CryptoKey | nul
           {/* ── THE LIST. Time, name, identifier, age, status. NOTHING ELSE. ─────────────────── */}
           <section className="mt-5" aria-labelledby="off-patients">
             <h2 id="off-patients" className="text-[13px] font-bold text-gray-900">Who was expected</h2>
+
+            {/* ⚠ THE CLINICAL STAMP SITS WITH THE LIST IT DESCRIBES, NOT AT THE TOP OF THE PAGE.
+                It ages on a different clock from the day above it, and the hazard it names is a
+                different hazard -- a medicine stopped since capture, not an appointment moved. A single
+                merged banner would have to pick one of those sentences and would be wrong about the
+                other. */}
+            <ClinicalStamp clinical={clinical} />
+
             {/* ⚠ A REFUSAL AND A FAULT ARE DIFFERENT SENTENCES, and until 2026-08-11 both produced the
                 second one. Telling an administrator who is not a clinician that the list "could not be
                 read" says the system is broken when nothing is; telling somebody with a real fault that
@@ -189,6 +211,9 @@ export default function OfflineReader({ cacheKey }: { cacheKey?: CryptoKey | nul
                 {result.day.patients.map(p => (
                   <PatientRow
                     key={p.id} patient={p}
+                    // ⚠ THE PACK, NOT A LOOKED-UP RECORD. The lookup happens inside the row, behind the
+                    // "open" toggle, so a rendered list never touches the clinical data at all.
+                    clinicalPack={clinical?.state === "ok" ? clinical.pack : null}
                     open={opened === p.id}
                     onToggle={() => setOpened(opened === p.id ? null : p.id)}
                   />
@@ -380,7 +405,8 @@ function GuidanceRow(
  * function's return type rather than a flipped boolean.
  */
 function PatientRow(
-  { patient, open, onToggle }: { patient: OfflinePatient; open: boolean; onToggle: () => void },
+  { patient, clinicalPack, open, onToggle }:
+  { patient: OfflinePatient; clinicalPack: OfflineClinicalPack | null; open: boolean; onToggle: () => void },
 ) {
   const row = offlineListRow(patient);
   const detail = offlineRecordDetail(patient);
@@ -434,13 +460,192 @@ function PatientRow(
               </span>
             ))}
           </div>
-          <p className="mt-2 text-[10.5px] text-gray-500">
-            Allergies, current medicines and diagnoses are not held on this device. They are not missing
-            from the record — they are deliberately not stored here, because a stale one is a medication
-            error.
-          </p>
+          {/* ⚠ THE SENTENCE THAT USED TO SIT HERE SAID "Allergies, current medicines and diagnoses are
+              not held on this device... they are deliberately not stored here". It was true when it was
+              written and became FALSE in the same change that shipped the clinical carry. Removing it in
+              that change rather than later is the whole of the "every user-facing sentence must be true
+              today" rule -- a stale reassurance about what is NOT stored is as dangerous as a stale
+              clinical fact, because it tells a practitioner not to bother looking. */}
+          <ClinicalPanel pack={clinicalPack} patientId={detail.patientId} />
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * How the four SafetyLine tones are allowed to LOOK.
+ *
+ * ⚠ ONLY `none` MAY BE NEUTRAL, AND NOTHING MAY BE GREEN. `safeToRead` is true for exactly one tone --
+ * somebody was asked and said there were none -- and every other tone must carry visible weight, because
+ * the failure this whole design guards against is a reassuring-looking blank. A green tick beside
+ * "Allergy status not recorded" would undo in one stylesheet what three files were written to prevent.
+ */
+const SAFETY_TONE: Record<SafetyLine["tone"], string> = {
+  none: "border-gray-300 bg-white text-gray-800",
+  present: "border-amber-400 bg-amber-50 text-amber-900",
+  unknown: "border-amber-400 bg-amber-50 text-amber-900",
+  unreadable: "border-red-500 bg-red-50 text-red-900",
+};
+
+/** The stamp for the clinical pack. Its own clock, its own hazard -- see the call site. */
+function ClinicalStamp({ clinical }: { clinical: OfflineClinicalReadResult | null }) {
+  if (clinical === null) return null;
+
+  if (clinical.state !== "ok")
+    return (
+      <p className="mt-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-[12px] leading-relaxed text-gray-700">
+        {clinical.reason} Names and times below are unaffected — what is missing is the clinical record
+        behind them.
+      </p>
+    );
+
+  const { pack, notice } = clinical;
+  return (
+    <div className={`mt-1 rounded-xl border px-4 py-3 ${TONE[notice.tone]}`} role="status">
+      <p className="text-[13px] font-semibold">{notice.sentence}</p>
+      <p className="mt-1 text-[12px] opacity-90">
+        Clinical records held for {pack.records.length} patient{pack.records.length === 1 ? "" : "s"}
+        {" "}booked up to {pack.horizonDate}. Removed after {OFFLINE_CLINICAL_MAX_DAYS} days without
+        reaching the practice.
+      </p>
+      {/* ⚠ NO SILENT CAP, and this one matters more than the guidance library's: a practitioner who
+          opens a patient and finds no allergy panel must be able to tell "not held" from "none". */}
+      {pack.dropped && <p className="mt-1 text-[12px] opacity-90">{pack.dropped.reason}</p>}
+    </div>
+  );
+}
+
+/**
+ * One patient's clinical carry, inside their opened record.
+ *
+ * ⚠ EVERY SENTENCE HERE COMES FROM A PURE FUNCTION IN offline-clinical.ts OR longitudinal-constants.ts.
+ * None is composed in this file. That is deliberate: the allergy sentence in particular is the one place
+ * in this product where getting the wording wrong is a clinical harm rather than an inconvenience, and it
+ * is chosen by the same allergyLine() the online screens use, from a status the cache preserved as three
+ * separate facts rather than as a list that might be empty.
+ */
+function ClinicalPanel(
+  { pack, patientId }: { pack: OfflineClinicalPack | null; patientId: string | null },
+) {
+  // A name-only booking has no patient record, so there is nothing to look up and nothing to imply.
+  if (!patientId)
+    return (
+      <p className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-[11.5px] leading-relaxed text-gray-700">
+        This is a name-only booking with no patient record at the practice, so there is no clinical record
+        to hold for it.
+      </p>
+    );
+
+  const found = lookupOfflineClinical(pack, patientId);
+  if (found.state === "not_held")
+    return (
+      // ⚠ AMBER, NOT GREY. "No clinical record is held" is a warning, not a neutral fact: the
+      // practitioner must not read a quiet grey line as "nothing to report about this patient".
+      <p className="mt-2 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">
+        {found.reason} That is not a statement about this patient — it is a statement about this device.
+      </p>
+    );
+
+  const rec = found.record;
+  const allergy = offlineAllergySentence(rec);
+  const blood = offlineBloodGroupSentence(rec);
+  const meds = offlineMedicationSentence(rec);
+
+  return (
+    <div className="mt-2 space-y-2">
+      {/* ── ALLERGIES. First, always, and never collapsed behind another toggle. ───────────────── */}
+      <div className={`rounded-lg border px-3 py-2 ${SAFETY_TONE[allergy.tone]}`}>
+        <p className="text-[12px] font-bold">{allergy.text}</p>
+        {rec.allergies.length > 0 && (
+          <ul className="mt-1 space-y-0.5">
+            {rec.allergies.map(a => (
+              <li key={a.id} className="text-[11.5px] leading-relaxed">
+                <span className="font-semibold">{a.substance}</span>
+                {a.reaction ? ` — ${a.reaction}` : ""}
+                {a.severity ? ` · ${a.severity}` : ""}
+                {/* ⚠ THE CERTAINTY IS ALWAYS PRINTED, including `refuted`. "Somebody checked and it was
+                    not real" is a different answer from silence and changes what happens next. */}
+                <span className="opacity-75"> · {a.certainty}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {blood.tone !== "unknown" && <p className="mt-1 text-[11px] opacity-90">Blood group: {blood.text}</p>}
+      </div>
+
+      {/* ── CURRENT MEDICATION ─────────────────────────────────────────────────────────────────── */}
+      <div className={`rounded-lg border px-3 py-2 ${SAFETY_TONE[meds.tone]}`}>
+        <p className="text-[12px] font-bold">{meds.text}</p>
+        {rec.medications.length > 0 && (
+          <ul className="mt-1 space-y-0.5">
+            {rec.medications.map(m => (
+              <li key={m.id} className="text-[11.5px] leading-relaxed">
+                <span className="font-semibold">{m.genericName}</span>
+                {m.brandName ? ` (${m.brandName})` : ""} — {m.doseText}
+                {m.route ? ` · ${m.route}` : ""}{m.frequency ? ` · ${m.frequency}` : ""}
+                {m.indication ? <span className="opacity-75"> · for {m.indication}</span> : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* ── PROBLEMS ───────────────────────────────────────────────────────────────────────────── */}
+      {rec.problemsUnavailable ? (
+        <p className="rounded-lg border border-red-500 bg-red-50 px-3 py-2 text-[11.5px] text-red-900">
+          The problem list could not be read when this was captured.
+        </p>
+      ) : rec.problems.length > 0 ? (
+        <div className="rounded-lg border border-gray-300 bg-white px-3 py-2">
+          <p className="text-[11px] font-semibold text-gray-500">Active problems</p>
+          <ul className="mt-0.5 space-y-0.5">
+            {rec.problems.map(p => (
+              <li key={p.id} className="text-[11.5px] text-gray-800">
+                {p.label}{p.onsetOn ? <span className="text-gray-500"> · since {p.onsetOn}</span> : null}
+              </li>
+            ))}
+          </ul>
+          {rec.problemsDropped > 0 && (
+            <p className="mt-1 text-[11px] text-gray-600">
+              {rec.problemsDropped} more not held on this device.
+            </p>
+          )}
+        </div>
+      ) : null}
+
+      {/* ── THE LAST VISIT. One, as the owner bounded it. ──────────────────────────────────────── */}
+      {rec.lastVisitUnavailable ? (
+        <p className="rounded-lg border border-red-500 bg-red-50 px-3 py-2 text-[11.5px] text-red-900">
+          The last visit could not be read when this was captured, so nothing about it is shown. This is
+          not a statement that there was no previous visit.
+        </p>
+      ) : rec.lastVisit ? (
+        <div className="rounded-lg border border-gray-300 bg-white px-3 py-2">
+          <p className="text-[11px] font-semibold text-gray-500">
+            Last visit · {rec.lastVisit.date} · {rec.lastVisit.kindLabel}
+          </p>
+          {rec.lastVisit.diagnoses.length > 0 && (
+            <p className="mt-0.5 text-[11.5px] text-gray-800">
+              {rec.lastVisit.diagnoses.join(", ")}
+            </p>
+          )}
+          {/* ⚠ ABSENCE IS NAMED RATHER THAN LEFT BLANK. A heading with nothing under it reads as "there
+              was nothing to conclude"; this says nobody wrote one, which is a different fact. */}
+          <p className="mt-1 whitespace-pre-wrap text-[11.5px] leading-relaxed text-gray-800">
+            <span className="font-semibold">Assessment: </span>
+            {rec.lastVisit.assessment ?? <span className="text-gray-500">not recorded at that visit</span>}
+          </p>
+          <p className="mt-0.5 whitespace-pre-wrap text-[11.5px] leading-relaxed text-gray-800">
+            <span className="font-semibold">Plan: </span>
+            {rec.lastVisit.plan ?? <span className="text-gray-500">not recorded at that visit</span>}
+          </p>
+        </div>
+      ) : (
+        <p className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-[11.5px] text-gray-700">
+          No earlier visit is recorded for this patient at this practice.
+        </p>
+      )}
+    </div>
   );
 }

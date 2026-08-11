@@ -43,8 +43,17 @@ import { zonedDayRange } from "@/lib/practice/practice-time";
 // suppressing the per-patient visit kind removed. The activity TYPE -- outpatient clinic, ward round,
 // theatre list -- is a care setting rather than a condition, so that is what is kept.
 
-/** Bumped when the shape below changes. A record from an older schema is discarded, never migrated. */
-export const OFFLINE_SCHEMA_VERSION = 1;
+/**
+ * Bumped when the shape below changes. A record from an older schema is discarded, never migrated.
+ *
+ * ⚠ 2 ADDS `patientId`, AND THE BUMP IS THE POINT. Every device holding a version-1 day discards it on
+ * the next read -- `readOfflineDay` returns `wrong_schema` with `purge: true`, which is designed for
+ * exactly this and costs one reconnection. Leaving the version alone and letting the new field be
+ * `undefined` on old records would be the silent option: the clinical lookup would find nothing for
+ * every cached patient and render as "no clinical record held", which is a sentence that must only ever
+ * be true.
+ */
+export const OFFLINE_SCHEMA_VERSION = 2;
 
 /**
  * One appointment on the cached day.
@@ -55,6 +64,20 @@ export const OFFLINE_SCHEMA_VERSION = 1;
 export type OfflinePatient = {
   /** The appointment row id. Opaque; the key for this row and nothing else. */
   id: string;
+  /**
+   * ⚠ THE PATIENT ROW ID, AND IT IS HERE FOR ONE REASON: IT IS THE ONLY JOIN TO THE CLINICAL CARRY.
+   *
+   * The clinical pack is keyed by patient rather than by appointment, because the four-day horizon means
+   * one person can appear on several days and their allergies must not be stored several times. That
+   * requires a key both records share, and until now the day carried none -- it identified a row by
+   * APPOINTMENT and deliberately held nothing that pointed at the person.
+   *
+   * ⚠ IT IS NOT NOTHING. An opaque uuid discloses no name, no date of birth and nothing clinical on its
+   * own, but it IS a stable cross-referencable handle: two caches on the same device can now be joined,
+   * which is the entire purpose and is also the whole of the new exposure. Null for a name-only booking,
+   * which has no patient record to point at.
+   */
+  patientId: string | null;
   name: string;
   /** ONE identifier, never the set. Null when the patient has none recorded. */
   identifierType: string | null;
@@ -116,7 +139,7 @@ export type OfflineDay = {
 };
 
 export const OFFLINE_PATIENT_KEYS: readonly (keyof OfflinePatient)[] = [
-  "id", "name", "identifierType", "identifierValue", "ageYears",
+  "id", "patientId", "name", "identifierType", "identifierValue", "ageYears",
   "timeLabel", "durationMinutes", "status", "encounterId", "visitKind",
 ] as const;
 
@@ -279,6 +302,15 @@ export type OfflineRecordDetail = OfflineListRow & {
   durationMinutes: number | null;
   visitKind: string;
   encounterId: string | null;
+  /**
+   * ⚠ ON THE DETAIL, NEVER ON THE LIST ROW -- the same rule the visit kind already follows.
+   *
+   * The clinical carry is reached through this id, so putting it on the list row would mean a list could
+   * join every name on screen to an allergy and a medication list. Opening one record deliberately is a
+   * different act from scrolling a waiting-room list, which is precisely the distinction s3.8.7 drew for
+   * the visit kind, and it applies with far more force to this.
+   */
+  patientId: string | null;
 };
 
 export function offlineRecordDetail(p: OfflinePatient): OfflineRecordDetail {
@@ -288,6 +320,7 @@ export function offlineRecordDetail(p: OfflinePatient): OfflineRecordDetail {
     durationMinutes: p.durationMinutes,
     visitKind: p.visitKind,
     encounterId: p.encounterId,
+    patientId: p.patientId,
   };
 }
 
@@ -362,6 +395,7 @@ export function enabledMutatingControls(controls: OfflineControl[]): OfflineCont
 
 export type CohortSource = {
   appointmentId: string;
+  patientId: string | null;
   name: string;
   identifierType: string | null;
   identifierValue: string | null;
@@ -382,6 +416,7 @@ export function projectOfflinePatient(row: CohortSource): OfflinePatient {
   // FIELD BY FIELD. No spread, ever -- see the header.
   return {
     id: row.appointmentId,
+    patientId: row.patientId,
     name: row.name,
     identifierType: row.identifierType,
     identifierValue: row.identifierValue,
