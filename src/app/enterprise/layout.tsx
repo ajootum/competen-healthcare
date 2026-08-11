@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { resolveEnterpriseShell } from "@/lib/enterprise-shell";
 import { ENTERPRISE_BUILT_SUBPRODUCTS, ENTERPRISE_NOT_BUILT_REASON } from "@/lib/enterprise-constants";
@@ -18,9 +17,34 @@ export const dynamic = "force-dynamic";
 export default async function EnterpriseLayout({ children }: { children: React.ReactNode }) {
   const shell = await resolveEnterpriseShell();
 
-  // ⚠ WITH THE DESTINATION, or signing in strands the person on /dashboard and they arrive back here
-  // only by typing the URL again -- which is how the owner experienced it on 2026-08-11.
-  if (shell.state === "AUTH_REQUIRED") redirect("/login?next=/enterprise");
+  // ⚠ A PUBLIC GATE PAGE, NOT A BOUNCE -- WEB-HOME-001 s15, adopted 2026-08-11: an unauthenticated
+  // visitor to /enterprise is a PROSPECT following a product card, and throwing them at a login form
+  // answers a question they did not ask. The sign-in CTA carries the destination, so authentication
+  // still lands them back here rather than on /dashboard.
+  // ⚠ It says nothing about sub-products: s10 keeps those behind the door until Enterprise is chosen
+  // AND the visitor is a member -- the catalogue renders only in the authenticated shell below.
+  if (shell.state === "AUTH_REQUIRED")
+    return (
+      <div className="mx-auto max-w-lg p-10">
+        <h1 className="text-2xl font-bold text-gray-900">Competen Enterprise</h1>
+        <p className="mt-3 text-[14px] leading-relaxed text-gray-700">
+          Manage workforce, assess, train, and assure quality and performance across your organisation.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link href="/login?next=/enterprise"
+            className="rounded-xl bg-[#4F46E5] px-5 py-2.5 text-[14px] font-semibold text-white hover:opacity-90">
+            Sign in
+          </Link>
+          <a href={"mailto:gabriel@semacast.com?subject=" + encodeURIComponent("Competen Enterprise enquiry")}
+            className="rounded-xl border border-gray-300 px-5 py-2.5 text-[14px] font-semibold text-gray-700 hover:bg-gray-50">
+            Talk to us
+          </a>
+        </div>
+        <p className="mt-4 text-[12px] text-gray-500">
+          Your organisation not on Competen Enterprise yet? Talk to us and we will walk you through it.
+        </p>
+      </div>
+    );
 
   if (shell.state === "NO_TENANT")
     return (

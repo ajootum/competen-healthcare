@@ -7,6 +7,7 @@ import {
   CTA_BAND, ASSURANCES, ONE_ACCOUNT,
 } from "@/lib/marketing/home-content";
 import { PRIMARY_SOLUTIONS } from "@/lib/marketing/solutions";
+import { PRODUCTS } from "@/lib/marketing/products";
 import { pageMetadata } from "@/lib/marketing/site";
 
 // WEB-STRAT-001 — public homepage.
@@ -29,11 +30,15 @@ export const metadata = pageMetadata({
 
 const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 
+// WEB-HOME-001 s9's five audiences, adopted 2026-08-11: Practitioner and Organisation replaced the
+// product-named cards, and Recruiter joined. Keyed by catalogue slug, so a pathway with no blurb here
+// simply does not render a card -- which is why the count is asserted by the disclosure harness.
 const PATH_BLURB: Record<string, { title: string; body: string; img: string }> = {
-  students:      { title: "Students",      body: "Build your foundation. Start your journey with confidence.", img: "/images/home/path-students.webp" },
-  professionals: { title: "Professionals", body: "Grow your career. Keep learning. Stay ready.",               img: "/images/home/path-professionals.webp" },
-  practice:      { title: "Practice",      body: "Run your practice. Delight your patients.",                  img: "/images/home/path-practice.webp" },
-  hospitals:     { title: "Hospitals",     body: "Empower your teams. Improve care. Transform outcomes.",      img: "/images/home/path-hospitals.webp" },
+  students:      { title: "Student",      body: "Build your foundation. Start your journey with confidence.", img: "/images/home/path-students.webp" },
+  professionals: { title: "Professional", body: "Grow your career. Keep learning. Stay ready.",               img: "/images/home/path-professionals.webp" },
+  practice:      { title: "Practitioner", body: "Run your practice. Delight your patients.",                  img: "/images/home/path-practice.webp" },
+  organisations: { title: "Organisation", body: "Empower your teams. Improve care. Transform outcomes.",      img: "/images/home/path-hospitals.webp" },
+  recruitment:   { title: "Recruiter",    body: "Find the right people. Verify what matters.",                img: "/images/home/team-hospital.webp" },
 };
 
 /* Floating intelligence cards over the hero. Drawn, not screenshotted: a screenshot of a seeded tenant
@@ -118,7 +123,7 @@ export default function Home() {
           {/* WEB-HOME-001 s9's heading. The section id stays `choose-your-path` -- the hero CTA and any
               external link to the anchor keep working, and an anchor is not a sentence a visitor reads. */}
           <h2 className="text-center text-[1.35rem] font-bold tracking-tight text-gray-900">Who are you?</h2>
-          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
             {PRIMARY_SOLUTIONS.map(s => {
               const p = PATH_BLURB[s.slug];
               return (
@@ -136,6 +141,25 @@ export default function Home() {
                 </Link>
               );
             })}
+          </div>
+        </section>
+
+        {/* ── ONE PLATFORM. FOUR PRODUCTS. (WEB-HOME-001 s10) ─────────────────
+            ⚠ Micro-descriptions only, from the catalogue -- s2 forbids feature lists here, and s10
+            forbids naming any Enterprise sub-product on this page. The disclosure harness holds both. */}
+        <section className={`${container} pb-14`}>
+          <h2 className="text-center text-[1.35rem] font-bold tracking-tight text-gray-900">One platform. Four products.</h2>
+          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {PRODUCTS.map(p => (
+              <Link key={p.key} href={p.href}
+                className="group rounded-2xl border border-gray-200 bg-white p-5 hover:shadow-lg hover:-translate-y-0.5 transition-all">
+                <span aria-hidden className="flex w-10 h-10 items-center justify-center rounded-xl text-[15px] font-bold text-white"
+                  style={{ background: p.accent }}>{p.label[0]}</span>
+                <h3 className="mt-3 text-[16px] font-bold text-gray-900">{p.label}</h3>
+                <p className="mt-1 text-[13px] text-gray-600">{p.micro}</p>
+                <span className="mt-3 inline-block text-[13px] font-semibold" style={{ color: p.accent }}>Explore →</span>
+              </Link>
+            ))}
           </div>
         </section>
 

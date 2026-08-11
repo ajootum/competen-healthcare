@@ -97,13 +97,19 @@ export const SOLUTIONS: Solution[] = [
   },
   {
     // No `template`: /practice is a six-page section built from practice-content.ts. See the note above.
-    slug: "practice", nav: "Practice", eyebrow: "Practice",
+    // ⚠ nav says "Practitioners", not "Practice" -- WEB-DEC 2026-08-11 adopted WEB-HOME-001 s3's rule
+    // that SOLUTION labels name AUDIENCES and product names live in the Products menu. Same slug, same
+    // pages: the practitioner pathway and the Practice product marketing share a front door.
+    slug: "practice", nav: "Practitioners", eyebrow: "Practice",
     body: "All the tools you need to manage appointments, patients and follow-ups in one place.",
     accent: "#2563EB", inPrimaryNav: true,
   },
   {
-    slug: "hospitals", nav: "Hospitals", eyebrow: "Hospitals",
-    body: "An integrated platform that helps hospitals strengthen capability, improve quality and drive performance.",
+    // ⚠ RENAMED from "hospitals" -- WEB-HOME-001 s20: "Hospitals is replaced by the broader organisation
+    // pathway", adopted by the owner 2026-08-11. /hospitals is a LIVE INDEXED route, so it now issues a
+    // permanent redirect here rather than 404ing a URL that is in the sitemap and other people's links.
+    slug: "organisations", nav: "Organisations", eyebrow: "Organisations",
+    body: "An integrated platform that helps healthcare organisations strengthen capability, improve quality and drive performance.",
     accent: "#4F46E5", inPrimaryNav: true,
     template: {
       headline: ["Stronger teams.", "Better care.", "Better outcomes."],
@@ -112,15 +118,23 @@ export const SOLUTIONS: Solution[] = [
       secondary: { label: "Explore Solutions", href: "#features" },
       image: "/images/home/team-hospital.webp",
       imageAlt: "A hospital team outside the main entrance",
-      featuresTitle: "Built for hospital excellence",
+      featuresTitle: "Built for organisational excellence",
       features: [
         { title: "Workforce", body: "Right people. Right place. Right skills." },
         { title: "Capability", body: "Build, assess and manage capability" },
         { title: "Quality", body: "Improve safety. Achieve accreditation." },
         { title: "Performance", body: "Real-time insights. Better decisions." },
       ],
-      closing: { title: "Ready to transform your hospital?", body: "Book a personalised demo and see how Competen can help.", action: "Book a Demo" },
+      closing: { title: "Ready to transform your organisation?", body: "Book a personalised demo and see how Competen can help.", action: "Book a Demo" },
     },
+  },
+  {
+    // ⚠ No `template`: /recruitment is the Recruitment PRODUCT page (products.ts), and this entry is the
+    // Recruiters AUDIENCE pathway pointing at it -- WEB-HOME-001 s6's fifth audience, adopted 2026-08-11.
+    // Same structural rule as /practice above: the slug owns its page, so the template stays absent.
+    slug: "recruitment", nav: "Recruiters", eyebrow: "Recruitment",
+    body: "Find the right people faster with verified capability and credentials.",
+    accent: "#7C3AED", inPrimaryNav: true,
   },
   {
     // Secondary page: reachable and indexed, deliberately NOT in the Solutions menu.

@@ -47,7 +47,16 @@ export function indexablePages(): IndexablePage[] {
     { path: "/", priority: 1.0, changeFrequency: "weekly" },
 
     // The solution landing pages, from the catalogue that also defines their routes.
+    // ⚠ /hospitals left this list when the catalogue renamed the pathway to /organisations (WEB-HOME-001
+    // s20, 2026-08-11) -- the route still exists as a permanent redirect, and a sitemap must name the
+    // canonical page, not the redirect that reaches it.
     ...SOLUTIONS.map(s => ({ path: `/${s.slug}`, priority: 0.9, changeFrequency: "monthly" as const })),
+
+    // The not-yet-live Individual product page (WEB-HOME-001 s10) -- a marketing page with an honest
+    // CTA, indexed because it describes a real offering. ⚠ /recruitment is NOT repeated here: the
+    // Recruiters catalogue entry above already emits it, and a sitemap with the same URL twice is the
+    // kind of defect a validator reports and a person never notices.
+    { path: "/individual", priority: 0.9, changeFrequency: "monthly" },
 
     // Competen Practice: its four journeys carry higher priority than the capability detail, because they
     // are what a visitor is actually trying to reach.

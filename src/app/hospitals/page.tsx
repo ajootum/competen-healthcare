@@ -1,18 +1,10 @@
-import SolutionPage from "@/components/marketing/SolutionPage";
-import { templated } from "@/lib/marketing/solutions";
-import { pageMetadata } from "@/lib/marketing/site";
+import { permanentRedirect } from "next/navigation";
 
-// WEB-STRAT-001 public landing page. Content is data; the layout is the shared SolutionPage template.
-const s = templated("hospitals");
-
-// pageMetadata, not a bare title/description: a page that sets only those keeps the ROOT layout's
-// og:title and og:description, so it reads correctly in a search result and unfurls in a chat app as the
-// generic site card. See src/lib/marketing/site.ts.
-export const metadata = pageMetadata({
-  title: `${s.template.headline.join(" ")} — Competen`,
-  description: s.body,
-  path: "/hospitals",
-  imageAlt: s.template.imageAlt,
-});
-
-export default function Page() { return <SolutionPage s={s} />; }
+// ⚠ A PERMANENT REDIRECT, NOT A DELETED PAGE. /hospitals was a live, indexed route -- in the sitemap and
+// in other people's links -- until WEB-HOME-001 s20 renamed the pathway to /organisations (owner's
+// decision, 2026-08-11). Deleting it would 404 every existing link; a controlled redirect is what
+// ENT-NAV-001 s8 asks for in exactly this case. It is deliberately absent from the sitemap now: the
+// canonical page is /organisations, and search engines follow a 308 to the truth.
+export default function Page() {
+  permanentRedirect("/organisations");
+}

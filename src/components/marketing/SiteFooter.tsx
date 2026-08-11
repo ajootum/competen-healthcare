@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ACCENT, BRAND, DEMO_REQUEST, FOOTER_LEGAL, STAFF_ACCESS } from "@/lib/marketing/home-content";
 import { PRIMARY_SOLUTIONS } from "@/lib/marketing/solutions";
+import { PRODUCTS } from "@/lib/marketing/products";
 
 // Shared public footer. The Solutions column is generated from the same list as the routes and the header
 // menu, so the three can never disagree about which solutions exist.
@@ -28,7 +29,18 @@ export default function SiteFooter() {
           </div>
         </div>
 
-        <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-3 gap-6">
+        <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-4 gap-6">
+          {/* WEB-HOME-001 s13: Products first, from the same catalogue as the header and homepage. */}
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/80">Products</p>
+            <ul className="mt-3 space-y-2">
+              {PRODUCTS.map(p => (
+                <li key={p.key}>
+                  <Link href={p.href} className="text-[12.5px] text-white/55 hover:text-white transition-colors">{p.label}</Link>
+                </li>
+              ))}
+            </ul>
+          </div>
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/80">Solutions</p>
             <ul className="mt-3 space-y-2">

@@ -43,16 +43,24 @@ const ok = (label: string, cond: boolean, detail = "") => {
 
 // Phrases that must not appear on a public page. Kept as the spec's own words so the list can be diffed
 // against the document rather than re-interpreted.
+// ⚠ EDITED BY DECISION, NOT DRIFT -- WEB-DEC 2026-08-11: the owner ruled that WEB-HOME-001 supersedes
+// WEB-STRAT-001, so the four PRODUCT names (Enterprise, Individual, Recruitment, Practice) are now
+// public and "Recruitment platform" left this list. What stays hidden is the layer BELOW the products:
+// WEB-HOME-001 s10 forbids naming any Enterprise sub-product on the root homepage, so the sub-product
+// vocabulary keeps its guard.
 const FORBIDDEN = [
   "Competency Management", "Workforce Management", "Executive Intelligence",
-  "Recruitment platform", "Learning platform", "Competency Studio", "Assessment Studio",
+  "Learning platform", "Competency Studio", "Assessment Studio",
   "AI platform", "Platform operations", "Configuration, integration",
+  "Mock Code",
 ];
 
 // The Practice capability pages are included: they are the most detailed public pages on the site and
 // therefore the likeliest place for a product name to leak into a sentence about what something connects to.
 const PUBLIC_PAGES = [
   "/", ...SOLUTIONS.map(s => `/${s.slug}`),
+  // The Individual product page (WEB-DEC 2026-08-11). /recruitment already arrives via the catalogue.
+  "/individual",
   ...PRACTICE_AREAS.map(a => `/practice/${a.slug}`),
   ...JOURNEYS.map(j => j.href),
   "/login", "/signup",
@@ -325,6 +333,34 @@ async function main() {
     }
 
     ok("7d. the audience question is asked in the visitor's own terms", homeText.includes("Who are you?"));
+
+    // ── WEB-DEC 2026-08-11: the products-first IA, held to its own limits ────────────────────────
+    ok("7g. the homepage carries the four-product section", homeText.includes("One platform. Four products."));
+    ok("7h. all four products are on it, and ONLY four",
+      ["Enterprise", "Individual", "Recruitment", "Practice"].every(p => homeText.includes(p)));
+    ok("7i. ⚠ five audiences, exactly -- WEB-HOME-001 s9",
+      ["Student", "Professional", "Practitioner", "Organisation", "Recruiter"]
+        .every(a => homeText.includes(a)));
+    // ⚠ The rename kept every existing link alive: /hospitals must REDIRECT to /organisations, not 404
+    // and not render. redirect: "manual", because a followed redirect returns the destination's 200 and
+    // proves nothing about the hop.
+    const hosp = await fetch(BASE + "/hospitals", { redirect: "manual" });
+    ok("7j. ⚠ /hospitals permanently redirects to /organisations -- a live indexed route never 404s",
+      (hosp.status === 308 || hosp.status === 307 || hosp.status === 301)
+        && (hosp.headers.get("location") ?? "").includes("/organisations"),
+      `status=${hosp.status} location=${hosp.headers.get("location")}`);
+    // ⚠ The two not-yet-live product pages offer NO PRODUCT SIGN-IN -- a sign-in to a product that does
+    // not exist is a dead door, and the owner's condition for showing them at all was honesty about
+    // that. ⚠ The first version of this assertion banned href="/login" outright and failed on the
+    // SHARED SITE HEADER, whose generic Sign in is on every public page by design and goes to My
+    // Competen, not into these products. The property is about the page's OWN CTAs: no /signup
+    // anywhere, and the primary action is a conversation.
+    for (const p of ["/individual", "/recruitment"]) {
+      const html = await (await fetch(BASE + p)).text();
+      ok(`7k. ${p} offers a conversation, not a registration`,
+        !/href="\/signup"/.test(html) && html.includes("Talk to us about Competen"),
+        "the product does not exist; the only honest CTA is a conversation");
+    }
     ok("7e. the One Competen account section exists and promises only what is true",
       homeText.includes("One Competen account.") && !/IAM|entitlement|workspace registry|product gate/i.test(homeText),
       "s11 forbids teaching visitors the internal architecture");
