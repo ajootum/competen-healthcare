@@ -65,7 +65,7 @@ export const isSupervisor = (c: Caller) => hasRole(c, ...SUPERVISOR_ROLES);
 
 // Authenticate and load the caller's role + tenant. Returns a NextResponse on
 // failure (caller does `if (isResponse(c)) return c`).
-export async function getCaller(opts: { plane?: "estate" | "practice" } = {}): Promise<Caller | NextResponse> {
+export async function getCaller(opts: { plane?: "estate" | "practice" | "enterprise" } = {}): Promise<Caller | NextResponse> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return unauthorized();
@@ -110,7 +110,11 @@ export async function getCaller(opts: { plane?: "estate" | "practice" } = {}): P
   // at all, and an UNREADABLE membership store ADMITS and warns rather than refusing. A transient
   // database error must not turn every API in the product into a 403 for everybody at once; the role
   // predicates below are still the operative check in that case.
-  if (opts.plane !== "practice"
+  // ⚠ "enterprise" skips the estate gate for the same reason "practice" does: a hospital tenant is not
+  // a Competen Platform member (ENT-DEC-001 D4), and asking gate 1 of them is the 115-route regression
+  // one plane over. Enterprise routes are gated by requireEnterpriseContext instead -- a real gate, not
+  // an absence of one -- and the default here stays STRICT: anything that names no plane gets the estate.
+  if (opts.plane !== "practice" && opts.plane !== "enterprise"
       && !(await admitToEstate(admin, user.id, roles as AppRole[])).admitted)
     return forbidden("Not a member of this platform");
 

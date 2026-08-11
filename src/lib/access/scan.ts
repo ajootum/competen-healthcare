@@ -72,12 +72,18 @@ const LANDLORD_ANY = /getLandlordCaller\s*\(/;
 // layouts instead of routes, which is why the rule is written to the STATE MACHINE rather than to the
 // one file that currently uses it.
 const SHELL_GATE = /resolvePracticeShell\s*\(|["']AUTH_REQUIRED["']/;
-const PRACTICE_ANY = /requirePracticeContext\s*\(/;
+// ⚠ A FOURTH PLANE, TAUGHT IN THE SAME COMMIT AS ITS GUARD -- ENT-DEC-001 D12. requireEnterpriseContext
+// (Competen Enterprise, gate 3) has exactly requirePracticeContext's call shape -- a capability literal,
+// null, a resolved constant, or a ternary -- so ONE classifier serves both tenant planes rather than a
+// clone that drifts. Four prior guard helpers shipped without a scanner entry and each classified as
+// `none`, "reachable without signing in"; enterprise-membership-harness feeds classifyGate a synthetic
+// enterprise route and fails if this pattern ever stops matching it.
+const PRACTICE_ANY = /require(?:Practice|Enterprise)Context\s*\(/;
 // Four spellings, all of them real in this codebase: a literal, null, a resolved constant, and a ternary
 // whose branches are literals -- `requirePracticeContext(to === "SIGNED" ? "document.sign" : "document.author")`,
 // where the capability depends on the transition being attempted. BOTH branches are taken for the ternary:
 // either one reaches the route, and the union is what "who can reach this at all" means.
-const PRACTICE_CALL = /requirePracticeContext\s*\(\s*(?:"([a-z0-9._]+)"|(null)|([A-Z][A-Za-z0-9_]*)\s*\.\s*([A-Za-z0-9_]+)|[^()]*?\?\s*"([a-z0-9._]+)"\s*:\s*"([a-z0-9._]+)")\s*\)/g;
+const PRACTICE_CALL = /require(?:Practice|Enterprise)Context\s*\(\s*(?:"([a-z0-9._]+)"|(null)|([A-Z][A-Za-z0-9_]*)\s*\.\s*([A-Za-z0-9_]+)|[^()]*?\?\s*"([a-z0-9._]+)"\s*:\s*"([a-z0-9._]+)")\s*\)/g;
 // Two spellings of the same gate: pages redirect to /login, API routes return 401. Both mean
 // "signed in, no role restriction". `!user?.email` is the same check on a route that needs the address.
 const AUTH = /if\s*\(\s*!\s*user(?:\?\.\w+)?\s*\)\s*(?:redirect\(|return\s)/;
@@ -221,6 +227,14 @@ function classifyPractice(source: string, caps: CapabilityConsts): Gate | null {
   if (!PRACTICE_ANY.test(source)) return null;
   const appointment = APPOINTMENT.test(source);
 
+  // Evidence names the guard that actually matched, so a reader of the matrix can tell which tenant
+  // plane a route sits on without opening the file. The call form (with paren) is tested, not the bare
+  // name, because the import line would otherwise count.
+  const guardName = /requireEnterpriseContext\s*\(/.test(source)
+    ? (/requirePracticeContext\s*\(/.test(source)
+      ? "requirePracticeContext+requireEnterpriseContext" : "requireEnterpriseContext")
+    : "requirePracticeContext";
+
   const codes: string[] = [];
   let nullCalls = 0;
   let parsedCalls = 0;
@@ -243,24 +257,24 @@ function classifyPractice(source: string, caps: CapabilityConsts): Gate | null {
 
   if (unresolved)
     return { kind: "unknown", roles: [], appointment, capabilities: codes,
-      evidence: `requirePracticeContext(${unresolved}) — capability constant could not be resolved` };
+      evidence: `${guardName}(${unresolved}) — capability constant could not be resolved` };
 
   // ⚠ EVERY CALL MUST HAVE BEEN ACCOUNTED FOR. A call spelled in a way PRACTICE_CALL does not match --
   // a variable, a ternary, a template string -- sits next to calls that did parse, and reporting
   // `capability` would claim the unparsed one is covered by the parsed ones. Counted rather than assumed.
   // The import spells it `requirePracticeContext,` so it does not match this and must not be subtracted.
-  const calls = (source.match(/requirePracticeContext\s*\(/g) ?? []).length;
+  const calls = (source.match(/require(?:Practice|Enterprise)Context\s*\(/g) ?? []).length;
   if (calls !== parsedCalls)
     return { kind: "unknown", roles: [], appointment, capabilities: codes,
-      evidence: `${calls} requirePracticeContext call(s), ${parsedCalls} parsed` };
+      evidence: `${calls} ${guardName} call(s), ${parsedCalls} parsed` };
 
   if (codes.length === 0 && nullCalls > 0)
-    return { kind: "member-only", roles: [], appointment, evidence: "requirePracticeContext(null)" };
+    return { kind: "member-only", roles: [], appointment, evidence: `${guardName}(null)` };
 
   return {
     kind: "capability", roles: [], appointment,
     capabilities: [...new Set(codes)].sort(),
-    evidence: `requirePracticeContext: ${[...new Set(codes)].sort().join(", ")}${nullCalls ? ` (and ${nullCalls} call(s) with no capability)` : ""}`,
+    evidence: `${guardName}: ${[...new Set(codes)].sort().join(", ")}${nullCalls ? ` (and ${nullCalls} call(s) with no capability)` : ""}`,
   };
 }
 
@@ -338,7 +352,7 @@ export function classifyGate(source: string, groups: RoleGroups = {}, caps: Capa
   // classifyPractice above already claims every file containing it. If that ever stops being true, the
   // failure this catches is a practice route reported as `none` -- open to the world -- which is the one
   // wrong answer this module must never give.
-  const anySignal = /auth\.getUser|getCaller|getLandlordCaller|requirePracticeContext|createClient\(\)|ALLOWED|roles/.test(source);
+  const anySignal = /auth\.getUser|getCaller|getLandlordCaller|requirePracticeContext|requireEnterpriseContext|createClient\(\)|ALLOWED|roles/.test(source);
   if (!anySignal) return { kind: "none", roles: [], appointment, evidence: "no access check found in this file" };
 
   return { kind: "unknown", roles: [], appointment, evidence: null };
