@@ -359,17 +359,32 @@ async function main() {
     // and the login page carries a we-are-building-this notice before the password field, landing the
     // person on My Competen. The property that SURVIVES the revision: no /signup, and the conversation
     // CTA stays. The property that is NEW: the gate carries its ?next, or the notice can never fire.
+    // ⚠ REVISED AGAIN 2026-08-11: the gates now lead to PRODUCT-BRANDED coming-soon screens, like
+    // /practice has its own sign-in -- not to the generic /login with a notice above the form.
     for (const p of ["/individual", "/recruitment"]) {
       const html = await (await fetch(BASE + p)).text();
-      ok(`7k. ${p} offers a conversation and a gate, never a registration`,
+      ok(`7k. ${p} offers a conversation and its own branded gate, never a registration`,
         !/href="\/signup"/.test(html) && html.includes("Talk to us about Competen")
-          && html.includes(`/login?next=${p}`),
-        "a gate without its next parameter is a notice that never shows");
+          && html.includes(`href="${p}/sign-in"`),
+        "the gate must lead to the product's own screen");
     }
     // Students and Professionals gate into the SAME site -- Individual -- the owner's mapping.
     for (const p of ["/students", "/professionals"]) {
       const html = await (await fetch(BASE + p)).text();
-      ok(`7l. ${p} gates into Competen Individual`, html.includes("/login?next=/individual"));
+      ok(`7l. ${p} gates into Competen Individual`, html.includes(`href="/individual/sign-in"`));
+    }
+    // ⚠ THE COMING-SOON SCREENS CARRY NO CREDENTIAL FIELD. A password box on a product that does not
+    // exist is a door painted on a wall -- the person types, submits, and lands somewhere the page did
+    // not promise. Section 6 above applies the same iff-rule to the real credential pages; this is its
+    // sibling for pages that must have NONE.
+    for (const p of ["/individual/sign-in", "/recruitment/sign-in"]) {
+      const html = await (await fetch(BASE + p)).text();
+      const rendered = html.includes("Coming soon") && html.includes("We are building this site.");
+      ok(`7p-control. ${p} actually rendered the coming-soon screen`, rendered);
+      ok(`7p. ${p} has NO password field, and routes every intention somewhere real`,
+        rendered && !/<input[^>]+type=["']password["']/i.test(html)
+          && html.includes(`href="/login"`) && html.includes("Talk to us about Competen"),
+        "an honest page: the product is coming, the account already works, the conversation is open");
     }
     // ⚠ The login notice is rendered CLIENT-side, so fetched HTML cannot carry it -- asserted at the
     // source instead, comments stripped, with the destination override that keeps a signed-in person

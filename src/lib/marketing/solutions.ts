@@ -63,7 +63,7 @@ export const SOLUTIONS: Solution[] = [
       primary: { label: "Talk to us about getting started", href: ACTION },
       // The owner, 2026-08-11: Student and Professional both GATE into Competen Individual -- one site
       // for both audiences. The login page says the site is still being built BEFORE the password field.
-      secondary: { label: "Sign in", href: "/login?next=/individual" },
+      secondary: { label: "Sign in", href: "/individual/sign-in" },
       image: "/images/home/path-students.webp",
       imageAlt: "A student nurse with a tablet",
       featuresTitle: "Everything you need to succeed",
@@ -85,7 +85,7 @@ export const SOLUTIONS: Solution[] = [
       points: ["Maintain your competency records", "Continuing professional development", "Career opportunities", "Professional portfolio & passport"],
       primary: { label: "Talk to us about getting started", href: ACTION },
       // Same gate as Students -- one Individual site serves both audience pathways.
-      secondary: { label: "Sign in", href: "/login?next=/individual" },
+      secondary: { label: "Sign in", href: "/individual/sign-in" },
       image: "/images/home/path-professionals.webp",
       imageAlt: "A doctor outside a hospital",
       featuresTitle: "Your professional workspace",
