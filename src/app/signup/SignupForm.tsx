@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 
-export default function SignupPage() {
+export default function SignupForm() {
   const [form, setForm] = useState({ full_name: "", email: "", password: "", role: "nurse" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

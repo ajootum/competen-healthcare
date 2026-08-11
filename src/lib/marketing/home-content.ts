@@ -1,4 +1,4 @@
-// Competen corporate homepage content (COMP-HOME-001 → WEB-HP-002 → WEB-STRAT-001, latest wins).
+// Competen corporate homepage content (COMP-HOME-001 → WEB-HP-002 → WEB-STRAT-001 → WEB-HOME-001, latest wins).
 //
 // The governing change across that chain is "minimal disclosure": communicate outcomes, not platform
 // internals. The capability cards, lifecycle stages, workflow diagram and impact grid are all gone -- the

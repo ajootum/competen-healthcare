@@ -2,12 +2,26 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { grantPlatformMembership } from "@/lib/platform-membership";
+import { platformFlag } from "@/lib/practice/provisioning";
 
 // Public self-registration. Privileged roles (hospital_admin, super_admin)
 // are assigned by administrators in All Users — never via public signup.
 const PUBLIC_ROLES = ["nurse", "assessor", "educator"];
 
 export async function POST(request: Request) {
+  // ⚠ THE FLAG GATES THE ENDPOINT AS WELL AS THE PAGE -- Practice's own rule, mirrored: "route
+  // protection must exist on the server/API, not only in the client". A page that hides the form while
+  // the endpoint still registers anybody who POSTs is a gate painted on the door. platformFlag is
+  // fail-closed (absent row = OFF), and estate_public_signup has never been written, which is the truth.
+  if (!(await platformFlag(
+    createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!),
+    "estate_public_signup",
+  )))
+    return NextResponse.json(
+      { error: "Signup is not open yet. Competen accounts are set up with us directly for now." },
+      { status: 403 },
+    );
+
   const { email, password, full_name, role } = await request.json();
 
   // A REGISTRATION ENDPOINT MUST NOT MUTATE THE CALLER'S SESSION.

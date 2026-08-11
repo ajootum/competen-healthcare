@@ -1,15 +1,17 @@
-// WEB-STRAT-001 — public solution landing pages.
+// Public solution landing pages -- the AUDIENCE pathways.
 //
-// PROGRESSIVE DISCLOSURE IS THE POINT. The strategy is explicit: expose outcomes, market SOLUTIONS rather
-// than software modules, and reveal more only after registration. So these pages describe what a person
-// gets, never how the platform is built.
+// ⚠ GOVERNED BY WEB-HOME-001 SINCE 2026-08-11 (WEB-DEC, the owner's decision), which SUPERSEDED
+// WEB-STRAT-001. The lineage, latest wins: COMP-HOME-001 -> WEB-HP-002 -> WEB-STRAT-001 -> WEB-HOME-001.
+// What changed: the four PRODUCT names (Enterprise, Individual, Recruitment, Practice) are now public
+// and live in products.ts; SOLUTIONS here name AUDIENCES, never products (s3: "Solution labels are not
+// product names").
 //
-// The spec also names products that must NOT appear on the public site at all -- Competency Management,
-// Workforce Management, Executive Intelligence, Recruitment, Learning platform, Competency Studio,
-// Assessment Studio, AI platform, platform operations, and the configuration/integration engines. That is
-// not a styling preference; "hide unauthorised products completely rather than displaying disabled menus"
-// means the words themselves stay off these pages. scripts/public-disclosure-harness.ts asserts it, because
-// a leak here is one careless sentence and nobody would notice until a competitor did.
+// ⚠ WHAT SURVIVED THE SUPERSESSION, UNWEAKENED: progressive disclosure, and the hidden layer -- which
+// MOVED rather than vanished. The Enterprise SUB-PRODUCTS (Competency Management, Workforce Management,
+// Executive Intelligence, Learning platform, the Studios, Mock Code, the AI platform and the engines)
+// must still never appear on a public page: s10 keeps them behind the Enterprise door.
+// scripts/public-disclosure-harness.ts asserts the CURRENT list against rendered HTML, because a leak
+// here is one careless sentence and nobody would notice until a competitor did.
 //
 // ONE SOLUTION IS BIGGER THAN A LANDING PAGE. Competen Practice is a named product with six capability
 // pages of its own under /practice, built from src/lib/marketing/practice-content.ts. It therefore has no

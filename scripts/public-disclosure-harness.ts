@@ -1,5 +1,6 @@
 /**
- * Public disclosure harness (WEB-STRAT-001).
+ * Public disclosure harness. Governed by WEB-HOME-001 since 2026-08-11 (WEB-DEC), superseding
+ * WEB-STRAT-001 -- the FORBIDDEN list below was rewritten BY that decision, not by drift.
  *
  * THE RULE THIS GUARDS. The strategy names products that must NOT appear on the public website at all --
  * Competency Management, Workforce Management, Executive Intelligence, Recruitment, the Learning platform,
@@ -68,6 +69,10 @@ const PUBLIC_PAGES = [
   // forbidden-vocabulary, metadata and adoption-claim sweep as every other public page. While the launch
   // flags are off they render the development notice; when the flags flip, this harness keeps watching.
   "/practice/sign-in", "/practice/sign-up",
+  // The coming-soon gates for the unbuilt sites (WEB-DEC 2026-08-11): Students and Professionals gate
+  // into Individual, Recruiters into Recruitment. Public, anonymous, and deliberately WITHOUT a password
+  // field -- which makes them exactly the pages a copy edit could quietly put one back on.
+  "/individual/sign-in", "/recruitment/sign-in",
 ];
 
 // Strip tags AND the Next.js RSC payload. The flight data at the bottom of the document repeats every
@@ -257,15 +262,24 @@ async function main() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const db = url && key ? createSupabase(url, key, { auth: { persistSession: false } }) : null;
     const { data } = db
-      ? await db.from("practice_platform_flags").select("flag, enabled").in("flag", ["practice_sign_in", "practice_public_signup"])
+      ? await db.from("practice_platform_flags").select("flag, enabled").in("flag", ["practice_sign_in", "practice_public_signup", "estate_public_signup"])
       : { data: null };
     const rows = (data ?? []) as { flag: string; enabled: boolean }[];
-    ok("6. both credential flags were read from the database", rows.length === 2,
-      `${rows.length}/2 -- without them this check cannot run and must not pretend to`);
+    // ⚠ Only the two PRACTICE flags must exist as rows -- they were written by hand at launch.
+    // estate_public_signup is deliberately allowed to be ABSENT: platformFlag() is fail-closed, so an
+    // absent row IS the OFF state, and `expected` below computes it the same way (find -> undefined ->
+    // false). Requiring the row would force a migration whose only purpose is to record "off".
+    ok("6. both practice credential flags were read from the database",
+      ["practice_sign_in", "practice_public_signup"].every(f => rows.some(r => r.flag === f)),
+      `${rows.length} rows -- without them this check cannot run and must not pretend to`);
 
     const CREDENTIAL_PAGES: [string, string, string][] = [
       ["/practice/sign-in", "practice_sign_in", "Sign in"],
       ["/practice/sign-up", "practice_public_signup", "Create your Competen Practice"],
+      // The estate-wide /signup page, gated 2026-08-11: the page AND /api/auth/signup both read
+      // estate_public_signup through the same fail-closed reader. The marker is the OPEN form's heading;
+      // the closed posture is caught by the control's "not open yet" alternative.
+      ["/signup", "estate_public_signup", "Create your account"],
     ];
     // SAME PROBE AS THE CONTENT HARNESS, and it has to be here too: when the server disagrees with the
     // database about the flags, every gated page renders closed, and assertion 6 would report a page bug

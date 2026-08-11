@@ -10,7 +10,8 @@ import { PRIMARY_SOLUTIONS } from "@/lib/marketing/solutions";
 import { PRODUCTS } from "@/lib/marketing/products";
 import { pageMetadata } from "@/lib/marketing/site";
 
-// WEB-STRAT-001 — public homepage.
+// Public homepage. Governed by WEB-HOME-001 since 2026-08-11 (WEB-DEC, superseding WEB-STRAT-001):
+// products-first IA -- Products say WHAT Competen offers, Solutions say WHO it helps.
 //
 // A ROUTER, not a brochure. The strategy is progressive disclosure: expose outcomes, market solutions
 // rather than modules, and reveal more only after registration. So the homepage's real job is "Choose your
