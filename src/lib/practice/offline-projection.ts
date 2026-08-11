@@ -105,6 +105,13 @@ export type OfflineDay = {
   feeders: Record<string, "ok" | "unavailable">;
   /** ⚠ A FAILED READ IS NOT AN EMPTY DAY, offline least of all. */
   patientsUnavailable: boolean;
+  /**
+   * ⚠ AND A REFUSAL IS NOT A FAILURE. "refused" means this account does not hold
+   * practice.calendar.view -- an administrator who is not a clinician, which this product supports.
+   * "failed" means something broke. Rendering both as "could not be read" tells the first person the
+   * system is broken when nothing is.
+   */
+  patientsUnavailableReason: "refused" | "failed" | null;
   sessionsUnavailable: boolean;
 };
 
@@ -119,7 +126,8 @@ export const OFFLINE_SESSION_KEYS: readonly (keyof OfflineSession)[] = [
 
 export const OFFLINE_DAY_KEYS: readonly (keyof OfflineDay)[] = [
   "schemaVersion", "workspaceId", "date", "timezone", "asOf", "expiresAt",
-  "sessions", "patients", "feeders", "patientsUnavailable", "sessionsUnavailable",
+  "sessions", "patients", "feeders", "patientsUnavailable", "patientsUnavailableReason",
+  "sessionsUnavailable",
 ] as const;
 
 /**
@@ -402,6 +410,7 @@ export function projectOfflineDay(input: {
   patients: CohortSource[];
   feeders: Record<string, string>;
   patientsUnavailable: boolean;
+  patientsUnavailableReason?: "refused" | "failed" | null;
   sessionsUnavailable: boolean;
 }): OfflineDay {
   return {
@@ -423,6 +432,7 @@ export function projectOfflineDay(input: {
         .map(([k, v]) => [k, v === "ok" ? "ok" as const : "unavailable" as const]),
     ),
     patientsUnavailable: input.patientsUnavailable,
+    patientsUnavailableReason: input.patientsUnavailableReason ?? null,
     sessionsUnavailable: input.sessionsUnavailable,
   };
 }

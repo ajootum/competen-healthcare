@@ -23,7 +23,7 @@ import { createClient } from "@supabase/supabase-js";
 import { loadEnvConfig } from "@next/env";
 import { readFileSync } from "node:fs";
 import { dashboardReadModel } from "../src/lib/practice/dashboard";
-import { offlineDayPayload } from "../src/lib/practice/offline-day";
+import { offlineDayPayload, todaysCohort } from "../src/lib/practice/offline-day";
 import { offlineCacheGate, OFFLINE_FLAG } from "../src/lib/practice/offline-gate";
 import { updateConfiguration } from "../src/lib/practice/configuration";
 import {
@@ -408,6 +408,32 @@ async function main() {
   const platformOff = await offlineCacheGate(admin, ctx, USER);
   ok("10h. the platform switch closes it too, and purges", platformOff.state === "withheld"
     && platformOff.purge === true, platformOff.reason);
+
+  // ── 11. ⚠ A REFUSAL IS NOT A FAULT ──────────────────────────────────────────────────────────────
+  // todaysCohort sets ONE flag for two very different things: an account without practice.calendar.view
+  // (permanent, expected, nothing wrong) and a read that failed (transient, somebody should look). Until
+  // 2026-08-11 both rendered as "could not be read", which tells an administrator who is not a clinician
+  // that the system is broken. Three states, and this was two collapsed into one.
+  const refused = await todaysCohort(admin, ctxFor(workspaceId, ["practice.home.view"]),
+    { date: today, timezone: "Africa/Kampala", at });
+  ok("11a. ⚠ no practice.calendar.view is reported as REFUSED, not failed",
+    refused.unavailable === true && refused.reason === "refused", String(refused.reason));
+
+  const cohortFailed = await todaysCohort(
+    { from: () => ({ select: () => ({ eq: () => ({ gte: () => ({ lt: () => ({ neq: () => ({ order: () => Promise.resolve({ data: null, error: { message: "boom" } }) }) }) }) }) }) }) },
+    ctxFor(workspaceId), { date: today, timezone: "Africa/Kampala", at });
+  ok("11b. ⚠ and a read that broke is reported as FAILED",
+    cohortFailed.unavailable === true && cohortFailed.reason === "failed", String(cohortFailed.reason));
+
+  const cohortOk = await todaysCohort(admin, ctxFor(workspaceId), { date: today, timezone: "Africa/Kampala", at });
+  ok("11c-control. a healthy read reports neither, so 11a/11b are the two paths and not a constant",
+    cohortOk.unavailable === false && cohortOk.reason === null, String(cohortOk.reason));
+
+  ok("11d. ⚠ the screen says something DIFFERENT for a refusal",
+    /patientsUnavailableReason === "refused"/.test(readerSrc)
+    && /permission rather than a fault/.test(readerSrc));
+  ok("11e. the reason is carried on the cached record, not recomputed offline",
+    (built.ok ? Object.keys(built.day) : []).includes("patientsUnavailableReason"));
 
   await cleanup();
   report();

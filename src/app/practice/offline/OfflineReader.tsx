@@ -164,10 +164,16 @@ export default function OfflineReader() {
           {/* ── THE LIST. Time, name, identifier, age, status. NOTHING ELSE. ─────────────────── */}
           <section className="mt-5" aria-labelledby="off-patients">
             <h2 id="off-patients" className="text-[13px] font-bold text-gray-900">Who was expected</h2>
+            {/* ⚠ A REFUSAL AND A FAULT ARE DIFFERENT SENTENCES, and until 2026-08-11 both produced the
+                second one. Telling an administrator who is not a clinician that the list "could not be
+                read" says the system is broken when nothing is; telling somebody with a real fault that
+                they lack permission sends them to the wrong person. `todaysCohort` sets one flag for
+                both, so the REASON travels with it. */}
             {result.day.patientsUnavailable ? (
               <p className="mt-1 text-[12px] text-gray-600">
-                The appointment list could not be read in full when this was captured, so what is below may
-                be incomplete. It is not a claim that nobody else is coming.
+                {result.day.patientsUnavailableReason === "refused"
+                  ? "This account does not have access to the appointment list, so no patients are held on this device. That is a permission rather than a fault — nothing is missing that you were meant to see."
+                  : "The appointment list could not be read in full when this was captured, so what is below may be incomplete. It is not a claim that nobody else is coming."}
               </p>
             ) : null}
             {result.day.patients.length === 0 ? (

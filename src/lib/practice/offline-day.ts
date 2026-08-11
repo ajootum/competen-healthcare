@@ -49,6 +49,18 @@ export type CohortRead = {
   patients: CohortSource[];
   /** ⚠ A FAILED READ IS NOT AN EMPTY CLINIC. */
   unavailable: boolean;
+  /**
+   * ⚠ WHY IT IS UNAVAILABLE, BECAUSE TWO VERY DIFFERENT THINGS SET THE FLAG ABOVE.
+   *
+   *   "refused"  this account does not hold practice.calendar.view. Permanent, expected, and nothing is
+   *              wrong -- an administrator who is not a clinician is a role this product supports.
+   *   "failed"   the read did not work. Transient, and somebody should look.
+   *
+   * They rendered identically until 2026-08-11: both produced "The appointment list could not be read in
+   * full", which tells a practice manager the system is broken when they are simply not entitled to the
+   * list. Three states, and a refusal is not a fault.
+   */
+  reason: "refused" | "failed" | null;
 };
 
 /**
@@ -60,7 +72,8 @@ export type CohortRead = {
 export async function todaysCohort(
   admin: any, ctx: WorkspaceContext, opts: { date: string; timezone: string; at?: Date },
 ): Promise<CohortRead> {
-  if (!ctx.capabilities.includes("practice.calendar.view")) return { patients: [], unavailable: true };
+  if (!ctx.capabilities.includes("practice.calendar.view"))
+    return { patients: [], unavailable: true, reason: "refused" };
 
   const at = opts.at ?? new Date();
   const { startIso, endIso } = zonedDayRange(opts.date, opts.timezone);
@@ -74,10 +87,10 @@ export async function todaysCohort(
 
   // ⚠ The error is read, not discarded. Without this an unreadable table becomes "no patients today",
   // cached, and shown on a device with no way to find out otherwise.
-  if (error) return { patients: [], unavailable: true };
+  if (error) return { patients: [], unavailable: true, reason: "failed" };
 
   const rows = (appts ?? []) as any[];
-  if (rows.length === 0) return { patients: [], unavailable: false };
+  if (rows.length === 0) return { patients: [], unavailable: false, reason: null };
 
   const patientIds = [...new Set(rows.map(r => r.patient_id).filter(Boolean))] as string[];
   const apptIds = rows.map(r => r.id) as string[];
@@ -143,7 +156,7 @@ export async function todaysCohort(
     };
   });
 
-  return { patients, unavailable: enrichmentFailed };
+  return { patients, unavailable: enrichmentFailed, reason: enrichmentFailed ? "failed" : null };
 }
 
 export type OfflineDayResult =
@@ -192,6 +205,7 @@ export async function offlineDayPayload(
       patients: cohort.patients,
       feeders: model.feeders,
       patientsUnavailable: cohort.unavailable,
+      patientsUnavailableReason: cohort.reason,
       sessionsUnavailable: model.plan.unavailable,
     }),
   };
