@@ -1,7 +1,7 @@
 import type { EngineResult } from "@/lib/practice/encounters";
 import { type WorkspaceContext } from "@/lib/practice/access";
 import {
-  registerPatient, composeDisplayName, screenRegistration, storedSex, generatePracticeId,
+  registerPatient, composeDisplayName, screenRegistration, storedSex, allocatePatientNumber,
   type Candidate,
 } from "@/lib/practice/patients";
 import { addRelationship, ageFrom, relationshipExpectation, MAJORITY_AGE } from "@/lib/practice/relationships";
@@ -223,7 +223,7 @@ async function attachRelationships(
 
 export async function register(admin: any, ctx: WorkspaceContext, input: RegistrationInput): Promise<
   EngineResult<{
-    patientId: string; practiceId: string; displayName: string;
+    patientId: string; patientNumber: string; displayName: string;
     relationships: number; appointmentId: string | null;
     incomplete: { step: string; reason: string }[];
   }>
@@ -295,7 +295,7 @@ export async function register(admin: any, ctx: WorkspaceContext, input: Registr
   return {
     ok: true,
     data: {
-      patientId: created.data.id, practiceId: created.data.practiceId, displayName,
+      patientId: created.data.id, patientNumber: created.data.patientNumber, displayName,
       relationships: attached, appointmentId, incomplete,
     },
   };
@@ -343,7 +343,7 @@ export type RegisterAndBookResult =
   | {
       ok: true;
       data: {
-        patientId: string; practiceId: string; displayName: string;
+        patientId: string; patientNumber: string; displayName: string;
         appointmentId: string; scheduledAt: string; locationId: string | null;
         relationships: number;
         /** Writes after the transaction that did not happen. The patient and the booking both exist. */
@@ -433,30 +433,15 @@ export async function registerAndBook(
       message: "that time is not one this practice is offering for this kind of appointment at this location. Choose one of the times shown.",
     };
 
-  // ── 4. A PRACTICE NUMBER NOBODY ELSE HOLDS ─────────────────────────────────────────────────────
+  // ── 4. THE PATIENT NUMBER (CPR-PID-001) ────────────────────────────────────────────────────────
   //
-  // ⚠ GENERATED AND CHECKED HERE, NOT IN THE TRANSACTION. register() writes a candidate and retries when
-  // the unique index refuses it, which is a decision -- and a decision in SQL is the thing migration 276
-  // refuses to contain. Checking first also keeps the refusals apart: once the candidate is known free,
-  // a unique-violation coming back from the rpc is a REAL duplicate identifier and not a collision on a
-  // generated number, so the desk is told which of the two happened.
-  let practiceId = "";
-  for (let attempt = 0; attempt < 5 && !practiceId; attempt++) {
-    const candidate = generatePracticeId();
-    const { data: clash, error } = await admin.from("practice_patient_identifier")
-      .select("id").eq("workspace_id", ctx.workspaceId).eq("identifier_type", "practice_id")
-      .eq("value_normalised", candidate.toLowerCase().replace(/\s+/g, "")).is("valid_to", null)
-      .maybeSingle();
-    // A CHECK THAT COULD NOT RUN IS NOT A CHECK THAT PASSED -- patients.ts's own rule, applied here.
-    if (error)
-      return {
-        ok: false, status: 503, code: "READ_FAILED",
-        message: `a practice number could not be reserved, so nothing was saved: ${error.message}`,
-      };
-    if (!clash) practiceId = candidate;
-  }
-  if (!practiceId)
-    return { ok: false, status: 502, code: "IDENTIFIER_GENERATION_FAILED", message: "could not generate a unique practice id" };
+  // ⚠ ALLOCATED HERE, NOT IN THE TRANSACTION -- migration 276's rule that the function decides nothing
+  // survives migration 289 unchanged: the counter RPC is its own atomic statement, and this call is the
+  // only decision-shaped thing about it. An allocation whose booking then fails leaves a GAP in the
+  // sequence, which the spec accepts; reuse it does not, and rolling the counter back would be reuse.
+  const allocated = await allocatePatientNumber(admin, ctx.workspaceId);
+  if (!allocated.ok) return allocated;
+  const { patientNumber, registrationYear, sequenceNumber } = allocated.data;
 
   // ── 5. ONE CALL. ONE TRANSACTION. ──────────────────────────────────────────────────────────────
   //
@@ -476,7 +461,9 @@ export async function registerAndBook(
     p_birth_date: input.birthDate ?? null,
     p_age_estimate_years: input.ageEstimateYears ?? null,
     p_created_by: ctx.userId,
-    p_practice_id: practiceId,
+    p_patient_number: patientNumber,
+    p_registration_year: registrationYear,
+    p_sequence_number: sequenceNumber,
     p_identifiers: identifiers.map(i => ({ identifier_type: i.type, value: i.value, issuer: null })),
     p_contacts: contacts,
     p_location_id: locationId,
@@ -498,7 +485,7 @@ export async function registerAndBook(
     if (code === "PGRST202" || /Could not find the function|does not exist/i.test(message))
       return {
         ok: false, status: 503, code: "TRANSACTION_UNAVAILABLE",
-        message: `this registration was not saved because the register-and-book transaction is not available -- migration 276 may not have been applied: ${message}`,
+        message: `this registration was not saved because the register-and-book transaction is not available -- migration 289 (which replaced the 276 function with the numbered signature) may not have been applied: ${message}`,
       };
 
     // ⚠ THE RACE, CAUGHT BY THE DATABASE AND REPORTED AS WHAT IT IS. Nothing was written: no patient, no
@@ -585,7 +572,7 @@ export async function registerAndBook(
   return {
     ok: true,
     data: {
-      patientId: result.patient_id, practiceId, displayName,
+      patientId: result.patient_id, patientNumber, displayName,
       appointmentId: result.appointment_id,
       scheduledAt: new Date(startMs).toISOString(), locationId,
       relationships: related.attached, incomplete: related.failures,

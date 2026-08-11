@@ -53,8 +53,8 @@ export default function ContextBanner({ banner, onClose }: {
               shown beside the Practice ID rather than hidden in demographics -- so they are in the
               header, where a number is read off out loud. */}
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            {banner.practiceId
-              ? <span className="rounded bg-[var(--cp-primary)]/10 px-1.5 py-0.5 font-mono text-[12px] text-[var(--cp-primary-deep)]">{banner.practiceId}</span>
+            {(banner.patientNumber ?? banner.practiceId)
+              ? <span className="rounded bg-[var(--cp-primary)]/10 px-1.5 py-0.5 font-mono text-[12px] text-[var(--cp-primary-deep)]">{banner.patientNumber ?? banner.practiceId}</span>
               : <span className="text-[12px] text-gray-400">No Practice ID issued</span>}
             {banner.hospitalNumbers.map(h => (
               <span key={h.id} className="rounded bg-emerald-50 px-1.5 py-0.5 font-mono text-[12px] text-emerald-800">

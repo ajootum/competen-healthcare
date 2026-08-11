@@ -86,9 +86,21 @@ const code = lines
 
 if (code.trim().length < 40) fail("control", "stripping comments left no code — every check below is vacuous");
 
-// ── 5. NO do-blocks, NO plpgsql, NO functions ────────────────────────────────────────────────────
+// ── 5. NO do-blocks, NO plpgsql, NO functions — UNLESS THE FILE DECLARES ITSELF WHOLE ────────────
+//
+// ⚠ THE ESCAPE HATCH IS EXPLICIT, IN THE FILE, NEAR THE TOP. Migrations 195, 276 and 289 contain
+// function bodies and applied cleanly — because they were pasted WHOLE into the SQL editor, never fed
+// to the semicolon-splitting runner these bans protect against. Per this checker's own rule ("a
+// checker that fails files known to have applied cleanly is a checker somebody turns off"), a file
+// carrying the banner APPLY THIS FILE WHOLE in its first 15 lines downgrades the construct bans to
+// warnings. Nothing else relaxes: ASCII, comment-semicolons, notify-last and the partial-unique ban
+// still fail, because they bite whichever way the file is applied.
+const declaredWhole = lines.slice(0, 15).some(l => /APPLY THIS FILE WHOLE/i.test(l));
 for (const banned of ["do $", "$$", "plpgsql", "create function", "create or replace function"])
-  if (code.toLowerCase().includes(banned)) fail("construct", `banned construct present: ${banned}`);
+  if (code.toLowerCase().includes(banned)) {
+    if (declaredWhole) warn("construct", `${banned} present — the file declares APPLY THIS FILE WHOLE; paste it into the SQL editor in one piece`);
+    else fail("construct", `banned construct present: ${banned} (add the APPLY THIS FILE WHOLE banner in the first 15 lines if this is deliberate)`);
+  }
 
 // ── 6. `notify pgrst` IS THE LAST STATEMENT ──────────────────────────────────────────────────────
 const statements = code.split(";").map(s => s.trim()).filter(Boolean);

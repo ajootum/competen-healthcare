@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { audit } from "@/lib/practice/audit";
 import { SORT_ORDER_CAP } from "@/lib/practice/patient-workspace-constants";
+import { workspaceClock, practiceToday } from "@/lib/practice/practice-time";
 
 // PEN-002 Patient Identity Engine -- one longitudinal identity per patient, duplicates prevented at
 // registration, retrieval in seconds, merges audited. This module is the engine; CPR-V2-004's registry and
@@ -146,7 +147,21 @@ export async function searchPatients(admin: any, workspaceId: string, q: string,
     if (error) failures.push(`${name}: ${error.message}`);
   };
 
-  // Identifier exact (any type -- practice id, national id, MRN, QR...).
+  // The CP Patient Number (CPR-PID-001 s10): canonical and normalised forms resolve, top-ranked.
+  const pn = canonicalPatientNumber(query);
+  if (pn) {
+    const { data: pnHits, error: pnErr } = await admin.from("practice_patient")
+      .select("id, status, merged_into_patient_id").eq("workspace_id", workspaceId)
+      .eq("patient_number", pn).limit(3);
+    probe("patient-number", pnErr);
+    for (const h of (pnHits ?? []) as any[]) {
+      // A retired number on a merged record resolves to the survivor (spec s13).
+      if (h.status === "merged") { if (h.merged_into_patient_id) add(h.merged_into_patient_id, 105, "patient_number:retired_on_merged_record"); }
+      else add(h.id, 105, "patient_number");
+    }
+  }
+
+  // Identifier exact (any type -- legacy practice id, national id, MRN, QR...).
   const { data: idHits, error: idErr } = await admin.from("practice_patient_identifier")
     .select("patient_id, identifier_type").eq("workspace_id", workspaceId)
     .eq("value_normalised", normValue(query)).is("valid_to", null).limit(limit);
@@ -183,7 +198,7 @@ export async function searchPatients(admin: any, workspaceId: string, q: string,
   // "safe because of where the ids came from" is a property of the CALLER, not of this query. A future
   // probe that forgets its own filter would turn this into a cross-tenant read with nothing to catch it.
   const { data: rows, error: rowsErr } = await admin.from("practice_patient")
-    .select("id, display_name, birth_date, sex, status")
+    .select("id, display_name, birth_date, sex, status, patient_number")
     .eq("workspace_id", workspaceId).in("id", ids).neq("status", "merged");
   probe("hydrate", rowsErr);
   const pids = await practiceIdsFor(admin, workspaceId, ids);
@@ -195,6 +210,7 @@ export async function searchPatients(admin: any, workspaceId: string, q: string,
   const results = ((rows ?? []) as any[])
     .map(r => ({
       id: r.id, displayName: r.display_name, birthDate: r.birth_date, sex: r.sex, status: r.status,
+      patientNumber: (r.patient_number as string | null) ?? null,
       practiceId: pids.ids.get(r.id) ?? null, practiceIdUnknown: !pids.ok, matchedBy: hits.get(r.id)!.matchedBy,
       _score: hits.get(r.id)!.score,
     }))
@@ -344,9 +360,56 @@ export async function screenRegistration(admin: any, input: {
 export const storedSex = (sex: string | null | undefined) =>
   ["female", "male", "other", "unknown"].includes(sex ?? "") ? (sex as string) : "unspecified";
 
-/** CPR-V2-005: search first, duplicate detection BEFORE save, identifier generation, then create. */
+// ── CPR-PID-001: THE PATIENT NUMBER ─────────────────────────────────────────────────────────────────
+
+/**
+ * YY-NNNNNN from a full year and a sequence. One spelling, because a second formatter is a second
+ * answer to what 26-000184 looks like.
+ */
+export const formatPatientNumber = (year: number, seq: number) =>
+  `${String(year % 100).padStart(2, "0")}-${String(seq).padStart(6, "0")}`;
+
+/**
+ * A typed search form back to the canonical number, or null when it is not one (spec s10):
+ * "26-000184", "26000184", "26 000184" and the zero-dropped "26-184" all resolve; anything else is not
+ * a patient-number query and the caller moves on to the other probes.
+ */
+export function canonicalPatientNumber(q: string): string | null {
+  const hit = /^(\d{2})[-\s]?(\d{1,6})$/.exec(q.trim());
+  if (!hit) return null;
+  return `${hit[1]}-${hit[2].padStart(6, "0")}`;
+}
+
+/**
+ * The atomic allocation (CPR-PID-001 s6/s9): the year in the PRACTICE timezone, the sequence from the
+ * database counter -- never MAX+1, two simultaneous registrations serialise on the counter row. A
+ * failed registration after this leaves a GAP, which the spec accepts; a reused number it does not.
+ */
+export async function allocatePatientNumber(admin: any, workspaceId: string): Promise<EngineResult<{
+  patientNumber: string; registrationYear: number; sequenceNumber: number;
+}>> {
+  const { timezone } = await workspaceClock(admin, workspaceId);
+  const year = Number(practiceToday(timezone).slice(0, 4));
+  const { data, error } = await admin.rpc("practice_next_patient_number", {
+    p_workspace_id: workspaceId, p_registration_year: year,
+  });
+  const seq = typeof data === "number" ? data : Number(data);
+  if (error || !Number.isInteger(seq) || seq < 1)
+    return {
+      ok: false, status: 502, code: "NUMBER_ALLOCATION_FAILED",
+      // ⚠ REGISTRATION FAILS WITH IT. A patient without a number would violate the frozen spec the
+      // moment it existed, and backfilling one later means a number that does not match its sequence.
+      message: `a patient number could not be allocated: ${error?.message ?? `counter returned ${JSON.stringify(data)}`}`,
+    };
+  return { ok: true, data: { patientNumber: formatPatientNumber(year, seq), registrationYear: year, sequenceNumber: seq } };
+}
+
+/** CPR-V2-005: search first, duplicate detection BEFORE save, number allocation, then create. */
 export async function registerPatient(admin: any, input: RegisterInput): Promise<EngineResult<{
-  id: string; practiceId: string;
+  id: string;
+  /** The CP Patient Number, YY-NNNNNN (CPR-PID-001). The P-XXXXXX practice id RETIRED 2026-08-12:
+   * existing ones remain searchable legacy identifiers; new registrations do not get one. */
+  patientNumber: string;
   /** Writes that did not happen. Empty on a clean registration -- never absent, so a caller cannot
    * forget to look. See the note above the identifier and contact inserts. */
   incomplete: { step: string; reason: string }[];
@@ -356,7 +419,11 @@ export async function registerPatient(admin: any, input: RegisterInput): Promise
   if (!screened.ok) return screened;
   const name = screened.data.displayName;
 
-  // 3. Create patient + generated practice id (retried on the unique index) + primary contact(s).
+  // 3. Allocate the number, then create the patient carrying it (CPR-PID-001 s7).
+  const allocated = await allocatePatientNumber(admin, input.workspaceId);
+  if (!allocated.ok) return allocated;
+  const { patientNumber, registrationYear, sequenceNumber } = allocated.data;
+
   const { data: patient, error: pErr } = await admin.from("practice_patient").insert({
     workspace_id: input.workspaceId, display_name: name,
     sex: storedSex(input.sex),
@@ -365,22 +432,9 @@ export async function registerPatient(admin: any, input: RegisterInput): Promise
     middle_name: input.middleName?.trim() || null,
     family_name: input.familyName?.trim() || null,
     created_by: input.actorId,
+    patient_number: patientNumber, registration_year: registrationYear, sequence_number: sequenceNumber,
   }).select("id").single();
   if (pErr) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: pErr.message };
-
-  let practiceId = "";
-  for (let attempt = 0; attempt < 5 && !practiceId; attempt++) {
-    const candidate = generatePracticeId();
-    const { error } = await admin.from("practice_patient_identifier").insert({
-      workspace_id: input.workspaceId, patient_id: patient.id,
-      identifier_type: "practice_id", value: candidate, created_by: input.actorId,
-    });
-    if (!error) practiceId = candidate;
-    else if (!/duplicate|unique/i.test(error.message)) {
-      return { ok: false, status: 502, code: "IDENTIFIER_GENERATION_FAILED", message: error.message };
-    }
-  }
-  if (!practiceId) return { ok: false, status: 502, code: "IDENTIFIER_GENERATION_FAILED", message: "could not generate a unique practice id" };
 
   // ⚠ THESE FOUR WRITES DISCARDED THEIR ERRORS, AND THAT IS WHERE THE DATA WENT.
   //
@@ -429,11 +483,17 @@ export async function registerPatient(admin: any, input: RegisterInput): Promise
     if (error) incomplete.push({ step: "email", reason: `the email address was not saved: ${error.message}` });
   }
 
+  // CPR-PID-001 s7 step 8, and s14: the assignment is its own audited event.
+  await audit(admin, {
+    workspaceId: input.workspaceId, actorId: input.actorId, eventType: "practice.patient_number_assigned",
+    payload: { patientId: patient.id, patientNumber, registrationYear, sequenceNumber },
+    correlationId: input.correlationId,
+  });
   await audit(admin, {
     workspaceId: input.workspaceId, actorId: input.actorId, eventType: "practice.patient_registered",
-    payload: { patientId: patient.id, practiceId }, correlationId: input.correlationId,
+    payload: { patientId: patient.id, patientNumber }, correlationId: input.correlationId,
   });
-  return { ok: true, data: { id: patient.id as string, practiceId, incomplete } };
+  return { ok: true, data: { id: patient.id as string, patientNumber, incomplete } };
 }
 
 /**
@@ -516,7 +576,7 @@ export async function registerNeighbours(admin: any, workspaceId: string, patien
 
 export async function getPatient(admin: any, workspaceId: string, patientId: string) {
   const { data: patient } = await admin.from("practice_patient")
-    .select("id, display_name, sex, birth_date, age_estimate_years, status, merged_into_patient_id, record_version, created_at")
+    .select("id, display_name, sex, birth_date, age_estimate_years, status, merged_into_patient_id, record_version, created_at, patient_number")
     .eq("id", patientId).eq("workspace_id", workspaceId).maybeSingle();
   if (!patient) return null;
   const [{ data: identifiers }, { data: contacts }, { data: appointments }] = await Promise.all([

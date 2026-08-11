@@ -305,9 +305,13 @@ export default function CohortTable({
                             </span>
                           )}
                           <span className="mt-1 flex flex-wrap items-center gap-1">
-                            {r.practiceId
-                              ? <span className="rounded-md bg-[var(--cp-primary)]/10 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-[var(--cp-primary-deep)]">{r.practiceId}</span>
-                              : <span className="text-[10.5px] text-gray-400">no Practice ID issued</span>}
+                            {/* CPR-PID-001: the CP Patient Number leads; the retired P-XXXXXX shows
+                                only on a record that predates the numbering and its backfill. */}
+                            {r.patientNumber
+                              ? <span className="rounded-md bg-[var(--cp-primary)]/10 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-[var(--cp-primary-deep)]">{r.patientNumber}</span>
+                              : r.practiceId
+                                ? <span className="rounded-md bg-[var(--cp-primary)]/10 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-[var(--cp-primary-deep)]">{r.practiceId}</span>
+                                : <span className="text-[10.5px] text-gray-400">no patient number yet</span>}
                             {/* HOSPITAL NUMBERS BESIDE THE NAME, not hidden in demographics. */}
                             {r.hospitalNumbers.map(h => (
                               <span key={h.id} className="rounded-md bg-emerald-50 px-1.5 py-0.5 font-mono text-[10.5px] text-emerald-800">

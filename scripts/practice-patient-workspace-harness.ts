@@ -414,19 +414,20 @@ async function main() {
   // ══ 1. UNIVERSAL SEARCH ════════════════════════════════════════════════════
   console.log("\n-- Universal search --");
 
-  const { data: pidRow } = await admin.from("practice_patient_identifier")
-    .select("value").eq("patient_id", adult.data.id).eq("identifier_type", "practice_id").maybeSingle();
-  const practiceId = pidRow!.value as string;
+  // CPR-PID-001 (2026-08-12): the primary identity is the CP Patient Number on the patient row --
+  // registrations stopped minting the P-XXXXXX identifier, so the search-by-primary-identity proof
+  // goes through the number now.
+  const patientNumber = adult.data.patientNumber;
 
-  const byPracticeId = await universalSearch(admin, a, practiceId, { correlationId: CID });
-  ok("1. FOUND BY PRACTICE ID",
-    byPracticeId.results.length === 1 && byPracticeId.results[0].patientId === adult.data.id &&
-    byPracticeId.results[0].matchedBy === "identifier:practice_id",
-    JSON.stringify(byPracticeId.results.map(r => r.matchedBy)));
+  const byNumber = await universalSearch(admin, a, patientNumber, { correlationId: CID });
+  ok("1. FOUND BY PATIENT NUMBER",
+    byNumber.results.length === 1 && byNumber.results[0].patientId === adult.data.id &&
+    byNumber.results[0].matchedBy === "patient_number",
+    JSON.stringify(byNumber.results.map(r => r.matchedBy)));
   ok("1b. and the hit carries its hospital numbers, not just a name",
-    byPracticeId.results[0]?.hospitalNumbers.length === 2 &&
-    byPracticeId.results[0].hospitalNumbers.every(h => h.facilityName === "Mulago National Referral"),
-    JSON.stringify(byPracticeId.results[0]?.hospitalNumbers.map(h => `${h.type}:${h.value}@${h.facilityName}`)));
+    byNumber.results[0]?.hospitalNumbers.length === 2 &&
+    byNumber.results[0].hospitalNumbers.every(h => h.facilityName === "Mulago National Referral"),
+    JSON.stringify(byNumber.results[0]?.hospitalNumbers.map(h => `${h.type}:${h.value}@${h.facilityName}`)));
 
   const byHospital = await universalSearch(admin, a, "mul-778899", { correlationId: CID });
   ok("1c. FOUND BY HOSPITAL NUMBER (case-insensitive)",
@@ -484,9 +485,9 @@ async function main() {
   ok("3b. and the partial still reaches all three Nakato children -- a mononym does not shadow them",
     ["Nakato Aisha", "Nakato Brian", "Nakato Clara"].every(n => mixed.results.some(r => r.displayName === n)),
     JSON.stringify(mixed.results.map(r => r.displayName)));
-  ok("3c. AND AN IDENTIFIER HIT OUTRANKS EVERY NAME MATCH",
-    byPracticeId.results[0].rank > mixed.results[0].rank,
-    JSON.stringify([byPracticeId.results[0].rank, mixed.results[0].rank]));
+  ok("3c. AND A PATIENT-NUMBER HIT OUTRANKS EVERY NAME MATCH",
+    byNumber.results[0].rank > mixed.results[0].rank,
+    JSON.stringify([byNumber.results[0].rank, mixed.results[0].rank]));
 
   const emptySearch = await universalSearch(admin, a, "   ", { correlationId: CID });
   ok("4. AN EMPTY BOX HAS NOT SEARCHED -- ran:false, not 'no results'",
@@ -494,9 +495,9 @@ async function main() {
     JSON.stringify({ ran: emptySearch.ran, unavailable: emptySearch.unavailable }));
 
   ok("4b. and a real search reports what it searched BY, in the spec's own list",
-    byPracticeId.searchedBy.includes("Parent/guardian phone") && byPracticeId.searchedBy.includes("Practice ID") &&
-    byPracticeId.complete === true,
-    JSON.stringify(byPracticeId.searchedBy));
+    byNumber.searchedBy.includes("Parent/guardian phone") && byNumber.searchedBy.includes("Patient number") &&
+    byNumber.complete === true,
+    JSON.stringify(byNumber.searchedBy));
 
   // A FAILED READ IS NEVER "NOT FOUND".
   const brokenIdentifiers = failingOn(["practice_patient_identifier"]);
@@ -617,13 +618,13 @@ async function main() {
   const cohort = await myPatients(admin, a, { pageSize: MAX_PAGE_SIZE });
   ok("15. THE COHORT CARRIES CPR-V5-006'S SEVEN COLUMNS",
     cohort.rows.length === 9 && cohort.rows.every(r =>
-      "name" in r && "practiceId" in r && "hospitalNumbers" in r && "lastSeen" in r &&
+      "name" in r && "patientNumber" in r && "practiceId" in r && "hospitalNumbers" in r && "lastSeen" in r &&
       "nextFollowUp" in r && "currentStatus" in r && "location" in r),
     JSON.stringify(cohort.rows.length));
 
   const rowOf = (id: string) => cohort.rows.find(r => r.patientId === id)!;
-  ok("15b. PRACTICE ID AND EVERY HOSPITAL NUMBER SIT TOGETHER, not hidden in demographics",
-    rowOf(adult.data.id).practiceId === practiceId &&
+  ok("15b. THE PATIENT NUMBER AND EVERY HOSPITAL NUMBER SIT TOGETHER, not hidden in demographics",
+    rowOf(adult.data.id).patientNumber === patientNumber &&
     rowOf(adult.data.id).hospitalNumbers.map(h => h.value).sort().join("|") === "MUL-778899|OPD-4242",
     JSON.stringify(rowOf(adult.data.id).hospitalNumbers.map(h => h.value)));
 
@@ -759,8 +760,8 @@ async function main() {
   ok("22. WITHOUT patient.view THE LIST IS THE SAME LENGTH -- withholding a name is not withholding the fact",
     blind.rows.length === cohort.rows.length && blind.total === cohort.total && blind.unavailable === false,
     JSON.stringify({ rows: blind.rows.length, total: blind.total }));
-  ok("22b. AND NO NAME, PRACTICE ID OR HOSPITAL NUMBER COMES BACK",
-    blind.rows.every(r => r.name === null && r.deIdentified === true && r.practiceId === null && r.hospitalNumbers.length === 0),
+  ok("22b. AND NO NAME, PATIENT NUMBER, PRACTICE ID OR HOSPITAL NUMBER COMES BACK",
+    blind.rows.every(r => r.name === null && r.deIdentified === true && r.patientNumber === null && r.practiceId === null && r.hospitalNumbers.length === 0),
     JSON.stringify(blind.rows.slice(0, 2)));
   ok("22c. but the operational facts still do, which is the point of the split",
     blind.rows.some(r => r.currentStatus.code === "in_consultation") &&
@@ -771,7 +772,7 @@ async function main() {
     blindLists.worklists.find(x => x.key === "waiting")!.count === 2 &&
     blindLists.worklists.find(x => x.key === "waiting")!.rows.every(r => r.patientName === null && r.deIdentified),
     JSON.stringify(blindLists.worklists.find(x => x.key === "waiting")!.rows));
-  const blindSearch = await universalSearch(admin, noView, practiceId, { correlationId: CID });
+  const blindSearch = await universalSearch(admin, noView, patientNumber, { correlationId: CID });
   ok("22e. SEARCH IS REFUSED OUTRIGHT without patient.view -- '2 results hidden' is itself a disclosure",
     blindSearch.unavailable === true && blindSearch.reason === "capability" &&
     blindSearch.results.length === 0 && blindSearch.ran === false,
@@ -797,9 +798,9 @@ async function main() {
     brokenCohort.enrichment.encounters.ok === false &&
     String(brokenCohort.enrichment.encounters.error).includes(BROKEN),
     JSON.stringify(brokenCohort.enrichment.encounters));
-  ok("24b. CONTROL: the rest of the row is intact -- identifiers and follow-ups still resolve",
+  ok("24b. CONTROL: the rest of the row is intact -- the patient number and follow-ups still resolve",
     brokenCohort.rows.length === 9 &&
-    brokenCohort.rows.find(r => r.patientId === adult.data.id)!.practiceId === practiceId &&
+    brokenCohort.rows.find(r => r.patientId === adult.data.id)!.patientNumber === patientNumber &&
     brokenCohort.rows.find(r => r.patientId === adult.data.id)!.nextFollowUp !== null,
     JSON.stringify(brokenCohort.enrichment));
 
@@ -811,10 +812,13 @@ async function main() {
   if (!summaryResult.ok) return report();
   const s = summaryResult.data;
 
-  ok("25b. IDENTIFIERS ARE SURFACED TOGETHER -- practice ID plus every hospital number",
-    s.identifiers.practiceId === practiceId && s.identifiers.hospitalNumbers.length === 2 &&
+  // CPR-PID-001: a NEW registration has no practice_id identifier row -- the number is a COLUMN, on
+  // the banner. The identifier set still carries every hospital number and the rest.
+  ok("25b. IDENTIFIERS ARE SURFACED TOGETHER -- no legacy practice ID on a new record, every hospital number present",
+    s.identifiers.practiceId === null && s.banner.patientNumber === patientNumber &&
+    s.identifiers.hospitalNumbers.length === 2 &&
     s.identifiers.otherIdentifiers.map(i => i.type).sort().join("|") === "national_id|passport",
-    JSON.stringify({ p: s.identifiers.practiceId, h: s.identifiers.hospitalNumbers.length, o: s.identifiers.otherIdentifiers.length }));
+    JSON.stringify({ p: s.identifiers.practiceId, n: s.banner.patientNumber, h: s.identifiers.hospitalNumbers.length, o: s.identifiers.otherIdentifiers.length }));
 
   ok("26. MEDICATIONS ARE WHAT WAS DECIDED HERE, and the payload says it is NOT a current-medication list",
     s.medicationsDecided.count === 2 &&
@@ -857,7 +861,7 @@ async function main() {
 
   const banner = s.banner;
   ok("29. THE CONTEXT BANNER CARRIES WHAT STAYS ON SCREEN across patient views",
-    banner.name === "Okello Daniel" && banner.practiceId === practiceId &&
+    banner.name === "Okello Daniel" && banner.patientNumber === patientNumber &&
     banner.hospitalNumbers.length === 2 && banner.sex === "male" &&
     banner.age?.years === 41 && banner.ageBasis === "birth_date" &&
     banner.lastSeen !== null && banner.activeFollowUp?.overdue === true &&
@@ -986,10 +990,13 @@ async function main() {
     (absent as any).message === (crossSummary as any).message);
   const crossFamily = await familyRelationships(admin, b, child.data.id);
   ok("36c. and so does the family view", !crossFamily.ok && (crossFamily as any).status === 404);
-  const crossSearch = await universalSearch(admin, b, practiceId, { correlationId: CID });
+  // Workspace B searching workspace A's patient NUMBER -- the probe must be tenant-scoped. Note B may
+  // legitimately hold the SAME number for its own patient (the spec's uniqueness boundary), so this
+  // asserts none of A's records leak, not that zero rows exist anywhere.
+  const crossSearch = await universalSearch(admin, b, patientNumber, { correlationId: CID });
   ok("37. ANOTHER PRACTICE'S SEARCH DOES NOT REACH THIS ONE'S PATIENTS",
-    crossSearch.ran === true && crossSearch.results.length === 0,
-    JSON.stringify(crossSearch.results.length));
+    crossSearch.ran === true && crossSearch.results.every(r => r.patientId !== adult.data.id),
+    JSON.stringify(crossSearch.results.map(r => r.patientId)));
   ok("37b. CONTROL: and it finds its own, so the isolation is not a broken search",
     bChild.ok && (await universalSearch(admin, b, "Nakato Zoe", { correlationId: CID })).results.length === 1,
     "");

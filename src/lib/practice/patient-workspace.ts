@@ -2,6 +2,7 @@ import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { practiceToday, workspaceClock, zonedDayRange, dueDateFrom } from "@/lib/practice/practice-time";
 import { ageFrom, relationshipExpectation, RELATIONSHIP_TYPES } from "@/lib/practice/relationships";
+import { canonicalPatientNumber } from "@/lib/practice/patients";
 import { logAccess } from "@/lib/practice/privacy";
 import {
   WORKLIST_KEYS, RECENT_WINDOW_DAYS, WORKLIST_META, HOSPITAL_IDENTIFIER_TYPES, MATCH_RANK,
@@ -158,6 +159,9 @@ function groupIdentifiers(rows: any[], facilityNames: Map<string, string>): Iden
 export type SearchMatch = {
   patientId: string;
   displayName: string;
+  /** The CP Patient Number, YY-NNNNNN (CPR-PID-001). */
+  patientNumber: string | null;
+  /** The retired P-XXXXXX, where the record predates the numbering. Legacy, searchable, not headline. */
   practiceId: string | null;
   hospitalNumbers: IdentifierRow[];
   birthDate: string | null;
@@ -223,7 +227,7 @@ export async function universalSearch(
   const query = (rawQuery ?? "").trim();
   const limit = Math.min(Math.max(opts.limit ?? 20, 1), MAX_PAGE_SIZE);
   const searchedBy = [
-    "Practice ID", "Hospital numbers", "National ID", "Passport", "Insurance", "Name",
+    "Patient number", "Practice ID", "Hospital numbers", "National ID", "Passport", "Insurance", "Name",
     "Phone", "Email", "Parent/guardian phone", "Parent/guardian email",
   ];
   const empty = (reason: Unavailable, probes: UniversalSearchResult["probes"] = {}): UniversalSearchResult => ({
@@ -248,7 +252,15 @@ export async function universalSearch(
   // the same floor patients.ts uses for a contact lookup.
   const phonePattern = qDigits.length >= 5 ? `%${qDigits.split("").join("%")}%` : null;
 
-  const [identifiers, contacts, nameExact, namePartial, guardianPhone, guardianEmail] = await Promise.all([
+  // CPR-PID-001 s10: "26-000184", "26000184", "26 000184" and the zero-dropped "26-184" all resolve.
+  const pn = canonicalPatientNumber(query);
+
+  const [patientNumberHits, identifiers, contacts, nameExact, namePartial, guardianPhone, guardianEmail] = await Promise.all([
+    lookup(4, () => pn
+      ? admin.from("practice_patient")
+        .select("id, status, merged_into_patient_id")
+        .eq("workspace_id", ws).eq("patient_number", pn).limit(5)
+      : Promise.resolve({ data: [], error: null })),
     lookup(limit * 2, () => admin.from("practice_patient_identifier")
       .select("patient_id, identifier_type").eq("workspace_id", ws)
       .eq("value_normalised", nq).is("valid_to", null).limit(limit * 2 + 1)),
@@ -278,6 +290,7 @@ export async function universalSearch(
       unavailable: !l.ok, reason: l.ok ? null : "read_failed", error: l.error, truncated: l.truncated,
     };
   };
+  record("patientNumber", patientNumberHits);
   record("identifiers", identifiers); record("contacts", contacts);
   record("nameExact", nameExact); record("namePartial", namePartial);
   record("guardianPhone", guardianPhone); record("guardianEmail", guardianEmail);
@@ -289,6 +302,18 @@ export async function universalSearch(
     if (!cur || cur.rank < hit.rank) hits.set(id, hit);
   };
 
+  // ⚠ THE RETIRED NUMBER OF A MERGED RECORD RESOLVES TO THE SURVIVOR (CPR-PID-001 s13). The number is
+  // a COLUMN, so a merge does not move it the way identifiers move -- the merged row keeps it. The
+  // probe therefore reads status and the pointer, and a hit on a merged row surfaces the canonical
+  // patient with matchedBy saying it arrived through a retired number.
+  for (const r of patientNumberHits.rows as any[]) {
+    if (r.status === "merged") {
+      if (r.merged_into_patient_id)
+        add(r.merged_into_patient_id, { rank: MATCH_RANK.identifier + 5, matchedBy: "patient_number:retired_on_merged_record", via: "direct", guardian: null });
+    } else {
+      add(r.id, { rank: MATCH_RANK.identifier + 5, matchedBy: "patient_number", via: "direct", guardian: null });
+    }
+  }
   for (const r of identifiers.rows as any[]) {
     add(r.patient_id, { rank: MATCH_RANK.identifier, matchedBy: `identifier:${r.identifier_type}`, via: "direct", guardian: null });
   }
@@ -333,7 +358,7 @@ export async function universalSearch(
   // desk a record that must not be written to. The surviving record is found by every identifier the
   // merge moved, so nothing becomes unfindable.
   const patients = await lookup(ids.length, () => admin.from("practice_patient")
-    .select("id, display_name, birth_date, age_estimate_years, sex, status")
+    .select("id, display_name, birth_date, age_estimate_years, sex, status, patient_number")
     .eq("workspace_id", ws).in("id", ids).neq("status", "merged").limit(ids.length + 1));
   record("patients", patients);
 
@@ -354,6 +379,7 @@ export async function universalSearch(
     const hit = hits.get(p.id)!;
     return {
       patientId: p.id, displayName: p.display_name,
+      patientNumber: p.patient_number ?? null,
       practiceId: set.practiceId, hospitalNumbers: set.hospitalNumbers,
       birthDate: p.birth_date ?? null, age: ageFrom(p.birth_date ?? null, today),
       ageEstimateYears: p.age_estimate_years ?? null, sex: p.sex, status: p.status,
@@ -680,6 +706,9 @@ export type CohortRow = {
   /** null when the caller lacks patient.view. */
   name: string | null;
   deIdentified: boolean;
+  /** The CP Patient Number, YY-NNNNNN (CPR-PID-001); withheld with the name. */
+  patientNumber: string | null;
+  /** The retired P-XXXXXX where the record predates the numbering. Legacy, not headline. */
   practiceId: string | null;
   hospitalNumbers: IdentifierRow[];
   /** Derived from the most recent encounter. */
@@ -837,7 +866,7 @@ export async function myPatients(
   };
 
   const from = page * pageSize;
-  const PAGE_COLS = "id, display_name, sex, birth_date, age_estimate_years, status, created_at";
+  const PAGE_COLS = "id, display_name, sex, birth_date, age_estimate_years, status, created_at, patient_number";
   let rows: any[] = [];
   let hasMore = false;
   let totalOut: number | null = null;
@@ -993,6 +1022,7 @@ export async function myPatients(
       patientId: p.id,
       name: mayName ? p.display_name : null,
       deIdentified: !mayName,
+      patientNumber: mayName ? (p.patient_number ?? null) : null,
       practiceId: mayName ? set.practiceId : null,
       hospitalNumbers: mayName ? set.hospitalNumbers : [],
       lastSeen: latest?.started_at ?? null,
@@ -1101,6 +1131,8 @@ async function placeMap(admin: any, ws: string, encounterRows: any[]): Promise<M
 export type ContextBanner = {
   patientId: string;
   name: string;
+  /** The CP Patient Number, YY-NNNNNN (CPR-PID-001). */
+  patientNumber: string | null;
   practiceId: string | null;
   age: ReturnType<typeof ageFrom>;
   ageEstimateYears: number | null;
@@ -1182,7 +1214,7 @@ export async function patientSummary(
   // DOCTRINE 8: the workspace filter is on the query, and a patient in another practice returns the
   // same 404 an absent one does. A 403 here would confirm the record exists.
   const { data: patient, error: patientError } = await admin.from("practice_patient")
-    .select("id, display_name, given_name, middle_name, family_name, sex, birth_date, age_estimate_years, status, merged_into_patient_id, created_at, preferred_contact_method, preferred_language, tags")
+    .select("id, display_name, given_name, middle_name, family_name, sex, birth_date, age_estimate_years, status, merged_into_patient_id, patient_number, created_at, preferred_contact_method, preferred_language, tags")
     .eq("id", patientId).eq("workspace_id", ws).maybeSingle();
   if (patientError) return { ok: false, status: 502, code: "READ_FAILED", message: String(patientError.message ?? patientError) };
   if (!patient) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
@@ -1273,6 +1305,7 @@ export async function patientSummary(
   const banner: ContextBanner = {
     patientId: patient.id,
     name: patient.display_name,
+    patientNumber: patient.patient_number ?? null,
     practiceId: identifiers.practiceId,
     age,
     ageEstimateYears: patient.age_estimate_years ?? null,

@@ -162,7 +162,7 @@ export default function SearchSection({ canCreate }: { canCreate: boolean }) {
                   <Link href={`/practice/patients/${m.patientId}`}
                     className="flex flex-wrap items-baseline gap-2 rounded-lg border border-gray-100 px-3 py-2 transition hover:border-[var(--cp-primary)]">
                     <span className="text-[14px] font-semibold text-gray-900">{m.displayName}</span>
-                    {m.practiceId && <span className="font-mono text-[12px] text-gray-500">{m.practiceId}</span>}
+                    {(m.patientNumber ?? m.practiceId) && <span className="font-mono text-[12px] text-gray-500">{m.patientNumber ?? m.practiceId}</span>}
                     {m.hospitalNumbers.map(h => (
                       <span key={h.id} className="rounded bg-emerald-50 px-1.5 py-0.5 font-mono text-[11px] text-emerald-800">{h.value}</span>
                     ))}

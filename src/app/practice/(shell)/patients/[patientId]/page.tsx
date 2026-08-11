@@ -138,7 +138,9 @@ export default async function PatientPage({ params, searchParams }: {
         <div>
           <h1 className="text-xl font-bold text-gray-900">{patient.display_name}</h1>
           <p className="mt-0.5 text-[13px] text-gray-500">
-            {practiceId && <span className="font-mono">{practiceId}</span>}
+            {/* CPR-PID-001: the CP Patient Number is the headline identity; the retired P-XXXXXX shows
+                only on a record that predates the numbering. */}
+            {(patient.patient_number ?? practiceId) && <span className="font-mono">{patient.patient_number ?? practiceId}</span>}
             {" · "}{patient.sex}
             {patient.birth_date ? ` · b. ${patient.birth_date}` : patient.age_estimate_years != null ? ` · ~${patient.age_estimate_years}y` : ""}
             {" · "}{patient.status}

@@ -67,12 +67,17 @@ export default function PatientActions(props: {
   }), "Booked.");
 
   async function doMerge() {
-    // Resolve the duplicate by its Practice ID first -- merging by uuid paste is error-prone.
+    // Resolve the duplicate by its patient number (or a legacy Practice ID) first -- merging by uuid
+    // paste is error-prone. The comparison accepts the normalised number forms search accepts.
     setBusy(true); setNotice(null);
-    const search = await fetch(`/api/v1/practice/patients?q=${encodeURIComponent(mergeTarget.trim())}`);
+    const typed = mergeTarget.trim();
+    const asNumber = /^(\d{2})[-\s]?(\d{1,6})$/.exec(typed);
+    const canonical = asNumber ? `${asNumber[1]}-${asNumber[2].padStart(6, "0")}` : null;
+    const search = await fetch(`/api/v1/practice/patients?q=${encodeURIComponent(typed)}`);
     const found = search.ok ? (await search.json()).results : [];
-    const target = (found as any[]).find(r => r.practiceId?.toLowerCase() === mergeTarget.trim().toLowerCase());
-    if (!target) { setNotice({ kind: "err", text: "No patient with that Practice ID." }); setBusy(false); return; }
+    const target = (found as any[]).find(r =>
+      (canonical && r.patientNumber === canonical) || r.practiceId?.toLowerCase() === typed.toLowerCase());
+    if (!target) { setNotice({ kind: "err", text: "No patient with that patient number (or legacy Practice ID)." }); setBusy(false); return; }
     if (target.id === props.patientId) { setNotice({ kind: "err", text: "That is this patient." }); setBusy(false); return; }
     await call(() => fetch(`/api/v1/practice/patients/${props.patientId}/merge`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -147,11 +152,12 @@ export default function PatientActions(props: {
         <>
           <h2 className="mt-4 text-[13px] font-bold text-gray-900">Merge a duplicate into this record</h2>
           <p className="mt-1 text-[10px] text-gray-400">
-            Enter the duplicate&apos;s Practice ID. Its identifiers, contacts and appointments move here; the
-            duplicate is kept as a merged pointer, fully audited. This is a clinical decision.
+            Enter the duplicate&apos;s patient number (or a legacy Practice ID). Its identifiers, contacts and
+            appointments move here; the duplicate is kept as a merged pointer, fully audited. This is a
+            clinical decision.
           </p>
           <div className="mt-2 flex gap-2">
-            <input placeholder="P-XXXXXX" value={mergeTarget} onChange={e => setMergeTarget(e.target.value)} className={input} />
+            <input placeholder="26-000184 or P-XXXXXX" value={mergeTarget} onChange={e => setMergeTarget(e.target.value)} className={input} />
             <button type="button" disabled={busy || !mergeTarget.trim()} onClick={doMerge}
               className="shrink-0 rounded-lg border border-[var(--cmp-color-warning)] px-3 py-2 text-[12px] font-semibold text-[var(--cmp-text-warning)] hover:bg-[var(--cmp-surface-warning)] disabled:opacity-50">
               Merge

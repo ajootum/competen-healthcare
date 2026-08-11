@@ -206,10 +206,18 @@ export default function SummaryPanel({ summary, summaryError, family, capabiliti
       <section className="border-t border-gray-100 px-4 py-3">
         <h3 className="text-[12px] font-bold uppercase tracking-wide text-gray-600">Identifiers</h3>
         <ul className="mt-1.5 flex flex-col gap-1">
+          {/* CPR-PID-001: the CP Patient Number leads. The retired P-XXXXXX renders as the legacy row
+              it is, only where the record carries one. */}
           <li className="flex items-baseline justify-between gap-2 text-[12px]">
-            <span className="text-gray-500">Practice ID</span>
-            <span className="font-mono text-gray-900">{ids.practiceId ?? <span className="font-sans text-gray-400">none issued</span>}</span>
+            <span className="text-gray-500">Patient number</span>
+            <span className="font-mono text-gray-900">{summary.banner.patientNumber ?? <span className="font-sans text-gray-400">not yet assigned</span>}</span>
           </li>
+          {ids.practiceId && (
+            <li className="flex items-baseline justify-between gap-2 text-[12px]">
+              <span className="text-gray-500">Practice ID (legacy)</span>
+              <span className="font-mono text-gray-900">{ids.practiceId}</span>
+            </li>
+          )}
           {ids.hospitalNumbers.map(h => (
             <li key={h.id} className="flex items-baseline justify-between gap-2 text-[12px]">
               <span className="text-gray-500">

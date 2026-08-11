@@ -178,8 +178,8 @@ async function main() {
     workspaceId: ws, displayName: "Gate Preflight Patient", birthDate: "1990-03-15", sex: "female",
     phone: "0772 900 900", ...base,
   });
-  ok("a patient registers with a generated Practice ID",
-    patient.ok && /^P-[2-9A-HJKMNP-Z]{6}$/.test(patient.data.practiceId), patient.ok ? patient.data.practiceId : patient.message);
+  ok("a patient registers with an allocated CP Patient Number (CPR-PID-001)",
+    patient.ok && /^\d{2}-\d{6}$/.test(patient.data.patientNumber), patient.ok ? patient.data.patientNumber : patient.message);
   if (!patient.ok) { await cleanup(); return report(); }
 
   const appt = await bookAppointment(admin, {

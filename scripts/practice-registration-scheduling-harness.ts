@@ -583,11 +583,15 @@ async function main() {
     (await patientCount(ws)) === patientsBeforeE, `${patientsBeforeE} -> ${await patientCount(ws)}`);
 
   // ── ⚠ THE MIGRATION GATE ───────────────────────────────────────────────────────────────────────
-  section("D-gate. Migration 276");
+  // 289 REPLACED 276's function: the numbered signature (p_patient_number/p_registration_year/
+  // p_sequence_number) is the only one that exists -- 289 drops the old one so no caller can reach a
+  // numberless writer. This probe therefore speaks the NEW signature.
+  section("D-gate. Migration 289 (the numbered register-and-book)");
   const probe = await admin.rpc("practice_register_and_book", {
     p_workspace_id: ws, p_display_name: "", p_given_name: null, p_middle_name: null,
     p_family_name: null, p_sex: "unspecified", p_birth_date: null, p_age_estimate_years: null,
-    p_created_by: OWNER, p_practice_id: "", p_identifiers: [], p_contacts: [],
+    p_created_by: OWNER, p_patient_number: null, p_registration_year: null, p_sequence_number: null,
+    p_identifiers: [], p_contacts: [],
     p_location_id: null, p_patient_phone: null, p_appointment_type: "new_consultation",
     p_scheduled_at: new Date().toISOString(), p_duration_minutes: 20, p_status: "REQUESTED", p_reason: null,
   });
@@ -595,7 +599,7 @@ async function main() {
   // a constraint error and an ABSENT one refuses it with PGRST202. The two are told apart by the code.
   const migrationApplied = String((probe.error as any)?.code ?? "") !== "PGRST202"
     && !/Could not find the function/i.test(String(probe.error?.message ?? ""));
-  ok("D-gate. ⚠ MIGRATION 276 IS APPLIED -- every assertion in section D is about the function it creates, and none of them has been exercised until it is",
+  ok("D-gate. ⚠ MIGRATION 289 IS APPLIED -- every assertion in section D is about the function it (re)creates, and none of them has been exercised until it is",
     migrationApplied, String(probe.error?.message ?? "the probe returned no error at all"));
 
   if (!migrationApplied) {
@@ -634,10 +638,14 @@ async function main() {
     .select("identifier_type, value").eq("patient_id", booked.data.patientId);
   const { data: cRows } = await admin.from("practice_patient_contact")
     .select("contact_type, value").eq("patient_id", booked.data.patientId);
-  ok("D1c. the identifiers and the contacts were written in the same transaction",
-    (idRows ?? []).some((r: any) => r.identifier_type === "practice_id" && r.value === booked.data.practiceId)
+  // CPR-PID-001 (2026-08-12): the number lives ON the patient row now, not in the identifier table --
+  // new registrations issue no P-XXXXXX. The same-transaction proof reads the column and the contact.
+  const { data: numberedRow } = await admin.from("practice_patient")
+    .select("patient_number").eq("id", booked.data.patientId).single();
+  ok("D1c. the patient number, extra identifiers and contacts were written in the same transaction",
+    numberedRow?.patient_number === booked.data.patientNumber && /^\d{2}-\d{6}$/.test(booked.data.patientNumber)
     && (cRows ?? []).some((r: any) => r.contact_type === "phone"),
-    JSON.stringify({ idRows, cRows }));
+    JSON.stringify({ patientNumber: booked.data.patientNumber, stored: numberedRow?.patient_number, idRows, cRows }));
 
   // ── D2. ⚠ THE PROOF: A SLOT TAKEN BETWEEN THE READ AND THE WRITE ───────────────────────────────
   //
@@ -725,7 +733,8 @@ async function main() {
     const forbidden = await stranger.rpc("practice_register_and_book", {
       p_workspace_id: ws, p_display_name: "Intruder Test", p_given_name: null, p_middle_name: null,
       p_family_name: null, p_sex: "unspecified", p_birth_date: "1990-01-01", p_age_estimate_years: null,
-      p_created_by: OWNER, p_practice_id: "P-ZZZZZZ", p_identifiers: [], p_contacts: [],
+      p_created_by: OWNER, p_patient_number: "99-999999", p_registration_year: 2099, p_sequence_number: 999999,
+      p_identifiers: [], p_contacts: [],
       p_location_id: locId, p_patient_phone: null, p_appointment_type: "new_consultation",
       p_scheduled_at: timeSeen, p_duration_minutes: 20, p_status: "REQUESTED", p_reason: null,
     });

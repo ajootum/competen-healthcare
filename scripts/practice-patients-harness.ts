@@ -84,7 +84,8 @@ async function main() {
     phone: "0772 000 111", identifiers: [{ type: "national_id", value: "CM880412001" }], ...base,
   });
   ok("registration creates the patient", p1.ok, p1.ok ? "" : p1.message);
-  ok("a Practice ID is generated (P-XXXXXX, unambiguous alphabet)", p1.ok && /^P-[2-9A-HJKMNP-Z]{6}$/.test(p1.data.practiceId), p1.ok ? p1.data.practiceId : "");
+  // CPR-PID-001 (2026-08-12): the generated P-XXXXXX retired; the CP Patient Number replaced it.
+  ok("a CP Patient Number is allocated (YY-NNNNNN, CPR-PID-001)", p1.ok && /^\d{2}-\d{6}$/.test(p1.data.patientNumber), p1.ok ? p1.data.patientNumber : "");
 
   // ── 2. Duplicate doctrine ──────────────────────────────────────────────────
   const dupId = await registerPatient(admin, {
@@ -100,7 +101,12 @@ async function main() {
     !nearDup.ok && nearDup.code === "POSSIBLE_DUPLICATE" && (nearDup.candidates?.length ?? 0) > 0,
     nearDup.ok ? "was allowed" : nearDup.code);
 
-  const namesake = await registerPatient(admin, { workspaceId: wsA, displayName: "Amina Nakato", birthDate: "1988-04-12", phone: "0414999999", confirmNew: true, ...base });
+  // The hospital number exists so the merge below has an identifier to MOVE -- registrations stopped
+  // minting a P-XXXXXX (CPR-PID-001 retired it), so a bare patient now has zero identifier rows.
+  const namesake = await registerPatient(admin, {
+    workspaceId: wsA, displayName: "Amina Nakato", birthDate: "1988-04-12", phone: "0414999999",
+    identifiers: [{ type: "hospital_mrn", value: "MRG-HN-77" }], confirmNew: true, ...base,
+  });
   ok("confirmNew registers the genuine namesake", namesake.ok, namesake.ok ? "" : namesake.message);
 
   const bypass = await admin.from("practice_patient_identifier").insert({

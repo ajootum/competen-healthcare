@@ -110,6 +110,9 @@ export type CohortRowView = {
   patientId: string;
   name: string | null;
   deIdentified: boolean;
+  /** The CP Patient Number, YY-NNNNNN (CPR-PID-001); withheld with the name. */
+  patientNumber: string | null;
+  /** The retired P-XXXXXX where the record predates the numbering. Legacy, not headline. */
   practiceId: string | null;
   hospitalNumbers: IdentifierRow[];
   lastSeen: string | null;
@@ -153,6 +156,7 @@ export type CohortView = {
 export type SearchMatchView = {
   patientId: string;
   displayName: string;
+  patientNumber: string | null;
   practiceId: string | null;
   hospitalNumbers: IdentifierRow[];
   birthDate: string | null;
@@ -187,6 +191,7 @@ export type SearchView = {
 export type BannerView = {
   patientId: string;
   name: string;
+  patientNumber: string | null;
   practiceId: string | null;
   age: Age;
   ageEstimateYears: number | null;
