@@ -370,6 +370,38 @@ async function main() {
     buttons.every(b => /\bdisabled\b/.test(b) || /aria-expanded/.test(b)),
     buttons.filter(b => !/\bdisabled\b/.test(b) && !/aria-expanded/.test(b)).join(" | "));
 
+  // ⚠ THE PAGE THAT DEPENDS ON THE WORKER MUST BE ABLE TO UPDATE IT. Registration lived only in
+  // OfflineCacheWriter, inside the (shell), behind auth and the feature flag -- so a device holding an
+  // old worker had no route to a newer one, because reaching it meant visiting a page that is not this
+  // one. Found on 2026-08-11 when a shipped change simply never arrived.
+  const gateSrc = readFileSync("src/app/practice/offline/OfflineGate.tsx", "utf8");
+  // ⚠ NO REGEX LITERALS ANYWHERE IN THIS BLOCK. The first version of it was mangled passing through a
+  // shell-quoted script -- every backslash eaten -- and the file stopped parsing, so the whole harness
+  // printed its own transpiled source instead of running. Ninth time this session. String operations
+  // cannot be damaged that way.
+  const stripComments = (src: string): string => {
+    const out: string[] = [];
+    let inBlock = false;
+    // ⚠ String.fromCharCode(10) rather than a newline escape: an escape passing through a shell-quoted
+    // script has been eaten ten times in this session, once turning into a real line break and breaking
+    // the parse. A character code cannot be mangled.
+    for (const raw of src.split(String.fromCharCode(10))) {
+      const line = raw.trim();
+      if (inBlock) { if (line.includes("*/")) inBlock = false; continue; }
+      if (line.startsWith("/*")) { if (!line.includes("*/")) inBlock = true; continue; }
+      if (line.startsWith("//") || line.startsWith("*") || line.startsWith("{/*")) continue;
+      out.push(raw);
+    }
+    return out.join(String.fromCharCode(10));
+  };
+  const gateCode = stripComments(gateSrc);
+  ok("6n-control. stripping comments left the gate code behind", gateCode.includes("OfflineGate"));
+  ok("6n. ⚠ the offline page registers the worker itself, so it can receive a new one",
+    gateCode.includes("serviceWorker") && gateCode.includes("register("),
+    "only an authenticated shell page could ever update the worker this page depends on");
+  ok("6o. ⚠ and asks for an update explicitly, since re-registering can be a no-op",
+    gateCode.includes(".update()"));
+
   // ── 7. s3.3: THE SERVICE WORKER CACHES THE SHELL AND NEVER AN API RESPONSE ───────────────────────
   const swSrc = readFileSync("public/sw.js", "utf8");
   const listeners: Record<string, (e: unknown) => void> = {};
