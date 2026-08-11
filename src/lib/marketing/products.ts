@@ -48,7 +48,9 @@ export const PRODUCT_PAGES: Record<string, Solution & { template: SolutionTempla
       headline: ["Your professional record,", "wherever you go."],
       points: ["Your competency passport", "Learning and development", "Credentials and achievements", "A record that stays yours between employers"],
       primary: { label: "Talk to us about Competen Individual", href: TALK },
-      secondary: { label: "Learn More", href: "#features" },
+      // REVISED by the owner 2026-08-11: these pages ARE gates now. The login page carries the
+      // we-are-building-this notice and lands the person on My Competen, so the door is honest.
+      secondary: { label: "Sign in", href: "/login?next=/individual" },
       image: "/images/home/path-professionals.webp",
       imageAlt: "A doctor outside a hospital",
       featuresTitle: "One record for a whole career",
@@ -69,7 +71,8 @@ export const PRODUCT_PAGES: Record<string, Solution & { template: SolutionTempla
       headline: ["The right people,", "faster."],
       points: ["Opportunities and applications", "Verified capability, not just CVs", "Interviews and offers in one place", "Built for healthcare recruitment"],
       primary: { label: "Talk to us about Competen Recruitment", href: TALK },
-      secondary: { label: "Learn More", href: "#features" },
+      // REVISED by the owner 2026-08-11 -- see individual above. A gate with an honest notice.
+      secondary: { label: "Sign in", href: "/login?next=/recruitment" },
       image: "/images/home/team-hospital.webp",
       imageAlt: "A hospital team outside the main entrance",
       featuresTitle: "Recruitment on verified ground",

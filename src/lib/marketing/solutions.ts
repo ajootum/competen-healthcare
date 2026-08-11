@@ -61,7 +61,9 @@ export const SOLUTIONS: Solution[] = [
       headline: ["Build your future", "in healthcare."],
       points: ["Track your learning & progress", "Build your professional portfolio", "Prepare for assessments", "Stand out to employers"],
       primary: { label: "Talk to us about getting started", href: ACTION },
-      secondary: { label: "Learn More", href: "#features" },
+      // The owner, 2026-08-11: Student and Professional both GATE into Competen Individual -- one site
+      // for both audiences. The login page says the site is still being built BEFORE the password field.
+      secondary: { label: "Sign in", href: "/login?next=/individual" },
       image: "/images/home/path-students.webp",
       imageAlt: "A student nurse with a tablet",
       featuresTitle: "Everything you need to succeed",
@@ -82,7 +84,8 @@ export const SOLUTIONS: Solution[] = [
       headline: ["Grow throughout", "your career."],
       points: ["Maintain your competency records", "Continuing professional development", "Career opportunities", "Professional portfolio & passport"],
       primary: { label: "Talk to us about getting started", href: ACTION },
-      secondary: { label: "Learn More", href: "#features" },
+      // Same gate as Students -- one Individual site serves both audience pathways.
+      secondary: { label: "Sign in", href: "/login?next=/individual" },
       image: "/images/home/path-professionals.webp",
       imageAlt: "A doctor outside a hospital",
       featuresTitle: "Your professional workspace",

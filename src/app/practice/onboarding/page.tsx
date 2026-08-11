@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const shell = await resolvePracticeShell();
   if (shell.state === "AUTH_REQUIRED") redirect("/practice/sign-in?return_to=/practice/onboarding");
-  if (shell.state === "WORKSPACE_REQUIRED") redirect("/practice");
+  if (shell.state === "WORKSPACE_REQUIRED") redirect("/practice/no-account");
   if (shell.state === "CHOOSER_REQUIRED") redirect("/practice/select-workspace");
   if (shell.state === "ACCESS_RESTRICTED") redirect("/practice/access-status");
   // CPR-370: a revoked device and an unmet MFA policy are refusals like any other, and are refused on

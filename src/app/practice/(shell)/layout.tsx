@@ -42,7 +42,7 @@ export default async function PracticeShellLayout({ children }: { children: Reac
   const returnTo = /^\/practice\/[A-Za-z0-9\-/]*$/.test(asked) ? asked : "/practice/home";
 
   if (shell.state === "AUTH_REQUIRED") redirect(`/practice/sign-in?return_to=${encodeURIComponent(returnTo)}`);
-  if (shell.state === "WORKSPACE_REQUIRED") redirect("/practice");
+  if (shell.state === "WORKSPACE_REQUIRED") redirect("/practice/no-account");
   if (shell.state === "CHOOSER_REQUIRED") redirect("/practice/select-workspace");
   if (shell.state === "ONBOARDING_REQUIRED") redirect("/practice/onboarding");
   if (shell.state === "ACCESS_RESTRICTED") redirect("/practice/access-status");

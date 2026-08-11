@@ -21,7 +21,7 @@
  * Needs the dev server on :3000.
  *   npx --yes tsx scripts/public-disclosure-harness.ts
  */
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { loadEnvConfig } from "@next/env";
 import { createClient as createSupabase } from "@supabase/supabase-js";
@@ -355,12 +355,45 @@ async function main() {
     // SHARED SITE HEADER, whose generic Sign in is on every public page by design and goes to My
     // Competen, not into these products. The property is about the page's OWN CTAs: no /signup
     // anywhere, and the primary action is a conversation.
+    // ⚠ REVISED BY THE OWNER 2026-08-11: the ghost-product pages ARE gates now -- Sign in is offered,
+    // and the login page carries a we-are-building-this notice before the password field, landing the
+    // person on My Competen. The property that SURVIVES the revision: no /signup, and the conversation
+    // CTA stays. The property that is NEW: the gate carries its ?next, or the notice can never fire.
     for (const p of ["/individual", "/recruitment"]) {
       const html = await (await fetch(BASE + p)).text();
-      ok(`7k. ${p} offers a conversation, not a registration`,
-        !/href="\/signup"/.test(html) && html.includes("Talk to us about Competen"),
-        "the product does not exist; the only honest CTA is a conversation");
+      ok(`7k. ${p} offers a conversation and a gate, never a registration`,
+        !/href="\/signup"/.test(html) && html.includes("Talk to us about Competen")
+          && html.includes(`/login?next=${p}`),
+        "a gate without its next parameter is a notice that never shows");
     }
+    // Students and Professionals gate into the SAME site -- Individual -- the owner's mapping.
+    for (const p of ["/students", "/professionals"]) {
+      const html = await (await fetch(BASE + p)).text();
+      ok(`7l. ${p} gates into Competen Individual`, html.includes("/login?next=/individual"));
+    }
+    // ⚠ The login notice is rendered CLIENT-side, so fetched HTML cannot carry it -- asserted at the
+    // source instead, comments stripped, with the destination override that keeps a signed-in person
+    // out of a marketing loop.
+    const loginSrc = readFileSync("src/app/login/page.tsx", "utf8")
+      .split(/\r?\n/).filter((l: string) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+    ok("7m. the login page knows both building destinations and overrides them to /dashboard",
+      loginSrc.includes(`"/individual"`) && loginSrc.includes(`"/recruitment"`)
+        && loginSrc.includes("!BUILDING[next]"),
+      "a building destination honoured as next lands the person back on the brochure they left");
+    // ⚠ THE PRACTICE BOUNCE IS DEAD. A signed-in account with no Practice workspace used to be silently
+    // redirected to the marketing page -- the owner hit it personally. Every WORKSPACE_REQUIRED redirect
+    // must now land on the page that says what is true.
+    const bouncers = [
+      "src/app/practice/(shell)/layout.tsx", "src/app/practice/access-status/page.tsx",
+      "src/app/practice/onboarding/page.tsx", "src/app/practice/select-workspace/page.tsx",
+    ];
+    const stillBouncing = bouncers.filter(f =>
+      /WORKSPACE_REQUIRED"\) redirect\("\/practice"\)/.test(readFileSync(f, "utf8")));
+    ok("7n. ⚠ no WORKSPACE_REQUIRED state bounces to the marketing page any more",
+      stillBouncing.length === 0, stillBouncing.join(", "));
+    const noAccount = await fetch(BASE + "/practice/no-account");
+    ok("7o. /practice/no-account resolves (signed out it forwards to sign-in, never a 404 or 500)",
+      noAccount.status === 200, `status=${noAccount.status}`);
     ok("7e. the One Competen account section exists and promises only what is true",
       homeText.includes("One Competen account.") && !/IAM|entitlement|workspace registry|product gate/i.test(homeText),
       "s11 forbids teaching visitors the internal architecture");

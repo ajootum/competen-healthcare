@@ -43,11 +43,39 @@ const FEATURES = [
   { title: "AI Powered", body: "Intelligence in every workflow" },
 ];
 
+/**
+ * ⚠ THE THREE GATES THAT LEAD TO SITES STILL BEING BUILT — the owner's decision, 2026-08-11.
+ *
+ * Student and Professional both gate into Competen Individual; Recruiter gates into Competen
+ * Recruitment. Neither product exists yet, so a person signing in through those doors must be TOLD
+ * that before they type a password — not discover it as a redirect they cannot explain. The notice
+ * renders above the form, and after sign-in they land on My Competen, where everything their account
+ * DOES hold is waiting. When a product ships, its entry leaves this map and ?next starts working.
+ */
+const BUILDING: Record<string, { name: string; blurb: string }> = {
+  "/individual": {
+    name: "Competen Individual",
+    blurb: "Your professional record, learning and competency passport — we are building this site now.",
+  },
+  "/recruitment": {
+    name: "Competen Recruitment",
+    blurb: "Opportunities, applications and verified hiring — we are building this site now.",
+  },
+};
+
 export default function LoginPage() {
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // ⚠ A LAZY INITIALISER, NOT AN EFFECT. setState inside an effect body is the cascading-render shape
+  // the lint rule rejects, and the URL is known before the first render anyway. The typeof guard is for
+  // the one server render a client component still gets, where window does not exist.
+  const [building] = useState<{ name: string; blurb: string } | null>(() => {
+    if (typeof window === "undefined") return null;
+    const next = new URLSearchParams(window.location.search).get("next");
+    return next ? BUILDING[next] ?? null : null;
+  });
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -75,7 +103,10 @@ export default function LoginPage() {
       // open redirect ("//evil.example" parses as protocol-relative and is refused by the double-slash
       // test; anything with a scheme fails the leading-slash test).
       const next = new URLSearchParams(window.location.search).get("next");
-      window.location.href = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+      // ⚠ A DESTINATION STILL BEING BUILT RESOLVES TO MY COMPETEN, where everything the account DOES
+      // hold is one click away. Honouring the next would land them on a marketing page they just left.
+      const dest = next && next.startsWith("/") && !next.startsWith("//") && !BUILDING[next] ? next : "/dashboard";
+      window.location.href = dest;
     }
   }
 
@@ -144,6 +175,17 @@ export default function LoginPage() {
               <p className="mt-1 text-[13.5px] text-gray-500">Sign in to your Competen account</p>
             </div>
 
+            {/* ⚠ The building notice, ABOVE the password field -- the person must know where this door
+                leads before they walk through it, not after. */}
+            {building && (
+              <div className="mt-5 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+                <p className="text-[13px] font-semibold text-indigo-900">{building.name} is on its way</p>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-indigo-800">
+                  {building.blurb} Sign in and we&apos;ll take you to your Competen workspaces in the
+                  meantime — you&apos;ll find {building.name} here the moment it opens.
+                </p>
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="mt-7 flex flex-col gap-4">
               <div>
                 <label htmlFor="email" className="block text-[12.5px] font-semibold text-gray-700 mb-1.5">Email address</label>

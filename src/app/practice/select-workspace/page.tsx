@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const shell = await resolvePracticeShell();
   if (shell.state === "AUTH_REQUIRED") redirect("/practice/sign-in?return_to=/practice/select-workspace");
-  if (shell.state === "WORKSPACE_REQUIRED") redirect("/practice");
+  if (shell.state === "WORKSPACE_REQUIRED") redirect("/practice/no-account");
   if (shell.state === "READY") redirect("/practice/home");
   if (shell.state === "ONBOARDING_REQUIRED") redirect("/practice/onboarding");
   if (shell.state === "ACCESS_RESTRICTED") redirect("/practice/access-status");

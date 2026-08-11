@@ -74,7 +74,7 @@ export default async function Page() {
   if (shell.state === "READY") redirect("/practice/home");
   if (shell.state === "ONBOARDING_REQUIRED") redirect("/practice/onboarding");
   if (shell.state === "CHOOSER_REQUIRED") redirect("/practice/select-workspace");
-  if (shell.state === "WORKSPACE_REQUIRED") redirect("/practice");
+  if (shell.state === "WORKSPACE_REQUIRED") redirect("/practice/no-account");
 
   // MFA_REQUIRED and SECURITY_CHECK_UNAVAILABLE carry no `reason` field -- the state is the reason. The
   // first splits further on whether the person actually holds a factor, which the state carries.
