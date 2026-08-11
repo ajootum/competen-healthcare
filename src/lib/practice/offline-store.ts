@@ -42,8 +42,14 @@ import { generateCacheKey, openRecord, sealRecord, type SealedRecord } from "@/l
 
 const DB_NAME = "competen-practice-offline";
 /**
- * 2 adds the guidance stores. `onupgradeneeded` creates only what is missing, so a device holding a
- * version-1 day keeps it — the upgrade adds stores and destroys nothing.
+ * 2 added the guidance stores; 3 adds the clinical ones. `onupgradeneeded` creates only what is missing,
+ * so a device holding an older database keeps everything in it — the upgrade adds stores and destroys
+ * nothing.
+ *
+ * ⚠ THE DAY ITSELF IS STILL DISCARDED ON THIS UPGRADE, and by a different mechanism: OFFLINE_SCHEMA_VERSION
+ * went to 2 in the same change, so `readOfflineDay` returns `wrong_schema` and purges the stored day the
+ * first time it is read. That is deliberate — the day gained `patientId` and a record without it would
+ * silently find no clinical match. The two version numbers are unrelated and both had to move.
  */
 const DB_VERSION = 3;
 const STORE_DAY = "day";

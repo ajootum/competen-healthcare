@@ -377,18 +377,61 @@ async function main() {
   // ⚠ "DOES NOT WRITE TO", NOT "DOES NOT MENTION". purgeOfflineDay READS the guidance store — that is how
   // it decides whether META_ACTIVE may go — so a mention is expected and correct. The property that
   // matters is that it never opens it for writing, because only a readwrite transaction can delete.
-  ok("13a. ⚠ purgeOfflineDay never opens the guidance store for writing",
-    !/STORE_GUIDANCE(_KEY)?,\s*"readwrite"/.test(dayPurge),
+  // ⚠ THE POINTER RULE MOVED, AND 13a2 IS THE CONTROL THAT CAUGHT IT MOVING.
+  //
+  // The check used to be written out inside purgeOfflineDay: read STORE_GUIDANCE, and delete META_ACTIVE
+  // only `if (!guidance)`. When the CLINICAL cache arrived that hand-written check became wrong -- it
+  // looked at one other store when there were now two -- so it was replaced by dropPointerIfOrphaned(),
+  // which asks every sealed store except the one just emptied.
+  //
+  // ⚠ AND THAT MADE 13a PASS FOR THE WRONG REASON. purgeOfflineDay no longer MENTIONS the guidance store,
+  // so "it never opens it for writing" became vacuously true -- an assertion that would keep passing if
+  // the pointer logic were deleted outright. 13a2-control failed, which is precisely what a control is
+  // for, and the answer is to point the assertions at where the property now lives rather than to relax
+  // them.
+  const pointerStart = store.indexOf("async function dropPointerIfOrphaned");
+  const pointerEnd = store.indexOf("\nexport ", pointerStart + 1);
+  const pointer = store.slice(pointerStart, pointerEnd);
+  ok("13-control-b. the sliced helper is dropPointerIfOrphaned alone",
+    pointerStart > 0 && pointerEnd > pointerStart && !pointer.includes("\nexport "),
+    `${pointer.length} chars`);
+
+  ok("13a. ⚠ neither the day purge nor the pointer helper opens the guidance store for writing",
+    !/STORE_GUIDANCE(_KEY)?,\s*"readwrite"/.test(dayPurge)
+    && !/STORE_GUIDANCE(_KEY)?,\s*"readwrite"/.test(pointer),
     "the nightly day expiry would delete a week of protocols");
-  ok("13a2-control. it does read it -- otherwise 13b could not be true",
-    /STORE_GUIDANCE,\s*"readonly"/.test(dayPurge));
-  ok("13b. ⚠ nor does it delete META_ACTIVE unconditionally -- the guidance needs that pointer",
-    dayPurge.includes("if (!guidance)"),
-    "an unconditional delete orphans a valid guidance cache every midnight");
+  ok("13a-control. the regex does catch a readwrite on that store when there is one",
+    /STORE_GUIDANCE(_KEY)?,\s*"readwrite"/.test('tx(db, STORE_GUIDANCE, "readwrite", s => s.delete(x))'),
+    "13a would pass against any string at all");
+  ok("13a2-control. the pointer helper DOES read the guidance store -- otherwise 13b is vacuous",
+    /STORE_GUIDANCE/.test(pointer) && /"readonly"/.test(pointer));
+
+  // ⚠ THE PROPERTY, NOT THE OLD SPELLING. `if (!guidance)` was one store's version of "something still
+  // needs this pointer". What has to be true now is stronger: the helper consults EVERY sealed store and
+  // returns without deleting the moment any of them still holds a record.
+  ok("13b. ⚠ nor is META_ACTIVE deleted unconditionally -- every other cache needs that pointer",
+    pointer.includes("SEALED_STORES") && /if\s*\(held\)\s*return;/.test(pointer)
+    && pointer.includes("META_ACTIVE"),
+    "an unconditional delete orphans a valid guidance or clinical cache every midnight");
+  ok("13b2. ⚠ and the day, the guidance AND the clinical pack are all in that list",
+    /SEALED_STORES\s*=\s*\[\s*STORE_DAY,\s*STORE_GUIDANCE,\s*STORE_CLINICAL\s*\]/.test(pointer),
+    "a cache missing from the list is a cache the pointer can be pulled out from under");
   ok("13c. guidance has its own key store, separate from the day's",
     store.includes("STORE_GUIDANCE_KEY") && store.includes('const STORE_KEY = "key"'));
-  ok("13d. the database version was bumped so the new stores are created",
-    /const DB_VERSION = 2/.test(store));
+
+  // ⚠ NOT `DB_VERSION === 2` ANY MORE, AND NOT `=== 3` EITHER. Pinning the number means the assertion
+  // fails every time a store is legitimately added -- it was pinned at 2, the clinical stores arrived,
+  // and it failed against correct code. The number is not the property. THE PROPERTY IS THAT EVERY
+  // DECLARED STORE IS CREATED IN THE UPGRADE HANDLER, which is what the version bump exists to trigger.
+  const declaredStores = [...store.matchAll(/const (STORE_[A-Z_]+) = /g)].map(m => m[1]);
+  const upgradeBody = store.slice(store.indexOf("onupgradeneeded"), store.indexOf("req.onsuccess"));
+  const uncreated = declaredStores.filter(s => !upgradeBody.includes(`contains(${s})`));
+  ok("13d. every declared object store is created in onupgradeneeded",
+    declaredStores.length >= 6 && uncreated.length === 0,
+    uncreated.length ? `never created: ${uncreated.join(", ")}` : `${declaredStores.length} stores`);
+  ok("13d-control. the check can actually see the store names",
+    declaredStores.includes("STORE_GUIDANCE") && declaredStores.includes("STORE_CLINICAL"),
+    "13d would pass over an empty list");
   ok("13e. the switch-off path purges the WORKSPACE, not just the day",
     readFileSync("src/app/practice/(shell)/OfflineCacheWriter.tsx", "utf8").includes("purgeOfflineWorkspace("));
 
