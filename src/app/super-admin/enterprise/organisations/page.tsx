@@ -7,7 +7,7 @@ import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
-// Organisations module (ENT-001 §1) — directory + KPIs. The registry of every
+// Organisations module (ENT-ORG-001 §1) — directory + KPIs. The registry of every
 // tenant organisation. Create/edit/lifecycle run through /api/enterprise/organisations.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 
-// People + Positions directory (ENT-001 §5). People tab links to person detail;
+// People + Positions directory (ENT-ORG-001 §5). People tab links to person detail;
 // Positions tab is the catalogue with create.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

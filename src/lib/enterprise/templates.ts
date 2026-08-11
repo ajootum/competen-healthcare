@@ -1,4 +1,4 @@
-// Enterprise Templates module (ENT-001 §6) loaders — reusable organisational
+// Enterprise Templates module (ENT-ORG-001 §6) loaders — reusable organisational
 // structures/configurations. Registry = ent_templates (all types) unified with
 // plat_org_templates (control-plane org templates, read-only here). Live data.
 /* eslint-disable @typescript-eslint/no-explicit-any */

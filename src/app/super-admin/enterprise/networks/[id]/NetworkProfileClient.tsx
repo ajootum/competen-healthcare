@@ -6,7 +6,7 @@ import Link from "next/link";
 import { cardClass } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/interactive";
 
-// Network profile (ENT-001 §2) — header, tabs and member-organisation management.
+// Network profile (ENT-ORG-001 §2) — header, tabs and member-organisation management.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const TABS = ["Overview", "Member Organisations", "Countries", "Governance", "Audit"] as const;

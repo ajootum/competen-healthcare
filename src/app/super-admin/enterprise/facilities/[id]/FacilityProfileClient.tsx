@@ -6,7 +6,7 @@ import Link from "next/link";
 import { cardClass } from "@/components/ui/primitives";
 import { Row } from "../../../_kit";
 
-// Facility profile (ENT-001 §3) — header, lifecycle actions and tabbed detail.
+// Facility profile (ENT-ORG-001 §3) — header, lifecycle actions and tabbed detail.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", onboarding: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", archived: "bg-gray-100 text-gray-500" };

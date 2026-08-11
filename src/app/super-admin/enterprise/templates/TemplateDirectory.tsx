@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/interactive";
 
-// Enterprise Templates registry (ENT-001 §6) — filterable table + create.
+// Enterprise Templates registry (ENT-ORG-001 §6) — filterable table + create.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const TYPES = ["organisation", "facility", "department", "unit", "role", "workspace", "structure"];

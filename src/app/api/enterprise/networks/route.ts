@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 
-// Networks & Enterprise Groups module (ENT-001 §2) — create / edit networks
+// Networks & Enterprise Groups module (ENT-ORG-001 §2) — create / edit networks
 // (the `enterprises` table) and manage member organisations. Super_admin only.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

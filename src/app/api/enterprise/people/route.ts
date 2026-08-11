@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCaller, isResponse, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 import { ACCOUNT_STATUSES, EMPLOYMENT_TYPES, ASSIGNABLE_ROLES, rolesOf } from "@/lib/enterprise/people";
 
-// People module (ENT-001 §5) — edit a person: position, employment, account
+// People module (ENT-ORG-001 §5) — edit a person: position, employment, account
 // status, line manager and role assignments. Super_admin only. Role changes are
 // restricted to ASSIGNABLE_ROLES (never grants super_admin from here).
 /* eslint-disable @typescript-eslint/no-explicit-any */

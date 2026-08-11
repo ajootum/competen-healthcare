@@ -7,7 +7,7 @@ import { cardClass } from "@/components/ui/primitives";
 import { Row } from "../../../_kit";
 import { Modal } from "@/components/ui/interactive";
 
-// Person profile (ENT-001 §5) — Person / Position / Roles / Workspace access,
+// Person profile (ENT-ORG-001 §5) — Person / Position / Roles / Workspace access,
 // with live editing of position, roles, employment and account status.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

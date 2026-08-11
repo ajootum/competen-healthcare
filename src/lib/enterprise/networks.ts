@@ -1,4 +1,4 @@
-// Networks & Enterprise Groups module (ENT-001 §2) loaders — directory + single
+// Networks & Enterprise Groups module (ENT-ORG-001 §2) loaders — directory + single
 // network profile. Networks are the `enterprises` table; member organisations
 // link via organisations.enterprise_id. Live data; fail-soft on audit.
 /* eslint-disable @typescript-eslint/no-explicit-any */

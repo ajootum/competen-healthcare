@@ -1,4 +1,4 @@
-// Organisations module (ENT-001 §1) loaders — directory + single-organisation
+// Organisations module (ENT-ORG-001 §1) loaders — directory + single-organisation
 // profile. The organisation is the top tenant-level entity. All live data;
 // select("*") keeps it drift-proof, fail-soft on tables added by 052.
 /* eslint-disable @typescript-eslint/no-explicit-any */

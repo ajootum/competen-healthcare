@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { COUNTRIES } from "@/lib/countries";
 import { Modal } from "@/components/ui/interactive";
 
-// Organisations directory (ENT-001 §1) — searchable/filterable table + create.
+// Organisations directory (ENT-ORG-001 §1) — searchable/filterable table + create.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const ORG_TYPES = ["government", "private", "ngo", "faith_based", "academic"];

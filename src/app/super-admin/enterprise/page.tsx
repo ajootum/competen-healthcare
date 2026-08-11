@@ -7,7 +7,7 @@ import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
 
-// Enterprise Administration — section overview (ENT-001). The authoritative
+// Enterprise Administration — section overview (ENT-ORG-001). The authoritative
 // organisational model: KPI ribbon, structure explorer, onboarding pipeline,
 // setup issues, recent activity, quick actions and top organisations. All live
 // data; unbacked signals show an honest state rather than a fabricated number.

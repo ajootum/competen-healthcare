@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCaller, isResponse, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 
-// Structure Builder (ENT-001 §4) — one endpoint for the whole organisational
+// Structure Builder (ENT-ORG-001 §4) — one endpoint for the whole organisational
 // hierarchy: divisions, departments, units, teams and services. Super_admin only.
 // Every create validates its parent exists; archive uses status/is_active.
 /* eslint-disable @typescript-eslint/no-explicit-any */

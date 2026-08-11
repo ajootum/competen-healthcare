@@ -6,7 +6,7 @@ import Link from "next/link";
 import { cardClass } from "@/components/ui/primitives";
 import { Row } from "../../../_kit";
 
-// Organisation profile (ENT-001 §1) — header, lifecycle actions and tabbed
+// Organisation profile (ENT-ORG-001 §1) — header, lifecycle actions and tabbed
 // detail. Every figure is live; thin governance fields are marked honestly.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

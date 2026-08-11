@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCaller, isResponse, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 import { ORG_STATUSES, ORG_TYPES } from "@/lib/enterprise/organisations";
 
-// Organisations module (ENT-001 §1) — create / edit / lifecycle. Enterprise
+// Organisations module (ENT-ORG-001 §1) — create / edit / lifecycle. Enterprise
 // Administration is a platform-level surface, so writes require super_admin
 // (matches the page gate). Fields are whitelisted; status is validated.
 /* eslint-disable @typescript-eslint/no-explicit-any */

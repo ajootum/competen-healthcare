@@ -3,7 +3,7 @@ import { getCaller, isResponse, isSuper, forbidden, badRequest } from "@/lib/api
 import { TEMPLATE_TYPES, NEXT_STATUS } from "@/lib/enterprise/templates";
 import { ORG_STATUSES } from "@/lib/enterprise/organisations";
 
-// Enterprise Templates (ENT-001 §6) — registry + lifecycle + deployment.
+// Enterprise Templates (ENT-ORG-001 §6) — registry + lifecycle + deployment.
 // Super_admin only. Lifecycle transitions are validated against NEXT_STATUS.
 // Deploy currently provisions ORGANISATION templates into a new organisation
 // (a real minimal deployment); other types report an honest not-yet state.

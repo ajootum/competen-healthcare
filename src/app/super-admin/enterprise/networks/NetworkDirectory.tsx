@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { COUNTRIES } from "@/lib/countries";
 import { Modal } from "@/components/ui/interactive";
 
-// Networks directory (ENT-001 §2) — table of enterprise groups + create.
+// Networks directory (ENT-ORG-001 §2) — table of enterprise groups + create.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const NET_TYPES = ["network", "enterprise_group", "health_system", "holding", "academic_network"];

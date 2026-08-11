@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCaller, isResponse, isSuper, forbidden, badRequest } from "@/lib/api-auth";
 import { FACILITY_TYPES, FACILITY_STATUSES } from "@/lib/enterprise/facilities";
 
-// Facilities module (ENT-001 §3) — create / edit / lifecycle. Super_admin only.
+// Facilities module (ENT-ORG-001 §3) — create / edit / lifecycle. Super_admin only.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const TIERS = ["free", "professional", "enterprise"];

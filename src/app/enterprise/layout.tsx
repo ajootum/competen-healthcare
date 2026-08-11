@@ -5,7 +5,8 @@ import { ENTERPRISE_BUILT_SUBPRODUCTS, ENTERPRISE_NOT_BUILT_REASON } from "@/lib
 // The Competen Enterprise tenant workspace shell -- ENT-DEC-001 D5, the walkable slice.
 //
 // ⚠ THIS IS NOT /super-admin/enterprise. That surface is Competen's own (the landlord org-hierarchy
-// module, the other ENT-001); this one is a hospital tenant looking at its own organisation, behind
+// module, renumbered ENT-ORG-001 per ENT-DEC-001 D8); this one is a hospital tenant looking at its own
+// organisation, behind
 // gate 3. The two must never share a layout, a loader or a gate.
 //
 // ⚠ EVERY NON-READY STATE RENDERS A SENTENCE, NOT A DEAD END. AUTH_REQUIRED redirects to sign-in;

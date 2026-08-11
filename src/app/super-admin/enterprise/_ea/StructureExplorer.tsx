@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 
-// Enterprise Structure Explorer (ENT-001) — collapsible network → organisation →
+// Enterprise Structure Explorer (ENT-ORG-001) — collapsible network → organisation →
 // facility → department → unit tree, built entirely from real rows.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

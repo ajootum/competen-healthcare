@@ -8,8 +8,8 @@ import { admitToEnterprise, enterpriseRefusalSentence, type EnterpriseMembership
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 // ⚠ WHY THIS FILE IS NOT IN src/lib/enterprise/ -- THE DIRECTORY NAME IS ALREADY TAKEN BY THE LANDLORD.
 //
-// src/lib/enterprise/*.ts is the org-hierarchy administration module: the OTHER document numbered
-// ENT-001 (see ENT-DEC-001 D8), gated hq.executive.enterprise.view, reading globally with no tenant
+// src/lib/enterprise/*.ts is the org-hierarchy administration module -- its spec was renumbered
+// ENT-ORG-001 to end the collision (ENT-DEC-001 D8) -- gated hq.executive.enterprise.view, reading globally with no tenant
 // predicate. It is Competen looking at the estate from above. This module is the opposite plane -- a
 // hospital tenant looking at its own data -- and putting the tenant gate inside the landlord's directory
 // would blur exactly the boundary it exists to draw. It sits at src/lib/ top level beside

@@ -1,4 +1,4 @@
-// People, Positions & Roles module (ENT-001 §5) loaders. Separates Person
+// People, Positions & Roles module (ENT-ORG-001 §5) loaders. Separates Person
 // (profiles) / Position (positions) / Role (profiles.roles[]) / Workspace access
 // (derived from roles). Live data; select("*") is drift-proof.
 /* eslint-disable @typescript-eslint/no-explicit-any */

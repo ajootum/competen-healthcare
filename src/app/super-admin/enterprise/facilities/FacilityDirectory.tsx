@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { COUNTRIES } from "@/lib/countries";
 import { Modal } from "@/components/ui/interactive";
 
-// Facilities directory (ENT-001 §3) — searchable/filterable table + create.
+// Facilities directory (ENT-ORG-001 §3) — searchable/filterable table + create.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const TYPES = ["hospital", "clinic", "health_center", "nursing_home", "diagnostic_center"];

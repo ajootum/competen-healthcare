@@ -7,7 +7,7 @@ import { NEXT_STATUS } from "@/lib/enterprise/templates";
 import { cardClass } from "@/components/ui/primitives";
 import { Modal } from "@/components/ui/interactive";
 
-// Enterprise Template profile (ENT-001 §6) — lifecycle, versioning and the
+// Enterprise Template profile (ENT-ORG-001 §6) — lifecycle, versioning and the
 // deployment workflow (organisation templates provision a new organisation).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

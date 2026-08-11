@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/interactive";
 
-// Structure Builder (ENT-001 §4) — interactive Facility → Division → Department →
+// Structure Builder (ENT-ORG-001 §4) — interactive Facility → Division → Department →
 // Unit → Team tree with contextual create / edit / archive, plus the service
 // catalogue. Not a flat list: select a node, act on it, add children.
 /* eslint-disable @typescript-eslint/no-explicit-any */

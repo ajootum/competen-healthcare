@@ -1,4 +1,4 @@
-// Facilities module (ENT-001 §3) loaders — directory + single-facility profile.
+// Facilities module (ENT-ORG-001 §3) loaders — directory + single-facility profile.
 // A facility is a hospital/clinic/campus (the `hospitals` table). Live data;
 // select("*") is drift-proof, fail-soft on 052 tables (divisions/services/audit).
 /* eslint-disable @typescript-eslint/no-explicit-any */

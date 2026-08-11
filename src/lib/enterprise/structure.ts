@@ -1,4 +1,4 @@
-// Structure Builder (ENT-001 §4) loader — the interactive organisational tree
+// Structure Builder (ENT-ORG-001 §4) loader — the interactive organisational tree
 // for a selected facility: Facility → Division → Department → Unit → Team, plus
 // the service catalogue. All live from real tables (ent_divisions, departments,
 // units, ent_teams, ent_services). Returns the staff list for head/manager

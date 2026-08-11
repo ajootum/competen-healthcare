@@ -1,4 +1,4 @@
-// Enterprise Administration overview loader (ENT-001). Aggregates the real
+// Enterprise Administration overview loader (ENT-ORG-001). Aggregates the real
 // organisational hierarchy — enterprises → organisations → facilities →
 // departments → units, plus positions, services, templates and people — into
 // the section dashboard: KPI ribbon, structure explorer, onboarding pipeline,
