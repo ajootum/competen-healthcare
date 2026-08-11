@@ -29,6 +29,9 @@ import {
   admitToEnterprise, enterpriseRefusalSentence, readEnterpriseMembership,
 } from "../src/lib/enterprise-membership";
 import { admitToEstate } from "../src/lib/platform-membership";
+// ⚠ From enterprise-constants.ts, never enterprise-shell.ts -- the shell imports next/headers through
+// the supabase server client, and an import pulls the module, not the binding.
+import { ENTERPRISE_BUILT_SUBPRODUCTS } from "../src/lib/enterprise-constants";
 import { classifyGate } from "../src/lib/access/scan";
 import type { AppRole } from "../src/lib/roles";
 
@@ -115,6 +118,16 @@ async function main() {
   const ungated = classifyGate(`export async function GET() { return new Response("hi"); }`);
   ok("5e-control. a genuinely ungated source still classifies as `none`, so 5a is a distinction",
     ungated.kind === "none");
+  // ⚠ The PAGE idiom, taught in the same commit as the shell resolver -- a layout gating via
+  // resolveEnterpriseShell is a membership gate, and an untaught shell idiom once put SIXTY practice
+  // pages in the matrix as reachable without signing in.
+  const shellGate = classifyGate(
+    `import { resolveEnterpriseShell } from "@/lib/enterprise-shell";\n`
+    + `export default async function L() { const s = await resolveEnterpriseShell(); return null; }`);
+  ok("5f. ⚠ a page gated by resolveEnterpriseShell classifies as member-only, never `none`",
+    shellGate.kind === "member-only", `kind=${shellGate.kind}`);
+  // ⚠ The built-surface list may only name catalogue codes -- a typo here would render a nav link to a
+  // 404 while the card said Read-only. Checked against the LIVE catalogue below once it is read.
 
   // ── 6. SOURCE ASSERTIONS, COMMENTS STRIPPED FIRST ────────────────────────────────────────────────
   const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").split(/\r?\n/)
@@ -178,6 +191,22 @@ async function main() {
   ok("7e. ⚠ any super_admin membership of a tenant is an explicit admin_grant, never a backfill",
     staffRows.every(m => m.source === "admin_grant"),
     staffRows.filter(m => m.source !== "admin_grant").map(m => m.source).join(", "));
+
+  // ── 8. MIGRATION 287: THE CATALOGUE, AND THE BUILT-LIST HELD HONEST AGAINST IT ──────────────────
+  const { data: subs, error: sErr } = await admin.from("plat_enterprise_subproduct")
+    .select("code, product_line_code, is_active").order("sort");
+  ok("8a. migration 287 is applied -- the catalogue answers a real select", !sErr, sErr?.message ?? "");
+  if (!sErr) {
+    ok("8b. the catalogue holds exactly the eight, all welded to the enterprise line",
+      subs?.length === 8 && (subs ?? []).every(s => s.product_line_code === "enterprise"),
+      (subs ?? []).map(s => s.code).join(", "));
+    // ⚠ A code in ENTERPRISE_BUILT_SUBPRODUCTS that the catalogue does not hold is a nav link rendered
+    // as Read-only that lands on nothing -- the reverse of disabled-with-a-reason.
+    const catalogue = new Set((subs ?? []).map(s => s.code));
+    const phantom = ENTERPRISE_BUILT_SUBPRODUCTS.filter(c => !catalogue.has(c));
+    ok("8c. ⚠ every code the shell claims is BUILT exists in the live catalogue",
+      phantom.length === 0 && ENTERPRISE_BUILT_SUBPRODUCTS.length > 0, phantom.join(", "));
+  }
 
   report();
 }

@@ -71,7 +71,10 @@ const LANDLORD_ANY = /getLandlordCaller\s*\(/;
 // practice API routes taught this lesson once at 98 routes; this is the same lesson arriving through
 // layouts instead of routes, which is why the rule is written to the STATE MACHINE rather than to the
 // one file that currently uses it.
-const SHELL_GATE = /resolvePracticeShell\s*\(|["']AUTH_REQUIRED["']/;
+// ⚠ resolveEnterpriseShell joined in the SAME commit that created it (ENT-DEC-001 D12): a shell
+// resolver is a gate idiom, and the practice shell's line above records what an untaught one produced.
+// Same alternation, same classification -- member-only -- because the state machine is the same shape.
+const SHELL_GATE = /resolve(?:Practice|Enterprise)Shell\s*\(|["']AUTH_REQUIRED["']/;
 // ⚠ A FOURTH PLANE, TAUGHT IN THE SAME COMMIT AS ITS GUARD -- ENT-DEC-001 D12. requireEnterpriseContext
 // (Competen Enterprise, gate 3) has exactly requirePracticeContext's call shape -- a capability literal,
 // null, a resolved constant, or a ternary -- so ONE classifier serves both tenant planes rather than a
