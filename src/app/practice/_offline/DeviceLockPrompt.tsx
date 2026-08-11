@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   LOCKOUT_CLEARS, LOCKOUT_NEVER_CLEARS, LOCK_FORGOTTEN_NOTE, LOCK_HONEST_NOTE, LOCK_MIN_LENGTH,
-  checkPin, enrolLock, lockMessage, unlock, type LockRecord, type LockState,
+  checkPin, enrolLock, lockMessage, lockStateOf, unlock, type LockRecord, type LockState,
 } from "@/lib/practice/offline-lock";
 import { forgetLock, loadLock, saveLock } from "@/lib/practice/offline-lock-store";
 import { holdSessionKey, sessionKey } from "@/lib/practice/offline-session";
@@ -65,6 +65,33 @@ export default function DeviceLockPrompt({ variant, onUnlocked, children }: Prop
   }, [onUnlocked]);
 
   useEffect(() => { queueMicrotask(() => { void reread(); }); }, [reread]);
+
+  // ════════════════════════════════════════════════════════════════════════════════════════════════════
+  // ⚠⚠ THE COUNTDOWN HAS TO TICK, OR THE BUTTON NEVER COMES BACK.
+  //
+  // A cooldown rendered the sentence "Try again in 15 seconds" ONCE and then nothing re-ran. `state`
+  // stayed "cooling_down" for ever, so `disabled={busy || state === "cooling_down"}` stayed true for
+  // ever: after three mistyped digits the only way to get a fourth attempt was to RELOAD THE PAGE.
+  //
+  // ⚠ Which offline is the one thing a practitioner cannot safely be told to do -- and the screen never
+  // told them to. It simply sat there counting down to a moment that never arrived. The owner reached it
+  // on 2026-08-11 on their third attempt.
+  //
+  // It ticks off the record already in memory, so no store is read once a second; the interval exists
+  // only while cooling down and clears itself the moment the wait is over.
+  // ════════════════════════════════════════════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (state !== "cooling_down" || !record) return;
+    const id = setInterval(() => {
+      const now = new Date();
+      const next = lockStateOf(record, now);
+      // Still waiting: rewrite the message so the seconds visibly count down rather than freezing.
+      if (next === "cooling_down") { setProblem(lockMessage(next, record, now)); return; }
+      // The wait is over. The error goes with it -- leaving it up would say "try again in 0 seconds".
+      setState(next); setProblem(null);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [state, record]);
 
   const strength = checkPin(pin);
 
@@ -135,9 +162,20 @@ export default function DeviceLockPrompt({ variant, onUnlocked, children }: Prop
         {detail && (
           <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">{detail}</p>
         )}
-        <p className="mt-2 text-[12.5px] leading-relaxed text-gray-700">
-          {state === null ? "Checking this device…" : lockMessage(state, record, new Date())}
-        </p>
+        {/* ⚠ THE SAME SENTENCE WAS PRINTED TWICE -- grey here, red below -- because a failed unlock puts
+            the state message into `problem` as well. The owner's screenshot of 2026-08-11 shows "Too many
+            wrong attempts. Try again in 15 seconds. 7 attempts remain..." rendered word for word in both
+            places. Whichever is showing, it says the current state once.
+            ⚠ AND THE ERROR IS RENDERED HERE, OUTSIDE THE INPUT BLOCK, not inside it. It used to live
+            beside the field -- which a LOCKOUT hides -- so suppressing this line without moving that one
+            would have left a locked-out device explaining nothing. */}
+        {problem ? (
+          <p className="mt-2 text-[12.5px] leading-relaxed text-rose-700">{problem}</p>
+        ) : (
+          <p className="mt-2 text-[12.5px] leading-relaxed text-gray-700">
+            {state === null ? "Checking this device…" : lockMessage(state, record, new Date())}
+          </p>
+        )}
         {/* ⚠ SAID ON THE LOCK SCREEN, WHERE THE FEAR IS. Somebody who has forgotten their PIN needs to
             know what they have and have not lost BEFORE they start guessing. */}
         <div className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[11.5px] leading-relaxed text-gray-700">
@@ -152,7 +190,6 @@ export default function DeviceLockPrompt({ variant, onUnlocked, children }: Prop
                 onKeyDown={e => { if (e.key === "Enter") void doUnlock(); }}
                 className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)]" />
             </label>
-            {problem && <p className="text-[12px] text-rose-700">{problem}</p>}
             <button type="button" disabled={busy || state === "cooling_down"} onClick={doUnlock}
               className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
               {busy ? "Checking…" : "Unlock"}

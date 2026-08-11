@@ -201,12 +201,38 @@ self.addEventListener("fetch", (event) => {
         }
         return res;
       })
-      .catch(() => (isShellItself
-        ? caches.match(SHELL).then((hit) => hit || Response.error())
+      .catch(() => {
+        // The shell itself: serve the copy. Harmless in every case -- it is the document this worker
+        // exists to keep, and the page it renders says its own age.
+        if (isShellItself) return caches.match(SHELL).then((hit) => hit || Response.error());
+
+        // ════════════════════════════════════════════════════════════════════════════════════════
+        // ⚠⚠ ONLY WHEN THE BROWSER SAYS IT IS OFFLINE. THIS USED TO REDIRECT ON ANY REJECTION.
+        //
+        // `fetch` rejects for far more than a lost connection. It rejects when a navigation is
+        // ABORTED -- which is what happens every time somebody clicks a second link while the first
+        // page is still loading -- and when a dev server restarts, and on a transient hiccup.
+        //
+        // The old handler treated all of those as "you are offline" and redirected to
+        // /practice/offline. So a practitioner working normally, online, mid-clinic, who clicked
+        // twice, was thrown onto the offline page -- which is PIN-LOCKED. A device credential
+        // standing between somebody and their own clinic is the one failure this whole arc was
+        // written to avoid, and it was reached by clicking too fast. The owner hit it on 2026-08-11:
+        // "after a few seconds on the online screen, it locks again".
+        //
+        // ⚠ THE COST OF THE NARROWER RULE, STATED RATHER THAN HIDDEN: a device connected to wifi with
+        // no working internet reports `onLine === true`, so it now gets the browser's own error page
+        // instead of the cached day. That is worse for that case -- but the practitioner can still
+        // reach /practice/offline by its link, whereas being hijacked mid-consultation has no
+        // recovery at all. Under-redirecting is recoverable; over-redirecting is not.
+        // ════════════════════════════════════════════════════════════════════════════════════════
+        if (self.navigator && self.navigator.onLine) return Response.error();
+
         // ⚠ A REDIRECT, NOT THE SHELL BODY SERVED AT SOMEBODY ELSE'S URL. Answering /practice/today with
         // the offline document would leave the address bar claiming a page the browser is not showing,
         // and would hand the client router a route it did not ask for. The browser is sent to
         // /practice/offline instead, which this worker then answers from the cache.
-        : Promise.resolve(Response.redirect(new URL(SHELL, self.location.origin).href, 302)))),
+        return Response.redirect(new URL(SHELL, self.location.origin).href, 302);
+      }),
   );
 });

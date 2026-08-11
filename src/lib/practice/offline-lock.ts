@@ -192,6 +192,26 @@ export function lockMessage(state: LockState, record: LockRecord | null, now: Da
 }
 
 /**
+ * ⚠⚠ SAID AFTER A WRONG PIN, AND ONLY THERE. WITHOUT IT THE SCREEN NEVER SAYS THE PIN WAS WRONG.
+ *
+ * `lockMessage("locked", ...)` is a PROMPT -- "Enter your PIN. 9 attempts remain" -- and the failed
+ * unlock path used to hand that same sentence back as the error. The owner walked into the result on
+ * 2026-08-11: they typed a PIN, got red text reading "Enter your PIN. 9 attempts remain", and could not
+ * tell a mistyped digit from a broken screen. The attempt counter had moved, which was the ONLY evidence
+ * anything had happened, and it is not evidence anybody should have to decode.
+ *
+ * ⚠ IT NAMES THE CAUSE AND THEN THE CONSEQUENCE, in that order, because "9 attempts remain" is frightening
+ * on its own and reassuring once you know you simply mistyped.
+ */
+export function wrongPinMessage(state: LockState, record: LockRecord | null, now: Date): string {
+  if (state === "locked")
+    return `That PIN did not match. ${record ? lockAttemptsLeft(record) : 0} attempts remain before this device clears what it is holding.`;
+  if (state === "cooling_down") return `That PIN did not match. ${lockMessage(state, record, now)}`;
+  // locked_out already explains itself in full, and adding a preamble would bury it.
+  return lockMessage(state, record, now);
+}
+
+/**
  * ⚠ WHAT A LOCKOUT DESTROYS, AS DATA RATHER THAN AS A COMMENT.
  *
  * The harness asserts this list never grows to include captured work. A lockout is allowed to be
@@ -280,7 +300,9 @@ export async function unlock(record: LockRecord, pin: string, now: Date = new Da
     if (!key) {
       const next = lockAfterFailure(record, now);
       const nextState = lockStateOf(next, now);
-      return { ok: false, state: nextState, record: next, reason: lockMessage(nextState, next, now) };
+      // ⚠ wrongPinMessage, NOT lockMessage. See its comment: the prompt and the error were the same
+      // sentence, so a wrong PIN produced a screen that never said the PIN was wrong.
+      return { ok: false, state: nextState, record: next, reason: wrongPinMessage(nextState, next, now) };
     }
     return { ok: true, key, record: lockAfterSuccess(record) };
   } catch (e) {
