@@ -41,16 +41,53 @@ export const ACCENT = "#4F46E5";
 export const ACCENT_DARK = "#4338CA";
 export const ACCENT_SOFT = "#EEF0FF";
 
+/**
+ * ⚠ A DEMO REQUEST IS A CONVERSATION, NOT AN ACCOUNT. Every "Book a Demo" used to point at /signup --
+ * a self-registration form -- while the owner's decision keeps signup CLOSED (Supabase signups off).
+ * WEB-HOME-001 s8 asks for "the existing governed demo-request flow"; the only such flow this product
+ * has is the contact mailbox, which is exactly what /practice already uses (practice-site.ts
+ * contactFor). An honest mailto beats a button that walks a visitor into a form that cannot succeed.
+ */
+export const DEMO_REQUEST = 'mailto:gabriel@semacast.com?subject=' + encodeURIComponent('Competen demo request');
+
+/**
+ * ⚠ WHERE COMPETEN STAFF ENTER, AS ONE CONSTANT -- WEB-HOME-001 s13 + PLAT-HQ-ACCESS-001.
+ *
+ * The specs name /hq, and /hq deliberately does not exist: src/lib/hq/spaces.ts defers the rename until
+ * every one of the 205 /super-admin pages carries its own scoped guard (167 do not yet), so that no
+ * window ever exists in which /hq/* is reachable ungated. PLAT-ROUTE-001 s10 allows "exact production
+ * path configurable" -- this constant IS that configuration, and the rename later is a one-line change
+ * here rather than a hunt through the footer.
+ */
+export const STAFF_ACCESS = { label: 'Competen Staff Access', href: '/super-admin' };
+
 export const HERO = {
   headline: ['Stronger healthcare', 'begins with'],
   headlineAccent: 'empowered people.',
   body:
     'Competen helps students, professionals, practices and hospitals build capability, ' +
     'deliver better care and improve outcomes.',
-  primary: { label: 'Explore Solutions', href: '#choose-your-path' },
-  secondary: { label: 'Book a Demo', href: '/signup' },
+  primary: { label: 'Explore Competen', href: '#choose-your-path' },
+  secondary: { label: 'Book a Demo', href: DEMO_REQUEST },
   image: '/images/home/journey-nurse.webp',
   imageAlt: 'A nurse reviewing records on a tablet on the ward',
+};
+
+/**
+ * WEB-HOME-001 s11 "One Competen account". ⚠ EVERY LINE HERE IS TRUE TODAY -- one sign-in reaches the
+ * workspaces a person holds (workspace-links.ts resolves them per gate), and moving between roles does
+ * not create a second identity. No line mentions IAM, gates, entitlement or the workspace registry:
+ * s2 forbids teaching visitors the internal architecture.
+ */
+export const ONE_ACCOUNT = {
+  title: 'One Competen account.',
+  subtitle: 'Your professional world, connected.',
+  points: [
+    'Sign in once to reach the products and workspaces that belong to you.',
+    'Move between your roles and organisations without a second account.',
+    'Secure, personal and always yours.',
+  ],
+  action: { label: 'Sign in', href: '/login' },
 };
 
 // WEB-STRAT-001 'Built for healthcare. Designed for Africa.' band.
@@ -90,14 +127,17 @@ export const HERO_CARDS = {
 export const CTA_BAND = {
   title: "Ready to transform healthcare performance?",
   body: "Join leading organisations and professionals who are building a more competent, capable, and confident healthcare workforce.",
-  action: { label: "Book a Demo", href: "/signup" },
+  // ⚠ DEMO_REQUEST, not /signup -- see the constant. Signup is closed by the owner's decision.
+  action: { label: "Book a Demo", href: DEMO_REQUEST },
 };
 
+// WEB-HOME-001 s12's four words, with the very short supporting copy it asks for. Detailed claims
+// belong on dedicated pages, not the trust strip.
 export const ASSURANCES = [
-  { title: "Secure & Compliant", body: "Enterprise-grade security and data protection" },
-  { title: "Scalable & Flexible", body: "Built to grow with your organisation" },
+  { title: "Secure", body: "Enterprise-grade security and data protection" },
+  { title: "Scalable", body: "Built to grow with your organisation" },
   { title: "Interoperable", body: "Works with your existing systems" },
-  { title: "Data-Driven Insights", body: "Make better decisions with real-time intelligence" },
+  { title: "Intelligent", body: "Better decisions with real-time insight" },
 ];
 
 // Privacy and Terms have no pages yet. Kept in one list so that when the pages land it is a two-line edit,

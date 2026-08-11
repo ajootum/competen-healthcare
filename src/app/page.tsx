@@ -4,7 +4,7 @@ import SiteFooter from "@/components/marketing/SiteFooter";
 import { PatternField } from "@/components/marketing/Pattern";
 import {
   ACCENT, ACCENT_DARK, ACCENT_SOFT, BRAND, HERO, HERO_CARDS, AFRICA_BAND,
-  CTA_BAND, ASSURANCES,
+  CTA_BAND, ASSURANCES, ONE_ACCOUNT,
 } from "@/lib/marketing/home-content";
 import { PRIMARY_SOLUTIONS } from "@/lib/marketing/solutions";
 import { pageMetadata } from "@/lib/marketing/site";
@@ -115,7 +115,9 @@ export default function Home() {
 
         {/* ── CHOOSE YOUR PATH ─────────────────────────────────────────────── */}
         <section id="choose-your-path" className={`${container} py-12 lg:py-16`}>
-          <h2 className="text-center text-[1.35rem] font-bold tracking-tight text-gray-900">Choose your path</h2>
+          {/* WEB-HOME-001 s9's heading. The section id stays `choose-your-path` -- the hero CTA and any
+              external link to the anchor keep working, and an anchor is not a sentence a visitor reads. */}
+          <h2 className="text-center text-[1.35rem] font-bold tracking-tight text-gray-900">Who are you?</h2>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {PRIMARY_SOLUTIONS.map(s => {
               const p = PATH_BLURB[s.slug];
@@ -164,6 +166,30 @@ export default function Home() {
             claim, which is a factual statement about a third party and an implied endorsement. It is in
             git if it returns — with permission. */}
 
+        {/* ── ONE COMPETEN ACCOUNT (WEB-HOME-001 s11) ──────────────────────── */}
+        <section className={`${container} pb-14`}>
+          <div className="rounded-3xl border border-gray-200 bg-white px-6 py-8 sm:px-10 flex flex-col lg:flex-row lg:items-center gap-6">
+            <div className="flex-1">
+              <h2 className="text-[1.5rem] font-bold text-gray-900 leading-snug">{ONE_ACCOUNT.title}</h2>
+              <p className="mt-1 text-[14px] font-medium" style={{ color: ACCENT }}>{ONE_ACCOUNT.subtitle}</p>
+              <ul className="mt-4 space-y-2">
+                {ONE_ACCOUNT.points.map(p => (
+                  <li key={p} className="flex gap-2.5 text-[13.5px] leading-relaxed text-gray-600">
+                    <span aria-hidden className="mt-0.5 w-5 h-5 shrink-0 rounded-md flex items-center justify-center text-[10px]"
+                      style={{ background: ACCENT_SOFT, color: ACCENT }}>✓</span>
+                    {p}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <Link href={ONE_ACCOUNT.action.href}
+              className="shrink-0 rounded-xl px-6 py-3.5 text-[15px] font-semibold text-white text-center transition-opacity hover:opacity-90"
+              style={{ background: ACCENT }}>
+              {ONE_ACCOUNT.action.label} →
+            </Link>
+          </div>
+        </section>
+
         {/* ── CLOSING CTA ──────────────────────────────────────────────────── */}
         <section id="cta" className={`${container} pb-14`}>
           <div className="relative overflow-hidden rounded-3xl bg-[#141B4D] px-6 py-8 sm:px-10">
@@ -174,8 +200,10 @@ export default function Home() {
                 <h2 className="text-[1.6rem] font-bold text-white leading-snug text-balance">{CTA_BAND.title}</h2>
                 <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-white/65">{CTA_BAND.body}</p>
               </div>
-              <Link href={CTA_BAND.action.href} className="shrink-0 rounded-xl px-6 py-3.5 text-[15px] font-semibold text-white text-center transition-opacity hover:opacity-90"
-                style={{ background: ACCENT }}>{CTA_BAND.action.label} →</Link>
+              {/* A plain anchor: the action is a mailto now (see DEMO_REQUEST), and next/link exists for
+                  route transitions, not mail clients. */}
+              <a href={CTA_BAND.action.href} className="shrink-0 rounded-xl px-6 py-3.5 text-[15px] font-semibold text-white text-center transition-opacity hover:opacity-90"
+                style={{ background: ACCENT }}>{CTA_BAND.action.label} →</a>
             </div>
           </div>
 

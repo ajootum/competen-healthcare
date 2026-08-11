@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ACCENT, BRAND, FOOTER_LEGAL } from "@/lib/marketing/home-content";
+import { ACCENT, BRAND, DEMO_REQUEST, FOOTER_LEGAL, STAFF_ACCESS } from "@/lib/marketing/home-content";
 import { PRIMARY_SOLUTIONS } from "@/lib/marketing/solutions";
 
 // Shared public footer. The Solutions column is generated from the same list as the routes and the header
@@ -50,9 +50,14 @@ export default function SiteFooter() {
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-white/80">Access</p>
             <ul className="mt-3 space-y-2">
-              <li><Link href="/login" className="text-[12.5px] text-white/55 hover:text-white transition-colors">Login</Link></li>
-              <li><Link href="/signup" className="text-[12.5px] text-white/55 hover:text-white transition-colors">Book a Demo</Link></li>
-              <li><Link href="/quality" className="text-[12.5px] text-white/55 hover:text-white transition-colors">Quality</Link></li>
+              <li><Link href="/login" className="text-[12.5px] text-white/55 hover:text-white transition-colors">Sign in</Link></li>
+              {/* ⚠ A mailto, not /signup. A demo request is a conversation; /signup is a registration
+                  form, and signup is CLOSED by the owner's decision -- a demo button that walks into it
+                  is a dishonest button in front of an honest wall. */}
+              <li><a href={DEMO_REQUEST} className="text-[12.5px] text-white/55 hover:text-white transition-colors">Book a Demo</a></li>
+              {/* ⚠ Quality is deliberately NOT here any more (WEB-HOME-001 s13): it is an Enterprise
+                  sub-product, not an access route. The /quality PAGE stays -- WEB-STRAT-001 keeps it as
+                  a secondary landing page and the disclosure harness asserts it stays reachable. */}
             </ul>
           </div>
         </div>
@@ -63,6 +68,14 @@ export default function SiteFooter() {
           <span>© {new Date().getFullYear()} Competen. All rights reserved.</span>
           {/* Plain text, not links: neither page exists yet, and a legal link to nowhere is worse than a label. */}
           {FOOTER_LEGAL.map(l => <span key={l.label}>{l.label}</span>)}
+          {/* ⚠ WEB-HOME-001 s13: visually DISCREET and SEPARATED from customer access -- the legal bar,
+              pushed to the far edge, not the Access column. It is a controlled governance entry, not a
+              fifth product, and the gate behind it decides everything; this link only says the door
+              exists. The href is the one configured constant, so the /hq rename later is one edit. */}
+          <Link href={STAFF_ACCESS.href}
+            className="ml-auto inline-flex items-center gap-1.5 rounded border border-white/15 px-2 py-1 text-white/45 hover:text-white/80 transition-colors">
+            <span aria-hidden className="text-[10px]">🛡</span>{STAFF_ACCESS.label}
+          </Link>
         </div>
       </div>
     </footer>

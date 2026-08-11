@@ -42,7 +42,12 @@ export type SolutionTemplate = {
   closing: { title: string; body: string; action: string };
 };
 
-const ACTION = "/signup";
+// ⚠ A MAILTO, NOT /signup, AND THE LABELS CHANGED WITH IT. Signup is CLOSED by the owner's decision
+// (Supabase signups off), so "Create Student Account" pointing at a registration form was a dishonest
+// button in front of an honest wall -- the exact shape /practice/page.tsx:57 documents refusing. A
+// public CTA may only promise what the product can do today, and today the path in is a conversation.
+// When signup opens, this constant and the labels below change together.
+const ACTION = "mailto:gabriel@semacast.com?subject=" + encodeURIComponent("Competen enquiry");
 
 export const SOLUTIONS: Solution[] = [
   {
@@ -55,7 +60,7 @@ export const SOLUTIONS: Solution[] = [
     template: {
       headline: ["Build your future", "in healthcare."],
       points: ["Track your learning & progress", "Build your professional portfolio", "Prepare for assessments", "Stand out to employers"],
-      primary: { label: "Create Student Account", href: ACTION },
+      primary: { label: "Talk to us about getting started", href: ACTION },
       secondary: { label: "Learn More", href: "#features" },
       image: "/images/home/path-students.webp",
       imageAlt: "A student nurse with a tablet",
@@ -76,7 +81,7 @@ export const SOLUTIONS: Solution[] = [
     template: {
       headline: ["Grow throughout", "your career."],
       points: ["Maintain your competency records", "Continuing professional development", "Career opportunities", "Professional portfolio & passport"],
-      primary: { label: "Create Professional Account", href: ACTION },
+      primary: { label: "Talk to us about getting started", href: ACTION },
       secondary: { label: "Learn More", href: "#features" },
       image: "/images/home/path-professionals.webp",
       imageAlt: "A doctor outside a hospital",

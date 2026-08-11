@@ -215,7 +215,10 @@ export async function resolveHqContext(
 ): Promise<HqResolution> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, redirectTo: "/login", decision: "deny", reason: "not authenticated" };
+  // ⚠ WITH THE DESTINATION -- PLAT-ROUTE-001 s6. A bare /login lands on /dashboard and loses where the
+  // person was going, which is exactly how the owner experienced /enterprise on 2026-08-11. The /login
+  // page validates `next` to a single leading slash, and /super-admin re-gates on arrival regardless.
+  if (!user) return { ok: false, redirectTo: "/login?next=/super-admin", decision: "deny", reason: "not authenticated" };
 
   const admin = createAdminClient();
   const { data } = await admin

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useModalFocus } from "@/components/ui/use-modal-focus";
-import { ACCENT, BRAND } from "@/lib/marketing/home-content";
+import { ACCENT, BRAND, DEMO_REQUEST } from "@/lib/marketing/home-content";
 import { PRIMARY_SOLUTIONS } from "@/lib/marketing/solutions";
 
 // Shared public header (WEB-STRAT-001). One component across the homepage and every landing page, so the
@@ -82,9 +82,11 @@ export default function SiteHeader({ dark = false }: { dark?: boolean }) {
         </nav>
 
         <div className="hidden lg:flex items-center gap-4 ml-auto">
-          <Link href="/login" className={`text-[14px] font-medium ${link} transition-colors`}>Login</Link>
-          <Link href="/signup" className="rounded-full px-5 py-2.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90"
-            style={{ background: ACCENT }}>Book a Demo</Link>
+          <Link href="/login" className={`text-[14px] font-medium ${link} transition-colors`}>Sign in</Link>
+          {/* A mailto, not /signup: signup is closed by the owner's decision, and a demo is a
+              conversation. See DEMO_REQUEST in home-content.ts. */}
+          <a href={DEMO_REQUEST} className="rounded-full px-5 py-2.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ background: ACCENT }}>Book a Demo</a>
         </div>
 
         {/* Mobile trigger */}
@@ -121,10 +123,10 @@ export default function SiteHeader({ dark = false }: { dark?: boolean }) {
             )}
             <Link href="/#cta" onClick={() => setOpen(false)} className="block py-3 text-[15px] font-semibold border-t border-white/10">Resources</Link>
             <Link href="/#cta" onClick={() => setOpen(false)} className="block py-3 text-[15px] font-semibold border-t border-white/10">About Us</Link>
-            <Link href="/login" onClick={() => setOpen(false)} className="block py-3 text-[15px] font-semibold border-t border-white/10">Login</Link>
-            <Link href="/signup" onClick={() => setOpen(false)}
+            <Link href="/login" onClick={() => setOpen(false)} className="block py-3 text-[15px] font-semibold border-t border-white/10">Sign in</Link>
+            <a href={DEMO_REQUEST} onClick={() => setOpen(false)}
               className="mt-5 block rounded-xl py-3.5 text-center text-[15px] font-semibold text-white"
-              style={{ background: ACCENT }}>Book a Demo</Link>
+              style={{ background: ACCENT }}>Book a Demo</a>
           </nav>
         </div>
       )}

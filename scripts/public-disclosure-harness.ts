@@ -295,6 +295,44 @@ async function main() {
     }
   }
 
+  // ── 7. WEB-HOME-001 SAFE SLICE — the parts adopted WITHOUT reversing WEB-STRAT-001 ──────────────
+  //
+  // ⚠ WEB-HOME-001's products-first IA CONTRADICTS WEB-STRAT-001's solutions-first strategy (the one
+  // this whole harness enforces), and that fork is the OWNER'S -- recorded, not drifted past. What
+  // shipped is the subset inside the existing strategy: the staff door, honest CTAs, the account
+  // section. These assertions hold that subset, and none of them names a product.
+  {
+    const home = await (await fetch(BASE + "/")).text();
+    const homeText = visibleText(home);
+
+    // ⚠ THE STAFF DOOR EXISTS AND IS DISCREET. Exactly once -- a second occurrence means somebody
+    // promoted it into a menu, and WEB-HOME-001 s13 forbids presenting it as a fifth product.
+    // ⚠ COUNTED IN VISIBLE TEXT, NOT RAW HTML. The first version counted the raw document and found
+    // TWO: the RSC flight payload at the bottom repeats every string in the tree. That is the precise
+    // false positive this file's own visibleText() comment warns about, walked into by the assertion
+    // being added forty lines below the warning.
+    const staffCount = (homeText.match(/Competen Staff Access/g) ?? []).length;
+    ok("7a. the footer carries Competen Staff Access exactly once", staffCount === 1, `${staffCount} occurrences`);
+    ok("7b. and it points at the configured HQ path, not a hard-coded /hq that does not exist",
+      home.includes(`href="/super-admin"`),
+      "the /hq rename is deferred until all 205 pages carry their own guard");
+
+    // ⚠ NO PUBLIC CTA REACHES /signup WHILE SIGNUP IS CLOSED. The owner keeps Supabase signups off; a
+    // demo button that walks into a registration form is a dishonest button in front of an honest wall.
+    for (const path of ["/", ...PRIMARY_SOLUTIONS.map(s => `/${s.slug}`)]) {
+      const html = path === "/" ? home : await (await fetch(BASE + path)).text();
+      ok(`7c. ${path} has no CTA pointing at /signup`, !/href="\/signup"/.test(html));
+    }
+
+    ok("7d. the audience question is asked in the visitor's own terms", homeText.includes("Who are you?"));
+    ok("7e. the One Competen account section exists and promises only what is true",
+      homeText.includes("One Competen account.") && !/IAM|entitlement|workspace registry|product gate/i.test(homeText),
+      "s11 forbids teaching visitors the internal architecture");
+    ok("7f. Quality is not offered as an access route",
+      !/Access[\s\S]{0,400}?>Quality</.test(home),
+      "the /quality PAGE stays (asserted above); the footer Access entry does not");
+  }
+
   console.log(`\n${fails.length ? "FAILED" : "PASSED"}  ${pass} assertion(s)${fails.length ? `, ${fails.length} failure(s):\n  - ${fails.join("\n  - ")}` : ""}\n`);
   process.exitCode = fails.length ? 1 : 0;
 }
