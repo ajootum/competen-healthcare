@@ -7,6 +7,11 @@ import {
   guidanceKeysOutsideAllowList, readOfflineGuidance,
   type OfflineGuidanceLibrary, type OfflineGuidanceReadResult,
 } from "@/lib/practice/offline-guidance";
+import {
+  OFFLINE_CLINICAL_PACK_KEYS, OFFLINE_CLINICAL_RECORD_KEYS,
+  clinicalKeysOutsideAllowList, readOfflineClinical,
+  type OfflineClinicalPack, type OfflineClinicalReadResult,
+} from "@/lib/practice/offline-clinical";
 import { generateCacheKey, openRecord, sealRecord, type SealedRecord } from "@/lib/practice/offline-crypto";
 
 // CP-OFFLINE-SURVEY-001 s3.3 step 1 — the browser store. ⚠ BROWSER ONLY: every function here touches
@@ -40,9 +45,20 @@ const DB_NAME = "competen-practice-offline";
  * 2 adds the guidance stores. `onupgradeneeded` creates only what is missing, so a device holding a
  * version-1 day keeps it — the upgrade adds stores and destroys nothing.
  */
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_DAY = "day";
 const STORE_KEY = "key";
+/**
+ * The clinical carry, and ⚠ ITS OWN KEY AGAIN -- a THIRD one, for the third lifetime.
+ *
+ * Day: end of the clinic day. Guidance: seven days. Clinical: five. Three different expiries mean three
+ * different moments at which a key is deleted, and any pair sharing one would leave the survivor sealed
+ * under a key that no longer exists -- decrypt fails, the record is treated as corrupt, and it is
+ * deleted. See the STORE_GUIDANCE comment: that trap was reasoned about once and it applies again here
+ * without modification.
+ */
+const STORE_CLINICAL = "clinical";
+const STORE_CLINICAL_KEY = "clinicalKey";
 /**
  * The cached guidance library, and ⚠ ITS OWN KEY, SEPARATE FROM THE DAY'S.
  *
@@ -88,6 +104,8 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_META)) db.createObjectStore(STORE_META);
       if (!db.objectStoreNames.contains(STORE_GUIDANCE)) db.createObjectStore(STORE_GUIDANCE);
       if (!db.objectStoreNames.contains(STORE_GUIDANCE_KEY)) db.createObjectStore(STORE_GUIDANCE_KEY);
+      if (!db.objectStoreNames.contains(STORE_CLINICAL)) db.createObjectStore(STORE_CLINICAL);
+      if (!db.objectStoreNames.contains(STORE_CLINICAL_KEY)) db.createObjectStore(STORE_CLINICAL_KEY);
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error ?? new Error("IndexedDB could not be opened"));
@@ -243,8 +261,7 @@ export async function purgeOfflineDay(workspaceId: string): Promise<{ ok: boolea
     // day. Deleting it unconditionally here — which is what this did before guidance existed — meant the
     // nightly day expiry orphaned a perfectly valid week-long guidance cache: still stored, still
     // decryptable, and unreachable because nothing could name its workspace.
-    const guidance = await tx<SealedRecord | undefined>(db, STORE_GUIDANCE, "readonly", s => s.get(workspaceId));
-    if (!guidance) await tx(db, STORE_META, "readwrite", s => s.delete(META_ACTIVE));
+    await dropPointerIfOrphaned(db, workspaceId, STORE_DAY);
     db.close();
     return { ok: true, reason: "Anything held for this practice on this device has been removed." };
   } catch (e) {
@@ -252,6 +269,34 @@ export async function purgeOfflineDay(workspaceId: string): Promise<{ ok: boolea
     // practice believes the data is gone and it is not.
     return { ok: false, reason: `This device's offline store could not be cleared: ${String((e as Error)?.message ?? e).slice(0, 200)}` };
   }
+}
+
+/**
+ * ⚠⚠ THE POINTER GOES ONLY WHEN NOTHING AT ALL IS LEFT TO POINT AT -- AND "NOTHING" NOW MEANS THREE
+ * STORES, NOT ONE.
+ *
+ * META_ACTIVE is how the offline page knows which workspace to load. Each purge used to check exactly
+ * ONE other store by hand: purgeOfflineDay looked at guidance, purgeOfflineGuidance looked at the day.
+ * That was correct while there were two caches and became wrong the moment a third arrived -- the
+ * NIGHTLY day expiry would have deleted the pointer while a five-day clinical pack was still sealed on
+ * the device, leaving it stored, decryptable and unreachable because nothing could name its workspace.
+ *
+ * ⚠ THE SAME BUG THE STORE_GUIDANCE COMMENT DESCRIBES, RE-ARMED BY ADDING A CACHE. So the check is no
+ * longer written out per call site: this function asks every sealed store except the one just emptied,
+ * and a FOURTH cache is covered by adding its name to one array below rather than by remembering to
+ * amend three purges.
+ */
+async function dropPointerIfOrphaned(
+  db: IDBDatabase, workspaceId: string, justCleared: string,
+): Promise<void> {
+  const SEALED_STORES = [STORE_DAY, STORE_GUIDANCE, STORE_CLINICAL];
+  for (const store of SEALED_STORES) {
+    if (store === justCleared) continue;
+    const held = await tx<SealedRecord | undefined>(db, store, "readonly", s => s.get(workspaceId));
+    // Something still needs the pointer. Leave it exactly where it is.
+    if (held) return;
+  }
+  await tx(db, STORE_META, "readwrite", s => s.delete(META_ACTIVE));
 }
 
 // ── THE GUIDANCE LIBRARY ────────────────────────────────────────────────────────────────────────────
@@ -358,9 +403,7 @@ export async function purgeOfflineGuidance(workspaceId: string): Promise<{ ok: b
     const db = await openDb();
     await tx(db, STORE_GUIDANCE, "readwrite", s => s.delete(workspaceId));
     await tx(db, STORE_GUIDANCE_KEY, "readwrite", s => s.delete(workspaceId));
-    // Mirror of the rule in purgeOfflineDay: the pointer survives while the other cache still needs it.
-    const day = await tx<SealedRecord | undefined>(db, STORE_DAY, "readonly", s => s.get(workspaceId));
-    if (!day) await tx(db, STORE_META, "readwrite", s => s.delete(META_ACTIVE));
+    await dropPointerIfOrphaned(db, workspaceId, STORE_GUIDANCE);
     db.close();
     return { ok: true, reason: "The practice guidance held on this device has been removed." };
   } catch (e) {
@@ -380,12 +423,136 @@ export async function purgeOfflineGuidance(workspaceId: string): Promise<{ ok: b
 export async function purgeOfflineWorkspace(workspaceId: string): Promise<{ ok: boolean; reason: string }> {
   const day = await purgeOfflineDay(workspaceId);
   const guidance = await purgeOfflineGuidance(workspaceId);
-  if (day.ok && guidance.ok)
+  // ⚠ THE CLINICAL PACK IS THE MOST IMPORTANT ONE FOR THIS FUNCTION TO REACH. It is the most sensitive
+  // thing this device holds, so a "turn it off" that left allergies and medication behind would be the
+  // switch failing at exactly the case it was asked for.
+  const clinical = await purgeOfflineClinical(workspaceId);
+  if (day.ok && guidance.ok && clinical.ok)
     return { ok: true, reason: "Anything held for this practice on this device has been removed." };
   return {
     ok: false,
-    reason: [day.ok ? null : day.reason, guidance.ok ? null : guidance.reason].filter(Boolean).join(" "),
+    reason: [
+      day.ok ? null : day.reason,
+      guidance.ok ? null : guidance.reason,
+      clinical.ok ? null : clinical.reason,
+    ].filter(Boolean).join(" "),
   };
+}
+
+// ── THE CLINICAL CARRY ──────────────────────────────────────────────────────────────────────────────
+//
+// Same shape as the two caches above, same allow-list-before-sealing discipline, its own key and its own
+// lifetime -- and ⚠ ONE RULE NEITHER OF THE OTHERS HAS: it will not be written to a device with no PIN.
+// That decision lives in the WRITER rather than here, because this module is the mechanism and the writer
+// is the policy; see OfflineCacheWriter. What this module guarantees is that the payload is sealed and
+// that the allow-list held, which is the same guarantee it gives the other two.
+
+/** Fields on the clinical payload that are not on the allow-list. Empty means it is what was agreed. */
+export function clinicalFieldsNotAllowed(pack: OfflineClinicalPack): string[] {
+  const bad = clinicalKeysOutsideAllowList(pack, OFFLINE_CLINICAL_PACK_KEYS as readonly string[])
+    .map(k => `pack.${k}`);
+  for (const r of pack.records ?? [])
+    for (const k of clinicalKeysOutsideAllowList(r, OFFLINE_CLINICAL_RECORD_KEYS as readonly string[]))
+      bad.push(`record.${k}`);
+  return [...new Set(bad)];
+}
+
+export type ClinicalWriteResult =
+  | { ok: true; records: number }
+  | { ok: false; reason: string };
+
+/**
+ * Write one workspace's clinical carry, sealed. Replaces whatever was there.
+ *
+ * ⚠ `derived` IS REQUIRED IN PRACTICE EVEN THOUGH THE TYPE ALLOWS IT TO BE ABSENT. The other two caches
+ * fall back to a generated random key when no PIN is set, because a day list behind a random key beside
+ * its ciphertext is still better than nothing. This payload does not get that fallback from its caller:
+ * the writer refuses to call this at all without a device key. The parameter keeps the same shape as its
+ * siblings so the three cannot drift apart, and the refusal is stated where it can be enforced.
+ */
+export async function cacheOfflineClinical(
+  pack: OfflineClinicalPack, derived?: CryptoKey,
+): Promise<ClinicalWriteResult> {
+  const bad = clinicalFieldsNotAllowed(pack);
+  if (bad.length > 0)
+    return { ok: false, reason: `nothing was stored: the clinical payload carried fields that are not on the offline allow-list (${bad.join(", ")})` };
+
+  try {
+    const db = await openDb();
+    let key = derived;
+    if (!key) {
+      key = await tx<CryptoKey | undefined>(db, STORE_CLINICAL_KEY, "readonly", s => s.get(pack.workspaceId));
+      if (!key) {
+        key = await generateCacheKey();
+        await tx(db, STORE_CLINICAL_KEY, "readwrite", s => s.put(key as CryptoKey, pack.workspaceId));
+      }
+    }
+    const sealed = await sealRecord(key, pack);
+    await tx(db, STORE_CLINICAL, "readwrite", s => s.put(sealed, pack.workspaceId));
+    await tx(db, STORE_META, "readwrite", s => s.put(pack.workspaceId, META_ACTIVE));
+    db.close();
+    return { ok: true, records: pack.records.length };
+  } catch (e) {
+    return { ok: false, reason: `nothing was stored: ${String((e as Error)?.message ?? e).slice(0, 200)}` };
+  }
+}
+
+/**
+ * Read the cached clinical carry, and DELETE it if it may not be shown.
+ *
+ * ⚠ Expiry is evaluated on every read and it DELETES rather than hides. For this cache that is not
+ * merely the established rule: a six-day-old medication list cannot be told apart from a correct one by
+ * anybody looking at it, so leaving it in place behind a warning would be leaving a decision to somebody
+ * who has no way to make it.
+ */
+export async function loadOfflineClinical(
+  workspaceId: string, now: Date = new Date(), derived?: CryptoKey,
+): Promise<OfflineClinicalReadResult> {
+  let db: IDBDatabase;
+  try {
+    db = await openDb();
+  } catch (e) {
+    return { state: "none", purge: false, reason: `This device's offline store could not be opened: ${String((e as Error)?.message ?? e).slice(0, 120)}` };
+  }
+
+  try {
+    const sealed = await tx<SealedRecord | undefined>(db, STORE_CLINICAL, "readonly", s => s.get(workspaceId));
+    const key = derived ?? await tx<CryptoKey | undefined>(db, STORE_CLINICAL_KEY, "readonly", s => s.get(workspaceId));
+    if (!sealed || !key) { db.close(); return readOfflineClinical(null, now); }
+
+    const pack = await openRecord<OfflineClinicalPack>(key, sealed);
+    if (!pack) {
+      await tx(db, STORE_CLINICAL, "readwrite", s => s.delete(workspaceId));
+      db.close();
+      return { state: "none", purge: false, reason: "The clinical records stored on this device could not be read back, so they have been removed." };
+    }
+
+    const result = readOfflineClinical(pack, now);
+    if (result.state !== "ok" && result.purge) {
+      await tx(db, STORE_CLINICAL, "readwrite", s => s.delete(workspaceId));
+      await tx(db, STORE_CLINICAL_KEY, "readwrite", s => s.delete(workspaceId));
+    }
+    db.close();
+    return result;
+  } catch (e) {
+    db.close();
+    return { state: "none", purge: false, reason: `This device's clinical store could not be read: ${String((e as Error)?.message ?? e).slice(0, 120)}` };
+  }
+}
+
+/** Remove the clinical carry held for a workspace -- the pack AND its key. Leaves the others alone. */
+export async function purgeOfflineClinical(workspaceId: string): Promise<{ ok: boolean; reason: string }> {
+  try {
+    const db = await openDb();
+    await tx(db, STORE_CLINICAL, "readwrite", s => s.delete(workspaceId));
+    await tx(db, STORE_CLINICAL_KEY, "readwrite", s => s.delete(workspaceId));
+    await dropPointerIfOrphaned(db, workspaceId, STORE_CLINICAL);
+    db.close();
+    return { ok: true, reason: "The clinical records held on this device have been removed." };
+  } catch (e) {
+    // ⚠ REPORTED, NEVER SWALLOWED -- see purgeOfflineDay.
+    return { ok: false, reason: `This device's clinical store could not be cleared: ${String((e as Error)?.message ?? e).slice(0, 200)}` };
+  }
 }
 
 /** One primary section, as the practitioner's own sidebar shows it. No hrefs are followed offline. */
