@@ -362,10 +362,37 @@ export function offlineBloodGroupSentence(record: OfflineClinicalRecord): Safety
  * medication list on a device is ambiguous between "this patient takes nothing" and "the list did not
  * make it onto this device", and a prescriber acting on the first when the second is true is the harm.
  */
+/**
+ * ⚠ WHICH MEDICATION STATUSES REACH A DEVICE, AND WHY `paused` IS ONE OF THEM.
+ *
+ * migration 258's four states are active / completed / paused / discontinued. The first draft of this
+ * carried `active` alone, which is the obvious reading of "current medication" and is WRONG in the one
+ * direction that matters: a paused course is a drug the patient may resume, that may still be in them,
+ * and that can interact with whatever is prescribed today. A prescriber offline who cannot see it cannot
+ * ask about it -- and unlike online, there is nobody to ring.
+ *
+ * `completed` and `discontinued` are NOT carried: those courses are over, and a finished drug listed on
+ * a small screen in bad light is the noise that makes the important two lines get skipped.
+ *
+ * ⚠ AND `paused` IS NEVER COUNTED AS "CURRENT". It is carried, and it is labelled, and the sentence
+ * below reports the two separately -- because "3 current medicines" that silently includes a paused one
+ * is a different kind of wrong from not showing it at all.
+ */
+export const OFFLINE_MEDICATION_STATUSES = ["active", "paused"] as const;
+
 export function offlineMedicationSentence(record: OfflineClinicalRecord): SafetyLine {
   if (record.medicationsUnavailable)
     return { text: "Current medication could not be read", tone: "unreadable", safeToRead: false };
+  const active = record.medications.filter(m => m.status === "active").length;
+  const paused = record.medications.filter(m => m.status === "paused").length;
   const n = record.medications.length;
+  if (n > 0 && active === 0)
+    // Everything held is paused. Saying "0 current medicines" would be true and would read as "nothing
+    // to worry about", which is the opposite of what a paused course means to somebody prescribing.
+    return {
+      text: `Nothing is recorded as currently being taken, but ${paused} paused course${paused === 1 ? " is" : "s are"} on the record`,
+      tone: "present", safeToRead: false,
+    };
   if (n === 0)
     return {
       // ⚠ NOT "no current medication". This says what is actually known: the practice's record was read
@@ -375,7 +402,14 @@ export function offlineMedicationSentence(record: OfflineClinicalRecord): Safety
     };
   const more = record.medicationsDropped > 0
     ? ` (${record.medicationsDropped} more not held on this device)` : "";
-  return { text: `${n} current medicine${n === 1 ? "" : "s"}${more}`, tone: "present", safeToRead: false };
+  // ⚠ `active`, NOT `n`. Counting the paused courses into "current medicines" is the conflation this
+  // whole block was rewritten to avoid, and it is one character away at all times.
+  const pausedClause = paused > 0
+    ? `, and ${paused} paused course${paused === 1 ? "" : "s"}` : "";
+  return {
+    text: `${active} current medicine${active === 1 ? "" : "s"}${pausedClause}${more}`,
+    tone: "present", safeToRead: false,
+  };
 }
 
 // ── THE CONTROLS AN OFFLINE CLINICAL SCREEN MAY RENDER ──────────────────────────────────────────────

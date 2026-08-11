@@ -585,6 +585,14 @@ function ClinicalPanel(
                 {m.brandName ? ` (${m.brandName})` : ""} — {m.doseText}
                 {m.route ? ` · ${m.route}` : ""}{m.frequency ? ` · ${m.frequency}` : ""}
                 {m.indication ? <span className="opacity-75"> · for {m.indication}</span> : null}
+                {/* ⚠ A PAUSED COURSE IS LABELLED WHEREVER IT APPEARS. It is carried because it can still
+                    interact and the patient may resume it, and it is marked because reading it as
+                    something they are taking today is the opposite error. */}
+                {m.status !== "active" && (
+                  <span className="ml-1 rounded bg-amber-200 px-1 py-0.5 text-[10px] font-bold uppercase text-amber-900">
+                    {m.status}
+                  </span>
+                )}
               </li>
             ))}
           </ul>

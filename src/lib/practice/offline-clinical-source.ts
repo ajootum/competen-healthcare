@@ -5,7 +5,7 @@ import {
   capOfflineClinical, projectOfflineAllergy, projectOfflineClinicalPack, projectOfflineMedication,
   projectOfflineProblem,
   OFFLINE_CLINICAL_HORIZON_DAYS, OFFLINE_CLINICAL_MAX_ALLERGIES, OFFLINE_CLINICAL_MAX_MEDICATIONS,
-  OFFLINE_CLINICAL_MAX_PATIENTS, OFFLINE_CLINICAL_MAX_PROBLEMS,
+  OFFLINE_CLINICAL_MAX_PATIENTS, OFFLINE_CLINICAL_MAX_PROBLEMS, OFFLINE_MEDICATION_STATUSES,
   OFFLINE_LAST_VISIT_EXCLUDED_STATUSES,
   type AllergySource, type MedicationSource, type OfflineClinicalPack, type OfflineClinicalRecord,
   type OfflineLastVisit, type ProblemSource,
@@ -145,10 +145,11 @@ export async function offlineClinicalPayload(
       .eq("workspace_id", ctx.workspaceId).in("patient_id", considered).limit(ROW_CEILING),
     admin.from("practice_medication").select(MEDICATION_COLUMNS)
       .eq("workspace_id", ctx.workspaceId).in("patient_id", considered)
-      // ⚠ ACTIVE ONLY. A stopped medicine listed offline as current is the specific harm this whole
-      // payload is meant to prevent, and carrying stopped rows would put the burden of noticing on a
-      // practitioner reading a small screen in bad light.
-      .eq("status", "active")
+      // ⚠ ACTIVE AND PAUSED, NOT ACTIVE ALONE -- see OFFLINE_MEDICATION_STATUSES for the reasoning. A
+      // paused course is a drug the patient may resume and that can interact with what is prescribed
+      // today; offline there is nobody to ring and ask. `completed` and `discontinued` are over, and
+      // listing finished drugs is the noise that makes the important lines get skipped.
+      .in("status", OFFLINE_MEDICATION_STATUSES as unknown as string[])
       .order("started_on", { ascending: false })
       .limit(ROW_CEILING),
     admin.from("practice_problem").select(PROBLEM_COLUMNS)
