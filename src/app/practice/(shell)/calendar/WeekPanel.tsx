@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { PlannerDay, PlannerWeek } from "@/lib/practice/planner";
 import { TRAVEL_BASIS_LABEL } from "@/lib/practice/planner-constants";
-import { hhmm, hoursMinutes, shortDate, toneFor, plannerHref, type PlannerUrlState } from "./planner-ui";
+import { hhmm, hoursMinutes, locationTone, shortDate, toneFor, plannerHref, type PlannerUrlState } from "./planner-ui";
 
 // s4 THE WEEKLY PLANNER -- Monday to Sunday, ALL SEVEN, ALWAYS.
 //
@@ -121,10 +121,18 @@ function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState }: 
         </p>
       ) : open ? (
         <div className="px-3 pb-3">
-          {/* WHERE, in clock order. Consecutive blocks at one place are one visit. */}
+          {/* WHERE, in clock order. Consecutive blocks at one place are one visit. Each place carries
+              its clinic dot (the owner, 2026-08-12) -- the same hue this location has on the month
+              grid and the day view, so the three screens read as one diary. */}
           {day.locations.length > 0 && (
-            <p className="mb-1.5 truncate text-[12px] font-semibold text-[var(--cp-primary-deep)]">
-              {day.locations.map(l => l.name).join(" → ")}
+            <p className="mb-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] font-semibold text-gray-700">
+              {day.locations.map((l, i) => (
+                <span key={`${l.locationId}-${i}`} className="flex items-center gap-1">
+                  <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${locationTone(l.locationId).dot}`} />
+                  <span className="truncate">{l.name}</span>
+                  {i < day.locations.length - 1 && <span aria-hidden className="text-gray-400">→</span>}
+                </span>
+              ))}
             </p>
           )}
 

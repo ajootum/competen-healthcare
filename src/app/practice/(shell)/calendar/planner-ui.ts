@@ -106,20 +106,24 @@ export const toneFor = (activityType: string): Tone => TONE[activityType] ?? FAL
 // is worse than no colour. The hash keeps each clinic's hue stable for the life of the location. With
 // more locations than palette entries two clinics share a hue -- acceptable, because the words are
 // the identity and the hue is a scanning aid.
-export type LocationTone = { card: string; time: string; place: string; dot: string };
+export type LocationTone = {
+  card: string; time: string; place: string; dot: string;
+  /** Background only -- the Day view tints a session card's HEADER BAND, keeping the booking list on white. */
+  band: string;
+};
 
 const LOCATION_PALETTE: LocationTone[] = [
-  { card: "border-indigo-200 bg-indigo-50/70 hover:border-indigo-400", time: "text-indigo-900", place: "text-indigo-700", dot: "bg-indigo-500" },
-  { card: "border-emerald-200 bg-emerald-50/70 hover:border-emerald-400", time: "text-emerald-900", place: "text-emerald-700", dot: "bg-emerald-500" },
-  { card: "border-teal-200 bg-teal-50/70 hover:border-teal-400", time: "text-teal-900", place: "text-teal-700", dot: "bg-teal-500" },
-  { card: "border-violet-200 bg-violet-50/70 hover:border-violet-400", time: "text-violet-900", place: "text-violet-700", dot: "bg-violet-500" },
-  { card: "border-sky-200 bg-sky-50/70 hover:border-sky-400", time: "text-sky-900", place: "text-sky-700", dot: "bg-sky-500" },
-  { card: "border-orange-200 bg-orange-50/70 hover:border-orange-400", time: "text-orange-900", place: "text-orange-700", dot: "bg-orange-500" },
+  { card: "border-indigo-200 bg-indigo-50/70 hover:border-indigo-400", time: "text-indigo-900", place: "text-indigo-700", dot: "bg-indigo-500", band: "bg-indigo-50/70" },
+  { card: "border-emerald-200 bg-emerald-50/70 hover:border-emerald-400", time: "text-emerald-900", place: "text-emerald-700", dot: "bg-emerald-500", band: "bg-emerald-50/70" },
+  { card: "border-teal-200 bg-teal-50/70 hover:border-teal-400", time: "text-teal-900", place: "text-teal-700", dot: "bg-teal-500", band: "bg-teal-50/70" },
+  { card: "border-violet-200 bg-violet-50/70 hover:border-violet-400", time: "text-violet-900", place: "text-violet-700", dot: "bg-violet-500", band: "bg-violet-50/70" },
+  { card: "border-sky-200 bg-sky-50/70 hover:border-sky-400", time: "text-sky-900", place: "text-sky-700", dot: "bg-sky-500", band: "bg-sky-50/70" },
+  { card: "border-orange-200 bg-orange-50/70 hover:border-orange-400", time: "text-orange-900", place: "text-orange-700", dot: "bg-orange-500", band: "bg-orange-50/70" },
 ];
 
 /** The comp's "Other / Special": a session with no location gets amber, distinct from every clinic. */
 export const NO_LOCATION_TONE: LocationTone = {
-  card: "border-amber-200 bg-amber-50/70 hover:border-amber-400", time: "text-amber-900", place: "text-amber-800", dot: "bg-amber-500",
+  card: "border-amber-200 bg-amber-50/70 hover:border-amber-400", time: "text-amber-900", place: "text-amber-800", dot: "bg-amber-500", band: "bg-amber-50/70",
 };
 
 export function locationTone(locationId: string | null | undefined): LocationTone {

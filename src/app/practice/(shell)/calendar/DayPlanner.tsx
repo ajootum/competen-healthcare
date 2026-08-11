@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { PlannerActivity, PlannerDay, PlannerWeek } from "@/lib/practice/planner";
 import { PLANNER_STATE_LABEL, type PlannerFilters } from "@/lib/practice/planner-constants";
 import {
-  hhmm, hoursMinutes, longDate, toneFor, STATE_CHIP, filterDay, capacityPhrase, plannerHref,
+  hhmm, hoursMinutes, longDate, toneFor, locationTone, STATE_CHIP, filterDay, capacityPhrase, plannerHref,
   APPOINTMENT_STATUS_CHIP, OUTCOME_CHIP,
   type LocationOption, type Notice, type RunAction, type PlannerUrlState,
 } from "./planner-ui";
@@ -112,16 +112,21 @@ export default function DayPlanner({
             <div className="flex flex-col gap-2">
               {shown.sessions.map(s => {
                 const inside = shown.appointments.filter(a => s.appointmentIds.includes(a.id));
+                // Per-clinic tint on the HEADER BAND only (the owner, 2026-08-12, carried over from
+                // the month view) -- the booking list below stays on white for readability, and a
+                // blocked session stays grey whatever its place.
+                const tone = locationTone(s.locationId);
                 return (
                   <section key={s.id}
-                    className={`rounded-xl border ${selectedSessionId === s.id
+                    className={`overflow-hidden rounded-xl border ${selectedSessionId === s.id
                       ? "border-[var(--cp-primary-border)] ring-1 ring-[var(--cp-primary)]/20"
                       : "border-gray-200"} ${s.capacity.blocked ? "bg-gray-50" : "bg-white"}`}>
-                    <div className="flex flex-wrap items-baseline gap-2 border-b border-gray-100 px-3 py-2">
-                      <span className="text-[13px] font-bold tabular-nums text-gray-800">
+                    <div className={`flex flex-wrap items-baseline gap-2 border-b border-gray-100 px-3 py-2 ${s.capacity.blocked ? "" : tone.band}`}>
+                      <span aria-hidden className={`h-2 w-2 shrink-0 self-center rounded-full ${s.capacity.blocked ? "bg-gray-300" : tone.dot}`} />
+                      <span className={`text-[13px] font-bold tabular-nums ${s.capacity.blocked ? "text-gray-800" : tone.time}`}>
                         {hhmm(s.startMinute)} - {hhmm(s.endMinute)}
                       </span>
-                      <span className="text-[13px] text-gray-700">{s.locationName ?? "no location"}</span>
+                      <span className={`text-[13px] ${s.capacity.blocked ? "text-gray-700" : tone.place}`}>{s.locationName ?? "no location"}</span>
                       <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                         {s.slotKindLabel}
                       </span>
