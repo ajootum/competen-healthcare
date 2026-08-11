@@ -67,6 +67,30 @@ const NATIONAL_ID = "CM90031512345X";
 const PRACTICE_ID = "PX-0042";
 const PATIENT_NAME = "Harness Offline Patient";
 
+/**
+ * ⚠⚠ THE PLATFORM FLAG ROW THIS HARNESS FOUND, SO IT CAN PUT IT BACK.
+ *
+ * `plat_feature_flags` IS PLATFORM-WIDE. It is not scoped to this fixture, this workspace or this
+ * practice -- one row governs every practice on the deployment. This harness seeds it, mutates it to
+ * prove the gate closes, and used to DELETE it unconditionally in cleanup.
+ *
+ * ⚠ SO EVERY RUN SILENTLY SWITCHED OFF OFFLINE CACHING FOR THE WHOLE PLATFORM. Migration 285 seeded that
+ * row on 2026-08-11 and a dozen harness runs later the owner opened the offline page and found nothing
+ * cached, because the flag it depends on had been deleted by a test. That is a harness changing
+ * production configuration, which is a worse failure than any assertion it contains.
+ *
+ * `undefined` means not yet looked at; `null` means genuinely absent before this run.
+ */
+let flagBeforeRun: Record<string, unknown> | null | undefined = undefined;
+
+async function restoreFlag() {
+  if (flagBeforeRun === undefined) return;          // never captured, nothing to restore
+  await admin.from("plat_feature_flags").delete().eq("key", OFFLINE_FLAG);
+  // ⚠ ABSENT IS A STATE WORTH RESTORING TOO. If there was no row before, leaving the harness one behind
+  // would switch the feature ON for a platform that had never decided to.
+  if (flagBeforeRun !== null) await admin.from("plat_feature_flags").insert(flagBeforeRun);
+}
+
 async function cleanup() {
   const { data: ws } = await admin.from("practice_workspace").select("id").eq("owner_person_id", USER);
   for (const w of (ws ?? []) as { id: string }[]) {
@@ -84,6 +108,11 @@ async function cleanup() {
   // ⚠ practice_audit_event is NOT deleted here: migration 247 made it append-only and every harness's
   // delete has been a silent no-op since. Any assertion about audit rows must scope itself to this run.
   await purgeWorkspacesOwnedBy(admin, [USER], { quiet: true });
+  // Captured ONCE, on the first cleanup, before anything here has touched it.
+  if (flagBeforeRun === undefined) {
+    const { data } = await admin.from("plat_feature_flags").select("*").eq("key", OFFLINE_FLAG).maybeSingle();
+    flagBeforeRun = (data as Record<string, unknown> | null) ?? null;
+  }
   await admin.from("plat_feature_flags").delete().eq("key", OFFLINE_FLAG);
 }
 
@@ -477,6 +506,7 @@ async function main() {
     (built.ok ? Object.keys(built.day) : []).includes("patientsUnavailableReason"));
 
   await cleanup();
+  await restoreFlag();
   report();
 }
 
@@ -486,4 +516,6 @@ function report() {
   if (failures.length) process.exitCode = 1;
 }
 
-main().catch(async e => { console.error(e); await cleanup(); process.exitCode = 1; });
+// ⚠ THE CRASH PATH RESTORES AS WELL. A harness that only puts the platform back when it passes leaves
+// the deployment misconfigured exactly when somebody is distracted by a failure.
+main().catch(async e => { console.error(e); await cleanup(); await restoreFlag(); process.exitCode = 1; });
