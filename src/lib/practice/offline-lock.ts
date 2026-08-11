@@ -296,3 +296,82 @@ export function lockSessionValid(unlockedAt: string | null, now: Date): boolean 
   const elapsed = now.getTime() - Date.parse(unlockedAt);
   return elapsed >= 0 && elapsed < LOCK_SESSION_MS;
 }
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// ⚠⚠ THE KEY-ENCRYPTION-KEY, AND WHY THE OBVIOUS DESIGN CANNOT WORK.
+//
+// The first attempt (2026-08-11, built and reverted) derived a key from the PIN and sealed the caches
+// with it directly. That fails on a fact about where the two halves live:
+//
+//   THE WRITER  OfflineCacheWriter, inside the practice (shell). Online, on every page load.
+//   THE READER  /practice/offline, OUTSIDE the shell so it renders with no connection.
+//
+// A PIN typed on the reader gives the READER a key. The writer, elsewhere, has none -- so it keeps
+// sealing with the old random key, the reader cannot decrypt, and `loadOfflineDay` DELETES what it
+// cannot decrypt. Setting a PIN would have destroyed every cached day and protocol.
+//
+// ⚠ AND A DERIVED KEY CANNOT SIMPLY BE KEPT. A non-extractable CryptoKey cannot be serialised, so it
+// cannot survive a page load; and storing it WOULD put the key back beside the ciphertext, which is the
+// whole thing the PIN was for.
+//
+// THE STANDARD SHAPE, AND THE ONE BUILT HERE:
+//
+//   PIN + salt --PBKDF2--> KEK        never stored, never leaves memory, re-derived on each unlock
+//   random data key                   wraps under the KEK
+//   WRAPPED BYTES                     this is what is stored, and it is useless without the PIN
+//   unlock: derive KEK -> unwrap      the data key lives in memory for the session
+//
+// The data key is the one the caches are actually sealed with, so BOTH halves can hold it once the
+// session is unlocked -- which is what makes a single PIN prompt serve the writer and the reader alike.
+//
+// ⚠ THE DATA KEY IS EXTRACTABLE, AND THAT IS NOT AN OVERSIGHT. It has to be, to be wrapped at all. The
+// honest reading is offline-crypto.ts's: script running as this origin can decrypt with a
+// non-extractable key anyway, so extractability changes the cost of an attack that has already
+// succeeded, not whether it succeeds. What the KEK genuinely changes is the case the PIN is FOR -- a
+// device examined without script execution, where the ciphertext is now useless on its own.
+
+/** AES-KW wrapping key derived from the PIN. ⚠ Never stored, in any form. */
+export async function deriveKek(pin: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
+  const base = await subtle().importKey("raw", new TextEncoder().encode(pin), "PBKDF2", false, ["deriveKey"]);
+  return subtle().deriveKey(
+    { name: "PBKDF2", salt: salt as unknown as BufferSource, iterations, hash: "SHA-256" },
+    base, { name: "AES-KW", length: 256 }, false, ["wrapKey", "unwrapKey"]);
+}
+
+/**
+ * A fresh data key, and its wrapped form.
+ *
+ * ⚠ THE CALLER STORES ONLY `wrapped`. Writing the key itself anywhere would undo the entire design, and
+ * this function deliberately returns them together so the mistake has to be made in plain sight.
+ */
+export async function newWrappedDataKey(kek: CryptoKey): Promise<{ key: CryptoKey; wrapped: number[] }> {
+  const key = await subtle().generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+  const wrapped = await subtle().wrapKey("raw", key, kek, "AES-KW");
+  return { key, wrapped: Array.from(new Uint8Array(wrapped)) };
+}
+
+/**
+ * ⚠ NULL ON FAILURE, NEVER A THROW. A wrong PIN produces a KEK that cannot unwrap, and AES-KW's
+ * integrity check rejects. The caller must treat that exactly as a wrong PIN -- which it is -- rather
+ * than as a fault, or a mistyped digit would read as a broken device.
+ */
+export async function unwrapDataKey(kek: CryptoKey, wrapped: number[]): Promise<CryptoKey | null> {
+  try {
+    return await subtle().unwrapKey(
+      "raw", Uint8Array.from(wrapped) as unknown as BufferSource, kek, "AES-KW",
+      { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * ⚠ CHANGING THE PIN MUST NOT RE-KEY THE DATA. The data key is unwrapped with the old PIN and re-wrapped
+ * with the new one -- the caches are never touched, so a PIN change costs nothing and loses nothing.
+ * Generating a fresh data key instead would silently orphan every cached record, which is the same
+ * failure this whole module exists to avoid.
+ */
+export async function rewrapDataKey(dataKey: CryptoKey, newKek: CryptoKey): Promise<number[]> {
+  const wrapped = await subtle().wrapKey("raw", dataKey, newKek, "AES-KW");
+  return Array.from(new Uint8Array(wrapped));
+}

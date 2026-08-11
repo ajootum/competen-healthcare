@@ -23,6 +23,7 @@ import {
   LOCK_MIN_LENGTH, LOCK_SESSION_MS, LOCK_VERIFIER_PLAINTEXT, LOCKOUT_CLEARS, LOCKOUT_NEVER_CLEARS,
   checkPin, deriveLockKey, enrolLock, lockAfterFailure, lockAfterSuccess, lockAttemptsLeft,
   lockCooldownMs, lockMessage, lockSessionValid, lockStateOf, unlock, type LockRecord,
+  deriveKek, newWrappedDataKey, unwrapDataKey, rewrapDataKey,
 } from "../src/lib/practice/offline-lock";
 
 let pass = 0; const failures: string[] = [];
@@ -169,6 +170,60 @@ async function main() {
   const cost = Date.now() - c0;
   ok("7a. ⚠ a derivation costs real time, which is the only thing protecting a short secret",
     cost > 50, `${cost}ms at ${LOCK_ITERATIONS} iterations`);
+
+  // ── 8. ⚠ THE KEY-ENCRYPTION-KEY ─────────────────────────────────────────────────────────────────
+  // The first attempt at precondition 0 sealed the caches with the PIN-derived key directly and had to
+  // be reverted: the WRITER lives in the shell and the READER outside it, so only one of them ever held
+  // the key, and `loadOfflineDay` DELETES what it cannot decrypt. A PIN would have destroyed every
+  // cached day. The KEK exists so both halves can hold the same DATA key once a session is unlocked.
+  const IT = 20_000;   // fast enough to run here; the product uses LOCK_ITERATIONS
+  const salt8 = Uint8Array.from(record.salt);
+  const kek = await deriveKek(GOOD_PIN, salt8, IT);
+  const { key: dataKey, wrapped } = await newWrappedDataKey(kek);
+
+  const iv8 = new Uint8Array(12);
+  (globalThis as unknown as { crypto: Crypto }).crypto.getRandomValues(iv8);
+  const sealed8 = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv8 }, dataKey,
+    new TextEncoder().encode("a clinic day"));
+
+  ok("8a. ⚠ what is stored is WRAPPED BYTES, not a key",
+    Array.isArray(wrapped) && wrapped.every(n => typeof n === "number"), `${wrapped.length} bytes`);
+  ok("8b-control. and the bytes are not the plaintext of anything recognisable",
+    !JSON.stringify(wrapped).includes("clinic"));
+
+  const reopened = await unwrapDataKey(await deriveKek(GOOD_PIN, salt8, IT), wrapped);
+  const opened = reopened
+    ? new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv8 }, reopened, sealed8))
+    : null;
+  ok("8c. ⚠ the right PIN re-derives the KEK, unwraps the SAME data key, and opens the record",
+    opened === "a clinic day", String(opened));
+
+  ok("8d. ⚠ the wrong PIN cannot unwrap at all",
+    (await unwrapDataKey(await deriveKek(WRONG_PIN, salt8, IT), wrapped)) === null);
+  ok("8e. ⚠ and it returns NULL rather than throwing -- a mistyped digit is a wrong PIN, not a fault",
+    (await unwrapDataKey(await deriveKek(WRONG_PIN, salt8, IT), wrapped)) === null);
+
+  // ⚠ THE ONE THAT MATTERS MOST FOR A LIVE DEVICE: changing the PIN must not orphan the caches.
+  const newKek = await deriveKek("a-completely-different-pin", salt8, IT);
+  const rewrapped = await rewrapDataKey(reopened!, newKek);
+  const afterChange = await unwrapDataKey(newKek, rewrapped);
+  const stillOpens = afterChange
+    ? new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv8 }, afterChange, sealed8))
+    : null;
+  ok("8f. ⚠ changing the PIN RE-WRAPS without re-keying -- everything cached is still readable",
+    stillOpens === "a clinic day", String(stillOpens));
+  ok("8g. and the old PIN stops working the moment it is changed",
+    (await unwrapDataKey(await deriveKek(GOOD_PIN, salt8, IT), rewrapped)) === null);
+
+  // ⚠ THE KEK CANNOT BE SERIALISED, TESTED RATHER THAN GREPPED. The first version of this line searched
+  // the source for "kek," and went red -- passing a KEK as an ARGUMENT is normal and correct, which is
+  // most of what the file does with it. The property that actually matters is that it is
+  // non-extractable, so no amount of later carelessness can write it to IndexedDB beside the ciphertext.
+  const kekExportable = await crypto.subtle.exportKey("raw", kek).then(() => true).catch(() => false);
+  ok("8h. ⚠ the KEK is NON-EXTRACTABLE -- it cannot be written anywhere, even by mistake",
+    kekExportable === false);
+  ok("8i-control. the DATA key IS extractable, because it has to be wrapped at all",
+    await crypto.subtle.exportKey("raw", dataKey).then(() => true).catch(() => false));
 
   report();
 }

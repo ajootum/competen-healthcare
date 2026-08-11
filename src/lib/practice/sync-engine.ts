@@ -36,6 +36,27 @@ import type { WorkspaceContext } from "@/lib/practice/access";
 export const SYNC_TABLE = "practice_sync_transaction";
 export const SYNC_MIGRATION = "284-sync-transaction-ledger";
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// ⚠ RETENTION: THE LEDGER IS NEVER PURGED, AND THAT IS A DECISION TAKEN ON 2026-08-11, NOT AN OMISSION.
+//
+// Migration 284 shipped with retention unset and flagged as open. It was then argued the other way and
+// settled: THERE IS NO PROVABLY SAFE WINDOW.
+//
+//   Deleting a row RESTORES THE DUPLICATE IT WAS PREVENTING. The whole value of this table is that a
+//   transaction id it has seen can never be applied twice. The outbox is exempt from expiry by the
+//   user's decision of 2026-08-08, so a device may hold an unsent transaction indefinitely -- there is
+//   no age at which a retry becomes impossible, only ages at which it becomes unlikely.
+//
+//   And the cost of keeping it is small. A row is a few hundred bytes with no clinical payload (284
+//   deliberately stores none). A practice at a thousand transactions a day is about 70 MB a year, on a
+//   table with three indexes and no joins.
+//
+// ⚠ WHEN TO REVISIT, so this is a decision with a trigger rather than a shrug: if a single practice ever
+// exceeds roughly ten million rows, or the table's index bloat starts showing in the status query, the
+// answer is ARCHIVAL -- move old rows somewhere a lookup can still reach them -- and NOT deletion. A
+// transaction id that cannot be found is a transaction that can be applied again.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
 /** COMP-SYNC-001 s5. What the device uploads, one per accepted action. */
 export type SyncTransaction = {
   id: string;
