@@ -317,7 +317,30 @@ async function main() {
   // The JSX, not only the data. s5's warning is about a FORM reused from an online page that merely fails
   // on submit -- which no assertion over a control array would ever see.
   const pageSrc = readFileSync("src/app/practice/offline/page.tsx", "utf8");
-  const offlineTree = readerSrc + pageSrc;
+  const frameSrc = readFileSync("src/app/practice/offline/OfflineFrame.tsx", "utf8");
+  const offlineTree = readerSrc + pageSrc + frameSrc;
+
+  // ── ⚠ THE FRAME MUST NOT REACH INTO THE SHELL, AND MUST NOT PRETEND TO NAVIGATE ─────────────────
+  // The offline page renders with no connection, so anything it imports must too. The shell layout sits
+  // behind six database reads and REDIRECTS on failure -- borrowing its sidebar would put that graph
+  // behind the one page that has to work when nothing else does.
+  // ⚠ PLAIN STRING CHECKS, NO REGEX LITERALS, AND THE REASON IS WORTH THE LINES. The first version
+  // of these three was written through a shell-quoted script and every backslash was eaten: the escape
+  // for whitespace became a literal letter, so the "from" needle could never match anything, and the
+  // parenthesis escapes became a capture group matching a bare word. All three PASSED against code
+  // deliberately broken to fail them. Seventh mangled pattern this session; the cure is not more care,
+  // it is not writing regex literals through a shell at all.
+  const importsTheShell = offlineTree.includes("(shell)/") || offlineTree.includes("(shell)\"");
+  ok("6h. ⚠ nothing in the offline tree imports from the (shell) group",
+    !importsTheShell, "the shell sits behind six database reads and redirects on failure");
+  ok("6i. ⚠ the frame offers NO navigation -- offline every other route redirects back here",
+    !frameSrc.includes("<Link") && !frameSrc.includes("href="),
+    "nine links that all bounce to this page look normal and behave bizarrely");
+  ok("6j. ⚠ and it names no practice and no person",
+    !frameSrc.includes("workspaceName") && !frameSrc.includes("fullName")
+    && !frameSrc.includes("ctx.") && !frameSrc.includes("profile"));
+  ok("6k-control. it DOES render the product mark, so 6i is not passing over an empty file",
+    frameSrc.includes("competen") && frameSrc.includes("cp-shell"));
   ok("6d. the offline screen contains no form and no input of any kind",
     !/<form\b/i.test(offlineTree) && !/<input\b/i.test(offlineTree)
     && !/<textarea\b/i.test(offlineTree) && !/<select\b/i.test(offlineTree));

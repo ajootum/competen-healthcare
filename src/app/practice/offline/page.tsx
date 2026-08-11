@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import OfflineFrame from "./OfflineFrame";
 import OfflineReader from "./OfflineReader";
 
 // /practice/offline — CP-OFFLINE-SURVEY-001 s3.3 step 3.
@@ -27,9 +28,11 @@ export const metadata: Metadata = {
 };
 
 export default function PracticeOfflinePage() {
+  // ⚠ OfflineFrame is purpose-built and imports nothing from the (shell) group. See its header: this page
+  // must render with no connection, and the shell's chrome sits behind six database reads.
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-6">
+    <OfflineFrame>
       <OfflineReader />
-    </main>
+    </OfflineFrame>
   );
 }
