@@ -36,7 +36,7 @@ import { join } from "node:path";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
-import { registerPatient } from "../src/lib/practice/patients";
+import { registerPatient, registerNeighbours } from "../src/lib/practice/patients";
 import { resolveWorkspaceContext, type WorkspaceContext } from "../src/lib/practice/access";
 import { addFacility, addPatientIdentifier } from "../src/lib/practice/facilities";
 import { addRelationship } from "../src/lib/practice/relationships";
@@ -724,6 +724,27 @@ async function main() {
   ok("20g. name_desc IS name REVERSED, so a header click flips rather than re-deals",
     zToA.rows.map(r => r.patientId).join("|") === [...aToZ.rows].reverse().map(r => r.patientId).join("|"),
     JSON.stringify({ aToZ: aToZ.rows.map(r => r.name), zToA: zToA.rows.map(r => r.name) }));
+
+  // ── 20h-j. THE REGISTER WALK on the patient page (the owner, 2026-08-11) ──────────────────────────
+  // registerNeighbours must agree with the register's own default order: prev/next of a middle row are
+  // exactly the rows beside it in the default cohort. Asserted against the cohort rather than fixture
+  // ids, so a change to the default order breaks this loudly instead of silently disagreeing.
+  const registerOrder = (await myPatients(admin, a, { pageSize: MAX_PAGE_SIZE })).rows;
+  const mid = Math.floor(registerOrder.length / 2);
+  const midNb = await registerNeighbours(admin, wsA, registerOrder[mid].patientId);
+  ok("20h. A MIDDLE PATIENT'S NEIGHBOURS ARE THE ROWS BESIDE IT in the register's default order",
+    midNb.known && midNb.prev?.id === registerOrder[mid - 1].patientId &&
+    midNb.next?.id === registerOrder[mid + 1].patientId,
+    JSON.stringify({ mid: registerOrder[mid].name, prev: midNb.prev?.name, next: midNb.next?.name }));
+  const firstNb = await registerNeighbours(admin, wsA, registerOrder[0].patientId);
+  const lastNb = await registerNeighbours(admin, wsA, registerOrder[registerOrder.length - 1].patientId);
+  ok("20i. the ends say so: first has no prev, last has no next -- and both still KNOW it",
+    firstNb.known && firstNb.prev === null && firstNb.next?.id === registerOrder[1].patientId &&
+    lastNb.known && lastNb.next === null,
+    JSON.stringify({ first: firstNb.prev, last: lastNb.next }));
+  const ghostNb = await registerNeighbours(admin, wsA, "00000000-0000-4000-8000-00000000dead");
+  ok("20j. an id not on the register gets NO neighbours, known -- never a guessed walk",
+    ghostNb.known && ghostNb.prev === null && ghostNb.next === null, JSON.stringify(ghostNb));
 
   // THE BRIDGE FROM A FIGURE TO A LIST.
   const fromTile = await myPatients(admin, a, { patientIds: w("waiting").patientIds });

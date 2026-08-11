@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { audit } from "@/lib/practice/audit";
+import { SORT_ORDER_CAP } from "@/lib/practice/patient-workspace-constants";
 
 // PEN-002 Patient Identity Engine -- one longitudinal identity per patient, duplicates prevented at
 // registration, retrieval in seconds, merges audited. This module is the engine; CPR-V2-004's registry and
@@ -483,6 +484,36 @@ export async function mergePatients(admin: any, args: {
 }
 
 /** The patient with everything the registry shows (CPR-V2-002/004): identity, identifiers, contacts, diary. */
+/**
+ * The record's neighbours in the register's DEFAULT order (most recently registered first, id as the
+ * tiebreak) -- so the patient page can walk the register without a round-trip to it. The owner,
+ * 2026-08-11: "go to the next patient without having to go back to registry".
+ *
+ * `known: false` means the answer could not be trusted -- the read failed or the register exceeded the
+ * bound -- and the caller must render NOTHING rather than a "next" that silently skips people.
+ */
+export async function registerNeighbours(admin: any, workspaceId: string, patientId: string): Promise<{
+  prev: { id: string; name: string } | null;
+  next: { id: string; name: string } | null;
+  known: boolean;
+}> {
+  const none = { prev: null, next: null };
+  const { data, error } = await admin.from("practice_patient")
+    .select("id, display_name").eq("workspace_id", workspaceId).eq("status", "active")
+    .order("created_at", { ascending: false }).order("id", { ascending: false })
+    .limit(SORT_ORDER_CAP + 1);
+  if (error) return { ...none, known: false };
+  const rows = (data ?? []) as { id: string; display_name: string }[];
+  if (rows.length > SORT_ORDER_CAP) return { ...none, known: false };
+  const i = rows.findIndex(r => r.id === patientId);
+  if (i === -1) return { ...none, known: true };
+  return {
+    prev: i > 0 ? { id: rows[i - 1].id, name: rows[i - 1].display_name } : null,
+    next: i < rows.length - 1 ? { id: rows[i + 1].id, name: rows[i + 1].display_name } : null,
+    known: true,
+  };
+}
+
 export async function getPatient(admin: any, workspaceId: string, patientId: string) {
   const { data: patient } = await admin.from("practice_patient")
     .select("id, display_name, sex, birth_date, age_estimate_years, status, merged_into_patient_id, record_version, created_at")

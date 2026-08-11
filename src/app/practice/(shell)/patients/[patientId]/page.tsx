@@ -3,7 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
-import { getPatient } from "@/lib/practice/patients";
+import { getPatient, registerNeighbours } from "@/lib/practice/patients";
 import { patientTimeline } from "@/lib/practice/encounters";
 import { listFollowUps } from "@/lib/practice/follow-ups";
 import { patientFollowUps } from "@/lib/practice/follow-up-plans";
@@ -108,6 +108,10 @@ export default async function PatientPage({ params, searchParams }: {
   // who takes nothing.
   const medications = await patientMedications(admin, shell.ctx, patientId);
 
+  // The register-walk links in the header. After the merged-record check would be too late: a merged
+  // record renders its signpost and returns before the header exists.
+  const neighbours = await registerNeighbours(admin, shell.ctx.workspaceId, patientId);
+
   if (patient.status === "merged") {
     return (
       <div className="max-w-3xl">
@@ -140,7 +144,31 @@ export default async function PatientPage({ params, searchParams }: {
             {" · "}{patient.status}
           </p>
         </div>
-        <Link href="/practice/patients" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">← Registry</Link>
+        <div className="flex items-center gap-3">
+          {/* ⚠ WALKING THE REGISTER WITHOUT THE ROUND-TRIP (the owner, 2026-08-11). The order is the
+              register's own default -- most recently registered first -- so "next" here is the row
+              below this patient on an unsorted registry. When the neighbours could not be trusted
+              (read failed, register over the bound) NOTHING renders: a "next" that silently skipped
+              somebody would be worse than the round-trip this replaces. */}
+          {neighbours.known && (neighbours.prev || neighbours.next) && (
+            <span className="flex items-center gap-2 text-[12px] font-semibold">
+              {neighbours.prev ? (
+                <Link href={`/practice/patients/${neighbours.prev.id}`} title={neighbours.prev.name}
+                  className="text-[var(--cp-primary-deep)] hover:underline">← {neighbours.prev.name}</Link>
+              ) : (
+                <span className="text-gray-300">first on the register</span>
+              )}
+              <span aria-hidden className="text-gray-300">|</span>
+              {neighbours.next ? (
+                <Link href={`/practice/patients/${neighbours.next.id}`} title={neighbours.next.name}
+                  className="text-[var(--cp-primary-deep)] hover:underline">{neighbours.next.name} →</Link>
+              ) : (
+                <span className="text-gray-300">last on the register</span>
+              )}
+            </span>
+          )}
+          <Link href="/practice/patients" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">← Registry</Link>
+        </div>
       </div>
 
       <div className="mt-4 grid lg:grid-cols-2 gap-4">
