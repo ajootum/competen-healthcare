@@ -317,6 +317,47 @@ async function main() {
     fakeSelf, fakeCaches, () => Promise.reject(new Error("offline")), Response, URL,
   );
 
+  // ── ⚠ THE SHELL IS USELESS WITHOUT WHAT IT REFERENCES ───────────────────────────────────────────
+  // Measured in a real browser on 2026-08-11: install cached ONE entry, the page needed 21 assets, and
+  // 21 were missing. Offline that is the shell HTML with no CSS and no JavaScript -- unstyled text and a
+  // client component that never boots, so the screen sits on "Reading what is stored on this device..."
+  // for ever. The page had never actually worked offline, which is its only purpose.
+  // ⚠ COMMENTS STRIPPED, AND THIS IS THE SIXTH TIME IN ONE SESSION IT HAS BEEN NEEDED. sw.js now
+  // explains at length what install USED to do -- `cache.add(SHELL)` -- and why `addAll` is wrong. Both
+  // phrases are the needles below. A file that documents the fix reads, to a raw-text search, exactly
+  // like a file that still has the bug.
+  const swCode = swSrc
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split(/\r?\n/).filter(l => !/^\s*(\/\/|\*)/.test(l)).join("\n");
+  ok("7-pre-0-control. stripping comments left the worker's code behind",
+    swCode.includes("addEventListener") && swCode.includes("const CACHE"));
+
+  const extract = fakeSelf.__assetsReferencedBy as (html: string, origin: string) => string[];
+  ok("7-pre-a. the worker exposes its asset extractor for testing",
+    typeof extract === "function");
+  const sampleHtml = `<link rel="stylesheet" href="/_next/static/chunks/a__x._.css"/>`
+    + `<script src="/_next/static/chunks/b_y._.js"></script>`
+    + `<script>self.__next_f.push([1,"c:\\"/_next/static/media/f.woff2\\""])</script>`
+    + `<img src="https://elsewhere.example/_next/static/nope.js">`;
+  const found = typeof extract === "function" ? extract(sampleHtml, "https://app.example") : [];
+  ok("7-pre-b. ⚠ it finds the stylesheet, the script AND the font",
+    found.some(u => u.endsWith("a__x._.css")) && found.some(u => u.endsWith("b_y._.js"))
+    && found.some(u => u.endsWith("f.woff2")), found.join(", "));
+  ok("7-pre-c. ⚠ a font URL embedded with ESCAPED quotes is not left with a trailing backslash",
+    found.every(u => !u.includes("%5C") && !u.endsWith("/")), found.join(", "));
+  ok("7-pre-d. ⚠ and a CROSS-ORIGIN asset is refused",
+    !found.some(u => u.includes("elsewhere.example")), found.join(", "));
+  ok("7-pre-e. ⚠ install precaches the referenced assets, not just the document",
+    // ⚠ Built by concatenation, not written as a regex literal. Three times this session an escape has
+    // been eaten on its way through a shell-quoted script, and a broken literal here makes tsx print the
+    // transpiled file instead of running -- which reads as catastrophe rather than as a typo.
+    swCode.includes("assetsReferencedBy" + "(html") && !swCode.includes("cache" + ".add(" + "SHELL)"),
+    "install caches one HTML file and nothing it needs");
+  ok("7-pre-f. ⚠ each asset may fail alone -- addAll would abort the whole precache on one 404",
+    !swCode.includes("addAll"));
+  ok("7-pre-g. ⚠ the cache name was bumped, or every device keeps the broken v1 set for ever",
+    swCode.includes(`const CACHE = "competen-practice-shell-v2"`));
+
   const policy = fakeSelf.__cachePolicy as (r: { url: string; mode?: string }, origin: string) => string;
   ok("7a-control. the worker registered a fetch handler and exposed its policy",
     typeof policy === "function" && typeof listeners.fetch === "function");

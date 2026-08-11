@@ -28,8 +28,63 @@
  * sync handler would create the appearance of a queue that does not exist.
  */
 
-const CACHE = "competen-practice-shell-v1";
+/*
+ * ⚠ BUMP THIS WHENEVER WHAT IS PRECACHED CHANGES, AND IT IS NOT BOOKKEEPING.
+ *
+ * `activate` deletes every cache whose key is not this one, so the name is the only eviction mechanism
+ * there is. v1 held a shell and none of its assets; leaving the name alone would have left every device
+ * that ever installed v1 holding that broken set for ever, because a worker with an unchanged script
+ * and an unchanged cache name has no reason to rebuild anything.
+ *
+ * ⚠ AND CHANGING THE SCRIPT IS NOT ENOUGH ON ITS OWN. A browser keeps the OLD worker active until every
+ * controlled tab is gone -- unregister() does not evict a worker that is still controlling a page. That
+ * caught this change during verification: the logic was correct and the cache stayed empty, because the
+ * v1 worker was still the one running.
+ */
+const CACHE = "competen-practice-shell-v2";
 const SHELL = "/practice/offline";
+
+/*
+ * ⚠⚠ WHY THE SHELL ALONE WAS NOT ENOUGH, AND HOW THAT WAS FOUND.
+ *
+ * install used to do cache.add(SHELL) -- ONE HTML DOCUMENT -- and leave its stylesheet, its twenty-odd
+ * JavaScript chunks and its font to be cached opportunistically, if and when they happened to be
+ * requested while this worker was already running.
+ *
+ * Measured in a real browser on 2026-08-11: after install the cache held exactly one entry, and the page
+ * needed TWENTY-ONE assets, of which TWENTY-ONE were missing. Offline that renders as the shell HTML with
+ * no CSS and no JavaScript: unstyled serif text, and a client component that never boots, so the screen
+ * sits on "Reading what is stored on this device..." for ever. Which is precisely what the owner saw.
+ *
+ * ⚠ AND IT GETS WORSE AFTER A REBUILD, WHICH IS THE STEADY STATE. The shell is fetched NETWORK-FIRST, so
+ * it updates; the assets are cache-first-on-demand, so they lag. A new build changes every chunk URL, so
+ * the cache ends up holding a fresh document that points at assets it does not have. The page was in that
+ * state for as long as it has existed.
+ *
+ * So install now reads the shell it just cached, pulls the asset URLs out of it, and caches those too.
+ * No build manifest is involved -- the document is the manifest, and it is the one this page will
+ * actually be served.
+ */
+const ASSET_IN_HTML = /["'(]([^"'()\s]*\/_next\/static\/[^"'()\s]+)["')]/g;
+
+/** The /_next/static/ URLs a document references. Deduped, same-origin, absolute. */
+function assetsReferencedBy(html, origin) {
+  const found = new Set();
+  let m;
+  while ((m = ASSET_IN_HTML.exec(html)) !== null) {
+    try {
+      // ⚠ TRAILING BACKSLASHES STRIPPED. Next embeds asset URLs inside the RSC payload with ESCAPED
+      // quotes, so a naive capture ends at the backslash and yields ".../x.woff2\" -- which new URL
+      // normalises to a path with a trailing slash. That caches a 404 and, worse, misses the real asset.
+      const u = new URL(m[1].replace(/\\+$/, ""), origin);
+      if (u.origin === origin) found.add(u.href);
+    } catch {
+      // A malformed match is skipped rather than allowed to abort the precache.
+    }
+  }
+  return [...found];
+}
+self.__assetsReferencedBy = assetsReferencedBy;
 
 /**
  * "shell" | "static" | "never" — the ONLY decision this worker makes.
@@ -61,7 +116,21 @@ self.__cachePolicy = cachePolicy;
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE)
-      .then((cache) => cache.add(SHELL))
+      .then((cache) =>
+        // ⚠ THE DOCUMENT FIRST, THEN WHAT IT NEEDS IN ORDER TO BE MORE THAN A DOCUMENT.
+        fetch(SHELL, { cache: "reload" })
+          .then((res) => {
+            if (!res || !res.ok) throw new Error("shell unavailable");
+            const copy = res.clone();
+            return res.text().then((html) => cache.put(SHELL, copy).then(() => html));
+          })
+          .then((html) => {
+            const assets = assetsReferencedBy(html, self.location.origin);
+            // ⚠ addAll would abort the WHOLE precache if any single asset 404s, leaving the shell cached
+            // and nothing else -- the exact state this replaces. Each is allowed to fail on its own.
+            return Promise.all(assets.map((u) =>
+              fetch(u).then((r) => (r && r.ok && r.type === "basic" ? cache.put(u, r) : null)).catch(() => null)));
+          }))
       // ⚠ A precache that fails must not stop the worker installing. The consequence is that the offline
       // page is unavailable until the next successful load — which is honest — whereas a rejected install
       // leaves the previous worker in place with no way to say why.
