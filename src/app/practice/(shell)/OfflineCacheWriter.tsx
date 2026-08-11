@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { cacheOfflineDay, cacheOfflineGuidance, purgeOfflineWorkspace } from "@/lib/practice/offline-store";
+import { loadLock } from "@/lib/practice/offline-lock-store";
+import { sessionKey } from "@/lib/practice/offline-session";
+import DeviceLockPrompt from "../_offline/DeviceLockPrompt";
 import type { OfflineDay } from "@/lib/practice/offline-projection";
 import type { OfflineGuidanceLibrary } from "@/lib/practice/offline-guidance";
 
@@ -39,13 +42,18 @@ type Outcome =
   | { kind: "stored"; patients: number; at: string; documents: number | null }
   | { kind: "purged"; reason: string }
   | { kind: "withheld"; reason: string }
-  | { kind: "failed"; reason: string };
+  | { kind: "failed"; reason: string }
+  /** ⚠ A PIN is set and this tab has not been unlocked. Nothing was stored, and nothing was lost. */
+  | { kind: "locked" };
 
 export default function OfflineCacheWriter(
   { workspaceId, gate, showStatus = false }:
   { workspaceId: string; gate: OfflineWriterGate; showStatus?: boolean },
 ) {
   const [outcome, setOutcome] = useState<Outcome>({ kind: "idle" });
+  // ⚠ Bumped when the device is unlocked, so the effect re-runs and the cache is written immediately
+  // rather than at the next navigation. Without it, unlocking would appear to do nothing.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,7 +91,19 @@ export default function OfflineCacheWriter(
         }
       }
 
-      // ── 3. THE DAY ITSELF ─────────────────────────────────────────────────────────────────────
+      // ── 3. THE DEVICE PIN, IF THERE IS ONE ────────────────────────────────────────────────────
+      // ⚠ A LOCKED DEVICE STORES NOTHING, AND THAT IS NOT A FAILURE. The caches are sealed with a key
+      // only the PIN can unwrap, so writing them while locked is impossible -- and writing them under a
+      // DIFFERENT key would leave records the reader cannot open, which loadOfflineDay deletes. Better
+      // to hold off and say so than to fill the device with rubble.
+      const lock = await loadLock(new Date());
+      const derived = lock.state === "not_enrolled" ? undefined : (sessionKey() ?? null);
+      if (derived === null) {
+        if (!cancelled) setOutcome({ kind: "locked" });
+        return;
+      }
+
+      // ── 4. THE DAY ITSELF ─────────────────────────────────────────────────────────────────────
       try {
         const res = await fetch("/api/v1/practice/offline/day", { cache: "no-store" });
         if (!res.ok) { if (!cancelled) setOutcome({ kind: "failed", reason: `the practice could not be reached (${res.status})` }); return; }
@@ -101,7 +121,7 @@ export default function OfflineCacheWriter(
         }
         if (!body.day) { if (!cancelled) setOutcome({ kind: "withheld", reason: body.gate?.reason ?? "Nothing was stored on this device." }); return; }
 
-        const wrote = await cacheOfflineDay(body.day);
+        const wrote = await cacheOfflineDay(body.day, derived);
         if (!wrote.ok) { if (!cancelled) setOutcome({ kind: "failed", reason: wrote.reason }); return; }
 
         // ── 4. THE GUIDANCE LIBRARY ───────────────────────────────────────────────────────────────
@@ -118,7 +138,7 @@ export default function OfflineCacheWriter(
           if (gRes.ok) {
             const gBody = await gRes.json() as { library: OfflineGuidanceLibrary | null };
             if (gBody.library) {
-              const gWrote = await cacheOfflineGuidance(gBody.library);
+              const gWrote = await cacheOfflineGuidance(gBody.library, derived);
               if (gWrote.ok) documents = gWrote.documents;
             }
           }
@@ -137,7 +157,7 @@ export default function OfflineCacheWriter(
     })();
 
     return () => { cancelled = true; };
-  }, [workspaceId, gate.state, gate.purge, gate.reason]);
+  }, [workspaceId, gate.state, gate.purge, gate.reason, attempt]);
 
   if (!showStatus) return null;
 
@@ -156,12 +176,31 @@ export default function OfflineCacheWriter(
       : outcome.kind === "failed" ? `Nothing new was stored on this device: ${outcome.reason}`
       : null;
 
-  if (!line) return null;
+  // ⚠ THE PIN PROMPT IS RENDERED WHATEVER THE OUTCOME, AND IT IS THE ONLY WAY OUT OF `locked`. It is a
+  // quiet line, never a wall: the practitioner is online and has no reason to be stopped by a device
+  // credential. Ignoring it costs tomorrow's offline copy, not today's work.
+  const prompt = (
+    <DeviceLockPrompt variant="inline" onUnlocked={() => setAttempt(a => a + 1)} />
+  );
+
+  if (outcome.kind === "locked")
+    return (
+      <div className="flex flex-col gap-1">
+        <p className="text-[10.5px] text-gray-400">
+          A PIN is set on this device and this tab has not been unlocked, so nothing new is being stored
+          for offline use. Nothing already recorded is affected.
+        </p>
+        {prompt}
+      </div>
+    );
+
+  if (!line) return prompt;
   // ⚠ THE ONLY PLACE THIS WAS EVER MENTIONED, AND IT WAS NOT A LINK. /practice/offline sits outside the
   // (shell) group so it can render with no connection -- correct -- and the consequence nobody drew is
   // that it had no route in at all: not in the nav, and not linked from anywhere in the product. The
   // owner went looking for it on 2026-08-11 and there was nothing to click.
   return (
+    <div className="flex flex-col gap-1">
     <p className="text-[10.5px] text-gray-400">
       {line}{" "}
       {/* ⚠ A plain <a>: a client-side navigation needs an RSC fetch, which is unavailable exactly when
@@ -169,5 +208,7 @@ export default function OfflineCacheWriter(
       {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
       <a href="/practice/offline" className="underline hover:text-gray-600">See what is held on this device</a>
     </p>
+    {prompt}
+    </div>
   );
 }

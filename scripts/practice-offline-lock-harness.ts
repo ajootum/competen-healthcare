@@ -20,7 +20,7 @@
 import { readFileSync } from "node:fs";
 import {
   LOCK_COOLDOWN_AFTER, LOCK_FORGOTTEN_NOTE, LOCK_HONEST_NOTE, LOCK_ITERATIONS, LOCK_MAX_ATTEMPTS,
-  LOCK_MIN_LENGTH, LOCK_SESSION_MS, LOCK_VERIFIER_PLAINTEXT, LOCKOUT_CLEARS, LOCKOUT_NEVER_CLEARS,
+  LOCK_MIN_LENGTH, LOCK_SESSION_MS, LOCKOUT_CLEARS, LOCKOUT_NEVER_CLEARS,
   checkPin, deriveLockKey, enrolLock, lockAfterFailure, lockAfterSuccess, lockAttemptsLeft,
   lockCooldownMs, lockMessage, lockSessionValid, lockStateOf, unlock, type LockRecord,
   deriveKek, newWrappedDataKey, unwrapDataKey, rewrapDataKey,
@@ -68,8 +68,13 @@ async function main() {
     !("key" in (record as object)) && !/\bkey\b/.test(Object.keys(record).join(",")));
   ok("2d. a salt and an iteration count ARE stored, because derivation needs them",
     record.salt.length === 16 && record.iterations === LOCK_ITERATIONS);
-  ok("2e-control. the verifier is present and is not the plaintext",
-    record.verifier.ciphertext.length > 0 && !serialised.includes(LOCK_VERIFIER_PLAINTEXT));
+  // ⚠ THE WRAPPED KEY REPLACED THE VERIFIER, and one blob now does both jobs. A separate verifier would
+  // be a second thing that has to agree with the first about whether a PIN is right.
+  ok("2e-control. the WRAPPED data key is stored, and it is bytes rather than a key",
+    Array.isArray(record.wrappedKey) && record.wrappedKey.length > 0
+    && record.wrappedKey.every(n => typeof n === "number"), `${record.wrappedKey.length} bytes`);
+  ok("2e2. ⚠ and there is no separate verifier left to disagree with it",
+    !("verifier" in (record as object)));
 
   // The real test: does the right PIN open what the right PIN sealed, and the wrong PIN not?
   const good = await unlock(record, GOOD_PIN, NOW);

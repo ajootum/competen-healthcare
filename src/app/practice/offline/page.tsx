@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import OfflineFrame from "./OfflineFrame";
-import OfflineReader from "./OfflineReader";
+import OfflineGate from "./OfflineGate";
 
 // /practice/offline — CP-OFFLINE-SURVEY-001 s3.3 step 3.
 //
@@ -32,7 +32,10 @@ export default function PracticeOfflinePage() {
   // must render with no connection, and the shell's chrome sits behind six database reads.
   return (
     <OfflineFrame>
-      <OfflineReader />
+      {/* ⚠ The GATE, not the reader directly. The PIN is checked in the browser against a record only
+          the browser holds, so this page still renders with no connection and no session. When no PIN is
+          enrolled the gate passes straight through and behaves exactly as phase one did. */}
+      <OfflineGate />
     </OfflineFrame>
   );
 }

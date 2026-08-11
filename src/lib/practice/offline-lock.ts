@@ -90,8 +90,16 @@ export type LockState =
 export type LockRecord = {
   salt: number[];
   iterations: number;
-  /** A known plaintext sealed with the derived key. Opening it proves the PIN without storing it. */
-  verifier: { iv: number[]; ciphertext: number[] };
+  /**
+   * ⚠ THE DATA KEY, WRAPPED UNDER THE KEK. This is the whole design in one field: useless without the
+   * PIN, and the only thing about the key that is ever written down.
+   *
+   * ⚠ IT IS ALSO THE VERIFIER, WHICH IS WHY THERE IS NO LONGER A SEPARATE ONE. An earlier shape sealed a
+   * known plaintext to check the PIN. That is redundant here: a wrong PIN derives a wrong KEK, AES-KW's
+   * integrity check rejects the unwrap, and the failure IS the answer. Keeping both would have meant two
+   * blobs that must agree about whether a PIN is right, which is one more than can be kept true.
+   */
+  wrappedKey: number[];
   createdAt: string;
   failures: number;
   /** Set while cooling down. */
@@ -99,8 +107,6 @@ export type LockRecord = {
   lockedOutAt: string | null;
 };
 
-/** The constant the verifier seals. Its value is irrelevant; that it decodes is the whole test. */
-export const LOCK_VERIFIER_PLAINTEXT = "competen-practice-offline-lock-v1";
 
 // ── PURE POLICY ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -230,18 +236,16 @@ export async function enrolLock(pin: string, now: Date = new Date()): Promise<En
   try {
     const salt = new Uint8Array(LOCK_SALT_BYTES);
     (globalThis as unknown as { crypto: Crypto }).crypto.getRandomValues(salt);
-    const key = await deriveLockKey(pin, salt, LOCK_ITERATIONS);
 
-    const iv = new Uint8Array(12);
-    (globalThis as unknown as { crypto: Crypto }).crypto.getRandomValues(iv);
-    const ct = await subtle().encrypt({ name: "AES-GCM", iv }, key,
-      new TextEncoder().encode(LOCK_VERIFIER_PLAINTEXT));
+    // ⚠ THE KEK WRAPS A FRESH DATA KEY, AND ONLY THE WRAPPED FORM IS RETURNED FOR STORAGE. `key` is the
+    // data key the caches are sealed with -- the caller holds it for the session and never writes it.
+    const kek = await deriveKek(pin, salt, LOCK_ITERATIONS);
+    const { key, wrapped } = await newWrappedDataKey(kek);
 
     return {
       ok: true, key,
       record: {
-        salt: Array.from(salt), iterations: LOCK_ITERATIONS,
-        verifier: { iv: Array.from(iv), ciphertext: Array.from(new Uint8Array(ct)) },
+        salt: Array.from(salt), iterations: LOCK_ITERATIONS, wrappedKey: wrapped,
         createdAt: now.toISOString(), failures: 0, retryAt: null, lockedOutAt: null,
       },
     };
@@ -268,13 +272,12 @@ export async function unlock(record: LockRecord, pin: string, now: Date = new Da
     return { ok: false, state, record, reason: lockMessage(state, record, now) };
 
   try {
-    const key = await deriveLockKey(pin, bytes(record.salt), record.iterations);
-    const opened = await subtle().decrypt(
-      { name: "AES-GCM", iv: bytes(record.verifier.iv) as unknown as BufferSource },
-      key, bytes(record.verifier.ciphertext) as unknown as BufferSource,
-    ).then(b => new TextDecoder().decode(b)).catch(() => null);
+    // ⚠ THE UNWRAP IS THE CHECK. A wrong PIN derives a wrong KEK and AES-KW's integrity check rejects,
+    // so there is nothing to compare and no second blob that could disagree with the first.
+    const kek = await deriveKek(pin, bytes(record.salt), record.iterations);
+    const key = await unwrapDataKey(kek, record.wrappedKey);
 
-    if (opened !== LOCK_VERIFIER_PLAINTEXT) {
+    if (!key) {
       const next = lockAfterFailure(record, now);
       const nextState = lockStateOf(next, now);
       return { ok: false, state: nextState, record: next, reason: lockMessage(nextState, next, now) };

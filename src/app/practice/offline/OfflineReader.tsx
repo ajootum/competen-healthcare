@@ -65,7 +65,7 @@ const SESSION_STATE_LABEL: Record<string, string> = {
   planned: "Planned", running: "Was running at capture", done: "Finished",
 };
 
-export default function OfflineReader() {
+export default function OfflineReader({ cacheKey }: { cacheKey?: CryptoKey | null }) {
   const [result, setResult] = useState<OfflineReadResult | null>(null);
   const [guidance, setGuidance] = useState<OfflineGuidanceReadResult | null>(null);
   const [opened, setOpened] = useState<string | null>(null);
@@ -84,9 +84,13 @@ export default function OfflineReader() {
     // still render a valid library. Reading them together and gating one on the other would throw away a
     // week of protocols every midnight.
     const now = new Date();
-    setResult(await loadOfflineDay(workspaceId, now));
-    setGuidance(await loadOfflineGuidance(workspaceId, now));
-  }, []);
+    // ⚠ THE UNWRAPPED DATA KEY, WHERE THIS TAB HAS ONE. With no PIN enrolled it is undefined and the
+    // store falls back to the per-workspace key it generated, which is phase one behaviour unchanged.
+    // ⚠ AND IT MUST BE IN THE DEPENDENCY LIST: without it the first read runs before the PIN is entered,
+    // finds nothing openable, and never runs again -- the screen would sit empty behind a solved lock.
+    setResult(await loadOfflineDay(workspaceId, now, cacheKey ?? undefined));
+    setGuidance(await loadOfflineGuidance(workspaceId, now, cacheKey ?? undefined));
+  }, [cacheKey]);
 
   useEffect(() => {
     // Deferred by a tick rather than called in the effect body: a setState during the same commit
