@@ -7,7 +7,8 @@ import {
   type PlannerFilters, type PlannerPeriod,
 } from "@/lib/practice/planner-constants";
 import {
-  capacityPhrase, filterDay, hhmm, plannerHref, toneFor, type PlannerUrlState,
+  capacityPhrase, filterDay, hhmm, locationTone, plannerHref, toneFor, NO_LOCATION_TONE,
+  type PlannerUrlState,
 } from "./planner-ui";
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -60,11 +61,49 @@ export default function MonthGrid({ range, period, filters, urlState, selectedDa
         ))}
       </div>
 
+      {/* ── THE CLINIC LEGEND (the owner, 2026-08-12, from the design comp) ─────────────────────────
+          Built from the locations actually ON this grid, so it cannot list a clinic the month does not
+          contain. The hue is a scanning aid; the words on each block remain the identity. */}
+      <MonthLegend range={range} />
+
       <p className="border-t border-gray-100 px-3 py-2 text-[11px] text-gray-400">
         Counts are for your own diary. A session with no generated times shows no free count rather than
         nought -- there is nothing to count until times are generated in Practice Setup.
       </p>
     </section>
+  );
+}
+
+function MonthLegend({ range }: { range: PlannerRange }) {
+  const places = new Map<string, string>();
+  let hasNoLocation = false;
+  let hasDayOff = false;
+  for (const day of range.days) {
+    if (day.dayOff) hasDayOff = true;
+    for (const s of day.sessions) {
+      if (s.locationId) places.set(s.locationId, s.locationName ?? "Unnamed location");
+      else hasNoLocation = true;
+    }
+  }
+  if (places.size === 0 && !hasNoLocation && !hasDayOff) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-gray-100 px-3 py-2">
+      {[...places.entries()].map(([id, name]) => (
+        <span key={id} className="flex items-center gap-1.5 text-[11px] text-gray-600">
+          <span aria-hidden className={`h-2 w-2 rounded-full ${locationTone(id).dot}`} />{name}
+        </span>
+      ))}
+      {hasNoLocation && (
+        <span className="flex items-center gap-1.5 text-[11px] text-gray-600">
+          <span aria-hidden className={`h-2 w-2 rounded-full ${NO_LOCATION_TONE.dot}`} />No location named
+        </span>
+      )}
+      {hasDayOff && (
+        <span className="flex items-center gap-1.5 text-[11px] text-gray-600">
+          <span aria-hidden className="h-2 w-2 rounded-full bg-gray-300" />Day off
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -109,16 +148,20 @@ function MonthCell({ day, period, filters, urlState, selected }: {
         </p>
       ) : (
         <div className="mt-1 flex flex-col gap-1">
-          {shown.sessions.slice(0, 3).map(s => (
+          {shown.sessions.slice(0, 3).map(s => {
+            // Per-clinic tint (the comp's month view). A blocked session stays grey whatever its
+            // place: "this time is not bookable" outranks "where it would have been".
+            const tone = locationTone(s.locationId);
+            return (
             <Link key={s.id} scroll={false}
               href={plannerHref({ ...urlState, view: "day", date: day.date, from: null, to: null, sel: s.id })}
               className={`block rounded-md border px-1.5 py-1 text-left ${s.capacity.blocked
                 ? "border-gray-200 bg-gray-100"
-                : "border-gray-200 bg-white hover:border-[var(--cp-primary)]"}`}>
-              <p className="truncate text-[10px] font-semibold text-gray-800 tabular-nums">
+                : tone.card}`}>
+              <p className={`truncate text-[10px] font-semibold tabular-nums ${s.capacity.blocked ? "text-gray-800" : tone.time}`}>
                 {hhmm(s.startMinute)}-{hhmm(s.endMinute)}
               </p>
-              <p className="truncate text-[10px] text-gray-600">
+              <p className={`truncate text-[10px] ${s.capacity.blocked ? "text-gray-600" : tone.place}`}>
                 {s.locationName ?? s.slotKindLabel}
               </p>
               {/* THE COUNTS. A link, because each of them is the length of a list. */}
@@ -129,7 +172,8 @@ function MonthCell({ day, period, filters, urlState, selected }: {
                   : capacityPhrase(s.capacity)}
               </p>
             </Link>
-          ))}
+            );
+          })}
           {shown.sessions.length > 3 && (
             <Link href={dayHref} scroll={false} className="text-[10px] font-semibold text-gray-500 hover:underline">
               +{shown.sessions.length - 3} more session{shown.sessions.length - 3 === 1 ? "" : "s"}
