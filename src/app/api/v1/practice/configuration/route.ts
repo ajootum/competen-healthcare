@@ -130,6 +130,8 @@ export async function PUT(req: NextRequest) {
     name: body.name !== undefined ? String(body.name) : undefined,
     type: body.type !== undefined ? String(body.type) : undefined,
     active: typeof body.active === "boolean" ? body.active : undefined,
+    // The clinic's planner colour: a slot name, or null to return to the automatic palette.
+    colorSlot: body.colorSlot !== undefined ? (body.colorSlot === null ? null : String(body.colorSlot)) : undefined,
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });

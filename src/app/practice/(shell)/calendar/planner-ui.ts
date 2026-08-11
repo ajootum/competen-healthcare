@@ -112,13 +112,27 @@ export type LocationTone = {
   band: string;
 };
 
-const LOCATION_PALETTE: LocationTone[] = [
-  { card: "border-indigo-200 bg-indigo-50/70 hover:border-indigo-400", time: "text-indigo-900", place: "text-indigo-700", dot: "bg-indigo-500", band: "bg-indigo-50/70" },
-  { card: "border-emerald-200 bg-emerald-50/70 hover:border-emerald-400", time: "text-emerald-900", place: "text-emerald-700", dot: "bg-emerald-500", band: "bg-emerald-50/70" },
-  { card: "border-teal-200 bg-teal-50/70 hover:border-teal-400", time: "text-teal-900", place: "text-teal-700", dot: "bg-teal-500", band: "bg-teal-50/70" },
-  { card: "border-violet-200 bg-violet-50/70 hover:border-violet-400", time: "text-violet-900", place: "text-violet-700", dot: "bg-violet-500", band: "bg-violet-50/70" },
-  { card: "border-sky-200 bg-sky-50/70 hover:border-sky-400", time: "text-sky-900", place: "text-sky-700", dot: "bg-sky-500", band: "bg-sky-50/70" },
-  { card: "border-orange-200 bg-orange-50/70 hover:border-orange-400", time: "text-orange-900", place: "text-orange-700", dot: "bg-orange-500", band: "bg-orange-50/70" },
+/** Every pickable slot's full tone, keyed by the registry in planner-constants. */
+const TONE_BY_SLOT: Record<string, LocationTone> = {
+  indigo: { card: "border-indigo-200 bg-indigo-50/70 hover:border-indigo-400", time: "text-indigo-900", place: "text-indigo-700", dot: "bg-indigo-500", band: "bg-indigo-50/70" },
+  emerald: { card: "border-emerald-200 bg-emerald-50/70 hover:border-emerald-400", time: "text-emerald-900", place: "text-emerald-700", dot: "bg-emerald-500", band: "bg-emerald-50/70" },
+  teal: { card: "border-teal-200 bg-teal-50/70 hover:border-teal-400", time: "text-teal-900", place: "text-teal-700", dot: "bg-teal-500", band: "bg-teal-50/70" },
+  violet: { card: "border-violet-200 bg-violet-50/70 hover:border-violet-400", time: "text-violet-900", place: "text-violet-700", dot: "bg-violet-500", band: "bg-violet-50/70" },
+  sky: { card: "border-sky-200 bg-sky-50/70 hover:border-sky-400", time: "text-sky-900", place: "text-sky-700", dot: "bg-sky-500", band: "bg-sky-50/70" },
+  orange: { card: "border-orange-200 bg-orange-50/70 hover:border-orange-400", time: "text-orange-900", place: "text-orange-700", dot: "bg-orange-500", band: "bg-orange-50/70" },
+  rose: { card: "border-rose-200 bg-rose-50/70 hover:border-rose-400", time: "text-rose-900", place: "text-rose-700", dot: "bg-rose-500", band: "bg-rose-50/70" },
+  fuchsia: { card: "border-fuchsia-200 bg-fuchsia-50/70 hover:border-fuchsia-400", time: "text-fuchsia-900", place: "text-fuchsia-700", dot: "bg-fuchsia-500", band: "bg-fuchsia-50/70" },
+  lime: { card: "border-lime-200 bg-lime-50/70 hover:border-lime-400", time: "text-lime-900", place: "text-lime-700", dot: "bg-lime-600", band: "bg-lime-50/70" },
+  cyan: { card: "border-cyan-200 bg-cyan-50/70 hover:border-cyan-400", time: "text-cyan-900", place: "text-cyan-700", dot: "bg-cyan-500", band: "bg-cyan-50/70" },
+};
+
+// ⚠ THE AUTOMATIC PALETTE IS THE FIRST SIX, IN THIS ORDER, AND THE ORDER IS LOAD-BEARING: the hash
+// below assigns clinics into it, and reordering would silently recolour every clinic that has not
+// picked a colour. A clinic that HAS picked one (practice_location.color_slot, migration 290) is
+// immune -- its choice wins over the hash.
+const AUTO_PALETTE: LocationTone[] = [
+  TONE_BY_SLOT.indigo, TONE_BY_SLOT.emerald, TONE_BY_SLOT.teal,
+  TONE_BY_SLOT.violet, TONE_BY_SLOT.sky, TONE_BY_SLOT.orange,
 ];
 
 /** The comp's "Other / Special": a session with no location gets amber, distinct from every clinic. */
@@ -126,11 +140,17 @@ export const NO_LOCATION_TONE: LocationTone = {
   card: "border-amber-200 bg-amber-50/70 hover:border-amber-400", time: "text-amber-900", place: "text-amber-800", dot: "bg-amber-500", band: "bg-amber-50/70",
 };
 
-export function locationTone(locationId: string | null | undefined): LocationTone {
+/**
+ * The tone for a place: the practitioner's CHOSEN slot when one is set (the owner, 2026-08-12:
+ * "so i can choose colors for the different clinics"), else the stable hash. An unknown slot value
+ * falls back to the hash rather than crashing a calendar over a stale string.
+ */
+export function locationTone(locationId: string | null | undefined, chosenSlot?: string | null): LocationTone {
   if (!locationId) return NO_LOCATION_TONE;
+  if (chosenSlot && TONE_BY_SLOT[chosenSlot]) return TONE_BY_SLOT[chosenSlot];
   let h = 0;
   for (let i = 0; i < locationId.length; i++) h = ((h * 31) + locationId.charCodeAt(i)) >>> 0;
-  return LOCATION_PALETTE[h % LOCATION_PALETTE.length];
+  return AUTO_PALETTE[h % AUTO_PALETTE.length];
 }
 
 /** The legend's rows. Read out of the constants so a new type appears here the day it is added. */

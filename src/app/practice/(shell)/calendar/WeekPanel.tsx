@@ -47,6 +47,7 @@ export default function WeekPanel({ week, selectedDate, canManage, onAdd, urlSta
             canManage={canManage}
             onAdd={() => onAdd(day.date)}
             urlState={urlState}
+            locationColors={week.locationColors}
           />
         ))}
       </div>
@@ -54,9 +55,10 @@ export default function WeekPanel({ week, selectedDate, canManage, onAdd, urlSta
   );
 }
 
-function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState }: {
+function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState, locationColors }: {
   day: PlannerDay; selected: boolean; open: boolean; onToggle: () => void;
   canManage: boolean; onAdd: () => void; urlState: PlannerUrlState;
+  locationColors: Record<string, string>;
 }) {
   const w = day.workload;
   const live = day.activities.filter(a => a.state !== "cancelled");
@@ -128,7 +130,7 @@ function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState }: 
             <p className="mb-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] font-semibold text-gray-700">
               {day.locations.map((l, i) => (
                 <span key={`${l.locationId}-${i}`} className="flex items-center gap-1">
-                  <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${locationTone(l.locationId).dot}`} />
+                  <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${locationTone(l.locationId, locationColors[l.locationId]).dot}`} />
                   <span className="truncate">{l.name}</span>
                   {i < day.locations.length - 1 && <span aria-hidden className="text-gray-400">→</span>}
                 </span>

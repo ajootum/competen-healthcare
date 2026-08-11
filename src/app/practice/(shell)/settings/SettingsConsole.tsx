@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ENCOUNTER_MODES, LOCATION_TYPES, APPOINTMENT_MINUTES_BOUNDS } from "@/lib/practice/configuration";
+import { LOCATION_COLOR_SLOTS } from "@/lib/practice/planner-constants";
 import { FACILITY_TYPES } from "@/lib/practice/facilities";
 
 // The settings form, the locations list, and the trail behind both.
@@ -221,6 +222,32 @@ export default function SettingsConsole({ workspace, config, today, locations, h
                         a patient&apos;s number here cannot be shown until this is linked
                       </span>
                     )}
+                  </div>
+                )}
+
+                {/* ── THE PLANNER COLOUR (the owner, 2026-08-12) ─────────────────────────────────
+                    One hue per clinic across the month, week and day views. "Auto" returns this
+                    clinic to the hashed palette; a chosen swatch wins everywhere at once. */}
+                {canManageLocations && l.active && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5 border-t border-gray-100 pt-1.5">
+                    <span className="mr-0.5 text-[11px] text-gray-500">Planner colour</span>
+                    {LOCATION_COLOR_SLOTS.map(([slot, label, dot]) => (
+                      <button key={slot} type="button" disabled={busy} title={label}
+                        aria-label={`Colour ${l.name} ${label}`}
+                        aria-pressed={l.color_slot === slot}
+                        onClick={() => send("PUT", { locationId: l.id, colorSlot: slot })}
+                        className={`h-5 w-5 rounded-full ${dot} ${l.color_slot === slot
+                          ? "ring-2 ring-gray-700 ring-offset-1"
+                          : "opacity-70 hover:opacity-100"} disabled:opacity-40`} />
+                    ))}
+                    <button type="button" disabled={busy}
+                      aria-pressed={!l.color_slot}
+                      onClick={() => send("PUT", { locationId: l.id, colorSlot: null })}
+                      className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${!l.color_slot
+                        ? "border-gray-700 text-gray-800"
+                        : "border-gray-200 text-gray-500 hover:bg-gray-50"} disabled:opacity-40`}>
+                      Auto
+                    </button>
                   </div>
                 )}
               </li>

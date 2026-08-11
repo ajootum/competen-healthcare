@@ -1,6 +1,7 @@
 import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { practiceToday } from "@/lib/practice/practice-time";
+import { LOCATION_COLOR_SLOTS, isLocationColorSlot } from "@/lib/practice/planner-constants";
 
 // CPR-360 CONFIGURATION.
 //
@@ -259,7 +260,7 @@ export async function configurationHistory(admin: any, workspaceId: string, limi
 
 export async function listLocations(admin: any, workspaceId: string) {
   const { data } = await admin.from("practice_location")
-    .select("id, name, type, country, active, created_at, facility_id, travel_buffer_minutes")
+    .select("id, name, type, country, active, created_at, facility_id, travel_buffer_minutes, color_slot")
     .eq("workspace_id", workspaceId).order("created_at");
   return (data ?? []) as any[];
 }
@@ -297,14 +298,24 @@ export async function createLocation(admin: any, args: {
  */
 export async function updateLocation(admin: any, args: {
   workspaceId: string; locationId: string; name?: string; type?: string; active?: boolean;
+  /** A LOCATION_COLOR_SLOTS name, or null to return this clinic to the automatic palette. */
+  colorSlot?: string | null;
   actorId: string; correlationId: string;
 }): Promise<EngineResult<{ changed: string[] }>> {
   const { data: location } = await admin.from("practice_location")
-    .select("id, name, type, active").eq("id", args.locationId).eq("workspace_id", args.workspaceId).maybeSingle();
+    .select("id, name, type, active, color_slot").eq("id", args.locationId).eq("workspace_id", args.workspaceId).maybeSingle();
   if (!location) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
   const patch: Record<string, unknown> = {};
   const changed: string[] = [];
+  if (args.colorSlot !== undefined && args.colorSlot !== (location.color_slot ?? null)) {
+    if (args.colorSlot !== null && !isLocationColorSlot(args.colorSlot))
+      return {
+        ok: false, status: 400, code: "VALIDATION_ERROR",
+        message: `colorSlot must be one of: ${LOCATION_COLOR_SLOTS.map(([s]) => s).join(", ")} (or null for automatic)`,
+      };
+    patch.color_slot = args.colorSlot; changed.push("colour");
+  }
   if (args.name !== undefined) {
     const name = args.name.trim();
     if (!name) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a location needs a name" };

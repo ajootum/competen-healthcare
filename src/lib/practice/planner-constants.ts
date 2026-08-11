@@ -473,3 +473,29 @@ export function sessionPasses(f: PlannerFilters, s: {
   if (f.appointmentType || f.status || f.activityType) return false;
   return matchesQuery(f, hay(s.slotKindLabel, s.slotKind, s.locationName, s.note));
 }
+
+// ── LOCATION COLOUR SLOTS (CPR clinic themes, the owner 2026-08-12) ─────────────────────────────────
+//
+// The names a practitioner can pick for a clinic in Practice Setup, stored on
+// practice_location.color_slot (migration 290, whose CHECK mirrors this list). Null means automatic:
+// the planner hashes the location id over the first six. One registry, because the migration, the
+// engine validator, the picker and the palette disagreeing about what "teal" is would be four answers
+// to one question. The `dot` class is here so the settings picker can render a swatch without
+// importing the planner's full tone table.
+export const LOCATION_COLOR_SLOTS = [
+  ["indigo", "Indigo", "bg-indigo-500"],
+  ["emerald", "Emerald", "bg-emerald-500"],
+  ["teal", "Teal", "bg-teal-500"],
+  ["violet", "Violet", "bg-violet-500"],
+  ["sky", "Sky", "bg-sky-500"],
+  ["orange", "Orange", "bg-orange-500"],
+  ["rose", "Rose", "bg-rose-500"],
+  ["fuchsia", "Fuchsia", "bg-fuchsia-500"],
+  ["lime", "Lime", "bg-lime-600"],
+  ["cyan", "Cyan", "bg-cyan-500"],
+] as const;
+
+export type LocationColorSlot = (typeof LOCATION_COLOR_SLOTS)[number][0];
+
+export const isLocationColorSlot = (v: unknown): v is LocationColorSlot =>
+  LOCATION_COLOR_SLOTS.some(([slot]) => slot === v);

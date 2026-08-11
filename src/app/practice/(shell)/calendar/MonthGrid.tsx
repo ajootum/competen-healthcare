@@ -57,7 +57,8 @@ export default function MonthGrid({ range, period, filters, urlState, selectedDa
       <div className="grid grid-cols-7">
         {weeks.flat().map(day => (
           <MonthCell key={day.date} day={day} period={period} filters={filters}
-            urlState={urlState} selected={day.date === selectedDate} />
+            urlState={urlState} selected={day.date === selectedDate}
+            locationColors={range.locationColors} />
         ))}
       </div>
 
@@ -90,7 +91,7 @@ function MonthLegend({ range }: { range: PlannerRange }) {
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-gray-100 px-3 py-2">
       {[...places.entries()].map(([id, name]) => (
         <span key={id} className="flex items-center gap-1.5 text-[11px] text-gray-600">
-          <span aria-hidden className={`h-2 w-2 rounded-full ${locationTone(id).dot}`} />{name}
+          <span aria-hidden className={`h-2 w-2 rounded-full ${locationTone(id, range.locationColors[id]).dot}`} />{name}
         </span>
       ))}
       {hasNoLocation && (
@@ -107,9 +108,10 @@ function MonthLegend({ range }: { range: PlannerRange }) {
   );
 }
 
-function MonthCell({ day, period, filters, urlState, selected }: {
+function MonthCell({ day, period, filters, urlState, selected, locationColors }: {
   day: PlannerDay; period: PlannerPeriod; filters: PlannerFilters;
   urlState: PlannerUrlState; selected: boolean;
+  locationColors: Record<string, string>;
 }) {
   const inMonth = day.date >= period.focusFromDate && day.date <= period.focusToDate;
   const shown = filterDay(day, filters);
@@ -149,9 +151,10 @@ function MonthCell({ day, period, filters, urlState, selected }: {
       ) : (
         <div className="mt-1 flex flex-col gap-1">
           {shown.sessions.slice(0, 3).map(s => {
-            // Per-clinic tint (the comp's month view). A blocked session stays grey whatever its
-            // place: "this time is not bookable" outranks "where it would have been".
-            const tone = locationTone(s.locationId);
+            // Per-clinic tint (the comp's month view): the practitioner's chosen colour when one is
+            // set, else the stable hash. A blocked session stays grey whatever its place: "this time
+            // is not bookable" outranks "where it would have been".
+            const tone = locationTone(s.locationId, s.locationId ? locationColors[s.locationId] : null);
             return (
             <Link key={s.id} scroll={false}
               href={plannerHref({ ...urlState, view: "day", date: day.date, from: null, to: null, sel: s.id })}

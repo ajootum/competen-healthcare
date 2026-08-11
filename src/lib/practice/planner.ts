@@ -492,6 +492,12 @@ export type PlannerWeek = {
   truncated: boolean;
   /** True when the period asked for was longer than RANGE_DAY_CAP and was cut. Named, never silent. */
   rangeCapped: boolean;
+  /**
+   * The colour each clinic CHOSE in Practice Setup (practice_location.color_slot, migration 290),
+   * keyed by location id. Only locations with a choice appear; the views hash the rest. One map on the
+   * payload rather than a field on every session, so all four views resolve a hue the same way.
+   */
+  locationColors: Record<string, string>;
 };
 
 /**
@@ -738,7 +744,7 @@ export async function plannerRange(
     timezone, todayDate, fromDate, toDate, weekStartDate: fromDate, weekEndDate: toDate,
     days: dates.map(date => emptyDay(date, todayDate, unavailable)),
     workload: unavailable ? null : emptyWeekWorkload(),
-    unavailable, detail, truncated: false, rangeCapped,
+    unavailable, detail, truncated: false, rangeCapped, locationColors: {},
   });
 
   if (clock.error) return skeleton(true, clock.error.message);
@@ -763,7 +769,7 @@ export async function plannerRange(
   // per row: the travel buffers are needed for the hops anyway, so the map has to exist regardless.
   const [{ data: locs, error: locError }, { data: facs, error: facError }] = await Promise.all([
     admin.from("practice_location")
-      .select("id, name, facility_id, travel_buffer_minutes").eq("workspace_id", ctx.workspaceId),
+      .select("id, name, facility_id, travel_buffer_minutes, color_slot").eq("workspace_id", ctx.workspaceId),
     admin.from("practice_facility").select("id, name").eq("workspace_id", ctx.workspaceId),
   ]);
   // A location read that failed would silently rename every place to null and zero every travel buffer,
@@ -953,6 +959,9 @@ export async function plannerRange(
     days,
     workload: rollUp(days),
     unavailable: false, detail: null, truncated, rangeCapped,
+    locationColors: Object.fromEntries(
+      ((locs ?? []) as any[]).filter(l => l.color_slot).map(l => [l.id, l.color_slot as string]),
+    ),
   };
 }
 

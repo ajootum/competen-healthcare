@@ -114,8 +114,9 @@ export default function DayPlanner({
                 const inside = shown.appointments.filter(a => s.appointmentIds.includes(a.id));
                 // Per-clinic tint on the HEADER BAND only (the owner, 2026-08-12, carried over from
                 // the month view) -- the booking list below stays on white for readability, and a
-                // blocked session stays grey whatever its place.
-                const tone = locationTone(s.locationId);
+                // blocked session stays grey whatever its place. The practitioner's chosen colour
+                // wins over the hash.
+                const tone = locationTone(s.locationId, s.locationId ? week.locationColors[s.locationId] : null);
                 return (
                   <section key={s.id}
                     className={`overflow-hidden rounded-xl border ${selectedSessionId === s.id
