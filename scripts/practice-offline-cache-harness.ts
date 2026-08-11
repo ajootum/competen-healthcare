@@ -410,6 +410,19 @@ async function main() {
   ok("7-pre-g. ⚠ the cache name was bumped, or every device keeps the broken v1 set for ever",
     swCode.includes(`const CACHE = "competen-practice-shell-v2"`));
 
+  // ⚠ AND THE SHELL PATH MUST RE-SCAN, NOT ONLY RE-CACHE. install runs once and does not re-run for a
+  // worker whose script has not changed, so after a deploy the network-first path would store a FRESH
+  // document pointing at assets the cache does not hold -- the unstyled skeleton again. A full page load
+  // happens to request the new assets and the `static` branch catches them; a prefetch or an RSC fetch
+  // does not, and leaves the two out of step silently. Verified in a browser by poisoning the cached
+  // shell and watching one fetch bring 50 assets back in step.
+  const shellBranch = swCode.slice(swCode.indexOf("isShellItself"));
+  ok("7-pre-h. ⚠ refreshing the shell also refreshes the assets it references",
+    shellBranch.includes("assetsReferencedBy"),
+    "a deploy would leave a fresh document pointing at assets that are not cached");
+  ok("7-pre-i. ⚠ and that work never blocks the response the practitioner is waiting for",
+    shellBranch.includes("return res;"));
+
   const policy = fakeSelf.__cachePolicy as (r: { url: string; mode?: string }, origin: string) => string;
   ok("7a-control. the worker registered a fetch handler and exposed its policy",
     typeof policy === "function" && typeof listeners.fetch === "function");

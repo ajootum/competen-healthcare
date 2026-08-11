@@ -174,8 +174,30 @@ self.addEventListener("fetch", (event) => {
     fetch(event.request)
       .then((res) => {
         if (isShellItself && res && res.ok && res.type === "basic") {
-          const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put(SHELL, copy));
+          // ⚠ THE DOCUMENT AND ITS ASSETS ARE REFRESHED TOGETHER, OR NOT AT ALL.
+          //
+          // This used to cache the new HTML alone. The precache that captures its stylesheet and chunks
+          // runs at INSTALL, and install does not re-run for a worker whose script has not changed -- so
+          // after a deploy the cache would hold a FRESH document pointing at assets it did not have, and
+          // the next offline visit would be the unstyled skeleton this whole file exists to prevent.
+          // That state was reached for real on 2026-08-11.
+          //
+          // A normal page load happens to request the new assets, and the `static` branch catches them.
+          // A refresh that is NOT a full page load -- a prefetch, an RSC fetch, a background update --
+          // does not, and leaves the two out of step silently.
+          const forCache = res.clone();
+          const forScan = res.clone();
+          caches.open(CACHE).then((cache) =>
+            cache.put(SHELL, forCache).then(() =>
+              forScan.text().then((html) =>
+                Promise.all(assetsReferencedBy(html, self.location.origin).map((u) =>
+                  // Already-cached assets are re-fetched cheaply from the HTTP cache; a miss is what
+                  // this is for. Each may fail alone -- see install.
+                  fetch(u).then((r) => (r && r.ok && r.type === "basic" ? cache.put(u, r) : null))
+                    .catch(() => null))))))
+            // ⚠ Never allowed to affect the response. The practitioner gets their page whether or not
+            // the cache could be brought up to date behind it.
+            .catch(() => undefined);
         }
         return res;
       })
