@@ -51,8 +51,27 @@ const walk = (d: string, o: string[] = []): string[] => {
 
   ok("W1", /admitToEstate\(\s*admin\s*,\s*user\.id\s*,\s*roles/.test(src),
     "getCaller calls admitToEstate with the authenticated user and their roles");
-  ok("W2", /if\s*\(!\(await admitToEstate\([^)]*\)\)\.admitted\)\s*\n?\s*return forbidden/.test(src),
+  // ⚠⚠ THIS PINNED THE SPELLING OF THE CONDITION AND HAS BEEN RED SINCE THE PLANE FIX LANDED.
+  //
+  // It required `if (` to be immediately followed by `!(await admitToEstate`. When the estate gate gained
+  // its `opts.plane !== "practice"` guard -- the fix for the regression that 403'd 115 of 125 practice
+  // routes -- the condition grew a first term and this assertion went red against the CORRECTION for the
+  // very bug it exists to guard. It then sat red, which is how an assertion stops being read.
+  //
+  // The property was never the spelling. It is: THE ESTATE GATE'S ONLY OUTCOME ON REFUSAL IS `forbidden`
+  // -- it does not warn and continue, and it does not fall through to the role predicates. So the
+  // statement is sliced from the call to its terminator and that is what is asserted.
+  const gateStart = src.indexOf("admitToEstate(admin");
+  const gateEnd = src.indexOf(";", gateStart);
+  const gate = gateStart > 0 ? src.slice(src.lastIndexOf("if", gateStart), gateEnd + 1) : "";
+  ok("W2", /^if\s*\(/.test(gate) && gate.includes(".admitted") && gate.includes("return forbidden"),
     "a refused membership returns forbidden -- it does not fall through to the role predicates");
+  ok("W2b", gateStart > 0 && gateEnd > gateStart && gate.length < 400,
+    "the sliced statement is the estate gate alone, not half the file");
+  // ⚠ AND THE PLANE TERM IS PART OF THE PROPERTY NOW, not an inconvenience the regex has to tolerate.
+  // Without it this gate stands in front of gate 2 again, which is the whole regression.
+  ok("W2c", gate.includes('plane !== "practice"'),
+    "the estate gate does not apply to practice routes -- COMP-ARCH-PSA-001 keeps the gates separate");
 
   // ⚠ ORDER. The membership read must happen AFTER the profile read (it needs `roles` for break-glass) and
   // BEFORE the Caller is returned, or a refused identity is handed to a route anyway.

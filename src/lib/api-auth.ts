@@ -18,6 +18,26 @@ export type Caller = {
   roles: string[];
   hospitalId: string | null;
   organisationId: string | null;
+  /**
+   * ⚠ THE TENANT, AND UNTIL 2026-08-11 THIS FIELD DID NOT EXIST AT ALL.
+   *
+   * ENT-DEC-001 D1. The survey of the eighteen Enterprise specs turned up one fact that governs the
+   * whole programme: `getCaller` returned `hospitalId` and `organisationId` and NOTHING ELSE, so
+   * throughout the estate plane "tenant" silently meant "one hospital". A multi-facility Enterprise
+   * tenant with facility-scoped and unit-scoped administrators -- which every one of the eight
+   * sub-product specs requires in its first slice -- was not expressible.
+   *
+   * ⚠ ADDED, AND NOTHING IS GATED ON IT YET. That is deliberate and it is the lesson of the regression
+   * documented forty lines below: the last change to this function looked additive, was a new GATE, and
+   * answered 403 to the only person using the product. A field nothing reads cannot refuse anybody.
+   * The Enterprise gate arrives as `requireEnterpriseContext` (D4), in its own commit, with its
+   * `hq-scan.ts` entry (D12) beside it.
+   *
+   * Null for an account with no tenant -- which is most of them today. `profiles.tenant_id` is nullable
+   * (migration 041) and was backfilled downward from `organisations`, so a row that never belonged to a
+   * tenant legitimately has none. ⚠ Null must never be read as "any tenant".
+   */
+  tenantId: string | null;
   /** one id per request — joins the audit row, the event it raises, and the consumer's reaction */
   traceId: string;
 };
@@ -50,7 +70,11 @@ export async function getCaller(opts: { plane?: "estate" | "practice" } = {}): P
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return unauthorized();
   const admin = createAdminClient();
-  const { data: me } = await admin.from("profiles").select("role, roles, hospital_id, organisation_id").eq("id", user.id).single();
+  // ⚠ `tenant_id` JOINS THE SAME READ RATHER THAN GETTING ITS OWN. ENT-DEC-001 D1 rejected a second
+  // resolver for exactly the reason this function's own history gives: two places that answer "who is
+  // this caller" are two places for the answer to differ, and the divergence is invisible until
+  // something is written.
+  const { data: me } = await admin.from("profiles").select("role, roles, hospital_id, organisation_id, tenant_id").eq("id", user.id).single();
   const roles = ((me?.roles?.length ? me.roles : [me?.role]) as (string | null)[]).filter(Boolean) as string[];
 
   // ── GATE 1 AT THE API BOUNDARY (COMP-ARCH-PSA-001 s7/s14) ──────────────────────────────────────────
@@ -96,7 +120,7 @@ export async function getCaller(opts: { plane?: "estate" | "practice" } = {}): P
   // READ from the request, not minted here. getCaller used to mint its own uuid, which was wrong in two ways:
   // a route that called getCaller twice got two "trace" ids for one request, and the ~71 routes that never
   // call it could not obtain the same id at all. src/proxy.ts stamps it once per request instead.
-  return { admin, userId: user.id, role: (me?.role as string) ?? "", roles, hospitalId: (me?.hospital_id as string) ?? null, organisationId: (me?.organisation_id as string) ?? null, traceId: await currentTraceId() };
+  return { admin, userId: user.id, role: (me?.role as string) ?? "", roles, hospitalId: (me?.hospital_id as string) ?? null, organisationId: (me?.organisation_id as string) ?? null, tenantId: (me?.tenant_id as string) ?? null, traceId: await currentTraceId() };
 }
 
 // Require the caller to hold at least one of `roles`; null = allowed.
