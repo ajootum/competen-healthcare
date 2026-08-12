@@ -362,7 +362,23 @@ export default function EncounterConsole(props: {
   const block = (key: string, children: React.ReactNode) => {
     const b = CLINICAL_FLOW_BLOCKS.find(x => x.key === key)!;
     return (
-      <section id={`block-${b.key}`} className={`${CARD} scroll-mt-4`}>
+      // ⚠ SIXTH TAB ON THE KIT, AND THE ONE THAT NEARLY LOST ITS PADDING.
+      //
+      // THREE definitions of this card existed: Board.tsx's CARD, this file's own CARD at the top, and
+      // the kit's PANEL. The first and third are byte-identical; THIS FILE'S CARRIES `p-4` AND THE
+      // OTHERS DO NOT. Swapping to PANEL alone therefore looked like a pure consolidation and silently
+      // stripped the padding from every block on this tab -- content flush against a border, on the one
+      // tab a consultation is actually read from. tsc passed it. eslint passed it. The build would have
+      // passed it. Three same-looking strings and one of them different by four characters.
+      //
+      // The padding is stated here rather than folded into PANEL, because the other five tabs pad their
+      // own body and a padded PANEL would double it everywhere.
+      //
+      // ⚠ THE NUMBERED STEP BADGE STAYS, and is deliberately NOT pushed into the kit. It carries the
+      // CLINICAL FLOW ORDER -- why the patient is here, then the impression, then the plan -- which is
+      // this tab's own argument about the order a consultation is thought through. No other tab has an
+      // order to assert, and a kit component nobody else can use will be used wrongly by whoever finds it.
+      <section id={`block-${b.key}`} className={`${PANEL} p-4 scroll-mt-4`}>
         <div className="flex items-baseline gap-2.5">
           <span aria-hidden
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--cp-primary)] text-[11px] font-bold text-white">
