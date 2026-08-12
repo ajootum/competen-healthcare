@@ -37,6 +37,10 @@ import { purgeWorkspacesOwnedBy } from "./_cleanup";
 import {
   launchEncounter, transitionEncounter, recordDiagnosis, recordTreatment, setEncounterOutcome,
 } from "../src/lib/practice/encounters";
+// ⚠ THE SAME ENGINE THE /treatments ROUTE CALLS. A harness that posted to the route would prove the
+// route; calling the engine proves the thing every caller of it shares, and cannot pass because a
+// fixture happened to hit a different endpoint.
+import { recordTreatmentBatch } from "../src/lib/practice/treatment-capture";
 import {
   encountersDashboard, encounterExtras, addDecision, removeDecision,
   recordInvestigation, reviewInvestigation, recordReferral, updateReferralStatus,
@@ -687,6 +691,50 @@ async function main() {
   // would pass this on the strength of the two positive halves alone.
   ok("13a-2b-control. and it would notice a hardcoded clinical list",
     /const\s+(ROUTES|FREQUENCIES|DOSE_UNITS)\s*=\s*\[/.test('const ROUTES = ["oral"]'));
+
+  // ── 13a-5. THE BEHAVIOURAL GUARD: A TREATMENT ACTUALLY LANDS ────────────────────────────────────
+  //
+  // ⚠ THIS IS THE ONE THE OTHERS COULD NOT BE. Every assertion above reads SOURCE, and source cannot
+  // answer the only question that matters before CP-ENC-DIAG-001 and CP-ENC-PROC-001 rewrite two
+  // working capture forms: does a treatment recorded on this screen reach the database? A form that
+  // silently stopped posting passes 13a-1, 13a-1b, 13a-2 and 13a-2b without a murmur.
+  //
+  // It calls recordTreatmentBatch -- the same engine the /treatments route calls -- and then READS THE
+  // ROW BACK. The engine returning ok is not the assertion; the row existing is. An engine that reports
+  // success while writing nothing is precisely the failure this exists to catch, and this codebase has
+  // shipped that shape before.
+  const pTx = await registerPatient(admin, {
+    workspaceId: wsA, displayName: "Capture Path Patient", sex: "female", birthDate: "1980-06-01",
+    phone: "0772 555 900", ...base,
+  });
+  const encTx = pTx.ok
+    ? await launchEncounter(admin, { workspaceId: wsA, patientId: pTx.data.id, pathway: "new_walk_in", ...base })
+    : null;
+  ok("13a-5-setup. a patient and an open encounter exist to record against",
+    !!encTx?.ok, pTx.ok ? (encTx?.ok ? "" : `encounter: ${(encTx as { message?: string })?.message}`) : `patient: ${pTx.message}`);
+
+  if (encTx?.ok) {
+    const rec = await recordTreatmentBatch(admin, ctxA, {
+      encounterId: encTx.data.id,
+      items: [{ treatmentType: "non_drug", label: "Wound care advice" }],
+      ...base,
+    });
+    ok("13a-5. ⚠ RECORDING A TREATMENT THROUGH THE REAL ENGINE SUCCEEDS",
+      rec.ok, rec.ok ? "" : `${rec.code}: ${rec.message}`);
+
+    // ⚠ THE ROW, NOT THE RETURN VALUE.
+    const { data: row, error: rowErr } = await admin.from("practice_treatment")
+      .select("id, label").eq("encounter_id", encTx.data.id).maybeSingle();
+    ok("13a-5b. ⚠ AND THE ROW IS IN practice_treatment -- the engine did not merely say so",
+      !rowErr && !!row && row.label === "Wound care advice",
+      rowErr?.message ?? (row ? `label was ${row.label}` : "no row"));
+
+    // ⚠ CONTROL: the read must be able to come back empty, or 13a-5b passes on any encounter at all.
+    const { data: none } = await admin.from("practice_treatment")
+      .select("id").eq("encounter_id", "00000000-0000-4000-8000-00000000dead").maybeSingle();
+    ok("13a-5b-control. and the same read finds nothing for an encounter that recorded none",
+      !none, none ? "a row came back for an encounter that never existed" : "");
+  }
 
   // ⚠ AND THE TWO PANELS THAT MOVED ARE THE SAME PANELS. They were full-width blocks stacked above the
   // workspace and are now slots inside the flow. Passing them as rendered elements is what let the move
