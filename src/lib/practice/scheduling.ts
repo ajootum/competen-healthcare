@@ -1,6 +1,7 @@
 import { audit } from "@/lib/practice/audit";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
-import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
+import { practiceToday, zonedDayRange, workspaceClock } from "@/lib/practice/practice-time";
+import { locationFromRegularWeek } from "@/lib/practice/session-location";
 import { resolveBookingRule, hhmm as hhmmOf } from "@/lib/practice/availability-config";
 // CPR-V5-007 s7.7. ⚠ No cycle: practice-sessions reaches 11 modules and this one is not among them,
 // checked rather than assumed. It is imported so the per-session walk-in limit has ONE resolver shared
@@ -434,9 +435,26 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
   }
   if (!patientName) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "patientName or patientId is required" };
 
+  // ── WHERE, WHEN NOBODY SAID (the owner, 2026-08-12) ──────────────────────────────────────────────
+  //
+  // Neither booking widget asks for a location, so every appointment in the product carried
+  // location_id NULL and no per-hospital list could find any of them -- while the practice's own
+  // regular week already said "Friday is TMR". The regular week now answers it.
+  //
+  // ⚠ ONLY WHEN THE CALLER SUPPLIED NOTHING, and only when the week SETTLES it: outside the regular
+  // week, or where two sessions disagree, the booking keeps no location rather than being given a
+  // guessed one. See session-location.ts for why each refusal is a refusal.
+  let locationId = input.locationId ?? null;
+  let locationDerived: string | null = null;
+  if (!locationId) {
+    const { timezone } = await workspaceClock(admin, input.workspaceId);
+    const derived = await locationFromRegularWeek(admin, input.workspaceId, new Date(startMs).toISOString(), timezone);
+    if (derived.derived && derived.locationId) { locationId = derived.locationId; locationDerived = derived.reason; }
+  }
+
   const placed = await checkPlacement(admin, {
     workspaceId: input.workspaceId, startMs, endMs,
-    locationId: input.locationId ?? null, appointmentType: input.appointmentType,
+    locationId, appointmentType: input.appointmentType,
     allowOverlap: input.allowOverlap === true,
   });
   if (!placed.ok) return placed;
@@ -445,7 +463,7 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
   const initialStatus = input.appointmentType === "walk_in" ? "CONFIRMED" : "REQUESTED";
 
   const { data: appt, error } = await admin.from("practice_appointment").insert({
-    workspace_id: input.workspaceId, location_id: input.locationId ?? null,
+    workspace_id: input.workspaceId, location_id: locationId,
     patient_id: input.patientId ?? null,
     patient_name: patientName, patient_phone: input.patientPhone?.trim() || null,
     appointment_type: input.appointmentType, scheduled_at: new Date(startMs).toISOString(),
