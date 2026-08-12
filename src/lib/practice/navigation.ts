@@ -296,6 +296,9 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // ⚠ THE CAPABILITY IS THE PAGE'S OWN GUARD, practice.settings.manage -- which is also what the API
   // enforces. An entry rendered for somebody the page redirects is a sidebar item that bounces.
   { href: "/practice/setup/identity", label: "Identity & Address", icon: "@", capability: "practice.settings.manage", group: "Setup", phase: 8, built: true, parent: "/practice/setup" },
+  // CP-BOOKING-TAXONOMY-001 s4's no-code configuration. Same capability as the page and the API, so the
+  // entry cannot be offered to somebody the page would redirect.
+  { href: "/practice/setup/booking-taxonomy", label: "Visit Types & Modes", icon: "⌘", capability: "practice.settings.manage", group: "Setup", phase: 8, built: true, parent: "/practice/setup" },
   // CP-OFF-UI-001 s7 - the Synchronisation Centre. Filed under Setup because it is about this DEVICE
   // rather than about a patient: what it is holding, what has reached the practice, and anything that
   // needs a person. It carries the same capability as the sync endpoints so the screen and the API agree
