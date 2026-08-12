@@ -345,9 +345,9 @@ export async function applyTemplate(admin: any, args: {
 export async function composeFromEncounter(admin: any, workspaceId: string, encounterId: string): Promise<string> {
   const [{ data: enc }, { data: notes }, { data: diagnoses }, { data: treatments }] = await Promise.all([
     admin.from("practice_encounter").select("reason_for_visit, started_at").eq("id", encounterId).eq("workspace_id", workspaceId).maybeSingle(),
-    admin.from("practice_encounter_note").select("note_type, body").eq("encounter_id", encounterId),
-    admin.from("practice_diagnosis").select("label, certainty, is_primary").eq("encounter_id", encounterId).order("created_at"),
-    admin.from("practice_treatment").select("treatment_type, label, dose, route, frequency, duration").eq("encounter_id", encounterId).order("created_at"),
+    admin.from("practice_encounter_note").select("note_type, body").eq("workspace_id", workspaceId).eq("encounter_id", encounterId),
+    admin.from("practice_diagnosis").select("label, certainty, is_primary").eq("workspace_id", workspaceId).eq("encounter_id", encounterId).order("created_at"),
+    admin.from("practice_treatment").select("treatment_type, label, dose, route, frequency, duration").eq("workspace_id", workspaceId).eq("encounter_id", encounterId).order("created_at"),
   ]);
   if (!enc) return "";
 
@@ -455,7 +455,7 @@ export async function updateDocument(admin: any, args: {
 
   const expected = args.recordVersion ?? doc.record_version;
   const { data: updated, error } = await admin.from("practice_clinical_document")
-    .update(patch).eq("id", doc.id).eq("record_version", expected).select("id").maybeSingle();
+    .update(patch).eq("workspace_id", args.workspaceId).eq("id", doc.id).eq("record_version", expected).select("id").maybeSingle();
   if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
   if (!updated) return { ok: false, status: 409, code: "VERSION_CONFLICT", message: "the document changed underneath you; reload and retry" };
 
@@ -497,7 +497,7 @@ export async function transitionDocument(admin: any, args: {
   if (args.to === "SIGNED") { patch.signed_at = nowIso(); patch.signed_by = args.actorId; }
 
   const { data: updated, error } = await admin.from("practice_clinical_document")
-    .update(patch).eq("id", doc.id).eq("record_version", doc.record_version).select("id").maybeSingle();
+    .update(patch).eq("workspace_id", args.workspaceId).eq("id", doc.id).eq("record_version", doc.record_version).select("id").maybeSingle();
   if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
   if (!updated) return { ok: false, status: 409, code: "VERSION_CONFLICT", message: "the document changed underneath you; reload and retry" };
 
@@ -545,10 +545,10 @@ export async function amendDocument(admin: any, args: {
   }
 
   const { data: moved, error: moveError } = await admin.from("practice_clinical_document")
-    .update({ status: "AMENDED", record_version: doc.record_version + 1, updated_at: nowIso(), updated_by: args.actorId })
+    .update({ status: "AMENDED", record_version: doc.record_version + 1, updated_at: nowIso(), updated_by: args.actorId }).eq("workspace_id", args.workspaceId)
     .eq("id", doc.id).eq("record_version", doc.record_version).select("id").maybeSingle();
   if (moveError || !moved) {
-    await admin.from("practice_clinical_document").delete().eq("id", successor.id);
+    await admin.from("practice_clinical_document").delete().eq("workspace_id", args.workspaceId).eq("id", successor.id);
     return { ok: false, status: 409, code: "VERSION_CONFLICT", message: "the document changed underneath you; reload and retry" };
   }
 
@@ -595,11 +595,11 @@ export async function getDocument(admin: any, workspaceId: string, documentId: s
   if (!doc) return null;
 
   const [{ data: patient }, { data: releases }, { data: successor }, { data: predecessor }] = await Promise.all([
-    admin.from("practice_patient").select("id, display_name, sex, birth_date, age_estimate_years").eq("id", doc.patient_id).maybeSingle(),
-    admin.from("practice_clinical_document_release").select("id, channel, recipient, note, released_at").eq("document_id", documentId).order("released_at"),
-    admin.from("practice_clinical_document").select("id, version, status").eq("supersedes_document_id", documentId).maybeSingle(),
+    admin.from("practice_patient").select("id, display_name, sex, birth_date, age_estimate_years").eq("workspace_id", workspaceId).eq("id", doc.patient_id).maybeSingle(),
+    admin.from("practice_clinical_document_release").select("id, channel, recipient, note, released_at").eq("workspace_id", workspaceId).eq("document_id", documentId).order("released_at"),
+    admin.from("practice_clinical_document").select("id, version, status").eq("workspace_id", workspaceId).eq("supersedes_document_id", documentId).maybeSingle(),
     doc.supersedes_document_id
-      ? admin.from("practice_clinical_document").select("id, version, status").eq("id", doc.supersedes_document_id).maybeSingle()
+      ? admin.from("practice_clinical_document").select("id, version, status").eq("workspace_id", workspaceId).eq("id", doc.supersedes_document_id).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
 
@@ -622,7 +622,7 @@ export async function listDocuments(admin: any, workspaceId: string, filter: {
 
   // Names in one query rather than one per row.
   const { data: patients } = await admin.from("practice_patient")
-    .select("id, display_name").in("id", [...new Set(docs.map(d => d.patient_id))]);
+    .select("id, display_name").eq("workspace_id", workspaceId).in("id", [...new Set(docs.map(d => d.patient_id))]);
   const nameById = new Map(((patients ?? []) as any[]).map(p => [p.id, p.display_name]));
   return docs.map(d => ({ ...d, patient_name: nameById.get(d.patient_id) ?? null }));
 }

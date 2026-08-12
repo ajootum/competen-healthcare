@@ -115,7 +115,7 @@ export async function applyCloseAction(admin: any, args: {
     patch.deferred_reason = null;
   }
 
-  const { error } = await admin.from("practice_encounter").update(patch).eq("id", args.encounterId);
+  const { error } = await admin.from("practice_encounter").update(patch).eq("workspace_id", args.workspaceId).eq("id", args.encounterId);
   if (error) return { ok: false, status: 500, code: "WRITE_FAILED", message: error.message };
 
   // CPR-GROWTH-001 s2 "continuity adoption". Only a COMPLETING action can have produced a closed

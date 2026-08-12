@@ -333,7 +333,7 @@ export async function updateLocation(admin: any, args: {
     return { ok: false, status: 422, code: "NO_CHANGE", message: "nothing was different" };
 
   const { error } = await admin.from("practice_location")
-    .update({ ...patch, updated_at: nowIso() }).eq("id", location.id);
+    .update({ ...patch, updated_at: nowIso() }).eq("workspace_id", args.workspaceId).eq("id", location.id);
   if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
 
   await audit(admin, {

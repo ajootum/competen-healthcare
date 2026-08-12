@@ -265,7 +265,7 @@ export async function listProcedures(admin: any, workspaceId: string, filter: {
   if (rows.length === 0) return [];
 
   const { data: outcomes } = await admin.from("practice_procedure_outcome")
-    .select("id, procedure_id, observed_at_encounter_id, outcome_type, severity, detail, observed_on")
+    .select("id, procedure_id, observed_at_encounter_id, outcome_type, severity, detail, observed_on").eq("workspace_id", workspaceId)
     .in("procedure_id", rows.map(r => r.id)).order("observed_on");
   const byProcedure: Record<string, any[]> = {};
   for (const o of (outcomes ?? []) as any[]) (byProcedure[o.procedure_id] ??= []).push(o);
@@ -305,7 +305,7 @@ export async function procedureActivity(admin: any, workspaceId: string, sinceIs
   const ids = rows.map(r => r.id);
   const { data: complications } = ids.length
     ? await admin.from("practice_procedure_outcome")
-      .select("procedure_id, severity").eq("outcome_type", "complication").in("procedure_id", ids)
+      .select("procedure_id, severity").eq("workspace_id", workspaceId).eq("outcome_type", "complication").in("procedure_id", ids)
     : { data: [] };
 
   return {
@@ -327,9 +327,9 @@ export async function getProcedure(admin: any, workspaceId: string, procedureId:
 
   const [{ data: outcomes }, { data: patient }, { data: type }] = await Promise.all([
     admin.from("practice_procedure_outcome")
-      .select("id, observed_at_encounter_id, outcome_type, severity, detail, observed_on, created_at")
+      .select("id, observed_at_encounter_id, outcome_type, severity, detail, observed_on, created_at").eq("workspace_id", workspaceId)
       .eq("procedure_id", procedureId).order("observed_on"),
-    admin.from("practice_patient").select("id, display_name").eq("id", procedure.patient_id).maybeSingle(),
+    admin.from("practice_patient").select("id, display_name").eq("workspace_id", workspaceId).eq("id", procedure.patient_id).maybeSingle(),
     procedure.procedure_type_id
       ? admin.from("practice_procedure_type").select("id, name, aftercare, sided, consent_required").eq("id", procedure.procedure_type_id).maybeSingle()
       : Promise.resolve({ data: null }),

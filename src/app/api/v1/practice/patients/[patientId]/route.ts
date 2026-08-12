@@ -45,7 +45,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pa
     return NextResponse.json({ error: `nothing to update; editable fields: ${EDITABLE.join(", ")}` }, { status: 400 });
 
   const { data: updated } = await auth.caller.admin.from("practice_patient")
-    .update({ ...patch, record_version: existing.record_version + 1, updated_at: new Date().toISOString(), updated_by: auth.caller.userId })
+    .update({ ...patch, record_version: existing.record_version + 1, updated_at: new Date().toISOString(), updated_by: auth.caller.userId }).eq("workspace_id", auth.ctx.workspaceId)
     .eq("id", patientId).eq("record_version", body.recordVersion).select("id, record_version").maybeSingle();
   if (!updated) return NextResponse.json({ error: { code: "VERSION_CONFLICT", message: "the record changed underneath you; reload and retry" } }, { status: 409 });
 

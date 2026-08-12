@@ -268,8 +268,12 @@ export async function calendarDay(admin: any, ctx: WorkspaceContext, dayIso?: st
 
 /** The comp's patient drawer -- context without navigating away (s31). */
 export async function patientDrawer(admin: any, ctx: WorkspaceContext, patientId: string) {
+  // ⚠ patient_number JOINED THE SELECT 2026-08-12. CPR-PID-001 made YY-NNNNNN the identity a person
+  // matches on and stopped minting the practice_id IDENTIFIER ROW, so this drawer -- whose whole job is
+  // "context without navigating away" -- had been showing a patient with no identifying number at all,
+  // and its identifiers list is now legitimately empty for anyone registered since.
   const { data: patient } = await admin.from("practice_patient")
-    .select("id, display_name, birth_date, age_estimate_years, sex, status")
+    .select("id, display_name, birth_date, age_estimate_years, sex, status, patient_number")
     .eq("id", patientId).eq("workspace_id", ctx.workspaceId).maybeSingle();
   if (!patient) return null;
 
@@ -279,17 +283,17 @@ export async function patientDrawer(admin: any, ctx: WorkspaceContext, patientId
   const [{ data: identifiers }, { data: contacts }, { data: encounters }, { data: diagnoses }, { data: followUps }] =
     await Promise.all([
       admin.from("practice_patient_identifier")
-        .select("identifier_type, value, facility_id").eq("patient_id", patientId).is("valid_to", null),
+        .select("identifier_type, value, facility_id").eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId).is("valid_to", null),
       admin.from("practice_patient_contact")
-        .select("contact_type, value, preferred").eq("patient_id", patientId),
+        .select("contact_type, value, preferred").eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId),
       admin.from("practice_encounter")
-        .select("id, started_at, status, reason_for_visit, entry_pathway")
+        .select("id, started_at, status, reason_for_visit, entry_pathway").eq("workspace_id", ctx.workspaceId)
         .eq("patient_id", patientId).order("started_at", { ascending: false }).limit(5),
       admin.from("practice_diagnosis")
-        .select("label, certainty, is_primary, created_at").eq("patient_id", patientId)
+        .select("label, certainty, is_primary, created_at").eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId)
         .order("created_at", { ascending: false }).limit(5),
       admin.from("practice_follow_up")
-        .select("id, due_on, status").eq("patient_id", patientId).in("status", ["OPEN", "SCHEDULED"])
+        .select("id, due_on, status").eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId).in("status", ["OPEN", "SCHEDULED"])
         .order("due_on").limit(3),
     ]);
 

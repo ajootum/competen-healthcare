@@ -173,7 +173,7 @@ export async function reviseReflection(admin: any, ctx: WorkspaceContext, args: 
     return { ok: false, status: 400, code: "TOO_SHORT", message: "a revision cannot empty the reflection" };
 
   const { count } = await admin.from("practice_reflection_version")
-    .select("*", { count: "exact", head: true }).eq("reflection_id", current.id);
+    .select("*", { count: "exact", head: true }).eq("workspace_id", ctx.workspaceId).eq("reflection_id", current.id);
   const version = (count ?? 0) + 1;
 
   // THE SNAPSHOT IS TAKEN BEFORE THE UPDATE, and its failure is fatal to the revision. Writing the new
@@ -191,7 +191,7 @@ export async function reviseReflection(admin: any, ctx: WorkspaceContext, args: 
   for (const f of FIELDS) if (args[f] !== undefined) patch[COLUMN[f]] = args[f]!.trim() || null;
   if (args.category) patch.category = args.category;
 
-  const { error } = await admin.from("practice_reflection").update(patch).eq("id", current.id);
+  const { error } = await admin.from("practice_reflection").update(patch).eq("workspace_id", ctx.workspaceId).eq("id", current.id);
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 
   return { ok: true, data: { version } };
@@ -210,7 +210,7 @@ export async function lockReflection(admin: any, ctx: WorkspaceContext, args: {
 
   const lockedAt = nowIso();
   const { data: updated, error } = await admin.from("practice_reflection")
-    .update({ locked_at: lockedAt, updated_at: lockedAt }).eq("id", r.id).select("id");
+    .update({ locked_at: lockedAt, updated_at: lockedAt }).eq("workspace_id", ctx.workspaceId).eq("id", r.id).select("id");
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
   if (!updated || updated.length === 0)
     return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
@@ -238,7 +238,7 @@ export async function setReflectionVisibility(admin: any, ctx: WorkspaceContext,
     return { ok: false, status: 403, code: "NOT_YOURS", message: "that is somebody else's reflection" };
 
   const { error } = await admin.from("practice_reflection")
-    .update({ visibility: args.visibility, updated_at: nowIso() }).eq("id", r.id);
+    .update({ visibility: args.visibility, updated_at: nowIso() }).eq("workspace_id", ctx.workspaceId).eq("id", r.id);
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 
   await audit(admin, {
@@ -299,7 +299,7 @@ export async function promoteLearning(admin: any, ctx: WorkspaceContext, args: {
   });
   if (!created.ok) return created;
 
-  await admin.from("practice_case_learning").update({ reflection_id: r.id }).eq("id", created.data.id);
+  await admin.from("practice_case_learning").update({ reflection_id: r.id }).eq("workspace_id", ctx.workspaceId).eq("id", created.data.id);
   return created;
 }
 
@@ -365,11 +365,11 @@ export async function getReflection(admin: any, ctx: WorkspaceContext, id: strin
     // HISTORY IS THE AUTHOR'S OWN. A shared reflection shows what it says now; what it said before they
     // revised it is not part of what they chose to share.
     r.author_id === ctx.userId
-      ? admin.from("practice_reflection_version").select("version, captured_at, went_well, could_improve, learned, will_do_differently, narrative")
+      ? admin.from("practice_reflection_version").select("version, captured_at, went_well, could_improve, learned, will_do_differently, narrative").eq("workspace_id", ctx.workspaceId)
         .eq("reflection_id", r.id).order("version", { ascending: false })
       : Promise.resolve({ data: [] }),
-    admin.from("practice_task").select("id, title, status, due_on, category").eq("reflection_id", r.id),
-    admin.from("practice_case_learning").select("id, kind, body, created_at").eq("reflection_id", r.id),
+    admin.from("practice_task").select("id, title, status, due_on, category").eq("workspace_id", ctx.workspaceId).eq("reflection_id", r.id),
+    admin.from("practice_case_learning").select("id, kind, body, created_at").eq("workspace_id", ctx.workspaceId).eq("reflection_id", r.id),
   ]);
 
   return {

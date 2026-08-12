@@ -197,7 +197,7 @@ export async function transitionTask(admin: any, args: {
   if (args.outcome !== undefined) patch.outcome = args.outcome.trim() || null;
 
   const { data: updated } = await admin.from("practice_task")
-    .update(patch).eq("id", task.id).eq("record_version", task.record_version).select("id").maybeSingle();
+    .update(patch).eq("workspace_id", args.workspaceId).eq("id", task.id).eq("record_version", task.record_version).select("id").maybeSingle();
   if (!updated) return { ok: false, status: 409, code: "VERSION_CONFLICT", message: "the task changed underneath you; reload and retry" };
 
   await recordEvent(admin, args.workspaceId, task.id, {
@@ -251,7 +251,7 @@ export async function reassignTask(admin: any, args: {
     return { ok: false, status: 422, code: "NOT_A_MEMBER", message: "that person is not an active member of this practice" };
 
   const { data: updated } = await admin.from("practice_task")
-    .update({ assigned_to: args.assignedTo, record_version: task.record_version + 1, updated_at: nowIso(), updated_by: args.actorId })
+    .update({ assigned_to: args.assignedTo, record_version: task.record_version + 1, updated_at: nowIso(), updated_by: args.actorId }).eq("workspace_id", args.workspaceId)
     .eq("id", task.id).eq("record_version", task.record_version).select("id").maybeSingle();
   if (!updated) return { ok: false, status: 409, code: "VERSION_CONFLICT", message: "the task changed underneath you; reload and retry" };
 
@@ -312,7 +312,7 @@ export async function listTasks(admin: any, workspaceId: string, filter: {
 
   const patientIds = [...new Set(rows.map(r => r.patient_id).filter(Boolean))];
   const { data: patients } = patientIds.length
-    ? await admin.from("practice_patient").select("id, display_name").in("id", patientIds)
+    ? await admin.from("practice_patient").select("id, display_name").eq("workspace_id", workspaceId).in("id", patientIds)
     : { data: [] };
   const patientName = new Map(((patients ?? []) as any[]).map(p => [p.id, p.display_name]));
 
@@ -353,7 +353,7 @@ export async function getTask(admin: any, workspaceId: string, taskId: string) {
 
   const [{ data: events }, { today }, members] = await Promise.all([
     admin.from("practice_task_event")
-      .select("from_status, to_status, from_assignee, to_assignee, note, occurred_at")
+      .select("from_status, to_status, from_assignee, to_assignee, note, occurred_at").eq("workspace_id", workspaceId)
       .eq("task_id", taskId).order("occurred_at"),
     workspaceClock(admin, workspaceId),
     listMembers(admin, workspaceId),

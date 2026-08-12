@@ -216,7 +216,7 @@ export async function documentRegister(
   ].filter(Boolean))] as string[];
   let nameOf = new Map<string, string>();
   if (patientIds.length > 0) {
-    const p = await admin.from("practice_patient").select("id, display_name").in("id", patientIds);
+    const p = await admin.from("practice_patient").select("id, display_name").eq("workspace_id", workspaceId).in("id", patientIds);
     if (p.error) unreadable.push({ source: "patient names", detail: String(p.error.message) });
     else nameOf = new Map(((p.data ?? []) as any[]).map(x => [x.id, x.display_name]));
   }

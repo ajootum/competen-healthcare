@@ -65,7 +65,7 @@ export async function launchEncounter(admin: any, input: LaunchInput): Promise<E
   // and finished after the ward round still records the clinic. It is a note about where the work
   // started, not a field that tracks where the practitioner currently is.
   const { data: live } = await admin.from("practice_encounter")
-    .select("id, status").eq("patient_id", input.patientId).in("status", LIVE_STATUSES).maybeSingle();
+    .select("id, status").eq("workspace_id", input.workspaceId).eq("patient_id", input.patientId).in("status", LIVE_STATUSES).maybeSingle();
   if (live) return { ok: true, data: { id: live.id, status: live.status, resumed: true } };
 
   // A named appointment must belong to this workspace AND this patient -- an encounter filed against
@@ -84,7 +84,7 @@ export async function launchEncounter(admin: any, input: LaunchInput): Promise<E
   let previousEncounterId: string | null = null;
   if (input.pathway === "walk_in_followup" || input.pathway === "scheduled_followup") {
     const { data: prev } = await admin.from("practice_encounter")
-      .select("id").eq("patient_id", input.patientId).in("status", ["COMPLETED", "SIGNED", "AMENDED"])
+      .select("id").eq("workspace_id", input.workspaceId).eq("patient_id", input.patientId).in("status", ["COMPLETED", "SIGNED", "AMENDED"])
       .order("started_at", { ascending: false }).limit(1).maybeSingle();
     previousEncounterId = prev?.id ?? null;
   }
@@ -115,7 +115,7 @@ export async function launchEncounter(admin: any, input: LaunchInput): Promise<E
     // The partial unique index is the backstop for a race that beat the resume check above.
     if (/duplicate|unique/i.test(error.message)) {
       const { data: raced } = await admin.from("practice_encounter")
-        .select("id, status").eq("patient_id", input.patientId).in("status", LIVE_STATUSES).maybeSingle();
+        .select("id, status").eq("workspace_id", input.workspaceId).eq("patient_id", input.patientId).in("status", LIVE_STATUSES).maybeSingle();
       if (raced) return { ok: true, data: { id: raced.id, status: raced.status, resumed: true } };
     }
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
@@ -177,7 +177,7 @@ export async function transitionEncounter(admin: any, args: {
   if (args.to === "ACTIVE" && enc.status === "PAUSED") patch.interrupted_by_id = null;
 
   const { data: updated, error } = await admin.from("practice_encounter")
-    .update(patch).eq("id", enc.id).eq("record_version", enc.record_version).select("id").maybeSingle();
+    .update(patch).eq("workspace_id", args.workspaceId).eq("id", enc.id).eq("record_version", enc.record_version).select("id").maybeSingle();
   // 23505 is migration 234's index: another tab won the race between the check above and this write.
   if (error)
     return error.code === "23505"
@@ -469,11 +469,11 @@ export async function getEncounter(admin: any, workspaceId: string, encounterId:
   if (!encounter) return null;
 
   const [{ data: patient }, { data: notes }, { data: diagnoses }, { data: treatments }, { data: history }] = await Promise.all([
-    admin.from("practice_patient").select("id, display_name, sex, birth_date, age_estimate_years, status").eq("id", encounter.patient_id).single(),
-    admin.from("practice_encounter_note").select("id, note_type, body, updated_at, version, last_source, template_id").eq("encounter_id", encounterId),
-    admin.from("practice_diagnosis").select("id, label, code, certainty, is_primary, problem_id").eq("encounter_id", encounterId).order("created_at"),
-    admin.from("practice_treatment").select("id, treatment_type, label, dose, route, frequency, duration, status").eq("encounter_id", encounterId).order("created_at"),
-    admin.from("practice_encounter_status_history").select("from_status, to_status, occurred_at").eq("encounter_id", encounterId).order("occurred_at"),
+    admin.from("practice_patient").select("id, display_name, sex, birth_date, age_estimate_years, status").eq("workspace_id", workspaceId).eq("id", encounter.patient_id).single(),
+    admin.from("practice_encounter_note").select("id, note_type, body, updated_at, version, last_source, template_id").eq("workspace_id", workspaceId).eq("encounter_id", encounterId),
+    admin.from("practice_diagnosis").select("id, label, code, certainty, is_primary, problem_id").eq("workspace_id", workspaceId).eq("encounter_id", encounterId).order("created_at"),
+    admin.from("practice_treatment").select("id, treatment_type, label, dose, route, frequency, duration, status").eq("workspace_id", workspaceId).eq("encounter_id", encounterId).order("created_at"),
+    admin.from("practice_encounter_status_history").select("from_status, to_status, occurred_at").eq("workspace_id", workspaceId).eq("encounter_id", encounterId).order("occurred_at"),
   ]);
 
   return {
@@ -525,7 +525,7 @@ export async function patientTimeline(admin: any, workspaceId: string, patientId
   };
 
   const { data: diags, error: diagErr } = await admin.from("practice_diagnosis")
-    .select("encounter_id, label, certainty, is_primary").in("encounter_id", ids);
+    .select("encounter_id, label, certainty, is_primary").eq("workspace_id", workspaceId).in("encounter_id", ids);
   const diagnosesByEncounter: Record<string, any[]> = {};
   for (const d of (diags ?? []) as any[]) {
     (diagnosesByEncounter[d.encounter_id] ??= []).push(d);

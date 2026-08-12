@@ -170,7 +170,7 @@ export async function updateSavedSearch(admin: any, ctx: WorkspaceContext, args:
   const favourite = args.favourite ?? s.favourite;
   const shared = args.shared ?? s.shared;
   const { error } = await admin.from("practice_saved_search")
-    .update({ favourite, shared, updated_at: nowIso() }).eq("id", s.id);
+    .update({ favourite, shared, updated_at: nowIso() }).eq("workspace_id", ctx.workspaceId).eq("id", s.id);
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
   return { ok: true, data: { favourite, shared } };
 }
@@ -184,7 +184,7 @@ export async function deleteSavedSearch(admin: any, ctx: WorkspaceContext, args:
   if (s.owner_id !== ctx.userId)
     return { ok: false, status: 403, code: "NOT_YOURS", message: "that is somebody else's saved search" };
 
-  await admin.from("practice_saved_search").delete().eq("id", s.id);
+  await admin.from("practice_saved_search").delete().eq("workspace_id", ctx.workspaceId).eq("id", s.id);
   await audit(admin, {
     workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.search_deleted",
     payload: { savedSearchId: s.id, name: s.name }, correlationId: args.correlationId,

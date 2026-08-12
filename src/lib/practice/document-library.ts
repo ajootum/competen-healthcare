@@ -83,9 +83,9 @@ export async function deleteFolder(admin: any, args: {
   if (!f) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
   const { count } = await admin.from("practice_library_document")
-    .select("*", { count: "exact", head: true }).eq("folder_id", f.id).is("deleted_at", null);
+    .select("*", { count: "exact", head: true }).eq("workspace_id", args.workspaceId).eq("folder_id", f.id).is("deleted_at", null);
 
-  await admin.from("practice_folder").delete().eq("id", f.id);
+  await admin.from("practice_folder").delete().eq("workspace_id", args.workspaceId).eq("id", f.id);
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.folder_deleted",
     payload: { folderId: f.id, name: f.name, orphaned: count ?? 0 }, correlationId: args.correlationId,
@@ -169,7 +169,7 @@ export async function binDocument(admin: any, args: {
   if (d.deleted_at) return { ok: false, status: 422, code: "ALREADY_BINNED", message: "that is already in the bin" };
 
   await admin.from("practice_library_document")
-    .update({ deleted_at: nowIso(), deleted_by: args.actorId, updated_at: nowIso() }).eq("id", d.id);
+    .update({ deleted_at: nowIso(), deleted_by: args.actorId, updated_at: nowIso() }).eq("workspace_id", args.workspaceId).eq("id", d.id);
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.library_document_binned",
     payload: { documentId: d.id, title: d.title }, correlationId: args.correlationId,
@@ -189,7 +189,7 @@ export async function restoreDocument(admin: any, args: {
   if (d.purged_at) return { ok: false, status: 422, code: "PURGED", message: "that was purged; the file itself is gone" };
 
   await admin.from("practice_library_document")
-    .update({ deleted_at: null, deleted_by: null, updated_at: nowIso() }).eq("id", d.id);
+    .update({ deleted_at: null, deleted_by: null, updated_at: nowIso() }).eq("workspace_id", args.workspaceId).eq("id", d.id);
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.library_document_restored",
     payload: { documentId: d.id }, correlationId: args.correlationId,
@@ -211,7 +211,7 @@ export async function purgeDocument(admin: any, args: {
   if (d.purged_at) return { ok: false, status: 422, code: "ALREADY_PURGED", message: "that was already purged" };
 
   await admin.from("practice_library_document")
-    .update({ purged_at: nowIso(), updated_at: nowIso() }).eq("id", d.id);
+    .update({ purged_at: nowIso(), updated_at: nowIso() }).eq("workspace_id", args.workspaceId).eq("id", d.id);
   await admin.storage.from(LIBRARY_BUCKET).remove([d.storage_path]).catch(() => {});
 
   await audit(admin, {
@@ -326,7 +326,7 @@ export async function patientCorrespondence(admin: any, workspaceId: string, pat
   const docs = (documents ?? []) as any[];
   const { data: releases } = docs.length
     ? await admin.from("practice_clinical_document_release")
-      .select("id, document_id, channel, recipient, released_at").in("document_id", docs.map(d => d.id))
+      .select("id, document_id, channel, recipient, released_at").eq("workspace_id", workspaceId).in("document_id", docs.map(d => d.id))
     : { data: [] };
   const releaseRows = (releases ?? []) as any[];
   const byDocument = new Map<string, any[]>();

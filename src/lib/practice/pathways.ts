@@ -173,11 +173,11 @@ export async function publishPathwayVersion(admin: any, args: {
   if (!created.ok) return created;
 
   const { error } = await admin.from("practice_pathway_template")
-    .update({ version: old.version + 1, supersedes_template_id: old.id, updated_at: nowIso(), updated_by: args.actorId })
+    .update({ version: old.version + 1, supersedes_template_id: old.id, updated_at: nowIso(), updated_by: args.actorId }).eq("workspace_id", args.workspaceId)
     .eq("id", created.data.id);
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
   await admin.from("practice_pathway_template")
-    .update({ is_active: false, updated_at: nowIso(), updated_by: args.actorId }).eq("id", old.id);
+    .update({ is_active: false, updated_at: nowIso(), updated_by: args.actorId }).eq("workspace_id", args.workspaceId).eq("id", old.id);
 
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.pathway_template_versioned",
@@ -230,10 +230,10 @@ export async function listPathwayTemplates(admin: any, workspaceId: string, opti
   const ids = rows.map(r => r.id);
   const [{ data: stages, error: stageErr }, { data: enrolments, error: enrolErr }] = await Promise.all([
     admin.from("practice_pathway_stage")
-      .select("id, template_id, position, name, offset_days, required_action, completion_rule, follow_up_kind, follow_up_priority")
+      .select("id, template_id, position, name, offset_days, required_action, completion_rule, follow_up_kind, follow_up_priority").eq("workspace_id", workspaceId)
       .in("template_id", ids).order("position"),
     admin.from("practice_patient_pathway")
-      .select("template_id, patient_id").in("template_id", ids).eq("status", "active"),
+      .select("template_id, patient_id").eq("workspace_id", workspaceId).in("template_id", ids).eq("status", "active"),
   ]);
   // ⚠ A TEMPLATE WITH NO STAGES BECAUSE THE STAGE READ FAILED LOOKS EXACTLY LIKE A TEMPLATE WITH NO
   // STAGES. Reported as unavailable rather than returned half-read.
@@ -383,7 +383,7 @@ export async function assignPathway(admin: any, args: {
   }
 
   const { data: stages, error: stageErr } = await admin.from("practice_pathway_stage")
-    .select("id, position, name, offset_days, required_action, completion_rule, follow_up_kind, follow_up_priority")
+    .select("id, position, name, offset_days, required_action, completion_rule, follow_up_kind, follow_up_priority").eq("workspace_id", args.workspaceId)
     .eq("template_id", template.id).order("position");
   if (stageErr) return { ok: false, status: 500, code: "READ_FAILED", message: stageErr.message };
   const stageRows = (stages ?? []) as TemplateStage[];
@@ -445,12 +445,12 @@ async function loadLive(admin: any, workspaceId: string, patientPathwayId: strin
     return { ok: false, status: 422, code: "PATHWAY_NOT_ACTIVE", message: `this pathway is ${enrolment.status}` };
 
   const [{ data: template }, { data: stages, error: stageErr }, { data: liveRow, error: liveErr }] = await Promise.all([
-    admin.from("practice_pathway_template").select("id, name").eq("id", enrolment.template_id).maybeSingle(),
+    admin.from("practice_pathway_template").select("id, name").eq("workspace_id", workspaceId).eq("id", enrolment.template_id).maybeSingle(),
     admin.from("practice_pathway_stage")
-      .select("id, position, name, offset_days, required_action, completion_rule, follow_up_kind, follow_up_priority")
+      .select("id, position, name, offset_days, required_action, completion_rule, follow_up_kind, follow_up_priority").eq("workspace_id", workspaceId)
       .eq("template_id", enrolment.template_id).order("position"),
     admin.from("practice_patient_pathway_stage")
-      .select("id, stage_id, state, entered_on, due_on, follow_up_id")
+      .select("id, stage_id, state, entered_on, due_on, follow_up_id").eq("workspace_id", workspaceId)
       .eq("patient_pathway_id", patientPathwayId).eq("state", "entered").maybeSingle(),
   ]);
   if (stageErr) return { ok: false, status: 500, code: "READ_FAILED", message: stageErr.message };
@@ -565,7 +565,7 @@ async function moveStage(admin: any, args: {
     state: closedAs, ended_on: today,
     closing_encounter_id: args.closingEncounterId ?? null,
     note: (args.note ?? reason)?.trim() || null,
-  }).eq("id", liveRow.id);
+  }).eq("workspace_id", args.workspaceId).eq("id", liveRow.id);
   if (closeErr) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: closeErr.message };
 
   const settleWarning = await settleStageFollowUp(admin, {
@@ -707,10 +707,10 @@ export async function stopPathway(admin: any, args: {
   const warnings: string[] = [];
 
   const { data: liveRow } = await admin.from("practice_patient_pathway_stage")
-    .select("id, stage_id, follow_up_id").eq("patient_pathway_id", args.patientPathwayId).eq("state", "entered").maybeSingle();
+    .select("id, stage_id, follow_up_id").eq("workspace_id", args.workspaceId).eq("patient_pathway_id", args.patientPathwayId).eq("state", "entered").maybeSingle();
   if (liveRow) {
     await admin.from("practice_patient_pathway_stage")
-      .update({ state: "cancelled", ended_on: today, note: `the pathway ended early: ${reason}` }).eq("id", liveRow.id);
+      .update({ state: "cancelled", ended_on: today, note: `the pathway ended early: ${reason}` }).eq("workspace_id", args.workspaceId).eq("id", liveRow.id);
     const settleWarning = await settleStageFollowUp(admin, {
       workspaceId: args.workspaceId, followUpId: liveRow.follow_up_id, to: "CANCELLED",
       outcome: `the pathway ended early: ${reason}`, actorId: args.actorId, correlationId: args.correlationId,
@@ -863,7 +863,7 @@ export async function getPatientPathway(admin: any, workspaceId: string, patient
   const [views, { data: events, error: eventErr }] = await Promise.all([
     buildPathwayViews(admin, workspaceId, [data], today),
     admin.from("practice_pathway_event")
-      .select("id, stage_id, event_type, reason, occurred_at, actor_id")
+      .select("id, stage_id, event_type, reason, occurred_at, actor_id").eq("workspace_id", workspaceId)
       .eq("patient_pathway_id", patientPathwayId).order("occurred_at", { ascending: false }),
   ]);
   if (views.unavailable) return { pathway: null, events: [], unavailable: true, detail: views.detail };

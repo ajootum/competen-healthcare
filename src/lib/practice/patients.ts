@@ -70,6 +70,13 @@ export type RegisterInput = {
 
 export type Candidate = {
   id: string; displayName: string; birthDate: string | null; matchedBy: string;
+  /**
+   * The CP Patient Number, YY-NNNNNN (CPR-PID-001). ⚠ THE ONE A HUMAN MATCHES ON since migration 289
+   * retired the P-XXXXXX below. searchPatients() has returned it since that day and this type did not
+   * declare it, so every candidate screen was type-blind to the identifier it is meant to show.
+   */
+  patientNumber: string | null;
+  /** The retired P-XXXXXX, present only on records that predate the numbering. Legacy, never headline. */
   practiceId: string | null;
   /**
    * !! practiceId NULL MEANS TWO DIFFERENT THINGS AND ONLY ONE OF THEM IS SAFE. "This patient has no
@@ -287,7 +294,7 @@ export async function screenRegistration(admin: any, input: {
       // simply cannot say WHO. Previously this called .single() and used `p.id` unchecked, so a failed
       // read threw a TypeError out of a function whose callers expect a result object.
       const { data: p } = await admin.from("practice_patient")
-        .select("id, display_name, birth_date").eq("id", clash.patient_id).maybeSingle();
+        .select("id, display_name, birth_date, patient_number").eq("workspace_id", input.workspaceId).eq("id", clash.patient_id).maybeSingle();
       // !! THE CANDIDATE ON THIS SCREEN IS WHAT SOMEBODY DECIDES "same patient or not" ON. If the
       // practice id could not be read we say so rather than showing a blank, which reads as a patient
       // who has none and makes a real match look like a stranger.
@@ -298,7 +305,7 @@ export async function screenRegistration(admin: any, input: {
         ok: false, status: 409, code: "DUPLICATE_IDENTIFIER",
         message: `that ${ident.type} already belongs to a registered patient`,
         candidates: p
-          ? [{ id: p.id, displayName: p.display_name, birthDate: p.birth_date, matchedBy: `identifier:${ident.type}`, practiceId: pids.ids.get(p.id) ?? null, practiceIdUnknown: !pids.ok }]
+          ? [{ id: p.id, displayName: p.display_name, birthDate: p.birth_date, matchedBy: `identifier:${ident.type}`, patientNumber: p.patient_number ?? null, practiceId: pids.ids.get(p.id) ?? null, practiceIdUnknown: !pids.ok }]
           : [],
       };
     }
@@ -311,7 +318,7 @@ export async function screenRegistration(admin: any, input: {
     // people, and "found nobody" is what lets this function proceed. Both reads refuse rather than
     // report an empty result.
     const { data: sameName, error: nameErr } = await admin.from("practice_patient")
-      .select("id, display_name, birth_date").eq("workspace_id", input.workspaceId)
+      .select("id, display_name, birth_date, patient_number").eq("workspace_id", input.workspaceId)
       .eq("name_normalised", norm(name)).neq("status", "merged").limit(5);
     if (nameErr) return {
       ok: false, status: 500, code: "DUPLICATE_CHECK_FAILED",
@@ -322,7 +329,7 @@ export async function screenRegistration(admin: any, input: {
       let phoneMatch = false;
       if (input.phone) {
         const { data: c, error: cErr } = await admin.from("practice_patient_contact")
-          .select("id").eq("patient_id", p.id).eq("contact_type", "phone")
+          .select("id").eq("workspace_id", input.workspaceId).eq("patient_id", p.id).eq("contact_type", "phone")
           .eq("value_normalised", normValue(input.phone)).limit(1).maybeSingle();
         if (cErr) return {
           ok: false, status: 500, code: "DUPLICATE_CHECK_FAILED",
@@ -332,7 +339,7 @@ export async function screenRegistration(admin: any, input: {
       }
       if (dobMatch || phoneMatch) {
         // practiceId is filled in below once every candidate is known -- one read for all of them.
-        candidates.push({ id: p.id, displayName: p.display_name, birthDate: p.birth_date, matchedBy: dobMatch ? "name+dob" : "name+phone", practiceId: null, practiceIdUnknown: false });
+        candidates.push({ id: p.id, displayName: p.display_name, birthDate: p.birth_date, matchedBy: dobMatch ? "name+dob" : "name+phone", patientNumber: p.patient_number ?? null, practiceId: null, practiceIdUnknown: false });
       }
     }
     if (candidates.length > 0) {
@@ -529,7 +536,7 @@ export async function mergePatients(admin: any, args: {
 
   await admin.from("practice_patient").update({
     status: "merged", merged_into_patient_id: args.survivingId, updated_at: new Date().toISOString(), updated_by: args.actorId,
-  }).eq("id", args.duplicateId);
+  }).eq("workspace_id", args.workspaceId).eq("id", args.duplicateId);
 
   await admin.from("practice_patient_merge").insert({
     workspace_id: args.workspaceId, surviving_patient_id: args.survivingId,
@@ -581,11 +588,11 @@ export async function getPatient(admin: any, workspaceId: string, patientId: str
   if (!patient) return null;
   const [{ data: identifiers }, { data: contacts }, { data: appointments }] = await Promise.all([
     admin.from("practice_patient_identifier")
-      .select("id, identifier_type, value, issuer, valid_to").eq("patient_id", patientId).order("created_at"),
+      .select("id, identifier_type, value, issuer, valid_to").eq("workspace_id", workspaceId).eq("patient_id", patientId).order("created_at"),
     admin.from("practice_patient_contact")
-      .select("id, contact_type, value, preferred, verified").eq("patient_id", patientId).order("created_at"),
+      .select("id, contact_type, value, preferred, verified").eq("workspace_id", workspaceId).eq("patient_id", patientId).order("created_at"),
     admin.from("practice_appointment")
-      .select("id, scheduled_at, appointment_type, status, duration_minutes, location_id")
+      .select("id, scheduled_at, appointment_type, status, duration_minutes, location_id").eq("workspace_id", workspaceId)
       .eq("patient_id", patientId).order("scheduled_at", { ascending: false }).limit(25),
   ]);
   return { patient, identifiers: identifiers ?? [], contacts: contacts ?? [], appointments: appointments ?? [] };

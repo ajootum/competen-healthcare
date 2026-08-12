@@ -126,7 +126,7 @@ export async function delegateArea(admin: any, args: {
   // A DELEGATION THAT GRANTED NOTHING IS A LIE ON THE TEAM PAGE -- it says somebody can cover the diary
   // when they cannot. Rolled back rather than left standing.
   if (grantError) {
-    await admin.from("practice_delegation").delete().eq("id", delegation.id);
+    await admin.from("practice_delegation").delete().eq("workspace_id", args.workspaceId).eq("id", delegation.id);
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: grantError.message };
   }
 
@@ -174,13 +174,13 @@ export async function withdrawDelegation(admin: any, args: {
 
   await admin.from("practice_delegation").update({
     withdrawn_at: now, withdrawn_by: args.actorId, withdrawn_reason: reason,
-  }).eq("id", d.id);
+  }).eq("workspace_id", args.workspaceId).eq("id", d.id);
 
   // `delegation_ended` and not some new string: migration 201 constrains event_type with a CHECK, and a
   // value outside it is refused by the database. subject_user_id is NOT NULL there too, so the event is
   // written only when the membership is still resolvable -- the trail loses a row rather than the
   // withdrawal failing, which is the right way round for a permission being taken away.
-  const { data: membership } = await admin.from("practice_membership").select("user_id").eq("id", d.membership_id).maybeSingle();
+  const { data: membership } = await admin.from("practice_membership").select("user_id").eq("workspace_id", args.workspaceId).eq("id", d.membership_id).maybeSingle();
   if (membership?.user_id) {
     await admin.from("practice_membership_event").insert({
       workspace_id: args.workspaceId, subject_user_id: membership.user_id,
@@ -423,7 +423,7 @@ export async function decideApproval(admin: any, args: {
 
   const { error } = await admin.from("practice_approval_request").update({
     status: args.decision, decided_by: args.actorId, decided_at: nowIso(), decision_note: note || null,
-  }).eq("id", r.id).eq("status", "PENDING");
+  }).eq("workspace_id", args.workspaceId).eq("id", r.id).eq("status", "PENDING");
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 
   await audit(admin, {

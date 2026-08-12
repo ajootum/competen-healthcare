@@ -82,9 +82,9 @@ export async function findSimilarCases(admin: any, ctx: WorkspaceContext, args: 
   if (!source) return null;
 
   const [{ data: sourcePatient }, { data: sourceDx }, { data: sourceProc }] = await Promise.all([
-    admin.from("practice_patient").select("id, sex, birth_date, age_estimate_years").eq("id", source.patient_id).maybeSingle(),
-    admin.from("practice_diagnosis").select("label").eq("encounter_id", source.id),
-    admin.from("practice_procedure").select("label").eq("encounter_id", source.id),
+    admin.from("practice_patient").select("id, sex, birth_date, age_estimate_years").eq("workspace_id", ctx.workspaceId).eq("id", source.patient_id).maybeSingle(),
+    admin.from("practice_diagnosis").select("label").eq("workspace_id", ctx.workspaceId).eq("encounter_id", source.id),
+    admin.from("practice_procedure").select("label").eq("workspace_id", ctx.workspaceId).eq("encounter_id", source.id),
   ]);
 
   const dxLabels = [...new Set(((sourceDx ?? []) as any[]).map(d => String(d.label).trim().toLowerCase()))];
@@ -151,7 +151,7 @@ export async function findSimilarCases(admin: any, ctx: WorkspaceContext, args: 
   const patientIds = [...new Set(rows.map(r => r.patient_id))];
   const { data: patients } = patientIds.length
     ? await admin.from("practice_patient")
-      .select("id, display_name, sex, birth_date, age_estimate_years, status").in("id", patientIds)
+      .select("id, display_name, sex, birth_date, age_estimate_years, status").eq("workspace_id", ctx.workspaceId).in("id", patientIds)
     : { data: [] };
   const patientById = new Map(((patients ?? []) as any[]).map(p => [p.id, p]));
 
@@ -316,7 +316,7 @@ export async function deleteLearning(admin: any, ctx: WorkspaceContext, args: {
   if (l.author_id !== ctx.userId)
     return { ok: false, status: 403, code: "NOT_YOURS", message: "that is somebody else's learning point" };
 
-  await admin.from("practice_case_learning").delete().eq("id", l.id);
+  await admin.from("practice_case_learning").delete().eq("workspace_id", ctx.workspaceId).eq("id", l.id);
   await audit(admin, {
     workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.learning_deleted",
     payload: { learningId: l.id }, correlationId: args.correlationId,
@@ -336,7 +336,7 @@ export async function listCollections(admin: any, ctx: WorkspaceContext) {
   if (rows.length === 0) return [];
 
   const { data: members } = await admin.from("practice_case_collection_member")
-    .select("collection_id").in("collection_id", rows.map(r => r.id));
+    .select("collection_id").eq("workspace_id", ctx.workspaceId).in("collection_id", rows.map(r => r.id));
   const counts = new Map<string, number>();
   for (const m of ((members ?? []) as any[])) counts.set(m.collection_id, (counts.get(m.collection_id) ?? 0) + 1);
 
@@ -401,7 +401,7 @@ export async function collectionCases(admin: any, ctx: WorkspaceContext, collect
   if (c.owner_id !== null && c.owner_id !== ctx.userId) return null;
 
   const { data: members } = await admin.from("practice_case_collection_member")
-    .select("encounter_id, note, added_at").eq("collection_id", c.id).order("added_at", { ascending: false });
+    .select("encounter_id, note, added_at").eq("workspace_id", ctx.workspaceId).eq("collection_id", c.id).order("added_at", { ascending: false });
   const rows = (members ?? []) as any[];
   if (rows.length === 0) return { collection: c, cases: [] };
 
@@ -412,7 +412,7 @@ export async function collectionCases(admin: any, ctx: WorkspaceContext, collect
 
   const identified = hasCapability(ctx, "patient.view");
   const { data: patients } = identified
-    ? await admin.from("practice_patient").select("id, display_name")
+    ? await admin.from("practice_patient").select("id, display_name").eq("workspace_id", ctx.workspaceId)
       .in("id", [...new Set(((encounters ?? []) as any[]).map(e => e.patient_id))])
     : { data: [] };
   const nameOf = new Map(((patients ?? []) as any[]).map(p => [p.id, p.display_name]));

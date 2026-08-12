@@ -66,7 +66,7 @@ export async function setRecurrence(admin: any, args: {
   const { error } = await admin.from("practice_task").update({
     recurrence: args.recurrence, recurrence_until: args.until ?? null,
     updated_at: nowIso(), updated_by: args.actorId,
-  }).eq("id", task.id);
+  }).eq("workspace_id", args.workspaceId).eq("id", task.id);
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 
   await audit(admin, {
@@ -121,7 +121,7 @@ export async function nextOccurrence(admin: any, args: {
   await admin.from("practice_task").update({
     recurrence: task.recurrence, recurrence_until: task.recurrence_until,
     recurred_from_task_id: task.id,
-  }).eq("id", created.data.id);
+  }).eq("workspace_id", args.workspaceId).eq("id", created.data.id);
 
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.task_recurred",

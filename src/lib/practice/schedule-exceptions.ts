@@ -683,7 +683,7 @@ async function cancelAppointment(admin: any, ctx: WorkspaceContext, args: {
       reason: args.reason.slice(0, 500),
       record_version: (appt.record_version as number) + 1,
       updated_at: nowIso(), updated_by: args.actorId,
-    })
+    }).eq("workspace_id", ctx.workspaceId)
     .eq("id", appt.id).eq("record_version", appt.record_version).select("id").maybeSingle();
   if (upErr) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: upErr.message };
   if (!updated)
@@ -867,7 +867,7 @@ export async function resolveAffectedBooking(admin: any, ctx: WorkspaceContext, 
     decided_by: resolves ? args.actorId : null,
     rescheduled_appointment_id: rescheduledAppointmentId,
     note: args.note && args.note.trim() ? args.note.trim().slice(0, 500) : null,
-  }).eq("id", action.id);
+  }).eq("workspace_id", ctx.workspaceId).eq("id", action.id);
   if (upErr) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: upErr.message };
 
   await audit(admin, {

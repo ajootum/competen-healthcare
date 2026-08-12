@@ -281,7 +281,7 @@ export async function touchSession(admin: any, args: {
         const { data: resumed, error: resumeError } = await admin.from("practice_session").update({
           revoked_at: null, revoked_by: null, revoked_reason: null, last_seen_at: nowIso(),
           user_agent: args.userAgent ?? null,
-        }).eq("id", existing.id).eq("revoked_reason", IDLE_REVOKED_REASON).is("revoked_by", null).select("id");
+        }).eq("workspace_id", args.workspaceId).eq("id", existing.id).eq("revoked_reason", IDLE_REVOKED_REASON).is("revoked_by", null).select("id");
 
         // A resume whose write did not land leaves the row revoked, so the honest answer is still
         // "refused" -- reporting entry on a write that failed is the exact error this arc is closing.
@@ -319,7 +319,7 @@ export async function touchSession(admin: any, args: {
         // null on purpose: that null is what marks this as the clock's doing and makes it reversible.
         const { error: idleError } = await admin.from("practice_session").update({
           revoked_at: nowIso(), revoked_by: null, revoked_reason: IDLE_REVOKED_REASON,
-        }).eq("id", existing.id).is("revoked_at", null);
+        }).eq("workspace_id", args.workspaceId).eq("id", existing.id).is("revoked_at", null);
         // The refusal stands either way -- the device WAS idle, and that is a fact about the clock rather
         // than about the write. What a failed write changes is whether the person can see why on their
         // device list, so it is recorded as an event even when the row could not be marked.
@@ -339,7 +339,7 @@ export async function touchSession(admin: any, args: {
 
     if (existing) {
       await admin.from("practice_session")
-        .update({ last_seen_at: nowIso(), user_agent: args.userAgent ?? null }).eq("id", existing.id);
+        .update({ last_seen_at: nowIso(), user_agent: args.userAgent ?? null }).eq("workspace_id", args.workspaceId).eq("id", existing.id);
       return { allowed: true, sessionId: existing.id, checked: true };
     }
 
@@ -443,7 +443,7 @@ export async function revokeSession(admin: any, args: {
   // above and this write cannot be silently overwritten with a second revoker and a second reason.
   const { data: updated, error: revokeError } = await admin.from("practice_session").update({
     revoked_at: nowIso(), revoked_by: args.actorId, revoked_reason: args.reason?.trim() || null,
-  }).eq("id", s.id).is("revoked_at", null).select("id");
+  }).eq("workspace_id", args.workspaceId).eq("id", s.id).is("revoked_at", null).select("id");
 
   if (revokeError)
     return {
@@ -456,7 +456,7 @@ export async function revokeSession(admin: any, args: {
     // meantime -- in which case the device IS locked out and reporting a failure would be its own lie --
     // or the write did not land. Read the row and report whichever it actually was.
     const { data: after } = await admin.from("practice_session")
-      .select("revoked_at").eq("id", s.id).maybeSingle();
+      .select("revoked_at").eq("workspace_id", args.workspaceId).eq("id", s.id).maybeSingle();
     if (after?.revoked_at)
       return { ok: false, status: 422, code: "ALREADY_REVOKED", message: "that device is already locked out" };
     return {
@@ -496,7 +496,7 @@ export async function setDeviceTrusted(admin: any, args: {
     return { ok: false, status: 403, code: "NOT_YOURS", message: "only the person using a device can mark it trusted" };
 
   const { error } = await admin.from("practice_session")
-    .update({ trusted: args.trusted, ...(args.label ? { device_label: args.label.trim().slice(0, 80) } : {}) })
+    .update({ trusted: args.trusted, ...(args.label ? { device_label: args.label.trim().slice(0, 80) } : {}) }).eq("workspace_id", args.workspaceId)
     .eq("id", s.id);
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
   return { ok: true, data: { trusted: args.trusted } };
@@ -576,7 +576,7 @@ export async function withdrawConsent(admin: any, args: {
   // consent withdrawn between the read and the write cannot have a second reason written over the first.
   const { data: updated, error: withdrawError } = await admin.from("practice_consent").update({
     withdrawn_at: nowIso(), withdrawn_by: args.actorId, withdrawal_reason: reason,
-  }).eq("id", c.id).is("withdrawn_at", null).select("id");
+  }).eq("workspace_id", args.workspaceId).eq("id", c.id).is("withdrawn_at", null).select("id");
 
   if (withdrawError)
     return {
@@ -589,7 +589,7 @@ export async function withdrawConsent(admin: any, args: {
     // withdrawn and reporting a failure would be its own lie -- or the write did not land. Read it back
     // and report whichever it actually was.
     const { data: after } = await admin.from("practice_consent")
-      .select("withdrawn_at").eq("id", c.id).maybeSingle();
+      .select("withdrawn_at").eq("workspace_id", args.workspaceId).eq("id", c.id).maybeSingle();
     if (after?.withdrawn_at)
       return { ok: false, status: 422, code: "ALREADY_WITHDRAWN", message: "that consent was already withdrawn" };
     return {
@@ -767,7 +767,7 @@ export async function breakGlass(admin: any, args: {
     // A break-glass that granted nothing is worse than a refusal: somebody would believe they had access
     // in an emergency and find out they did not.
     if (grantError) {
-      await admin.from("practice_break_glass").delete().eq("id", bg.id);
+      await admin.from("practice_break_glass").delete().eq("workspace_id", args.workspaceId).eq("id", bg.id);
       return { ok: false, status: 500, code: "GRANT_FAILED", message: `emergency access could not be granted: ${grantError.message}` };
     }
   }
@@ -825,10 +825,10 @@ export async function endBreakGlass(admin: any, args: {
     };
 
   const { data: closed, error: closeError } = await admin.from("practice_break_glass")
-    .update({ ended_at: now }).eq("id", bg.id).is("ended_at", null).select("id");
+    .update({ ended_at: now }).eq("workspace_id", args.workspaceId).eq("id", bg.id).is("ended_at", null).select("id");
   if (closeError || ((closed ?? []) as any[]).length !== 1) {
     const { data: after } = await admin.from("practice_break_glass")
-      .select("ended_at").eq("id", bg.id).maybeSingle();
+      .select("ended_at").eq("workspace_id", args.workspaceId).eq("id", bg.id).maybeSingle();
     if (after?.ended_at)
       return { ok: false, status: 422, code: "ALREADY_ENDED", message: "that emergency access has already ended" };
     return {
@@ -876,7 +876,7 @@ export async function reviewBreakGlass(admin: any, args: {
   // The reviewer stops looking; nobody else knows they should start.
   const { data: updated, error: reviewError } = await admin.from("practice_break_glass").update({
     reviewed_at: nowIso(), reviewed_by: args.actorId, review_note: note,
-  }).eq("id", bg.id).is("reviewed_at", null).select("id");
+  }).eq("workspace_id", args.workspaceId).eq("id", bg.id).is("reviewed_at", null).select("id");
 
   if (reviewError)
     return {
@@ -886,7 +886,7 @@ export async function reviewBreakGlass(admin: any, args: {
 
   if (((updated ?? []) as any[]).length !== 1) {
     const { data: after } = await admin.from("practice_break_glass")
-      .select("reviewed_at").eq("id", bg.id).maybeSingle();
+      .select("reviewed_at").eq("workspace_id", args.workspaceId).eq("id", bg.id).maybeSingle();
     if (after?.reviewed_at)
       return { ok: false, status: 422, code: "ALREADY_REVIEWED", message: "that has already been reviewed" };
     return {

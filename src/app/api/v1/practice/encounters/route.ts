@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   const { data: encounters, error } = await q;
   const ids = [...new Set(((encounters ?? []) as { patient_id: string }[]).map(e => e.patient_id))];
   const { data: patients } = ids.length
-    ? await auth.caller.admin.from("practice_patient").select("id, display_name").in("id", ids)
+    ? await auth.caller.admin.from("practice_patient").select("id, display_name").eq("workspace_id", auth.ctx.workspaceId).in("id", ids)
     : { data: [] };
   const nameById = new Map(((patients ?? []) as { id: string; display_name: string }[]).map(p => [p.id, p.display_name]));
 

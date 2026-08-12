@@ -183,7 +183,7 @@ export async function revokeInvitation(admin: any, args: {
     return { ok: false, status: 422, code: "NOT_PENDING", message: `this invitation is already ${invite.status.toLowerCase()}` };
 
   await admin.from("practice_invitation")
-    .update({ status: "REVOKED", revoked_at: nowIso() }).eq("id", invite.id);
+    .update({ status: "REVOKED", revoked_at: nowIso() }).eq("workspace_id", args.workspaceId).eq("id", invite.id);
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.invitation_revoked",
     payload: { invitationId: invite.id }, correlationId: args.correlationId,
@@ -257,13 +257,13 @@ export async function acceptInvitation(admin: any, args: {
     );
     if (grantError) {
       // A member who can sign in and do nothing is worse than a failed join, and it is invisible.
-      await admin.from("practice_membership").delete().eq("id", membership.id);
+      await admin.from("practice_membership").delete().eq("workspace_id", invite.workspace_id).eq("id", membership.id);
       return { ok: false, status: 500, code: "CAPABILITY_GRANT_FAILED", message: grantError.message };
     }
   }
 
   await admin.from("practice_invitation")
-    .update({ status: "ACCEPTED", accepted_by: args.userId, accepted_at: nowIso() }).eq("id", invite.id);
+    .update({ status: "ACCEPTED", accepted_by: args.userId, accepted_at: nowIso() }).eq("workspace_id", invite.workspace_id).eq("id", invite.id);
   await recordEvent(admin, invite.workspace_id, {
     subjectUserId: args.userId, eventType: "joined", to: invite.role_code, actorId: args.userId,
   });
@@ -313,7 +313,7 @@ export async function setMembershipStatus(admin: any, args: {
   }
 
   const { error } = await admin.from("practice_membership")
-    .update({ status: args.status, updated_at: nowIso() }).eq("id", membership.id);
+    .update({ status: args.status, updated_at: nowIso() }).eq("workspace_id", args.workspaceId).eq("id", membership.id);
   if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
 
   // ENDING A MEMBERSHIP ENDS EVERY LIVE GRANT, not merely the open-ended ones.

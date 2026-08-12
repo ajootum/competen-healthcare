@@ -131,7 +131,7 @@ export async function setTemplateActive(admin: any, args: {
   if (!t) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
   const { error } = await admin.from("practice_follow_up_template")
-    .update({ active: args.active, updated_at: nowIso(), updated_by: args.actorId }).eq("id", t.id);
+    .update({ active: args.active, updated_at: nowIso(), updated_by: args.actorId }).eq("workspace_id", args.workspaceId).eq("id", t.id);
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 
   // RETIRING A TEMPLATE DOES NOT TOUCH THE PLANS MADE FROM IT. Those are commitments to real patients;
@@ -230,7 +230,7 @@ export async function createPlan(admin: any, args: {
   // A PLAN WITH NO STEPS IS A LIE ON THE PATIENT'S RECORD -- it says continuity was arranged when nothing
   // was. Rolled back rather than left standing, exactly as a template with no steps is.
   if (stepError || !created) {
-    await admin.from("practice_follow_up_plan").delete().eq("id", plan.id);
+    await admin.from("practice_follow_up_plan").delete().eq("workspace_id", args.workspaceId).eq("id", plan.id);
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: stepError?.message ?? "the plan's steps could not be created" };
   }
 
@@ -278,14 +278,14 @@ export async function discontinuePlan(admin: any, args: {
     return { ok: false, status: 422, code: "NOT_ACTIVE", message: `this plan is already ${plan.status.toLowerCase()}` };
 
   const { data: open } = await admin.from("practice_follow_up")
-    .select("id, status").eq("plan_id", plan.id).in("status", ["OPEN", "SCHEDULED"]);
+    .select("id, status").eq("workspace_id", args.workspaceId).eq("plan_id", plan.id).in("status", ["OPEN", "SCHEDULED"]);
   const rows = (open ?? []) as any[];
 
   for (const f of rows) {
     await admin.from("practice_follow_up").update({
       status: "CANCELLED", outcome: reason, closed_at: nowIso(), closed_by: args.actorId,
       updated_at: nowIso(), updated_by: args.actorId,
-    }).eq("id", f.id);
+    }).eq("workspace_id", args.workspaceId).eq("id", f.id);
     await admin.from("practice_follow_up_event").insert({
       workspace_id: args.workspaceId, follow_up_id: f.id, from_status: f.status, to_status: "CANCELLED",
       note: `Plan discontinued: ${reason}`, actor_id: args.actorId,
@@ -294,7 +294,7 @@ export async function discontinuePlan(admin: any, args: {
 
   await admin.from("practice_follow_up_plan").update({
     status: "DISCONTINUED", discontinued_reason: reason, updated_at: nowIso(), updated_by: args.actorId,
-  }).eq("id", plan.id);
+  }).eq("workspace_id", args.workspaceId).eq("id", plan.id);
 
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.followup_plan_discontinued",
@@ -316,13 +316,13 @@ export async function reconcilePlan(admin: any, workspaceId: string, planId: str
   if (!plan || plan.status !== "ACTIVE") return;
 
   const { data: steps } = await admin.from("practice_follow_up")
-    .select("status").eq("plan_id", planId);
+    .select("status").eq("workspace_id", workspaceId).eq("plan_id", planId);
   const rows = (steps ?? []) as any[];
   if (rows.length === 0) return;
   if (!rows.every(s => CLOSED_FOLLOW_UP_STATUSES.includes(s.status))) return;
 
   await admin.from("practice_follow_up_plan")
-    .update({ status: "COMPLETED", updated_at: nowIso() }).eq("id", planId);
+    .update({ status: "COMPLETED", updated_at: nowIso() }).eq("workspace_id", workspaceId).eq("id", planId);
 }
 
 // ── THE PATIENT VIEW ─────────────────────────────────────────────────────────────────────────────────
@@ -350,7 +350,7 @@ export async function patientFollowUps(admin: any, workspaceId: string, patientI
   const all = ((rows ?? []) as any[]);
   const appointmentIds = all.map(r => r.appointment_id).filter(Boolean);
   const bookings = appointmentIds.length
-    ? (await admin.from("practice_appointment").select("id, scheduled_at, status").in("id", appointmentIds)).data ?? []
+    ? (await admin.from("practice_appointment").select("id, scheduled_at, status").eq("workspace_id", workspaceId).in("id", appointmentIds)).data ?? []
     : [];
   const bookingById = new Map(((bookings) as any[]).map(b => [b.id, b]));
 
@@ -417,7 +417,7 @@ export async function recallQueue(admin: any, workspaceId: string, opts: { limit
   if (all.length === 0) return { today, patients: [], total: 0 };
 
   const { data: patients } = await admin.from("practice_patient")
-    .select("id, display_name, status").in("id", [...new Set(all.map(r => r.patient_id))]);
+    .select("id, display_name, status").eq("workspace_id", workspaceId).in("id", [...new Set(all.map(r => r.patient_id))]);
   const byId = new Map(((patients ?? []) as any[]).map(p => [p.id, p]));
 
   // GROUPED BY PATIENT, because the unit of work is a person to contact, not a row to tick. Three

@@ -467,7 +467,7 @@ export async function portfolioSummary(admin: any, workspaceId: string, userId: 
   const performed = procs.filter(p => p.status === "PERFORMED");
   const { data: outcomes } = performed.length
     ? await admin.from("practice_procedure_outcome")
-      .select("procedure_id, outcome_type, severity").in("procedure_id", performed.map(p => p.id))
+      .select("procedure_id, outcome_type, severity").eq("workspace_id", workspaceId).in("procedure_id", performed.map(p => p.id))
     : { data: [] };
   const outcomeRows = (outcomes ?? []) as any[];
   const withComplication = new Set(outcomeRows.filter(o => o.outcome_type === "complication").map(o => o.procedure_id));

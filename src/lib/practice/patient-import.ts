@@ -627,7 +627,7 @@ export async function commitPatientImport(
   await admin.from("practice_import_run").update({
     status: "COMPLETED", completed_at: new Date().toISOString(),
     registered_count: registered, booked_count: booked, skipped_count: skipped, error_count: errors,
-  }).eq("id", runId);
+  }).eq("workspace_id", ctx.workspaceId).eq("id", runId);
 
   await audit(admin, {
     workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.patients_imported",

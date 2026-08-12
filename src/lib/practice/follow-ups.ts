@@ -277,7 +277,7 @@ export async function scheduleFollowUp(admin: any, args: {
     .update({
       status: "SCHEDULED", appointment_id: appt.id,
       record_version: f.record_version + 1, updated_at: nowIso(), updated_by: args.actorId,
-    })
+    }).eq("workspace_id", args.workspaceId)
     .eq("id", f.id).eq("record_version", f.record_version).select("id").maybeSingle();
   if (error) {
     // ux_practice_followup_appointment: one live obligation per booking.
@@ -366,7 +366,7 @@ export async function closeFollowUp(admin: any, args: {
   if (args.to === "OPEN") patch.appointment_id = null;
 
   const { data: updated } = await admin.from("practice_follow_up")
-    .update(patch).eq("id", f.id).eq("record_version", f.record_version).select("id").maybeSingle();
+    .update(patch).eq("workspace_id", args.workspaceId).eq("id", f.id).eq("record_version", f.record_version).select("id").maybeSingle();
   if (!updated) return { ok: false, status: 409, code: "VERSION_CONFLICT", message: "the follow-up changed underneath you; reload and retry" };
 
   await recordEvent(admin, args.workspaceId, f.id, f.status, args.to, args.actorId, outcome || undefined);
@@ -431,7 +431,7 @@ export async function rescheduleFollowUp(admin: any, args: {
     .update({
       due_on: args.dueOn, record_version: f.record_version + 1,
       updated_at: nowIso(), updated_by: args.actorId,
-    })
+    }).eq("workspace_id", args.workspaceId)
     .eq("id", f.id).eq("record_version", f.record_version).select("id").maybeSingle();
   if (!updated) return { ok: false, status: 409, code: "VERSION_CONFLICT", message: "the follow-up changed underneath you; reload and retry" };
 
@@ -473,7 +473,7 @@ export async function deferFollowUp(admin: any, args: {
     .update({
       status: "DEFERRED", deferred_until: args.until,
       record_version: f.record_version + 1, updated_at: nowIso(), updated_by: args.actorId,
-    })
+    }).eq("workspace_id", args.workspaceId)
     .eq("id", f.id).eq("record_version", f.record_version).select("id").maybeSingle();
   if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
   if (!updated) return { ok: false, status: 409, code: "VERSION_CONFLICT", message: "the follow-up changed underneath you; reload and retry" };
@@ -614,9 +614,9 @@ export async function listFollowUps(admin: any, workspaceId: string, filter: Lis
   const today = await workspaceToday(admin, workspaceId);
   const apptIds = [...new Set(rows.map(r => r.appointment_id).filter(Boolean))];
   const [{ data: patients }, appts] = await Promise.all([
-    admin.from("practice_patient").select("id, display_name").in("id", [...new Set(rows.map(r => r.patient_id))]),
+    admin.from("practice_patient").select("id, display_name").eq("workspace_id", workspaceId).in("id", [...new Set(rows.map(r => r.patient_id))]),
     apptIds.length
-      ? admin.from("practice_appointment").select("id, scheduled_at, status").in("id", apptIds)
+      ? admin.from("practice_appointment").select("id, scheduled_at, status").eq("workspace_id", workspaceId).in("id", apptIds)
       : Promise.resolve({ data: [] }),
   ]);
   const nameById = new Map(((patients ?? []) as any[]).map(p => [p.id, p.display_name]));
@@ -1088,10 +1088,10 @@ export async function getFollowUp(admin: any, workspaceId: string, followUpId: s
   const [{ data: events }, { data: patient }, { data: appt }] = await Promise.all([
     // from_due_on/to_due_on are selected because CPR-FUP-002 s7's promise -- "the original due date
     // remains available in the audit log" -- is only kept if something reads them back out.
-    admin.from("practice_follow_up_event").select("from_status, to_status, note, occurred_at, from_due_on, to_due_on").eq("follow_up_id", followUpId).order("occurred_at"),
-    admin.from("practice_patient").select("id, display_name").eq("id", f.patient_id).maybeSingle(),
+    admin.from("practice_follow_up_event").select("from_status, to_status, note, occurred_at, from_due_on, to_due_on").eq("workspace_id", workspaceId).eq("follow_up_id", followUpId).order("occurred_at"),
+    admin.from("practice_patient").select("id, display_name").eq("workspace_id", workspaceId).eq("id", f.patient_id).maybeSingle(),
     f.appointment_id
-      ? admin.from("practice_appointment").select("id, scheduled_at, status").eq("id", f.appointment_id).maybeSingle()
+      ? admin.from("practice_appointment").select("id, scheduled_at, status").eq("workspace_id", workspaceId).eq("id", f.appointment_id).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
 

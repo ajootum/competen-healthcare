@@ -951,7 +951,7 @@ export async function saveBookingAccess(admin: any, ctx: WorkspaceContext, args:
 
   if (existing.value) {
     const { data, error } = await admin.from("practice_booking_access")
-      .update(patch).eq("id", existing.value.id).select("id").maybeSingle();
+      .update(patch).eq("workspace_id", ctx.workspaceId).eq("id", existing.value.id).select("id").maybeSingle();
     if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
     // ⚠ AN UPDATE THAT MATCHED NOTHING IS NOT A SUCCESS. This codebase has shipped two silent write
     // failures by treating one as one.

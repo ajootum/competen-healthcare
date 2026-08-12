@@ -332,15 +332,20 @@ async function main() {
     `${byName.results.length} results`);
   ok("2b-control-2. and a name nobody registered finds nobody",
     (await searchPatients(admin, ws, "Nobody Of That Name At All")).results.length === 0);
-  ok("2b. every search result carries a stable id and an opaque practice identifier, not just a name",
+  // ⚠ THE OPAQUE IDENTIFIER IS THE CP PATIENT NUMBER NOW, not the retired P-XXXXXX. CPR-PID-001
+  // (migration 289, 2026-08-12) made YY-NNNNNN the one human-facing identity and stopped minting a
+  // practice_id for new registrations, so this pair asserted a shape the product no longer produces
+  // and had been red since. It was missed when the rest of the suite was swept -- the SECOND stale
+  // assertion from that change -- because it names the field only inside a regex.
+  ok("2b. every search result carries a stable id and an opaque patient number, not just a name",
     byName.results.length >= 1
-      && byName.results.every(r => /^[0-9a-f-]{36}$/.test(r.id) && /^P-[0-9A-Z]{6}$/.test(r.practiceId ?? "")),
-    JSON.stringify(byName.results.map(r => [r.id, r.practiceId])));
+      && byName.results.every(r => /^[0-9a-f-]{36}$/.test(r.id) && /^\d{2}-\d{6}$/.test(r.patientNumber ?? "")),
+    JSON.stringify(byName.results.map(r => [r.id, r.patientNumber])));
 
-  const practiceId = byName.results[0]?.practiceId ?? "";
-  const byIdentifier = await searchPatients(admin, ws, practiceId);
-  ok("2c. and the identifier retrieves the same person, ranked above the name that matched",
-    byIdentifier.results[0]?.id === p1.data.id && byIdentifier.results[0]?.matchedBy === "identifier:practice_id",
+  const patientNumber = byName.results[0]?.patientNumber ?? "";
+  const byIdentifier = await searchPatients(admin, ws, patientNumber);
+  ok("2c. and the number retrieves the same person, ranked above the name that matched",
+    byIdentifier.results[0]?.id === p1.data.id && byIdentifier.results[0]?.matchedBy === "patient_number",
     JSON.stringify(byIdentifier.results[0]));
 
   // ══ 3. "All state-changing actions require actor, timestamp, source and audit entry." ═════════════

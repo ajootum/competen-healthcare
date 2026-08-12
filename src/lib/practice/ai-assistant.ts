@@ -646,7 +646,7 @@ export async function sessionMessages(admin: any, ctx: WorkspaceContext, session
   if (!session || session.user_id !== ctx.userId) return null;
 
   const { data } = await admin.from("practice_ai_message")
-    .select("id, role, body, model, provider, grounding, status, error_detail, helpful, created_at")
+    .select("id, role, body, model, provider, grounding, status, error_detail, helpful, created_at").eq("workspace_id", ctx.workspaceId)
     .eq("session_id", sessionId).order("created_at");
   return { session, messages: (data ?? []) as any[] };
 }
@@ -659,12 +659,12 @@ export async function rateMessage(admin: any, ctx: WorkspaceContext, args: {
   if (!m) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
   const { data: s } = await admin.from("practice_ai_session")
-    .select("user_id").eq("id", m.session_id).maybeSingle();
+    .select("user_id").eq("workspace_id", ctx.workspaceId).eq("id", m.session_id).maybeSingle();
   if (!s || s.user_id !== ctx.userId)
     return { ok: false, status: 403, code: "NOT_YOURS", message: "that is somebody else's conversation" };
 
   await admin.from("practice_ai_message")
-    .update({ helpful: args.helpful, feedback_note: args.note?.trim() || null }).eq("id", m.id);
+    .update({ helpful: args.helpful, feedback_note: args.note?.trim() || null }).eq("workspace_id", ctx.workspaceId).eq("id", m.id);
   return { ok: true, data: { rated: true } };
 }
 

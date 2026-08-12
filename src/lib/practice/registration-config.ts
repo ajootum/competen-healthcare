@@ -98,7 +98,7 @@ export async function listTemplates(admin: any, ctx: WorkspaceContext) {
   if (rows.length === 0) return [];
 
   const { data: fields } = await admin.from("practice_registration_field")
-    .select("template_id").in("template_id", rows.map(r => r.id));
+    .select("template_id").eq("workspace_id", ctx.workspaceId).in("template_id", rows.map(r => r.id));
   const counts = new Map<string, number>();
   for (const f of ((fields ?? []) as any[])) counts.set(f.template_id, (counts.get(f.template_id) ?? 0) + 1);
 
@@ -199,10 +199,10 @@ export async function upsertField(admin: any, ctx: WorkspaceContext, args: {
   };
 
   const { data: existing } = await admin.from("practice_registration_field")
-    .select("id").eq("template_id", args.templateId).eq("field_key", args.fieldKey).maybeSingle();
+    .select("id").eq("workspace_id", ctx.workspaceId).eq("template_id", args.templateId).eq("field_key", args.fieldKey).maybeSingle();
 
   if (existing) {
-    const { error } = await admin.from("practice_registration_field").update(row).eq("id", existing.id);
+    const { error } = await admin.from("practice_registration_field").update(row).eq("workspace_id", ctx.workspaceId).eq("id", existing.id);
     if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
     return { ok: true, data: { id: existing.id as string } };
   }
@@ -311,7 +311,7 @@ export async function publishTemplate(admin: any, ctx: WorkspaceContext, args: {
   const { data: updated, error } = await admin.from("practice_registration_template").update({
     status: "published", is_default: args.makeDefault === true,
     published_at: nowIso(), published_by: ctx.userId, updated_at: nowIso(), updated_by: ctx.userId,
-  }).eq("id", template.id).select("id, version");
+  }).eq("workspace_id", ctx.workspaceId).eq("id", template.id).select("id, version");
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
   if (!updated || updated.length === 0)
     return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
@@ -352,7 +352,7 @@ export async function duplicateTemplate(admin: any, ctx: WorkspaceContext, args:
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 
   const { data: fields } = await admin.from("practice_registration_field")
-    .select("*").eq("template_id", source.id);
+    .select("*").eq("workspace_id", ctx.workspaceId).eq("template_id", source.id);
   const rows = ((fields ?? []) as any[]).map(f => ({
     workspace_id: ctx.workspaceId, template_id: created.id, field_key: f.field_key,
     is_core: f.is_core, label: f.label, help: f.help, field_type: f.field_type,
@@ -364,7 +364,7 @@ export async function duplicateTemplate(admin: any, ctx: WorkspaceContext, args:
     // A COPY MISSING ITS FIELDS IS WORSE THAN NO COPY -- it looks like an empty form somebody made on
     // purpose. Removed rather than left behind.
     if (copyError) {
-      await admin.from("practice_registration_template").delete().eq("id", created.id);
+      await admin.from("practice_registration_template").delete().eq("workspace_id", ctx.workspaceId).eq("id", created.id);
       return { ok: false, status: 500, code: "COPY_FAILED", message: `the fields could not be copied, so nothing was created: ${copyError.message}` };
     }
   }
@@ -400,11 +400,11 @@ export async function removeField(admin: any, ctx: WorkspaceContext, args: {
   // ANYTHING THAT DEPENDED ON IT WOULD BECOME UNREACHABLE, so the dependants are cleared rather than
   // left pointing at a field that is gone -- which publish would then refuse with a confusing message.
   await admin.from("practice_registration_field")
-    .update({ condition: null })
+    .update({ condition: null }).eq("workspace_id", ctx.workspaceId)
     .eq("template_id", args.templateId).contains("condition", { when: args.fieldKey });
 
   await admin.from("practice_registration_field")
-    .delete().eq("template_id", args.templateId).eq("field_key", args.fieldKey);
+    .delete().eq("workspace_id", ctx.workspaceId).eq("template_id", args.templateId).eq("field_key", args.fieldKey);
   return { ok: true, data: { removed: true } };
 }
 
@@ -466,7 +466,7 @@ export async function resolveTemplate(admin: any, ctx: WorkspaceContext, context
   const chosen = matches[0];
 
   const { data: fields } = await admin.from("practice_registration_field")
-    .select("*").eq("template_id", chosen.id).order("display_order");
+    .select("*").eq("workspace_id", ctx.workspaceId).eq("template_id", chosen.id).order("display_order");
 
   return { template: chosen, fields: (fields ?? []) as any[] };
 }

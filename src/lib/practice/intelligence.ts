@@ -195,7 +195,7 @@ export async function outcomePicture(admin: any, ctx: WorkspaceContext, period: 
 
   const { data: outcomes } = procs.length
     ? await admin.from("practice_procedure_outcome")
-      .select("procedure_id, outcome_type, severity").in("procedure_id", procs.map(p => p.id))
+      .select("procedure_id, outcome_type, severity").eq("workspace_id", ctx.workspaceId).in("procedure_id", procs.map(p => p.id))
     : { data: [] };
   const outcomeRows = (outcomes ?? []) as any[];
   const withComplication = new Set(outcomeRows.filter(o => o.outcome_type === "complication").map(o => o.procedure_id));
@@ -248,7 +248,7 @@ export async function completeness(admin: any, ctx: WorkspaceContext, period: Pe
       const ids = ((procs ?? []) as any[]).map(p => p.id);
       if (ids.length === 0) return 0;
       const { data: withOutcome } = await admin.from("practice_procedure_outcome")
-        .select("procedure_id").in("procedure_id", ids);
+        .select("procedure_id").eq("workspace_id", ctx.workspaceId).in("procedure_id", ids);
       const has = new Set(((withOutcome ?? []) as any[]).map(o => o.procedure_id));
       return ids.filter(id => !has.has(id)).length;
     })(),

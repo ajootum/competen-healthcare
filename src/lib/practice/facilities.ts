@@ -158,7 +158,7 @@ export async function patientIdentifiers(admin: any, ctx: WorkspaceContext, pati
 
   const facilityIds = [...new Set(rows.map(r => r.facility_id).filter(Boolean))];
   const { data: facilities } = facilityIds.length
-    ? await admin.from("practice_facility").select("id, name, facility_type, active").in("id", facilityIds)
+    ? await admin.from("practice_facility").select("id, name, facility_type, active").eq("workspace_id", ctx.workspaceId).in("id", facilityIds)
     : { data: [] };
   const facilityById = new Map(((facilities ?? []) as any[]).map(f => [f.id, f]));
 
@@ -256,7 +256,7 @@ async function identifierOwner(admin: any, ctx: WorkspaceContext, type: string, 
   const { data } = await q.maybeSingle();
   if (!data) return null;
   const { data: patient } = await admin.from("practice_patient")
-    .select("id, display_name").eq("id", data.patient_id).maybeSingle();
+    .select("id, display_name").eq("workspace_id", ctx.workspaceId).eq("id", data.patient_id).maybeSingle();
   return patient ?? null;
 }
 
@@ -285,7 +285,7 @@ export async function retireIdentifier(admin: any, ctx: WorkspaceContext, args: 
     return { ok: false, status: 422, code: "CANNOT_RETIRE", message: "the practice ID is how this record is found here" };
 
   const { data: updated, error } = await admin.from("practice_patient_identifier")
-    .update({ valid_to: new Date().toISOString() }).eq("id", row.id).select("id");
+    .update({ valid_to: new Date().toISOString() }).eq("workspace_id", ctx.workspaceId).eq("id", row.id).select("id");
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
   if (!updated || updated.length === 0)
     return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
@@ -369,13 +369,13 @@ export async function findByIdentifier(admin: any, ctx: WorkspaceContext, raw: s
 
   const patientIds = [...new Set(pHits.map(h => h.patient_id))];
   const { data: patients } = patientIds.length
-    ? await admin.from("practice_patient").select("id, display_name, status").in("id", patientIds)
+    ? await admin.from("practice_patient").select("id, display_name, status").eq("workspace_id", ctx.workspaceId).in("id", patientIds)
     : { data: [] };
   const patientById = new Map(((patients ?? []) as any[]).map(p => [p.id, p]));
 
   const encounterIds = [...new Set(eHits.map(h => h.encounter_id))];
   const { data: encounters } = encounterIds.length
-    ? await admin.from("practice_encounter").select("id, patient_id, started_at, status").in("id", encounterIds)
+    ? await admin.from("practice_encounter").select("id, patient_id, started_at, status").eq("workspace_id", ctx.workspaceId).in("id", encounterIds)
     : { data: [] };
 
   return {

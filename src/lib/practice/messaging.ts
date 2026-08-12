@@ -168,7 +168,7 @@ export async function setChannel(admin: any, ctx: WorkspaceContext, args: {
   };
 
   const { error } = existing
-    ? await admin.from("practice_message_channel").update(patch).eq("id", existing.id)
+    ? await admin.from("practice_message_channel").update(patch).eq("workspace_id", ctx.workspaceId).eq("id", existing.id)
     : await admin.from("practice_message_channel").insert(patch);
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 

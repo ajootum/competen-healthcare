@@ -371,12 +371,12 @@ export async function removeEntry(admin: any, ctx: WorkspaceContext, args: {
   // ⚠ THERE IS ONE SCOPE ON THIS TABLE NOW, AND IT IS THE PERSON. Looking the entry up by workspace
   // would refuse an author their own entry the moment they moved practice -- the exact failure D1 fixes.
   const { data: e } = await admin.from("practice_portfolio_entry")
-    .select("id, user_id").eq("id", args.id).maybeSingle();
+    .select("id, user_id").eq("workspace_id", ctx.workspaceId).eq("id", args.id).maybeSingle();
   if (!e) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (e.user_id !== ctx.userId)
     return { ok: false, status: 403, code: "NOT_YOURS", message: "that is somebody else's portfolio" };
 
-  await admin.from("practice_portfolio_entry").delete().eq("id", e.id);
+  await admin.from("practice_portfolio_entry").delete().eq("workspace_id", ctx.workspaceId).eq("id", e.id);
   await audit(admin, {
     workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.portfolio_entry_removed",
     payload: { entryId: e.id }, correlationId: args.correlationId,

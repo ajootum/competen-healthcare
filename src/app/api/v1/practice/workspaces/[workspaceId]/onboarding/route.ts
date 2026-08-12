@@ -111,7 +111,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ wo
     state: done ? "completed" : "in_progress",
     completed_at: done ? new Date().toISOString() : null,
     updated_at: new Date().toISOString(),
-  }).eq("id", ob.id);
+  }).eq("workspace_id", workspaceId).eq("id", ob.id);
 
   await audit(c.admin, { workspaceId, actorId: c.userId, eventType: "practice.onboarding_stage_completed", payload: { stepCode: body.stepCode }, correlationId: c.traceId });
 

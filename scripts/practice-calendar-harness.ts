@@ -247,9 +247,17 @@ async function main() {
     "one of them leaked into the data");
   ok("8d. and it names all three as unavailable, with reasons",
     drawer!.unavailable.length === 3, JSON.stringify(drawer!.unavailable.map(u => u.key)));
+  // ⚠ THE CONTROL ASKS FOR THE PATIENT NUMBER, NOT AN IDENTIFIER ROW. CPR-PID-001 (migration 289)
+  // retired the minted practice_id, so `identifiers` is legitimately EMPTY for anyone registered since
+  // and this control had been asserting a shape the product no longer produces. The number is the
+  // identity now, and a drawer that cannot show it is the actual defect worth catching here.
   ok("8e. CONTROL: it does carry what this product actually holds",
-    drawer!.identifiers.length > 0 && drawer!.contacts.length > 0 && !!drawer!.patient.age,
-    JSON.stringify({ i: drawer!.identifiers.length, c: drawer!.contacts.length }));
+    /^\d{2}-\d{6}$/.test((drawer!.patient as { patient_number?: string }).patient_number ?? "")
+      && drawer!.contacts.length > 0 && !!drawer!.patient.age,
+    JSON.stringify({
+      n: (drawer!.patient as { patient_number?: string }).patient_number,
+      i: drawer!.identifiers.length, c: drawer!.contacts.length,
+    }));
 
   // ── 11. Isolation ──────────────────────────────────────────────────────────
   const crossDay = await calendarDay(admin, b.ctx, day);

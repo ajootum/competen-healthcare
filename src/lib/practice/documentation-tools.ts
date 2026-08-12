@@ -85,7 +85,7 @@ export async function myDrafts(admin: any, workspaceId: string, encounterId: str
   // Compared against what is SAVED, so the UI can say "this differs from the note" rather than offering
   // a restore that would change nothing.
   const { data: saved } = await admin.from("practice_encounter_note")
-    .select("note_type, body, version").eq("encounter_id", encounterId);
+    .select("note_type, body, version").eq("workspace_id", workspaceId).eq("encounter_id", encounterId);
   const savedByType = new Map(((saved ?? []) as any[]).map(s => [s.note_type, s]));
 
   return {
@@ -174,7 +174,7 @@ export async function deletePhrase(admin: any, args: {
   if (p.author_id !== null && p.author_id !== args.actorId)
     return { ok: false, status: 403, code: "NOT_YOURS", message: "that is somebody else's personal phrase" };
 
-  await admin.from("practice_smart_phrase").delete().eq("id", p.id);
+  await admin.from("practice_smart_phrase").delete().eq("workspace_id", args.workspaceId).eq("id", p.id);
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.smart_phrase_deleted",
     payload: { shortcut: p.shortcut }, correlationId: args.correlationId,
@@ -217,7 +217,7 @@ export async function recordPhraseUse(admin: any, workspaceId: string, shortcuts
     .select("id, used_count, shortcut, author_id").eq("workspace_id", workspaceId).in("shortcut", shortcuts);
   for (const p of ((data ?? []) as any[])) {
     if (p.author_id !== null && p.author_id !== actorId) continue;
-    await admin.from("practice_smart_phrase").update({ used_count: (p.used_count ?? 0) + 1 }).eq("id", p.id);
+    await admin.from("practice_smart_phrase").update({ used_count: (p.used_count ?? 0) + 1 }).eq("workspace_id", workspaceId).eq("id", p.id);
   }
 }
 
@@ -335,7 +335,7 @@ export async function removeAttachment(admin: any, args: {
 
   await admin.from("practice_attachment").update({
     removed_at: nowIso(), removed_by: args.actorId, removed_reason: reason,
-  }).eq("id", a.id);
+  }).eq("workspace_id", args.workspaceId).eq("id", a.id);
 
   // The row is marked first and the bytes deleted second. The other order leaves a live row pointing at
   // nothing if the storage call fails, which reads as an attachment that will not open.

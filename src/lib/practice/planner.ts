@@ -1962,7 +1962,7 @@ export async function cancelActivity(
   const at = (opts.at ?? new Date()).toISOString();
   const { error: writeError } = await admin.from("practice_activity").update({
     cancelled_at: at, cancelled_by: ctx.userId, cancellation_reason: reason, updated_at: nowIso(),
-  }).eq("id", id);
+  }).eq("workspace_id", ctx.workspaceId).eq("id", id);
   if (writeError) return { ok: false, status: 500, code: "CANCEL_FAILED", message: writeError.message };
 
   await audit(admin, {

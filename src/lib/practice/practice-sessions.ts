@@ -917,7 +917,7 @@ export async function saveSession(admin: any, ctx: WorkspaceContext, args: {
     changed = Object.entries(row)
       .filter(([k, v]) => k !== "updated_at" && (existing as Record<string, unknown>)[k] !== v)
       .map(([k]) => k);
-    const { error } = await admin.from("practice_availability_template").update(row).eq("id", id);
+    const { error } = await admin.from("practice_availability_template").update(row).eq("workspace_id", ctx.workspaceId).eq("id", id);
     if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
   }
 
@@ -1024,7 +1024,7 @@ export async function endSession(admin: any, ctx: WorkspaceContext, args: {
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "the pattern cannot end before it starts" };
 
   const { error: upErr } = await admin.from("practice_availability_template")
-    .update({ effective_to: args.effectiveTo, updated_at: nowIso() }).eq("id", t.id);
+    .update({ effective_to: args.effectiveTo, updated_at: nowIso() }).eq("workspace_id", ctx.workspaceId).eq("id", t.id);
   if (upErr) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: upErr.message };
 
   // NOT A REFUSAL, A REPORT. Ending a pattern next month is a legitimate thing to do with patients
@@ -1095,7 +1095,7 @@ export async function deleteSession(admin: any, ctx: WorkspaceContext, args: {
     .delete().eq("workspace_id", ctx.workspaceId).eq("template_id", t.id);
   if (linkErr) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: linkErr.message };
 
-  const { error: delErr } = await admin.from("practice_availability_template").delete().eq("id", t.id);
+  const { error: delErr } = await admin.from("practice_availability_template").delete().eq("workspace_id", ctx.workspaceId).eq("id", t.id);
   if (delErr) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: delErr.message };
 
   await audit(admin, {

@@ -1685,7 +1685,7 @@ export async function upsertPlanEntry(
     return fail(404, "NOT_FOUND", "no such parameter");
 
   const { data: existing, error: eErr } = await admin.from("practice_patient_monitoring_plan")
-    .select("*").eq("patient_id", input.patientId).eq("definition_id", def.id).maybeSingle();
+    .select("*").eq("workspace_id", ctx.workspaceId).eq("patient_id", input.patientId).eq("definition_id", def.id).maybeSingle();
   if (eErr) return fail(503, "UNAVAILABLE", `the existing plan row could not be read: ${eErr.message}`);
 
   // ⚠ s11's override rule, refused HERE with a sentence rather than left to the constraint.
@@ -1791,7 +1791,7 @@ export async function requireForSafety(
   if (!patient) return fail(404, "NOT_FOUND", "no such patient");
 
   const { data: existing } = await admin.from("practice_patient_monitoring_plan")
-    .select("*").eq("patient_id", input.patientId).eq("definition_id", def.id).maybeSingle();
+    .select("*").eq("workspace_id", ctx.workspaceId).eq("patient_id", input.patientId).eq("definition_id", def.id).maybeSingle();
 
   // ⚠ THE STATE IS NOT CHANGED. A hidden parameter stays hidden -- s7's "Removed from routine views" is
   // a decision somebody made -- and safety_required is set beside it. Forcing the state back to
@@ -2541,7 +2541,7 @@ export async function parameterSeries(
       .select("id, value, unit, formula, source_measurement_ids, calculated_at")
       .eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId).eq("definition_id", definitionId)
       .order("calculated_at", { ascending: true }).limit(200),
-    admin.from("practice_patient_monitoring_plan").select("change_rule")
+    admin.from("practice_patient_monitoring_plan").select("change_rule").eq("workspace_id", ctx.workspaceId)
       .eq("patient_id", patientId).eq("definition_id", definitionId).maybeSingle(),
   ]);
 

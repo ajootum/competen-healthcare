@@ -382,7 +382,7 @@ export async function checkPlacement(admin: any, args: {
     if (elsewhere.length > 0) {
       const otherIds = [...new Set(elsewhere.map(a => a.location_id))];
       const { data: others } = await admin.from("practice_location")
-        .select("id, name, travel_buffer_minutes").in("id", otherIds);
+        .select("id, name, travel_buffer_minutes").eq("workspace_id", args.workspaceId).in("id", otherIds);
       const otherById = new Map(((others ?? []) as any[]).map(o => [o.id, o]));
 
       for (const a of elsewhere) {
@@ -582,7 +582,7 @@ export async function rescheduleAppointment(admin: any, args: {
       // for the rest of its life. The flag describes THIS placement, not the appointment's history.
       overlap_acknowledged: args.allowOverlap === true,
       record_version: appt.record_version + 1, updated_at: new Date().toISOString(), updated_by: args.actorId,
-    })
+    }).eq("workspace_id", args.workspaceId)
     .eq("id", appt.id).eq("record_version", appt.record_version)
     .select("id, scheduled_at, duration_minutes, location_id, record_version").maybeSingle();
   if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
@@ -634,7 +634,7 @@ export async function transitionAppointment(admin: any, args: {
   // Optimistic concurrency: the update carries the version we read, so two desks acting at once cannot
   // both win silently (DM-001 s16 "use optimistic concurrency").
   const { data: updated } = await admin.from("practice_appointment")
-    .update({ status: args.to, record_version: appt.record_version + 1, updated_at: new Date().toISOString(), updated_by: args.actorId })
+    .update({ status: args.to, record_version: appt.record_version + 1, updated_at: new Date().toISOString(), updated_by: args.actorId }).eq("workspace_id", args.workspaceId)
     .eq("id", appt.id).eq("record_version", appt.record_version).select("id").maybeSingle();
   if (!updated) return { ok: false, status: 409, code: "VERSION_CONFLICT", message: "the appointment changed underneath you; reload and retry" };
 
@@ -647,7 +647,7 @@ export async function transitionAppointment(admin: any, args: {
     // The partial index still backstops the race: if two check-ins pass the check simultaneously,
     // the second insert fails loudly here instead of silently duplicating.
     const { data: liveArrival } = await admin.from("practice_arrival")
-      .select("id").eq("appointment_id", appt.id).neq("status", "CANCELLED").maybeSingle();
+      .select("id").eq("workspace_id", args.workspaceId).eq("appointment_id", appt.id).neq("status", "CANCELLED").maybeSingle();
     if (!liveArrival) {
       const { error: arrErr } = await admin.from("practice_arrival").insert({
         workspace_id: args.workspaceId, appointment_id: appt.id, created_by: args.actorId,
@@ -684,7 +684,7 @@ export async function transitionQueueEntry(admin: any, args: {
   const patch: Record<string, unknown> = { status: args.to, updated_at: new Date().toISOString() };
   if (args.to === "IN_CONSULTATION" && entry.status !== "PAUSED") patch.started_at = new Date().toISOString();
   if (args.to === "COMPLETED" || args.to === "LEFT") patch.completed_at = new Date().toISOString();
-  await admin.from("practice_queue_entry").update(patch).eq("id", entry.id);
+  await admin.from("practice_queue_entry").update(patch).eq("workspace_id", args.workspaceId).eq("id", entry.id);
 
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: `practice.queue_${args.to.toLowerCase()}`,

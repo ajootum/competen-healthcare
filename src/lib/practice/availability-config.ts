@@ -460,7 +460,7 @@ export async function editSession(admin: any, ctx: WorkspaceContext, args: {
     ? { recurrence_anchor_date: nextRecurrence.anchorDate } : {};
 
   const { error } = await admin.from("practice_availability_template")
-    .update({ ...next, ...anchorPatch, active: next.status === "active", updated_at: nowIso() })
+    .update({ ...next, ...anchorPatch, active: next.status === "active", updated_at: nowIso() }).eq("workspace_id", ctx.workspaceId)
     .eq("id", t.id);
   if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
 
@@ -575,7 +575,7 @@ export async function removeSession(admin: any, ctx: WorkspaceContext, args: {
   // and the setup hub's count both still read the boolean. Two columns for one fact is a migration's
   // debt; letting them disagree would be a bug.
   await admin.from("practice_availability_template")
-    .update({ active: false, status: "closed", updated_at: nowIso() }).eq("id", t.id);
+    .update({ active: false, status: "closed", updated_at: nowIso() }).eq("workspace_id", ctx.workspaceId).eq("id", t.id);
 
   const cleaned = await reapGeneratedSlots(admin, ctx, { templateId: t.id, fromIso: nowIso() });
 
@@ -672,7 +672,7 @@ export async function setBookingRule(admin: any, ctx: WorkspaceContext, args: {
     && (r.appointment_type ?? null) === (args.appointmentType ?? null));
 
   if (match) {
-    const { error } = await admin.from("practice_booking_rule").update(patch).eq("id", match.id);
+    const { error } = await admin.from("practice_booking_rule").update(patch).eq("workspace_id", ctx.workspaceId).eq("id", match.id);
     if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
     await audit(admin, {
       workspaceId: ctx.workspaceId, actorId: args.actorId, eventType: "practice.booking_rule_updated",
@@ -991,7 +991,7 @@ async function reapGeneratedSlots(admin: any, ctx: WorkspaceContext, args: {
   });
 
   if (removable.length > 0)
-    await admin.from("practice_availability_slot").delete().in("id", removable.map(r => r.id));
+    await admin.from("practice_availability_slot").delete().eq("workspace_id", ctx.workspaceId).in("id", removable.map(r => r.id));
 
   return { slotsRemoved: removable.length, slotsKept: rows.length - removable.length };
 }

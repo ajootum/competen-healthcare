@@ -111,7 +111,7 @@ export async function postMessage(admin: any, args: {
   }).select("id, created_at").single();
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 
-  await admin.from("practice_thread").update({ last_message_at: message.created_at }).eq("id", thread.id);
+  await admin.from("practice_thread").update({ last_message_at: message.created_at }).eq("workspace_id", args.workspaceId).eq("id", thread.id);
   // Your own message is read by definition -- otherwise every reply marks your own thread unread at you.
   await markThreadRead(admin, { workspaceId: args.workspaceId, threadId: thread.id, userId: args.actorId });
 
@@ -160,7 +160,7 @@ export async function listThreads(admin: any, workspaceId: string, userId: strin
 
   const patientIds = [...new Set(rows.map(t => t.patient_id).filter(Boolean))];
   const { data: patients } = patientIds.length
-    ? await admin.from("practice_patient").select("id, display_name").in("id", patientIds)
+    ? await admin.from("practice_patient").select("id, display_name").eq("workspace_id", workspaceId).in("id", patientIds)
     : { data: [] };
   const nameOf = new Map(((patients ?? []) as any[]).map(p => [p.id, p.display_name]));
 
@@ -190,10 +190,10 @@ export async function getThread(admin: any, workspaceId: string, threadId: strin
 
   const [{ data: messages }, members, { data: patient }] = await Promise.all([
     admin.from("practice_thread_message")
-      .select("id, body, author_id, created_at").eq("thread_id", threadId).order("created_at"),
+      .select("id, body, author_id, created_at").eq("workspace_id", workspaceId).eq("thread_id", threadId).order("created_at"),
     listMembers(admin, workspaceId),
     thread.patient_id
-      ? admin.from("practice_patient").select("id, display_name").eq("id", thread.patient_id).maybeSingle()
+      ? admin.from("practice_patient").select("id, display_name").eq("workspace_id", workspaceId).eq("id", thread.patient_id).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
   const nameOf = new Map(members.map(m => [m.userId, m.name]));
@@ -318,7 +318,7 @@ export async function reviewIncoming(admin: any, args: {
     return { ok: false, status: 422, code: "ILLEGAL_TRANSITION", message: `${doc.status} cannot become REVIEWED` };
 
   const { error } = await admin.from("practice_incoming_document")
-    .update({ status: "REVIEWED", reviewed_by: args.actorId, reviewed_at: nowIso(), review_note: args.note?.trim() || null })
+    .update({ status: "REVIEWED", reviewed_by: args.actorId, reviewed_at: nowIso(), review_note: args.note?.trim() || null }).eq("workspace_id", args.workspaceId)
     .eq("id", doc.id);
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 
@@ -343,7 +343,7 @@ export async function actionIncoming(admin: any, args: {
     return { ok: false, status: 422, code: "ILLEGAL_TRANSITION", message: `${doc.status} cannot become ACTIONED` };
 
   const { error } = await admin.from("practice_incoming_document")
-    .update({ status: "ACTIONED", actioned_by: args.actorId, actioned_at: nowIso(), action_note: args.note.trim() })
+    .update({ status: "ACTIONED", actioned_by: args.actorId, actioned_at: nowIso(), action_note: args.note.trim() }).eq("workspace_id", args.workspaceId)
     .eq("id", doc.id);
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 
@@ -369,7 +369,7 @@ export async function listIncoming(admin: any, workspaceId: string, filter: {
 
   const patientIds = [...new Set(rows.map(r => r.patient_id).filter(Boolean))];
   const { data: patients } = patientIds.length
-    ? await admin.from("practice_patient").select("id, display_name").in("id", patientIds)
+    ? await admin.from("practice_patient").select("id, display_name").eq("workspace_id", workspaceId).in("id", patientIds)
     : { data: [] };
   const nameOf = new Map(((patients ?? []) as any[]).map(p => [p.id, p.display_name]));
 

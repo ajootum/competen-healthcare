@@ -251,7 +251,7 @@ export async function addRelationship(admin: any, ctx: WorkspaceContext, args: {
   // so the insert cannot fail on a constraint the caller cannot see.
   if (args.isPrimary) {
     await admin.from("practice_patient_relationship")
-      .update({ is_primary: false, updated_at: nowIso(), updated_by: ctx.userId })
+      .update({ is_primary: false, updated_at: nowIso(), updated_by: ctx.userId }).eq("workspace_id", ctx.workspaceId)
       .eq("patient_id", args.patientId).eq("is_primary", true).is("effective_to", null);
   }
 
@@ -304,7 +304,7 @@ export async function endRelationship(admin: any, ctx: WorkspaceContext, args: {
   const { data: updated, error } = await admin.from("practice_patient_relationship")
     // Cleared as it ends: a primary contact who is no longer live must not hold the primary slot, or
     // nobody else can take it.
-    .update({ effective_to: on, is_primary: false, updated_at: nowIso(), updated_by: ctx.userId })
+    .update({ effective_to: on, is_primary: false, updated_at: nowIso(), updated_by: ctx.userId }).eq("workspace_id", ctx.workspaceId)
     .eq("id", r.id).select("id");
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
   if (!updated || updated.length === 0)

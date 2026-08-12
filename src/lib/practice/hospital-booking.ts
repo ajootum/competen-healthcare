@@ -163,7 +163,7 @@ export async function linkLocationToFacility(admin: any, ctx: WorkspaceContext, 
     return { ok: false, status: 422, code: "NO_CHANGE", message: "nothing was different" };
 
   const { error } = await admin.from("practice_location")
-    .update({ facility_id: args.facilityId, updated_at: nowIso() }).eq("id", location.id);
+    .update({ facility_id: args.facilityId, updated_at: nowIso() }).eq("workspace_id", ctx.workspaceId).eq("id", location.id);
   if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
 
   await audit(admin, {
@@ -186,7 +186,7 @@ export async function setTravelBuffer(admin: any, ctx: WorkspaceContext, args: {
   if (!location) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
   const { error } = await admin.from("practice_location")
-    .update({ travel_buffer_minutes: args.minutes, updated_at: nowIso() }).eq("id", location.id);
+    .update({ travel_buffer_minutes: args.minutes, updated_at: nowIso() }).eq("workspace_id", ctx.workspaceId).eq("id", location.id);
   if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
 
   await audit(admin, {

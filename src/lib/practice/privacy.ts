@@ -189,25 +189,25 @@ export async function exportPatientRecord(admin: any, ctx: WorkspaceContext, pat
     { data: problems }, { data: diagnoses }, { data: treatments }, { data: procedures },
     { data: documents }, { data: followUps }, { data: contactLog },
   ] = await Promise.all([
-    admin.from("practice_patient_identifier").select("*").eq("patient_id", patientId),
-    admin.from("practice_patient_contact").select("*").eq("patient_id", patientId),
-    admin.from("practice_appointment").select("*").eq("patient_id", patientId),
-    admin.from("practice_encounter").select("*").eq("patient_id", patientId).order("started_at"),
-    admin.from("practice_problem").select("*").eq("patient_id", patientId),
-    admin.from("practice_diagnosis").select("*").eq("patient_id", patientId),
-    admin.from("practice_treatment").select("*").eq("patient_id", patientId),
-    admin.from("practice_procedure").select("*").eq("patient_id", patientId),
-    admin.from("practice_clinical_document").select("*").eq("patient_id", patientId),
-    admin.from("practice_follow_up").select("*").eq("patient_id", patientId),
-    admin.from("practice_contact_log").select("*").eq("patient_id", patientId),
+    admin.from("practice_patient_identifier").select("*").eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId),
+    admin.from("practice_patient_contact").select("*").eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId),
+    admin.from("practice_appointment").select("*").eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId),
+    admin.from("practice_encounter").select("*").eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId).order("started_at"),
+    admin.from("practice_problem").select("*").eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId),
+    admin.from("practice_diagnosis").select("*").eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId),
+    admin.from("practice_treatment").select("*").eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId),
+    admin.from("practice_procedure").select("*").eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId),
+    admin.from("practice_clinical_document").select("*").eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId),
+    admin.from("practice_follow_up").select("*").eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId),
+    admin.from("practice_contact_log").select("*").eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId),
   ]);
 
   // The notes hang off encounters rather than the patient, so they need the encounter ids.
   const encounterIds = ((encounters ?? []) as any[]).map(e => e.id);
   const [{ data: notes }, { data: noteVersions }] = encounterIds.length
     ? await Promise.all([
-      admin.from("practice_encounter_note").select("*").in("encounter_id", encounterIds),
-      admin.from("practice_encounter_note_version").select("*").in("encounter_id", encounterIds),
+      admin.from("practice_encounter_note").select("*").eq("workspace_id", ctx.workspaceId).in("encounter_id", encounterIds),
+      admin.from("practice_encounter_note_version").select("*").eq("workspace_id", ctx.workspaceId).in("encounter_id", encounterIds),
     ])
     : [{ data: [] }, { data: [] }];
 

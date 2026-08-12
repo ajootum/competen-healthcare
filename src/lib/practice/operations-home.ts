@@ -145,7 +145,7 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
     ...encRows.map(e => e.patient_id), ...docRows.map(d => d.patient_id), ...procRows.map(p => p.patient_id),
   ].filter(Boolean))];
   const { data: patients } = patientIds.length
-    ? await admin.from("practice_patient").select("id, display_name").in("id", patientIds)
+    ? await admin.from("practice_patient").select("id, display_name").eq("workspace_id", ctx.workspaceId).in("id", patientIds)
     : { data: [] };
   const nameOf = (id: string) => (((patients ?? []) as any[]).find(p => p.id === id)?.display_name) ?? "Unknown patient";
 

@@ -82,8 +82,8 @@ export async function buildMergeContext(admin: any, ctx: WorkspaceContext, args:
   if (!patient) return null;
 
   const [{ data: identifiers }, { data: contacts }, config] = await Promise.all([
-    admin.from("practice_patient_identifier").select("value, identifier_type").eq("patient_id", args.patientId),
-    admin.from("practice_patient_contact").select("value, contact_type, preferred").eq("patient_id", args.patientId),
+    admin.from("practice_patient_identifier").select("value, identifier_type").eq("workspace_id", ctx.workspaceId).eq("patient_id", args.patientId),
+    admin.from("practice_patient_contact").select("value, contact_type, preferred").eq("workspace_id", ctx.workspaceId).eq("patient_id", args.patientId),
     getConfiguration(admin, ctx.workspaceId),
   ]);
 
@@ -98,8 +98,8 @@ export async function buildMergeContext(admin: any, ctx: WorkspaceContext, args:
     if (enc && enc.patient_id === args.patientId) {
       encounter = enc;
       const [{ data: dx }, { data: notes }] = await Promise.all([
-        admin.from("practice_diagnosis").select("label, certainty").eq("encounter_id", enc.id).order("created_at"),
-        admin.from("practice_encounter_note").select("note_type, body").eq("encounter_id", enc.id).eq("note_type", "plan"),
+        admin.from("practice_diagnosis").select("label, certainty").eq("workspace_id", ctx.workspaceId).eq("encounter_id", enc.id).order("created_at"),
+        admin.from("practice_encounter_note").select("note_type, body").eq("workspace_id", ctx.workspaceId).eq("encounter_id", enc.id).eq("note_type", "plan"),
       ]);
       diagnoses = (dx ?? []) as any[];
       planNote = ((notes ?? []) as any[])[0]?.body ?? null;
@@ -434,7 +434,7 @@ export async function reportsDashboard(admin: any, ctx: WorkspaceContext, opts: 
   const nameOf = new Map<string, string>();
   if (identified && recent.length) {
     const ids = [...new Set(recent.map(r => r.patient_id).filter(Boolean))];
-    const { data: patients } = await admin.from("practice_patient").select("id, display_name").in("id", ids);
+    const { data: patients } = await admin.from("practice_patient").select("id, display_name").eq("workspace_id", ws).in("id", ids);
     for (const p of ((patients ?? []) as any[])) nameOf.set(p.id, p.display_name);
   }
 
@@ -471,6 +471,6 @@ export async function markScheduleRun(admin: any, ctx: WorkspaceContext, schedul
 
   const ranAt = new Date().toISOString();
   await admin.from("practice_scheduled_report")
-    .update({ last_run_at: ranAt, last_run_by: ctx.userId }).eq("id", schedule.id);
+    .update({ last_run_at: ranAt, last_run_by: ctx.userId }).eq("workspace_id", ctx.workspaceId).eq("id", schedule.id);
   return { ok: true, data: { ranAt } };
 }
