@@ -185,6 +185,134 @@ export async function patientList(admin: any, ctx: WorkspaceContext, opts: {
   };
 }
 
+// ── ATTENDANCE ──────────────────────────────────────────────────────────────────────────────────────
+//
+// ⚠⚠ THE ONE PERCENTAGE THIS WORKSPACE COMPUTES, AND WHY IT IS NOT THE ONE THE COMP DREW.
+//
+// The reference design shows "Seen rate 76% of booked" beside the two tab counts. That figure divides
+// encounters by appointments, and it is not a rate of anything:
+//
+//   1. THE TWO TABS USE DIFFERENT WINDOWS BY DEFAULT -- Booked looks forward 60 days, Seen looks back
+//      30. The comp's 76% divided last month's encounters by next month's bookings.
+//   2. EVEN MATCHED, THE DENOMINATOR IS WRONG. CP-BOOKED-SEEN-001 s1 says a patient may be seen with no
+//      booking at all -- walk-in, inpatient review, emergency. Encounters over appointments therefore
+//      counts things that were never booked against bookings that have not happened, and a walk-in-heavy
+//      week pushes it over 100 per cent.
+//   3. THE SPEC ITSELF REFUSES IT. s3: "Do not treat the Booked count and Seen count as a conversion
+//      funnel. Any optional seen-rate summary is informational only and belongs behind a configurable
+//      feature flag."
+//
+// What IS measurable is attendance, and only over time that has already happened. So:
+//
+//   THE DENOMINATOR IS CLOSED   only appointments whose time has PASSED. A future booking cannot have
+//                               been attended, and including it would make the figure a measure of how
+//                               far ahead the window reaches.
+//   THE NUMERATOR COMES FROM IT every attended appointment is one of those appointments, matched by
+//                               practice_encounter.appointment_id. s10: "Do not mark an appointment as
+//                               Seen merely because it is Arrived. Seen requires an encounter."
+//   NOTHING IS FOLDED AWAY      elapsed = attended + did not attend + cancelled + NO OUTCOME RECORDED,
+//                               and the fourth bucket is shown rather than being quietly counted as a
+//                               failure to attend. See attendanceVerdict for what it costs the figure.
+//   THE COUNTS TRAVEL WITH IT   a percentage hides its own scale -- 78 per cent reads identically at
+//                               31-of-40 and 3-of-4 -- so every caller renders the counts beside it.
+
+export type Attendance = {
+  /** Appointments in the window whose time has passed. The only closed denominator available. */
+  elapsed: number;
+  attended: number;
+  didNotAttend: number;
+  cancelled: number;
+  /** Elapsed, not cancelled, no encounter and not marked missed. Somebody has not closed these off. */
+  noOutcomeRecorded: number;
+  /**
+   * ⚠ NULL WHENEVER THE FIGURE WOULD DESCRIBE THE RECORD-KEEPING RATHER THAN THE PATIENTS. Null when
+   * nothing has elapsed, and null when more elapsed appointments have no outcome than have one -- see
+   * attendanceVerdict.
+   */
+  attendedPercent: number | null;
+  /** Attended plus did-not-attend: the appointments somebody actually closed off. */
+  resolved: number;
+  /** True when part of the window is still in the future, so the figure covers only the elapsed part. */
+  partialWindow: boolean;
+  /** ⚠ A FAILED READ IS NOT AN ATTENDANCE OF NOUGHT. */
+  readable: boolean;
+  detail: string | null;
+};
+
+/**
+ * WHETHER THE COUNTS SUPPORT A PERCENTAGE AT ALL. Pure, so it can be tested without a database -- see
+ * scripts/attendance-harness.ts.
+ *
+ * ⚠ AN UNRECORDED OUTCOME IS NOT A FAILURE TO ATTEND. A practice that has simply not closed its
+ * appointments off would otherwise be reported as having near-nought attendance: the figure would be
+ * describing the record-keeping while reading as a judgement on the patients. Live data on 2026-08-12 was
+ * exactly this -- five elapsed appointments, one cancelled and four still at requested or confirmed,
+ * yielding a true and thoroughly misleading "0 per cent attended".
+ *
+ * So the percentage is withheld unless at least as many appointments were closed off as were not. Below
+ * that line the honest statement is that attendance is not yet known, and the counts say why.
+ */
+export function attendanceVerdict(c: {
+  elapsed: number; attended: number; didNotAttend: number; noOutcomeRecorded: number;
+}): { resolved: number; attendedPercent: number | null } {
+  const resolved = c.attended + c.didNotAttend;
+  const measurable = c.elapsed > 0 && resolved > 0 && c.noOutcomeRecorded <= resolved;
+  return {
+    resolved,
+    attendedPercent: measurable ? Math.round((c.attended / c.elapsed) * 100) : null,
+  };
+}
+
+export async function attendance(admin: any, ctx: WorkspaceContext, opts: {
+  fromDate: string; toDate: string; locationId?: string | null; timezone: string;
+}): Promise<Attendance> {
+  const none: Attendance = {
+    elapsed: 0, attended: 0, didNotAttend: 0, cancelled: 0, noOutcomeRecorded: 0,
+    attendedPercent: null, resolved: 0, partialWindow: false, readable: true, detail: null,
+  };
+  if (!hasCapability(ctx, "practice.calendar.view")) return { ...none, readable: false, detail: "not permitted" };
+
+  const startIso = zonedDayRange(opts.fromDate, opts.timezone).startIso;
+  const windowEndIso = zonedDayRange(opts.toDate, opts.timezone).endIso;
+  const nowIso = new Date().toISOString();
+  // The window, cut off at NOW. Everything after it has not happened and cannot be attended.
+  const endIso = windowEndIso < nowIso ? windowEndIso : nowIso;
+  if (endIso <= startIso) return { ...none, partialWindow: true };
+
+  let q = admin.from("practice_appointment")
+    .select("id, status").eq("workspace_id", ctx.workspaceId)
+    .gte("scheduled_at", startIso).lt("scheduled_at", endIso);
+  if (opts.locationId) q = q.eq("location_id", opts.locationId);
+  const { data, error } = await q.limit(5000);
+  if (error) return { ...none, readable: false, detail: `attendance could not be read: ${error.message}` };
+
+  const rows = (data ?? []) as { id: string; status: string }[];
+  if (rows.length === 0) return { ...none, partialWindow: windowEndIso > nowIso };
+
+  const ids = rows.map(r => r.id);
+  const { data: encs, error: encErr } = await admin.from("practice_encounter")
+    .select("appointment_id").eq("workspace_id", ctx.workspaceId).in("appointment_id", ids).limit(5000);
+  // ⚠ WITHOUT THE ENCOUNTERS THERE IS NO ATTENDANCE FIGURE, only a count of appointments. Reporting one
+  // anyway would read every elapsed appointment as unattended.
+  if (encErr) return { ...none, readable: false, detail: `attendance could not be read: ${encErr.message}` };
+  const attendedIds = new Set(((encs ?? []) as any[]).map(e => e.appointment_id).filter(Boolean));
+
+  let attended = 0, didNotAttend = 0, cancelled = 0, noOutcomeRecorded = 0;
+  for (const r of rows) {
+    if (r.status === "CANCELLED") cancelled++;
+    else if (attendedIds.has(r.id)) attended++;
+    else if (r.status === "NO_SHOW") didNotAttend++;
+    else noOutcomeRecorded++;
+  }
+
+  return {
+    elapsed: rows.length, attended, didNotAttend, cancelled, noOutcomeRecorded,
+    ...attendanceVerdict({ elapsed: rows.length, attended, didNotAttend, noOutcomeRecorded }),
+    partialWindow: windowEndIso > nowIso,
+    readable: true, detail: null,
+  };
+}
+
 // ── EXPORT ──────────────────────────────────────────────────────────────────────────────────────────
 
 const csvCell = (v: string | null) => {

@@ -891,3 +891,33 @@ export const IMPACT_STATE_CHIP: Record<string, { label: string; chip: string; do
   unreviewed: { label: "Impact not reviewed", chip: "bg-slate-100 text-slate-600 ring-1 ring-slate-300", dot: "bg-slate-400" },
   unreadable: { label: "Could not be read", chip: "bg-slate-100 text-slate-500 ring-1 ring-slate-300", dot: "bg-slate-300" },
 };
+
+/**
+ * CP-BOOKED-SEEN-001 s9 -- the one appointment-status palette, shared by the planner and the
+ * Booked & seen workspace.
+ *
+ * ⚠ COLOUR SUPPLEMENTS TEXT, IT NEVER REPLACES IT. The spec says "Text always visible" on every row of
+ * its own table, and s17 repeats it: "Status meaning must not rely on colour alone." Every caller
+ * renders the word beside the swatch.
+ *
+ * ⚠ CANCELLED IS GREY, NOT RED. s9 asks for grey for cancelled and a MUTED RED for no-show, and the
+ * distinction is the point: a cancelled appointment is an ordinary administrative fact, a no-show is
+ * the one worth noticing. They were the same rose here, which flattened that.
+ */
+export const APPOINTMENT_STATUS_SWATCH: Record<string, string> = {
+  REQUESTED: "bg-amber-100 text-amber-800",
+  CONFIRMED: "bg-indigo-100 text-indigo-700",
+  ARRIVED: "bg-emerald-100 text-emerald-700",
+  COMPLETED: "bg-slate-100 text-slate-600",
+  CANCELLED: "bg-gray-100 text-gray-500",
+  NO_SHOW: "bg-rose-50 text-rose-600",
+};
+
+/** Encounter states on the Seen tab. s7: an encounter is not a booking and is not styled as one. */
+export const ENCOUNTER_STATUS_SWATCH: Record<string, string> = {
+  DRAFT: "bg-amber-100 text-amber-800",
+  ACTIVE: "bg-indigo-100 text-indigo-700",
+  PAUSED: "bg-amber-100 text-amber-800",
+  SIGNED: "bg-emerald-100 text-emerald-700",
+  COMPLETED: "bg-emerald-100 text-emerald-700",
+};

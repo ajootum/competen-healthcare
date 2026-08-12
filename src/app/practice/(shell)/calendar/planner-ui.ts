@@ -254,14 +254,13 @@ export function filterDay(day: PlannerDay, f: PlannerFilters): {
 }
 
 /** How an appointment status is drawn. Every one of migration 192's six has an entry. */
-export const APPOINTMENT_STATUS_CHIP: Record<string, string> = {
-  REQUESTED: "bg-amber-100 text-amber-800",
-  CONFIRMED: "bg-indigo-100 text-indigo-700",
-  ARRIVED: "bg-emerald-100 text-emerald-700",
-  COMPLETED: "bg-slate-100 text-slate-600",
-  CANCELLED: "bg-rose-100 text-rose-700",
-  NO_SHOW: "bg-rose-100 text-rose-700",
-};
+// ⚠ ONE DEFINITION, IN palette.ts. Re-exported here so the planner keeps its existing import while
+// the Booked & seen workspace reads the same swatches -- two tables disagreeing about what "arrived"
+// looks like is exactly the drift CP-BOOKED-SEEN-001 s9 exists to prevent.
+// The table that used to live here drew CANCELLED and NO_SHOW in the same rose, so a cancellation the
+// practice made and a patient who never arrived were indistinguishable at a glance. s9 separates them:
+// cancelled is grey (an appointment that stopped existing), no-show is muted red (one that failed).
+export { APPOINTMENT_STATUS_SWATCH as APPOINTMENT_STATUS_CHIP } from "@/lib/practice/palette";
 
 /**
  * ⚠ HOW AN OUTCOME IS DRAWN. `not_recorded` is AMBER, not grey and not red.

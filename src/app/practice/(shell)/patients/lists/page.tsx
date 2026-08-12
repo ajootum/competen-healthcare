@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
-import { patientList, defaultWindow, type PatientListResult } from "@/lib/practice/patient-lists";
+import { patientList, defaultWindow, attendance, type PatientListResult, type Attendance } from "@/lib/practice/patient-lists";
 import { workspaceClock } from "@/lib/practice/practice-time";
+import { APPOINTMENT_STATUS_SWATCH, ENCOUNTER_STATUS_SWATCH } from "@/lib/practice/palette";
 import PrintButton from "./PrintButton";
 
 // /practice/patients/lists -- WHO IS BOOKED, AND WHO WAS SEEN, as a list you can carry out.
@@ -50,6 +51,12 @@ export default async function PatientListsPage({ searchParams }: {
     locationId: one(sp.location) || null,
   });
 
+  // Over the SAME window and location the user is looking at, so the figure can never describe a period
+  // other than the one on screen.
+  const att = await attendance(admin, shell.ctx, {
+    fromDate: result.fromDate, toDate: result.toDate, locationId: result.locationId, timezone,
+  });
+
   const qs = (over: Record<string, string>) => {
     const q = new URLSearchParams({
       view, from: result.fromDate, to: result.toDate,
@@ -90,6 +97,10 @@ export default async function PatientListsPage({ searchParams }: {
           #printable table { font-size: 11px; }
           #printable thead { display: table-header-group; }
           #printable tr { break-inside: avoid; }
+          /* Browsers strip background colours when printing by default, which would flatten the status
+             badges to plain text. The words still carry the meaning (s17), so this is fidelity rather
+             than a dependency. */
+          #printable * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           @page { margin: 14mm; }
         }
       `}</style>
@@ -157,8 +168,15 @@ export default async function PatientListsPage({ searchParams }: {
       </p>
 
       {/* ── The list itself. Everything inside #printable is what a PDF will contain. ─────────────── */}
+      {/* ⚠ ATTENDANCE LIVES INSIDE #printable ON PURPOSE. The print rules hide everything outside this
+          subtree, so a band placed above it would read on screen and be absent from every PDF -- and a
+          list handed to somebody else would have lost the figure that qualifies it. */}
       <div id="printable" className="mt-4">
-        <ListBody result={result} fmt={fmt} view={view} />
+        <AttendanceBand a={att}
+          locationName={result.locationId ? (result.locations.find(l => l.id === result.locationId)?.name ?? null) : null} />
+        <div className="mt-3">
+          <ListBody result={result} fmt={fmt} view={view} />
+        </div>
       </div>
     </div>
   );
@@ -226,7 +244,14 @@ function ListBody({ result, fmt, view }: {
                   </td>
                   <td className="px-3 py-2 text-[13px] text-gray-800">{fmt(r.at)}</td>
                   <td className="px-3 py-2 text-[12.5px] text-gray-600">{r.kind}</td>
-                  <td className="px-3 py-2 text-[12px] text-gray-600">{r.status.toLowerCase()}</td>
+                  <td className="px-3 py-2">
+                    {/* ⚠ s17: the WORD is the status, the colour only reinforces it. Never a bare dot. */}
+                    <span className={`inline-block rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${
+                      (view === "booked" ? APPOINTMENT_STATUS_SWATCH : ENCOUNTER_STATUS_SWATCH)[r.status]
+                      ?? "bg-gray-100 text-gray-600"}`}>
+                      {r.status.toLowerCase().replace(/_/g, " ")}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-[12.5px] text-gray-600">{r.locationName ?? "not named"}</td>
                 </tr>
               ))}
@@ -244,5 +269,97 @@ function ListBody({ result, fmt, view }: {
           : " One row per recorded consultation; somebody seen twice appears twice."}
       </p>
     </section>
+  );
+}
+
+// ── ATTENDANCE ──────────────────────────────────────────────────────────────────────────────────────
+//
+// The one percentage on this page, and the shape it has to keep to earn it. See attendance() in
+// src/lib/practice/patient-lists.ts for why the comp's "seen rate 76% of booked" is not this figure.
+//
+//   THE COUNTS ARE THE HEADLINE, the percentage is the tail of the sentence. 78% reads identically at
+//   31-of-40 and 3-of-4, so the scale must be impossible to miss rather than available on request.
+//   NO OUTCOME RECORDED IS SHOWN, never folded into "did not attend" -- and while it is above nought the
+//   percentage is labelled AT LEAST, because some of those people were seen and nobody wrote it down.
+//   IT PRINTS. It is part of the page, not chrome around it, so the paper says the same as the screen.
+
+function AttendanceBand({ a, locationName }: { a: Attendance; locationName: string | null }) {
+  // ⚠ THREE STATES, NOT TWO. A failed read is not an attendance of nought.
+  if (!a.readable) {
+    return (
+      <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12.5px] text-amber-900">
+        Attendance could not be worked out for this period{a.detail ? ` (${a.detail})` : ""}. The list
+        below is unaffected.
+      </p>
+    );
+  }
+  // Nothing has happened yet. Saying "0% attended" over a week of future bookings would be a lie about
+  // the practice rather than a fact about the window.
+  if (a.elapsed === 0) return null;
+
+  const bucket = (n: number, label: string, dot: string) => (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} aria-hidden="true" />
+      <strong className="font-semibold text-gray-900">{n}</strong>
+      <span className="text-gray-600">{label}</span>
+    </span>
+  );
+
+  return (
+    <div className="mt-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 className="text-[13px] font-bold text-gray-900">
+          Attendance{locationName ? ` — ${locationName}` : ""}
+        </h2>
+        <p className="text-[11.5px] text-gray-500">
+          {a.partialWindow
+            ? "Counts the part of this period that has already happened; bookings still ahead are not included."
+            : "Every appointment in this period."}
+        </p>
+      </div>
+
+      <p className="mt-1.5 text-[13.5px] text-gray-800">
+        Of <strong className="font-semibold text-gray-900">{a.elapsed}</strong>{" "}
+        {a.elapsed === 1 ? "appointment" : "appointments"} that have taken place:
+      </p>
+
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[13px]">
+        {bucket(a.attended, "attended", "bg-emerald-500")}
+        {bucket(a.didNotAttend, "did not attend", "bg-rose-400")}
+        {bucket(a.cancelled, "cancelled", "bg-gray-400")}
+        {a.noOutcomeRecorded > 0 && bucket(a.noOutcomeRecorded, "no outcome recorded", "bg-amber-400")}
+      </div>
+
+      {a.attendedPercent === null ? (
+        // ⚠ NOT "0% attended". Below the measurability line the percentage would be reporting how much
+        // has been written down, in a form that reads as a judgement on the patients.
+        <div className="mt-2 border-t border-gray-100 pt-2">
+          <p className="text-[13px] font-semibold text-gray-800">Attendance is not known for this period.</p>
+          <p className="mt-0.5 text-[11.5px] leading-relaxed text-gray-500">
+            {a.resolved === 0
+              ? `None of these appointments has been closed off, so there is nothing to work an attendance figure from.`
+              : `More of these appointments have no outcome recorded (${a.noOutcomeRecorded}) than have one (${a.resolved}), so any percentage would describe the record-keeping rather than who turned up.`}
+            {" "}Marking each one attended, or as a missed appointment, is what makes the figure appear.
+          </p>
+        </div>
+      ) : (
+        <>
+          <p className="mt-2 border-t border-gray-100 pt-2 text-[13px] text-gray-800">
+            <strong className="text-[15px] font-bold text-gray-900">
+              {a.noOutcomeRecorded > 0 ? "At least " : ""}{a.attendedPercent}% attended
+            </strong>
+            <span className="text-gray-500"> &mdash; {a.attended} of {a.elapsed}</span>
+          </p>
+          {a.noOutcomeRecorded > 0 && (
+            <p className="mt-1 text-[11.5px] leading-relaxed text-gray-500">
+              {a.noOutcomeRecorded} {a.noOutcomeRecorded === 1 ? "appointment has" : "appointments have"} no
+              consultation recorded and {a.noOutcomeRecorded === 1 ? "was" : "were"} not marked as missed,
+              so {a.noOutcomeRecorded === 1 ? "it is" : "they are"} counted in the total but not as
+              attended. Real attendance is this figure or higher.
+            </p>
+          )}
+        </>
+      )}
+    </div>
   );
 }
