@@ -5,7 +5,8 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { patientList, defaultWindow, attendance, type PatientListResult, type Attendance } from "@/lib/practice/patient-lists";
 import { workspaceClock } from "@/lib/practice/practice-time";
-import { APPOINTMENT_STATUS_SWATCH, ENCOUNTER_STATUS_SWATCH } from "@/lib/practice/palette";
+import { groupByDay } from "@/components/practice/PatientTable";
+import GroupedTable from "./GroupedTable";
 import PrintButton from "./PrintButton";
 
 // /practice/patients/lists -- WHO IS BOOKED, AND WHO WAS SEEN, as a list you can carry out.
@@ -29,6 +30,27 @@ import PrintButton from "./PrintButton";
 export const dynamic = "force-dynamic";
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v ?? "").trim();
+
+/**
+ * s4: DD-MM-YYYY for inputs, and WRITTEN MONTH for descriptive labels -- "04 Sep 2026", not "04-09-2026".
+ * The reason the spec prefers it is that 04-09 and 09-04 are the same four digits reordered, so a
+ * misread costs a month rather than looking wrong.
+ *
+ * ⚠ PARSED EXPLICITLY, never handed to `new Date("04-09-2026")`, which browsers resolve by locale --
+ * the exact ambiguity s13 tells us not to inherit. The input is always the ISO day the engine returned.
+ */
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function writtenDay(isoDay: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDay);
+  if (!m) return isoDay;                       // not a day string: say what we were given, invent nothing
+  const month = MONTHS[Number(m[2]) - 1];
+  return month ? `${m[3]} ${month} ${m[1]}` : isoDay;
+}
+/** s4: the same day as DD-MM-YYYY, for the filter controls. */
+const dashedDay = (isoDay: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDay);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : isoDay;
+};
 
 export default async function PatientListsPage({ searchParams }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -65,14 +87,8 @@ export default async function PatientListsPage({ searchParams }: {
     });
     return q.toString();
   };
-  const fmt = (iso: string) => {
-    try {
-      return new Intl.DateTimeFormat("en-GB", {
-        timeZone: timezone, weekday: "short", day: "numeric", month: "short", year: "numeric",
-        hour: "2-digit", minute: "2-digit", hour12: false,
-      }).format(new Date(iso));
-    } catch { return iso; }
-  };
+  // (The row formatter moved into ListBody: s8 splits the date onto the group header and leaves only the
+  // time on the row, so the full weekday-date-time string this built is no longer rendered anywhere.)
 
   const tab = (key: "booked" | "seen", label: string) => (
     <Link href={`/practice/patients/lists?${qs({ view: key, from: defaultWindow(key, today).from, to: defaultWindow(key, today).to })}`}
@@ -101,8 +117,20 @@ export default async function PatientListsPage({ searchParams }: {
              badges to plain text. The words still carry the meaning (s17), so this is fidelity rather
              than a dependency. */
           #printable * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          /* ⚠ A COLLAPSED DAY IS A SCREEN STATE AND MUST NOT REACH THE PAPER. Without this, somebody
+             collapses August to read September, prints, and files a register with a whole day missing --
+             and nothing on the page says so. GroupedTable keeps those rows in the DOM precisely so this
+             rule can bring them back. */
+          #printable .cp-day-closed { display: table-row !important; }
+          #printable .print-only { display: inline-block !important; }
+          /* The sticky header and the scroll box are screen affordances; on paper the list runs on and
+             thead repeats per page via display: table-header-group above. */
+          #printable .cp-scroll { max-height: none !important; overflow: visible !important; }
+          #printable thead th { position: static !important; }
           @page { margin: 14mm; }
         }
+        /* Shown only on paper. Screen uses the button that carries the same caption. */
+        .print-only { display: none; }
       `}</style>
 
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
@@ -125,15 +153,24 @@ export default async function PatientListsPage({ searchParams }: {
       {/* ── The filters. A GET form, so every view is a URL. ─────────────────────────────────────── */}
       <form method="get" className="no-print mt-3 flex flex-wrap items-end gap-2 rounded-xl border border-gray-200 bg-white p-3">
         <input type="hidden" name="view" value={view} />
+        {/* ⚠ s4 ASKS FOR DD-MM-YYYY AND A NATIVE DATE INPUT WILL NOT GIVE IT. <input type="date"> renders
+            in the BROWSER's locale and no attribute overrides that -- a US-configured machine shows
+            09/04/2026 for the fourth of September whatever we write here. Replacing it with a text box we
+            control would cost the calendar picker, the keyboard handling and the platform validation, and
+            would hand us the locale-dependent PARSING s13 explicitly forbids.
+            So the control stays native and the unambiguous rendering is stated beneath it, which is the
+            part a person reads back to check. */}
         <label className="flex flex-col gap-1">
           <span className="text-[11px] font-semibold text-gray-500">From</span>
           <input type="date" name="from" defaultValue={result.fromDate}
             className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[13px]" />
+          <span className="text-[10.5px] tabular-nums text-gray-400">{dashedDay(result.fromDate)}</span>
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[11px] font-semibold text-gray-500">To</span>
           <input type="date" name="to" defaultValue={result.toDate}
             className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[13px]" />
+          <span className="text-[10.5px] tabular-nums text-gray-400">{dashedDay(result.toDate)}</span>
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-[11px] font-semibold text-gray-500">Location</span>
@@ -175,17 +212,22 @@ export default async function PatientListsPage({ searchParams }: {
         <AttendanceBand a={att}
           locationName={result.locationId ? (result.locations.find(l => l.id === result.locationId)?.name ?? null) : null} />
         <div className="mt-3">
-          <ListBody result={result} fmt={fmt} view={view} />
+          <ListBody result={result} view={view} />
         </div>
       </div>
     </div>
   );
 }
 
-function ListBody({ result, fmt, view }: {
-  result: PatientListResult; fmt: (iso: string) => string; view: "booked" | "seen";
+function ListBody({ result, view }: {
+  result: PatientListResult; view: "booked" | "seen";
 }) {
   const title = view === "booked" ? "Booked patients" : "Patients seen";
+  // s10: a Booked row is an appointment; a Seen row is a consultation. The noun follows the dataset
+  // rather than a shared "record", because the two are not the same thing counted twice.
+  const countNoun = view === "booked" ? "appointment" : "consultation";
+  // s8: one location selected means the column would repeat the same value on every row.
+  const showLocation = !result.locationId;
 
   // ⚠ THREE STATES, AND THE MIDDLE ONE IS THE POINT. A failed read must never print as an empty list --
   // this page exists to be exported, and an empty PDF is filed and planned against.
@@ -199,16 +241,37 @@ function ListBody({ result, fmt, view }: {
       do <strong>not</strong> read this as nobody.
     </p>;
 
+  // ⚠ EVERY VISIBLE STRING IS BUILT HERE, ON THE SERVER, because GroupedTable is a client component and
+  // a function on its payload would type-check, lint, pass the harnesses and kill the page at runtime.
+  // The ISO instant travels too, but only as the grouping key.
+  const timeOf = (iso: string) => {
+    try {
+      return new Intl.DateTimeFormat("en-GB", {
+        timeZone: result.timezone, hour: "2-digit", minute: "2-digit", hour12: false,
+      }).format(new Date(iso));
+    } catch { return iso.slice(11, 16); }
+  };
+  const groups = groupByDay(
+    result.rows.map(r => ({
+      id: r.id, patientId: r.patientId, patientName: r.patientName, patientNumber: r.patientNumber,
+      at: r.at, time: timeOf(r.at), kind: r.kind, status: r.status, locationName: r.locationName,
+    })),
+    result.timezone,
+  );
+
   return (
     <section className="rounded-xl border border-gray-200 bg-white">
       <div className="border-b border-gray-100 px-4 py-3">
         <h2 className="text-[15px] font-bold text-gray-900">{title}</h2>
+        {/* s5's context line: location, then range, then count. s13: the timezone is stated ONCE for the
+            workspace rather than repeated on every row. */}
         <p className="mt-0.5 text-[12px] text-gray-600">
-          {result.fromDate} to {result.toDate} ({result.timezone})
-          {" · "}{result.locationName ?? "All locations"}
-          {" · "}<strong>{result.rows.length}</strong> {result.rows.length === 1 ? "appointment" : view === "booked" ? "appointments" : "consultations"}
+          {result.locationName ?? "All locations"}
+          {" · "}{writtenDay(result.fromDate)} to {writtenDay(result.toDate)}
+          {" · "}<strong>{result.rows.length}</strong> {result.rows.length === 1 ? countNoun : `${countNoun}s`}
           {" · "}<strong>{result.patientCount}</strong> {result.patientCount === 1 ? "patient" : "patients"}
         </p>
+        <p className="mt-0.5 text-[11px] text-gray-400">Times shown in {result.timezone}.</p>
         {result.truncated && (
           <p className="mt-1 text-[12px] font-semibold text-[var(--cmp-text-warning)]">
             Only the first {result.limit} rows are shown. Narrow the period or the location &mdash; this list
@@ -219,45 +282,15 @@ function ListBody({ result, fmt, view }: {
       </div>
 
       {result.rows.length === 0 ? (
+        // s15's wording, plus the sentence that matters more than the wording: this period WAS read.
         <p className="px-4 py-6 text-[13px] text-gray-500">
-          Nobody was {view === "booked" ? "booked" : "seen"} between {result.fromDate} and {result.toDate}
-          {result.locationName ? ` at ${result.locationName}` : ""}. This period was read successfully.
+          {view === "booked"
+            ? "No booked patients found for this period and location."
+            : "No patients were seen for this period and location."}
+          {" "}This period was read successfully &mdash; use <em>Reset</em> to restore the default filters.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead className="bg-gray-50/80">
-              <tr>
-                {["Patient number", "Patient", view === "booked" ? "Booked for" : "Seen on", "Kind", "Status", "Location"].map(h => (
-                  <th key={h} className="px-3 py-2 text-left text-[10.5px] font-bold uppercase tracking-[0.06em] text-gray-500">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {result.rows.map(r => (
-                <tr key={r.id} className="border-t border-gray-100">
-                  <td className="px-3 py-2 font-mono text-[12px] text-gray-700">{r.patientNumber ?? "—"}</td>
-                  <td className="px-3 py-2 text-[13px] font-semibold text-gray-900">
-                    {r.patientId
-                      ? <Link href={`/practice/patients/${r.patientId}`} className="hover:underline">{r.patientName}</Link>
-                      : <span title="Booked by name before a record existed">{r.patientName}</span>}
-                  </td>
-                  <td className="px-3 py-2 text-[13px] text-gray-800">{fmt(r.at)}</td>
-                  <td className="px-3 py-2 text-[12.5px] text-gray-600">{r.kind}</td>
-                  <td className="px-3 py-2">
-                    {/* ⚠ s17: the WORD is the status, the colour only reinforces it. Never a bare dot. */}
-                    <span className={`inline-block rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${
-                      (view === "booked" ? APPOINTMENT_STATUS_SWATCH : ENCOUNTER_STATUS_SWATCH)[r.status]
-                      ?? "bg-gray-100 text-gray-600"}`}>
-                      {r.status.toLowerCase().replace(/_/g, " ")}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-[12.5px] text-gray-600">{r.locationName ?? "not named"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <GroupedTable groups={groups} view={view} showLocation={showLocation} countNoun={countNoun} />
       )}
 
       {/* ⚠ THE SENTENCE TRAVELS WITH THE PAGE, because the page is meant to leave the product. */}
