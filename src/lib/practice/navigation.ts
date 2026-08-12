@@ -138,6 +138,10 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // ⚠ patient.view, NOT patient.list. Every row here is a named person; the engine gates on the same
   // capability and re-checks it rather than trusting the nav.
   { href: "/practice/patients/lists", label: "Booked & seen", icon: "▤", capability: "patient.view", group: "Patients", phase: 2, built: true, parent: "/practice/patients" },
+  // CP-BULK-BOOKING-001 s1 puts this under Patients deliberately: "the operational task is to place
+  // multiple patients into the schedule". The capability is appointment.manage, matching the page and
+  // the endpoint -- an entry offered to somebody the page redirects is a sidebar item that bounces.
+  { href: "/practice/patients/bulk-booking", label: "Bulk Booking", icon: "≣", capability: "appointment.manage", group: "Patients", phase: 2, built: true, parent: "/practice/patients" },
   { href: "/practice/follow-ups", label: "Follow-ups", icon: "↻", capability: "followup.view", group: "Patients", phase: 4, built: true, primary: true },
   { href: "/practice/documents", label: "Documents", icon: "▦", capability: "document.view", group: "Clinical", phase: 4, built: true, primary: true },
   // CPR-V3-002 "Insights". Analytics and Patient Insights both exist and both sit under Practice Home
