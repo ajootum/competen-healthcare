@@ -216,12 +216,24 @@ export async function investigationCatalogue(
   if (!hasCapability(ctx, CAP_ENCOUNTER_EDIT) && !hasCapability(ctx, CAP_INVESTIGATION_CONFIGURE))
     return emptyCatalogue({ permitted: false });
 
-  const [catRes, aliasRes, actRes, prefRes, setRes, setItemRes, settings] = await Promise.all([
+  // ⚠ TWO WAVES, NOT ONE FAN-OUT, AND THE REASON IS A BUG THAT WAS LIVE.
+  //
+  // `alias` and `set_item` have no workspace_id column of their own -- they belong to a tenant only
+  // through their parent -- and they used to be read here with NO FILTER AT ALL, capped at 1000 rows.
+  // Two harms, and the second is the one that bit:
+  //
+  //   1. every practice's aliases and set items were read into this process, and
+  //   2. THE CAP IS SHARED. Another practice's rows fill the 1000 before yours are reached, so a
+  //      practice with forty investigation sets renders them EMPTY -- correct-looking, silent, and
+  //      worse the more tenants the platform has. It cannot be fixed by raising the limit.
+  //
+  // The in-memory join meant nothing leaked to the response, which is exactly why nobody noticed.
+  // Keying the children on their resolved parents costs one round trip and makes the cap per-practice.
+  const [catRes, actRes, prefRes, setRes, settings] = await Promise.all([
     admin.from(INVESTIGATION_TABLES.catalogue)
       .select("id, workspace_id, code, canonical_name, short_name, category, subcategory, active")
       .or(`workspace_id.is.null,workspace_id.eq.${ctx.workspaceId}`)
       .eq("active", true).order("category").order("canonical_name").limit(1000),
-    admin.from(INVESTIGATION_TABLES.alias).select("investigation_id, alias").limit(1000),
     admin.from(INVESTIGATION_TABLES.activation)
       .select("investigation_id, enabled, local_display_name").eq("workspace_id", ctx.workspaceId).limit(1000),
     admin.from(INVESTIGATION_TABLES.preference)
@@ -230,8 +242,21 @@ export async function investigationCatalogue(
     admin.from(INVESTIGATION_TABLES.set)
       .select("id, name, owner_type, owner_id, active").eq("workspace_id", ctx.workspaceId)
       .eq("active", true).order("name").limit(200),
-    admin.from(INVESTIGATION_TABLES.setItem).select("set_id, investigation_id, sort_order").limit(1000),
     captureSettings(admin, ctx.workspaceId),
+  ]);
+
+  const catalogueIds = ((catRes.data ?? []) as any[]).map(r => r.id as string);
+  const setIds = ((setRes.data ?? []) as any[]).map(r => r.id as string);
+  const none = { data: [] as any[], error: null };
+  const [aliasRes, setItemRes] = await Promise.all([
+    catalogueIds.length
+      ? admin.from(INVESTIGATION_TABLES.alias).select("investigation_id, alias")
+        .in("investigation_id", catalogueIds).limit(2000)
+      : none,
+    setIds.length
+      ? admin.from(INVESTIGATION_TABLES.setItem).select("set_id, investigation_id, sort_order")
+        .in("set_id", setIds).limit(2000)
+      : none,
   ]);
 
   if (catRes.error && isMissingTable(catRes.error))

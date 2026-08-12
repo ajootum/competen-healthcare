@@ -245,19 +245,27 @@ export type TreatmentTemplate = {
 export async function treatmentTemplates(
   admin: any, ctx: WorkspaceContext, practitionerId: string,
 ): Promise<Panel<TreatmentTemplate>> {
-  const [tplRes, itemRes] = await Promise.all([
-    admin.from(TREATMENT_TABLES.template)
-      .select("id, name, owner_type, owner_id, version, active")
-      .eq("workspace_id", ctx.workspaceId).eq("active", true).order("name").limit(200),
-    admin.from(TREATMENT_TABLES.templateItem)
-      .select("id, template_id, sort_order, treatment_type, label, medication_ref, formulation, "
-        + "dose_text, dose_unit, route, frequency_code, frequency_text, duration_text, reason").limit(1000),
-  ]);
+  // ⚠ THE TEMPLATE READ FIRST, THEN ITS ITEMS BY ID. See investigations.ts for the same fix and the
+  // same two harms -- except that what was being read across every tenant here is CLINICAL: drug
+  // names, doses, routes and frequencies from other practices' prescription templates. The items table
+  // has no workspace_id of its own, so its only honest scope is the template it belongs to, and it
+  // carried none. The shared 1000-row cap silently emptied templates for the same reason.
+  const tplRes = await admin.from(TREATMENT_TABLES.template)
+    .select("id, name, owner_type, owner_id, version, active")
+    .eq("workspace_id", ctx.workspaceId).eq("active", true).order("name").limit(200);
 
   if (tplRes.error)
     return isMissingTable(tplRes.error)
       ? failedPanel<TreatmentTemplate>(TREATMENT_CONFIG_ABSENT_NOTICE)
       : failedPanel<TreatmentTemplate>(`prescription templates could not be read: ${tplRes.error.message}`);
+
+  const templateIds = ((tplRes.data ?? []) as any[]).map(t => t.id as string);
+  const itemRes = templateIds.length
+    ? await admin.from(TREATMENT_TABLES.templateItem)
+      .select("id, template_id, sort_order, treatment_type, label, medication_ref, formulation, "
+        + "dose_text, dose_unit, route, frequency_code, frequency_text, duration_text, reason")
+      .in("template_id", templateIds).limit(2000)
+    : { data: [] as any[], error: null };
 
   const itemsBy = new Map<string, TemplateItem[]>();
   for (const i of ((itemRes.data ?? []) as any[])) {

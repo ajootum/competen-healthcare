@@ -199,8 +199,14 @@ async function refusalFor(admin: any, workspaceId: string, args: {
   if (!channel.enabled) return `this practice has not switched on ${args.kind}`;
 
   if (args.patientId) {
+    // ⚠ WORKSPACE-SCOPED, and it was not until 2026-08-12. This read decides whether a person may be
+    // contacted -- "do not contact" and merged-record both refuse from here -- and it was keyed on a
+    // patient id alone, in a function that HAS workspaceId as a parameter. Not exploitable through any
+    // caller today (every one derives patientId from a workspace-scoped read), but a consent gate that
+    // trusts an unverified id is one refactor away from consulting the wrong patient's wishes.
     const { data: patient } = await admin.from("practice_patient")
-      .select("preferred_contact_method, status").eq("id", args.patientId).maybeSingle();
+      .select("preferred_contact_method, status")
+      .eq("id", args.patientId).eq("workspace_id", workspaceId).maybeSingle();
     // "DO NOT CONTACT" MEANS DO NOT CONTACT, and it outranks every other setting including the
     // practice's own. CPR-PRM-001 s4 recorded this preference; this is the line that honours it.
     if (patient?.preferred_contact_method === "none")
@@ -210,7 +216,8 @@ async function refusalFor(admin: any, workspaceId: string, args: {
 
     if (channel.requireConsent) {
       const { data: consent } = await admin.from("practice_patient_consent")
-        .select("state").eq("patient_id", args.patientId).eq("consent_type", "contact_by_practice")
+        .select("state").eq("patient_id", args.patientId).eq("workspace_id", workspaceId)
+        .eq("consent_type", "contact_by_practice")
         .order("recorded_at", { ascending: false }).limit(1).maybeSingle();
       const state = consent?.state ?? "not_recorded";
       if (state !== "given")
@@ -360,7 +367,11 @@ async function appointmentDestination(admin: any, args: {
 
   if (args.patientId) {
     const [{ data: patient }, { data: contacts }] = await Promise.all([
-      admin.from("practice_patient").select("preferred_contact_method").eq("id", args.patientId).maybeSingle(),
+      // ⚠ BOTH SCOPED. The contacts read below carried .eq("workspace_id") from the day it was written
+      // and the patient read one line above it did not -- the clearest possible sign that the omission
+      // was an oversight rather than a decision.
+      admin.from("practice_patient").select("preferred_contact_method")
+        .eq("id", args.patientId).eq("workspace_id", args.workspaceId).maybeSingle(),
       admin.from("practice_patient_contact").select("contact_type, value, preferred")
         .eq("patient_id", args.patientId).eq("workspace_id", args.workspaceId),
     ]);

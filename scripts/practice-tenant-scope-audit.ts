@@ -86,6 +86,40 @@ const walk = (dir: string, out: string[] = []): string[] => {
 };
 
 /**
+ * ⚠ TABLE NAMES THAT ARE NOT STRING LITERALS -- THE BLIND SPOT THAT MADE THE FIRST VERSION OF THIS
+ * FILE REPORT "ZERO UNSCOPED READS" WHILE THREE REAL ONES WERE OPEN.
+ *
+ * Roughly a seventh of this codebase's queries name their table through a constant:
+ * `.from(INVESTIGATION_TABLES.setItem)`, `.from(TREATMENT_TABLES.templateItem)`, `.from(FORM_TABLE)`.
+ * A scanner matching only `.from("practice_…")` cannot see any of them, and an audit that cannot see a
+ * call site will certify it. Two of the three genuine holes found on 2026-08-12 -- cross-tenant reads
+ * of investigation aliases and of other practices' PRESCRIPTION TEMPLATE ITEMS -- were in exactly
+ * this shape.
+ *
+ * So the constants are resolved: any `const NAME = …` whose value mentions a practice_ table makes
+ * `.from(NAME)` and `.from(NAME.anything)` count. The recorded lesson applies -- THE DETECTION WAS THE
+ * BUG -- and a scanner that silently narrows its own scope is the worst kind, because its green line
+ * is read as coverage.
+ */
+function practiceTableConstants(files: string[]): Set<string> {
+  const names = new Set<string>();
+  for (const f of files) {
+    const src = readFileSync(f, "utf8");
+    const re = /(?:const|let|var)\s+([A-Za-z_$][\w$]{2,})\s*(?::[^=]{0,120})?=\s*([\s\S]{0,700}?);/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src))) {
+      // ⚠ THE VALUE MUST OPEN AS A TABLE NAME OR A MAP OF THEM. A lazy match to the next semicolon
+      // will happily run past a short declaration into a nearby practice_ string, which is how
+      // `Uint8Array.from(n)` in offline-lock.ts was first reported as an unscoped cross-tenant read.
+      // A scanner's false positives cost it its readers as surely as its false negatives.
+      if (!/^\s*(["'`]practice_|\{)/.test(m[2])) continue;
+      if (/["'`]practice_\w+["'`]/.test(m[2])) names.add(m[1]);
+    }
+  }
+  return names;
+}
+
+/**
  * The query chain that follows a `.from("practice_x")`.
  *
  * Depth-tracked from the match, so it stops at the `;` that ends the statement and at the `)` that
@@ -166,11 +200,36 @@ const ALLOW: Record<string, { count: number; reason: string }> = {
     "authTrail() takes workspaceId OPTIONALLY and applies .eq('workspace_id') when given; its only caller " +
     "(auth-audit.ts:291) passes it. VERIFIED 2026-08-12 -- a caller that omits it would be a real leak" },
 
+  // ── SCHEMA-PRESENCE PROBES ──────────────────────────────────────────────────────────────────────
+  // All of the same shape: `.select("id").limit(1)` destructuring ONLY `error` and discarding `data`,
+  // to ask whether a migration has been applied. No row content reaches the caller, so there is
+  // nothing for a tenant boundary to hold back.
   "practice_availability_template@src/lib/practice/availability-config.ts": { count: 1, reason:
-    "SCHEMA PROBE, not a data read: recurrenceStoreState() selects one row to ask whether the COLUMN " +
-    "exists and discards everything except `error`. No row content crosses a tenant boundary" },
+    "SCHEMA PROBE: recurrenceStoreState() asks whether the COLUMN exists and reads only `error`" },
   "practice_booking_rule@src/lib/practice/booking-rules.ts": { count: 1, reason:
-    "same shape: bookingRuleExtensionPresent() probes for migration 268's columns and reads only `error`" },
+    "SCHEMA PROBE: bookingRuleExtensionPresent() probes for migration 268's columns, reads only `error`" },
+  "«WAITING_LIST_TABLE»@src/lib/practice/booking-cancellation.ts": { count: 1, reason:
+    "SCHEMA PROBE: waiting-list store presence, reads only `error`" },
+  "«table»@src/lib/practice/checklist.ts": { count: 1, reason: "SCHEMA PROBE, reads only `error`" },
+  "«table»@src/lib/practice/forms.ts": { count: 1, reason: "SCHEMA PROBE, reads only `error`" },
+  "«table»@src/lib/practice/knowledge.ts": { count: 1, reason: "SCHEMA PROBE, reads only `error`" },
+  "«table»@src/lib/practice/medication.ts": { count: 1, reason: "SCHEMA PROBE, reads only `error`" },
+  "«s.table»@src/lib/practice/patient-access.ts": { count: 1, reason: "SCHEMA PROBE, reads only `error`" },
+
+  // ── CHILD INSERTS WHOSE PARENT WAS JUST VERIFIED IN THIS WORKSPACE ─────────────────────────────
+  // These tables have no workspace_id column; their tenant is their parent. Each parent read or
+  // insert immediately above them carries .eq("workspace_id", ctx.workspaceId) and 404s when absent
+  // -- checked by hand 2026-08-12, and the reason is here so the next reader need not re-derive it.
+  "«INVESTIGATION_TABLES.alias»@src/lib/practice/investigations.ts": { count: 1, reason:
+    "aliases for the catalogue row created two statements above with workspace_id: ctx.workspaceId" },
+  "«INVESTIGATION_TABLES.setItem»@src/lib/practice/investigations.ts": { count: 1, reason:
+    "items for a set whose id was either just inserted with workspace_id, or loaded by " +
+    ".eq('id', setId).eq('workspace_id', ctx.workspaceId) with a 404 when it is not this practice's" },
+  "«TREATMENT_TABLES.templateItem»@src/lib/practice/treatment-capture.ts": { count: 1, reason:
+    "same shape as the investigation set items, over a template verified the same way" },
+  "«TREATMENT_TABLES.treatment»@src/lib/practice/treatment-capture.ts": { count: 1, reason:
+    "insert of prepared.map(p => p.row), and every row is built at line ~437 with " +
+    "workspace_id: ctx.workspaceId -- the payload IS scoped, one construction step out of view" },
 
   "practice_otp_challenge@src/lib/practice/messaging.ts": { count: 3, reason:
     "DELIBERATELY GLOBAL, and must be: the limit is per DESTINATION (a phone number). Scoping it by " +
@@ -201,15 +260,35 @@ function main() {
     ...walk(join(ROOT, "src/app/practice")),
   ];
 
+  // Resolved across the WHOLE source tree, not just the walked directories: a constant is often
+  // declared in a -constants.ts file that lives outside them.
+  const constNames = practiceTableConstants([...files, ...walk(join(ROOT, "src/lib"))]);
+
   const findings: Finding[] = [];
   for (const file of files) {
     const src = readFileSync(file, "utf8");
     const rel = relative(ROOT, file).replace(/\\/g, "/");
-    const re = /\.from\(\s*["'`](practice_\w+)["'`]\s*\)/g;
+    // Literal `.from("practice_x")` OR `.from(CONST)` / `.from(CONST.member)` where CONST is known to
+    // name a practice table.
+    const re = /\.from\(\s*(?:["'`](practice_\w+)["'`]|([A-Za-z_$][\w$]*)(\.[\w$]+)?)\s*\)/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(src))) {
-      const table = m[1].toLowerCase();
       const chain = chainAfter(src, m.index);
+      let table: string;
+      if (m[1]) {
+        table = m[1].toLowerCase();
+      } else if (m[2] && constNames.has(m[2])) {
+        table = `«${m[2]}${m[3] ?? ""}»`;
+      } else if (m[2] && OP.test(chain)) {
+        // ⚠ A TABLE NAME THIS SCANNER CANNOT RESOLVE -- `.from(table)` where `table` is a function
+        // PARAMETER. Included rather than skipped, and judged on its chain like any other: tightening
+        // the constant resolver above (correctly, to stop Uint8Array.from(n) being reported) had the
+        // side effect of dropping these entirely, which is a scanner quietly narrowing its own scope.
+        // The OP test is what separates a Supabase chain from every other .from() in the language.
+        table = `«${m[2]}${m[3] ?? ""}»`;
+      } else {
+        continue;   // not a database call at all
+      }
       const line = src.slice(0, m.index).split("\n").length;
       const op = (OP.exec(chain)?.[1] ?? "?").toLowerCase();
 
