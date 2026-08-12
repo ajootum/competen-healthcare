@@ -1229,10 +1229,22 @@ export default function EncounterConsole(props: {
 
             {/* ══ NOTES ═════════════════════════════════════════════════════════════════════════ */}
             {tab === "notes" && (
-              <section>
-                <h3 className="text-[13px] font-bold text-gray-900">Clinical note</h3>
+              // ⚠ FOURTH TAB ON THE ENCOUNTER KIT. Expression position, so // is a real comment here --
+              // unlike the Attachments tab, where the same line sits in JSX children and would render.
+              //
+              // Chrome only. The two sentences this tab must never lose are both intact below: WHY it is
+              // read-only when it is (a closed encounter and a missing capability are different reasons
+              // and are still told apart), and that applying a template fills ONLY EMPTY segments.
+              <section className={PANEL}>
+                <SectionHeader
+                  title="Clinical note"
+                  subtitle="Create and structure your consultation note."
+                />
+                <div className="p-4">
                 {!editable && (
-                  <p className="mt-1 text-[11px] text-gray-500">
+                  // ⚠ THE REASON, NOT JUST THE STATE. "Read-only" alone leaves somebody hunting for a
+                  // permission they already hold, or waiting for an encounter that is already closed.
+                  <p className="mb-2 rounded-lg bg-gray-50 px-3 py-2 text-[11.5px] text-gray-600">
                     {locked ? "Read-only: this encounter is closed." : "Read-only: you do not hold encounter.edit in this workspace."}
                   </p>
                 )}
@@ -1253,9 +1265,12 @@ export default function EncounterConsole(props: {
                       className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                       Apply
                     </button>
-                    <p className="w-full text-[10px] text-gray-400">
-                      Only empty segments are filled. Anything you have already written stays exactly as it is.
-                    </p>
+                    <div className="w-full">
+                      <Tip>
+                        Only empty segments are filled. Anything you have already written stays exactly
+                        as it is.
+                      </Tip>
+                    </div>
                   </div>
                 )}
 
@@ -1325,6 +1340,7 @@ export default function EncounterConsole(props: {
                       </div>
                     );
                   })}
+                </div>
                 </div>
               </section>
             )}
