@@ -5,6 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { bulkAvailability, type BulkPreset } from "@/lib/practice/bulk-booking";
 import BulkWorkspace from "./BulkWorkspace";
+import { Advisory } from "@/components/practice/EncounterKit";
 
 // /practice/patients/bulk-booking -- CP-BULK-BOOKING-001.
 //
@@ -104,9 +105,12 @@ export default async function BulkBookingPage({ searchParams }: {
         />
       )}
 
-      <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
-        <h2 className="text-[12.5px] font-bold text-gray-800">Not built yet</h2>
-        <ul className="mt-1.5 list-disc space-y-1 pl-5 text-[12px] leading-relaxed text-gray-600">
+      {/* ⚠ COLLAPSED, NOT DELETED. These two gaps must stay findable -- a spec requirement that is
+          silently absent is indistinguishable from one nobody noticed -- but they were sitting open
+          under the booking grid on every visit, and the grid is what the screen is for. */}
+      <div className="mt-5">
+        <Advisory summary="Not built yet" count={2}>
+        <ul className="list-disc space-y-1 pl-5 text-[12px] leading-relaxed text-gray-600">
           <li>
             <strong>Patients &rarr; Find availability</strong> (s2&rsquo;s reverse workflow), and with it
             the follow-up-due and overdue cohorts of s8. The spec names Availability &rarr; Add patients
@@ -119,6 +123,7 @@ export default async function BulkBookingPage({ searchParams }: {
             rather than a single confirmation.
           </li>
         </ul>
+        </Advisory>
       </div>
     </div>
   );

@@ -180,3 +180,48 @@ export function EmptyState({ title, reason, tone = "neutral" }: {
     </div>
   );
 }
+
+/**
+ * AN ADVISORY THAT COSTS ONE LINE UNTIL IT IS ASKED FOR.
+ *
+ * The owner, 2026-08-12, of the pre-close notes: "drop this to a one-liner with click to see more. this
+ * important space that is being eaten up." A block that is permanently open spends the same vertical
+ * room whether or not anybody is reading it, and on a consultation screen that room is the record.
+ *
+ * ⚠ THE COUNT AND THE TONE STAY ON THE CLOSED LINE. Collapsing to "Notes" alone would hide HOW MANY
+ * there are, and somebody deciding whether to open it needs exactly that. Four outstanding notes and
+ * one are different situations, and the summary must say which without being opened.
+ *
+ * ⚠ AND IT IS <details>, NOT useState. No client component, no hydration boundary, keyboard-operable for
+ * free, and -- the part that matters on this screen -- it PRINTS OPEN, because `open` is what the print
+ * stylesheet can force. A React-collapsed block is absent from the DOM and cannot be recovered onto
+ * paper, which is the trap the Booked and seen day-groups had to avoid.
+ */
+export function Advisory({ tone = "note", summary, count, children }: {
+  tone?: "note" | "warn";
+  summary: string;
+  /** Shown on the closed line. Omit only where a count would be meaningless. */
+  count?: number;
+  children: ReactNode;
+}) {
+  const warn = tone === "warn";
+  return (
+    <details className={`group rounded-xl border ${warn
+      ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-gray-50/70"}`}>
+      <summary className={`flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-[12px] font-bold ${warn
+        ? "text-amber-800" : "text-gray-700"}`}>
+        <span aria-hidden="true" className="text-[9px] transition-transform group-open:rotate-90">&#9654;</span>
+        {summary}
+        {count !== undefined && (
+          <span className={`rounded-md px-1.5 py-0.5 text-[10.5px] font-bold ${warn
+            ? "bg-amber-200/70 text-amber-900" : "bg-gray-200 text-gray-700"}`}>
+            {count}
+          </span>
+        )}
+        <span className="ml-auto text-[10.5px] font-semibold opacity-60 group-open:hidden">show</span>
+        <span className="ml-auto hidden text-[10.5px] font-semibold opacity-60 group-open:inline">hide</span>
+      </summary>
+      <div className="px-3 pb-3">{children}</div>
+    </details>
+  );
+}

@@ -5,6 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { taxonomyForSetup } from "@/lib/practice/taxonomy-admin";
 import TaxonomyEditor from "./TaxonomyEditor";
+import { Advisory } from "@/components/practice/EncounterKit";
 
 // /practice/setup/booking-taxonomy -- CP-BOOKING-TAXONOMY-001 s4's no-code configuration.
 //
@@ -69,11 +70,14 @@ export default async function BookingTaxonomyPage() {
 
       {/* ⚠ SAID, NOT SILENTLY OMITTED. s4 asks for location restriction and migration 292 has nowhere to
           store it, so the gap is printed rather than left as a control that would appear to work. */}
-      <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50/60 p-4">
-        <h2 className="text-[12.5px] font-bold text-gray-800">Not configurable yet</h2>
-        <ul className="mt-1.5 list-disc space-y-1 pl-5 text-[12px] leading-relaxed text-gray-600">
-          {notYetConfigurable.map(n => <li key={n}>{n}</li>)}
-        </ul>
+      {/* Collapsed for the same reason as Bulk Booking's: the gap must stay findable, but it was sitting
+          open beneath the thing somebody came here to edit. */}
+      <div className="mt-5">
+        <Advisory summary="Not configurable yet" count={notYetConfigurable.length}>
+          <ul className="list-disc space-y-1 pl-5 text-[12px] leading-relaxed text-gray-600">
+            {notYetConfigurable.map(n => <li key={n}>{n}</li>)}
+          </ul>
+        </Advisory>
       </div>
 
       <p className="mt-4 text-[11.5px] leading-relaxed text-gray-500">

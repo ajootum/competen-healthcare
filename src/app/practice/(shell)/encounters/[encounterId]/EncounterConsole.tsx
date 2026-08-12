@@ -18,7 +18,7 @@ import Dictation from "@/components/practice/Dictation";
 import DocumentationTools from "./DocumentationTools";
 import { formatTime, formatDate } from "@/lib/datetime";
 // The shared encounter visual language. Follow-up is the first tab on it; the other seven follow.
-import { PANEL, SectionHeader, EmptyState, Tip } from "@/components/practice/EncounterKit";
+import { PANEL, SectionHeader, EmptyState, Tip, Advisory } from "@/components/practice/EncounterKit";
 
 // CPR-ENC-002's consultation surface: the comp's eight-tab main workspace and the right-hand actions
 // panel, over the SOAP note, diagnoses, treatments, procedures, investigations, referrals, follow-up,
@@ -528,9 +528,19 @@ export default function EncounterConsole(props: {
             would teach practitioners to type a diagnosis they do not hold in order to get out of the
             screen. A false diagnosis is worse than an empty field. */}
         {editable && props.warnings.length > 0 && (
-          <section className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-            <p className="text-[12px] font-bold text-amber-800">Before you close this encounter</p>
-            <ul className="mt-1 flex flex-col gap-0.5">
+          // ⚠ ONE LINE UNTIL ASKED FOR (the owner, 2026-08-12: "this important space is being eaten
+          // up"). The block sat open above the consultation on every encounter, spending the same
+          // vertical room whether or not anybody read it -- and on this screen that room is the record.
+          //
+          // ⚠ THE COUNT STAYS ON THE CLOSED LINE. Collapsing to "Before you close this encounter" alone
+          // would hide how many notes there are, and that is exactly what somebody decides on before
+          // opening it. Four outstanding and one are different situations.
+          //
+          // ⚠ AND "NOTES, NOT GATES" STAYS INSIDE RATHER THAN BEING DROPPED. It is the sentence that
+          // stops a practitioner typing a diagnosis they do not hold in order to get out of the screen,
+          // which is the whole argument of the comment above this block.
+          <Advisory tone="warn" summary="Before you close this encounter" count={props.warnings.length}>
+            <ul className="flex flex-col gap-0.5">
               {props.warnings.map(w => (
                 <li key={w.key} className="text-[11px] text-gray-700">· {w.text}</li>
               ))}
@@ -538,7 +548,7 @@ export default function EncounterConsole(props: {
             <p className="mt-1.5 text-[10px] text-gray-500">
               These are notes, not gates. You can close this encounter without acting on any of them.
             </p>
-          </section>
+          </Advisory>
         )}
 
         {/* ── CPR-130 draft recovery ────────────────────────────────────────────────────────────────
