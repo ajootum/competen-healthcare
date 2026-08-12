@@ -734,6 +734,38 @@ async function main() {
       .select("id").eq("encounter_id", "00000000-0000-4000-8000-00000000dead").maybeSingle();
     ok("13a-5b-control. and the same read finds nothing for an encounter that recorded none",
       !none, none ? "a row came back for an encounter that never existed" : "");
+
+    // ── 13a-6. THE SAME GUARD FOR DIAGNOSES ───────────────────────────────────────────────────────
+    //
+    // ⚠ THE MOST IMPORTANT OF THE THREE, because CP-ENC-DIAG-001 is about to replace this exact capture
+    // form with a multi-diagnosis working set. If that rewrite drops the write, this is what says so --
+    // and a diagnosis that does not land is a consultation whose conclusion was never recorded.
+    const dx = await recordDiagnosis(admin, {
+      workspaceId: wsA, encounterId: encTx.data.id, label: "Essential hypertension", ...base,
+    });
+    ok("13a-6. ⚠ RECORDING A DIAGNOSIS THROUGH THE REAL ENGINE SUCCEEDS",
+      dx.ok, dx.ok ? "" : `${dx.code}: ${dx.message}`);
+    const { data: dxRow, error: dxErr } = await admin.from("practice_diagnosis")
+      .select("id, label").eq("encounter_id", encTx.data.id).maybeSingle();
+    ok("13a-6b. ⚠ AND THE ROW IS IN practice_diagnosis, read back rather than taken on trust",
+      !dxErr && !!dxRow && dxRow.label === "Essential hypertension",
+      dxErr?.message ?? (dxRow ? `label was ${dxRow.label}` : "no row"));
+
+    // ── 13a-7. AND FOR INVESTIGATIONS ─────────────────────────────────────────────────────────────
+    //
+    // ⚠ THE TABLE IS practice_encounter_investigation, NOT practice_investigation. Naming it wrongly
+    // would make this assertion fail against correct code and read as a lost write path -- which is the
+    // exact misdiagnosis that started this whole thread.
+    const inv = await recordInvestigation(admin, {
+      workspaceId: wsA, encounterId: encTx.data.id, label: "Full blood count", ...base,
+    });
+    ok("13a-7. ⚠ RECORDING AN INVESTIGATION THROUGH THE REAL ENGINE SUCCEEDS",
+      inv.ok, inv.ok ? "" : `${inv.code}: ${inv.message}`);
+    const { data: invRow, error: invErr } = await admin.from("practice_encounter_investigation")
+      .select("id, label").eq("encounter_id", encTx.data.id).maybeSingle();
+    ok("13a-7b. ⚠ AND THE ROW IS IN practice_encounter_investigation",
+      !invErr && !!invRow && invRow.label === "Full blood count",
+      invErr?.message ?? (invRow ? `label was ${invRow.label}` : "no row"));
   }
 
   // ⚠ AND THE TWO PANELS THAT MOVED ARE THE SAME PANELS. They were full-width blocks stacked above the
