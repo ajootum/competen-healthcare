@@ -1154,12 +1154,28 @@ export default function EncounterConsole(props: {
                 signing the encounter records what happened, signing a document issues something. */}
             {tab === "attachments" && (
               <div className="flex flex-col gap-4">
-                <section>
-                  <h3 className="text-[13px] font-bold text-gray-900">Documents</h3>
+                {/* ⚠ THIRD TAB ON THE ENCOUNTER KIT. Chrome only -- every behaviour below is untouched,
+                    including the rule this tab exists to keep visible: a document is created FROM this
+                    consultation and signed SEPARATELY from it. Signing the encounter records what
+                    happened; signing a document issues something.
+
+                    ⚠ AND THE BRACES MATTER HERE. This comment sits inside the wrapping div's CHILDREN,
+                    so a bare // would render as visible text on the page -- unlike the Follow-up tab,
+                    where the same comment sits in an expression position and is a real comment. eslint
+                    caught it; nothing else would have until it appeared on screen. */}
+                <section className={PANEL}>
+                  <SectionHeader
+                    title="Documents"
+                    subtitle="Letters and summaries drafted from this consultation."
+                  />
+                  <div className="p-4">
                   {props.documents.length === 0 ? (
-                    <p className="mt-2 text-[12px] text-gray-400">Nothing has been drafted from this consultation.</p>
+                    // The read-succeeded empty state, said as such rather than left as a grey line that
+                    // could equally mean the documents could not be read.
+                    <EmptyState title="Nothing has been drafted from this consultation"
+                      reason="No document has been created here yet. This was read successfully -- draft one below if something needs to be issued." />
                   ) : (
-                    <ul className="mt-2 flex flex-col gap-1">
+                    <ul className="flex flex-col gap-1">
                       {props.documents.map(d => (
                         <li key={d.id} className="flex items-center gap-2 text-[12px] flex-wrap">
                           <Link href={`/practice/documents/${d.id}`} className="font-semibold text-gray-800 hover:underline">{d.title}</Link>
@@ -1188,12 +1204,16 @@ export default function EncounterConsole(props: {
                         className="col-span-2 rounded-lg border border-gray-200 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                         Create document
                       </button>
-                      <p className="col-span-2 text-[10px] text-gray-400">
-                        Composing pulls in only what this consultation actually holds &mdash; empty sections are left
-                        out rather than rendered as blank headings. Everything is editable before you sign.
-                      </p>
+                      <div className="col-span-2">
+                        <Tip>
+                          Composing pulls in only what this consultation actually holds &mdash; empty
+                          sections are left out rather than rendered as blank headings. Everything is
+                          editable before you sign.
+                        </Tip>
+                      </div>
                     </form>
                   )}
+                  </div>
                 </section>
 
                 <DocumentationTools
