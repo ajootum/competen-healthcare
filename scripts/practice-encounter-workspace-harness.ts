@@ -41,6 +41,7 @@ import {
 // route; calling the engine proves the thing every caller of it shares, and cannot pass because a
 // fixture happened to hit a different endpoint.
 import { recordTreatmentBatch } from "../src/lib/practice/treatment-capture";
+import { recordDiagnosisBatch } from "../src/lib/practice/diagnosis-capture";
 import {
   encountersDashboard, encounterExtras, addDecision, removeDecision,
   recordInvestigation, reviewInvestigation, recordReferral, updateReferralStatus,
@@ -766,6 +767,85 @@ async function main() {
     ok("13a-7b. ⚠ AND THE ROW IS IN practice_encounter_investigation",
       !invErr && !!invRow && invRow.label === "Full blood count",
       invErr?.message ?? (invRow ? `label was ${invRow.label}` : "no row"));
+
+    // ── 13a-8. CP-ENC-DIAG-001 s2, TRAP ONE: PROMOTING LINKS, IT DOES NOT DUPLICATE ───────────────
+    //
+    // "Promoting/keeping a diagnosis as an ongoing problem creates or links a longitudinal problem-list
+    // item." The failure this catches is the same condition appearing twice on a patient's problem list
+    // -- which nobody notices until a letter prints it, and which no pure test can reach because the
+    // match happens in the database.
+    const promo1 = await recordDiagnosisBatch(admin, ctxA, {
+      encounterId: encTx.data.id,
+      items: [{ label: "Type 2 diabetes mellitus", keepAsProblem: true }],
+      ...base,
+    });
+    const promo2 = await recordDiagnosisBatch(admin, ctxA, {
+      encounterId: encTx.data.id,
+      items: [{ label: "Type 2 diabetes mellitus", keepAsProblem: true }],
+      ...base,
+    });
+    ok("13a-8-setup. the same diagnosis is promoted twice and both calls are accepted",
+      promo1.ok && promo2.ok && promo1.data.recorded === 1 && promo2.data.recorded === 1,
+      JSON.stringify({ a: promo1.ok && promo1.data.results[0], b: promo2.ok && promo2.data.results[0] }));
+
+    const { count: probCount } = await admin.from("practice_problem")
+      .select("*", { count: "exact", head: true })
+      .eq("patient_id", pTx.ok ? pTx.data.id : "")
+      .eq("label", "Type 2 diabetes mellitus");
+    ok("13a-8. ⚠ PROMOTING THE SAME DIAGNOSIS TWICE LEAVES ONE PROBLEM, NOT TWO",
+      probCount === 1, `${probCount} problem rows for one condition`);
+
+    // ⚠ AND BOTH DIAGNOSES POINT AT IT. Deduplicating by refusing the second diagnosis would also give
+    // a count of one, and would be wrong: today's assessment must be recorded every time it is made.
+    const secondLinked = promo2.ok && promo2.data.results[0]?.ok && !!promo2.data.results[0]?.problemId;
+    ok("13a-8b. ⚠ and the SECOND diagnosis was still recorded, linked to that one problem",
+      secondLinked && promo2.ok && promo2.data.results[0].problemCreated === false,
+      JSON.stringify(promo2.ok ? promo2.data.results[0] : promo2));
+
+    // ── 13a-9. TRAP TWO: ANOTHER PATIENT'S PROBLEM ID IS REFUSED ──────────────────────────────────
+    //
+    // s2 lets an EXISTING active problem be marked assessed today. The id arrives from the browser, so
+    // an id belonging to somebody else would otherwise attach their condition to this consultation --
+    // a cross-patient clinical write that would look entirely normal on the screen that made it.
+    const other = await registerPatient(admin, {
+      workspaceId: wsA, displayName: "Other Patient Entirely", sex: "male", birthDate: "1975-03-03",
+      phone: "0772 555 901", ...base,
+    });
+    const { data: otherProb } = other.ok
+      ? await admin.from("practice_problem").insert({
+        workspace_id: wsA, patient_id: other.data.id, label: "Someone elses condition", created_by: USER_A,
+      }).select("id").maybeSingle()
+      : { data: null };
+    ok("13a-9-setup. a second patient exists with a problem of their own",
+      !!otherProb?.id, other.ok ? "problem insert returned no row" : `patient: ${other.message}`);
+
+    if (otherProb?.id) {
+      const stolen = await recordDiagnosisBatch(admin, ctxA, {
+        encounterId: encTx.data.id,
+        items: [{ label: "Assessed today", existingProblemId: otherProb.id }],
+        ...base,
+      });
+      const item = stolen.ok ? stolen.data.results[0] : null;
+      ok("13a-9. ⚠ A PROBLEM ID BELONGING TO ANOTHER PATIENT IS REFUSED, BY NAME",
+        !!item && item.ok === false && item.code === "PROBLEM_NOT_FOUND", JSON.stringify(item));
+
+      // ⚠ CONTROL: the refusal must not be "every existing problem id is refused". THIS patient's own
+      // problem, created by 13a-8 above, has to be accepted -- otherwise 13a-9 passes on a feature that
+      // simply does not work.
+      const { data: mine } = await admin.from("practice_problem")
+        .select("id").eq("patient_id", pTx.ok ? pTx.data.id : "")
+        .eq("label", "Type 2 diabetes mellitus").maybeSingle();
+      const own = mine?.id
+        ? await recordDiagnosisBatch(admin, ctxA, {
+          encounterId: encTx.data.id,
+          items: [{ label: "Diabetes reviewed today", existingProblemId: mine.id }],
+          ...base,
+        })
+        : null;
+      const ownItem = own?.ok ? own.data.results[0] : null;
+      ok("13a-9-control. and THIS patient's own problem id is accepted, so the refusal is about ownership",
+        !!ownItem && ownItem.ok === true && ownItem.problemId === mine?.id, JSON.stringify(ownItem));
+    }
   }
 
   // ⚠ AND THE TWO PANELS THAT MOVED ARE THE SAME PANELS. They were full-width blocks stacked above the
