@@ -57,14 +57,32 @@ export default function PatientActions(props: {
   // ⚠ WALL-CLOCK SENT AS date+time, COMPOSED ON THE SERVER in the practice timezone. This used to send
   // `${date}T${time}:00.000Z` -- declaring a Kampala 09:00 to be 09:00 UTC, which the diary then
   // honestly rendered as 12:00. A client must never stamp a zone it does not know.
-  const bookAppt = () => call(() => fetch("/api/v1/practice/appointments", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      patientId: props.patientId,
-      appointmentType: book.type,
-      date: book.date, time: book.time,
-    }),
-  }), "Booked.");
+  // ⚠ THE OUT-OF-HOURS WARNING IS SHOWN, NOT SWALLOWED (the owner, 2026-08-12). Booking outside the
+  // regular week is ALLOWED here -- a practitioner may genuinely see somebody late -- but the desk is
+  // told at the moment it happens, because the booking will carry no location and will not appear in
+  // any per-hospital list until one is set by hand.
+  async function bookAppt() {
+    setBusy(true); setNotice(null);
+    const res = await fetch("/api/v1/practice/appointments", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        patientId: props.patientId,
+        appointmentType: book.type,
+        date: book.date, time: book.time,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setNotice({ kind: "err", text: data?.error?.message ?? data?.error ?? "That did not work." });
+      setBusy(false); return;
+    }
+    const outside = data?.appointment?.outsideRegularWeek as string | null | undefined;
+    setNotice(outside
+      ? { kind: "err", text: `Booked — but ${outside}. It has no location, so it will not show under a hospital until you set one.` }
+      : { kind: "ok", text: "Booked." });
+    setBusy(false);
+    router.refresh();
+  }
 
   async function doMerge() {
     // Resolve the duplicate by its patient number (or a legacy Practice ID) first -- merging by uuid

@@ -35,6 +35,16 @@ export type DerivedLocation = {
   reason: string;
   /** True only when the regular week settled it. */
   derived: boolean;
+  /**
+   * ⚠ NO SESSION COVERS THIS TIME AT ALL -- a discriminant, not a string to match on.
+   *
+   * The owner, 2026-08-12, decided the two paths differ here: an in-house booking outside the regular
+   * week is ALLOWED AND WARNED (a practitioner may genuinely see somebody late, and refusing would
+   * make the product argue with the person who knows), while a PATIENT-FACING request at such a time
+   * is NOT OFFERED at all. Both callers need to tell "outside the week" apart from "two places at
+   * once" and "the session names no location", and a reason string is not something to branch on.
+   */
+  outsideRegularWeek: boolean;
 };
 
 /** ISO weekday, 1 = Monday .. 7 = Sunday. The convention the template column uses. */
@@ -45,7 +55,7 @@ export async function locationFromRegularWeek(
 ): Promise<DerivedLocation> {
   const at = new Date(instantIso);
   if (Number.isNaN(at.getTime()))
-    return { locationId: null, reason: "the time could not be read", derived: false };
+    return { locationId: null, reason: "the time could not be read", derived: false, outsideRegularWeek: false };
 
   // The practice's own wall clock: shift the instant by the zone offset AT that instant, then read the
   // parts as if they were UTC. Same technique practice-time.ts uses, and DST-correct for the same reason.
@@ -63,7 +73,7 @@ export async function locationFromRegularWeek(
   // ⚠ A FAILED READ IS NOT "NO REGULAR WEEK". Booking without a location is the safe outcome either
   // way, but the reason must not say the practitioner works nowhere on a Friday.
   if (error)
-    return { locationId: null, reason: `the regular week could not be read: ${error.message}`, derived: false };
+    return { locationId: null, reason: `the regular week could not be read: ${error.message}`, derived: false, outsideRegularWeek: false };
 
   const covering = ((data ?? []) as any[]).filter(t =>
     t.starts_minute <= minuteOfDay && minuteOfDay < t.ends_minute
@@ -73,21 +83,21 @@ export async function locationFromRegularWeek(
 
   if (covering.length === 0)
     return {
-      locationId: null, derived: false,
+      locationId: null, derived: false, outsideRegularWeek: true,
       reason: "this time is outside the regular week, so no location was assumed",
     };
 
   const places = [...new Set(covering.map(t => t.location_id).filter(Boolean))] as string[];
   if (places.length === 0)
-    return { locationId: null, derived: false, reason: "the regular week names no location for this time" };
+    return { locationId: null, derived: false, outsideRegularWeek: false, reason: "the regular week names no location for this time" };
   if (places.length > 1)
     return {
-      locationId: null, derived: false,
+      locationId: null, derived: false, outsideRegularWeek: false,
       reason: "two sessions at different locations cover this time, so it was not assumed",
     };
 
   return {
-    locationId: places[0], derived: true,
+    locationId: places[0], derived: true, outsideRegularWeek: false,
     reason: "taken from the regular week for this weekday and time",
   };
 }

@@ -413,7 +413,7 @@ export async function checkPlacement(admin: any, args: {
   return { ok: true, data: { locationName: here?.name ?? null } };
 }
 
-export async function bookAppointment(admin: any, input: BookInput): Promise<EngineResult<{ id: string; status: string }>> {
+export async function bookAppointment(admin: any, input: BookInput): Promise<EngineResult<{ id: string; status: string; outsideRegularWeek: string | null }>> {
   // CPR-360. The fallback used to be a hardcoded 20 here and in the overlap check below, so a practice
   // whose consultations run half an hour had been fighting that number since Phase 1. It now comes from
   // the workspace's own configuration -- and the literal survives only as the value for a workspace
@@ -445,11 +445,17 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
   // week, or where two sessions disagree, the booking keeps no location rather than being given a
   // guessed one. See session-location.ts for why each refusal is a refusal.
   let locationId = input.locationId ?? null;
-  let locationDerived: string | null = null;
+  // ⚠ ALLOWED AND WARNED, NEVER REFUSED (the owner, 2026-08-12). A booking outside the regular week is
+  // a practitioner saying they will see somebody late, and a product that refused it would be arguing
+  // with the person who knows. The warning is RETURNED so the desk is told at the moment it happens --
+  // it is not a log line nobody reads. The patient-facing path takes the opposite decision, in
+  // submitBookingRequest: such a time is never offered at all.
+  let outsideRegularWeek: string | null = null;
   if (!locationId) {
     const { timezone } = await workspaceClock(admin, input.workspaceId);
     const derived = await locationFromRegularWeek(admin, input.workspaceId, new Date(startMs).toISOString(), timezone);
-    if (derived.derived && derived.locationId) { locationId = derived.locationId; locationDerived = derived.reason; }
+    if (derived.derived && derived.locationId) locationId = derived.locationId;
+    else if (derived.outsideRegularWeek) outsideRegularWeek = derived.reason;
   }
 
   const placed = await checkPlacement(admin, {
@@ -486,7 +492,7 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
   // CPR-GROWTH-001 s2. Count-based, so it is right however often it runs and whatever ran before it,
   // and non-blocking: a commercial metric that could not be written must never cost a booking.
   await onAppointmentCreated(admin, input.workspaceId, input.actorId);
-  return { ok: true, data: { id: appt.id as string, status: appt.status as string } };
+  return { ok: true, data: { id: appt.id as string, status: appt.status as string, outsideRegularWeek } };
 }
 
 /**

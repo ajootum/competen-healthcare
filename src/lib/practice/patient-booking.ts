@@ -4,7 +4,8 @@ import { bookUnderRules, evaluateBooking } from "@/lib/practice/booking-rules";
 import { rescheduleAppointment, transitionAppointment, APPOINTMENT_TRANSITIONS } from "@/lib/practice/scheduling";
 import { resolveBookingRule } from "@/lib/practice/availability-config";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
-import { practiceToday } from "@/lib/practice/practice-time";
+import { practiceToday, workspaceClock } from "@/lib/practice/practice-time";
+import { locationFromRegularWeek } from "@/lib/practice/session-location";
 import { audit } from "@/lib/practice/audit";
 import {
   issuePatientSession, checkPatientSession, normaliseDestination, type Reading,
@@ -367,6 +368,24 @@ export async function submitBookingRequest(admin: any, args: {
     return { ok: false, status: 422, code: "TYPE_NOT_OFFERED", message: "that kind of appointment is not offered here" };
   if (args.locationId && !p.locations.some(l => l.id === args.locationId))
     return { ok: false, status: 422, code: "LOCATION_NOT_OFFERED", message: "that location is not offered here" };
+
+  // ⚠ AND NEITHER IS A TIME OUTSIDE THE REGULAR WEEK (the owner, 2026-08-12): "allow the booking for
+  // in-house booking. Do not offer a booking for patient-facing booking."
+  //
+  // Same reasoning as the two checks above, one step further: the page only DRAWS times generated from
+  // the practice's own sessions, so an out-of-hours instant arriving here is somebody editing the
+  // request rather than clicking it. Refused with the same shape a real unavailable slot gets, so it
+  // cannot be used to map when the practitioner works.
+  //
+  // ⚠ THE OPPOSITE DECISION FROM bookAppointment, DELIBERATELY, AND BOTH ARE THE OWNER'S. A
+  // practitioner booking their own late clinic is ALLOWED AND WARNED -- refusing would argue with the
+  // person who knows. A stranger asking for 22:00 on a Sunday is not offered one at all.
+  {
+    const { timezone } = await workspaceClock(admin, p.workspaceId);
+    const where = await locationFromRegularWeek(admin, p.workspaceId, args.scheduledAt, timezone);
+    if (where.outsideRegularWeek)
+      return { ok: false, status: 422, code: "TIME_NOT_OFFERED", message: "that time is not offered here" };
+  }
 
   // ══ s7.2's REQUIRED INFORMATION, RESOLVED BEFORE ANYTHING IS WRITTEN ═══════════════════════════
   //
