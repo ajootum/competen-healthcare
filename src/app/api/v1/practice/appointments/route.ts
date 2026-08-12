@@ -57,6 +57,15 @@ export async function POST(req: NextRequest) {
     patientName: String(body.patientName ?? ""),
     patientPhone: body.patientPhone ? String(body.patientPhone) : undefined,
     appointmentType: String(body.appointmentType),
+    // CP-BOOKING-TAXONOMY-001. Passed through UNVALIDATED on purpose -- the engine checks them against
+    // this practice's own active list, which is the only place that check is worth anything. A route
+    // that pre-approved an id would be trusting the browser about what the practice has configured.
+    //
+    // ⚠ booking_source IS NOT READ FROM THE BODY, and must never be. It is provenance: derived from the
+    // authenticated actor and the workflow inside the engine, so a client cannot claim a booking was
+    // self-booked or system-generated when it was neither.
+    visitTypeId: body.visitTypeId ? String(body.visitTypeId) : null,
+    consultationModeId: body.consultationModeId ? String(body.consultationModeId) : null,
     scheduledAt,
     durationMinutes: body.durationMinutes ? Number(body.durationMinutes) : undefined,
     locationId: body.locationId ? String(body.locationId) : null,

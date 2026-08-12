@@ -1,4 +1,5 @@
 import { audit } from "@/lib/practice/audit";
+import { loadTaxonomy, validateChoice, deriveBookingSource } from "@/lib/practice/taxonomy";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
 import { practiceToday, zonedDayRange, workspaceClock } from "@/lib/practice/practice-time";
 import { locationFromRegularWeek } from "@/lib/practice/session-location";
@@ -61,7 +62,15 @@ export type BookInput = {
   patientId?: string | null;
   patientName: string;
   patientPhone?: string;
+  /**
+   * ⚠ THE LEGACY SINGLE STRING (CP-BOOKING-TAXONOMY-001 replaces it). Still written, still required,
+   * because every reader in the estate is on it -- the planner, the lists, the exports and four
+   * harnesses. It is retired once they are moved, not before.
+   */
   appointmentType: string;
+  /** The new dimensions. Optional this phase so existing callers keep working while they are moved. */
+  visitTypeId?: string | null;
+  consultationModeId?: string | null;
   scheduledAt: string;
   durationMinutes?: number;
   locationId?: string | null;
@@ -69,6 +78,9 @@ export type BookInput = {
   allowOverlap?: boolean;
   actorId: string;
   correlationId: string;
+  /** s2.3: provenance is DERIVED from the workflow, never accepted from a form. See deriveBookingSource. */
+  isWalkIn?: boolean;
+  actorIsPractitioner?: boolean;
 };
 
 export type EngineResult<T = Record<string, unknown>> =
@@ -418,7 +430,28 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
   // whose consultations run half an hour had been fighting that number since Phase 1. It now comes from
   // the workspace's own configuration -- and the literal survives only as the value for a workspace
   // whose configuration row is somehow missing, which is a state getConfiguration() repairs on sight.
-  const duration = input.durationMinutes ?? await defaultAppointmentMinutes(admin, input.workspaceId);
+  // ══ THE TAXONOMY (CP-BOOKING-TAXONOMY-001) ══════════════════════════════════════════════════════
+  //
+  // ⚠ LOADED FOR EVERY BOOKING, NOT ONLY WHEN THE CALLER SUPPLIED IDS. A caller that names neither gets
+  // the practice defaults, so no booking written after this commit lands with a null visit type. The
+  // alternative -- leave them null for legacy callers -- would keep filling the table with exactly the
+  // rows the migration had to flag for human review, while looking like progress.
+  //
+  // ⚠ AND AN UNREADABLE TAXONOMY REFUSES THE BOOKING. Section 6 makes visit type required. Writing an
+  // appointment with no recorded clinical purpose because a lookup failed is how the single mixed
+  // appointment_type column came to mean four different things in the first place.
+  const taxonomy = await loadTaxonomy(admin, { workspaceId: input.workspaceId });
+  const choice = validateChoice(taxonomy, {
+    visitTypeId: input.visitTypeId ?? taxonomy.defaultVisitTypeId,
+    consultationModeId: input.consultationModeId ?? taxonomy.defaultModeId,
+    durationMinutes: input.durationMinutes ?? null,
+  });
+  if (!choice.ok) return { ok: false, status: 422, code: choice.code, message: choice.message };
+
+  // s5: the VISIT TYPE's duration outranks the workspace default, because "New consultation 30 minutes,
+  // Follow-up 15" is the whole point of putting minutes on the type. An explicit caller value still wins
+  // over both -- validateChoice has already applied that precedence.
+  const duration = choice.value.durationMinutes ?? await defaultAppointmentMinutes(admin, input.workspaceId);
   const startMs = Date.parse(input.scheduledAt);
   if (Number.isNaN(startMs)) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "scheduledAt is not a valid timestamp" };
   const endMs = startMs + duration * 60000;
@@ -491,6 +524,18 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
     patient_id: input.patientId ?? null,
     patient_name: patientName, patient_phone: input.patientPhone?.trim() || null,
     appointment_type: input.appointmentType, scheduled_at: new Date(startMs).toISOString(),
+    // The three dimensions, recorded separately at last. appointment_type is still written beside them
+    // until every reader is moved -- see BookInput.
+    visit_type_id: choice.value.visitTypeId,
+    consultation_mode_id: choice.value.consultationModeId,
+    // ⚠ DERIVED, NEVER ACCEPTED FROM A FORM (s2.3). This path is in-house by definition; whether the
+    // actor is the practitioner or delegated staff is the caller's to state, and it defaults to the
+    // practitioner because that is who a solo practice is.
+    booking_source: deriveBookingSource({
+      channel: "in_house",
+      isWalkIn: input.isWalkIn === true || input.appointmentType === "walk_in",
+      actorIsPractitioner: input.actorIsPractitioner,
+    }),
     duration_minutes: duration, status: initialStatus, reason: input.reason ?? null,
     // MIGRATION 255 MAKES DOUBLE-BOOKING IMPOSSIBLE IN THE DATABASE, and this field is how a DELIBERATE
     // one still gets through. The exclusion constraint carries `and not overlap_acknowledged`, so a row

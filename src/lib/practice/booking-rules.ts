@@ -3,6 +3,7 @@ import { audit } from "@/lib/practice/audit";
 import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
 import { checkPlacement } from "@/lib/practice/scheduling";
+import { loadTaxonomy, validateChoice, deriveBookingSource } from "@/lib/practice/taxonomy";
 import { bookingBlock } from "@/lib/practice/lifecycle-constants";
 // CPR-V5-007 s8. A LEAF MODULE, so this import cannot become a cycle -- see patient-session.ts.
 import { checkPatientSession } from "@/lib/practice/patient-session";
@@ -1745,7 +1746,11 @@ export type InternalBookingArgs = {
   patientId?: string | null;
   patientName?: string | null;
   patientPhone?: string | null;
+  /** ⚠ THE LEGACY SINGLE STRING. Still written until every reader moves off it. */
   appointmentType: string;
+  /** CP-BOOKING-TAXONOMY-001's two dimensions. Absent means "use the practice default". */
+  visitTypeId?: string | null;
+  consultationModeId?: string | null;
   scheduledAt: string;
   durationMinutes?: number | null;
   locationId?: string | null;
@@ -1973,6 +1978,21 @@ export async function bookUnderRules(
   });
   if (!placed.ok) return placed;
 
+  // ⚠ THE SELF-BOOKABLE FILTER IS APPLIED ONLY WHEN THE PATIENT IS CHOOSING. This engine also serves
+  // in-house callers (args.channel), and a practice booking on a patient's behalf may legitimately pick
+  // Urgent review or Procedure -- the restriction exists to keep those off the PUBLIC form, not to stop
+  // the practice using them. Same distinction the DNA rule already makes a few lines above.
+  const patientChoosing = args.channel === "patient_self";
+  const taxonomy = await loadTaxonomy(admin, { workspaceId: ctx.workspaceId }, { selfBookableOnly: patientChoosing });
+  const taxonomyResult = validateChoice(taxonomy, {
+    visitTypeId: args.visitTypeId ?? taxonomy.defaultVisitTypeId,
+    consultationModeId: args.consultationModeId ?? taxonomy.defaultModeId,
+    durationMinutes: duration,
+  });
+  if (!taxonomyResult.ok)
+    return { ok: false, status: 422, code: taxonomyResult.code, message: taxonomyResult.message };
+  const taxonomyChoice = taxonomyResult.value;
+
   const { data: appt, error } = await admin.from("practice_appointment").insert({
     workspace_id: ctx.workspaceId,
     location_id: args.locationId ?? null,
@@ -1983,6 +2003,15 @@ export async function bookUnderRules(
     scheduled_at: new Date(startMs).toISOString(),
     duration_minutes: duration,
     status: d.initialStatus,
+    // ══ THE TAXONOMY, on the patient-facing path (CP-BOOKING-TAXONOMY-001) ═════════════════════════
+    // ⚠ SELF-BOOKABLE ONLY. Section 7: "self-booking disabled -- do not expose item on public flow", and
+    // section 9 repeats it. Urgent review and Procedure are deliberately NOT self-bookable, so a patient
+    // who posted one of those ids gets the same refusal as one who posted a deactivated item -- the
+    // filter lives on the SERVER because the ids are visible in the page source.
+    visit_type_id: taxonomyChoice.visitTypeId,
+    consultation_mode_id: taxonomyChoice.consultationModeId,
+    // A booking arriving through this engine IS self-booking. Nothing a form posts can change that.
+    booking_source: deriveBookingSource({ channel: "patient_facing" }),
     reason: args.reason ?? null,
     // Migration 255's exclusion constraint carries `and not overlap_acknowledged`, so a deliberate
     // double-book must say so in the row or Postgres refuses it. Taken from the same value passed to

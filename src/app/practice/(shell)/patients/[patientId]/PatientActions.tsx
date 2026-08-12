@@ -23,12 +23,34 @@ export default function PatientActions(props: {
   patientId: string; displayName: string; sex: string; birthDate: string | null;
   ageEstimateYears: number | null; recordVersion: number;
   canEdit: boolean; canMerge: boolean; canBook: boolean; canStartEncounter: boolean;
+  /**
+   * CP-BOOKING-TAXONOMY-001: the practice's own configured dimensions, resolved on the SERVER and handed
+   * down as plain data. The old card hard-coded four values into the markup, which is how
+   * "teleconsultation" -- a MODE -- came to sit in a list of clinical purposes, and why three of the
+   * engine's seven accepted types were unreachable from this screen at all.
+   *
+   * ⚠ readable=false MEANS THE LOOKUP FAILED, not that the practice configured nothing. The card
+   * refuses to offer a booking rather than showing two empty dropdowns.
+   */
+  taxonomy: {
+    visitTypes: { id: string; label: string }[];
+    modes: { id: string; label: string }[];
+    defaultVisitTypeId: string | null;
+    defaultModeId: string | null;
+    readable: boolean;
+  };
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [edit, setEdit] = useState({ displayName: props.displayName, sex: props.sex, birthDate: props.birthDate ?? "" });
-  const [book, setBook] = useState({ date: new Date().toISOString().slice(0, 10), time: "09:00", type: "scheduled_followup" });
+  const [book, setBook] = useState({
+    date: new Date().toISOString().slice(0, 10), time: "09:00",
+    // The legacy string still travels until every reader is off it -- see BookInput in scheduling.ts.
+    type: "scheduled_followup",
+    visitTypeId: props.taxonomy.defaultVisitTypeId ?? "",
+    modeId: props.taxonomy.defaultModeId ?? "",
+  });
   const [mergeTarget, setMergeTarget] = useState("");
 
   // ⚠ SUCCESS IS SAID, NOT IMPLIED (the owner, 2026-08-11: "give a message to let us know it has been
@@ -68,6 +90,8 @@ export default function PatientActions(props: {
       body: JSON.stringify({
         patientId: props.patientId,
         appointmentType: book.type,
+        visitTypeId: book.visitTypeId || null,
+        consultationModeId: book.modeId || null,
         date: book.date, time: book.time,
       }),
     });
@@ -125,7 +149,19 @@ export default function PatientActions(props: {
         </div>
       )}
 
-      {props.canBook && (
+      {/* ⚠ THREE STATES. An unreadable taxonomy is not a practice with nothing configured, and the
+          difference matters here more than anywhere: two empty dropdowns look like a setup task, so
+          somebody would go to Practice Setup, find six visit types already there, and be none the wiser.
+          The form is withheld and the reason is named. */}
+      {props.canBook && !props.taxonomy.readable && (
+        <p className="rounded-lg border border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)] p-3 text-[12px] text-[var(--cmp-text-critical)]">
+          Booking is unavailable because this practice&rsquo;s visit types and consultation modes could
+          not be read. This is not a setup problem &mdash; nothing has been lost. Reload, and if it
+          persists the appointment can still be made from the Planner.
+        </p>
+      )}
+
+      {props.canBook && props.taxonomy.readable && (
         <>
           <h2 className="text-[13px] font-bold text-gray-900">Book for this patient</h2>
           <form className="mt-2 grid grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); bookAppt(); }}>
@@ -136,9 +172,24 @@ export default function PatientActions(props: {
             <input value={book.time} onChange={e => setBook(p => ({ ...p, time: e.target.value }))}
               required pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="09:00" inputMode="numeric"
               title="24-hour clock, HH:MM — for example 09:00 or 14:30" className={input} />
-            <select value={book.type} onChange={e => setBook(p => ({ ...p, type: e.target.value }))} className={`${input} col-span-2`}>
-              {[["scheduled_followup", "Scheduled follow-up"], ["new_consultation", "New consultation"], ["teleconsultation", "Teleconsultation"], ["home_visit", "Home visit"]].map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-            </select>
+            {/* ⚠ TWO FIELDS, NOT ONE (s3). WHY the patient is being seen and HOW the consultation
+                happens are independent: a follow-up may be in person, by telephone or at home, and the
+                single list made those the same kind of thing -- so a teleconsultation recorded no
+                clinical purpose and a follow-up recorded no mode. */}
+            <label className="flex flex-col gap-1">
+              <span className="text-[10.5px] font-semibold text-gray-500">Visit type</span>
+              <select value={book.visitTypeId} required className={input}
+                onChange={e => setBook(p => ({ ...p, visitTypeId: e.target.value }))}>
+                {props.taxonomy.visitTypes.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10.5px] font-semibold text-gray-500">Mode</span>
+              <select value={book.modeId} required className={input}
+                onChange={e => setBook(p => ({ ...p, modeId: e.target.value }))}>
+                {props.taxonomy.modes.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
+            </label>
             <button type="submit" disabled={busy}
               className="col-span-2 rounded-lg bg-[var(--cp-primary)] py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
               Book appointment

@@ -13,6 +13,7 @@ import FollowUpPanel from "./FollowUpPanel";
 import { listContacts } from "@/lib/practice/communication";
 import { logAccess, patientAccessHistory } from "@/lib/practice/privacy";
 import PatientActions from "./PatientActions";
+import { loadTaxonomy } from "@/lib/practice/taxonomy";
 import ContactLog from "./ContactLog";
 import { monitoringPlan } from "@/lib/practice/parameters";
 import MonitoringPlanPanel from "./MonitoringPlanPanel";
@@ -43,6 +44,10 @@ export default async function PatientPage({ params, searchParams }: {
   const { followUp: followUpTab } = await searchParams;
   const admin = createAdminClient();
   const detail = await getPatient(admin, shell.ctx.workspaceId, patientId);
+  // The booking card's two dropdowns. Read HERE rather than in the client, so the card receives plain
+  // data -- ids and labels only -- and cannot make a request of its own. A function on that payload
+  // would type-check, lint, pass every harness and kill the page at runtime.
+  const taxonomy = await loadTaxonomy(admin, { workspaceId: shell.ctx.workspaceId });
   if (!detail) notFound();
 
   const { patient, identifiers, contacts, appointments } = detail;
@@ -270,6 +275,13 @@ export default async function PatientPage({ params, searchParams }: {
           canMerge={hasCapability(shell.ctx, "patient.merge")}
           canBook={hasCapability(shell.ctx, "appointment.manage")}
           canStartEncounter={hasCapability(shell.ctx, "encounter.create")}
+          taxonomy={{
+            visitTypes: taxonomy.visitTypes.map(v => ({ id: v.id, label: v.label })),
+            modes: taxonomy.modes.map(m => ({ id: m.id, label: m.label })),
+            defaultVisitTypeId: taxonomy.defaultVisitTypeId,
+            defaultModeId: taxonomy.defaultModeId,
+            readable: taxonomy.readable,
+          }}
         />
       </div>
 

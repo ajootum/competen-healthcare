@@ -3,7 +3,9 @@
 // render a booking form at all. Membership IS the gate, and ctx cannot be constructed without it.
 // WRITING the taxonomy is a different matter and will require practice.settings.manage when the setup
 // screens land.
-import { type WorkspaceContext } from "@/lib/practice/access";
+//
+// The parameter is the MINIMAL shape rather than a full WorkspaceContext, so the booking engines -- which
+// carry a workspaceId and not a context -- can call it without manufacturing one.
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -104,7 +106,7 @@ const EMPTY: Taxonomy = {
  * order to reactivate them -- and historical appointments keep pointing at them either way, which is
  * why the spec says deactivate and never delete.
  */
-export async function loadTaxonomy(admin: any, ctx: WorkspaceContext, opts: {
+export async function loadTaxonomy(admin: any, ctx: { workspaceId: string }, opts: {
   includeInactive?: boolean;
   /** s9: the public booking flow may only see what is marked self-bookable. */
   selfBookableOnly?: boolean;

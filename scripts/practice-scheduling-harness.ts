@@ -80,6 +80,31 @@ async function main() {
   // human to confirm it. The transition REQUESTED -> CONFIRMED is still exercised at 3 below, because
   // booking-rules.ts still produces REQUESTED for conditional confirmation and the DNA approval rule.
   ok("a staff booking is created CONFIRMED, with no confirmation step", b1.ok && b1.data.status === "CONFIRMED", b1.ok ? b1.data.status : b1.message);
+  // ── CP-BOOKING-TAXONOMY-001: the three dimensions are recorded separately ─────────────────────────
+  // ⚠ THE ASSERTION IS ON THE ROW, NOT THE RETURN VALUE. bookAppointment could compute all three
+  // perfectly and still fail to write them -- an insert naming the wrong column silently discards it
+  // through PostgREST, and every check above would stay green.
+  if (b1.ok) {
+    const { data: row } = await admin.from("practice_appointment")
+      .select("visit_type_id, consultation_mode_id, booking_source, appointment_type")
+      .eq("id", b1.data.id).single();
+    ok("1b. a booking records a VISIT TYPE and a MODE, separately",
+      !!row?.visit_type_id && !!row?.consultation_mode_id, JSON.stringify(row));
+    ok("1c. and the legacy appointment_type is STILL written, so existing readers keep working",
+      row?.appointment_type === "new_consultation", String(row?.appointment_type));
+    // ⚠ DERIVED, NOT ACCEPTED. Nothing in the call above named a source.
+    ok("1d. booking_source is derived from the workflow, and this path is in-house",
+      row?.booking_source === "practitioner_created", String(row?.booking_source));
+    // ⚠ `unknown` IS RESERVED FOR MIGRATED ROWS. A new booking carrying it would be indistinguishable
+    // from a legacy one in any later audit.
+    ok("1e. ⚠ a NEW booking never carries the legacy `unknown` source",
+      row?.booking_source !== "unknown", String(row?.booking_source));
+    // s5: New consultation is seeded at 30 minutes, which must outrank the workspace default.
+    const { data: dur } = await admin.from("practice_appointment").select("duration_minutes").eq("id", b1.data.id).single();
+    ok("1f. the VISIT TYPE's duration is applied, not the workspace default",
+      dur?.duration_minutes === 30, String(dur?.duration_minutes));
+  }
+
   const w1 = await bookAppointment(admin, { workspaceId: wsA, patientName: "Walk-in One", appointmentType: "walk_in", scheduledAt: `${DAY}T09:10:00.000Z`, ...base });
   ok("a walk-in enters as CONFIRMED", w1.ok && w1.data.status === "CONFIRMED", w1.ok ? w1.data.status : w1.message);
 
