@@ -472,7 +472,8 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
   //
   // This path used to enter every non-walk-in as REQUESTED, which asked a human to confirm a booking a
   // human had just made. There is nobody else in that loop: the person clicking Confirm is the person who
-  // chose the slot. 13 of the Trial practice's 14 appointments were sitting in that state.
+  // chose the slot. 12 of the Trial practice's 14 appointments were sitting in that state, and all 14
+  // came through this path -- not one had been made through the patient-facing engine.
   //
   // ⚠ CONFIRMED HERE IS NOT A CAPACITY DECISION AND DOES NOT BECOME ONE. checkPlacement has already run
   // above and returned ok, and migration 255's exclusion constraint refuses an overlap in the database
