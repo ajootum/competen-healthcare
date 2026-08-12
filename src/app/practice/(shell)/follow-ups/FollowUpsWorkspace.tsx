@@ -10,6 +10,7 @@ import type { FollowUpWorkspace as WorkspaceView } from "@/lib/practice/follow-u
 import { FOLLOWUP_CARD_SWATCH, CARD_SWATCH_UNKEYED, CARE_CARD_UNSUPPLIED, BUTTON } from "@/lib/practice/palette";
 import AddFollowUp from "./AddFollowUp";
 import RowActions from "./RowActions";
+import { THEAD, TABLE_SCROLL } from "@/components/practice/PatientTable";
 
 // CPR-FUP-001 s4/s5 -- the summary cards, the saved views, and the work queue.
 //
@@ -277,9 +278,10 @@ export default function FollowUpsWorkspace({
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          // s8: shared patient-table chrome -- the header holds while a long list scrolls.
+          <div className={TABLE_SCROLL}>
             <table className="w-full min-w-[900px] text-left">
-              <thead>
+              <thead className={THEAD}>
                 <tr className="border-b border-gray-100 text-[10.5px] uppercase tracking-wide text-gray-400">
                   <th className="px-4 py-2 font-semibold">Patient</th>
                   <th className="px-3 py-2 font-semibold">Reason</th>

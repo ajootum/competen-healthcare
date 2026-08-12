@@ -9,6 +9,7 @@ import StageTrack from "./StageTrack";
 import PatientPathwayPanel, { ProgressChip } from "./PatientPathwayPanel";
 import AssignPathway from "./AssignPathway";
 import TemplateDesigner from "./TemplateDesigner";
+import { THEAD, TABLE_SCROLL } from "@/components/practice/PatientTable";
 
 // CPR-FUP-003 s12 -- the Care Pathways workspace.
 //
@@ -218,9 +219,10 @@ export default function PathwaysWorkspace({
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              // s8: shared patient-table chrome -- the header holds while a long list scrolls.
+              <div className={TABLE_SCROLL}>
                 <table className="w-full min-w-[820px] text-left">
-                  <thead>
+                  <thead className={THEAD}>
                     <tr className="border-b border-gray-100 text-[10.5px] uppercase tracking-wide text-gray-400">
                       <th className="px-4 py-2 font-semibold">Patient</th>
                       <th className="px-3 py-2 font-semibold">Pathway</th>

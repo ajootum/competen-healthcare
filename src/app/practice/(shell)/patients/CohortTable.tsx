@@ -6,6 +6,7 @@ import { Absence, CARD, day } from "./Honesty";
 import { UNSUPPLIED_COLUMN } from "./refusals";
 import type { CohortRowView, CohortSortView, CohortView, WorklistView } from "./types";
 import { COHORT_RING, JOURNEY_ICON, PATIENT_STATUS_SWATCH } from "@/lib/practice/palette";
+import { THEAD, TABLE_SCROLL } from "@/components/practice/PatientTable";
 
 // CPR-PAT-002 s4 -- the Longitudinal Patient Register.
 //
@@ -285,9 +286,12 @@ export default function CohortTable({
           )}
         </div>
       ) : (
-        <div className="overflow-x-auto">
+        // s8: the header stays visible while a long register scrolls. `position: sticky` needs an
+        // ancestor that actually scrolls, which is what the height cap on TABLE_SCROLL provides -- it did
+        // nothing against the plain overflow-x-auto box that used to be here.
+        <div className={TABLE_SCROLL}>
           <table className="w-full min-w-[1080px] border-collapse">
-            <thead className="bg-gray-50/80">
+            <thead className={THEAD}>
               <tr>
                 {sortableTh("Patient", "name", "name_desc", "asc")}
                 <th className={th}>Active problems</th>

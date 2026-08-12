@@ -14,6 +14,7 @@ import { ENCOUNTER_STATUS_CHIP, ENCOUNTER_STATUS_LABEL } from "@/lib/practice/en
 import { formatDateTime, formatDate } from "@/lib/datetime";
 import StartEncounter from "./StartEncounter";
 import HistoryNavigator from "./HistoryNavigator";
+import { THEAD, TABLE_SCROLL } from "@/components/practice/PatientTable";
 import {
   CARD, Figure, PanelState, patientLabel, ContextStrip, WorkSection, AttentionPanel,
 } from "./Board";
@@ -411,9 +412,10 @@ export default async function EncountersPage({ searchParams }: {
             )}
           </>
         ) : (
-          <div className="mt-3 overflow-x-auto">
+          // s8: shared patient-table chrome -- the header holds while a long list scrolls.
+          <div className={`mt-3 ${TABLE_SCROLL}`}>
             <table className="w-full min-w-[720px] text-left">
-              <thead>
+              <thead className={THEAD}>
                 <tr className="border-b border-gray-200 text-[11px] uppercase tracking-wide text-gray-400">
                   <th className="py-1.5 font-semibold">Patient</th>
                   <th className="py-1.5 font-semibold">Encounter</th>
