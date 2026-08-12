@@ -220,3 +220,12 @@ export const PATIENT_ACCESS_BLOCKING_CODES: string[] =
  * padded to keep an old assertion passing.
  */
 export const PATIENT_ACCESS_BUILD_BLOCKERS: string[] = [];
+
+/**
+ * The address a practice falls back to when its diary has nothing to offer, until it sets its own.
+ *
+ * The owner chose it, 2026-08-12. ONE constant, so migration 291's backfill and the seed applied when
+ * a booking page is created cannot drift apart -- a default applied once in a migration is a default
+ * that stops applying the next day, which the harness proved within minutes of 291 landing.
+ */
+export const BOOKING_FALLBACK_EMAIL = "competenhealth@gmail.com";

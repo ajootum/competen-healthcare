@@ -72,6 +72,8 @@ export default function PublishWorkspace({ readiness, locations, mayPublish }: {
     unverifiedRequestsAllowed: p?.unverifiedRequestsAllowed === true,
     brandDisplayName: p?.brandDisplayName ?? "",
     instructions: p?.instructions ?? "",
+    fallbackEmail: p?.fallbackEmail ?? "",
+    fallbackPhone: p?.fallbackPhone ?? "",
     visibleLocationIds: (p?.visibleLocationIds ?? []) as string[],
     visibleAppointmentTypes: (p?.visibleAppointmentTypes ?? []) as string[],
   });
@@ -317,6 +319,35 @@ export default function PublishWorkspace({ readiness, locations, mayPublish }: {
                 onChange={e => setDraft(d => ({ ...d, instructions: e.target.value }))}
                 className="mt-0.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] text-gray-800" />
             </label>
+
+            {/* ── HOW PATIENTS REACH YOU WHEN THE DIARY IS FULL (migration 291) ────────────────────
+                The booking page used to say "contact the practice directly" and give no way to do it.
+                EITHER, BOTH OR NEITHER: whichever is filled in is offered, and clearing both restores
+                the old sentence rather than drawing an empty label. */}
+            <fieldset className="rounded-lg border border-gray-200 p-2.5">
+              <legend className="px-1 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                How patients reach you when nothing is free
+              </legend>
+              <p className="text-[11px] leading-relaxed text-gray-500">
+                Shown only when the booking page has no times to offer. Fill in either, both or neither.
+              </p>
+              <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+                <label className="flex flex-col text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                  Email
+                  <input type="email" value={draft.fallbackEmail} disabled={!mayPublish}
+                    placeholder="competenhealth@gmail.com"
+                    onChange={e => setDraft(d => ({ ...d, fallbackEmail: e.target.value }))}
+                    className="mt-0.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] text-gray-800" />
+                </label>
+                <label className="flex flex-col text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                  Telephone
+                  <input value={draft.fallbackPhone} disabled={!mayPublish}
+                    placeholder="leave blank if you do not take calls"
+                    onChange={e => setDraft(d => ({ ...d, fallbackPhone: e.target.value }))}
+                    className="mt-0.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] text-gray-800" />
+                </label>
+              </div>
+            </fieldset>
 
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" disabled={busy || !mayPublish}

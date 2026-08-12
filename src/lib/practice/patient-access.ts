@@ -4,7 +4,7 @@ import { messagingStatus } from "@/lib/practice/messaging";
 import { BOOKING_MODES_LIVE, SESSION_APPOINTMENT_TYPES } from "@/lib/practice/practice-session-constants";
 import {
   PATIENT_ACCESS_STORES, PATIENT_BOOKING_FLAG, PATIENT_ACCESS_BUILD_BLOCKERS,
-  PATIENT_ACCESS_BLOCKING_CODES, patientAccessBlocker, PATIENT_ACCESS_MODES,
+  PATIENT_ACCESS_BLOCKING_CODES, patientAccessBlocker, PATIENT_ACCESS_MODES, BOOKING_FALLBACK_EMAIL,
 } from "@/lib/practice/patient-access-constants";
 import {
   publishCheck, publishStateLabel, PUBLISH_CHECKS,
@@ -428,6 +428,9 @@ export type BookingAccessProfile = {
   visibleAppointmentTypes: string[];
   brandDisplayName: string | null;
   instructions: string | null;
+  /** The way through when the diary cannot help (migration 291). Either, both, or neither. */
+  fallbackEmail: string | null;
+  fallbackPhone: string | null;
   privacyNotice: string | null;
   consentText: string | null;
   consentRequired: boolean;
@@ -460,6 +463,8 @@ const profileFrom = (row: any): BookingAccessProfile => ({
   visibleAppointmentTypes: ((row.visible_appointment_types ?? []) as string[]).map(String),
   brandDisplayName: (row.brand_display_name as string | null) ?? null,
   instructions: (row.instructions as string | null) ?? null,
+  fallbackEmail: (row.fallback_email as string | null) ?? null,
+  fallbackPhone: (row.fallback_phone as string | null) ?? null,
   privacyNotice: (row.privacy_notice as string | null) ?? null,
   consentText: (row.consent_text as string | null) ?? null,
   consentRequired: !!row.consent_required,
@@ -475,7 +480,8 @@ const profileFrom = (row: any): BookingAccessProfile => ({
 const PROFILE_COLUMNS =
   "id, handle, mode, publish_state, otp_required, otp_channel, guest_booking_allowed, "
   + "existing_patient_matching, visible_location_ids, visible_appointment_types, brand_display_name, "
-  + "instructions, privacy_notice, consent_text, consent_required, published_at, paused_at";
+  + "instructions, privacy_notice, consent_text, consent_required, published_at, paused_at, "
+  + "fallback_email, fallback_phone";
 
 /** Migration 272's two. Read separately so a practice with the migration unapplied still gets its page. */
 const PROFILE_COLUMNS_272 =
@@ -837,6 +843,8 @@ export type BookingAccessSave = {
   visibleAppointmentTypes?: string[];
   brandDisplayName?: string | null;
   instructions?: string | null;
+  fallbackEmail?: string | null;
+  fallbackPhone?: string | null;
   privacyNotice?: string | null;
   consentText?: string | null;
   consentRequired?: boolean;
@@ -928,6 +936,10 @@ export async function saveBookingAccess(admin: any, ctx: WorkspaceContext, args:
   if (args.visibleAppointmentTypes !== undefined) patch.visible_appointment_types = [...new Set(args.visibleAppointmentTypes.map(String))];
   if (args.brandDisplayName !== undefined) patch.brand_display_name = text(args.brandDisplayName);
   if (args.instructions !== undefined) patch.instructions = text(args.instructions);
+  // Either, both or neither -- see migration 291. text() turns a blank into null, so clearing a field
+  // in the form genuinely unsets it rather than storing an empty string the screen would render.
+  if (args.fallbackEmail !== undefined) patch.fallback_email = text(args.fallbackEmail);
+  if (args.fallbackPhone !== undefined) patch.fallback_phone = text(args.fallbackPhone);
   if (args.privacyNotice !== undefined) patch.privacy_notice = text(args.privacyNotice);
   if (args.consentText !== undefined) patch.consent_text = text(args.consentText);
   if (args.consentRequired !== undefined) patch.consent_required = args.consentRequired;
@@ -959,8 +971,18 @@ export async function saveBookingAccess(admin: any, ctx: WorkspaceContext, args:
     return { ok: true, data: { id: data.id as string, created: false } };
   }
 
+  // ⚠ A NEW PAGE STARTS WITH A WAY THROUGH, not with the gap migration 291 exists to close.
+  //
+  // 291 backfilled every page that already existed, and the harness immediately created one that did
+  // not get it -- which is the shape of the bug: a default applied once, in a migration, is a default
+  // that stops applying the next day. The practice can clear or change it in Practice Setup, and the
+  // onboarding step asks them to. This only fills a field the caller left unset.
+  const seeded = patch.fallback_email === undefined && patch.fallback_phone === undefined
+    ? { fallback_email: BOOKING_FALLBACK_EMAIL }
+    : {};
+
   const { data, error } = await admin.from("practice_booking_access")
-    .insert({ workspace_id: ctx.workspaceId, created_by: args.actorId, ...patch })
+    .insert({ workspace_id: ctx.workspaceId, created_by: args.actorId, ...seeded, ...patch })
     .select("id").maybeSingle();
   if (error) {
     if (error.code === "23505")

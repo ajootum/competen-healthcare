@@ -86,6 +86,9 @@ export async function POST(req: NextRequest) {
     visibleAppointmentTypes: stringList(body.visibleAppointmentTypes),
     brandDisplayName: nullableText(body.brandDisplayName),
     instructions: nullableText(body.instructions),
+    // Migration 291: either, both or neither. nullableText turns a cleared field into a genuine null.
+    fallbackEmail: nullableText(body.fallbackEmail),
+    fallbackPhone: nullableText(body.fallbackPhone),
     privacyNotice: nullableText(body.privacyNotice),
     consentText: nullableText(body.consentText),
     consentRequired: bool(body.consentRequired),

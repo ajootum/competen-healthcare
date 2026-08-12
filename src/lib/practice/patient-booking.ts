@@ -83,6 +83,12 @@ export type PublicBookingPage = {
   displayName: string | null;
   mode: string;
   instructions: string | null;
+  /**
+   * THE WAY THROUGH WHEN THE DIARY CANNOT HELP (migration 291). Either, both, or neither -- a page
+   * that shows an empty "call" label is worse than one that says nothing.
+   */
+  fallbackEmail: string | null;
+  fallbackPhone: string | null;
   privacyNotice: string | null;
   consentText: string | null;
   consentRequired: boolean;
@@ -109,7 +115,7 @@ export async function resolveBookingPage(
   if (!/^[a-z][a-z0-9]{2,29}$/.test(clean)) return { state: "ok", value: null };
 
   const { data, error } = await admin.from("practice_booking_access")
-    .select("workspace_id, handle, mode, publish_state, otp_required, otp_channel, guest_booking_allowed, visible_location_ids, visible_appointment_types, brand_display_name, instructions, privacy_notice, consent_text, consent_required")
+    .select("workspace_id, handle, mode, publish_state, otp_required, otp_channel, guest_booking_allowed, visible_location_ids, visible_appointment_types, brand_display_name, instructions, privacy_notice, consent_text, consent_required, fallback_email, fallback_phone")
     .eq("handle", clean).maybeSingle();
   // ⚠ AN UNREADABLE STORE IS NOT "NO SUCH PRACTICE". The caller renders an outage, not a 404 -- telling
   // a patient the practice does not exist because a query failed is the wrong answer to give twice.
@@ -140,6 +146,8 @@ export async function resolveBookingPage(
       displayName: (data.brand_display_name as string | null) ?? null,
       mode: String(data.mode),
       instructions: (data.instructions as string | null) ?? null,
+      fallbackEmail: (data.fallback_email as string | null) ?? null,
+      fallbackPhone: (data.fallback_phone as string | null) ?? null,
       privacyNotice: (data.privacy_notice as string | null) ?? null,
       consentText: (data.consent_text as string | null) ?? null,
       consentRequired: !!data.consent_required,
@@ -1808,6 +1816,9 @@ export type PublicBookingEntry = {
   /** What the PAGE calls this practice, where the practice chose a name for it. */
   displayName: string | null;
   instructions: string | null;
+  /** The way through when the diary cannot help (migration 291). Either, both, or neither. */
+  fallbackEmail: string | null;
+  fallbackPhone: string | null;
   privacyNotice: string | null;
   locations: { id: string; name: string }[];
   appointmentTypes: string[];
@@ -1830,6 +1841,9 @@ export async function publicBookingEntry(admin: any, handle: string): Promise<Pu
     whyNot: null as string | null,
     blockers: [] as PublicBookingEntry["blockers"],
     displayName: null as string | null, instructions: null as string | null,
+    // A page that is not published, or could not be read, advertises no contact -- inventing one would
+    // put a practice.s address in front of somebody it never agreed to hear from.
+    fallbackEmail: null as string | null, fallbackPhone: null as string | null,
     privacyNotice: null as string | null,
     locations: [] as { id: string; name: string }[], appointmentTypes: [] as string[],
     referenceNote: BOOKING_REFERENCE_NOTE,
@@ -1856,6 +1870,7 @@ export async function publicBookingEntry(admin: any, handle: string): Promise<Pu
   const shared = {
     ...base, state: "open" as const,
     displayName: p.displayName, instructions: p.instructions, privacyNotice: p.privacyNotice,
+    fallbackEmail: p.fallbackEmail, fallbackPhone: p.fallbackPhone,
     locations: p.locations, appointmentTypes: p.appointmentTypes,
   };
 

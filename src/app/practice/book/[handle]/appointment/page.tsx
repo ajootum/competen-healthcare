@@ -115,6 +115,8 @@ export default async function BookAppointmentPage({ params }: {
         canBook={entry.canBook}
         canRequestWithoutCode={entry.canRequestWithoutCode}
         requestNote={entry.requestNote}
+        fallbackEmail={entry.fallbackEmail}
+        fallbackPhone={entry.fallbackPhone}
         bookingWhyNot={entry.whyNot}
       />
     </Shell>

@@ -65,6 +65,9 @@ export default function BookingWizard(props: {
   canBook: boolean;
   canRequestWithoutCode: boolean;
   requestNote: string | null;
+  /** The way through when the diary cannot help (migration 291). Either, both, or neither. */
+  fallbackEmail: string | null;
+  fallbackPhone: string | null;
   bookingWhyNot: string | null;
 }) {
   const [step, setStep] = useState(1);
@@ -81,6 +84,8 @@ export default function BookingWizard(props: {
   const [timezone, setTimezone] = useState<string>("UTC");
   const [chosen, setChosen] = useState<Slot | null>(null);
   const [weekFrom, setWeekFrom] = useState(0);
+  /** How many weeks the forward search covered, so the empty state can say how far it looked. */
+  const [searchedWeeks, setSearchedWeeks] = useState(0);
 
   // Step 3
   const [questions, setQuestions] = useState<Question[] | null>(null);
@@ -186,26 +191,54 @@ export default function BookingWizard(props: {
     } finally { setBusy(false); }
   }
 
-  async function loadSlots(weekOffset: number) {
-    setBusy(true); setProblem(null); setSlotsProblem(null);
-    const from = new Date(Date.now() + weekOffset * 7 * 86400000);
-    const to = new Date(from.getTime() + 7 * 86400000);
+  /**
+   * ⚠ IT SKIPS FORWARD TO THE FIRST WEEK THAT HAS SOMETHING, RATHER THAN SHOWING AN EMPTY ONE.
+   *
+   * The owner, 2026-08-12: "They should be automatically offered spaces if all the slots are filled."
+   * A patient landing on an empty week has to work out that clicking "next" repeatedly might help, and
+   * a quiet fortnight reads as a practice that is closed. So one call becomes at most SEARCH_WEEKS
+   * calls, stopping at the first week with a free time.
+   *
+   * ⚠ AND THE SEARCH IS BOUNDED AND SAYS SO. Walking forward until something turns up would hammer the
+   * endpoint against a practice with no availability at all. When the bound is reached the screen says
+   * how far it looked -- "nothing in the next eight weeks" is a fact a patient can act on, whereas an
+   * empty list is not.
+   *
+   * ⚠ AN OUTAGE STOPS THE SEARCH IMMEDIATELY. Treating a failed read as "this week is empty, try the
+   * next" would turn one broken request into eight, and would end by reporting an outage as an
+   * absence -- the exact conflation `slots: null` versus `slots: []` exists to prevent.
+   */
+  const SEARCH_WEEKS = 8;
+
+  async function loadSlots(weekOffset: number, opts: { search?: boolean } = {}) {
+    setBusy(true); setProblem(null); setSlotsProblem(null); setSearchedWeeks(0);
     try {
-      const q = new URLSearchParams({
-        handle: props.handle, appointmentType,
-        from: from.toISOString(), to: to.toISOString(),
-      });
-      if (locationId) q.set("locationId", locationId);
-      const res = await fetch(`/api/v1/practice/public/booking?${q}`, { cache: "no-store" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        // ⚠ AN OUTAGE IS NOT AN EMPTY DIARY, AND THE TWO ARE HELD IN DIFFERENT STATE ON PURPOSE.
-        setSlots(null);
-        setSlotsProblem(data?.error?.message ?? `The times could not be read (${res.status}).`);
-        return;
+      const last = opts.search ? weekOffset + SEARCH_WEEKS - 1 : weekOffset;
+      for (let w = weekOffset; w <= last; w++) {
+        const from = new Date(Date.now() + w * 7 * 86400000);
+        const to = new Date(from.getTime() + 7 * 86400000);
+        const q = new URLSearchParams({
+          handle: props.handle, appointmentType,
+          from: from.toISOString(), to: to.toISOString(),
+        });
+        if (locationId) q.set("locationId", locationId);
+        const res = await fetch(`/api/v1/practice/public/booking?${q}`, { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          // ⚠ AN OUTAGE IS NOT AN EMPTY DIARY, AND THE TWO ARE HELD IN DIFFERENT STATE ON PURPOSE.
+          setSlots(null);
+          setSlotsProblem(data?.error?.message ?? `The times could not be read (${res.status}).`);
+          return;
+        }
+        setTimezone(String(data.timezone ?? "UTC"));
+        const found = (data.slots ?? []) as Slot[];
+        if (found.length > 0 || w === last) {
+          setSlots(found);
+          setWeekFrom(w);
+          setSearchedWeeks(opts.search ? w - weekOffset + 1 : 0);
+          return;
+        }
       }
-      setTimezone(String(data.timezone ?? "UTC"));
-      setSlots((data.slots ?? []) as Slot[]);
     } catch (e) {
       setSlots(null);
       setSlotsProblem(`The times could not be read: ${e instanceof Error ? e.message : String(e)}`);
@@ -305,7 +338,7 @@ export default function BookingWizard(props: {
           </div>
           <div className="mt-4">
             <button type="button" className={PRIMARY} disabled={busy || !appointmentType}
-              onClick={async () => { setStep(2); await loadSlots(0); }}>
+              onClick={async () => { setStep(2); await loadSlots(0, { search: true }); }}>
               Continue
             </button>
           </div>
@@ -343,10 +376,35 @@ export default function BookingWizard(props: {
               shortly.
             </p>
           )}
+          {/* ⚠ THE ESCAPE ROUTE IS A ROUTE, NOT AN INSTRUCTION TO FIND ONE. This said "contact the
+              practice directly" and gave no number and no address anywhere on the page -- an action
+              named for somebody who cannot take it. It now says HOW FAR IT LOOKED (a bounded search
+              reporting "nothing in eight weeks" is a fact a patient can act on) and offers whichever
+              of the two contacts the practice has set. With neither set it falls back to the old
+              sentence rather than drawing an empty "call" label. */}
           {!busy && !slotsProblem && slots !== null && slots.length === 0 && (
-            <p className="mt-3 rounded-lg border border-gray-200 bg-gray-50/70 p-3 text-[12.5px] leading-relaxed text-gray-700">
-              Nothing is free in this week. Try a later week, or contact the practice directly.
-            </p>
+            <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50/70 p-3 text-[12.5px] leading-relaxed text-gray-700">
+              <p>
+                {searchedWeeks > 1
+                  ? `Nothing is free in the next ${searchedWeeks} weeks.`
+                  : "Nothing is free in this week."}
+                {" "}You can look further ahead with the arrows.
+              </p>
+              {(props.fallbackEmail || props.fallbackPhone) ? (
+                <p className="mt-1.5">
+                  If you need to be seen sooner than anything shown here, contact the practice
+                  {props.fallbackPhone && (
+                    <> on <a className="font-semibold text-[var(--cp-primary-deep)] underline" href={`tel:${props.fallbackPhone.replace(/\s+/g, "")}`}>{props.fallbackPhone}</a></>
+                  )}
+                  {props.fallbackPhone && props.fallbackEmail && " or"}
+                  {props.fallbackEmail && (
+                    <> at <a className="font-semibold text-[var(--cp-primary-deep)] underline" href={`mailto:${props.fallbackEmail}`}>{props.fallbackEmail}</a></>
+                  )}.
+                </p>
+              ) : (
+                <p className="mt-1.5">Try a later week, or contact the practice directly.</p>
+              )}
+            </div>
           )}
           {!busy && slots !== null && slots.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
