@@ -5,6 +5,7 @@ import {
   type Candidate,
 } from "@/lib/practice/patients";
 import { addRelationship, ageFrom, relationshipExpectation, MAJORITY_AGE } from "@/lib/practice/relationships";
+import { loadTaxonomy, validateChoice, deriveBookingSource } from "@/lib/practice/taxonomy";
 import { bookAppointment, checkPlacement } from "@/lib/practice/scheduling";
 import { bookableTimes, type BookableSlot } from "@/lib/practice/patient-booking";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
@@ -337,6 +338,9 @@ export type RegisterAndBookInput = RegistrationInput & {
   scheduledAt: string;
   locationId?: string | null;
   durationMinutes?: number | null;
+  /** CP-BOOKING-TAXONOMY-001. Absent means the practice default is used, never a null visit type. */
+  visitTypeId?: string | null;
+  consultationModeId?: string | null;
 };
 
 export type RegisterAndBookResult =
@@ -451,6 +455,19 @@ export async function registerAndBook(
   if (contactPhone) contacts.push({ contact_type: "phone", value: contactPhone, preferred: true });
   if (contactEmail) contacts.push({ contact_type: "email", value: contactEmail, preferred: !contactPhone });
 
+  // ⚠ THE THIRD WRITER OF AN APPOINTMENT, and it was still inserting one with no taxonomy at all --
+  // so a patient registered and booked in a single action produced exactly the row migration 292 had to
+  // flag for review. Resolved here and passed into the RPC (migration 293 widened its signature),
+  // because the function is one statement by design and must not become two.
+  const regTaxonomy = await loadTaxonomy(admin, { workspaceId: ctx.workspaceId });
+  const regChoice = validateChoice(regTaxonomy, {
+    visitTypeId: input.visitTypeId ?? regTaxonomy.defaultVisitTypeId,
+    consultationModeId: input.consultationModeId ?? regTaxonomy.defaultModeId,
+    durationMinutes: duration,
+  });
+  if (!regChoice.ok)
+    return { ok: false, status: 422, code: regChoice.code, message: regChoice.message };
+
   const { data: written, error: rpcError } = await admin.rpc("practice_register_and_book", {
     p_workspace_id: ctx.workspaceId,
     p_display_name: displayName,
@@ -471,8 +488,19 @@ export async function registerAndBook(
     p_appointment_type: appointmentType,
     p_scheduled_at: new Date(startMs).toISOString(),
     p_duration_minutes: duration,
-    p_status: appointmentType === "walk_in" ? "CONFIRMED" : "REQUESTED",
+    // ⚠ CONFIRMED, UNCONDITIONALLY. This line read `walk_in ? CONFIRMED : REQUESTED` and its comment
+    // above claimed it mirrored bookAppointment "-- the same expression, in TypeScript". It stopped
+    // mirroring it on 2026-08-12, when staff bookings began confirming themselves, and nothing pointed
+    // that out: registering and booking a patient in one action still produced an appointment waiting
+    // for the same person to confirm it. That is the click the owner asked to remove.
+    p_status: "CONFIRMED",
     p_reason: input.reasonForVisit?.trim() || null,
+    p_visit_type_id: regChoice.value.visitTypeId,
+    p_consultation_mode_id: regChoice.value.consultationModeId,
+    // Derived, never accepted: this path is a member of staff registering somebody at the desk.
+    p_booking_source: deriveBookingSource({
+      channel: "in_house", isWalkIn: appointmentType === "walk_in",
+    }),
   });
 
   if (rpcError) {
