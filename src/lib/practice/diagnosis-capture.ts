@@ -70,7 +70,12 @@ export type EngineResult<T> =
 const fail = (status: number, code: string, message: string): EngineResult<never> =>
   ({ ok: false, status, code, message });
 
-const CAP_DIAGNOSIS_RECORD = "encounter.edit";
+// ⚠ THE SAME CAPABILITY THE SINGLE-DIAGNOSIS ROUTE HAS ALWAYS ENFORCED. This was `encounter.edit` when
+// the engine was written, which is a DIFFERENT permission -- a practice that had granted diagnosis.record
+// without encounter.edit would have found the new batch path refusing work the old form allowed, and the
+// reverse would have let somebody record diagnoses the existing route would not. A batch engine that
+// gates differently from the single-item one is two answers to one question.
+const CAP_DIAGNOSIS_RECORD = "diagnosis.record";
 
 /**
  * ⚠ ONE PRIMARY, AND THE LAST ONE TICKED WINS RATHER THAN THE FIRST.
