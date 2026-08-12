@@ -583,10 +583,18 @@ async function main() {
     (await patientCount(ws)) === patientsBeforeE, `${patientsBeforeE} -> ${await patientCount(ws)}`);
 
   // ── ⚠ THE MIGRATION GATE ───────────────────────────────────────────────────────────────────────
-  // 289 REPLACED 276's function: the numbered signature (p_patient_number/p_registration_year/
-  // p_sequence_number) is the only one that exists -- 289 drops the old one so no caller can reach a
-  // numberless writer. This probe therefore speaks the NEW signature.
-  section("D-gate. Migration 289 (the numbered register-and-book)");
+  // 289 REPLACED 276's function and 293 REPLACED 289's: the current signature carries the numbering
+  // (p_patient_number/p_registration_year/p_sequence_number) AND the taxonomy (p_visit_type_id/
+  // p_consultation_mode_id/p_booking_source). Each migration DROPS its predecessor so no caller can
+  // reach a writer that omits either, which is why this probe must speak the newest signature and
+  // nothing older.
+  //
+  // ⚠ THIS GATE HAS NOW GONE STALE TWICE, both times because it pins a SIGNATURE rather than a
+  // capability -- and a signature is exactly what the next migration changes. It reddened against a
+  // correctly-applied 293 while section D itself passed, which reads as "the migration is missing" when
+  // the truth was the opposite. Repointed rather than deleted: it is the only thing standing between a
+  // silently-absent function and a section D that would report nothing at all.
+  section("D-gate. Migration 293 (the numbered, taxonomy-carrying register-and-book)");
   const probe = await admin.rpc("practice_register_and_book", {
     p_workspace_id: ws, p_display_name: "", p_given_name: null, p_middle_name: null,
     p_family_name: null, p_sex: "unspecified", p_birth_date: null, p_age_estimate_years: null,
@@ -594,12 +602,13 @@ async function main() {
     p_identifiers: [], p_contacts: [],
     p_location_id: null, p_patient_phone: null, p_appointment_type: "new_consultation",
     p_scheduled_at: new Date().toISOString(), p_duration_minutes: 20, p_status: "REQUESTED", p_reason: null,
+    p_visit_type_id: null, p_consultation_mode_id: null, p_booking_source: null,
   });
   // An empty display name violates migration 193's own CHECK, so a REACHABLE function refuses this with
   // a constraint error and an ABSENT one refuses it with PGRST202. The two are told apart by the code.
   const migrationApplied = String((probe.error as any)?.code ?? "") !== "PGRST202"
     && !/Could not find the function/i.test(String(probe.error?.message ?? ""));
-  ok("D-gate. ⚠ MIGRATION 289 IS APPLIED -- every assertion in section D is about the function it (re)creates, and none of them has been exercised until it is",
+  ok("D-gate. ⚠ MIGRATION 293 IS APPLIED -- every assertion in section D is about the function it (re)creates, and none of them has been exercised until it is",
     migrationApplied, String(probe.error?.message ?? "the probe returned no error at all"));
 
   if (!migrationApplied) {
@@ -619,6 +628,24 @@ async function main() {
   ok("D1. ⚠ REGISTER AND BOOK INTO A FREE SLOT SUCCEEDS",
     booked.ok, booked.ok ? "" : `${(booked as any).code}: ${(booked as any).message}`);
   if (!booked.ok) return report();
+
+  // ── CP-BOOKING-TAXONOMY-001, on the THIRD writer ─────────────────────────────────────────────────
+  // ⚠ ASSERTED ON THE ROW. The RPC could accept all three parameters and drop them on the floor -- an
+  // insert that omits a column is not an error anywhere, and D1 above would stay green.
+  {
+    const { data: tax } = await admin.from("practice_appointment")
+      .select("visit_type_id, consultation_mode_id, booking_source, status")
+      .eq("id", booked.data.appointmentId).maybeSingle();
+    ok("D1-tax-a. the register-and-book transaction records a VISIT TYPE and a MODE",
+      !!tax?.visit_type_id && !!tax?.consultation_mode_id, JSON.stringify(tax));
+    ok("D1-tax-b. and derives the booking source rather than leaving it null",
+      !!tax?.booking_source && tax.booking_source !== "unknown", String(tax?.booking_source));
+    // ⚠ THE REGRESSION THIS PATH ACTUALLY HAD. It wrote REQUESTED under a comment claiming it mirrored
+    // bookAppointment, months after that engine stopped agreeing -- so a patient registered and booked
+    // at the desk still needed somebody to confirm the booking they had just made.
+    ok("D1-tax-c. ⚠ AND IT CONFIRMS, like every other staff booking -- no second click at the desk",
+      tax?.status === "CONFIRMED", String(tax?.status));
+  }
 
   const { data: pRow } = await admin.from("practice_patient").select("id, display_name")
     .eq("id", booked.data.patientId).maybeSingle();
