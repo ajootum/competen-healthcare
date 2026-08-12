@@ -9,6 +9,7 @@ import {
   REPEATS_ARE_NEVER_MERGED, rankInvestigations,
 } from "@/lib/practice/investigation-constants";
 import type { InvestigationCatalogue, CatalogueItem, EncounterInvestigation, Panel } from "@/lib/practice/investigations";
+import { PANEL, SectionHeader, Tip } from "@/components/practice/EncounterKit";
 
 // CPR-INV-001 -- THE INVESTIGATIONS TAB.
 //
@@ -180,23 +181,27 @@ export default function InvestigationCapture(props: {
   const openOnes = recorded.items.filter(i => i.status === "requested");
 
   return (
-    <section>
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <h3 className="text-[13px] font-bold text-gray-900">Investigations</h3>
-        <span className="text-[11px] text-gray-500">
-          {recorded.unavailable ? "could not be read"
-            : `${recorded.items.length} recorded in this encounter`}
-        </span>
-      </div>
+    // ⚠ SECOND TAB ON THE ENCOUNTER KIT. Chrome only -- the panel, the heading and the boundary band.
+    // ⚠ AND THE SUBTITLE KEEPS ITS THREE STATES. "could not be read" is NOT "0 recorded", and collapsing
+    // them here would tell a clinician this encounter has no investigations when the query failed.
+    <section className={PANEL}>
+      <SectionHeader
+        title="Investigations"
+        subtitle={recorded.unavailable
+          ? "These could not be read -- this is not a statement that none were recorded."
+          : `Record investigations ordered or done during this encounter. ${recorded.items.length} recorded so far.`}
+      />
+      <div className="p-4">
 
       {/* ⚠ THE BOUNDARY, FROM THE ENGINE'S OWN CONSTANT. Not retyped, so it cannot drift from the one
-          the API and the harness assert on. */}
-      <p className="mt-1 rounded-lg bg-gray-50 px-2.5 py-2 text-[11px] text-gray-600">
+          the API and the harness assert on. Now in the kit's Tip band, which is the same band every
+          other tab uses for the sentence that qualifies what the screen is claiming. */}
+      <Tip>
         {cat.boundary}{" "}
         <Link href="/practice/inbox" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
           Open the document inbox
         </Link>
-      </p>
+      </Tip>
 
       {cat.storeState === "absent" && (
         <p className="mt-2 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-[11.5px] text-[var(--cmp-text-warning)]">
@@ -585,6 +590,7 @@ export default function InvestigationCapture(props: {
           )}
         </>
       )}
+      </div>
     </section>
   );
 }

@@ -17,6 +17,8 @@ import {
 import Dictation from "@/components/practice/Dictation";
 import DocumentationTools from "./DocumentationTools";
 import { formatTime, formatDate } from "@/lib/datetime";
+// The shared encounter visual language. Follow-up is the first tab on it; the other seven follow.
+import { PANEL, SectionHeader, EmptyState, Tip } from "@/components/practice/EncounterKit";
 
 // CPR-ENC-002's consultation surface: the comp's eight-tab main workspace and the right-hand actions
 // panel, over the SOAP note, diagnoses, treatments, procedures, investigations, referrals, follow-up,
@@ -1069,12 +1071,23 @@ export default function EncounterConsole(props: {
                 CPR-140. The patient's LIVE obligations, not this encounter's -- one raised at the last
                 visit is exactly what today is meant to settle, and showing only today's would hide it. */}
             {tab === "follow-up" && (
-              <section>
-                <h3 className="text-[13px] font-bold text-gray-900">Follow-up</h3>
+              // ⚠ FIRST TAB ON THE ENCOUNTER KIT (CP-ENC-DIAG/PROC's shared visual language). Only the
+              // CHROME changes here -- the panel, the heading, the empty state and the tip band. Every
+              // behaviour below is untouched: what is listed is still the patient's LIVE obligations
+              // rather than this encounter's, settling still records this consultation as the closer,
+              // and the intervals sentence still says it is arithmetic and not clinical guidance.
+              <section className={PANEL}>
+                <SectionHeader
+                  title="Follow-up"
+                  subtitle="What this patient is owed, and what should happen after this encounter."
+                />
+                <div className="p-4">
                 {props.followUps.length === 0 ? (
-                  <p className="mt-2 text-[12px] text-gray-400">Nothing is owed to this patient.</p>
+                  // Three states, not two: this is the READ-SUCCEEDED one, and it says so.
+                  <EmptyState title="Nothing is owed to this patient"
+                    reason="No follow-up is open. This was read successfully -- raise one below if something should happen after today." />
                 ) : (
-                  <ul className="mt-2 flex flex-col gap-1.5">
+                  <ul className="flex flex-col gap-1.5">
                     {props.followUps.map(f => (
                       <li key={f.id} className={`text-[12px] ${f.overdue ? "border-l-2 border-[var(--cmp-color-critical)] pl-2" : ""}`}>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1123,12 +1136,16 @@ export default function EncounterConsole(props: {
                       className="rounded-lg border border-gray-200 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                       Raise a follow-up
                     </button>
-                    <p className="col-span-2 text-[10px] text-gray-400">
-                      The intervals are arithmetic on today&apos;s date, not clinical guidance. Once raised, this
-                      appears on the follow-up board and becomes overdue on its own if nothing is booked.
-                    </p>
+                    <div className="col-span-2">
+                      <Tip>
+                        The intervals are arithmetic on today&apos;s date, not clinical guidance. Once
+                        raised, this appears on the follow-up board and becomes overdue on its own if
+                        nothing is booked.
+                      </Tip>
+                    </div>
                   </form>
                 )}
+                </div>
               </section>
             )}
 
