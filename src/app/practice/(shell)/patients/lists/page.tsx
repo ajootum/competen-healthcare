@@ -254,7 +254,8 @@ function ListBody({ result, view }: {
   const groups = groupByDay(
     result.rows.map(r => ({
       id: r.id, patientId: r.patientId, patientName: r.patientName, patientNumber: r.patientNumber,
-      at: r.at, time: timeOf(r.at), kind: r.kind, status: r.status, locationName: r.locationName,
+      at: r.at, time: timeOf(r.at), kind: r.kind, status: r.status,
+      locationId: r.locationId, locationName: r.locationName, locationSlot: r.locationSlot,
     })),
     result.timezone,
   );

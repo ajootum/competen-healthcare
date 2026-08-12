@@ -36,6 +36,8 @@ export type PatientListRow = {
   status: string;
   locationId: string | null;
   locationName: string | null;
+  /** Migration 290's per-clinic colour choice, so a list can be scanned by place like the planner. */
+  locationSlot: string | null;
 };
 
 export type PatientListResult = {
@@ -49,7 +51,7 @@ export type PatientListResult = {
   locationId: string | null;
   locationName: string | null;
   /** Every active location, so a screen can offer the filter without a second read. */
-  locations: { id: string; name: string }[];
+  locations: { id: string; name: string; colorSlot: string | null }[];
   /**
    * ⚠ TRUE WHEN THE LIST IS SHORT BECAUSE THE CAP BIT, not because the practice is quiet. A register
    * that silently stops at 500 is a register somebody plans a month around and gets wrong.
@@ -110,11 +112,16 @@ export async function patientList(admin: any, ctx: WorkspaceContext, opts: {
   const startIso = zonedDayRange(fromDate, timezone).startIso;
   const endIso = zonedDayRange(toDate, timezone).endIso;
 
+  // color_slot is migration 290's per-clinic colour choice. Carried through so these lists can be
+  // scanned by place the way the planner is -- the owner picked those colours and they must mean the
+  // same thing on every screen, not just the calendar.
   const { data: locRows, error: locErr } = await admin.from("practice_location")
-    .select("id, name").eq("workspace_id", ctx.workspaceId).eq("active", true).order("name");
+    .select("id, name, color_slot").eq("workspace_id", ctx.workspaceId).eq("active", true).order("name");
   // A failed LOCATION read does not fail the list -- it costs the filter its labels, and the rows are
   // still true. Reported through `detail` rather than swallowed.
-  const locations = ((locRows ?? []) as any[]).map(l => ({ id: l.id as string, name: l.name as string }));
+  const locations = ((locRows ?? []) as any[]).map(l => ({
+    id: l.id as string, name: l.name as string, colorSlot: (l.color_slot as string | null) ?? null,
+  }));
   const locationId = opts.locationId && locations.some(l => l.id === opts.locationId) ? opts.locationId : null;
   const locationName = locations.find(l => l.id === locationId)?.name ?? null;
 
@@ -151,6 +158,7 @@ export async function patientList(admin: any, ctx: WorkspaceContext, opts: {
     : { data: [] };
   const byId = new Map(((patients ?? []) as any[]).map(p => [p.id, p]));
   const locById = new Map(locations.map(l => [l.id, l.name]));
+  const slotById = new Map(locations.map(l => [l.id, l.colorSlot]));
 
   const rows: PatientListRow[] = kept.map(r => {
     const p = r.patient_id ? byId.get(r.patient_id) : null;
@@ -166,6 +174,7 @@ export async function patientList(admin: any, ctx: WorkspaceContext, opts: {
       status: String(r.status ?? ""),
       locationId: r.location_id ?? null,
       locationName: r.location_id ? (locById.get(r.location_id) ?? null) : null,
+      locationSlot: r.location_id ? (slotById.get(r.location_id) ?? null) : null,
     };
   });
 

@@ -111,7 +111,21 @@ function splitCsvLine(line: string, lineNo: number, fileProblems: string[]): str
   return out;
 }
 
-const canon = (h: string) => h.replace(/^﻿/, "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+/**
+ * A header cell, reduced to the machine column name.
+ *
+ * ⚠ THE TRAILING PARENTHETICAL IS STRIPPED, and that is what lets the template carry its own guidance.
+ * IMPORT_TEMPLATE_HEADER ships "date_of_birth (dd-mm-yyyy)" so the person typing into Excel days later
+ * can see the format without the browser open; without this strip, every single column of the file we
+ * hand out would come back "unknown" and no import would ever succeed.
+ *
+ * It also absorbs the notes people add themselves -- "Phone (mobile)", "Last name (family name)" -- which
+ * were previously rejected for no reason a practitioner could act on.
+ */
+const canon = (h: string) =>
+  h.replace(/^﻿/, "").trim()
+    .replace(/\s*\([^()]*\)\s*$/, "")   // "date_of_birth (dd-mm-yyyy)" -> "date_of_birth"
+    .trim().toLowerCase().replace(/[\s-]+/g, "_");
 
 // ── Dates and times, as people actually type them ──────────────────────────────────────────────────
 // A migrated spreadsheet rarely carries ISO dates. The rules (the owner, 2026-08-11, incl. "e.g.

@@ -27,7 +27,7 @@ import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import {
   parseImportCsv, previewPatientImport, commitPatientImport, instantInZone, readDate, readTime,
 } from "../src/lib/practice/patient-import";
-import { IMPORT_TEMPLATE_HEADER } from "../src/lib/practice/import-columns";
+import { IMPORT_TEMPLATE_HEADER, IMPORT_COLUMNS, IMPORT_COLUMN_HINTS } from "../src/lib/practice/import-columns";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
@@ -90,6 +90,35 @@ async function main() {
   ok("1. THE TEMPLATE HEADER PARSES CLEAN, one row read",
     parsedHeader.fileProblems.length === 0 && parsedHeader.rows.length === 1,
     JSON.stringify(parsedHeader.fileProblems));
+  // ── 1a. The guidance the template carries in its own header (the owner, 2026-08-12) ──────────────
+  // ⚠ THE HEADER IS A CSV LINE, so a comma inside a hint silently becomes a column break and the file
+  // would offer more headers than it has columns. This is the assertion that stops that reaching a
+  // practitioner -- the parse in 1 above would still pass, having simply read a different shape.
+  const templateCells = IMPORT_TEMPLATE_HEADER.split(",");
+  ok("1a. THE TEMPLATE HEADER HAS EXACTLY ONE CELL PER COLUMN, so no hint contains a comma",
+    templateCells.length === IMPORT_COLUMNS.length,
+    `${templateCells.length} cells for ${IMPORT_COLUMNS.length} columns`);
+  // Every column carries guidance, so a column added later cannot ship without any.
+  const unhinted = IMPORT_COLUMNS.filter(c => !(IMPORT_COLUMN_HINTS[c] ?? "").trim());
+  ok("1a2. EVERY COLUMN CARRIES A HINT", unhinted.length === 0, unhinted.join(", "));
+  // ⚠ AND EVERY HINTED HEADER STILL RESOLVES TO ITS MACHINE NAME. This is the invariant the whole
+  // arrangement rests on: canon() strips the trailing parenthetical, and if that ever stops being true
+  // every column of the file we hand out comes back "unknown" and no import succeeds.
+  const roundTrip = IMPORT_COLUMNS.filter((c, i) => {
+    const p = parseImportCsv(`${templateCells[i]}\nx\n`);
+    return p.fileProblems.length > 0;
+  });
+  ok("1c. EVERY HINTED HEADER CANONICALISES BACK TO ITS COLUMN",
+    roundTrip.length === 0, `not recognised: ${roundTrip.join(", ")}`);
+  // The owner asked for this one by name.
+  ok("1d. date_of_birth states dd-mm-yyyy",
+    /dd-mm-yyyy/i.test(IMPORT_COLUMN_HINTS.date_of_birth), IMPORT_COLUMN_HINTS.date_of_birth);
+  // ⚠ CONTROL: 1c must not be passing because parseImportCsv accepts anything. A header that is NOT a
+  // column, wearing the same parenthetical shape, still has to be refused.
+  const bogus = parseImportCsv("favourite_colour (blue / green)\nx\n");
+  ok("1c-control. a NON-COLUMN wearing a hint is still refused",
+    bogus.fileProblems.some(p => p.includes("favourite_colour")), JSON.stringify(bogus.fileProblems));
+
   const typo = parseImportCsv("first_name,apointment_date\nAmina,2026-01-01\n");
   ok("1b. A MISSPELT COLUMN IS A NAMED FILE PROBLEM, not silently ignored",
     typo.fileProblems.some(p => p.includes("apointment_date")),

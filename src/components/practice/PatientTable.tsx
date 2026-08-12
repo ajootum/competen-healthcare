@@ -1,5 +1,10 @@
 import Link from "next/link";
 import { APPOINTMENT_STATUS_SWATCH, ENCOUNTER_STATUS_SWATCH } from "@/lib/practice/palette";
+// ⚠ planner-ui.ts is deliberately DATABASE-FREE and says so in its own header, which is the only reason
+// a client component may import from it. Reaching for locationTone from anywhere in src/lib/practice
+// would drag access.ts -> next/headers into the browser bundle and fail `next build` on pages nobody
+// touched, while tsc and eslint stayed green.
+import { locationTone } from "@/app/practice/(shell)/calendar/planner-ui";
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // THE SHARED LOOK OF EVERY PATIENT TABLE IN COMPETEN PRACTICE (CP-BOOKED-SEEN-001 s8, s9, s17).
@@ -26,6 +31,39 @@ import { APPOINTMENT_STATUS_SWATCH, ENCOUNTER_STATUS_SWATCH } from "@/lib/practi
 
 /** s8: light dividers and a hover state, deliberately NOT `odd:bg-*`. */
 export const ROW = "border-t border-gray-100 transition-colors hover:bg-gray-50/70";
+
+/**
+ * THE CLINIC'S OWN COLOUR, ON THE CELL THAT NAMES THE CLINIC.
+ *
+ * The owner picked these colours for the planner (migration 290's color_slot) and then, seeing this
+ * table: "the color theme has not landed". It had not. The status pills were tinted and every clinic was
+ * the same grey, so the one column a person scans to answer "which of my sites is this?" carried no
+ * colour at all -- the fourth time in this project a screen has shipped flat.
+ *
+ * ⚠ THE RULE THAT KEEPS BEING RELEARNT: THE VALUE TAKES THE COLOUR, not the decoration beside it. A grey
+ * clinic name with a coloured dot next to it spends the colour on the dot and leaves the word -- the
+ * thing actually being read -- looking like every other word on the row.
+ *
+ * ⚠ AND THE COLOUR IS NEVER THE ONLY CARRIER (s17). The clinic is spelled out in full on every row; the
+ * hue only lets a month of bookings be scanned by site. Two clinics share a hue once a practice passes
+ * six locations, which is acceptable precisely because the words are the identity.
+ */
+export function LocationCell({ locationId, locationName, locationSlot }: {
+  locationId: string | null; locationName: string | null; locationSlot: string | null;
+}) {
+  // No location is a real state, not a missing one -- a booking can genuinely have no site yet.
+  if (!locationName)
+    return <td className="px-3 py-2 text-[12.5px] italic text-gray-400">not named</td>;
+  const tone = locationTone(locationId, locationSlot);
+  return (
+    <td className="px-3 py-2">
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${tone.dot}`} />
+        <span className={`text-[12.5px] font-semibold ${tone.place}`}>{locationName}</span>
+      </span>
+    </td>
+  );
+}
 
 /**
  * s8: the header stays visible while the body scrolls. Needs an ancestor that actually scrolls --
@@ -92,7 +130,10 @@ export type PatientTableRow = {
   time: string;
   kind: string;
   status: string;
+  locationId: string | null;
   locationName: string | null;
+  /** Migration 290's per-clinic colour choice. Null means "let the stable hash decide". */
+  locationSlot: string | null;
 };
 
 /** One calendar day of rows, with the label its header shows. */
@@ -112,6 +153,8 @@ export type DayGroup = {
  * workspace is a practice-local one (s13), so the key is derived through the formatter rather than by
  * slicing the timestamp.
  */
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 export function groupByDay(rows: PatientTableRow[], timezone: string): DayGroup[] {
   const keyOf = (iso: string) => {
     try {
@@ -119,11 +162,18 @@ export function groupByDay(rows: PatientTableRow[], timezone: string): DayGroup[
       return new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date(iso));
     } catch { return iso.slice(0, 10); }
   };
+  // ⚠ THE MONTH IS OURS, NOT Intl's. `month: "short"` under en-GB returns "Sept" for September and three
+  // letters for every other month, so a grouped list reads "Thu, 13 Aug 2026" above "Fri, 04 Sept 2026"
+  // and the columns do not line up. s8's own example is "Fri, 04 Sep 2026". Only the weekday comes from
+  // the formatter, because that is the part which genuinely needs the timezone applied.
   const labelOf = (iso: string) => {
     try {
-      return new Intl.DateTimeFormat("en-GB", {
-        timeZone: timezone, weekday: "short", day: "2-digit", month: "short", year: "numeric",
-      }).format(new Date(iso));
+      const d = new Date(iso);
+      const weekday = new Intl.DateTimeFormat("en-GB", { timeZone: timezone, weekday: "short" }).format(d);
+      // en-CA gives YYYY-MM-DD in the practice zone, which is where the day and month must come from --
+      // taking them from the ISO string would be the same off-by-one-day bug the grouping key avoids.
+      const [y, m, dd] = new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(d).split("-");
+      return `${weekday}, ${dd} ${MONTHS_SHORT[Number(m) - 1] ?? m} ${y}`;
     } catch { return iso.slice(0, 10); }
   };
 

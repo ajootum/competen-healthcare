@@ -18,9 +18,15 @@ import { IMPORT_TEMPLATE_HEADER } from "@/lib/practice/import-columns";
 
 const CARD = "rounded-xl border border-gray-200 bg-white";
 
+// ⚠ THE EXAMPLE ROWS MUST DEMONSTRATE THE CONVENTION THE HEADER STATES. They previously showed ISO
+// dates (1988-03-14) while the import's declared convention -- printed in the header hint, on the screen
+// and in every error message -- is day-first dd-mm-yyyy. Both parse, so nothing failed; but the one line
+// a person copies the shape of was teaching a different format from the one the file asks for, and the
+// day a month-first spreadsheet is pasted in that difference is a wrong date of birth.
+// 14-03-1988 and 20-08-2026 both have a day above 12, so neither is ambiguous even read the other way.
 const TEMPLATE_EXAMPLE =
   IMPORT_TEMPLATE_HEADER + "\n" +
-  "Amina,,Okello,1988-03-14,,female,0772000001,,CM-1988-1234,,,,,Hypertension review,Main clinic,2026-08-20,09:30,scheduled_followup,ROW-001\n" +
+  "Amina,,Okello,14-03-1988,,female,0772000001,,CM-1988-1234,,,,,Hypertension review,Main clinic,20-08-2026,09:30,scheduled_followup,ROW-001\n" +
   "Kato,,Ssebunya,,7,male,,,,Grace Ssebunya,mother,0772000002,,Well-child visit,,,,,ROW-002\n";
 
 type PreviewRow = {

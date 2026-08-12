@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  PatientCell, StatusBadge, ROW, THEAD, TH, TABLE_SCROLL,
+  PatientCell, StatusBadge, LocationCell, ROW, THEAD, TH, TABLE_SCROLL,
   dayGroupCaption, type DayGroup,
 } from "@/components/practice/PatientTable";
 
@@ -97,7 +97,8 @@ export default function GroupedTable({ groups, view, showLocation, countNoun }: 
                     <StatusBadge status={r.status} kind={view === "booked" ? "appointment" : "encounter"} />
                   </td>
                   {showLocation && (
-                    <td className="px-3 py-2 text-[12.5px] text-gray-600">{r.locationName ?? "not named"}</td>
+                    <LocationCell locationId={r.locationId} locationName={r.locationName}
+                      locationSlot={r.locationSlot} />
                   )}
                   <td className="px-3 py-2 text-right">
                     {/* ⚠ s14: "do not expose unavailable actions as active controls". A seen row's id IS
