@@ -17,6 +17,7 @@ import {
 } from "@/lib/practice/longitudinal-constants";
 import type { TreatmentCapturePayload, PendingTreatment, TreatmentOption } from "@/lib/practice/treatment-capture";
 import type { PatientMedications, DoseCalculationResult } from "@/lib/practice/medication";
+import { PANEL, SectionHeader, Tip } from "@/components/practice/EncounterKit";
 
 // CPR-TREAT-001 -- THE TREATMENT TAB.
 //
@@ -207,16 +208,22 @@ export default function TreatmentCapture(props: {
   const decisionMissing = decisionRequired && !calc.weightDecision.trim();
 
   return (
-    <section>
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <h3 className="text-[13px] font-bold text-gray-900">Treatment and plan</h3>
-        <span className="text-[11px] text-gray-500">
-          {props.recorded.length} recorded in this encounter
-        </span>
-      </div>
+    // ⚠ FIFTH TAB ON THE ENCOUNTER KIT. Chrome only, and on THIS component that matters more than
+    // most: nothing here is a clinical list. Every formulation, dose unit, route, frequency, duration
+    // and non-drug category is read from configuration at request time (see the header above), and the
+    // dose arithmetic is medication.ts's, called rather than copied. A restyle must not quietly turn
+    // any of that into markup.
+    <section className={PANEL}>
+      <SectionHeader
+        title="Treatment and plan"
+        subtitle={`${props.recorded.length} recorded in this encounter.`}
+      />
+      <div className="p-4">
 
-      {/* ⚠ THE BOUNDARY, FROM THE ENGINE'S CONSTANT rather than retyped here. */}
-      <p className="mt-1 rounded-lg bg-gray-50 px-2.5 py-2 text-[11px] text-gray-600">{cap.boundary}</p>
+      {/* ⚠ THE BOUNDARY, FROM THE ENGINE'S CONSTANT rather than retyped here -- so it cannot drift from
+          the sentence the API and the harness assert on. Now in the kit's Tip band, which is where
+          every tab puts the sentence that qualifies what the screen is claiming. */}
+      <Tip>{cap.boundary}</Tip>
 
       {cap.options.storeState === "absent" && (
         <p className="mt-2 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-[11.5px] text-[var(--cmp-text-warning)]">
@@ -899,6 +906,7 @@ export default function TreatmentCapture(props: {
           </ul>
         </>
       )}
+      </div>
     </section>
   );
 }
