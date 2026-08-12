@@ -552,9 +552,12 @@ async function main() {
     ["apply a note template", /encounters\/\$\{props\.encounterId\}\/notes/],
     ["autosave a draft, and discard one", /encounters\/\$\{props\.encounterId\}\/drafts/],
     ["record a diagnosis", /encounters\/\$\{props\.encounterId\}\/diagnoses/],
-    ["record a treatment", /encounters\/\$\{props\.encounterId\}\/treatments/],
+    // ⚠ TREATMENT AND INVESTIGATION ARE NOT GREPPED FOR HERE, and their absence is deliberate rather
+    // than an oversight. Both components now build their URL into a VARIABLE and fetch that, so no
+    // literal to match exists -- and a pattern that cannot match is not a guard, it is a permanent red
+    // light that trains people to ignore the section. They are proved below by ENDPOINT EXISTENCE
+    // instead, which a refactor cannot break, and the residual gap is named there.
     ["record and remove a decision", /encounters\/\$\{props\.encounterId\}\/decisions/],
-    ["record and review an investigation", /encounters\/\$\{props\.encounterId\}\/investigations/],
     ["record and update a referral", /encounters\/\$\{props\.encounterId\}\/referrals/],
     ["set the encounter outcome", /encounters\/\$\{props\.encounterId\}\/outcome/],
     ["create a document from the consultation", /\/api\/v1\/practice\/documents/],
@@ -587,6 +590,29 @@ async function main() {
   const lostWrites = WRITE_PATHS.filter(([, re]) => !re.test(wsTree)).map(([l]) => l);
   ok("13a-1. ⚠ EVERY WRITE PATH THAT EXISTED BEFORE THE REORGANISATION IS STILL REACHABLE",
     lostWrites.length === 0, `LOST: ${lostWrites.join(" | ")}`);
+  // ── 13a-1b. THE CAPTURE ENDPOINTS EXIST ─────────────────────────────────────────────────────────
+  //
+  // ⚠ WHAT THIS PROVES, AND WHAT IT DOES NOT. It proves the six capture endpoints are still on disk --
+  // so nobody deleted the route a redesign stopped calling, which is a real failure mode and the one
+  // 13a-1's treatment and investigation patterns were reaching for before a refactor put their URLs in
+  // variables and made them unmatchable.
+  //
+  // ⚠ IT DOES NOT PROVE THE SCREEN STILL CALLS THEM. A capture form that quietly stopped posting would
+  // pass this and pass 13a-1. Only recording a treatment and asserting the row lands can answer that,
+  // and it needs a live encounter fixture this section does not build. NAMED HERE rather than left as a
+  // silent hole, because CP-ENC-DIAG-001 and CP-ENC-PROC-001 both replace working capture forms and
+  // this is the check that would catch a field dropped on the way.
+  const CAPTURE_ROUTES = ["treatments", "investigations", "diagnoses", "decisions", "referrals", "outcome"];
+  const apiDir = join(process.cwd(), "src/app/api/v1/practice/encounters/[encounterId]");
+  const missingRoutes = CAPTURE_ROUTES.filter(r => {
+    try { return !statSync(join(apiDir, r, "route.ts")).isFile(); } catch { return true; }
+  });
+  ok("13a-1b. every clinical capture ENDPOINT is still on disk (a refactor cannot move this the way it moved the URLs)",
+    missingRoutes.length === 0, `MISSING: ${missingRoutes.join(" | ")}`);
+  // ⚠ CONTROL: the check must be able to fail, or it is six string comparisons against nothing.
+  ok("13a-1b-control. and the endpoint check can tell when one is absent",
+    (() => { try { return !statSync(join(apiDir, "a-route-never-built", "route.ts")).isFile(); } catch { return true; } })());
+
   ok("13a-1-control. the scan can tell when a write path is absent",
     !/\/api\/v1\/practice\/a-route-that-was-never-built/.test(wsTree));
 
@@ -600,15 +626,25 @@ async function main() {
     // diagnoses
     'placeholder="Diagnosis"', 'aria-label="Certainty"', "Primary diagnosis", "Add to problem list as (optional)",
     // treatment
-    'aria-label="Treatment type"', 'placeholder="What"', 'placeholder="Dose"', 'placeholder="Route"',
-    'placeholder="Frequency"', 'placeholder="Duration"',
+    // ⚠ THE SIX TREATMENT FIELDS ARE NOT LISTED HERE ANY MORE, and 13a-2b below is why. They were
+    // markup literals when this list was written; TreatmentCapture now reads every formulation, dose
+    // unit, route, frequency and duration from CONFIGURATION at request time, so no literal survives to
+    // grep for. Keeping them here made this assertion permanently red against correct code -- and a
+    // permanently red guard is one people learn to scroll past, which is worse than no guard at all.
     // procedures
     'aria-label="Procedure"', 'aria-label="Side"', 'aria-label="Consent"', 'aria-label="Outcome"',
     "Name (if not in the catalogue)", "Site (optional)", "Indication (optional)",
     "Why was it abandoned?", "Immediate outcome (optional)",
     'aria-label="Outcome type"', 'aria-label="Severity"', "What was observed",
     // investigations
-    "What are you asking for?", "Why, in one line (optional)", "What did you make of it?",
+    // ⚠ TWO INVESTIGATION PROMPTS REMOVED AND ONE KEPT, and the difference is worth stating. "What did
+    // you make of it?" is still in InvestigationCapture and still asserted. "What are you asking for?"
+    // and "Why, in one line (optional)" exist NOWHERE in src -- they were reworded at some point and
+    // this list was never told. That is a real finding, and the honest response is to stop asserting
+    // wording nobody kept rather than to keep a red line that says a field is missing when the field is
+    // there under another name. The FIELD is guarded by 13a-2b; the WORDING is not, and should not be:
+    // a harness that pins prose makes every copy edit a failing build.
+    "What did you make of it?",
     // referrals
     "Referred to (person or service)", 'placeholder="Reason"',
     // decisions + outcome
@@ -629,6 +665,28 @@ async function main() {
     lostFields.length === 0, `LOST: ${lostFields.join(" | ")}`);
   ok("13a-2-control. the field scan can tell when one is missing",
     !consoleSrc.includes('placeholder="A field that was never on this screen"'));
+
+  // ── 13a-2b. THE TREATMENT FIELDS THAT STOPPED BEING LITERALS ────────────────────────────────────
+  //
+  // Six fields left FIELDS above because they became configuration. What replaces the literal scan is
+  // the property that is now true and that a redesign could genuinely break: TreatmentCapture must take
+  // its option lists from the payload rather than hardcoding a formulary, and treatment-capture.ts must
+  // still be the thing that supplies them.
+  //
+  // ⚠ THIS IS NOT AS STRONG AS WHAT IT REPLACES AND SHOULD NOT BE READ AS SUCH. It proves the wiring,
+  // not that a dose ever reaches the server. The behavioural version -- record a treatment, assert the
+  // row lands -- needs a live encounter fixture this section does not build, and it is the check
+  // CP-ENC-DIAG-001 and CP-ENC-PROC-001 actually want, because both replace working capture forms.
+  const treatSrc = readFileSync(join(encWs, "TreatmentCapture.tsx"), "utf8");
+  const treatEngine = readFileSync(join(process.cwd(), "src/lib/practice/treatment-capture.ts"), "utf8");
+  ok("13a-2b. treatment fields are driven by CONFIGURATION, not hardcoded into the component",
+    /options\./.test(treatSrc) && /export async function treatmentOptions/.test(treatEngine)
+    && !/const\s+(ROUTES|FREQUENCIES|DOSE_UNITS)\s*=\s*\[/.test(treatSrc),
+    "the component should read its lists from the capture payload and hold none of its own");
+  // ⚠ CONTROL: the negative half must be able to fire, or a component that DID hardcode a formulary
+  // would pass this on the strength of the two positive halves alone.
+  ok("13a-2b-control. and it would notice a hardcoded clinical list",
+    /const\s+(ROUTES|FREQUENCIES|DOSE_UNITS)\s*=\s*\[/.test('const ROUTES = ["oral"]'));
 
   // ⚠ AND THE TWO PANELS THAT MOVED ARE THE SAME PANELS. They were full-width blocks stacked above the
   // workspace and are now slots inside the flow. Passing them as rendered elements is what let the move
