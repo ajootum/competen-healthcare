@@ -49,7 +49,11 @@ async function main() {
 
   const { data: rows, error } = await admin.from("practice_appointment")
     .select("id, workspace_id, patient_name, scheduled_at, status, created_by")
-    .eq("status", "REQUESTED")
+    // ⚠ BOTH UNRESOLVED STATES, NOT JUST REQUESTED. The first run of this script took REQUESTED alone and
+    // missed an appointment that had been confirmed and then simply never closed off -- same position,
+    // same silence about what happened, different rung. `lt scheduled_at now` is what keeps this off the
+    // future diary, which is entirely CONFIRMED since staff bookings began confirming themselves.
+    .in("status", ["REQUESTED", "CONFIRMED"])
     .lt("scheduled_at", nowIso)
     .order("scheduled_at");
   if (error) { console.error(`could not read appointments: ${error.message}`); process.exit(1); }
@@ -82,7 +86,10 @@ async function main() {
   for (const r of targets) {
     const { data: upd, error: uErr } = await admin.from("practice_appointment")
       .update({ status: "COMPLETED", updated_at: nowIso })
-      .eq("id", r.id).eq("status", "REQUESTED")   // unchanged-since-read guard
+      // ⚠ THE GUARD RE-ASSERTS THE STATUS THIS ROW ACTUALLY HAD, not a literal. Hard-coding REQUESTED
+      // here would have matched nothing for a CONFIRMED row and reported it as "moved since the read" --
+      // a silent no-op dressed up as a safety check.
+      .eq("id", r.id).eq("status", r.status)
       .select("id");
     if (uErr) { failed.push(`${r.id}: ${uErr.message}`); continue; }
     if (!upd?.length) { failed.push(`${r.id}: moved since the read, left alone`); continue; }
@@ -95,7 +102,7 @@ async function main() {
       actorId: r.created_by,
       eventType: "practice.appointment_status_changed",
       payload: {
-        appointmentId: r.id, from: "REQUESTED", to: "COMPLETED",
+        appointmentId: r.id, from: r.status, to: "COMPLETED",
         reason: "retrospective attendance correction, recorded by the practice owner on 2026-08-12",
         observedAtDesk: false,
         encounterCreated: false,
