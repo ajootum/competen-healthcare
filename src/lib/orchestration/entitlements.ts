@@ -89,6 +89,19 @@ export async function resolveEntitlements(admin: any, userId: string, activeRole
 
 // Server-side re-authorization primitive — *visibility is not authorization* (§10). Every action/deep-link
 // handler must gate on this against the CURRENT entitlements, never on what a widget happened to render.
+//
+// ⚠⚠ IT HAS NO CALL SITES OUTSIDE THIS FILE, AND IT IS FAIL-OPEN BY INHERITANCE. DO NOT ADOPT IT FOR AN
+// ENTERPRISE SURFACE. It answers from `ent.workspaces`, which resolveEntitlements() builds through the
+// estate's deliberately fail-open path — an unmapped workspace, an unknown tenant or an unprovisioned
+// store all resolve to available. That is the ESTATE's recorded posture and ENT-DEC-001 D10 leaves it
+// unchanged for now (the owner, 2026-08-12: "new enterprise surfaces fail closed, estate unchanged").
+//
+// So a new Enterprise gate written on top of this would inherit fail-OPEN while believing it had a
+// gate, which is the one outcome D10 exists to prevent. Gate 3 is requireEnterpriseContext() over
+// enterprise-membership.ts, where `unreadable` REFUSES and a harness asserts it beside a control.
+//
+// Kept rather than deleted because it is the estate's stated re-auth contract and deleting it would
+// quietly drop a §10 obligation; it is named here so nobody wires it up mistaking it for a boundary.
 export function canEnterWorkspace(ent: Entitlements, workspaceKeyOrHref: string): boolean {
   return ent.workspaces.some(w => w.key === workspaceKeyOrHref || w.href === workspaceKeyOrHref);
 }

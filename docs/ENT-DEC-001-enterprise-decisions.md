@@ -1,8 +1,10 @@
 # ENT-DEC-001 — Decisions taken before building Competen Enterprise
 
 Settled 2026-08-11, after surveying eighteen ENT-* specifications against the repository.
-**Four were the owner's; eight were taken under the standing rule "on conflict, take the safer branch".**
-One remains open and is named as such in §D10.
+**Five were the owner's; the rest were taken under the standing rule "on conflict, take the safer branch".**
+
+**All twelve are now decided.** D10 was the last one open and was settled by the owner on 2026-08-12:
+_"new enterprise surfaces fail closed, estate unchanged for now."_
 
 This document exists so none of it is re-derived. Where a decision forecloses something the specs ask
 for, that is stated rather than left to be discovered.
@@ -225,9 +227,36 @@ header warns about. Do not add a third.
 
 ---
 
-## D10 — ⚠ STILL OPEN: fail-open versus fail-closed
+## D10 — Fail-open versus fail-closed ⭐ OWNER'S DECISION
 
-**Not decided. It needs the owner and it is a live behaviour change.**
+**DECIDED 2026-08-12, in the owner's words: _"new enterprise surfaces fail closed, estate unchanged
+for now."_**
+
+So the asymmetry is deliberate and recorded, not drift:
+
+| Plane | On an unreadable entitlement/membership read | Where |
+|---|---|---|
+| **Enterprise (gate 3)** | **REFUSES** | `enterprise-membership.ts` — `unreadable` returns `admitted: false` |
+| Platform (gate 1) | admits | `platform-membership.ts`, argued at length there |
+| Estate orchestration | admits | `orchestration/licensing.ts`, explicitly fail-open |
+
+**Already true in code, and asserted.** `enterprise-membership-harness.ts` proves gate 3 refuses on an
+unreadable store **beside a control proving gate 1 admits on the same store**, so the asymmetry is
+demonstrated rather than claimed. Nothing had to change to honour this decision — it ratifies what the
+walkable slice was built with.
+
+**What the decision forbids going forward:** an Enterprise surface must not be gated on anything that
+resolves through the estate's fail-open path. `canEnterWorkspace()` is the trap — it reads
+`ent.workspaces`, which is built fail-open, and it has no call sites outside its own file. It now
+carries that warning in place (`src/lib/orchestration/entitlements.ts`) rather than being deleted,
+because deleting it would quietly drop the §10 re-authorisation obligation it states.
+
+**The estate keeps failing open** until that is changed as its own announced decision, with its own
+timing — flipping it would start refusing anyone currently admitted by a failed read, with no warning.
+
+---
+
+### The original open question, kept for the record
 
 `src/lib/orchestration/licensing.ts` is **deliberately fail-open** and says so: *"unmapped workspaces, an
 unknown tenant, or an unprovisioned store all resolve to available"*. `src/lib/platform-membership.ts`
@@ -241,7 +270,7 @@ starts being refused. Note also that `canEnterWorkspace` has **zero call sites o
 today the gate protects nothing either way; reconcile or delete it before adding a fourth engine beside
 it.
 
-**Recommendation:** new Enterprise surfaces are fail-closed from the start; the existing estate behaviour
+**Recommendation (ADOPTED):** new Enterprise surfaces are fail-closed from the start; the existing estate behaviour
 is changed only as a separate, announced decision.
 
 ---
