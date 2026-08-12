@@ -10,7 +10,10 @@ import {
 // and one string imported from it into a "use client" component drags the whole server module into the
 // browser bundle -- which tsc and eslint both wave through and only `next build` catches. It has
 // happened three times in this codebase; procedure-constants.ts exists precisely so it cannot here.
-import { LATERALITIES, CONSENT_STATUSES, PROCEDURE_STATUSES } from "@/lib/practice/procedure-constants";
+import {
+  LATERALITIES, CONSENT_STATUSES, PROCEDURE_STATUSES,
+  OUTCOME_TYPES, OUTCOME_SEVERITIES, SEVERITY_REQUIRED_FOR,
+} from "@/lib/practice/procedure-constants";
 
 // CP-ENC-PROC-001: searchable catalogue -> working set -> procedure-specific fields -> batch record.
 //
@@ -55,6 +58,45 @@ export default function ProcedureWorkspace(props: {
   const [rows, setRows] = useState<Row[]>([newRow()]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  // ⚠ OUTCOME RECORDING, CARRIED OVER RATHER THAN LOST. The tab this workspace replaces held TWO
+  // writers: the procedure form, and this. Recording an outcome against an ALREADY-RECORDED procedure is
+  // what lets somebody walk from "this wound got infected" back to the day it was made, and the first
+  // attempt at this rewrite deleted it silently -- it survived only because eslint reported an orphaned
+  // function. It now hangs off the row it concerns rather than sitting in a separate form.
+  //
+  // ⚠ THE OBSERVING ENCOUNTER IS THIS ONE, which is the whole point: the outcome is attributed to the
+  // consultation that noticed it, not to the one that performed the procedure.
+  const [outcomeFor, setOutcomeFor] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState({ outcomeType: "healing", severity: "mild", detail: "" });
+
+  const saveOutcome = async (procedureId: string) => {
+    setBusy(true); setNotice(null);
+    try {
+      const res = await fetch(`/api/v1/practice/procedures/${procedureId}`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          observedAtEncounterId: props.encounterId,
+          outcomeType: outcome.outcomeType,
+          // ⚠ SEVERITY BELONGS TO A COMPLICATION AND TO NOTHING ELSE, and the engine enforces BOTH
+          // directions -- so sending it on a "healing" outcome is refused rather than ignored.
+          severity: SEVERITY_REQUIRED_FOR.includes(outcome.outcomeType) ? outcome.severity : undefined,
+          detail: outcome.detail || undefined,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNotice({ kind: "err", text: json?.error?.message ?? "That outcome was not recorded." });
+        return;
+      }
+      setNotice({ kind: "ok", text: "Outcome recorded against this procedure." });
+      setOutcomeFor(null);
+      setOutcome({ outcomeType: "healing", severity: "mild", detail: "" });
+      router.refresh();
+    } catch {
+      setNotice({ kind: "err", text: "That did not reach the server, so no outcome was recorded." });
+    } finally { setBusy(false); }
+  };
 
   const filled = rows.filter(r => r.label.trim() && !r.outcome?.ok);
   const set = (i: number, patch: Partial<Row>) =>
@@ -129,7 +171,38 @@ export default function ProcedureWorkspace(props: {
                 )}
                 {p.status === "ABANDONED" && <Badge tone="needs">abandoned</Badge>}
                 {p.immediate_outcome && (
-                  <span className="ml-auto text-[11px] text-gray-500">{p.immediate_outcome}</span>
+                  <span className="text-[11px] text-gray-500">{p.immediate_outcome}</span>
+                )}
+                {props.editable && props.canRecord && (
+                  <button type="button" disabled={busy}
+                    onClick={() => setOutcomeFor(outcomeFor === p.id ? null : p.id)}
+                    className="ml-auto rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                    {outcomeFor === p.id ? "Cancel" : "Record outcome"}
+                  </button>
+                )}
+                {outcomeFor === p.id && (
+                  <form className="mt-1 flex w-full flex-wrap items-end gap-2 rounded-lg bg-gray-50 p-2"
+                    onSubmit={e => { e.preventDefault(); saveOutcome(p.id); }}>
+                    <select value={outcome.outcomeType} disabled={busy} aria-label="Outcome"
+                      onChange={e => setOutcome(o => ({ ...o, outcomeType: e.target.value }))}
+                      className="rounded-lg border border-gray-200 px-2 py-1 text-[12px]">
+                      {OUTCOME_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                    </select>
+                    {SEVERITY_REQUIRED_FOR.includes(outcome.outcomeType) && (
+                      <select value={outcome.severity} disabled={busy} aria-label="Severity"
+                        onChange={e => setOutcome(o => ({ ...o, severity: e.target.value }))}
+                        className="rounded-lg border border-gray-200 px-2 py-1 text-[12px]">
+                        {OUTCOME_SEVERITIES.map(sv => <option key={sv} value={sv}>{sv}</option>)}
+                      </select>
+                    )}
+                    <input value={outcome.detail} disabled={busy} placeholder="What happened (optional)"
+                      onChange={e => setOutcome(o => ({ ...o, detail: e.target.value }))}
+                      className="min-w-[200px] flex-1 rounded-lg border border-gray-200 px-2 py-1 text-[12px]" />
+                    <button type="submit" disabled={busy}
+                      className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
+                      Record outcome
+                    </button>
+                  </form>
                 )}
               </li>
             ))}
