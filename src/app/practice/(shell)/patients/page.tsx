@@ -178,6 +178,27 @@ export default async function PatientsPage({ searchParams }: {
           periodParams={Object.fromEntries(
             Object.values(PERIOD_PARAMS).map(k => [k, one(sp[k])]).filter(([, v]) => !!v),
           ) as Record<string, string>}
+          // ⚠ WHAT IS NARROWING THE REGISTER, AND THE WAY OUT OF IT, HANDED TO THE TABLE ITSELF.
+          // The navigator above already says a period is applied; the TABLE said "No patient has been
+          // registered at this practice yet", which is a different claim and a false one -- the owner
+          // hit it with ten patients on the register and a month selected that none fell in. The
+          // sentence a reader believes is the one beside the empty table, so the table has to know.
+          // Clearing is simply dropping the period params: page.tsx defaults to allDatesTarget.
+          periodFilter={period.bounded ? {
+            fromDate: period.fromDate,
+            toDate: period.toDate,
+            clearHref: (() => {
+              const q = new URLSearchParams();
+              const keep: Record<string, string | null> = {
+                list: selectedList, patient: selectedPatientId, q: query || null,
+                scope: scope === "practice" ? null : scope,
+                sort: sort === "registered" ? null : sort,
+              };
+              for (const [k, v] of Object.entries(keep)) if (v) q.set(k, v);
+              const s = q.toString();
+              return `/practice/patients${s ? `?${s}` : ""}`;
+            })(),
+          } : null}
           registerNavigator={
             <RegisterNavigator
               period={period} todayDate={clock.today} timezone={clock.timezone}

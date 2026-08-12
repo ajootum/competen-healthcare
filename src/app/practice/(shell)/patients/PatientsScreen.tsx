@@ -85,6 +85,11 @@ export default function PatientsScreen(props: {
    * control still lit as though it were narrow.
    */
   periodParams: Record<string, string>;
+  /**
+   * Set only when a period is narrowing the register. The table needs it because the sentence a reader
+   * believes is the one beside the EMPTY TABLE, not the one above the controls.
+   */
+  periodFilter: { fromDate: string; toDate: string; clearHref: string } | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -204,6 +209,7 @@ export default function PatientsScreen(props: {
             onSort={s => go({ sort: s })}
             onPage={p => go({ page: p })}
             pending={pending}
+            periodFilter={props.periodFilter}
           />
           <p className="rounded-xl border border-[var(--cp-primary)]/20 bg-[var(--cp-primary)]/[0.04] px-4 py-2.5 text-[12px] leading-relaxed text-gray-600">
             <span className="font-semibold text-[var(--cp-primary-deep)]">Tip:</span> select a patient to

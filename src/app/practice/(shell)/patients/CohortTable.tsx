@@ -92,7 +92,7 @@ function NotReturned() {
 }
 
 export default function CohortTable({
-  cohort, worklist, selectedPatientId, onSelect, onScope, onSort, onPage, pending,
+  cohort, worklist, selectedPatientId, onSelect, onScope, onSort, onPage, pending, periodFilter,
 }: {
   cohort: CohortView | null;
   /** Set when a card is filtering this register -- it carries WHY each row is on the list. */
@@ -103,6 +103,8 @@ export default function CohortTable({
   onSort: (sort: CohortSortView) => void;
   onPage: (page: number) => void;
   pending: boolean;
+  /** Set only when a period is narrowing the register. See the empty state below for why it is here. */
+  periodFilter: { fromDate: string; toDate: string; clearHref: string } | null;
 }) {
   // ── SORTABLE COLUMN HEADERS (the owner, 2026-08-11) ───────────────────────────────────────────────
   // A header's first click applies the pair's most useful direction; a second click flips it. The
@@ -156,6 +158,18 @@ export default function CohortTable({
           {worklist && (
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
               filtered
+            </span>
+          )}
+          {/* ⚠ THE PERIOD, WHERE THE COUNT IS READ. A narrowed register with rows in it looks exactly
+              like a whole one, so the figure beside the heading needs to say what it counted -- and
+              carry its own off switch rather than sending somebody back to the chips to work it out. */}
+          {!worklist && periodFilter && (
+            <span className="flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+              registered {periodFilter.fromDate} to {periodFilter.toDate}
+              <Link href={periodFilter.clearHref} scroll={false}
+                className="underline decoration-amber-400 underline-offset-2 hover:text-amber-900">
+                show all
+              </Link>
             </span>
           )}
         </div>
@@ -236,15 +250,39 @@ export default function CohortTable({
         </div>
       ) : cohort.rows.length === 0 ? (
         <div className="p-4">
-          <p className="text-[13px] text-gray-500">
-            {worklist
-              ? namelessRows > 0
-                ? "Nobody on this list has a patient record behind them yet."
-                : "Nothing is on this list."
-              : cohort.scope === "mine"
-                ? "You have not consulted anybody on this register yet."
-                : "No patient has been registered at this practice yet."}
-          </p>
+          {/* ⚠⚠ AN EMPTY TABLE UNDER A FILTER IS NOT AN EMPTY PRACTICE, AND THIS SAID IT WAS.
+              It read "No patient has been registered at this practice yet" whenever the register came
+              back empty -- including when a PERIOD was narrowing it. The owner met that sentence with
+              ten patients on the register and September selected, and the only honest reading of the
+              screen was that the practice had none. The period is named here, and the way out of it is
+              a control rather than a thing to work out. */}
+          {!worklist && periodFilter ? (
+            <>
+              <p className="text-[13px] text-gray-700">
+                No patient was <strong>registered</strong> between {periodFilter.fromDate} and{" "}
+                {periodFilter.toDate}. This does <strong>not</strong> mean the register is empty &mdash;
+                it is narrowed to registration date, which is the only date a patient record owns.
+              </p>
+              <p className="mt-1.5 text-[12px] text-gray-500">
+                Looking for who is <strong>booked</strong> in this period? That is the Booked card above,
+                or the Planner. Who was <strong>seen</strong> is on Encounters.
+              </p>
+              <Link href={periodFilter.clearHref} scroll={false}
+                className="mt-2.5 inline-block rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)]">
+                Show all dates
+              </Link>
+            </>
+          ) : (
+            <p className="text-[13px] text-gray-500">
+              {worklist
+                ? namelessRows > 0
+                  ? "Nobody on this list has a patient record behind them yet."
+                  : "Nothing is on this list."
+                : cohort.scope === "mine"
+                  ? "You have not consulted anybody on this register yet."
+                  : "No patient has been registered at this practice yet."}
+            </p>
+          )}
         </div>
       ) : (
         <div className="overflow-x-auto">
