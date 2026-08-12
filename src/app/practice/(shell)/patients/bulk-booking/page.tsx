@@ -32,8 +32,22 @@ export default async function BulkBookingPage({ searchParams }: {
   if (!hasCapability(shell.ctx, "appointment.manage")) redirect("/practice/patients");
 
   const sp = await searchParams;
+  // ⚠ TYPED DATES BEAT THE DEFAULT PRESET, and they did not until the owner found it on 2026-08-12:
+  // "I tried selecting dates from the 16th to 23rd and it does not select appropriately. It seems to be
+  // overridden by This week."
+  //
+  // It was. The preset chips are submit buttons carrying name="preset", so pressing one sends it -- but
+  // APPLY CARRIES NO NAME, so pressing Apply submits the dates and no preset at all. This line then
+  // supplied `this_week` as a default, and bulkAvailability discards fromDate/toDate for any preset that
+  // is not `custom`. The dates were read, overwritten and never used, and the chip stayed lit on This
+  // week, which is why the screen looked like it had ignored the request rather than misunderstood it.
+  //
+  // A preset the user actually PRESSED still wins over the dates in the boxes, because pressing one is
+  // an instruction to change them. The inference only fills the silence Apply leaves.
   const rawPreset = one(sp.preset);
-  const preset = (PRESETS as string[]).includes(rawPreset) ? (rawPreset as BulkPreset) : "this_week";
+  const preset: BulkPreset = (PRESETS as string[]).includes(rawPreset)
+    ? (rawPreset as BulkPreset)
+    : (one(sp.from) || one(sp.to) ? "custom" : "this_week");
   const admin = createAdminClient();
 
   const availability = await bulkAvailability(admin, shell.ctx, {
