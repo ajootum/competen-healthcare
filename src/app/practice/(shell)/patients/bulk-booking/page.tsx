@@ -79,6 +79,7 @@ export default async function BulkBookingPage({ searchParams }: {
           locationId={availability.locationId}
           locations={((locs ?? []) as LocationRow[]).map(l => ({ id: l.id, name: l.name, colorSlot: l.color_slot ?? null }))}
           sessions={availability.sessions}
+          closed={availability.closed}
           totalSlots={availability.totalSlots}
           visitTypes={availability.taxonomy.visitTypes.map(v => ({
             id: v.id, label: v.label, minutes: v.defaultDurationMinutes,

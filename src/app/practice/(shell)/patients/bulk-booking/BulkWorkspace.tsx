@@ -16,6 +16,7 @@ import { locationTone } from "@/app/practice/(shell)/calendar/planner-ui";
 
 type Outcome = { clientRowId: string; ok: boolean; message?: string };
 type Hit = { patientId?: string; id?: string; displayName?: string; display_name?: string; patientNumber?: string };
+type Closed = { day: string; dayLabel: string; locationId: string | null; locationName: string | null; locationSlot: string | null; reason: string };
 type Slot = { startsAt: string; time: string; minutes: number };
 type Session = { day: string; dayLabel: string; locationId: string | null; locationName: string | null; slots: Slot[] };
 type Opt = { id: string; label: string; minutes?: number | null };
@@ -37,6 +38,7 @@ export default function BulkWorkspace(props: {
   locationId: string | null;
   locations: { id: string; name: string; colorSlot: string | null }[];
   sessions: Session[];
+  closed: Closed[];
   totalSlots: number;
   visitTypes: Opt[];
   modes: Opt[];
@@ -136,6 +138,7 @@ export default function BulkWorkspace(props: {
           No sessions with free appointments in this period{props.locationId ? " at that location" : ""}.
           This period was read successfully &mdash; widen the dates, choose another location, or open the
           Practice Planner to add a session.
+          {props.closed.length > 0 && " Some clinics below exist but are not open to booking."}
         </p>
       ) : (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -156,6 +159,38 @@ export default function BulkWorkspace(props: {
               </button>
             );
           })}
+        </div>
+      )}
+
+      {/* ── 2b. CLINICS THAT EXIST AND ARE NOT OPEN TO BOOKING ────────────────────────────────────
+          The owner, 2026-08-12: Friday and Saturday at TMR were simply absent, which reads as "no clinic
+          that day". They exist -- their sessions carry booking_mode `none`, which the practitioner set.
+          A closed clinic and an absent clinic are different facts and were being drawn identically.
+
+          ⚠ INERT ON PURPOSE. These are not buttons and nothing here becomes bookable: the engine's
+          decision is unchanged and only the silence about it is. Making them selectable would put the
+          screen back to offering times the control would then refuse -- which is the failure the
+          availability engine's own header warns about. */}
+      {props.closed.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {props.closed.map(c => {
+            const tone = locationTone(c.locationId, c.locationSlot);
+            return (
+              <div key={`${c.day}|${c.locationId}`}
+                className="rounded-xl border border-dashed border-gray-300 bg-gray-50/70 px-3 py-2">
+                <div className="text-[12.5px] font-bold text-gray-500">{c.dayLabel}</div>
+                <div className="mt-0.5 flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-500">
+                  <span aria-hidden="true" className={`h-2 w-2 rounded-full ${tone.dot} opacity-40`} />
+                  {c.locationName ?? "no location named"}
+                </div>
+                <div className="mt-0.5 text-[11px] italic text-gray-500">{c.reason}</div>
+              </div>
+            );
+          })}
+          <p className="w-full text-[11px] leading-relaxed text-gray-500">
+            These clinics are in the diary and closed to booking. Change that on the session itself in
+            the Practice Planner &mdash; nothing on this screen can book into them.
+          </p>
         </div>
       )}
 
