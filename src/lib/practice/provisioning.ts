@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { audit } from "./audit";
+import { seedTaxonomy } from "./taxonomy";
 
 // Competen Practice provisioning orchestrator (CPR-PROV-001 sections 3-8, 11-13).
 //
@@ -293,7 +294,26 @@ export async function runProvisioning(admin: any, req: {
     const { error } = await admin.from("practice_configuration").insert({ workspace_id: workspaceId, locale: payload.locale });
     if (error && !/duplicate|unique/i.test(error.message)) return fail("create_configuration", "CONFIGURATION_CREATE_FAILED");
   }
-  await markStep(admin, req.id, "create_configuration", "succeeded");
+  // ⚠ THE BOOKING TAXONOMY IS SEEDED HERE, NOT ONLY IN MIGRATION 292. That migration filled every
+  // workspace that existed when it ran and nothing since -- so without this a practice provisioned
+  // tomorrow comes up with two empty dropdowns and cannot take a booking at all. Exactly the failure
+  // the booking fallback contact hit after migration 291, caught only because a harness created a
+  // workspace minutes later.
+  //
+  // ⚠ AND IT DOES NOT FAIL PROVISIONING. A practice with no taxonomy is recoverable in one click from
+  // Practice Setup; a provisioning run that halted here would leave a half-built practice behind for a
+  // fault the owner can fix. The failure is recorded on the step rather than swallowed.
+  // ⚠ workspaceId IS `string | null` HERE. Every Supabase call above takes it untyped and would have
+  // written `workspace_id: null` without complaint; this is the first typed consumer, and it refuses.
+  // A null workspace at this point means the create step did not produce one, which is a failure worth
+  // stopping for rather than seeding into nothing.
+  if (!workspaceId) return fail("create_configuration", "WORKSPACE_ID_MISSING");
+  const seeded = await seedTaxonomy(admin, workspaceId);
+  // The step still SUCCEEDS -- the configuration was created -- but it carries the code, so a failure
+  // here is findable afterwards rather than surfacing weeks later as an empty dropdown.
+  await markStep(admin, req.id, "create_configuration", "succeeded",
+    seeded.ok ? undefined : "TAXONOMY_SEED_FAILED");
+  if (!seeded.ok) console.error(`[practice] taxonomy seed failed for ${workspaceId}: ${seeded.detail}`);
 
   // 5. create_entitlement (trial by default; PROV-001 s11.2 ENTITLEMENT_UNAVAILABLE if the plan is off).
   await markStep(admin, req.id, "create_entitlement", "running");
