@@ -240,6 +240,28 @@ export type Attendance = {
 };
 
 /**
+ * WHICH BUCKET ONE ELAPSED APPOINTMENT FALLS IN. Pure, so it can be tested without a database.
+ *
+ * ⚠ ATTENDANCE IS NOT DOCUMENTATION, and this used to insist it was. Requiring an encounter meant a
+ * practice that closes its appointments properly but writes its notes elsewhere read as nought per cent
+ * attended -- the figure describing the paperwork again, which is the very fault attendanceVerdict exists
+ * to prevent. ARRIVED and COMPLETED are the desk stating that the patient turned up, and that is the
+ * whole of what attendance asks.
+ *
+ * ⚠ s10 IS NOT VIOLATED BY THAT. Its rule -- "do not mark an appointment as Seen merely because it is
+ * Arrived" -- governs the SEEN LIST, which remains encounters and only encounters. Somebody who attended
+ * without a consultation being written up is attended here and absent from Seen. Both are true.
+ */
+export function attendanceBucket(
+  status: string, hasEncounter: boolean,
+): "cancelled" | "attended" | "didNotAttend" | "noOutcomeRecorded" {
+  if (status === "CANCELLED") return "cancelled";
+  if (hasEncounter || status === "ARRIVED" || status === "COMPLETED") return "attended";
+  if (status === "NO_SHOW") return "didNotAttend";
+  return "noOutcomeRecorded";   // REQUESTED or CONFIRMED, with the time gone by: nobody said.
+}
+
+/**
  * WHETHER THE COUNTS SUPPORT A PERCENTAGE AT ALL. Pure, so it can be tested without a database -- see
  * scripts/attendance-harness.ts.
  *
@@ -299,10 +321,12 @@ export async function attendance(admin: any, ctx: WorkspaceContext, opts: {
 
   let attended = 0, didNotAttend = 0, cancelled = 0, noOutcomeRecorded = 0;
   for (const r of rows) {
-    if (r.status === "CANCELLED") cancelled++;
-    else if (attendedIds.has(r.id)) attended++;
-    else if (r.status === "NO_SHOW") didNotAttend++;
-    else noOutcomeRecorded++;
+    switch (attendanceBucket(r.status, attendedIds.has(r.id))) {
+      case "cancelled": cancelled++; break;
+      case "attended": attended++; break;
+      case "didNotAttend": didNotAttend++; break;
+      default: noOutcomeRecorded++;
+    }
   }
 
   return {
