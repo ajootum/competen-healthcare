@@ -159,6 +159,9 @@ export const WORKLIST_SWATCH: Record<string, { badge: string; figure: string; bo
   followUpsToday: { badge: "bg-cyan-100 text-cyan-700", figure: "text-cyan-700", box: "border-cyan-200 bg-cyan-50/60", icon: "◷" },
   urgentReviews: { badge: "bg-rose-100 text-rose-700", figure: "text-rose-700", box: "border-rose-300 bg-rose-50", icon: "!" },
   newRegistrations: { badge: "bg-emerald-100 text-emerald-700", figure: "text-emerald-700", box: "border-emerald-200 bg-emerald-50/60", icon: "＋" },
+  // Teal for what is COMING: distinct from amber (in the building), cyan (due today) and rose (late).
+  // A tile with no entry here renders grey among nine coloured ones, which harness 42b exists to catch.
+  booked: { badge: "bg-teal-100 text-teal-700", figure: "text-teal-700", box: "border-teal-200 bg-teal-50/60", icon: "▤" },
 };
 
 /**

@@ -10,7 +10,11 @@ export const WORKLIST_KEYS = [
   // CPR-PAT-002 s3 splits these across two rows: Today's Care (what is happening now) and Continuing
   // Care (what is owed). The order here is still "cost of ignoring", which is what the tiles sort by.
   "waiting", "inConsultation", "walkIns", "followUpsToday", "urgentReviews",
-  "dueFollowUps", "pendingResults", "recentPatients", "newRegistrations",
+  // ⚠ "booked" SITS LOW BECAUSE THE ORDER IS COST OF IGNORING, NOT USEFULNESS. An appointment still to
+  // come is the one thing on this row that is not yet owed to anybody: nothing is going wrong while it
+  // waits. It ranks below the backlog and above the two informational cards. (The owner, 2026-08-12:
+  // "I would like to see a list of all booked patients.")
+  "dueFollowUps", "pendingResults", "booked", "recentPatients", "newRegistrations",
 ] as const;
 export type WorklistKey = (typeof WORKLIST_KEYS)[number];
 
@@ -93,6 +97,16 @@ export const WORKLIST_META: Record<WorklistKey, { title: string; note: string; h
     capability: "practice.calendar.view",
     // What a ROW is here. The card counts patients; this names what sits behind that figure.
     rowNoun: "arrivals",
+  },
+  booked: {
+    title: "Booked",
+    // ⚠ THE NOTE NAMES THE WINDOW AND THE STATES, because "booked" is a word people read as a total.
+    // It is not: a cancelled or completed appointment is not counted, and yesterday's is not either.
+    note: "Patients with an appointment from today onward that has not happened yet: requested, confirmed or arrived. Cancelled, completed and no-show bookings are not counted, and neither is anything before today.",
+    href: "/practice/patients?list=booked",
+    capability: "practice.calendar.view",
+    // What a ROW is here. The card counts PATIENTS; one person booked twice is one patient, two rows.
+    rowNoun: "appointments",
   },
   recentPatients: {
     title: "Recent patients",

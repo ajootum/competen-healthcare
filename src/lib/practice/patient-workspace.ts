@@ -470,7 +470,7 @@ export async function worklists(
   const mayName = can("patient.view");
 
   const [waiting, dueFollowUps, pendingResults, walkInQueue, walkInAppts, recent, registered,
-    inConsultation, followUpsToday, urgentReviews] = await Promise.all([
+    inConsultation, followUpsToday, urgentReviews, booked] = await Promise.all([
     probe(can(WORKLIST_META.waiting.capability), limit, () => admin.from("practice_queue_entry")
       .select("id, patient_id, patient_name, status, entered_at")
       .eq("workspace_id", ws).in("status", ["WAITING", "READY", "IN_CONSULTATION", "PAUSED"])
@@ -518,6 +518,21 @@ export async function worklists(
       .select("id, display_name, status, created_at")
       .eq("workspace_id", ws).gte("created_at", startIso).lt("created_at", endIso)
       .order("created_at", { ascending: false }).limit(limit + 1)),
+
+    // ── BOOKED: what is still to come (the owner, 2026-08-12) ────────────────────────────────────
+    //
+    // FROM THE START OF THE PRACTICE'S TODAY, not from "now". An appointment at 09:00 read at 10:00 has
+    // not happened -- nobody marked it arrived, completed or missed -- and dropping it at the moment it
+    // becomes late is exactly when a desk most needs to see it. The window opens on the practice's own
+    // calendar, like every other date on this screen, and has NO upper bound: "booked" means booked.
+    //
+    // ⚠ THE THREE LIVE STATUSES ONLY. CANCELLED, COMPLETED and NO_SHOW are excluded, so this figure can
+    // never overstate what is coming -- which is the one way a card called "Booked" could lie.
+    probe(can(WORKLIST_META.booked.capability), limit, () => admin.from("practice_appointment")
+      .select("id, patient_id, patient_name, scheduled_at, appointment_type, status, location_id")
+      .eq("workspace_id", ws).in("status", ["REQUESTED", "CONFIRMED", "ARRIVED"])
+      .gte("scheduled_at", startIso)
+      .order("scheduled_at").limit(limit + 1)),
 
     // ── CPR-PAT-002's three Today's Care cards that had no engine and rendered an em dash ──────────
     //
@@ -660,6 +675,14 @@ export async function worklists(
       id: r.id, patientId: r.id, fallbackName: r.display_name,
       note: r.status === "active" ? "Registered today" : `Registered today (${r.status})`,
       when: r.created_at,
+    })),
+    // ⚠ THE NOTE CARRIES THE STATUS IN WORDS. "Booked" folds three states into one figure, and a
+    // REQUESTED appointment is not a confirmed one -- the row says which, so the tile's count never has
+    // to be read as "all confirmed".
+    build("booked", booked, r => ({
+      id: r.id, patientId: r.patient_id ?? null, fallbackName: r.patient_name,
+      note: `${String(r.appointment_type).replace(/_/g, " ")} - ${String(r.status).toLowerCase()}`,
+      when: r.scheduled_at,
     })),
     build("inConsultation", inConsultation, r => ({
       id: r.id, patientId: r.patient_id ?? null, fallbackName: r.patient_name,
