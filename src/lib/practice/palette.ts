@@ -428,6 +428,8 @@ export const PATIENT_STATUS_SWATCH: Record<string, string> = {
   // A consultation record left open. Not an emergency, but it is unfinished work with a name on it.
   encounter_open: "bg-sky-100 text-sky-700 ring-1 ring-sky-200",
   seen: "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200",
+  // Indigo, matching CONFIRMED on the planner and Booked & seen: the same fact, drawn the same way.
+  booked_not_seen: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200",
   registered_not_seen: "bg-slate-100 text-slate-600 ring-1 ring-slate-200",
   // Archived and merged are not states to draw the eye; they explain why a record looks unusual.
   archived: "bg-slate-100 text-slate-500 ring-1 ring-slate-200",

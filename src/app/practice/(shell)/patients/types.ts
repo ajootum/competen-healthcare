@@ -120,6 +120,10 @@ export type CohortRowView = {
   lastSeenKnown: boolean;
   nextFollowUp: FollowUpRef | null;
   nextFollowUpKnown: boolean;
+  /** The soonest live, future booking. A DIARY ENTRY -- not nextFollowUp, which is a clinical intention. */
+  nextAppointment: { id: string; at: string; status: string; kind: string; locationName: string | null } | null;
+  /** ⚠ FALSE means "not established", never "no appointment". */
+  nextAppointmentKnown: boolean;
   currentStatus: { code: string; label: string };
   location: Place & { source: "encounter" | null };
   recordStatus: string;

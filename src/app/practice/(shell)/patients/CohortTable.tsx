@@ -82,6 +82,32 @@ function NextReview({ row }: { row: CohortRowView }) {
 }
 
 /**
+ * WHO IS COMING, which the register could not answer until 2026-08-12.
+ *
+ * The owner: "Is registered the same as booked? Shouldn't I have a column that shows me the patients who
+ * have appointments?" It was not, and there was not. The status ladder turned only on encounters and the
+ * queue, so a patient booked for next month read "Registered, not yet seen" -- true, and silent about
+ * the thing being asked. Next review sat right beside it saying "none open", which is a DIFFERENT
+ * QUESTION: practice_follow_up is a clinical intention ("review these bloods in six weeks"), while this
+ * is a diary entry. A patient can have either, both or neither, and the two columns must never be read
+ * as one.
+ */
+function NextAppointment({ row }: { row: CohortRowView }) {
+  // Three states again: the read is capped, and a cap that bit is not "no appointment".
+  if (!row.nextAppointmentKnown) return <span className="text-[var(--cmp-text-warning)]">not known</span>;
+  if (!row.nextAppointment) return <span className="text-gray-400">not booked</span>;
+  const a = row.nextAppointment;
+  return (
+    <span>
+      <span className="font-medium">{day(a.at)}</span>
+      <span className="mt-0.5 block text-[11px] text-gray-500">
+        {a.kind}{a.locationName ? ` · ${a.locationName}` : ""}
+      </span>
+    </span>
+  );
+}
+
+/**
  * A cell for a column CPR-PAT-002 asks for and myPatients() does not return.
  *
  * NOT AN EMPTY CELL AND NOT A ZERO. Both would be read as a fact about this patient. The dash is
@@ -304,6 +330,7 @@ export default function CohortTable({
                   </span>
                 </th>
                 {sortableTh("Last seen", "last_seen", "last_seen_oldest", "desc")}
+                <th className={th}>Next appointment</th>
                 {sortableTh("Next review", "next_review", "next_review_latest", "asc")}
                 <th className={th}>Journey snapshot</th>
                 {/* Status is not sortable: it is DERIVED per row from the queue and encounter reads, so
@@ -378,6 +405,7 @@ export default function CohortTable({
                     <td className={td}><NotReturned /></td>
                     <td className={td}><NotReturned /></td>
                     <td className={td}><LastSeen row={r} /></td>
+                    <td className={td}><NextAppointment row={r} /></td>
                     <td className={td}><NextReview row={r} /></td>
                     <td className={td}>
                       <span className="flex flex-col gap-0.5 text-[11.5px] text-slate-400">

@@ -740,6 +740,14 @@ export type CohortRow = {
   lastSeenKnown: boolean;
   nextFollowUp: { id: string; dueOn: string; reason: string; status: string; overdue: boolean } | null;
   nextFollowUpKnown: boolean;
+  /**
+   * The soonest LIVE, FUTURE appointment. Distinct from nextFollowUp, which is a clinical intention
+   * (practice_follow_up) rather than a diary entry -- the register showed "none open" for people who
+   * were booked, because those are two different questions.
+   */
+  nextAppointment: { id: string; at: string; status: string; kind: string; locationName: string | null } | null;
+  /** ⚠ FALSE means "not established", never "no appointment". See nextApptKnown. */
+  nextAppointmentKnown: boolean;
   currentStatus: { code: CohortStatus; label: string };
   /** CPR-V5-006's Location column. A PLACE -- see placeMap. Never a care setting. */
   location: Place & { source: "encounter" | null };
@@ -983,7 +991,8 @@ export async function myPatients(
   }
 
   const ids = rows.map(r => r.id);
-  const [identifiers, encounters, followUps, queue] = await Promise.all([
+  const nowIso = new Date().toISOString();
+  const [identifiers, encounters, followUps, queue, appointments] = await Promise.all([
     lookup(ids.length * 20, () => admin.from("practice_patient_identifier")
       .select("id, patient_id, identifier_type, value, issuer, facility_id, valid_to")
       .eq("workspace_id", ws).in("patient_id", ids).limit(ids.length * 20 + 1)),
@@ -999,11 +1008,25 @@ export async function myPatients(
       .select("id, patient_id, status, entered_at")
       .eq("workspace_id", ws).in("patient_id", ids)
       .in("status", ["WAITING", "READY", "IN_CONSULTATION", "PAUSED"]).limit(ENRICHMENT_ROW_CAP + 1)),
+    // ⚠ THE REGISTER HAS NEVER READ APPOINTMENTS, and the owner found it: "Is registered the same as
+    // booked? Shouldn't I have a column that shows me the patients who have appointments?" The status
+    // ladder below turned only on encounters and the queue, so somebody booked for next month read
+    // "Registered, not yet seen" -- true, and silent about the one fact being asked for. Next review is
+    // a different thing again: it is practice_follow_up, a clinical intention, not a diary entry.
+    //
+    // FUTURE AND STILL LIVE ONLY. A cancelled booking is not an appointment, and a past one is history
+    // that Booked and seen already reports -- this column answers "who is coming".
+    lookup(ENRICHMENT_ROW_CAP, () => admin.from("practice_appointment")
+      .select("id, patient_id, scheduled_at, status, appointment_type, location_id")
+      .eq("workspace_id", ws).in("patient_id", ids)
+      .in("status", ["REQUESTED", "CONFIRMED", "ARRIVED"]).gte("scheduled_at", nowIso)
+      .order("scheduled_at").limit(ENRICHMENT_ROW_CAP + 1)),
   ]);
   enrichment.identifiers = { ok: identifiers.ok, error: identifiers.error, truncated: identifiers.truncated };
   enrichment.encounters = { ok: encounters.ok, error: encounters.error, truncated: encounters.truncated };
   enrichment.followUps = { ok: followUps.ok, error: followUps.error, truncated: followUps.truncated };
   enrichment.queue = { ok: queue.ok, error: queue.error, truncated: queue.truncated };
+  enrichment.appointments = { ok: appointments.ok, error: appointments.error, truncated: appointments.truncated };
 
   const facilityNames = await facilityNameMap(admin, ws, identifiers.rows as any[]);
   const places = await placeMap(admin, ws, encounters.rows as any[]);
@@ -1016,6 +1039,10 @@ export async function myPatients(
   for (const r of followUps.rows as any[]) fuByPatient.set(r.patient_id, [...(fuByPatient.get(r.patient_id) ?? []), r]);
   const queueByPatient = new Map<string, any>();
   for (const r of queue.rows as any[]) if (r.patient_id && !queueByPatient.has(r.patient_id)) queueByPatient.set(r.patient_id, r);
+  // Ordered by scheduled_at above, so the FIRST row for a patient is their soonest.
+  const apptByPatient = new Map<string, any>();
+  for (const r of appointments.rows as any[]) if (r.patient_id && !apptByPatient.has(r.patient_id)) apptByPatient.set(r.patient_id, r);
+  const apptPlaces = await placeMap(admin, ws, appointments.rows as any[]);
 
   const LIVE_ENCOUNTER = ["DRAFT", "ACTIVE", "PAUSED"];
 
@@ -1030,6 +1057,11 @@ export async function myPatients(
     const fus = fuByPatient.get(p.id) ?? [];
     const nextFu = fus[0] ?? null;
     const q = queueByPatient.get(p.id) ?? null;
+    const nextAppt = apptByPatient.get(p.id) ?? null;
+    // ⚠ TRUNCATION DOES NOT BECOME "NO APPOINTMENT", the same rule lastSeenKnown follows above. If the
+    // read hit its cap and this patient had no row in it, we do not know whether they are booked -- and
+    // "none" would be a confident answer to a question we did not finish asking.
+    const nextApptKnown = appointments.ok && (!appointments.truncated || !!nextAppt);
     const locationSource = live ?? latest;
 
     let code: CohortStatus;
@@ -1039,6 +1071,10 @@ export async function myPatients(
     else if (q) code = "waiting";
     else if (live) code = "encounter_open";
     else if (encs.length > 0) code = "seen";
+    // ⚠ BOOKED IS NOT REGISTERED. Only reachable when nobody has been seen yet -- a patient with
+    // encounters stays "Seen", because their history is the more useful answer and their next
+    // appointment has its own column.
+    else if (nextAppt) code = "booked_not_seen";
     else code = "registered_not_seen";
 
     return {
@@ -1054,6 +1090,14 @@ export async function myPatients(
         ? { id: nextFu.id, dueOn: nextFu.due_on, reason: nextFu.reason, status: nextFu.status, overdue: nextFu.status === "OPEN" && nextFu.due_on < today }
         : null,
       nextFollowUpKnown: followUps.ok && (!followUps.truncated || fus.length > 0),
+      nextAppointment: nextAppt
+        ? {
+          id: nextAppt.id, at: nextAppt.scheduled_at, status: nextAppt.status,
+          kind: String(nextAppt.appointment_type ?? "").replace(/_/g, " "),
+          locationName: nextAppt.location_id ? (apptPlaces.get(nextAppt.id)?.locationName ?? null) : null,
+        }
+        : null,
+      nextAppointmentKnown: nextApptKnown,
       currentStatus: { code, label: COHORT_STATUS_LABELS[code] },
       location: {
         ...(locationSource ? (places.get(locationSource.id) ?? EMPTY_PLACE) : EMPTY_PLACE),

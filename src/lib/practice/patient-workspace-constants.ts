@@ -180,8 +180,14 @@ export const MATCH_RANK: Record<string, number> = {
   name_partial: 40,
 };
 
+// ⚠ `booked_not_seen` SEPARATES TWO THINGS THE REGISTER USED TO CONFLATE. The owner, 2026-08-12: "Is
+// registered the same as booked?" It was not, and the register could not tell them apart -- somebody
+// booked for next month read "Registered, not yet seen", which is true and answers a question nobody
+// asked. Registration is a record existing; a booking is a diary entry. Both can be absent, either can
+// be present without the other.
 export const COHORT_STATUSES = [
-  "in_consultation", "waiting", "encounter_open", "seen", "registered_not_seen", "archived", "merged",
+  "in_consultation", "waiting", "encounter_open", "seen", "booked_not_seen", "registered_not_seen",
+  "archived", "merged",
 ] as const;
 export type CohortStatus = (typeof COHORT_STATUSES)[number];
 
@@ -190,7 +196,8 @@ export const COHORT_STATUS_LABELS: Record<CohortStatus, string> = {
   waiting: "Waiting",
   encounter_open: "Encounter open",
   seen: "Seen",
-  registered_not_seen: "Registered, not yet seen",
+  booked_not_seen: "Booked, not yet seen",
+  registered_not_seen: "Registered, no appointment",
   archived: "Archived",
   merged: "Merged into another record",
 };
