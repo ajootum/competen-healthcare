@@ -564,8 +564,26 @@ async function main() {
     ["record a procedure outcome", /procedures\/\$\{procedureId\}/],
     ["expand a smart phrase", /\/api\/v1\/practice\/smart-phrases/],
   ];
-  const wsTree = [consoleSrc, paramSrc, medSrc, weightSrc,
-    readFileSync(join(encWs, "DocumentationTools.tsx"), "utf8")].join("\n");
+  // ⚠ THE TREE IS EVERY WORKSPACE COMPONENT, READ FROM THE DIRECTORY, NOT A HAND-KEPT LIST.
+  //
+  // It was a list of five files, and it went stale the moment a reorganisation extracted
+  // TreatmentCapture and InvestigationCapture into their own components: 13a-1 reported the treatment
+  // and investigation WRITE PATHS lost, and 13a-2 reported nine capture fields lost, because the files
+  // holding them were simply not among the ones being searched. Both were red against entirely correct
+  // code, in the direction that reads as "clinical capture has gone missing" -- which is the most
+  // alarming thing this harness can say and the least likely to be dismissed as a harness fault.
+  //
+  // ⚠ 13a-3 WAS PASSING THROUGHOUT, and that is what gave it away: it asserts the slot pattern is in
+  // use, so the panels had demonstrably moved rather than vanished. An assertion pinned to a LOCATION
+  // fails the day the code is reorganised, which is precisely the day these assertions exist for.
+  //
+  // Reading the directory means the next extraction is covered without anybody remembering to add it.
+  // The floor below is the control: a directory read that silently returned nothing would make every
+  // assertion in this section vacuously green, which is worse than the staleness it replaces.
+  const wsFiles = readdirSync(encWs).filter(f => f.endsWith(".tsx"));
+  const wsTree = wsFiles.map(f => readFileSync(join(encWs, f), "utf8")).join("\n");
+  ok("13a-0-control. ⚠ the workspace tree was actually read, so nothing below can pass vacuously",
+    wsFiles.length >= 8 && wsTree.length > 20000, `${wsFiles.length} files, ${wsTree.length} chars`);
   const lostWrites = WRITE_PATHS.filter(([, re]) => !re.test(wsTree)).map(([l]) => l);
   ok("13a-1. ⚠ EVERY WRITE PATH THAT EXISTED BEFORE THE REORGANISATION IS STILL REACHABLE",
     lostWrites.length === 0, `LOST: ${lostWrites.join(" | ")}`);
@@ -602,7 +620,11 @@ async function main() {
     'placeholder="Title"', 'aria-label="Document type"', "Addressed to (optional)",
     "Start from what is recorded in this consultation",
   ];
-  const lostFields = FIELDS.filter(f => !consoleSrc.includes(f));
+  // ⚠ THE WHOLE TREE, NOT THE CONSOLE ALONE. This searched EncounterConsole.tsx only, so nine fields
+  // read as lost the day treatment and investigation capture became their own components. The point of
+  // the assertion is that a field survives a REORGANISATION -- so it must not itself assume where the
+  // code lives, which is the one thing a reorganisation changes.
+  const lostFields = FIELDS.filter(f => !wsTree.includes(f));
   ok(`13a-2. ⚠ all ${FIELDS.length} named capture fields survived the reorganisation`,
     lostFields.length === 0, `LOST: ${lostFields.join(" | ")}`);
   ok("13a-2-control. the field scan can tell when one is missing",
