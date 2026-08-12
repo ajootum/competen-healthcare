@@ -19,6 +19,7 @@ import DocumentationTools from "./DocumentationTools";
 import { formatTime, formatDate } from "@/lib/datetime";
 // The shared encounter visual language. Follow-up is the first tab on it; the other seven follow.
 import { PANEL, SectionHeader, EmptyState, Tip, Advisory } from "@/components/practice/EncounterKit";
+import DiagnosisWorkspace from "./DiagnosisWorkspace";
 
 // CPR-ENC-002's consultation surface: the comp's eight-tab main workspace and the right-hand actions
 // panel, over the SOAP note, diagnoses, treatments, procedures, investigations, referrals, follow-up,
@@ -152,7 +153,6 @@ export default function EncounterConsole(props: {
   const [dictated, setDictated] = useState<Record<string, boolean>>({});
   const [showHistory, setShowHistory] = useState<Record<string, boolean>>({});
   const [templateId, setTemplateId] = useState("");
-  const [dx, setDx] = useState({ label: "", certainty: "provisional", isPrimary: false, problemLabel: "" });
   const [doc, setDoc] = useState({ title: "", docType: "consultation_summary", addressedTo: "", composeFrom: true });
   const [fu, setFu] = useState({ reason: "", kind: "review", intervalCode: "2w", priority: "routine" });
   const [closingFu, setClosingFu] = useState<string | null>(null);
@@ -307,13 +307,9 @@ export default function EncounterConsole(props: {
     }), label, true);
   };
 
-  const addDx = () => call(() => fetch(`/api/v1/practice/encounters/${props.encounterId}/diagnoses`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      label: dx.label, certainty: dx.certainty, isPrimary: dx.isPrimary,
-      problemLabel: dx.problemLabel || undefined,
-    }),
-  }), "Diagnosis recorded.", true);
+  // (addDx and its `dx` state went with the single-diagnosis form. The working set posts to the batch
+  // route through DiagnosisWorkspace, and leaving a second writer here -- unreachable but callable --
+  // is exactly the shape this file already warns about elsewhere.)
 
   // ── migration 238 writes ──────────────────────────────────────────────────────────────────────────
   const addDecision = () => call(() => fetch(`/api/v1/practice/encounters/${props.encounterId}/decisions`, {
@@ -891,47 +887,21 @@ export default function EncounterConsole(props: {
             )}
 
             {/* ══ DIAGNOSES ═════════════════════════════════════════════════════════════════════ */}
+            {/* ⚠ CP-ENC-DIAG-001 s1: THE SINGLE-DIAGNOSIS FORM IS REPLACED BY A WORKING SET. The old
+                markup below is deleted rather than left behind a flag -- two capture paths for one
+                clinical record is how a field comes to be written by whichever one somebody happened to
+                reach, and this file already carries a warning about a form removed while its capture
+                path was kept. The write goes through recordDiagnosisBatch, whose s2 problem-list rules
+                are guarded by live break-tested fixtures (13a-8, 13a-9). */}
             {tab === "diagnoses" && (
-              <section>
-                <h3 className="text-[13px] font-bold text-gray-900">Diagnoses</h3>
-                {props.diagnoses.length === 0 ? (
-                  <p className="mt-2 text-[12px] text-gray-400">None recorded for this encounter.</p>
-                ) : (
-                  <ul className="mt-2 flex flex-col gap-1">
-                    {props.diagnoses.map(d => (
-                      <li key={d.id} className="flex items-center gap-2 text-[12px]">
-                        {d.is_primary && <span className="rounded bg-[var(--cmp-surface-information)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--cmp-text-information)]">primary</span>}
-                        <span className="text-gray-800">{d.label}</span>
-                        {d.code && <span className="font-mono text-[11px] text-gray-400">{d.code}</span>}
-                        <span className="ml-auto text-[11px] text-gray-500">{d.certainty}</span>
-                        {d.problem_id && <span className="text-[10px] text-gray-400">on problem list</span>}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {editable && props.canDiagnose && (
-                  <form className="mt-3 grid grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); addDx(); }}>
-                    <input required placeholder="Diagnosis" value={dx.label} onChange={e => setDx(p => ({ ...p, label: e.target.value }))} className={`${input} col-span-2`} />
-                    <select aria-label="Certainty" value={dx.certainty} onChange={e => setDx(p => ({ ...p, certainty: e.target.value }))} className={input}>
-                      {["suspected", "provisional", "confirmed", "ruled_out"].map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                    <label className="flex items-center gap-2 text-[12px] text-gray-600">
-                      <input type="checkbox" checked={dx.isPrimary} onChange={e => setDx(p => ({ ...p, isPrimary: e.target.checked }))} />
-                      Primary diagnosis
-                    </label>
-                    <input placeholder="Add to problem list as (optional)" value={dx.problemLabel} onChange={e => setDx(p => ({ ...p, problemLabel: e.target.value }))} className={`${input} col-span-2`} />
-                    <button type="submit" disabled={busy || !dx.label.trim()}
-                      className="col-span-2 rounded-lg border border-gray-200 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                      Record diagnosis
-                    </button>
-                    <p className="col-span-2 text-[10px] text-gray-400">
-                      Naming a problem promotes this diagnosis to the patient&apos;s ongoing problem list, where it
-                      carries across visits. Leave it blank for a complaint that belongs to today only.
-                    </p>
-                  </form>
-                )}
-              </section>
+              <DiagnosisWorkspace
+                encounterId={props.encounterId}
+                recorded={props.diagnoses}
+                editable={editable}
+                canDiagnose={props.canDiagnose}
+              />
             )}
+
 
             {/* ══ TREATMENT -- CPR-TREAT-001 ════════════════════════════════════════════════════
                 ⚠ THE OLD FORM IS GONE AND ITS CAPTURE PATH IS NOT. TreatmentCapture records the same

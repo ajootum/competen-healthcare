@@ -1,5 +1,8 @@
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { audit } from "@/lib/practice/audit";
+import {
+  DIAGNOSIS_CERTAINTIES, DEFAULT_CERTAINTY, MAX_PENDING_DIAGNOSES, type DiagnosisCertainty,
+} from "@/lib/practice/diagnosis-constants";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -23,13 +26,14 @@ import { audit } from "@/lib/practice/audit";
 // item -- the same contract recordTreatmentBatch keeps, and for the same reason.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** The certainty vocabulary practice_diagnosis actually accepts. Not a superset, not a guess. */
-export const DIAGNOSIS_CERTAINTIES = ["suspected", "provisional", "confirmed", "ruled_out"] as const;
-export type DiagnosisCertainty = (typeof DIAGNOSIS_CERTAINTIES)[number];
-export const DEFAULT_CERTAINTY: DiagnosisCertainty = "provisional";
-
-/** s3's cap on one working set. Named, so a caller is refused rather than silently truncated. */
-export const MAX_PENDING_DIAGNOSES = 20;
+// ⚠ THE VOCABULARY LIVES IN AN IMPORTS-NOTHING FILE, and is re-exported here so there is still one
+// definition. A "use client" component importing it from THIS module would drag access.ts and
+// next/headers into the browser bundle -- which tsc and eslint both wave through and only the build
+// catches. See diagnosis-constants.ts.
+export {
+  DIAGNOSIS_CERTAINTIES, DEFAULT_CERTAINTY, MAX_PENDING_DIAGNOSES,
+  type DiagnosisCertainty,
+} from "@/lib/practice/diagnosis-constants";
 
 export type PendingDiagnosis = {
   label: string;

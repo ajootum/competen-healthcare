@@ -629,7 +629,17 @@ async function main() {
     "Clinical impression", "Key findings (optional)", "Next steps / Plan", "template-pick",
     "note-${t}", "outcome-note",
     // diagnoses
-    'placeholder="Diagnosis"', 'aria-label="Certainty"', "Primary diagnosis", "Add to problem list as (optional)",
+    // ⚠ REPOINTED, NOT RELAXED. CP-ENC-DIAG-001 replaced the single-diagnosis form with a working set,
+    // so the old markers went with it: placeholder="Diagnosis" is now "Type a diagnosis...", the
+    // certainty select sits under a column heading rather than an aria-label, and "Add to problem list
+    // as (optional)" became "keep as ongoing" -- which is the wording s2 argues for, because promoting
+    // does not change what the encounter diagnosis means.
+    //
+    // ⚠ THIS GUARD CAUGHT THE CHANGE, WHICH IS THE POINT. It went red the moment the form was replaced,
+    // and the only reason repointing it is honest rather than convenient is that 13a-6 and 13a-6b now
+    // prove the diagnosis actually reaches practice_diagnosis. Repointing a source scan while nothing
+    // tested the write would be deleting the guard and calling it maintenance.
+    'placeholder="Type a diagnosis..."', "keep as ongoing", "Record ", "Primary diagnosis",
     // treatment
     // ⚠ THE SIX TREATMENT FIELDS ARE NOT LISTED HERE ANY MORE, and 13a-2b below is why. They were
     // markup literals when this list was written; TreatmentCapture now reads every formulation, dose
