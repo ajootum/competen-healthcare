@@ -309,8 +309,13 @@ async function main() {
 
   // Keep the setup honest: prove the occupier really was where the conflict tests assumed.
   const { data: occ } = await admin.from("practice_appointment").select("scheduled_at, status").eq("id", occupied).maybeSingle();
+  // ⚠ THE PROPERTY IS "LIVE", NOT "REQUESTED". This pinned the creation status, so it reddened the day
+  // staff bookings began confirming themselves -- against an occupier that was still exactly as live, and
+  // still blocking, as it had always been. What the conflict tests rely on is that it participates in the
+  // overlap check, and that is the LIVE set the exclusion constraint uses.
+  const LIVE = ["REQUESTED", "CONFIRMED", "ARRIVED"];
   ok("CONTROL: the blocking appointment was live at the time the tests assumed",
-    occ?.status === "REQUESTED" && Date.parse(occ.scheduled_at) === Date.parse(at("11:00")), JSON.stringify(occ));
+    !!occ && LIVE.includes(occ.status) && Date.parse(occ.scheduled_at) === Date.parse(at("11:00")), JSON.stringify(occ));
 
   await cleanup();
 

@@ -465,8 +465,25 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
   });
   if (!placed.ok) return placed;
 
-  // Walk-ins arrive by definition: they enter as CONFIRMED and are checked in immediately by the caller.
-  const initialStatus = input.appointmentType === "walk_in" ? "CONFIRMED" : "REQUESTED";
+  // ══ A BOOKING MADE BY STAFF IS ALREADY CONFIRMED. ═══════════════════════════════════════════════
+  //
+  // The owner, 2026-08-12: "Once patients book into an available space, it should be booked and not need
+  // human intervention to confirm. We are looking to reduce number of clicks."
+  //
+  // This path used to enter every non-walk-in as REQUESTED, which asked a human to confirm a booking a
+  // human had just made. There is nobody else in that loop: the person clicking Confirm is the person who
+  // chose the slot. 13 of the Trial practice's 14 appointments were sitting in that state.
+  //
+  // ⚠ CONFIRMED HERE IS NOT A CAPACITY DECISION AND DOES NOT BECOME ONE. checkPlacement has already run
+  // above and returned ok, and migration 255's exclusion constraint refuses an overlap in the database
+  // regardless of status. Confirming skips a CLICK, never a check -- an unavailable slot still fails, and
+  // that failure is exactly the case the owner reserved for human contact.
+  //
+  // ⚠ AND IT IS NOT THE SAME DECISION AS THE PATIENT-FACING ONE. booking-rules.ts keeps REQUESTED for the
+  // cases where somebody genuinely must weigh in: `confirmation_mode` of conditional, and the DNA rule's
+  // require_approval. Those are about a patient the practice has not vouched for. Staff booking on that
+  // patient's behalf IS the practice vouching for it, which is why the two paths differ on purpose.
+  const initialStatus = "CONFIRMED";
 
   const { data: appt, error } = await admin.from("practice_appointment").insert({
     workspace_id: input.workspaceId, location_id: locationId,

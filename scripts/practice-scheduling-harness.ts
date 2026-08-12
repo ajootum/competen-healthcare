@@ -75,7 +75,11 @@ async function main() {
 
   // ── 1. Booking and walk-in initial states ──────────────────────────────────
   const b1 = await bookAppointment(admin, { workspaceId: wsA, patientName: "Diary Patient One", appointmentType: "new_consultation", scheduledAt: `${DAY}T09:00:00.000Z`, durationMinutes: 30, ...base });
-  ok("a booking is created as REQUESTED", b1.ok && b1.data.status === "REQUESTED", b1.ok ? b1.data.status : b1.message);
+  // ⚠ STAFF BOOKINGS CONFIRM THEMSELVES (owner, 2026-08-12: "it should be booked and not need human
+  // intervention to confirm"). This used to assert REQUESTED -- a booking made by a human waiting for a
+  // human to confirm it. The transition REQUESTED -> CONFIRMED is still exercised at 3 below, because
+  // booking-rules.ts still produces REQUESTED for conditional confirmation and the DNA approval rule.
+  ok("a staff booking is created CONFIRMED, with no confirmation step", b1.ok && b1.data.status === "CONFIRMED", b1.ok ? b1.data.status : b1.message);
   const w1 = await bookAppointment(admin, { workspaceId: wsA, patientName: "Walk-in One", appointmentType: "walk_in", scheduledAt: `${DAY}T09:10:00.000Z`, ...base });
   ok("a walk-in enters as CONFIRMED", w1.ok && w1.data.status === "CONFIRMED", w1.ok ? w1.data.status : w1.message);
 
@@ -87,8 +91,17 @@ async function main() {
 
   // ── 3. Appointment state machine + check-in side effects ───────────────────
   if (!b1.ok) { report(); return; }
-  const c1 = await transitionAppointment(admin, { workspaceId: wsA, appointmentId: b1.data.id, to: "CONFIRMED", ...base });
-  ok("REQUESTED -> CONFIRMED", c1.ok, c1.ok ? "" : c1.message);
+
+  // ⚠ THE REQUESTED RUNG IS STILL REACHABLE AND STILL HAS TO WORK. Nothing in this path creates it any
+  // more, so the fixture puts an appointment there deliberately rather than relying on bookAppointment --
+  // an assertion that quietly stopped exercising the transition would be worse than a deleted one.
+  if (override.ok) {
+    await admin.from("practice_appointment").update({ status: "REQUESTED" }).eq("id", override.data.id);
+    const c1 = await transitionAppointment(admin, { workspaceId: wsA, appointmentId: override.data.id, to: "CONFIRMED", ...base });
+    ok("REQUESTED -> CONFIRMED still works, for the paths that still request", c1.ok, c1.ok ? "" : c1.message);
+  }
+
+  // b1 is already CONFIRMED, so it reaches the queue without an intervening click.
   const arr = await transitionAppointment(admin, { workspaceId: wsA, appointmentId: b1.data.id, to: "ARRIVED", ...base });
   ok("CONFIRMED -> ARRIVED creates a queue entry", arr.ok && !!arr.data.queueEntryId, arr.ok ? "no queue entry" : arr.message);
   const { count: arrivals } = await admin.from("practice_arrival").select("*", { count: "exact", head: true }).eq("appointment_id", b1.data.id);
