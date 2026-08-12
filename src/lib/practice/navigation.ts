@@ -131,6 +131,13 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // CPR-V3-002 "Patient Journey": longitudinal timeline, diagnoses, treatments, documents, hospital
   // history, follow-up history, AI summary. The pieces exist across several screens; the single
   // longitudinal view V3 asks for does not. NOT SHIPPED, so it renders nothing.
+  // The owner, 2026-08-12: "a good place is a sub-menu under Patients". Booked and seen over any
+  // period, filterable by location, printable and exportable -- the register answers "who is on our
+  // books", this answers "who is coming, and who came".
+  //
+  // ⚠ patient.view, NOT patient.list. Every row here is a named person; the engine gates on the same
+  // capability and re-checks it rather than trusting the nav.
+  { href: "/practice/patients/lists", label: "Booked & seen", icon: "▤", capability: "patient.view", group: "Patients", phase: 2, built: true, parent: "/practice/patients" },
   { href: "/practice/follow-ups", label: "Follow-ups", icon: "↻", capability: "followup.view", group: "Patients", phase: 4, built: true, primary: true },
   { href: "/practice/documents", label: "Documents", icon: "▦", capability: "document.view", group: "Clinical", phase: 4, built: true, primary: true },
   // CPR-V3-002 "Insights". Analytics and Patient Insights both exist and both sit under Practice Home
