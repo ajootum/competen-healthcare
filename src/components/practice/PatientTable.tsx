@@ -80,24 +80,66 @@ export const TABLE_SCROLL = "cp-scroll max-h-[70vh] overflow-y-auto overflow-x-a
  * ⚠ `unlinkedTitle` exists because a booking can name somebody before a record exists for them. That row
  * is not a broken link, and rendering it as plain text with no explanation reads like one.
  */
-export function PatientCell({ patientId, name, patientNumber, unlinkedTitle }: {
+export function PatientCell({ patientId, name, patientNumber, unlinkedTitle, sex }: {
   patientId: string | null;
   name: string;
   patientNumber?: string | null;
   unlinkedTitle?: string;
+  sex?: string | null;
 }) {
   return (
     <td className="px-3 py-2">
-      <div className="text-[13px] font-semibold leading-tight text-gray-900">
-        {patientId
-          ? <Link href={`/practice/patients/${patientId}`} className="hover:underline">{name}</Link>
-          : <span title={unlinkedTitle ?? "Named at booking, before a patient record existed"}>{name}</span>}
+      <div className="flex items-center gap-2.5">
+        <Avatar name={name} seed={patientId ?? name} />
+        <div className="min-w-0">
+          <div className="truncate text-[13px] font-semibold leading-tight text-gray-900">
+            {patientId
+              ? <Link href={`/practice/patients/${patientId}`} className="hover:underline">{name}</Link>
+              : <span title={unlinkedTitle ?? "Named at booking, before a patient record existed"}>{name}</span>}
+          </div>
+          {/* select-all so the number can be lifted in one gesture -- s6 "number remains copyable". */}
+          {patientNumber
+            ? <div className="mt-0.5 text-[11px] leading-tight text-gray-500">
+              <span className="select-all font-mono">{patientNumber}</span><SexGlyph sex={sex ?? null} />
+            </div>
+            : <div className="mt-0.5 text-[11px] leading-tight text-gray-400">no patient number</div>}
+        </div>
       </div>
-      {/* select-all so the number can be lifted in one gesture -- s6 "number remains copyable". */}
-      {patientNumber
-        ? <div className="mt-0.5 select-all font-mono text-[11px] leading-tight text-gray-500">{patientNumber}</div>
-        : <div className="mt-0.5 text-[11px] leading-tight text-gray-400">no patient number</div>}
     </td>
+  );
+}
+
+/** The avatar tints, deliberately distinct from the STATUS palette so the two are never confused. */
+const AVATAR_TONES = [
+  "bg-violet-100 text-violet-700", "bg-emerald-100 text-emerald-700", "bg-sky-100 text-sky-700",
+  "bg-orange-100 text-orange-700", "bg-rose-100 text-rose-700", "bg-teal-100 text-teal-700",
+  "bg-fuchsia-100 text-fuchsia-700", "bg-cyan-100 text-cyan-700",
+];
+
+/**
+ * INITIALS IN A TINTED DISC -- the reference design's most visible element, and the one this workspace
+ * shipped without because the comp lives in the spec as an IMAGE and the text extraction dropped it.
+ *
+ * ⚠ THE TINT IS DECORATION AND CARRIES NO MEANING WHATSOEVER. It is not sex, not status, not risk, not
+ * location. It exists so a row can be re-found by shape while scrolling. The hue comes from a hash of
+ * the patient id, so it is stable for that person for the life of the record -- an index-based colour
+ * would repaint every avatar the moment one row was inserted above.
+ *
+ * ⚠ AND IT IS NOT A PHOTOGRAPH. Practice stores no patient images (recorded in the Patients refusals),
+ * so initials are the whole of what can honestly be drawn here.
+ */
+export function Avatar({ name, seed }: { name: string; seed: string }) {
+  const initials = name.trim().split(/\s+/).filter(Boolean).slice(0, 2)
+    .map(w => w[0]?.toUpperCase() ?? "").join("") || "?";
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = ((h * 31) + seed.charCodeAt(i)) >>> 0;
+  const tone = AVATAR_TONES[h % AVATAR_TONES.length];
+  return (
+    // aria-hidden: the name is right beside it, so a screen reader announcing "AM" first is noise.
+    <span aria-hidden="true"
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${tone}`}>
+      {initials}
+    </span>
   );
 }
 
@@ -112,8 +154,54 @@ export function StatusBadge({ status, kind }: { status: string; kind: "appointme
   const swatch = (kind === "appointment" ? APPOINTMENT_STATUS_SWATCH : ENCOUNTER_STATUS_SWATCH)[status]
     ?? "bg-gray-100 text-gray-600";
   return (
-    <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${swatch}`}>
-      {status.toLowerCase().replace(/_/g, " ")}
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${swatch}`}>
+      {/* The reference design's leading dot. Decoration only -- currentColor, so it can never disagree
+          with the word beside it, and the word is what carries the meaning (s17). */}
+      <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-80" />
+      {titleCase(status)}
+    </span>
+  );
+}
+
+/**
+ * "scheduled_followup" -> "Scheduled follow-up", as the reference design writes it.
+ *
+ * ⚠ THE HYPHENATIONS ARE A LOOKUP, NOT A RULE. There is no general way to know that "followup" takes a
+ * hyphen and "walkin" does not, so guessing would produce "Walk-in" and "Teleconsult-ation" alike. An
+ * unlisted value falls through to sentence case with underscores opened out, which is always readable --
+ * a vocabulary this map has not caught up with must never render blank or raw.
+ */
+const WORD_FORMS: Record<string, string> = {
+  followup: "follow-up", walkin: "walk-in", "no": "no", show: "show",
+};
+export function titleCase(raw: string): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+  const opened = s.toLowerCase().replace(/_/g, " ").trim();
+  const words = opened.split(/\s+/).map(w => WORD_FORMS[w] ?? w);
+  const joined = words.join(" ");
+  return joined.charAt(0).toUpperCase() + joined.slice(1);
+}
+
+/**
+ * The register's sex, as the single glyph the reference design puts beside the patient number.
+ *
+ * ⚠ ONLY WHAT WAS RECORDED. "unknown", "unspecified", "other" and an absent value each get NO glyph --
+ * a symbol implies somebody wrote it down. The title attribute spells the value out, because a lone
+ * glyph is not an accessible label (s17: meaning never rests on a visual alone).
+ */
+export function SexGlyph({ sex }: { sex: string | null }) {
+  const s = (sex ?? "").toLowerCase();
+  const glyph = s === "female" ? "♀" : s === "male" ? "♂" : null;
+  if (!glyph) return null;
+  return <span title={s} className="ml-1 text-[11px] text-rose-400">{glyph}</span>;
+}
+
+/** s8's date-group header: the count as a tinted pill, as the reference design draws it. */
+export function DayCountPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-md bg-[var(--cp-primary)]/10 px-2 py-0.5 text-[11px] font-semibold text-[var(--cp-primary-deep)]">
+      {children}
     </span>
   );
 }
@@ -134,6 +222,7 @@ export type PatientTableRow = {
   locationName: string | null;
   /** Migration 290's per-clinic colour choice. Null means "let the stable hash decide". */
   locationSlot: string | null;
+  sex: string | null;
 };
 
 /** One calendar day of rows, with the label its header shows. */

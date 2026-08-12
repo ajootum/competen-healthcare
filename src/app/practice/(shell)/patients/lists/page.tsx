@@ -3,11 +3,14 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
-import { patientList, defaultWindow, attendance, type PatientListResult, type Attendance } from "@/lib/practice/patient-lists";
+import {
+  patientList, defaultWindow, attendance, patientListCounts,
+  type PatientListResult, type Attendance,
+} from "@/lib/practice/patient-lists";
 import { workspaceClock } from "@/lib/practice/practice-time";
 import { groupByDay } from "@/components/practice/PatientTable";
 import GroupedTable from "./GroupedTable";
-import PrintButton from "./PrintButton";
+import ExportMenu from "./ExportMenu";
 
 // /practice/patients/lists -- WHO IS BOOKED, AND WHO WAS SEEN, as a list you can carry out.
 //
@@ -71,11 +74,16 @@ export default async function PatientListsPage({ searchParams }: {
     fromDate: one(sp.from) || undefined,
     toDate: one(sp.to) || undefined,
     locationId: one(sp.location) || null,
+    search: one(sp.q) || null,
   });
 
   // Over the SAME window and location the user is looking at, so the figure can never describe a period
   // other than the one on screen.
   const att = await attendance(admin, shell.ctx, {
+    fromDate: result.fromDate, toDate: result.toDate, locationId: result.locationId, timezone,
+  });
+  // s3: BOTH tab counts, over the same filters, so the tab you are not on can state its own size.
+  const counts = await patientListCounts(admin, shell.ctx, {
     fromDate: result.fromDate, toDate: result.toDate, locationId: result.locationId, timezone,
   });
 
@@ -90,12 +98,21 @@ export default async function PatientListsPage({ searchParams }: {
   // (The row formatter moved into ListBody: s8 splits the date onto the group header and leaves only the
   // time on the row, so the full weekday-date-time string this built is no longer rendered anywhere.)
 
-  const tab = (key: "booked" | "seen", label: string) => (
-    <Link href={`/practice/patients/lists?${qs({ view: key, from: defaultWindow(key, today).from, to: defaultWindow(key, today).to })}`}
-      className={`rounded-lg px-3 py-1.5 text-[13px] font-semibold ${view === key
+  // s3: "changing tabs must preserve the current date range, location and search". Only `view` changes.
+  // ⚠ A NULL COUNT IS NOT NOUGHT. When the count query failed the badge shows an em dash -- a tab reading
+  // "Seen 0" would tell a practitioner they saw nobody, which is a different claim from "we could not
+  // count". Same three-state rule the lists themselves follow.
+  const tab = (key: "booked" | "seen", label: string, count: number | null) => (
+    <Link href={`/practice/patients/lists?${qs({ view: key })}`}
+      className={`inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-semibold ${view === key
         ? "bg-[var(--cp-primary)] text-white"
         : "border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}>
       {label}
+      <span className={`rounded px-1.5 py-0.5 text-[11px] font-bold ${view === key
+        ? "bg-white/25 text-white" : "bg-gray-100 text-gray-600"}`}
+        title={count === null ? "this count could not be read" : undefined}>
+        {count ?? "—"}
+      </span>
     </Link>
   );
 
@@ -133,21 +150,37 @@ export default async function PatientListsPage({ searchParams }: {
         .print-only { display: none; }
       `}</style>
 
-      <div className="no-print flex flex-wrap items-center justify-between gap-3">
+      <div className="no-print flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Booked and seen</h1>
-          <p className="mt-0.5 text-[13px] text-gray-500">
-            Who is booked, and who was seen &mdash; over any period, at any location.
+          <h1 className="text-2xl font-bold text-gray-900">Booked and seen</h1>
+          {/* s3's supporting text, verbatim. */}
+          <p className="mt-1 text-[13px] text-gray-500">
+            See who was booked and who was actually seen &mdash; over any period, at any location.
           </p>
         </div>
-        <Link href="/practice/patients" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
-          &larr; Patients
+        <Link href="/practice/patients" className="text-[12.5px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+          &larr; Back to Patients
         </Link>
       </div>
 
+      {/* ── The summary tiles the reference design puts at the top right. ────────────────────────── */}
+      <div className="no-print mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <SummaryTile icon="&#128197;" tint="bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
+          label="Booked" value={counts.booked} unit="appointments" />
+        <SummaryTile icon="&#128100;" tint="bg-emerald-100 text-emerald-700"
+          label="Seen" value={counts.seen} unit="encounters" />
+        {/* ⚠ THE THIRD TILE IS ATTENDANCE, NOT THE COMP'S "SEEN RATE 76% OF BOOKED".
+            That figure divides encounters by appointments, and s3 refuses it in the spec's own words:
+            "do not treat the Booked count and Seen count as a conversion funnel". The two tabs also
+            default to DIFFERENT windows, so the comp's 76% divided last month's encounters by next
+            month's bookings. The owner chose the honest replacement on 2026-08-12 -- attendance over a
+            window that has already happened -- and the band below carries its counts and caveats. */}
+        <AttendanceTile a={att} />
+      </div>
+
       <div className="no-print mt-3 flex flex-wrap items-center gap-2">
-        {tab("booked", "Booked")}
-        {tab("seen", "Seen")}
+        {tab("booked", "Booked", counts.booked)}
+        {tab("seen", "Seen", counts.seen)}
       </div>
 
       {/* ── The filters. A GET form, so every view is a URL. ─────────────────────────────────────── */}
@@ -189,13 +222,16 @@ export default async function PatientListsPage({ searchParams }: {
           Reset
         </Link>
 
-        <span className="ml-auto flex items-center gap-2">
-          <PrintButton />
-          <a href={`/api/v1/practice/patient-lists?${qs({ format: "csv" })}`}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
-            Download CSV
-          </a>
-        </span>
+        {/* s5: search by patient name and patient number. A plain GET field, so a searched view is a URL
+            like every other filter state -- and so it survives a tab change, which s3 requires. */}
+        <label className="ml-auto flex flex-col gap-1">
+          <span className="text-[11px] font-semibold text-gray-500">Search</span>
+          <input type="search" name="q" defaultValue={result.search ?? ""}
+            placeholder={view === "booked" ? "Search booked patients..." : "Search seen patients..."}
+            className="w-[220px] rounded-lg border border-gray-200 px-2.5 py-1.5 text-[13px]" />
+        </label>
+        {/* s5: "Export is a single menu rather than two permanent buttons." */}
+        <ExportMenu csvHref={`/api/v1/practice/patient-lists?${qs({ format: "csv" })}`} />
       </form>
 
       <p className="no-print mt-2 text-[11.5px] leading-relaxed text-gray-500">
@@ -222,7 +258,8 @@ export default async function PatientListsPage({ searchParams }: {
 function ListBody({ result, view }: {
   result: PatientListResult; view: "booked" | "seen";
 }) {
-  const title = view === "booked" ? "Booked patients" : "Patients seen";
+  // (No card heading: the reference design runs the tabs straight into the context line, and a
+  // "Booked patients" title between them would repeat the tab that is already highlighted.)
   // s10: a Booked row is an appointment; a Seen row is a consultation. The noun follows the dataset
   // rather than a shared "record", because the two are not the same thing counted twice.
   const countNoun = view === "booked" ? "appointment" : "consultation";
@@ -256,6 +293,7 @@ function ListBody({ result, view }: {
       id: r.id, patientId: r.patientId, patientName: r.patientName, patientNumber: r.patientNumber,
       at: r.at, time: timeOf(r.at), kind: r.kind, status: r.status,
       locationId: r.locationId, locationName: r.locationName, locationSlot: r.locationSlot,
+      sex: r.sex,
     })),
     result.timezone,
   );
@@ -263,16 +301,23 @@ function ListBody({ result, view }: {
   return (
     <section className="rounded-xl border border-gray-200 bg-white">
       <div className="border-b border-gray-100 px-4 py-3">
-        <h2 className="text-[15px] font-bold text-gray-900">{title}</h2>
-        {/* s5's context line: location, then range, then count. s13: the timezone is stated ONCE for the
-            workspace rather than repeated on every row. */}
-        <p className="mt-0.5 text-[12px] text-gray-600">
-          {result.locationName ?? "All locations"}
-          {" · "}{writtenDay(result.fromDate)} to {writtenDay(result.toDate)}
-          {" · "}<strong>{result.rows.length}</strong> {result.rows.length === 1 ? countNoun : `${countNoun}s`}
-          {" · "}<strong>{result.patientCount}</strong> {result.patientCount === 1 ? "patient" : "patients"}
+        {/* s5's context line, as the reference design lays it out: place, then period, then count. */}
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-gray-600">
+          <span aria-hidden="true">&#127973;</span>
+          <strong className="font-bold text-gray-900">{result.locationName ?? "All locations"}</strong>
+          <span className="text-gray-300">&middot;</span>
+          <span aria-hidden="true">&#128197;</span>
+          <span>{writtenDay(result.fromDate)} &ndash; {writtenDay(result.toDate)}</span>
+          <span className="text-gray-300">&middot;</span>
+          <span><strong className="font-bold text-gray-900">{result.rows.length}</strong> {result.rows.length === 1 ? countNoun : `${countNoun}s`}</span>
+          <span className="text-gray-300">&middot;</span>
+          <span><strong className="font-bold text-gray-900">{result.patientCount}</strong> {result.patientCount === 1 ? "patient" : "patients"}</span>
+          {result.search && (
+            <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11.5px] font-semibold text-amber-800">
+              filtered by &ldquo;{result.search}&rdquo;
+            </span>
+          )}
         </p>
-        <p className="mt-0.5 text-[11px] text-gray-400">Times shown in {result.timezone}.</p>
         {result.truncated && (
           <p className="mt-1 text-[12px] font-semibold text-[var(--cmp-text-warning)]">
             Only the first {result.limit} rows are shown. Narrow the period or the location &mdash; this list
@@ -280,6 +325,22 @@ function ListBody({ result, view }: {
           </p>
         )}
         {result.detail && <p className="mt-1 text-[11.5px] text-[var(--cmp-text-warning)]">{result.detail}</p>}
+
+        {/* ⚠ THE COUNTING RULE MOVES UP HERE, WHERE THE REFERENCE DESIGN PUTS IT, AND STILL PRINTS.
+            It was a grey line under the table -- below the fold on any list longer than a screen, so the
+            one sentence that says what the number does and does not include was the least likely thing
+            on the page to be read. It is a caveat on the count; it belongs beside the count. */}
+        <p className="mt-2.5 flex items-start gap-2 rounded-lg bg-[var(--cp-primary)]/[0.06] px-3 py-2 text-[11.5px] leading-relaxed text-gray-600">
+          <span aria-hidden="true" className="mt-px text-[12px] text-[var(--cp-primary)]">&#9432;</span>
+          <span>
+            Times are shown in <strong className="font-semibold">{result.timezone}</strong>, this
+            practice&rsquo;s own clock.
+            {view === "booked"
+              ? " Requested, confirmed and arrived appointments only — cancelled, completed and no-show bookings are not counted."
+              : " One row per recorded consultation; somebody seen twice appears twice."}
+            {" "}This list identifies patients and is not anonymised.
+          </span>
+        </p>
       </div>
 
       {result.rows.length === 0 ? (
@@ -294,14 +355,6 @@ function ListBody({ result, view }: {
         <GroupedTable groups={groups} view={view} showLocation={showLocation} countNoun={countNoun} />
       )}
 
-      {/* ⚠ THE SENTENCE TRAVELS WITH THE PAGE, because the page is meant to leave the product. */}
-      <p className="border-t border-gray-100 px-4 py-2 text-[11px] leading-relaxed text-gray-500">
-        This list identifies patients and is not anonymised. Times are shown in {result.timezone}, this
-        practice&rsquo;s own clock.
-        {view === "booked"
-          ? " Requested, confirmed and arrived appointments only — cancelled, completed and no-show bookings are not counted."
-          : " One row per recorded consultation; somebody seen twice appears twice."}
-      </p>
     </section>
   );
 }
@@ -394,6 +447,65 @@ function AttendanceBand({ a, locationName }: { a: Attendance; locationName: stri
           )}
         </>
       )}
+    </div>
+  );
+}
+
+// ── The reference design's summary tiles ────────────────────────────────────────────────────────────
+
+/**
+ * ⚠ A NULL VALUE IS NOT A NOUGHT, and this is the tile where that matters most. "Seen 0 encounters" is a
+ * statement about the practice; "we could not count" is a statement about the query. They must not look
+ * the same, so a failed count renders an em dash and says why on hover.
+ */
+function SummaryTile({ icon, tint, label, value, unit }: {
+  icon: string; tint: string; label: string; value: number | null; unit: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+      <span aria-hidden="true" className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-[17px] ${tint}`}>
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <div className="text-[12px] font-semibold text-gray-500">{label}</div>
+        <div className="text-[20px] font-bold leading-tight text-gray-900"
+          title={value === null ? "this count could not be read" : undefined}>
+          {value ?? "—"}
+        </div>
+        <div className="text-[11.5px] text-gray-500">{value === null ? "could not be counted" : unit}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The third tile. The comp draws "Seen rate 76% of booked"; this draws attendance, for the reasons set
+ * out at the call site and in attendance() itself. Where the percentage is withheld the tile says so in
+ * words rather than showing a nought, because the tile is the part people read at a glance.
+ */
+function AttendanceTile({ a }: { a: Attendance }) {
+  const unreadable = !a.readable;
+  const nothing = a.readable && a.elapsed === 0;
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+      <span aria-hidden="true"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-100 text-[17px] text-sky-700">
+        &#127919;
+      </span>
+      <div className="min-w-0">
+        <div className="text-[12px] font-semibold text-gray-500">Attended</div>
+        <div className="text-[20px] font-bold leading-tight text-gray-900">
+          {unreadable || nothing || a.attendedPercent === null
+            ? "—"
+            : `${a.noOutcomeRecorded > 0 ? "≥" : ""}${a.attendedPercent}%`}
+        </div>
+        <div className="text-[11.5px] text-gray-500">
+          {unreadable ? "could not be read"
+            : nothing ? "nothing has elapsed yet"
+              : a.attendedPercent === null ? "outcomes not recorded"
+                : `${a.attended} of ${a.elapsed} elapsed`}
+        </div>
+      </div>
     </div>
   );
 }

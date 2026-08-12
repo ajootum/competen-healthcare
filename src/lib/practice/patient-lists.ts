@@ -38,6 +38,12 @@ export type PatientListRow = {
   locationName: string | null;
   /** Migration 290's per-clinic colour choice, so a list can be scanned by place like the planner. */
   locationSlot: string | null;
+  /**
+   * The register's recorded sex, drawn as a glyph beside the patient number in the reference design.
+   * ⚠ NULL IS A REAL ANSWER and stays distinguishable from "unknown": the register permits neither being
+   * recorded, and drawing a guessed glyph would put a fact in front of a clinician that nobody entered.
+   */
+  sex: string | null;
 };
 
 export type PatientListResult = {
@@ -50,6 +56,8 @@ export type PatientListResult = {
   timezone: string;
   locationId: string | null;
   locationName: string | null;
+  /** s5's search text, echoed back so the field repopulates without re-reading the URL. */
+  search: string | null;
   /** Every active location, so a screen can offer the filter without a second read. */
   locations: { id: string; name: string; colorSlot: string | null }[];
   /**
@@ -73,7 +81,7 @@ const empty = (
   view: "booked" | "seen", fromDate: string, toDate: string, timezone: string,
   extra: Partial<PatientListResult> = {},
 ): PatientListResult => ({
-  view, rows: [], patientCount: 0, fromDate, toDate, timezone,
+  view, rows: [], patientCount: 0, fromDate, toDate, timezone, search: null,
   locationId: null, locationName: null, locations: [], truncated: false,
   limit: PATIENT_LIST_LIMIT, unavailable: false, permitted: true, detail: null, ...extra,
 });
@@ -95,6 +103,8 @@ export async function patientList(admin: any, ctx: WorkspaceContext, opts: {
   view: "booked" | "seen";
   fromDate?: string; toDate?: string;
   locationId?: string | null;
+  /** s5: searches the ACTIVE RESULT SET by patient name and patient number. */
+  search?: string | null;
   correlationId?: string;
 }): Promise<PatientListResult> {
   const view = opts.view === "seen" ? "seen" : "booked";
@@ -153,14 +163,14 @@ export async function patientList(admin: any, ctx: WorkspaceContext, opts: {
   // the same rule bookAppointment follows when it writes patient_name.
   const ids = [...new Set(kept.map(r => r.patient_id).filter(Boolean))] as string[];
   const { data: patients } = ids.length
-    ? await admin.from("practice_patient").select("id, display_name, patient_number")
+    ? await admin.from("practice_patient").select("id, display_name, patient_number, sex")
       .eq("workspace_id", ctx.workspaceId).in("id", ids)
     : { data: [] };
   const byId = new Map(((patients ?? []) as any[]).map(p => [p.id, p]));
   const locById = new Map(locations.map(l => [l.id, l.name]));
   const slotById = new Map(locations.map(l => [l.id, l.colorSlot]));
 
-  const rows: PatientListRow[] = kept.map(r => {
+  const rowsAll: PatientListRow[] = kept.map(r => {
     const p = r.patient_id ? byId.get(r.patient_id) : null;
     return {
       id: r.id,
@@ -175,23 +185,70 @@ export async function patientList(admin: any, ctx: WorkspaceContext, opts: {
       locationId: r.location_id ?? null,
       locationName: r.location_id ? (locById.get(r.location_id) ?? null) : null,
       locationSlot: r.location_id ? (slotById.get(r.location_id) ?? null) : null,
+      sex: (p?.sex as string | null) ?? null,
     };
   });
+
+  // ⚠ s5's SEARCH NARROWS THE ACTIVE RESULT SET, and does so AFTER the read on purpose. Pushing it into
+  // the query would make `truncated` a lie in the dangerous direction: 600 bookings filtered server-side
+  // to 12 matches would report a complete list, when 100 rows past the cap were never examined. Here the
+  // cap is computed against the whole window, so a truncated register still says it is truncated.
+  const needle = (opts.search ?? "").trim().toLowerCase();
+  const rows = needle
+    ? rowsAll.filter(r =>
+      r.patientName.toLowerCase().includes(needle)
+      || (r.patientNumber ?? "").toLowerCase().includes(needle))
+    : rowsAll;
 
   await logAccess(admin, {
     workspaceId: ctx.workspaceId, actorId: ctx.userId, subjectKind: "search", action: "search",
     route: `patients/lists/${view}`,
-    detail: `${fromDate}..${toDate}${locationName ? ` at ${locationName}` : ""}`,
+    detail: `${fromDate}..${toDate}${locationName ? ` at ${locationName}` : ""}${needle ? ` matching "${needle}"` : ""}`,
     correlationId: opts.correlationId,
   });
 
   return {
-    view, rows,
+    view, rows, search: needle || null,
     patientCount: new Set(rows.map(r => r.patientId ?? r.id)).size,
     fromDate, toDate, timezone, locationId, locationName, locations,
     truncated, limit: PATIENT_LIST_LIMIT, unavailable: false, permitted: true,
     detail: locErr ? `the location list could not be read: ${locErr.message}` : null,
   };
+}
+
+/**
+ * BOTH TAB COUNTS AT ONCE, for the same filters (s3: "counts must respect the active date and location
+ * filters"). The reference design puts a number on the tab you are NOT looking at, so one view has to be
+ * able to state the other's size.
+ *
+ * ⚠ NULL MEANS THE COUNT COULD NOT BE READ, and every caller must render that as something other than a
+ * nought. A tab reading "Seen 0" when the query failed tells a practitioner they saw nobody last month.
+ *
+ * ⚠ head + count, SO NO ROWS CROSS THE WIRE. These are counts of people this caller may already list, but
+ * fetching 500 rows to call .length on them would also silently cap at the PostgREST limit and start
+ * under-reporting past 1000 -- the trap recorded against the QIE work.
+ */
+export async function patientListCounts(admin: any, ctx: WorkspaceContext, opts: {
+  fromDate: string; toDate: string; locationId?: string | null; timezone: string;
+}): Promise<{ booked: number | null; seen: number | null }> {
+  if (!hasCapability(ctx, "patient.list")) return { booked: null, seen: null };
+  const startIso = zonedDayRange(opts.fromDate, opts.timezone).startIso;
+  const endIso = zonedDayRange(opts.toDate, opts.timezone).endIso;
+
+  const one = async (table: string, timeCol: string, statuses: string[] | null) => {
+    let q = admin.from(table).select("id", { count: "exact", head: true })
+      .eq("workspace_id", ctx.workspaceId).gte(timeCol, startIso).lt(timeCol, endIso);
+    if (statuses) q = q.in("status", statuses);
+    if (opts.locationId) q = q.eq("location_id", opts.locationId);
+    const { count, error } = await q;
+    return error ? null : (count ?? 0);
+  };
+
+  const [booked, seen] = await Promise.all([
+    one("practice_appointment", "scheduled_at", LIVE_APPOINTMENT),
+    one("practice_encounter", "started_at", null),
+  ]);
+  return { booked, seen };
 }
 
 // ── ATTENDANCE ──────────────────────────────────────────────────────────────────────────────────────
