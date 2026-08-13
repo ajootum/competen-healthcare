@@ -3,6 +3,7 @@ import { editableEncounter, type EngineResult } from "@/lib/practice/encounters"
 import {
   PROCEDURE_CATEGORIES, SIDED_LATERALITIES, LATERALITIES, CONSENT_STATUSES,
   OUTCOME_TYPES, OUTCOME_SEVERITIES, SEVERITY_REQUIRED_FOR,
+  PROCEDURE_STATUSES, PROCEDURE_STATUSES_NOT_DONE, PROCEDURE_STATUSES_NEEDING_REASON,
 } from "@/lib/practice/procedure-constants";
 
 // CPR-150 PROCEDURE AND CLINICAL ACTIVITY -- what was actually DONE to a person, as distinct from what
@@ -124,6 +125,8 @@ export async function recordProcedure(admin: any, args: {
   treatmentId?: string | null; site?: string; laterality?: string; indication?: string;
   consentStatus?: string; consentNote?: string; anaesthesia?: string; materials?: string;
   immediateOutcome?: string; status?: string; abandonedReason?: string; performedAt?: string;
+  /** CPR-TRT-PROC-003 s10. Required by the engine when the status is SCHEDULED -- see recordProcedure. */
+  scheduledAt?: string;
   actorId: string; correlationId: string;
 }): Promise<EngineResult<{ id: string; label: string }>> {
   const guard = await editableEncounter(admin, args.workspaceId, args.encounterId);
@@ -157,9 +160,38 @@ export async function recordProcedure(admin: any, args: {
       message: `${type.name} requires consent; record whether it was obtained, refused, or not required`,
     };
 
-  const status = args.status === "ABANDONED" ? "ABANDONED" : "PERFORMED";
-  if (status === "ABANDONED" && !(args.abandonedReason ?? "").trim())
-    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "say why the procedure was abandoned" };
+  // ⚠ THE STATUS IS VALIDATED, NOT COERCED, AND THAT IS A BUG FIX RATHER THAN A REFACTOR. This line
+  // read `args.status === "ABANDONED" ? "ABANDONED" : "PERFORMED"`, so ANY unrecognised value -- a
+  // typo, a stale client, a renamed constant -- silently became PERFORMED. That is the single most
+  // consequential value in the set: the record would assert that a procedure was carried out on a
+  // patient because a string did not match. With six statuses instead of two the odds of a near-miss
+  // rise sharply, so an unknown status is now refused by name.
+  const status = (args.status ?? "PERFORMED").trim();
+  if (!PROCEDURE_STATUSES.some(([s]) => s === status))
+    return {
+      ok: false, status: 400, code: "VALIDATION_ERROR",
+      message: `${status} is not a procedure status`,
+    };
+
+  const needsReason = (PROCEDURE_STATUSES_NEEDING_REASON as readonly string[]).includes(status);
+  if (needsReason && !(args.abandonedReason ?? "").trim())
+    return {
+      ok: false, status: 400, code: "VALIDATION_ERROR",
+      message: status === "ATTEMPTED"
+        ? "say why the procedure was not completed"
+        : `say why the procedure was ${status.toLowerCase()}`,
+    };
+
+  // ⚠ A SCHEDULED PROCEDURE NEEDS THE TIME IT IS SCHEDULED FOR, and defaulting it to now() would be
+  // worse than refusing: it would put a meaningless appointment on the record and satisfy migration
+  // 294's constraint while doing so. Refusing costs one round trip and says exactly what is missing.
+  if (status === "SCHEDULED" && !(args.scheduledAt ?? "").trim())
+    return {
+      ok: false, status: 400, code: "VALIDATION_ERROR",
+      message: "a scheduled procedure needs the date and time it is scheduled for",
+    };
+
+  const notDone = (PROCEDURE_STATUSES_NOT_DONE as readonly string[]).includes(status);
 
   // A named plan must belong to this encounter -- linking a procedure to another visit's treatment would
   // make the "was this carried out" question unanswerable in both directions.
@@ -180,8 +212,18 @@ export async function recordProcedure(admin: any, args: {
     consent_status: consentStatus, consent_note: args.consentNote ?? null,
     anaesthesia: args.anaesthesia ?? null, materials: args.materials ?? null,
     immediate_outcome: args.immediateOutcome ?? null,
-    status, abandoned_reason: status === "ABANDONED" ? args.abandonedReason!.trim() : null,
-    performed_at: args.performedAt ?? nowIso(), performed_by: args.actorId, created_by: args.actorId,
+    status, abandoned_reason: needsReason ? args.abandonedReason!.trim() : null,
+    // ⚠ EACH STATUS CARRIES ONLY THE TIMESTAMP THAT IS TRUE OF IT. performed_at was set on every insert,
+    // which was harmless while the only statuses meant the act had happened, and becomes a false claim
+    // the moment ORDERED and SCHEDULED exist -- a record saying the procedure was carried out, at a
+    // precise moment, on a patient it has not been done to. Migration 294 dropped the column default for
+    // this same reason; this is the other half of it. performed_by follows the same rule: nobody
+    // performed a procedure that has not been performed.
+    performed_at: notDone ? null : (args.performedAt ?? nowIso()),
+    performed_by: notDone ? null : args.actorId,
+    ordered_at: status === "ORDERED" ? (args.performedAt ?? nowIso()) : null,
+    scheduled_at: status === "SCHEDULED" ? args.scheduledAt!.trim() : null,
+    created_by: args.actorId,
   }).select("id, label").single();
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 
@@ -297,7 +339,13 @@ export async function procedureActivity(admin: any, workspaceId: string, sinceIs
   const byLabel = new Map<string, { label: string; performed: number; abandoned: number; lastAt: string }>();
   for (const r of rows) {
     const entry = byLabel.get(r.label) ?? { label: r.label, performed: 0, abandoned: 0, lastAt: r.performed_at };
-    if (r.status === "ABANDONED") entry.abandoned++; else entry.performed++;
+    // ⚠ COUNTED BY WHAT EACH STATUS MEANS, NOT BY `else`. This read "ABANDONED, otherwise performed",
+    // which was exhaustive while there were two statuses and silently wrong the moment there were six:
+    // an ORDERED, SCHEDULED, CANCELLED or DECLINED procedure would have been counted as PERFORMED and
+    // inflated a practitioner portfolio with work nobody did. Only PERFORMED counts as performed.
+    if (r.status === "PERFORMED") entry.performed++;
+    else if (r.status === "ATTEMPTED" || r.status === "ABANDONED") entry.abandoned++;
+    else continue;
     if (r.performed_at > entry.lastAt) entry.lastAt = r.performed_at;
     byLabel.set(r.label, entry);
   }

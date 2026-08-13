@@ -57,6 +57,9 @@ export async function POST(req: NextRequest) {
       immediateOutcome: str(r.immediateOutcome),
       status: str(r.status),
       abandonedReason: str(r.abandonedReason),
+      // CPR-TRT-PROC-003 s10. The engine REFUSES a SCHEDULED procedure without it rather than
+      // defaulting to now(), so this has to reach it or the status is a dead end on the screen.
+      scheduledAt: str(r.scheduledAt),
     })),
     actorId: auth.caller.userId,
     correlationId: auth.caller.traceId,

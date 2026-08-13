@@ -11,9 +11,14 @@ import {
 // browser bundle -- which tsc and eslint both wave through and only `next build` catches. It has
 // happened three times in this codebase; procedure-constants.ts exists precisely so it cannot here.
 import {
-  LATERALITIES, CONSENT_STATUSES, PROCEDURE_STATUSES,
+  LATERALITIES, CONSENT_STATUSES, PROCEDURE_STATUSES, PROCEDURE_STATUSES_NEEDING_REASON,
   OUTCOME_TYPES, OUTCOME_SEVERITIES, SEVERITY_REQUIRED_FOR,
 } from "@/lib/practice/procedure-constants";
+
+// ⚠ THE ENGINE'S OWN LIST, WIDENED TO string SO THE SCREEN CANNOT HOLD A SECOND OPINION. If this were
+// retyped here, the day somebody added a status needing a reason the engine would refuse the batch and
+// the field asking for that reason would never be drawn.
+const NEEDS_REASON: readonly string[] = PROCEDURE_STATUSES_NEEDING_REASON;
 
 // CP-ENC-PROC-001: searchable catalogue -> working set -> procedure-specific fields -> batch record.
 //
@@ -40,6 +45,8 @@ type Row = {
   indication: string;
   immediateOutcome: string;
   abandonedReason: string;
+  /** CPR-TRT-PROC-003 s10. Only meaningful while the status is SCHEDULED, and required by the engine then. */
+  scheduledAt: string;
   outcome?: { ok: boolean; message?: string };
 };
 
@@ -52,7 +59,7 @@ let seq = 0;
 const newRow = (): Row => ({
   key: `p${++seq}`, label: "", site: "", laterality: "not_applicable",
   consentStatus: "not_recorded", status: "PERFORMED",
-  indication: "", immediateOutcome: "", abandonedReason: "",
+  indication: "", immediateOutcome: "", abandonedReason: "", scheduledAt: "",
 });
 
 export default function ProcedureWorkspace(props: {
@@ -123,9 +130,13 @@ export default function ProcedureWorkspace(props: {
             laterality: r.laterality, consentStatus: r.consentStatus, status: r.status,
             indication: r.indication.trim() || undefined,
             immediateOutcome: r.immediateOutcome.trim() || undefined,
-            // ⚠ ONLY WHEN ABANDONED. Sending a reason on a completed procedure would record why
-            // something was stopped that was not stopped.
-            abandonedReason: r.status === "ABANDONED" ? (r.abandonedReason.trim() || undefined) : undefined,
+            // ⚠ ONLY WHERE THE STATUS ASKS FOR IT. Sending a reason on a completed procedure would
+            // record why something was stopped that was not stopped. The test is the engine's list
+            // rather than one hard-coded status, so the two cannot disagree about which need one.
+            abandonedReason: NEEDS_REASON.includes(r.status)
+              ? (r.abandonedReason.trim() || undefined) : undefined,
+            // Likewise: a scheduled time is meaningless on anything but SCHEDULED, and required there.
+            scheduledAt: r.status === "SCHEDULED" ? (r.scheduledAt || undefined) : undefined,
           })),
         }),
       });
@@ -186,7 +197,16 @@ export default function ProcedureWorkspace(props: {
                 {p.laterality && p.laterality !== "not_applicable" && (
                   <Badge tone="neutral">{p.laterality}</Badge>
                 )}
-                {p.status === "ABANDONED" && <Badge tone="needs">abandoned</Badge>}
+                {/* ⚠ ANYTHING THAT IS NOT PERFORMED SAYS SO. This drew a badge for ABANDONED alone,
+                    which was complete while those were the only two statuses. With six, an ORDERED,
+                    SCHEDULED, CANCELLED or DECLINED procedure would have rendered EXACTLY like a
+                    performed one -- a list of things done to a patient, silently including things that
+                    were not. The label comes from the vocabulary so it cannot drift from the value. */}
+                {p.status && p.status !== "PERFORMED" && (
+                  <Badge tone={p.status === "ATTEMPTED" || p.status === "ABANDONED" ? "needs" : "muted"}>
+                    {(PROCEDURE_STATUSES.find(([k]) => k === p.status)?.[1] ?? p.status).toLowerCase()}
+                  </Badge>
+                )}
                 {p.immediate_outcome && (
                   <span className="text-[11px] text-gray-500">{p.immediate_outcome}</span>
                 )}
@@ -315,12 +335,28 @@ export default function ProcedureWorkspace(props: {
                               aria-label={`Immediate outcome for ${r.label || "row " + (i + 1)}`}
                               onChange={e => set(i, { immediateOutcome: e.target.value })}
                               className="min-w-[180px] flex-1 rounded-lg border border-gray-200 px-2 py-1 text-[12px]" />
-                            {r.status === "ABANDONED" && (
+                            {/* ⚠ THE REASON FOLLOWS THE VOCABULARY, NOT ONE HARD-CODED STATUS. It used
+                                to test `=== "ABANDONED"`. With six statuses the engine requires a reason
+                                for ATTEMPTED, CANCELLED and DECLINED, and a hard-coded test would have
+                                left three of them refusing the batch over a field the screen never drew
+                                -- the practitioner reads that as the product being broken. */}
+                            {NEEDS_REASON.includes(r.status) && (
                               <input value={r.abandonedReason} disabled={busy}
-                                placeholder="Why was it abandoned?"
-                                aria-label={`Reason abandoned for ${r.label || "row " + (i + 1)}`}
+                                placeholder={r.status === "ATTEMPTED"
+                                  ? "Why was it not completed?"
+                                  : `Why was it ${r.status.toLowerCase()}?`}
+                                aria-label={`Reason for ${r.label || "row " + (i + 1)}`}
                                 onChange={e => set(i, { abandonedReason: e.target.value })}
                                 className="min-w-[200px] flex-1 rounded-lg border border-amber-300 bg-amber-50/40 px-2 py-1 text-[12px]" />
+                            )}
+                            {/* ⚠ AND SCHEDULED NEEDS THE TIME IT IS SCHEDULED FOR. The engine refuses
+                                without it rather than inventing now(), so drawing the status without
+                                drawing this field would put a dead end on the screen. */}
+                            {r.status === "SCHEDULED" && (
+                              <input type="datetime-local" value={r.scheduledAt} disabled={busy}
+                                aria-label={`Scheduled for ${r.label || "row " + (i + 1)}`}
+                                onChange={e => set(i, { scheduledAt: e.target.value })}
+                                className="min-w-[200px] rounded-lg border border-indigo-300 bg-indigo-50/40 px-2 py-1 text-[12px]" />
                             )}
                           </div>
                         </td>

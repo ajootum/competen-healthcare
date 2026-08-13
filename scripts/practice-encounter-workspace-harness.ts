@@ -712,7 +712,17 @@ async function main() {
     // screen reader working down a table of several procedures and is why the old bare literals no
     // longer match. The capability is unchanged; the wording is not pinned.
     'placeholder="Name the procedure..."', 'aria-label={`Side for', 'aria-label={`Consent for',
-    "Indication (optional)", "Why was it abandoned?", "Immediate outcome (optional)",
+    // ⚠ THE REASON FIELD IS PINNED BY ITS aria-label NOW, NOT BY ITS PLACEHOLDER. It was
+    // "Why was it abandoned?" -- a literal, and correct while ABANDONED was the only status that asked
+    // for a reason. Migration 294 gave procedures six statuses, three of which need one, so the
+    // placeholder became computed ("Why was it not completed?", "Why was it cancelled?"). The FIELD is
+    // unchanged and still guarded; only the prose moved, and this list already refuses to pin prose --
+    // see the investigation note below for the same decision made for the same reason.
+    "Indication (optional)", 'aria-label={`Reason for', "Immediate outcome (optional)",
+    // NEW with the lifecycle: a SCHEDULED procedure needs the time it is scheduled for, and the engine
+    // refuses without it. Pinned here so a later reorganisation cannot quietly drop it and leave the
+    // status selectable but unrecordable.
+    'aria-label={`Scheduled for',
     'aria-label="Outcome"', 'aria-label="Severity"', "What happened (optional)",
     // investigations
     // ⚠ TWO INVESTIGATION PROMPTS REMOVED AND ONE KEPT, and the difference is worth stating. "What did
