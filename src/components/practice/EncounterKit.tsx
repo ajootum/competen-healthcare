@@ -102,6 +102,43 @@ export const WS_TH = "px-3 py-2 text-left text-[10.5px] font-bold uppercase trac
 export const WS_ROW = "border-t border-gray-100 transition-colors hover:bg-gray-50/60";
 export const WS_TD = "px-3 py-2.5 align-middle text-[12.5px] text-gray-800";
 
+/**
+ * ══ THE RECORDED TABLE ═══════════════════════════════════════════════════════════════════════════
+ *
+ * What is already IN the record, as against WS_* above, which is the working set still being typed.
+ * Diagnoses, procedures and treatments all render one of these, so a reader learns the shape once.
+ *
+ * ⚠ THE STRIPE AND THE LEFT EDGE ARE DIFFERENT JOBS, AND KEEPING BOTH IS THE POINT. The stripe answers
+ * a POSITIONAL question -- where does this row end and the next begin, once there are six of them. The
+ * left edge answers a CLINICAL one -- how settled is this finding, did this procedure actually happen.
+ * Collapsing them into one signal would either throw the meaning away or make every second row look
+ * significant, and a colour that means something on odd rows and nothing on even rows means nothing.
+ *
+ * ⚠ THE STRIPE IS DELIBERATELY FAINT. It is navigation, not information. Anything stronger competes
+ * with the edge colour that a clinician is actually meant to read.
+ */
+export const REC_TABLE = "w-full border-collapse";
+export const REC_HEAD = "bg-gray-50/80";
+export const REC_TH = "px-3 py-2 text-left text-[10.5px] font-bold uppercase tracking-[0.06em] text-gray-500";
+export const REC_TD = "px-3 py-2.5 align-middle text-[12.5px] text-gray-800";
+
+/**
+ * One recorded row: the zebra stripe, plus the 3px slot the caller colours by meaning.
+ *
+ * ⚠ THE LEADING ROW BEATS THE STRIPE. Whether a row is the primary diagnosis must not depend on
+ * whether it happens to have landed in an even position -- that would make the most important row on
+ * the table invisible half the time, decided by how many rows precede it.
+ *
+ * The caller supplies borderLeftColor and borderLeftStyle inline, from its own domain vocabulary. This
+ * file deliberately holds no clinical meaning: it knows there IS an edge, never what it says.
+ */
+export function recRow(index: number, opts: { leading?: boolean } = {}): string {
+  const base = "border-t border-gray-100 border-l-[3px] transition-colors";
+  return opts.leading
+    ? `${base} bg-[var(--cp-primary-soft)]`
+    : `${base} ${index % 2 === 1 ? "bg-gray-50/60" : "bg-white"} hover:bg-gray-50`;
+}
+
 /** The drag affordance at the head of each working-set row. Decorative until reordering is real. */
 export function DragHandle({ label }: { label: string }) {
   return (

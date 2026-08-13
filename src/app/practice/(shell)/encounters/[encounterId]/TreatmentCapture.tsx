@@ -11,13 +11,16 @@ import {
   TREATMENT_REFUSALS, QUICK_ADD_NOT_A_RECOMMENDATION, TEMPLATES_ARE_REVALIDATED,
   CUSTOM_WORDING_PRESERVED, OTHER_OPTION_CODE, treatmentShape, BATCH_BOUNDARY,
   SAFETY_VERDICT_CHIP, SAFETY_VERDICT_MARK, ALLERGY_UNRESOLVED_ASK, NKDA_IS_SOMETHING_SOMEBODY_SAID,
+  treatmentBand,
 } from "@/lib/practice/treatment-capture-constants";
 import {
   ALLERGY_SEVERITIES, ALLERGY_CERTAINTIES, BLOOD_GROUPS, type SafetyLine,
 } from "@/lib/practice/longitudinal-constants";
 import type { TreatmentCapturePayload, PendingTreatment, TreatmentOption } from "@/lib/practice/treatment-capture";
 import type { PatientMedications, DoseCalculationResult } from "@/lib/practice/medication";
-import { PANEL, SectionHeader, Tip, Advisory, Badge } from "@/components/practice/EncounterKit";
+import {
+  PANEL, SectionHeader, Tip, Advisory, Badge, REC_TABLE, REC_HEAD, REC_TH, REC_TD, recRow,
+} from "@/components/practice/EncounterKit";
 
 // CPR-TREAT-001 -- THE TREATMENT TAB.
 //
@@ -305,22 +308,49 @@ export default function TreatmentCapture(props: {
           evaluation this product does not perform, which s11 forbids implying. The day a per-treatment
           check exists its verdict belongs here; until then the panel below is the one that carries it. */}
       {props.recorded.length > 0 && (
-        <ul className="mt-3 flex flex-col gap-1.5">
-          {props.recorded.map(t => (
-            <li key={t.id} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <span className="text-[12.5px] font-semibold text-gray-900">{t.label}</span>
-                <span className="text-[11.5px] text-gray-600">
-                  {[t.dose, t.route, t.frequency, t.duration].filter(Boolean).join(" · ")}
-                </span>
-                <span className="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
+        <div className="mt-3 overflow-x-auto">
+        <table className={REC_TABLE}>
+          <thead className={REC_HEAD}>
+            <tr>
+              <th className={REC_TH}>Treatment</th>
+              <th className={REC_TH}>Regimen</th>
+              <th className={REC_TH}>Type</th>
+              <th className={REC_TH}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+          {props.recorded.map((t, i) => {
+            const band = treatmentBand(t.status);
+            return (
+            <tr key={t.id}
+              style={{ borderLeftColor: band.edge, borderLeftStyle: band.dashed ? "dashed" : "solid" }}
+              className={recRow(i)}>
+              <td className={REC_TD}>
+                <span className={band.struck
+                  ? "font-semibold text-gray-400 line-through"
+                  : "font-semibold text-gray-900"}>{t.label}</span>
+              </td>
+              <td className={REC_TD}>
+                {/* s14's one line: dose - route - frequency - duration, in that order. An em dash
+                    rather than an empty cell, because blank reads as "did not load". */}
+                {[t.dose, t.route, t.frequency, t.duration].filter(Boolean).length > 0
+                  ? <span className="text-[11.5px] text-gray-600">
+                      {[t.dose, t.route, t.frequency, t.duration].filter(Boolean).join(" · ")}
+                    </span>
+                  : <span className="text-gray-400">&mdash;</span>}
+              </td>
+              <td className={REC_TD}>
+                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
                   {String(t.treatment_type).replace(/_/g, " ")}
                 </span>
-                <Badge tone="neutral">{t.status}</Badge>
-              </div>
-            </li>
-          ))}
-        </ul>
+              </td>
+              <td className={REC_TD}><Badge tone="neutral">{t.status}</Badge></td>
+            </tr>
+            );
+          })}
+          </tbody>
+        </table>
+        </div>
       )}
 
       {/* ══ s10's SAFETY -- COMPACT BY DEFAULT (CPR-TRT-UI-002 s10, s11, s12) ═════════════════════

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   PANEL, SectionHeader, Badge, Tip, EmptyState,
   WS_HEAD, WS_TH, WS_ROW, WS_TD, ROW_REMOVE,
+  REC_TABLE, REC_HEAD, REC_TH, REC_TD, recRow,
 } from "@/components/practice/EncounterKit";
 // ⚠ FROM THE CONSTANTS FILE, NEVER FROM THE ENGINE. diagnosis-capture.ts reaches access.ts and
 // next/headers; importing one string from it here breaks `next build` with an import trace on pages
@@ -188,25 +189,34 @@ export default function DiagnosisWorkspace(props: {
           <EmptyState title="No diagnosis recorded for this encounter"
             reason="This was read successfully. A consultation that ends without one is a real consultation -- the honest answer is often that it is not yet known." />
         ) : (
-          <ul className="flex flex-col gap-1">
-            {props.recorded.map(d => {
+          // ⚠ A TABLE, NOT A LIST OF CARDS. Once several diagnoses are recorded the reader is comparing
+          // them -- which is primary, which is confirmed, which is on the problem list -- and comparison
+          // wants columns. The stripe is what makes a six-row table scannable as it grows.
+          //
+          // ⚠ THE BAND IS ON THE RECORDED TABLE ONLY, by the owner's decision. The working set below has
+          // a certainty dropdown still being chosen, and a band that recoloured on every selection would
+          // be movement rather than information.
+          <div className="overflow-x-auto">
+          <table className={REC_TABLE}>
+            <thead className={REC_HEAD}>
+              <tr>
+                <th className={REC_TH}>Diagnosis</th>
+                <th className={REC_TH}>Status</th>
+                <th className={REC_TH}>Ongoing problem</th>
+                {props.editable && props.canDiagnose && <th className={REC_TH} aria-label="Row actions" />}
+              </tr>
+            </thead>
+            <tbody>
+            {props.recorded.map((d, i) => {
               const band = diagnosisBand(d.certainty);
+              const cols = props.editable && props.canDiagnose ? 4 : 3;
               return (
-              // ⚠ THE BAND IS ON THE RECORDED LIST ONLY, by the owner's decision. The working set below
-              // has a certainty dropdown still being chosen, and a band that changed colour on every
-              // selection would be movement rather than information.
-              //
-              // ⚠ SQUARE ON THE LEFT, ROUNDED ON THE RIGHT. A 3px accent edge under a rounded corner
-              // reads as a rendering fault -- the border thins into the curve and looks like a clipping
-              // bug rather than a deliberate mark.
-              <li key={d.id}
+              <tr key={d.id}
                 style={{ borderLeftColor: band.edge, borderLeftStyle: band.dashed ? "dashed" : "solid" }}
-                className={`rounded-l-none rounded-r-lg border border-l-[3px] border-gray-100 px-2.5 py-1.5 ${
-                  // The leading diagnosis is findable without reading: a faint wash of the same hue the
-                  // band uses, so the row belongs to the scheme rather than introducing a second one.
-                  d.is_primary ? "bg-[var(--cp-primary-soft)]" : ""}`}>
+                className={recRow(i, { leading: d.is_primary })}>
                 {editing === d.id ? (
-                  // ⚠ CORRECTING THE RECORD, NOT ADDING TO IT. This PATCHes the row the database holds.
+                  <td className={REC_TD} colSpan={cols}>
+                  {/* ⚠ CORRECTING THE RECORD, NOT ADDING TO IT. This PATCHes the row the database holds. */}
                   <form className="flex flex-wrap items-center gap-2"
                     onSubmit={e => { e.preventDefault(); saveEdit(d.id); }}>
                     <input value={edit.label} disabled={busy} autoFocus
@@ -226,39 +236,51 @@ export default function DiagnosisWorkspace(props: {
                       Cancel
                     </button>
                   </form>
+                  </td>
                 ) : (
-                  <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
-                    {d.is_primary && <Badge tone="neutral">primary</Badge>}
-                    {/* ⚠ STRUCK ONLY WHEN RULED OUT. The band already says it, and saying it twice is
-                        what makes this one legible at a glance rather than decorative -- a ruled-out
-                        finding read as a live one is the misreading with the worst consequence here. */}
-                    <span className={band.struck
-                      ? "font-semibold text-gray-400 line-through"
-                      : "font-semibold text-gray-800"}>{d.label}</span>
-                    {d.code && <span className="font-mono text-[11px] text-gray-400">{d.code}</span>}
-                    <span className={band.struck ? "text-[11px] text-gray-400" : "text-[11px] text-gray-500"}>
-                      {d.certainty.replace(/_/g, " ")}
-                    </span>
-                    {d.problem_id && <Badge tone="settled">on problem list</Badge>}
+                  <>
+                    <td className={REC_TD}>
+                      {d.is_primary && <><Badge tone="neutral">primary</Badge>{" "}</>}
+                      {/* ⚠ STRUCK ONLY WHEN RULED OUT. The band already says it, and saying it twice is
+                          what makes this one legible at a glance rather than decorative -- a ruled-out
+                          finding read as a live one is the misreading with the worst consequence here. */}
+                      <span className={band.struck
+                        ? "font-semibold text-gray-400 line-through"
+                        : "font-semibold text-gray-800"}>{d.label}</span>
+                      {d.code && <span className="ml-1.5 font-mono text-[11px] text-gray-400">{d.code}</span>}
+                    </td>
+                    <td className={REC_TD}>
+                      <span className={band.struck ? "text-[11.5px] text-gray-400" : "text-[11.5px] text-gray-600"}>
+                        {d.certainty.replace(/_/g, " ")}
+                      </span>
+                    </td>
+                    <td className={REC_TD}>
+                      {/* An em dash rather than an empty cell: blank reads as "not loaded". */}
+                      {d.problem_id
+                        ? <Badge tone="settled">on problem list</Badge>
+                        : <span className="text-gray-400">&mdash;</span>}
+                    </td>
                     {props.editable && props.canDiagnose && (
-                      <span className="ml-auto flex items-center gap-1.5">
+                      <td className={`${REC_TD} text-right whitespace-nowrap`}>
                         <button type="button" disabled={busy}
                           onClick={() => { setEditing(d.id); setEdit({ label: d.label, certainty: d.certainty }); }}
                           className="rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
                           Correct
                         </button>
                         <button type="button" disabled={busy} onClick={() => removeRecorded(d.id)}
-                          className="rounded-lg border border-rose-200 px-2 py-0.5 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50">
+                          className="ml-1.5 rounded-lg border border-rose-200 px-2 py-0.5 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50">
                           Remove
                         </button>
-                      </span>
+                      </td>
                     )}
-                  </div>
+                  </>
                 )}
-              </li>
+              </tr>
               );
             })}
-          </ul>
+            </tbody>
+          </table>
+          </div>
         )}
 
         {/* ── The working set ──────────────────────────────────────────────────────────────────── */}

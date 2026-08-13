@@ -34,6 +34,9 @@ import { runProvisioning, type IndividualRequest } from "../src/lib/practice/pro
 import { registerPatient } from "../src/lib/practice/patients";
 import { resolveWorkspaceContext, type WorkspaceContext } from "../src/lib/practice/access";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
+import { diagnosisBand } from "../src/lib/practice/diagnosis-constants";
+import { procedureBand } from "../src/lib/practice/procedure-constants";
+import { treatmentBand } from "../src/lib/practice/treatment-capture-constants";
 import {
   launchEncounter, transitionEncounter, recordDiagnosis, recordTreatment, setEncounterOutcome,
 } from "../src/lib/practice/encounters";
@@ -557,6 +560,41 @@ async function main() {
     "this is the assertion that stops a work list quietly claiming to be complete");
   // ⚠ RENDERED FROM Board.tsx, not page.tsx -- the encounter card moved into the shared board component
   // and this assertion kept looking at the page that composes it.
+  // ── ONE BANDING GRAMMAR ACROSS THE ENCOUNTER ────────────────────────────────────────────────────
+  //
+  // Three tabs band their recorded rows by a domain question -- how settled is this finding, did this
+  // procedure happen, how live is this plan. Three lookalike schemes that drifted apart would be worse
+  // than one, because a clinician would learn a rule on one tab and be misled by it on the next.
+  // Asserted across all three at once, which is the only place the shared property is visible.
+  const BANDS: [string, (v: string) => { edge: string; dashed: boolean; struck: boolean }, string, string][] = [
+    ["diagnosis", diagnosisBand, "confirmed", "ruled_out"],
+    ["procedure", procedureBand, "PERFORMED", "CANCELLED"],
+    ["treatment", treatmentBand, "completed", "cancelled"],
+  ];
+  ok("band-1. every tab draws its most-settled state at full strength, in the SAME hue",
+    BANDS.every(([, fn, settled]) => fn(settled).edge === "var(--cp-primary)"),
+    BANDS.map(([n, fn, s]) => `${n}:${fn(s).edge}`).join(" | "));
+  ok("band-2. every tab takes its NEGATIVE state out of the hue, dashed and struck",
+    BANDS.every(([, fn, , negative]) => {
+      const b = fn(negative);
+      return b.dashed && b.struck && b.edge !== "var(--cp-primary)";
+    }),
+    BANDS.map(([n, fn, , x]) => `${n}:${JSON.stringify(fn(x))}`).join(" | "));
+  // ⚠ THE ONE THAT MATTERS MOST. An unrecognised value must never be drawn as the most settled thing on
+  // screen -- the procedures ENGINE had exactly this bug, coercing an unknown status to PERFORMED so the
+  // record asserted a procedure was carried out because a string failed to match. The colour follows the
+  // same rule: the failure lands on the side that claims LESS about a patient.
+  ok("band-3. an unrecognised value never bands as the most settled state, on any tab",
+    BANDS.every(([, fn]) => fn("something_nobody_defined").edge !== "var(--cp-primary)"),
+    BANDS.map(([n, fn]) => `${n}:${fn("something_nobody_defined").edge}`).join(" | "));
+  ok("band-4. no tab borrows the alert palette for a confidence scale",
+    BANDS.every(([, fn, s, x]) => ![fn(s).edge, fn(x).edge, fn("zzz").edge]
+      .some(e => /warning|success|critical|danger|error/i.test(e))));
+  // CONTROL: if every band resolved to the same string the four above would all pass while the screens
+  // banded every row identically.
+  ok("band-control. within a tab the settled and negative states actually differ",
+    BANDS.every(([, fn, s, x]) => fn(s).edge !== fn(x).edge));
+
   ok("ui-3. the row menu exists, is keyboard-dismissable, and offers only real destinations",
     /<RowMenu/.test(panelSrc) && /useDismiss/.test(menuSrc)
     && /\/practice\/patients\/\$\{patientId\}/.test(menuSrc) && /role="menu"/.test(menuSrc),

@@ -144,6 +144,34 @@ export const SAFETY_VERDICT_MARK: Record<SafetyVerdict, string> = {
  * ⚠ AN EMPTY ALLERGY LIST IS `unknown`, NOT `clear`. Nobody has said this patient has no allergies --
  * the list is simply empty, and those are different facts. AC-08 is exactly this distinction.
  */
+/**
+ * The left-edge band on a recorded treatment row: HOW FAR ALONG IS THIS PLAN.
+ *
+ * ⚠ THE THIRD USE OF ONE GRAMMAR, ON A THIRD QUESTION. diagnosisBand weighs how settled a finding is,
+ * procedureBand how far an act got, and this how live a plan is. Same hue, same three weights, same
+ * treatment of the negative case -- so a clinician learns the scheme once and reads it on every tab,
+ * and the alert palette stays reserved for something actually going wrong.
+ *
+ * ⚠ CANCELLED LEAVES THE RAMP: struck and dashed, like ruled_out and like a declined procedure. A
+ * cancelled prescription skim-read as live is the misreading with consequences on this tab.
+ *
+ * ⚠ AN UNRECOGNISED STATUS FALLS TO THE WEAKEST BAND, NEVER COMPLETED. Values are practice_treatment's
+ * (migration 194): planned, in_progress, completed, cancelled.
+ */
+export function treatmentBand(status: string): { edge: string; dashed: boolean; struck: boolean } {
+  switch (status) {
+    case "completed":
+      return { edge: "var(--cp-primary)", dashed: false, struck: false };
+    case "in_progress":
+      return { edge: "color-mix(in srgb, var(--cp-primary) 55%, transparent)", dashed: false, struck: false };
+    case "cancelled":
+      return { edge: "var(--cmp-text-neutral)", dashed: true, struck: true };
+    case "planned":
+    default:
+      return { edge: "color-mix(in srgb, var(--cp-primary) 26%, transparent)", dashed: false, struck: false };
+  }
+}
+
 export const ALLERGY_UNRESOLVED_HEADLINE = "Allergy status has not been recorded for this patient.";
 export const ALLERGY_UNRESOLVED_ASK =
   "Nobody has said whether this patient has drug allergies. An empty list is not the same as no known "

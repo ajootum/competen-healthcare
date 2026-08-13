@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import {
   PANEL, SectionHeader, Badge, Tip, EmptyState,
   WS_HEAD, WS_TH, WS_ROW, WS_TD, ROW_REMOVE,
+  REC_TABLE, REC_HEAD, REC_TH, REC_TD, recRow,
 } from "@/components/practice/EncounterKit";
 // ⚠ FROM THE CONSTANTS FILE, NEVER FROM procedures.ts. That module reaches access.ts and next/headers,
 // and one string imported from it into a "use client" component drags the whole server module into the
 // browser bundle -- which tsc and eslint both wave through and only `next build` catches. It has
 // happened three times in this codebase; procedure-constants.ts exists precisely so it cannot here.
 import {
-  LATERALITIES, CONSENT_STATUSES, PROCEDURE_STATUSES, PROCEDURE_STATUSES_NEEDING_REASON,
+  LATERALITIES, CONSENT_STATUSES, PROCEDURE_STATUSES, PROCEDURE_STATUSES_NEEDING_REASON, procedureBand,
   OUTCOME_TYPES, OUTCOME_SEVERITIES, SEVERITY_REQUIRED_FOR,
 } from "@/lib/practice/procedure-constants";
 
@@ -189,36 +190,71 @@ export default function ProcedureWorkspace(props: {
           <EmptyState title="No procedure recorded for this encounter"
             reason="This was read successfully -- add one below if something was done." />
         ) : (
-          <ul className="flex flex-col gap-1">
-            {props.recorded.map(p => (
-              <li key={p.id} className="flex flex-wrap items-center gap-2 text-[12.5px]">
-                <span className="font-semibold text-gray-800">{p.label}</span>
-                {p.site && <span className="text-[11.5px] text-gray-600">{p.site}</span>}
-                {p.laterality && p.laterality !== "not_applicable" && (
-                  <Badge tone="neutral">{p.laterality}</Badge>
-                )}
+          // ⚠ THE SAME TABLE AS DIAGNOSES, WITH THE BAND ANSWERING THIS TAB'S OWN QUESTION: did this
+          // actually happen. One grammar across the encounter -- stripe for position, left edge for
+          // meaning -- so a clinician learns it once rather than per tab.
+          <div className="overflow-x-auto">
+          <table className={REC_TABLE}>
+            <thead className={REC_HEAD}>
+              <tr>
+                <th className={REC_TH}>Procedure</th>
+                <th className={REC_TH}>Status</th>
+                <th className={REC_TH}>Immediate outcome</th>
+                {props.editable && props.canRecord && <th className={REC_TH} aria-label="Row actions" />}
+              </tr>
+            </thead>
+            <tbody>
+            {props.recorded.map((p, i) => {
+              const band = procedureBand(p.status ?? "");
+              const cols = props.editable && props.canRecord ? 4 : 3;
+              return (
+              <Fragment key={p.id}>
+              <tr style={{ borderLeftColor: band.edge, borderLeftStyle: band.dashed ? "dashed" : "solid" }}
+                className={recRow(i)}>
+                <td className={REC_TD}>
+                  <span className={band.struck
+                    ? "font-semibold text-gray-400 line-through"
+                    : "font-semibold text-gray-800"}>{p.label}</span>
+                  {p.site && <span className="ml-1.5 text-[11.5px] text-gray-600">{p.site}</span>}
+                  {p.laterality && p.laterality !== "not_applicable" && (
+                    <span className="ml-1.5"><Badge tone="neutral">{p.laterality}</Badge></span>
+                  )}
+                </td>
                 {/* ⚠ ANYTHING THAT IS NOT PERFORMED SAYS SO. This drew a badge for ABANDONED alone,
                     which was complete while those were the only two statuses. With six, an ORDERED,
                     SCHEDULED, CANCELLED or DECLINED procedure would have rendered EXACTLY like a
                     performed one -- a list of things done to a patient, silently including things that
-                    were not. The label comes from the vocabulary so it cannot drift from the value. */}
-                {p.status && p.status !== "PERFORMED" && (
-                  <Badge tone={p.status === "ATTEMPTED" || p.status === "ABANDONED" ? "needs" : "muted"}>
-                    {(PROCEDURE_STATUSES.find(([k]) => k === p.status)?.[1] ?? p.status).toLowerCase()}
-                  </Badge>
-                )}
-                {p.immediate_outcome && (
-                  <span className="text-[11px] text-gray-500">{p.immediate_outcome}</span>
-                )}
+                    were not. The label comes from the vocabulary so it cannot drift from the value.
+                    In a table it gets its own column, so the absence of a badge is no longer the only
+                    thing distinguishing a performed procedure from one nobody has done yet. */}
+                <td className={REC_TD}>
+                  {p.status === "PERFORMED"
+                    ? <span className="text-[11.5px] text-gray-600">performed</span>
+                    : (
+                      <Badge tone={p.status === "ATTEMPTED" || p.status === "ABANDONED" ? "needs" : "muted"}>
+                        {(PROCEDURE_STATUSES.find(([k]) => k === p.status)?.[1] ?? p.status ?? "unknown").toLowerCase()}
+                      </Badge>
+                    )}
+                </td>
+                <td className={REC_TD}>
+                  {p.immediate_outcome
+                    ? <span className="text-[11.5px] text-gray-600">{p.immediate_outcome}</span>
+                    : <span className="text-gray-400">&mdash;</span>}
+                </td>
                 {props.editable && props.canRecord && (
-                  <button type="button" disabled={busy}
-                    onClick={() => setOutcomeFor(outcomeFor === p.id ? null : p.id)}
-                    className="ml-auto rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
-                    {outcomeFor === p.id ? "Cancel" : "Record outcome"}
-                  </button>
+                  <td className={`${REC_TD} text-right whitespace-nowrap`}>
+                    <button type="button" disabled={busy}
+                      onClick={() => setOutcomeFor(outcomeFor === p.id ? null : p.id)}
+                      className="rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                      {outcomeFor === p.id ? "Cancel" : "Record outcome"}
+                    </button>
+                  </td>
                 )}
-                {outcomeFor === p.id && (
-                  <form className="mt-1 flex w-full flex-wrap items-end gap-2 rounded-lg bg-gray-50 p-2"
+              </tr>
+              {outcomeFor === p.id && (
+                <tr className="border-l-[3px] border-l-transparent">
+                  <td className={REC_TD} colSpan={cols}>
+                  <form className="flex w-full flex-wrap items-end gap-2 rounded-lg bg-gray-50 p-2"
                     onSubmit={e => { e.preventDefault(); saveOutcome(p.id); }}>
                     <select value={outcome.outcomeType} disabled={busy} aria-label="Outcome"
                       onChange={e => setOutcome(o => ({ ...o, outcomeType: e.target.value }))}
@@ -240,10 +276,15 @@ export default function ProcedureWorkspace(props: {
                       Record outcome
                     </button>
                   </form>
-                )}
-              </li>
-            ))}
-          </ul>
+                  </td>
+                </tr>
+              )}
+              </Fragment>
+              );
+            })}
+            </tbody>
+          </table>
+          </div>
         )}
 
         {props.editable && props.canRecord && (

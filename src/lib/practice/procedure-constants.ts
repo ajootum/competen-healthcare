@@ -30,6 +30,40 @@ export const PROCEDURE_STATUSES = [
 export const PROCEDURE_STATUSES_NOT_DONE = ["ORDERED", "SCHEDULED", "CANCELLED", "DECLINED"] as const;
 
 /**
+ * The left-edge band on a recorded procedure row: DID THIS HAPPEN, at a glance.
+ *
+ * ⚠ THE SAME GRAMMAR AS diagnosisBand, ON A DIFFERENT QUESTION. There, weight is how settled a finding
+ * is. Here it is how far along the act got. One hue at three weights either way, so a reader learns the
+ * scheme once and it means something on every tab -- and the alert palette stays free for real alerts.
+ *
+ * ⚠ CANCELLED AND DECLINED LEAVE THE RAMP ENTIRELY, like ruled_out on a diagnosis. They are not faint
+ * versions of "performed" -- they are the statement that it did NOT happen and is not going to. In a
+ * list of things done to a patient that is the one row that must not be skim-read as done.
+ *
+ * ⚠ AN UNRECOGNISED STATUS FALLS TO THE WEAKEST BAND, NEVER PERFORMED. The engine had exactly this bug
+ * until migration 294's follow-up: an unknown status silently became PERFORMED, so the record asserted
+ * a procedure was carried out on a patient because a string failed to match. The same rule holds for
+ * the colour -- the failure lands on the side that claims LESS.
+ */
+export function procedureBand(status: string): { edge: string; dashed: boolean; struck: boolean } {
+  switch (status) {
+    case "PERFORMED":
+      return { edge: "var(--cp-primary)", dashed: false, struck: false };
+    case "ATTEMPTED":
+    case "ABANDONED":
+      return { edge: "color-mix(in srgb, var(--cp-primary) 55%, transparent)", dashed: false, struck: false };
+    case "SCHEDULED":
+      return { edge: "color-mix(in srgb, var(--cp-primary) 40%, transparent)", dashed: false, struck: false };
+    case "CANCELLED":
+    case "DECLINED":
+      return { edge: "var(--cmp-text-neutral)", dashed: true, struck: true };
+    case "ORDERED":
+    default:
+      return { edge: "color-mix(in srgb, var(--cp-primary) 26%, transparent)", dashed: false, struck: false };
+  }
+}
+
+/**
  * The statuses that require the practitioner to say why in their own words.
  *
  * ⚠ ATTEMPTED INHERITS THIS FROM ABANDONED. "Started and did not finish" is the one outcome a reader
