@@ -17,7 +17,7 @@ import {
 } from "@/lib/practice/longitudinal-constants";
 import type { TreatmentCapturePayload, PendingTreatment, TreatmentOption } from "@/lib/practice/treatment-capture";
 import type { PatientMedications, DoseCalculationResult } from "@/lib/practice/medication";
-import { PANEL, SectionHeader, Tip } from "@/components/practice/EncounterKit";
+import { PANEL, SectionHeader, Tip, Advisory, Badge } from "@/components/practice/EncounterKit";
 
 // CPR-TREAT-001 -- THE TREATMENT TAB.
 //
@@ -112,6 +112,10 @@ export default function TreatmentCapture(props: {
 
   const [calc, setCalc] = useState({ basis: "mg_per_kg", rateValue: "", fixedDose: "", doseUnit: "mg", dosesPerDay: "", weightDecision: "" });
   const [calcOpen, setCalcOpen] = useState(false);
+  // CPR-TRT-UI-002 s8: notes and advanced tools are collapsed by default, so the common prescription
+  // is not paid for by fields most of them never use.
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [dose, setDose] = useState<DoseCalculationResult | null>(null);
 
   const opts = (key: string): TreatmentOption[] => cap.options.byField[key] ?? [];
@@ -254,9 +258,15 @@ export default function TreatmentCapture(props: {
     // dose arithmetic is medication.ts's, called rather than copied. A restyle must not quietly turn
     // any of that into markup.
     <section className={PANEL}>
+      {/* ⚠ s5's COUNT, IN THE SPEC'S OWN WORDS. "N treatments this encounter" rather than "N recorded in
+          this encounter": the count is of treatments, and saying `recorded` twice on one screen (here and
+          on every card's status) spends words on the mechanism instead of the fact. Singular is handled
+          because "1 treatments" is the kind of thing a practitioner stops trusting the screen over. */}
       <SectionHeader
         title="Treatment and plan"
-        subtitle={`${props.recorded.length} recorded in this encounter.`}
+        subtitle={props.recorded.length === 1
+          ? "1 treatment this encounter."
+          : `${props.recorded.length} treatments this encounter.`}
       />
       <div className="p-4">
 
@@ -284,26 +294,53 @@ export default function TreatmentCapture(props: {
       )}
 
       {/* ══ WHAT IS ALREADY RECORDED ═══════════════════════════════════════════════════════════════ */}
+      {/* ⚠ s14's HIERARCHY: the treatment NAME leads, then dose - route - frequency - duration on one
+          line, then the status. The type drops to a quiet chip; it disambiguates and it is not the fact
+          a reader is scanning for. Previously the type led and the name sat in the middle of a flat row.
+
+          ⚠ NO PER-CARD SAFETY CHIPS, AND THAT IS A DECISION RATHER THAN AN OMISSION. s14 lists a
+          "compact safety state" on the card, but every safety fact this component holds is PATIENT-level
+          -- the same allergy status and the same weight for every row. Drawing them per card would be
+          precisely the duplication s15 exists to remove, and worse, it would imply a per-treatment
+          evaluation this product does not perform, which s11 forbids implying. The day a per-treatment
+          check exists its verdict belongs here; until then the panel below is the one that carries it. */}
       {props.recorded.length > 0 && (
-        <ul className="mt-3 flex flex-col gap-1">
+        <ul className="mt-3 flex flex-col gap-1.5">
           {props.recorded.map(t => (
-            <li key={t.id} className="flex items-center gap-2 text-[12px] flex-wrap">
-              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
-                {String(t.treatment_type).replace(/_/g, " ")}
-              </span>
-              <span className="text-gray-800">{t.label}</span>
-              <span className="text-[11px] text-gray-500">
-                {[t.dose, t.route, t.frequency, t.duration].filter(Boolean).join(" · ")}
-              </span>
-              <span className="ml-auto text-[11px] text-gray-400">{t.status}</span>
+            <li key={t.id} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <span className="text-[12.5px] font-semibold text-gray-900">{t.label}</span>
+                <span className="text-[11.5px] text-gray-600">
+                  {[t.dose, t.route, t.frequency, t.duration].filter(Boolean).join(" · ")}
+                </span>
+                <span className="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
+                  {String(t.treatment_type).replace(/_/g, " ")}
+                </span>
+                <Badge tone="neutral">{t.status}</Badge>
+              </div>
             </li>
           ))}
         </ul>
       )}
 
-      {/* ══ s10's SAFETY CHECKPOINT -- CONSUMED, NOT RE-ASKED ═════════════════════════════════════ */}
-      <div className={`${CARD} mt-3`}>
-        <h4 className="text-[12px] font-bold text-gray-900">Before you prescribe</h4>
+      {/* ══ s10's SAFETY -- COMPACT BY DEFAULT (CPR-TRT-UI-002 s10, s11, s12) ═════════════════════
+          ⚠ THE HEADING AND THE PERMANENT EXPLANATIONS GO; THE FACTS AND THE ACTIONS STAY. s10 asks for
+          normal findings as compact indicators rather than a standing card, and s11 moves the LIMITS of
+          allergy matching behind a details action -- a practitioner re-reads those approximately never
+          and was paying for them on every consultation. What remains in the default view is only what
+          could change a prescribing decision: the recorded allergy status, any listed allergies, the
+          weight, what the patient is already taking, and the one-tap answer while the question is
+          still unanswered.
+
+          ⚠ DISCLOSED, NOT HIDDEN, AND THE DIFFERENCE IS THE WHOLE POINT. Advisory is a <details>: every
+          sentence stays in the HTML, stays printable and stays keyboard-reachable. Removing a safety
+          limitation from the page would be a different act from folding it up, and s11 asks for the
+          second one. The nine checks this product does not run are still one interaction away.
+
+          ⚠ AND THE ONE-TAP ANSWER STAYS IN THE OPEN. Burying `No known drug allergies` behind the
+          disclosure would leave assertion 7b-7 -- "answering the common case is ONE tap" -- passing on a
+          count while its sentence had quietly become false. Explanations moved; controls did not. */}
+      <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
 
         {/* == THE ALLERGY LINE, AND THE TWO ACTIONS THAT ANSWER IT ==============================
             WARNING: THIS WAS A DEAD END UNTIL NOW, AND THAT IS THE DEFECT BEING FIXED. The store
@@ -482,15 +519,13 @@ export default function TreatmentCapture(props: {
               </p>
             )}
 
-            <p className="mt-1 text-[10px] text-gray-500">{med.allergyNotice}</p>
           </div>
         </div>
 
-        {/* The blood group LINE, readable without opening anything. */}
-        <p className="mt-1.5 text-[11px] text-gray-600">
-          <span className="font-bold text-gray-900">Blood group</span> {props.bloodGroupLine.text}
-        </p>
-
+        {/* ⚠ THE BLOOD GROUP LINE IS GONE FROM HERE (s12), NOT GONE. It is not routinely relevant to
+            prescribing, so it was being read past on every consultation to reach the fields that are.
+            It now sits in the details below, beside the other things worth having and not worth
+            standing. The CONTROL was always in the allergy panel and has not moved. */}
         <div className="mt-2 flex items-start gap-2">
           <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${weightTone.chip}`}>
             {weightTone.mark} {weightTone.label}
@@ -505,13 +540,20 @@ export default function TreatmentCapture(props: {
           </p>
         )}
 
-        {/* ⚠ THE NINE DEFERRED CHECKS, ON THE PRESCRIBING SURFACE. An unwarned screen reads as a cleared
-            screen, and s11 forbids claiming safe merely because a rule could not be evaluated. */}
-        <details className="mt-2">
-          <summary className="cursor-pointer text-[11px] font-semibold text-gray-700">
-            {med.notChecked.length} checks this product does not run
-          </summary>
-          <ul className="mt-1 flex flex-col gap-1">
+        {/* ⚠ ONE DISCLOSURE FOR EVERY EXPLANATION ON THIS PANEL (s11). Three separate standing blocks --
+            the allergy-matching notice, the nine deferred checks, the blood group -- became one line
+            that opens. They were never read together and each was paid for separately.
+
+            ⚠ THE SUMMARY NAMES THE NUMBER, so the line itself carries the fact that checks are NOT run.
+            "Safety details" alone would let a closed disclosure read as a clean bill of health, which is
+            exactly the inference s11 forbids: an unwarned screen must not read as a cleared screen. */}
+        <Advisory
+          summary={`What this screen does not check — ${med.notChecked.length} checks this product does not run`}
+          count={med.notChecked.length}>
+          {/* CPR-TRT-UI-002 s11: a green status is the RECORDED STATUS, never a drug-specific clearance.
+              This is the engine's own sentence, not one composed here. */}
+          <p className="text-[10.5px] text-gray-600">{med.allergyNotice}</p>
+          <ul className="mt-1.5 flex flex-col gap-1">
             {med.notChecked.map(c => (
               <li key={c.key} className="text-[10.5px] text-gray-600">
                 <span className="font-semibold text-gray-800">{c.label}</span> — {c.detail}
@@ -521,7 +563,10 @@ export default function TreatmentCapture(props: {
           <p className="mt-1 text-[10px] font-semibold text-gray-700">
             The absence of a warning on this screen carries no information about safety.
           </p>
-        </details>
+          <p className="mt-2 border-t border-gray-100 pt-2 text-[10.5px] text-gray-600">
+            <span className="font-bold text-gray-900">Blood group</span> {props.bloodGroupLine.text}
+          </p>
+        </Advisory>
       </div>
 
       {!editable && (
@@ -724,17 +769,38 @@ export default function TreatmentCapture(props: {
               </>
             )}
 
-            <label className="mt-2 block">
-              <span className={LABEL}>
-                Reason or notes {cap.reasonRequired ? "(required by this practice)" : "(optional)"}
-              </span>
-              <input className={input} value={draft.reason ?? ""}
-                onChange={e => setDraft(d => ({ ...d, reason: e.target.value }))} />
-            </label>
+            {/* ⚠ s8's COLLAPSED NOTES -- BUT NEVER WHEN THIS PRACTICE REQUIRES THEM. A required field
+                behind a disclosure makes the form refuse for a reason the practitioner cannot see, which
+                is the same failure as a disabled button that cannot say why it is disabled. It also stays
+                open once anything has been typed, so a collapse can never swallow entered text. */}
+            {cap.reasonRequired || notesOpen || (draft.reason ?? "").trim() !== "" ? (
+              <label className="mt-2 block">
+                <span className={LABEL}>
+                  Reason or notes {cap.reasonRequired ? "(required by this practice)" : "(optional)"}
+                </span>
+                <input className={input} value={draft.reason ?? ""}
+                  onChange={e => setDraft(d => ({ ...d, reason: e.target.value }))} />
+              </label>
+            ) : (
+              <button type="button" data-step="notes-toggle" className={`${QUIET} mt-2`}
+                onClick={() => setNotesOpen(true)}>
+                + Instructions / notes
+              </button>
+            )}
 
-            {/* ══ s8's WEIGHT-BASED DOSE. The arithmetic is medication.ts's, called not copied. ════ */}
+            {/* ══ s13's ADVANCED TOOLS, OFF THE DEFAULT FORM ══════════════════════════════════════
+                ⚠ THE WEIGHT-BASED DOSE BUTTON WAS PERMANENT ON EVERY PRESCRIPTION and was paid for by
+                the overwhelming majority that never open it. s13 moves it; it does NOT remove it, and
+                the spec says so in as many words -- "Do not remove the underlying capability". The
+                arithmetic is still medication.ts's, called rather than copied. */}
             {shape.prescribing && props.canPrescribe && (
               <div className="mt-2">
+                <button type="button" data-step="more-options" className={QUIET}
+                  onClick={() => setMoreOpen(o => !o)}>
+                  {moreOpen ? "Fewer options" : "More options"}
+                </button>
+                {moreOpen && (
+                <div className="mt-2">
                 <button type="button" className={QUIET} onClick={() => setCalcOpen(o => !o)}>
                   {calcOpen ? "Close the dose calculator" : "Work out a weight-based dose"}
                 </button>
@@ -846,6 +912,8 @@ export default function TreatmentCapture(props: {
                       </div>
                     )}
                   </div>
+                )}
+                </div>
                 )}
               </div>
             )}
