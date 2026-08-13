@@ -19,10 +19,13 @@ import {
 import type { TreatmentCapturePayload, PendingTreatment, TreatmentOption } from "@/lib/practice/treatment-capture";
 import type { PatientMedications, DoseCalculationResult } from "@/lib/practice/medication";
 import type { EncounterCollection } from "@/lib/practice/parameters";
-import { safetyChips, type SafetyChip } from "@/lib/practice/safety-chips";
+import { safetyChips } from "@/lib/practice/safety-chips";
 import {
-  PANEL, SectionHeader, Advisory, Badge,
+  PANEL, SectionHeader, Advisory, Badge, EmptyState,
 } from "@/components/practice/EncounterKit";
+import {
+  ClinicalRecordTable, type RecordColumn, type RowState,
+} from "@/components/practice/ClinicalRecordTable";
 
 // CPR-TREAT-001 -- THE TREATMENT TAB.
 //
@@ -61,6 +64,11 @@ const CHIP = "rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11.
 const CHIP_ON = "rounded-full border border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary-deep)]";
 const LABEL = "block text-[10px] font-semibold uppercase tracking-wide text-gray-500";
 
+type RecordedTreatment = {
+  id: string; treatment_type: string; label: string; dose: string | null; route: string | null;
+  frequency: string | null; duration: string | null; status: string; notes?: string | null;
+};
+
 const blankDraft = (treatmentType: string): PendingTreatment => ({
   treatmentType, label: "", medicationRef: null, brandName: null, strengthText: null,
   formulation: null, dose: null, doseUnit: null, route: null,
@@ -73,8 +81,7 @@ export default function TreatmentCapture(props: {
   patientId: string;
   capture: TreatmentCapturePayload;
   medication: PatientMedications;
-  recorded: { id: string; treatment_type: string; label: string; dose: string | null; route: string | null;
-    frequency: string | null; duration: string | null; status: string; notes?: string | null }[];
+  recorded: RecordedTreatment[];
   canRecord: boolean;
   canPrescribe: boolean;
   locked: boolean;
@@ -174,6 +181,83 @@ export default function TreatmentCapture(props: {
 
   // ⚠ CONFIRMED BY NAME, s19: "Require appropriate confirmation". A one-tap delete on a prescription is
   // an accident waiting to be blamed on the person who made it.
+  // ── CP-UI-TABLE-001 s5's TREATMENT COLUMNS, s6's SECOND LINE ────────────────────────────────────
+  //
+  // ⚠ THE SAFETY COLUMN CARRIES THE PATIENT'S RECORDED ALLERGY STATUS, NOT A DRUG CHECK. The comp
+  // reads "No allergy alerts" and shows a penicillin warning on an amoxicillin row. THIS PRODUCT DOES
+  // NOT MATCH DRUGS AGAINST ALLERGIES -- CPR-TRT-UI-002 s11 forbids implying that it does, and the
+  // deferred-checks list on this very tab names the check it does not run. Printing the comp's wording
+  // would claim a check that never happened, on the one row where a clinician would rely on it. The
+  // column shows the engine's own allergy sentence instead, which is true.
+  //
+  // ⚠ AND FOR THE SAME REASON NO ROW IS `warning` YET. s4 reserves that state for clinically
+  // actionable issues; the only alerts this build has are patient-level parameter alerts, which are
+  // identical on every row and would paint the whole table amber. A warning on every row is a warning
+  // on none. When per-treatment evaluation exists, its verdict sets rowState here.
+  const TREATMENT_COLUMNS: RecordColumn<RecordedTreatment>[] = [
+    { key: "label", label: "Treatment", priority: "primary",
+      render: t => {
+        const band = treatmentBand(t.status);
+        return (
+          <span className={band.struck ? "font-semibold text-gray-400 line-through" : "font-semibold text-gray-900"}>
+            {t.label}
+          </span>
+        );
+      } },
+    { key: "dose", label: "Dose / route",
+      render: t => [t.dose, t.route].filter(Boolean).join(" · ") || <span className="text-gray-400">&mdash;</span> },
+    { key: "freq", label: "Frequency / duration",
+      render: t => [t.frequency, t.duration].filter(Boolean).join(" · ") || <span className="text-gray-400">&mdash;</span> },
+    { key: "status", label: "Status", priority: "status",
+      render: t => <Badge tone={treatmentBand(t.status).struck ? "muted" : "neutral"}>{t.status}</Badge> },
+    { key: "safety", label: "Safety", priority: "secondary",
+      render: () => (
+        <span className="inline-flex items-baseline gap-1.5">
+          <span aria-hidden="true" className={
+            allergyVerdict === "clear" ? "text-[var(--cmp-text-success)]"
+              : allergyVerdict === "flagged" ? "text-[var(--cmp-text-critical)]" : "text-gray-400"}>
+            {allergyVerdict === "clear" ? "✓" : allergyVerdict === "flagged" ? "⚠" : "–"}
+          </span>
+          <span className="text-[11.5px] text-gray-700">{props.allergyLine.text}</span>
+        </span>
+      ) },
+  ];
+
+  const treatmentRow = (t: RecordedTreatment) => ({
+    id: t.id,
+    data: t,
+    state: (FINISHED.includes(t.status) ? "completed" : "normal") as RowState,
+    stateLabel: FINISHED.includes(t.status) ? `${t.status} treatment` : undefined,
+    // s6's second line, verbatim in shape: weight with its age, vitals, alerts.
+    secondaryText: (
+      <>Weight: {med.weight.text} &middot; Vitals: {vitalsChip.text} &middot; Alerts: {alertsChip.text}</>
+    ),
+    actions: (
+      <span className="inline-flex items-center gap-1">
+        <button type="button" data-step="review-safety"
+          onClick={() => { setSafetyOpen(true); document.getElementById("treatment-safety")?.scrollIntoView({ behavior: "smooth", block: "center" }); }}
+          aria-label={`Review safety for ${t.label}`}
+          className="text-[11.5px] font-semibold text-[var(--cp-primary)] hover:underline">
+          Review &rsaquo;
+        </button>
+        {editable && (
+          <>
+            <button type="button" data-step="edit-treatment" disabled={busy} onClick={() => editTreatment(t)}
+              aria-label={`Correct ${t.label} treatment`} title="Correct this treatment"
+              className="rounded-lg border border-gray-200 px-1.5 py-0.5 text-[12px] text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+              ✎
+            </button>
+            <button type="button" data-step="withdraw-treatment" disabled={busy} onClick={() => withdrawTreatment(t)}
+              aria-label={`Withdraw ${t.label} treatment`} title="Withdraw this treatment"
+              className="rounded-lg border border-gray-200 px-1.5 py-0.5 text-[12px] text-gray-600 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50">
+              ⋮
+            </button>
+          </>
+        )}
+      </span>
+    ),
+  });
+
   const withdrawTreatment = async (t: { id: string; label: string }) => {
     if (!window.confirm(`Withdraw "${t.label}" from this encounter? This removes it from the record.`)) return;
     const body = await post("/api/v1/practice/treatment-capture", {
@@ -405,17 +489,15 @@ export default function TreatmentCapture(props: {
           safety context it was written under, which is two lines per item -- squeezed into a table row
           the regimen truncates and the safety has nowhere to go. The owner's comp draws cards for
           exactly that reason. I built a table here first and it moved the tab away from the design. */}
-      {liveTreatments.length > 0 && (
-        <ul className="mt-3 flex flex-col gap-2">
-          {liveTreatments.map(t => (
-            <TreatmentCard key={t.id} t={t} allergyLine={props.allergyLine} weightText={med.weight.text}
-              vitals={vitalsChip} alerts={alertsChip} verdict={allergyVerdict} busy={busy}
-              onEdit={editable ? () => editTreatment(t) : undefined}
-              onWithdraw={editable ? () => withdrawTreatment(t) : undefined}
-              onReview={() => { setSafetyOpen(true); document.getElementById("treatment-safety")?.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
-          ))}
-        </ul>
-      )}
+      <div className="mt-3">
+        <ClinicalRecordTable
+          label="Treatments recorded in this encounter"
+          columns={TREATMENT_COLUMNS}
+          empty={<EmptyState title="No treatment recorded for this encounter"
+            reason="This was read successfully. A consultation that changes no treatment is a real consultation, and recording that is a decision rather than a gap." />}
+          records={liveTreatments.map(t => treatmentRow(t))}
+        />
+      </div>
 
       {/* ⚠ COLLAPSED, NEVER DROPPED. A stopped treatment is still part of what happened in this
           consultation. The count is on the summary so a closed group is not mistaken for an empty one --
@@ -434,15 +516,14 @@ export default function TreatmentCapture(props: {
             Nothing has been completed or stopped in this consultation.
           </p>
         ) : (
-          <ul className="mt-2 flex flex-col gap-2">
-            {finishedTreatments.map(t => (
-              <TreatmentCard key={t.id} t={t} allergyLine={props.allergyLine} weightText={med.weight.text}
-                vitals={vitalsChip} alerts={alertsChip} verdict={allergyVerdict} busy={busy}
-                onEdit={editable ? () => editTreatment(t) : undefined}
-                onWithdraw={editable ? () => withdrawTreatment(t) : undefined}
-                onReview={() => setSafetyOpen(true)} />
-            ))}
-          </ul>
+          <div className="mt-2">
+            <ClinicalRecordTable
+              label="Treatments completed or stopped in this encounter"
+              columns={TREATMENT_COLUMNS}
+              empty={<></>}
+              records={finishedTreatments.map(t => treatmentRow(t))}
+            />
+          </div>
         )
       )}
 
@@ -1219,125 +1300,6 @@ export default function TreatmentCapture(props: {
  * the source of any default to be preserved for audit, and s20 wants to know whether each value was
  * typed, taken from the catalogue or loaded from a shortcut. There is nowhere to record that yet, and a
  * default nobody can trace is worse than a field the practitioner filled -- it would be indistinguishable
- * from a clinical choice. Pre-population lands with the column that can say where it came from.
- */
-/**
- * One recorded treatment, in the shape of the owner's comp: an icon tile, the regimen on one line, the
- * status, and the safety context the prescription was written under.
- *
- * ⚠ THE FOUR CHIPS ARE PATIENT-LEVEL FACTS AND SAY SO BY BEING IDENTICAL ON EVERY CARD. They are the
- * same allergy status and the same weight for every treatment because there is one patient. Nothing
- * here reads `checked`, `cleared` or `safe` -- s11 forbids implying a drug-specific check has passed,
- * and this product runs none. What they are for is scanning: the context that was true when this was
- * prescribed, beside the thing prescribed.
- *
- * ⚠ AN UNKNOWN CHIP IS GREY, NEVER AMBER. s10: missing optional data must not look like a warning.
- * "Vitals not recorded" is the ordinary state of most consultations, and an amber chip on every card
- * would teach a practitioner to stop seeing amber -- which is the colour the real alert uses.
- */
-function TreatmentCard({ t, allergyLine, weightText, vitals, alerts, verdict, onReview, onEdit, onWithdraw, busy }: {
-  t: { id: string; treatment_type: string; label: string; dose: string | null; route: string | null;
-    frequency: string | null; duration: string | null; status: string };
-  allergyLine: SafetyLine;
-  weightText: string;
-  vitals: SafetyChip; alerts: SafetyChip;
-  verdict: "clear" | "unknown" | "flagged";
-  onReview: () => void;
-  /** Undefined where the caller cannot write -- a control that cannot act is not drawn at all. */
-  onEdit?: () => void;
-  onWithdraw?: () => void;
-  busy?: boolean;
-}) {
-  const band = treatmentBand(t.status);
-  const regimen = [t.dose, t.route, t.frequency, t.duration].filter(Boolean).join(" · ");
-  const isMedication = t.treatment_type === "medication";
-
-  const chipTone = (c: SafetyChip) =>
-    c.tone === "warn" ? "text-[var(--cmp-text-warning)]"
-      : c.tone === "ok" ? "text-[var(--cmp-text-success)]" : "text-gray-400";
-  const chipMark = (c: SafetyChip) => (c.tone === "warn" ? "⚠" : c.tone === "ok" ? "✓" : "–");
-
-  return (
-    <li style={{ borderLeftColor: band.edge, borderLeftStyle: band.dashed ? "dashed" : "solid" }}
-      className="rounded-l-none rounded-r-xl border border-l-[3px] border-gray-200 bg-white p-3">
-      <div className="flex items-start gap-3">
-        {/* The comp's icon tile. Hue by KIND -- a medicine and a dressing are different acts, and this is
-            the one place on the card where colour is categorical rather than a confidence weight. */}
-        <span aria-hidden="true"
-          className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[15px] ${
-            isMedication ? "bg-[var(--cp-primary)]/10 text-[var(--cp-primary)]" : "bg-teal-50 text-teal-700"}`}>
-          {isMedication ? "℞" : "✚"}
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className={band.struck
-              ? "text-[13.5px] font-bold text-gray-400 line-through"
-              : "text-[13.5px] font-bold text-gray-900"}>{t.label}</span>
-            {regimen && <span className="text-[12px] text-gray-600">{regimen}</span>}
-            <Badge tone={band.struck ? "muted" : "neutral"}>{t.status}</Badge>
-            {/* ⚠ THE COMP'S PENCIL AND MENU, AND THEY ONLY EXIST BECAUSE THE WRITE PATH DOES. There was
-                no correction or withdrawal engine for a treatment until this change -- drawing these
-                first would have been the same defect as a disabled button that cannot say why.
-                ⚠ NOT DRAWN AT ALL WHERE THE CALLER CANNOT WRITE. A signed encounter refuses both by
-                name at the engine, and the screen closes the road before it is walked. */}
-            {(onEdit || onWithdraw) && (
-              <span className="ml-auto flex shrink-0 items-center gap-1">
-                {onEdit && (
-                  <button type="button" data-step="edit-treatment" disabled={busy} onClick={onEdit}
-                    aria-label={`Correct ${t.label}`} title="Correct this treatment"
-                    className="rounded-lg border border-gray-200 px-1.5 py-0.5 text-[12px] text-gray-600 hover:bg-gray-50 disabled:opacity-50">
-                    ✎
-                  </button>
-                )}
-                {onWithdraw && (
-                  <button type="button" data-step="withdraw-treatment" disabled={busy} onClick={onWithdraw}
-                    aria-label={`Withdraw ${t.label}`} title="Withdraw this treatment"
-                    className="rounded-lg border border-gray-200 px-1.5 py-0.5 text-[12px] text-gray-600 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50">
-                    ⋮
-                  </button>
-                )}
-              </span>
-            )}
-          </div>
-
-          {/* ══ THE SAFETY ROW ═════════════════════════════════════════════════════════════════ */}
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-gray-100 pt-2">
-            <span className="inline-flex items-baseline gap-1.5">
-              {/* ⚠ GREEN ONLY WHEN A PERSON ANSWERED. `clear` is set from allergyLine.safeToRead, which
-                  is true only once somebody recorded an answer -- never because a list came back empty.
-                  `flagged` is rose; `unknown` is grey, because an unanswered question is not a warning. */}
-              <span aria-hidden="true" className={`text-[11px] ${
-                verdict === "clear" ? "text-[var(--cmp-text-success)]"
-                  : verdict === "flagged" ? "text-[var(--cmp-text-critical)]" : "text-gray-400"}`}>
-                {verdict === "clear" ? "✓" : verdict === "flagged" ? "⚠" : "–"}
-              </span>
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Allergies</span>
-              <span className="text-[11.5px] text-gray-700">{allergyLine.text}</span>
-            </span>
-            <span className="inline-flex items-baseline gap-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Weight</span>
-              <span className="text-[11.5px] text-gray-700">{weightText}</span>
-            </span>
-            <span className="inline-flex items-baseline gap-1.5">
-              <span aria-hidden="true" className={`text-[11px] ${chipTone(vitals)}`}>{chipMark(vitals)}</span>
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Vitals</span>
-              <span className="text-[11.5px] text-gray-700">{vitals.text}</span>
-            </span>
-            <span className="inline-flex items-baseline gap-1.5">
-              <span aria-hidden="true" className={`text-[11px] ${chipTone(alerts)}`}>{chipMark(alerts)}</span>
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Alerts</span>
-              <span className="text-[11.5px] text-gray-700">{alerts.text}</span>
-            </span>
-            <button type="button" data-step="review-safety" onClick={onReview}
-              className="ml-auto text-[11.5px] font-semibold text-[var(--cp-primary)] hover:underline">
-              Review &rsaquo;
-            </button>
-          </div>
-        </div>
-      </div>
-    </li>
-  );
-}
 
 
 /**
