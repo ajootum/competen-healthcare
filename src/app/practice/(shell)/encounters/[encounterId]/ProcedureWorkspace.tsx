@@ -34,6 +34,12 @@ type Row = {
   laterality: string;
   consentStatus: string;
   status: string;
+  // ⚠ THE THREE THE FIRST WIRING ATTEMPT DROPPED. The engine accepts all of them and the form this
+  // workspace replaces collected all of them, so leaving them out was reduced clinical capture rather
+  // than a simplification. 13a-2 caught it; nothing on the screen would have.
+  indication: string;
+  immediateOutcome: string;
+  abandonedReason: string;
   outcome?: { ok: boolean; message?: string };
 };
 
@@ -46,6 +52,7 @@ let seq = 0;
 const newRow = (): Row => ({
   key: `p${++seq}`, label: "", site: "", laterality: "not_applicable",
   consentStatus: "not_recorded", status: "PERFORMED",
+  indication: "", immediateOutcome: "", abandonedReason: "",
 });
 
 export default function ProcedureWorkspace(props: {
@@ -114,6 +121,11 @@ export default function ProcedureWorkspace(props: {
           items: items.map(({ r }) => ({
             label: r.label.trim(), site: r.site.trim() || undefined,
             laterality: r.laterality, consentStatus: r.consentStatus, status: r.status,
+            indication: r.indication.trim() || undefined,
+            immediateOutcome: r.immediateOutcome.trim() || undefined,
+            // ⚠ ONLY WHEN ABANDONED. Sending a reason on a completed procedure would record why
+            // something was stopped that was not stopped.
+            abandonedReason: r.status === "ABANDONED" ? (r.abandonedReason.trim() || undefined) : undefined,
           })),
         }),
       });

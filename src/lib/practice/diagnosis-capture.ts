@@ -239,3 +239,118 @@ export async function recordDiagnosisBatch(admin: any, ctx: WorkspaceContext, ar
   // tell a screen that nine recorded diagnoses did not exist because the tenth was refused.
   return { ok: true, data: { results, recorded } };
 }
+
+/**
+ * CORRECT A DIAGNOSIS ALREADY RECORDED IN THIS ENCOUNTER.
+ *
+ * The owner, 2026-08-13: "The diagnoses are uneditable... Can they remain editable this encounter?"
+ * They could not -- there was no update path at all, so the working set locked a row the moment it was
+ * written and a typo was permanent. Re-submitting through the batch route would have inserted a SECOND
+ * copy rather than correcting the first, which is why the rows were locked in the first place.
+ *
+ * ⚠ ONLY WHILE THE ENCOUNTER IS UNSIGNED. A signed encounter is a statement somebody put their name to;
+ * correcting it silently afterwards would make the signature meaningless. The refusal says which it is.
+ *
+ * ⚠ AND THE PROBLEM LIST IS NOT TOUCHED HERE. Renaming today's diagnosis must not rename the patient's
+ * longitudinal problem -- they are different records and s2 is explicit that promoting one does not
+ * change the meaning of the other. Detaching or renaming a problem is its own action on the problem
+ * list, not a side effect of fixing a spelling.
+ */
+export async function updateEncounterDiagnosis(admin: any, ctx: WorkspaceContext, args: {
+  diagnosisId: string;
+  label?: string;
+  certainty?: string;
+  isPrimary?: boolean;
+  actorId: string;
+  correlationId: string;
+}): Promise<EngineResult<{ id: string }>> {
+  if (!hasCapability(ctx, CAP_DIAGNOSIS_RECORD))
+    return fail(403, "FORBIDDEN", `correcting a diagnosis needs ${CAP_DIAGNOSIS_RECORD}`);
+
+  // ⚠ THE ROW IS FETCHED WITH ITS ENCOUNTER, and the workspace filter is the tenant boundary --
+  // service_role bypasses RLS, so a diagnosis id from another practice would otherwise be writable.
+  const { data: row, error: readErr } = await admin.from("practice_diagnosis")
+    .select("id, encounter_id, workspace_id")
+    .eq("id", args.diagnosisId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (readErr) return fail(503, "READ_FAILED", `that diagnosis could not be read: ${readErr.message}`);
+  if (!row) return fail(404, "NOT_FOUND", "Not found");
+
+  const { data: enc } = await admin.from("practice_encounter")
+    .select("id, signed_at").eq("id", row.encounter_id).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (!enc) return fail(404, "NOT_FOUND", "Not found");
+  if (enc.signed_at)
+    return fail(422, "ENCOUNTER_SIGNED", "this encounter is signed, so its diagnoses can no longer be changed");
+
+  const patch: Record<string, unknown> = {};
+  if (args.label !== undefined) {
+    const label = args.label.trim();
+    if (!label) return fail(400, "LABEL_REQUIRED", "a diagnosis needs a name");
+    if (label.length > 300) return fail(422, "LABEL_TOO_LONG", "that diagnosis name is longer than 300 characters");
+    patch.label = label;
+  }
+  if (args.certainty !== undefined) {
+    if (!DIAGNOSIS_CERTAINTIES.includes(args.certainty as DiagnosisCertainty))
+      return fail(422, "CERTAINTY_INVALID", `certainty must be one of ${DIAGNOSIS_CERTAINTIES.join(", ")}`);
+    patch.certainty = args.certainty;
+  }
+  if (args.isPrimary !== undefined) patch.is_primary = args.isPrimary === true;
+  if (Object.keys(patch).length === 0) return fail(400, "NOTHING_TO_CHANGE", "nothing was changed");
+
+  // ⚠ ONE PRIMARY PER ENCOUNTER, CLEARED BEFORE THE NEW ONE IS SET. s2 makes primary an encounter-level
+  // designation, so two rows carrying it is a state the record cannot hold. Done first: if the clear
+  // succeeds and the set fails, the encounter has NO primary, which is recoverable and visible. The
+  // reverse order leaves two, which looks correct on screen and is not.
+  if (args.isPrimary === true) {
+    await admin.from("practice_diagnosis").update({ is_primary: false })
+      .eq("workspace_id", ctx.workspaceId).eq("encounter_id", row.encounter_id).neq("id", args.diagnosisId);
+  }
+
+  const { data: updated, error } = await admin.from("practice_diagnosis")
+    .update(patch).eq("id", args.diagnosisId).eq("workspace_id", ctx.workspaceId).select("id").maybeSingle();
+  if (error) return fail(400, "WRITE_FAILED", error.message);
+  if (!updated) return fail(404, "NOT_FOUND", "Not found");
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: args.actorId, eventType: "practice.diagnosis_corrected",
+    payload: { diagnosisId: args.diagnosisId, encounterId: row.encounter_id, changed: Object.keys(patch) },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { id: args.diagnosisId } };
+}
+
+/**
+ * REMOVE A DIAGNOSIS RECORDED IN ERROR, while the encounter is still unsigned.
+ *
+ * ⚠ THE PROBLEM IT PROMOTED IS LEFT ALONE, deliberately. A longitudinal problem may already have been
+ * assessed at another visit, referenced by a letter, or be the reason the patient is on a medication.
+ * Deleting it because today's diagnosis was mistyped would remove a record this encounter does not own.
+ * The problem list is edited from the problem list.
+ */
+export async function removeEncounterDiagnosis(admin: any, ctx: WorkspaceContext, args: {
+  diagnosisId: string; actorId: string; correlationId: string;
+}): Promise<EngineResult<{ id: string; problemLeftInPlace: boolean }>> {
+  if (!hasCapability(ctx, CAP_DIAGNOSIS_RECORD))
+    return fail(403, "FORBIDDEN", `removing a diagnosis needs ${CAP_DIAGNOSIS_RECORD}`);
+
+  const { data: row, error: readErr } = await admin.from("practice_diagnosis")
+    .select("id, encounter_id, problem_id").eq("id", args.diagnosisId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (readErr) return fail(503, "READ_FAILED", `that diagnosis could not be read: ${readErr.message}`);
+  if (!row) return fail(404, "NOT_FOUND", "Not found");
+
+  const { data: enc } = await admin.from("practice_encounter")
+    .select("id, signed_at").eq("id", row.encounter_id).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (!enc) return fail(404, "NOT_FOUND", "Not found");
+  if (enc.signed_at)
+    return fail(422, "ENCOUNTER_SIGNED", "this encounter is signed, so its diagnoses can no longer be removed");
+
+  const { error } = await admin.from("practice_diagnosis")
+    .delete().eq("id", args.diagnosisId).eq("workspace_id", ctx.workspaceId);
+  if (error) return fail(400, "WRITE_FAILED", error.message);
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: args.actorId, eventType: "practice.diagnosis_removed",
+    payload: { diagnosisId: args.diagnosisId, encounterId: row.encounter_id, problemLeftInPlace: !!row.problem_id },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { id: args.diagnosisId, problemLeftInPlace: !!row.problem_id } };
+}

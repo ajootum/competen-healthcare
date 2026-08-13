@@ -59,6 +59,55 @@ export default function DiagnosisWorkspace(props: {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
+  // ── CORRECTING WHAT IS ALREADY RECORDED ─────────────────────────────────────────────────────────
+  // There was no update path in the product at all until today, which is why the old rows were locked:
+  // re-submitting would have inserted a second copy rather than correcting the first.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [edit, setEdit] = useState({ label: "", certainty: DEFAULT_CERTAINTY as string });
+
+  const saveEdit = async (id: string) => {
+    setBusy(true); setNotice(null);
+    try {
+      const res = await fetch(`/api/v1/practice/encounters/${props.encounterId}/diagnoses/${id}`, {
+        method: "PATCH", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ label: edit.label.trim(), certainty: edit.certainty }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNotice({ kind: "err", text: json?.error?.message ?? "That correction was not saved." });
+        return;
+      }
+      setNotice({ kind: "ok", text: "Diagnosis corrected." });
+      setEditing(null);
+      router.refresh();
+    } catch {
+      setNotice({ kind: "err", text: "That did not reach the server, so nothing was changed." });
+    } finally { setBusy(false); }
+  };
+
+  const removeRecorded = async (id: string) => {
+    setBusy(true); setNotice(null);
+    try {
+      const res = await fetch(`/api/v1/practice/encounters/${props.encounterId}/diagnoses/${id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNotice({ kind: "err", text: json?.error?.message ?? "That diagnosis was not removed." });
+        return;
+      }
+      // ⚠ THE PROBLEM IT PROMOTED SURVIVES, and the message says so rather than leaving somebody to
+      // discover it. It may already have been assessed at another visit or be why a medication exists.
+      setNotice({
+        kind: "ok",
+        text: json?.removed?.problemLeftInPlace
+          ? "Diagnosis removed from this encounter. The ongoing problem it created is still on the patient's problem list."
+          : "Diagnosis removed from this encounter.",
+      });
+      router.refresh();
+    } catch {
+      setNotice({ kind: "err", text: "That did not reach the server, so nothing was removed." });
+    } finally { setBusy(false); }
+  };
+
   const filled = rows.filter(r => r.label.trim() && !r.outcome?.ok);
   const set = (i: number, patch: Partial<Row>) =>
     setRows(p => p.map((r, j) => (j === i ? { ...r, ...patch } : r)));
@@ -93,13 +142,20 @@ export default function DiagnosisWorkspace(props: {
       // the moment a blank or already-recorded row is skipped, and mismatching them would attach one
       // diagnosis's refusal to another's row.
       const results = (json.results ?? []) as { index: number; ok: boolean; message?: string }[];
+      // ⚠ A RECORDED ROW LEAVES THE WORKING SET (the owner, 2026-08-13: "the diagnoses are
+      // uneditable"). It used to stay, locked, while the same diagnosis also appeared in the recorded
+      // list above -- the entry showed twice, one copy dead, and the dead one looked like the record.
+      // The working set is now only what is still PENDING; corrections happen on the recorded list,
+      // which is the row the database actually holds.
       setRows(prev => {
         const next = [...prev];
         for (const out of results) {
           const target = items[out.index];
           if (target) next[target.i] = { ...next[target.i], outcome: { ok: out.ok, message: out.message } };
         }
-        return next;
+        const remaining = next.filter(r => !r.outcome?.ok);
+        // Never leave an empty table with no way to type into it.
+        return remaining.length ? remaining : [newRow()];
       });
       const okCount = results.filter(r => r.ok).length;
       const bad = results.length - okCount;
@@ -132,12 +188,50 @@ export default function DiagnosisWorkspace(props: {
         ) : (
           <ul className="flex flex-col gap-1">
             {props.recorded.map(d => (
-              <li key={d.id} className="flex flex-wrap items-center gap-2 text-[12.5px]">
-                {d.is_primary && <Badge tone="neutral">primary</Badge>}
-                <span className="font-semibold text-gray-800">{d.label}</span>
-                {d.code && <span className="font-mono text-[11px] text-gray-400">{d.code}</span>}
-                <span className="ml-auto text-[11px] text-gray-500">{d.certainty}</span>
-                {d.problem_id && <Badge tone="settled">on problem list</Badge>}
+              <li key={d.id} className="rounded-lg border border-gray-100 px-2.5 py-1.5">
+                {editing === d.id ? (
+                  // ⚠ CORRECTING THE RECORD, NOT ADDING TO IT. This PATCHes the row the database holds.
+                  <form className="flex flex-wrap items-center gap-2"
+                    onSubmit={e => { e.preventDefault(); saveEdit(d.id); }}>
+                    <input value={edit.label} disabled={busy} autoFocus
+                      onChange={e => setEdit(v => ({ ...v, label: e.target.value }))}
+                      className="min-w-[200px] flex-1 rounded-lg border border-gray-200 px-2 py-1 text-[12.5px]" />
+                    <select value={edit.certainty} disabled={busy} aria-label="Certainty"
+                      onChange={e => setEdit(v => ({ ...v, certainty: e.target.value }))}
+                      className="rounded-lg border border-gray-200 px-2 py-1 text-[12.5px]">
+                      {DIAGNOSIS_CERTAINTIES.map(c => <option key={c} value={c}>{c.replace(/_/g, " ")}</option>)}
+                    </select>
+                    <button type="submit" disabled={busy || !edit.label.trim()}
+                      className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
+                      Save
+                    </button>
+                    <button type="button" disabled={busy} onClick={() => setEditing(null)}
+                      className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] font-semibold text-gray-600 hover:bg-gray-50">
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+                    {d.is_primary && <Badge tone="neutral">primary</Badge>}
+                    <span className="font-semibold text-gray-800">{d.label}</span>
+                    {d.code && <span className="font-mono text-[11px] text-gray-400">{d.code}</span>}
+                    <span className="text-[11px] text-gray-500">{d.certainty}</span>
+                    {d.problem_id && <Badge tone="settled">on problem list</Badge>}
+                    {props.editable && props.canDiagnose && (
+                      <span className="ml-auto flex items-center gap-1.5">
+                        <button type="button" disabled={busy}
+                          onClick={() => { setEditing(d.id); setEdit({ label: d.label, certainty: d.certainty }); }}
+                          className="rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                          Correct
+                        </button>
+                        <button type="button" disabled={busy} onClick={() => removeRecorded(d.id)}
+                          className="rounded-lg border border-rose-200 px-2 py-0.5 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50">
+                          Remove
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>

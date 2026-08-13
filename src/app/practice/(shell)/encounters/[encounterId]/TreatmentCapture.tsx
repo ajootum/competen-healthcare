@@ -824,6 +824,28 @@ export default function TreatmentCapture(props: {
               </h4>
             </div>
 
+            {/* ⚠ THE DISABLED BUTTON NOW SAYS WHAT TO DO FIRST (the owner, 2026-08-13: "have tried
+                recording a treatment, however it does not seem to record").
+                THIS IS A TWO-STEP FORM AND ONLY ONE STEP LOOKED LIKE AN ACTION. The fields build a
+                DRAFT; "Add to the plan" moves it into the plan; "Record treatments" writes the plan.
+                Somebody who fills the form and presses the big primary button gets nothing, no message,
+                and no indication that the quiet button above it was the one that mattered -- so the
+                product reads as broken when it is merely silent.
+                Shown only while a draft is actually started, so it is guidance at the moment it applies
+                rather than a permanent instruction nobody reads. */}
+            {plan.length === 0 && !!draft.label?.trim() && (
+              <p className="mt-1 text-[11.5px] text-[var(--cmp-text-warning)]">
+                <strong>{draft.label.trim()}</strong> is not in the plan yet &mdash; press
+                {" "}<strong>Add to the plan</strong> above, then record. Nothing is written until you do.
+              </p>
+            )}
+            {plan.length === 0 && !draft.label?.trim() && (
+              <p className="mt-1 text-[11.5px] text-gray-500">
+                Build a treatment above and press <strong>Add to the plan</strong>. Several can be added
+                before recording them together.
+              </p>
+            )}
+
             {plan.length > 0 && (
               <ul className="mt-2 flex flex-col gap-1">
                 {plan.map((p, i) => (
