@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { PatientSnapshot } from "@/lib/practice/longitudinal";
 import { SAFETY_TONE } from "@/lib/practice/encounter-workspace-constants";
+import type { SafetyChips } from "@/lib/practice/safety-chips";
 import { formatDayTime } from "@/lib/datetime";
 
 // CPR-ENC-002 s2's LEFT CONTEXT PANEL: patient summary, session context, active problems, current
@@ -30,6 +31,30 @@ function Fact({ label, value, missing }: { label: string; value: string | null; 
   );
 }
 
+/**
+ * One line of the comp's Patient safety rail.
+ *
+ * ⚠ THE MARK IS GREY FOR UNKNOWN, NEVER AMBER. An unanswered question is not a warning, and amber on
+ * every ordinary consultation is how a practitioner learns to stop seeing amber.
+ */
+function RailFact({ mark, label, value }: {
+  mark: "ok" | "warn" | "unknown" | "plain"; label: string; value: string;
+}) {
+  const tone = mark === "warn" ? "text-[var(--cmp-text-warning)]"
+    : mark === "ok" ? "text-[var(--cmp-text-success)]" : "text-gray-400";
+  return (
+    <div className="flex items-baseline gap-2">
+      <span aria-hidden="true" className={`w-3 shrink-0 text-[11px] ${tone}`}>
+        {mark === "warn" ? "⚠" : mark === "ok" ? "✓" : mark === "unknown" ? "–" : ""}
+      </span>
+      <div className="min-w-0">
+        <p className={LABEL}>{label}</p>
+        <p className="text-[12px] text-gray-800">{value}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function ContextPanel(props: {
   snapshot: PatientSnapshot;
   encounter: any;
@@ -37,44 +62,87 @@ export default function ContextPanel(props: {
   sessionUnavailable: boolean;
   facility: string | null;
   practitionerName: string | null;
+  /** The comp's Patient safety rail. Derived once in safety-chips.ts, shared with the treatment cards. */
+  chips: SafetyChips;
+  /** The weight sentence the medication engine already composes, carrying its own age. */
+  weightText: string | null;
 }) {
   const s = props.snapshot;
   const e = props.encounter;
 
   return (
     <div className="flex flex-col gap-3">
-      {/* ── Encounter context (auto-inherited, CPR-ENC-002 s3) ─────────────────────────────────── */}
+      {/* ── Encounter context (auto-inherited, CPR-ENC-002 s3) ─────────────────────────────────────
+          ⚠ CPR-TRT-UI-002 s15: "Compress Encounter Context to essential metadata plus View details."
+          It was six labelled rows and a two-line explanation of where the context came from, standing
+          open on every consultation. The comp shows three lines. NOTHING IS LOST -- every one of those
+          six facts, and the explanation, is inside the disclosure, which is a <details> so it is in the
+          HTML, printable and keyboard-reachable without JavaScript. */}
       <section className={CARD}>
         <h2 className="text-[13px] font-bold text-gray-900">Encounter context</h2>
-        <p className="mt-0.5 text-[10px] text-gray-400">
-          Inherited from the session you were in when this was opened. It records where the work started,
-          not where you are now.
-        </p>
-        <div className="mt-2.5 flex flex-col gap-2.5">
-          <Fact label="Date & time" value={formatDayTime(e.started_at)} missing="—" />
-          {/* ⚠ THREE STATES. "No session" is a true and ordinary answer -- consultations happen on call,
-              between clinics, at two in the morning against no plan at all. "I could not find out" is
-              not an answer, and rendering it as the first would file this record as context-less. */}
-          <div>
-            <p className={LABEL}>Session</p>
+        <div className="mt-2 flex flex-col gap-1.5 text-[12px] text-gray-800">
+          <p className="flex items-center gap-2">
+            <span aria-hidden="true" className="text-gray-400">&#9636;</span>
+            {[String(e.encounter_mode).replace(/_/g, " "), String(e.entry_pathway).replace(/_/g, " ")]
+              .filter(Boolean).join(" · ")}
+          </p>
+          <p className="flex items-center gap-2">
+            <span aria-hidden="true" className="text-gray-400">&#128197;</span>
+            {formatDayTime(e.started_at) ?? "—"}
+          </p>
+          {/* ⚠ THREE STATES, KEPT ON THE COMPRESSED LINE. "No session" is a true and ordinary answer --
+              consultations happen on call, between clinics, at two in the morning against no plan at
+              all. "I could not find out" is not an answer, and collapsing it into the first would file
+              this record as context-less. That distinction is too important to move behind a click. */}
+          <p className="flex items-center gap-2">
+            <span aria-hidden="true" className="text-gray-400">&#128205;</span>
             {props.sessionUnavailable ? (
-              <p className="text-[12px] text-rose-700">The session could not be read</p>
+              <span className="text-rose-700">The session could not be read</span>
             ) : (
-              <p className={`text-[12px] ${props.sessionTitle ? "text-gray-800" : "text-gray-400"}`}>
-                {props.sessionTitle ?? "Not opened inside a session"}
-              </p>
+              <span className={props.sessionTitle ? "" : "text-gray-400"}>
+                {props.sessionTitle ?? props.facility ?? "Not opened inside a session"}
+              </span>
             )}
-          </div>
-          <Fact label="Location" value={props.facility} missing="Not recorded" />
-          <Fact label="Encounter type" value={String(e.encounter_mode).replace(/_/g, " ")} missing="—" />
-          <Fact label="Source" value={String(e.entry_pathway).replace(/_/g, " ")} missing="—" />
-          <Fact label="Practitioner" value={props.practitionerName} missing="Not recorded" />
+          </p>
         </div>
+        <details className="mt-2">
+          <summary className="cursor-pointer text-[11.5px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+            View details
+          </summary>
+          <p className="mt-1.5 text-[10px] text-gray-400">
+            Inherited from the session you were in when this was opened. It records where the work
+            started, not where you are now.
+          </p>
+          <div className="mt-2 flex flex-col gap-2.5">
+            <Fact label="Date & time" value={formatDayTime(e.started_at)} missing="—" />
+            <Fact label="Location" value={props.facility} missing="Not recorded" />
+            <Fact label="Encounter type" value={String(e.encounter_mode).replace(/_/g, " ")} missing="—" />
+            <Fact label="Source" value={String(e.entry_pathway).replace(/_/g, " ")} missing="—" />
+            <Fact label="Practitioner" value={props.practitionerName} missing="Not recorded" />
+          </div>
+        </details>
       </section>
 
-      {/* ── Patient snapshot ───────────────────────────────────────────────────────────────────── */}
+      {/* ── Patient safety (the comp's rail) ──────────────────────────────────────────────────────
+          ⚠ s15: "Remove or substantially reduce the separate Patient Snapshot when it merely duplicates
+          the top strip." It duplicated four of the six tiles above it. The rail now leads with the four
+          SAFETY facts the comp names, in the comp's order, and the rest of the record -- the allergy
+          list, blood group, problems, current treatments -- moves into the disclosure below rather than
+          off the page. Reducing duplication is not the same as deleting a clinical list.
+          ⚠ THE CHIPS COME FROM THE SHARED DERIVATION, so this rail, the top strip and every treatment
+          card cannot disagree about how many alerts are open. */}
       <section className={CARD}>
-        <h2 className="text-[13px] font-bold text-gray-900">Patient snapshot</h2>
+        <h2 className="text-[13px] font-bold text-gray-900">Patient safety</h2>
+        {s.permitted && !s.unavailable && (
+          <div className="mt-2 flex flex-col gap-2">
+            <RailFact mark={s.allergies.tone === "none" ? "ok" : s.allergies.tone === "present" ? "warn" : "unknown"}
+              label="Allergies" value={s.allergies.text} />
+            <RailFact mark={props.weightText ? "plain" : "unknown"} label="Weight"
+              value={props.weightText ?? "Not recorded"} />
+            <RailFact mark={props.chips.vitals.tone} label="Vitals" value={props.chips.vitals.text} />
+            <RailFact mark={props.chips.alerts.tone} label="Parameter alerts" value={props.chips.alerts.text} />
+          </div>
+        )}
 
         {!s.permitted ? (
           <p className="mt-2 rounded-lg bg-gray-50 px-2.5 py-2 text-[11px] text-gray-500">
@@ -85,7 +153,10 @@ export default function ContextPanel(props: {
             The patient record could not be read. Nothing below is a statement about this patient.
           </p>
         ) : (
-          <>
+          <details className="mt-2.5">
+            <summary className="cursor-pointer text-[11.5px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+              The rest of the record
+            </summary>
             {/* ⚠ ALLERGIES FIRST, AND ALWAYS DRAWN. A panel that hides the allergy line when there is
                 nothing in the list is a panel that says nothing at the moment it matters most. */}
             <div className="mt-2.5">
@@ -163,7 +234,7 @@ export default function ContextPanel(props: {
                 administration chart.
               </p>
             </div>
-          </>
+          </details>
         )}
       </section>
 

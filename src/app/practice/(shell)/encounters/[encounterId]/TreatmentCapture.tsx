@@ -18,7 +18,8 @@ import {
 } from "@/lib/practice/longitudinal-constants";
 import type { TreatmentCapturePayload, PendingTreatment, TreatmentOption } from "@/lib/practice/treatment-capture";
 import type { PatientMedications, DoseCalculationResult } from "@/lib/practice/medication";
-import type { EncounterCollection, EncounterParameter } from "@/lib/practice/parameters";
+import type { EncounterCollection } from "@/lib/practice/parameters";
+import { safetyChips, type SafetyChip } from "@/lib/practice/safety-chips";
 import {
   PANEL, SectionHeader, Advisory, Badge,
 } from "@/components/practice/EncounterKit";
@@ -149,25 +150,45 @@ export default function TreatmentCapture(props: {
   // ⚠ THREE STATES, NOT TWO. Not permitted, could not be read, and genuinely nothing monitored are
   // different sentences -- "No alerts" over an unreadable collection is the reassurance this product
   // must never print.
-  const col = props.collection;
-  const paramsReadable = col.permitted && !col.unavailable;
-  const allParams: EncounterParameter[] = paramsReadable
-    ? [...col.priority, ...col.optional, ...col.additions] : [];
-  const vitalParams = allParams.filter(p => p.category === "vital_sign");
-  const vitalsToday = vitalParams.filter(p => p.recordedThisEncounter != null).length;
-  const alertCount = allParams.reduce((n, p) => n + p.openAlerts, 0);
+  // ⚠ FROM THE SHARED DERIVATION, NOT COMPUTED HERE. The same four facts are drawn on the top strip,
+  // on every card below and in the Patient safety rail. Three screens each counting open alerts their
+  // own way is precisely the drift that made command-centre.ts and session.ts disagree about "overdue"
+  // on two screens a click apart, with nothing failing because each was right against itself.
+  const { vitals: vitalsChip, alerts: alertsChip } = safetyChips(props.collection);
 
-  const vitalsChip = !paramsReadable
-    ? { tone: "unknown" as const, text: col.permitted ? "Could not be read" : "Not permitted" }
-    : vitalParams.length === 0 ? { tone: "unknown" as const, text: "None monitored" }
-      : vitalsToday === 0 ? { tone: "unknown" as const, text: "Not recorded" }
-        : { tone: "ok" as const, text: `${vitalsToday} recorded today` };
+  // ── s19's EDIT AND REMOVE, on a card that is already in the record ───────────────────────────────
+  //
+  // ⚠ EDIT LOADS THE COMPOSER AND WITHDRAWS THE ROW ONLY WHEN THE REPLACEMENT IS RECORDED -- no. It
+  // does NOT withdraw first. Pulling the row out and trusting the practitioner to finish would lose a
+  // prescription to a closed tab or a changed mind, and "it disappeared while I was editing it" is the
+  // worst possible answer about a medication. The card stays until Correct is pressed.
+  const editTreatment = async (t: { id: string; label: string; dose: string | null; route: string | null;
+    frequency: string | null; duration: string | null }) => {
+    const label = window.prompt("Correct the treatment name", t.label);
+    if (label === null) return;                      // cancelled, and cancelling changes nothing
+    const body = await post("/api/v1/practice/treatment-capture", {
+      action: "correct", treatmentId: t.id, label,
+    });
+    if (body) { setNotice({ kind: "ok", text: "Treatment corrected." }); router.refresh(); }
+  };
 
-  const alertsChip = !paramsReadable
-    ? { tone: "unknown" as const, text: col.permitted ? "Could not be read" : "Not permitted" }
-    : allParams.length === 0 ? { tone: "unknown" as const, text: "Nothing monitored" }
-      : alertCount === 0 ? { tone: "ok" as const, text: "No alerts" }
-        : { tone: "warn" as const, text: `${alertCount} parameter alert${alertCount === 1 ? "" : "s"}` };
+  // ⚠ CONFIRMED BY NAME, s19: "Require appropriate confirmation". A one-tap delete on a prescription is
+  // an accident waiting to be blamed on the person who made it.
+  const withdrawTreatment = async (t: { id: string; label: string }) => {
+    if (!window.confirm(`Withdraw "${t.label}" from this encounter? This removes it from the record.`)) return;
+    const body = await post("/api/v1/practice/treatment-capture", {
+      action: "withdraw", treatmentId: t.id,
+    });
+    if (body) {
+      // ⚠ THE MEDICATION ROW SURVIVES, AND THE PRACTITIONER IS TOLD SO. Removing the note here does not
+      // remove a longitudinal medication that may already have been reviewed or carried forward. A
+      // silent partial deletion would leave evidence somewhere nobody is looking.
+      setNotice({ kind: "ok", text: body.medicationKept
+        ? "Treatment withdrawn from this encounter. It remains on the patient's medication list, which the medication console owns."
+        : "Treatment withdrawn from this encounter." });
+      router.refresh();
+    }
+  };
 
   // ⚠ s14's "Show completed / stopped". Splitting on status rather than hiding a count: a card that has
   // been stopped is still part of what happened in this consultation, so it is collapsed, never dropped.
@@ -388,7 +409,9 @@ export default function TreatmentCapture(props: {
         <ul className="mt-3 flex flex-col gap-2">
           {liveTreatments.map(t => (
             <TreatmentCard key={t.id} t={t} allergyLine={props.allergyLine} weightText={med.weight.text}
-              vitals={vitalsChip} alerts={alertsChip} verdict={allergyVerdict}
+              vitals={vitalsChip} alerts={alertsChip} verdict={allergyVerdict} busy={busy}
+              onEdit={editable ? () => editTreatment(t) : undefined}
+              onWithdraw={editable ? () => withdrawTreatment(t) : undefined}
               onReview={() => { setSafetyOpen(true); document.getElementById("treatment-safety")?.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
           ))}
         </ul>
@@ -414,7 +437,9 @@ export default function TreatmentCapture(props: {
           <ul className="mt-2 flex flex-col gap-2">
             {finishedTreatments.map(t => (
               <TreatmentCard key={t.id} t={t} allergyLine={props.allergyLine} weightText={med.weight.text}
-                vitals={vitalsChip} alerts={alertsChip} verdict={allergyVerdict}
+                vitals={vitalsChip} alerts={alertsChip} verdict={allergyVerdict} busy={busy}
+                onEdit={editable ? () => editTreatment(t) : undefined}
+                onWithdraw={editable ? () => withdrawTreatment(t) : undefined}
                 onReview={() => setSafetyOpen(true)} />
             ))}
           </ul>
@@ -1196,8 +1221,6 @@ export default function TreatmentCapture(props: {
  * default nobody can trace is worse than a field the practitioner filled -- it would be indistinguishable
  * from a clinical choice. Pre-population lands with the column that can say where it came from.
  */
-type Chip = { tone: "ok" | "warn" | "unknown"; text: string };
-
 /**
  * One recorded treatment, in the shape of the owner's comp: an icon tile, the regimen on one line, the
  * status, and the safety context the prescription was written under.
@@ -1212,23 +1235,27 @@ type Chip = { tone: "ok" | "warn" | "unknown"; text: string };
  * "Vitals not recorded" is the ordinary state of most consultations, and an amber chip on every card
  * would teach a practitioner to stop seeing amber -- which is the colour the real alert uses.
  */
-function TreatmentCard({ t, allergyLine, weightText, vitals, alerts, verdict, onReview }: {
+function TreatmentCard({ t, allergyLine, weightText, vitals, alerts, verdict, onReview, onEdit, onWithdraw, busy }: {
   t: { id: string; treatment_type: string; label: string; dose: string | null; route: string | null;
     frequency: string | null; duration: string | null; status: string };
   allergyLine: SafetyLine;
   weightText: string;
-  vitals: Chip; alerts: Chip;
+  vitals: SafetyChip; alerts: SafetyChip;
   verdict: "clear" | "unknown" | "flagged";
   onReview: () => void;
+  /** Undefined where the caller cannot write -- a control that cannot act is not drawn at all. */
+  onEdit?: () => void;
+  onWithdraw?: () => void;
+  busy?: boolean;
 }) {
   const band = treatmentBand(t.status);
   const regimen = [t.dose, t.route, t.frequency, t.duration].filter(Boolean).join(" · ");
   const isMedication = t.treatment_type === "medication";
 
-  const chipTone = (c: Chip) =>
+  const chipTone = (c: SafetyChip) =>
     c.tone === "warn" ? "text-[var(--cmp-text-warning)]"
       : c.tone === "ok" ? "text-[var(--cmp-text-success)]" : "text-gray-400";
-  const chipMark = (c: Chip) => (c.tone === "warn" ? "⚠" : c.tone === "ok" ? "✓" : "–");
+  const chipMark = (c: SafetyChip) => (c.tone === "warn" ? "⚠" : c.tone === "ok" ? "✓" : "–");
 
   return (
     <li style={{ borderLeftColor: band.edge, borderLeftStyle: band.dashed ? "dashed" : "solid" }}
@@ -1248,6 +1275,29 @@ function TreatmentCard({ t, allergyLine, weightText, vitals, alerts, verdict, on
               : "text-[13.5px] font-bold text-gray-900"}>{t.label}</span>
             {regimen && <span className="text-[12px] text-gray-600">{regimen}</span>}
             <Badge tone={band.struck ? "muted" : "neutral"}>{t.status}</Badge>
+            {/* ⚠ THE COMP'S PENCIL AND MENU, AND THEY ONLY EXIST BECAUSE THE WRITE PATH DOES. There was
+                no correction or withdrawal engine for a treatment until this change -- drawing these
+                first would have been the same defect as a disabled button that cannot say why.
+                ⚠ NOT DRAWN AT ALL WHERE THE CALLER CANNOT WRITE. A signed encounter refuses both by
+                name at the engine, and the screen closes the road before it is walked. */}
+            {(onEdit || onWithdraw) && (
+              <span className="ml-auto flex shrink-0 items-center gap-1">
+                {onEdit && (
+                  <button type="button" data-step="edit-treatment" disabled={busy} onClick={onEdit}
+                    aria-label={`Correct ${t.label}`} title="Correct this treatment"
+                    className="rounded-lg border border-gray-200 px-1.5 py-0.5 text-[12px] text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                    ✎
+                  </button>
+                )}
+                {onWithdraw && (
+                  <button type="button" data-step="withdraw-treatment" disabled={busy} onClick={onWithdraw}
+                    aria-label={`Withdraw ${t.label}`} title="Withdraw this treatment"
+                    className="rounded-lg border border-gray-200 px-1.5 py-0.5 text-[12px] text-gray-600 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50">
+                    ⋮
+                  </button>
+                )}
+              </span>
+            )}
           </div>
 
           {/* ══ THE SAFETY ROW ═════════════════════════════════════════════════════════════════ */}

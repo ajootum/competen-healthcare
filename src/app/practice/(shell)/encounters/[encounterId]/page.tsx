@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
+import { safetyChips } from "@/lib/practice/safety-chips";
 import { getEncounter, patientTimeline, LOCKED_STATUSES } from "@/lib/practice/encounters";
 import { encounterExtras } from "@/lib/practice/encounter-workspace";
 import { patientSnapshot } from "@/lib/practice/longitudinal";
@@ -353,6 +354,11 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
                 sessionUnavailable={sessionUnavailable}
                 facility={sessionRow?.practice_facility?.name ?? null}
                 practitionerName={(practitioner as any)?.data?.full_name ?? null}
+                /* ⚠ THE SAME DERIVATION THE TREATMENT CARDS USE, from the same collection. The rail and
+                   the cards printing different alert counts on one screen is the failure this shares a
+                   function to prevent. */
+                chips={safetyChips(parameterCollection)}
+                weightText={medicationRecord.weight.text}
               />
 
               <section className="rounded-xl border border-gray-200 bg-white p-3.5">

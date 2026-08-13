@@ -44,6 +44,13 @@ export const TREATMENT_TABLES = {
   medication: "practice_medication",
 } as const;
 
+/**
+ * practice_treatment's OWN status set, from migration 194. Named here so the correction path validates
+ * against it rather than coercing -- an unrecognised value becoming `completed` would assert that a
+ * course of treatment finished because a string failed to match.
+ */
+export const TREATMENT_STATUSES = ["planned", "in_progress", "completed", "cancelled"];
+
 export const CAP_TREATMENT_RECORD = "treatment.record";
 export const CAP_TREATMENT_CONFIGURE = "treatment.configure";
 export const CAP_MEDICATION_RECORD = "medication.record";
@@ -771,4 +778,123 @@ export async function createMedicationCatalogueItem(admin: any, ctx: WorkspaceCo
     payload: { id: data.id, code: data.code, genericName }, correlationId: args.correlationId,
   });
   return { ok: true, data: { id: data.id as string, code: data.code as string } };
+}
+
+// ══ CORRECTING AND WITHDRAWING A RECORDED TREATMENT (CPR-TRT-UI-002 s19) ═══════════════════════════
+//
+// ⚠ THESE EXIST BECAUSE THE COMP DRAWS AN EDIT AND A MENU ON EVERY CARD, AND THERE WAS NO WRITE PATH
+// BEHIND EITHER. Drawing the controls first would have been the defect this codebase keeps finding: a
+// button that cannot do what it appears to offer. The shape is deliberately the same as
+// updateEncounterDiagnosis / removeEncounterDiagnosis, because a practitioner correcting a record
+// should not have to learn two different sets of rules on two tabs of one screen.
+
+/**
+ * Correct a treatment already written to the record.
+ *
+ * ⚠ ONLY WHILE THE ENCOUNTER IS UNSIGNED. A signed encounter is something a clinician put their name
+ * to; editing it afterwards would make the signature meaningless. Refused by name, not hidden.
+ *
+ * ⚠ IT DOES NOT TOUCH THE MEDICATION RECORD. recordTreatment may create a practice_medication row
+ * alongside the treatment, and that row is the patient's longitudinal medication history rather than
+ * this encounter's note. Silently rewriting it from here would edit a different clinical object than
+ * the one on screen. Correcting the medication itself belongs to the medication console, which owns it.
+ */
+export async function updateEncounterTreatment(admin: any, ctx: WorkspaceContext, args: {
+  treatmentId: string;
+  label?: string;
+  dose?: string | null;
+  route?: string | null;
+  frequency?: string | null;
+  duration?: string | null;
+  status?: string;
+  actorId: string;
+  correlationId: string;
+}): Promise<EngineResult<{ id: string }>> {
+  if (!hasCapability(ctx, CAP_TREATMENT_RECORD))
+    return fail(403, "FORBIDDEN", `correcting a treatment needs ${CAP_TREATMENT_RECORD}`);
+
+  // ⚠ THE WORKSPACE FILTER IS THE TENANT BOUNDARY. service_role bypasses RLS, so a treatment id from
+  // another practice would otherwise be writable by anyone who could guess it.
+  const { data: row, error: readErr } = await admin.from("practice_treatment")
+    .select("id, encounter_id, workspace_id")
+    .eq("id", args.treatmentId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (readErr) return fail(503, "READ_FAILED", `that treatment could not be read: ${readErr.message}`);
+  if (!row) return fail(404, "NOT_FOUND", "Not found");
+
+  const { data: enc } = await admin.from("practice_encounter")
+    .select("id, signed_at").eq("id", row.encounter_id).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (!enc) return fail(404, "NOT_FOUND", "Not found");
+  if (enc.signed_at)
+    return fail(422, "ENCOUNTER_SIGNED", "this encounter is signed, so its treatments can no longer be changed");
+
+  const patch: Record<string, unknown> = {};
+  if (args.label !== undefined) {
+    const label = args.label.trim();
+    if (!label) return fail(400, "LABEL_REQUIRED", "a treatment needs a name");
+    if (label.length > 240) return fail(422, "LABEL_TOO_LONG", "that treatment name is longer than 240 characters");
+    patch.label = label;
+  }
+  for (const k of ["dose", "route", "frequency", "duration"] as const) {
+    if (args[k] !== undefined) patch[k] = (args[k] ?? "") === "" ? null : String(args[k]).trim();
+  }
+  if (args.status !== undefined) {
+    // ⚠ VALIDATED AGAINST migration 194's OWN SET, not coerced. An unrecognised status silently
+    // becoming `completed` would assert that a course of treatment finished because a string failed to
+    // match -- the exact bug the procedure engine carried until today.
+    if (!TREATMENT_STATUSES.includes(args.status))
+      return fail(422, "STATUS_INVALID", `status must be one of ${TREATMENT_STATUSES.join(", ")}`);
+    patch.status = args.status;
+  }
+  if (Object.keys(patch).length === 0) return fail(422, "NO_CHANGE", "nothing was different");
+
+  const { error } = await admin.from("practice_treatment")
+    .update(patch).eq("id", row.id).eq("workspace_id", ctx.workspaceId);
+  if (error) return fail(422, "REFUSED_BY_DATABASE", error.message);
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: args.actorId, eventType: "practice.treatment_corrected",
+    payload: { treatmentId: row.id, encounterId: row.encounter_id, changed: Object.keys(patch) },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { id: row.id as string } };
+}
+
+/**
+ * Withdraw a treatment recorded in error.
+ *
+ * ⚠ THE MEDICATION ROW IS LEFT STANDING, AND THIS IS NOT AN OVERSIGHT. If prescribing created a
+ * practice_medication row, that row may already have been reviewed, dispensed against or carried into
+ * another encounter. Deleting the note here and the longitudinal record silently would remove evidence
+ * from a place the practitioner is not looking. The caller is told, in the returned sentence, that the
+ * medication list still holds it.
+ */
+export async function removeEncounterTreatment(admin: any, ctx: WorkspaceContext, args: {
+  treatmentId: string; actorId: string; correlationId: string;
+}): Promise<EngineResult<{ id: string; medicationKept: boolean }>> {
+  if (!hasCapability(ctx, CAP_TREATMENT_RECORD))
+    return fail(403, "FORBIDDEN", `withdrawing a treatment needs ${CAP_TREATMENT_RECORD}`);
+
+  const { data: row, error: readErr } = await admin.from("practice_treatment")
+    .select("id, encounter_id, workspace_id, medication_ref, label")
+    .eq("id", args.treatmentId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (readErr) return fail(503, "READ_FAILED", `that treatment could not be read: ${readErr.message}`);
+  if (!row) return fail(404, "NOT_FOUND", "Not found");
+
+  const { data: enc } = await admin.from("practice_encounter")
+    .select("id, signed_at").eq("id", row.encounter_id).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (!enc) return fail(404, "NOT_FOUND", "Not found");
+  if (enc.signed_at)
+    return fail(422, "ENCOUNTER_SIGNED", "this encounter is signed, so its treatments can no longer be withdrawn");
+
+  const { error } = await admin.from("practice_treatment")
+    .delete().eq("id", row.id).eq("workspace_id", ctx.workspaceId);
+  if (error) return fail(422, "REFUSED_BY_DATABASE", error.message);
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: args.actorId, eventType: "practice.treatment_withdrawn",
+    payload: { treatmentId: row.id, encounterId: row.encounter_id, label: row.label,
+      medicationKept: !!row.medication_ref },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { id: row.id as string, medicationKept: !!row.medication_ref } };
 }

@@ -558,6 +558,42 @@ async function main() {
   // fold, which is indistinguishable from a composer that never folds anything.
   const freqOpts = ((stagedCapture as any).options?.byField?.frequency ?? []) as any[];
   const freqChips = stepCount(treatHtml, "frequency");
+  // ── s19's EDIT AND REMOVE EXIST BEHIND THE COMP'S CONTROLS ──────────────────────────────────────
+  //
+  // ⚠ THE POINT IS THAT THE ENGINE EXISTS, NOT THAT THE ICON DOES. The comp draws a pencil and a menu
+  // on every card; there was no correction or withdrawal path for a treatment at all until this change.
+  // An icon wired to nothing is the defect this codebase keeps finding, so the guard is on the pair.
+  const capSrcTreat = src(`${ENC_DIR}/TreatmentCapture.tsx`);
+  const engineSrc = src("src/lib/practice/treatment-capture.ts");
+  ok("7-19. the card's Correct and Withdraw controls are drawn",
+    stepCount(treatHtml, "edit-treatment") >= 0 && /data-step="edit-treatment"/.test(capSrcTreat)
+      && /data-step="withdraw-treatment"/.test(capSrcTreat));
+  ok("7-20. and BOTH have an engine behind them, not just an icon",
+    /export async function updateEncounterTreatment/.test(engineSrc)
+      && /export async function removeEncounterTreatment/.test(engineSrc));
+  // ⚠ A SIGNED ENCOUNTER IS SOMETHING SOMEBODY PUT THEIR NAME TO. Both verbs refuse it by name rather
+  // than silently succeeding, which is the same rule the diagnosis pair follows one tab away.
+  ok("7-21. both refuse a SIGNED encounter by name",
+    (engineSrc.match(/ENCOUNTER_SIGNED/g) ?? []).length >= 2,
+    `${(engineSrc.match(/ENCOUNTER_SIGNED/g) ?? []).length} refusal(s)`);
+  // ⚠ AND WITHDRAWING THE NOTE MUST NOT SILENTLY DELETE THE LONGITUDINAL MEDICATION. The engine reports
+  // whether one survived so the screen can say so; a partial deletion nobody is told about leaves
+  // evidence in a place the practitioner is not looking.
+  // ⚠ THE FLAG MUST BE DERIVED, NOT DECLARED. The first version of this tested for the WORD
+  // `medicationKept`, and its break-test did not redden: hardcoding the value to false left the type
+  // signature still carrying the name, so the assertion passed against an engine that had stopped
+  // reporting the thing it is named after. Same shape as the ui-2 weakness -- a needle that matches a
+  // declaration proves nothing about behaviour.
+  // ⚠ COUNTED, BECAUSE IT IS REPORTED IN TWO PLACES AND BOTH MATTER: the value returned to the screen,
+  // and the audit payload. This took THREE attempts to get right, each failure the same shape as ui-2.
+  // First it tested for the WORD `medicationKept` -- the type signature carries that, so hardcoding the
+  // value to false still passed. Then it tested the derivation with .test() -- which matched the AUDIT
+  // line while the RETURN was broken. An assertion over two call sites has to count them.
+  const keptDerived = (engineSrc.match(/medicationKept: !!row\.medication_ref/g) ?? []).length;
+  ok("7-22. withdrawal reports the surviving medication to BOTH the screen and the audit log",
+    keptDerived >= 2 && /medicationKept/.test(capSrcTreat),
+    `${keptDerived} of 2 derived from the row`);
+
   ok("7-16-control. the fixture configures more frequencies than the quick set draws",
     freqOpts.length > 5, `${freqOpts.length} configured`);
   // ⚠ REPOINTED WHEN THE CHIPS BECAME A DROPDOWN, AND THE GUARANTEE GOT STRONGER RATHER THAN WEAKER.

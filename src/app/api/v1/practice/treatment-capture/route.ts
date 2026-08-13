@@ -3,6 +3,7 @@ import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import {
   recordTreatmentBatch, saveTreatmentTemplate, retireTreatmentTemplate,
   setTreatmentOptionState, createTreatmentOption, createMedicationCatalogueItem,
+  updateEncounterTreatment, removeEncounterTreatment,
   type PendingTreatment,
 } from "@/lib/practice/treatment-capture";
 import { TREATMENT_FIELD_KEYS, type TreatmentFieldKey } from "@/lib/practice/treatment-capture-constants";
@@ -123,6 +124,29 @@ export async function POST(req: NextRequest) {
         ...actor,
       });
       return respond(result, caller.traceId, 201);
+    }
+
+    // CPR-TRT-UI-002 s19: Edit and Remove on a recorded card. Both refuse a signed encounter by name.
+    case "correct": {
+      const result = await updateEncounterTreatment(caller.admin, ctx, {
+        treatmentId: String(body.treatmentId ?? ""),
+        label: body.label === undefined ? undefined : String(body.label),
+        dose: body.dose === undefined ? undefined : (body.dose === null ? null : String(body.dose)),
+        route: body.route === undefined ? undefined : (body.route === null ? null : String(body.route)),
+        frequency: body.frequency === undefined ? undefined : (body.frequency === null ? null : String(body.frequency)),
+        duration: body.duration === undefined ? undefined : (body.duration === null ? null : String(body.duration)),
+        status: body.status === undefined ? undefined : String(body.status),
+        actorId: caller.userId, correlationId: caller.traceId,
+      });
+      return respond(result, caller.traceId);
+    }
+
+    case "withdraw": {
+      const result = await removeEncounterTreatment(caller.admin, ctx, {
+        treatmentId: String(body.treatmentId ?? ""),
+        actorId: caller.userId, correlationId: caller.traceId,
+      });
+      return respond(result, caller.traceId);
     }
 
     default:
