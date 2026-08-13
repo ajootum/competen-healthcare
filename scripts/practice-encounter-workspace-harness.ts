@@ -42,6 +42,7 @@ import {
 // fixture happened to hit a different endpoint.
 import { recordTreatmentBatch } from "../src/lib/practice/treatment-capture";
 import { recordDiagnosisBatch } from "../src/lib/practice/diagnosis-capture";
+import { recordProcedureBatch } from "../src/lib/practice/procedure-capture";
 import {
   encountersDashboard, encounterExtras, addDecision, removeDecision,
   recordInvestigation, reviewInvestigation, recordReferral, updateReferralStatus,
@@ -568,7 +569,12 @@ async function main() {
     ["create a document from the consultation", /\/api\/v1\/practice\/documents/],
     ["raise a follow-up", /"\/api\/v1\/practice\/follow-ups"/],
     ["close a follow-up in this consultation", /follow-ups\/\$\{id\}/],
-    ["record a procedure", /"\/api\/v1\/practice\/procedures"/],
+    // ⚠ "record a procedure" DROPPED ITS URL LITERAL, joining treatment and investigation. The working
+    // set posts to /procedures/batch, so the bare literal cannot match -- and a pattern that cannot
+    // match is not a guard, it is a permanent red light people learn to scroll past. The write itself is
+    // proved by 13a-10 and 13a-10b, which read the row back out of practice_procedure.
+    //
+    // The OUTCOME writer below keeps its pattern: it still posts to /procedures/{id} from the workspace.
     ["record a procedure outcome", /procedures\/\$\{procedureId\}/],
     ["expand a smart phrase", /\/api\/v1\/practice\/smart-phrases/],
   ];
@@ -647,10 +653,17 @@ async function main() {
     // grep for. Keeping them here made this assertion permanently red against correct code -- and a
     // permanently red guard is one people learn to scroll past, which is worse than no guard at all.
     // procedures
-    'aria-label="Procedure"', 'aria-label="Side"', 'aria-label="Consent"', 'aria-label="Outcome"',
-    "Name (if not in the catalogue)", "Site (optional)", "Indication (optional)",
-    "Why was it abandoned?", "Immediate outcome (optional)",
-    'aria-label="Outcome type"', 'aria-label="Severity"', "What was observed",
+    // ⚠ REPOINTED AT THE WORKING SET'S MARKUP, and legitimate ONLY because 13a-10 and 13a-10b now prove
+    // a procedure reaches practice_procedure. Repointing a source scan while nothing tested the write
+    // would be deleting the guard and calling it maintenance -- the same standard applied to the
+    // diagnosis fields yesterday.
+    //
+    // The aria-labels became PER-ROW ("Side for Wound dressing") rather than bare, which is better for a
+    // screen reader working down a table of several procedures and is why the old bare literals no
+    // longer match. The capability is unchanged; the wording is not pinned.
+    'placeholder="Name the procedure..."', 'aria-label={`Side for', 'aria-label={`Consent for',
+    "Indication (optional)", "Why was it abandoned?", "Immediate outcome (optional)",
+    'aria-label="Outcome"', 'aria-label="Severity"', "What happened (optional)",
     // investigations
     // ⚠ TWO INVESTIGATION PROMPTS REMOVED AND ONE KEPT, and the difference is worth stating. "What did
     // you make of it?" is still in InvestigationCapture and still asserted. "What are you asking for?"
@@ -774,6 +787,26 @@ async function main() {
       inv.ok, inv.ok ? "" : `${inv.code}: ${inv.message}`);
     const { data: invRow, error: invErr } = await admin.from("practice_encounter_investigation")
       .select("id, label").eq("encounter_id", encTx.data.id).maybeSingle();
+    // ── 13a-10. THE SAME GUARD FOR PROCEDURES ─────────────────────────────────────────────────────
+    //
+    // ⚠ THE FOURTH CAPTURE PATH, AND THE LAST ONE WITHOUT COVER. CP-ENC-PROC-001 replaces the procedure
+    // form with a working set, and two earlier attempts at that swap each lost something. Source scans
+    // caught both -- but a source scan cannot say whether a procedure still REACHES the database, and
+    // that is the question the rewrite actually turns on.
+    const proc = await recordProcedureBatch(admin, ctxA, {
+      encounterId: encTx.data.id,
+      items: [{ label: "Wound dressing", site: "Left forearm", laterality: "left" }],
+      ...base,
+    });
+    ok("13a-10. ⚠ RECORDING A PROCEDURE THROUGH THE REAL ENGINE SUCCEEDS",
+      proc.ok && proc.data.recorded === 1,
+      proc.ok ? JSON.stringify(proc.data.results[0]) : `${proc.code}: ${proc.message}`);
+    const { data: procRow, error: procErr } = await admin.from("practice_procedure")
+      .select("id, label, site").eq("encounter_id", encTx.data.id).maybeSingle();
+    ok("13a-10b. ⚠ AND THE ROW IS IN practice_procedure, read back rather than taken on trust",
+      !procErr && !!procRow && procRow.label === "Wound dressing" && procRow.site === "Left forearm",
+      procErr?.message ?? JSON.stringify(procRow));
+
     ok("13a-7b. ⚠ AND THE ROW IS IN practice_encounter_investigation",
       !invErr && !!invRow && invRow.label === "Full blood count",
       invErr?.message ?? (invRow ? `label was ${invRow.label}` : "no row"));

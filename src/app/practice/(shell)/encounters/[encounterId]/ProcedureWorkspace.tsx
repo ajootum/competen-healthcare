@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   PANEL, SectionHeader, Badge, Tip, EmptyState,
@@ -137,13 +137,18 @@ export default function ProcedureWorkspace(props: {
       // ⚠ MAPPED BY POSITION IN THE SUBMITTED LIST, not by row index. The two diverge the moment a blank
       // row is skipped, and mismatching them would attach one procedure's refusal to another's row.
       const results = (json.results ?? []) as { index: number; ok: boolean; message?: string }[];
+      // ⚠ A RECORDED ROW LEAVES THE WORKING SET, the same fix the Diagnoses tab needed after the owner
+      // found a recorded entry showing twice -- once in the list above, once as a dead locked row below.
+      // The working set holds only what is still PENDING; what is recorded lives in the list, where
+      // outcome recording hangs off it.
       setRows(prev => {
         const next = [...prev];
         for (const out of results) {
           const target = items[out.index];
           if (target) next[target.i] = { ...next[target.i], outcome: { ok: out.ok, message: out.message } };
         }
-        return next;
+        const remaining = next.filter(r => !r.outcome?.ok);
+        return remaining.length ? remaining : [newRow()];
       });
       const okCount = results.filter(r => r.ok).length;
       const bad = results.length - okCount;
@@ -237,7 +242,10 @@ export default function ProcedureWorkspace(props: {
                 </thead>
                 <tbody>
                   {rows.map((r, i) => (
-                    <tr key={r.key} className={`${WS_ROW} ${r.outcome?.ok ? "bg-emerald-50/50" : r.outcome ? "bg-rose-50/50" : ""}`}>
+                    // ⚠ A FRAGMENT, BECAUSE EACH ROW IS NOW TWO <tr>s. Wrapping them in a div would be
+                    // invalid inside a tbody and the browser would hoist it out of the table silently.
+                    <Fragment key={r.key}>
+                    <tr className={`${WS_ROW} ${r.outcome?.ok ? "bg-emerald-50/50" : r.outcome ? "bg-rose-50/50" : ""}`}>
                       <td className={WS_TD}>
                         <input value={r.label} disabled={busy || r.outcome?.ok === true}
                           placeholder="Name the procedure..." className={input}
@@ -282,6 +290,43 @@ export default function ProcedureWorkspace(props: {
                         )}
                       </td>
                     </tr>
+
+                    {/* ⚠ THE THREE FIELDS THE FIRST WIRING ATTEMPT DROPPED, on a second line rather than
+                        three more columns. Six columns already scroll on a laptop, and a field pushed off
+                        the right edge is a field nobody fills -- which is how a capture loss happens
+                        after the code is technically correct.
+
+                        ⚠ ABANDONED REASON APPEARS ONLY WHEN THE STATUS IS ABANDONED. This is the first
+                        piece of s6's "only show fields clinically relevant to the selected procedure" --
+                        the rest needs per-type requirements from the catalogue, which this screen does
+                        not read yet. Asking why something was stopped that was not stopped invites an
+                        answer that contradicts the record beside it. */}
+                    {!r.outcome?.ok && (
+                      <tr key={`${r.key}-detail`} className="border-t-0">
+                        <td className="px-3 pb-2.5" colSpan={6}>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input value={r.indication} disabled={busy}
+                              placeholder="Indication (optional)"
+                              aria-label={`Indication for ${r.label || "row " + (i + 1)}`}
+                              onChange={e => set(i, { indication: e.target.value })}
+                              className="min-w-[180px] flex-1 rounded-lg border border-gray-200 px-2 py-1 text-[12px]" />
+                            <input value={r.immediateOutcome} disabled={busy}
+                              placeholder="Immediate outcome (optional)"
+                              aria-label={`Immediate outcome for ${r.label || "row " + (i + 1)}`}
+                              onChange={e => set(i, { immediateOutcome: e.target.value })}
+                              className="min-w-[180px] flex-1 rounded-lg border border-gray-200 px-2 py-1 text-[12px]" />
+                            {r.status === "ABANDONED" && (
+                              <input value={r.abandonedReason} disabled={busy}
+                                placeholder="Why was it abandoned?"
+                                aria-label={`Reason abandoned for ${r.label || "row " + (i + 1)}`}
+                                onChange={e => set(i, { abandonedReason: e.target.value })}
+                                className="min-w-[200px] flex-1 rounded-lg border border-amber-300 bg-amber-50/40 px-2 py-1 text-[12px]" />
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                   ))}
                 </tbody>
               </table>

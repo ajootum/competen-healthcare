@@ -5,10 +5,10 @@ import Link from "next/link";
 import { ENCOUNTER_TRANSITIONS, NOTE_TYPES, LOCKED_STATUSES, actionFor, labelFor } from "@/lib/practice/encounter-constants";
 import { DOC_TYPES } from "@/lib/practice/document-constants";
 import { FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
-import {
-  LATERALITIES, SIDED_LATERALITIES, CONSENT_STATUSES, PROCEDURE_STATUSES,
-  OUTCOME_TYPES, OUTCOME_SEVERITIES, SEVERITY_REQUIRED_FOR,
-} from "@/lib/practice/procedure-constants";
+// ⚠ THE PROCEDURE VOCABULARIES MOVED TO ProcedureWorkspace WITH THE FORM. Only what this file still
+// renders stays imported -- a vocabulary imported here and used nowhere is the next person's evidence
+// that procedure capture still lives in this file, which it does not.
+import { SIDED_LATERALITIES } from "@/lib/practice/procedure-constants";
 import {
   ENCOUNTER_TABS, QUICK_ACTIONS, QUICK_ACTION_ICON, ENCOUNTER_OUTCOMES, OUTCOME_SWATCH,
   REFERRAL_CHIP, REFERRAL_STATUSES, CLINICAL_FLOW_BLOCKS, DECISION_CARDS,
@@ -20,6 +20,7 @@ import { formatTime, formatDate } from "@/lib/datetime";
 // The shared encounter visual language. Follow-up is the first tab on it; the other seven follow.
 import { PANEL, SectionHeader, EmptyState, Tip, Advisory } from "@/components/practice/EncounterKit";
 import DiagnosisWorkspace from "./DiagnosisWorkspace";
+import ProcedureWorkspace from "./ProcedureWorkspace";
 
 // CPR-ENC-002's consultation surface: the comp's eight-tab main workspace and the right-hand actions
 // panel, over the SOAP note, diagnoses, treatments, procedures, investigations, referrals, follow-up,
@@ -157,13 +158,6 @@ export default function EncounterConsole(props: {
   const [fu, setFu] = useState({ reason: "", kind: "review", intervalCode: "2w", priority: "routine" });
   const [closingFu, setClosingFu] = useState<string | null>(null);
   const [fuOutcome, setFuOutcome] = useState("");
-  const [proc, setProc] = useState({
-    procedureTypeId: "", label: "", site: "", laterality: "not_applicable",
-    indication: "", consentStatus: "not_recorded", status: "PERFORMED",
-    abandonedReason: "", immediateOutcome: "",
-  });
-  const [outcomeFor, setOutcomeFor] = useState<string | null>(null);
-  const [outcome, setOutcome] = useState({ outcomeType: "healing", severity: "mild", detail: "" });
   // migration 238
   const [decision, setDecision] = useState("");
   const [ref, setRef] = useState({ referredTo: "", reason: "" });
@@ -283,21 +277,9 @@ export default function EncounterConsole(props: {
     body: JSON.stringify({ action: "complete", closingEncounterId: props.encounterId, outcome: fuOutcome }),
   }), "Follow-up closed.", true);
 
-  const recordProcedure = () => call(() => fetch("/api/v1/practice/procedures", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ encounterId: props.encounterId, ...proc, procedureTypeId: proc.procedureTypeId || undefined }),
-  }), "Procedure recorded.", true);
-
-  // THE OBSERVING ENCOUNTER IS THIS ONE, and it is what makes the outcome traceable: a reader can walk
-  // from "this wound got infected" back to the day it was made.
-  const addOutcome = (procedureId: string) => call(() => fetch(`/api/v1/practice/procedures/${procedureId}`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      observedAtEncounterId: props.encounterId, outcomeType: outcome.outcomeType,
-      severity: SEVERITY_REQUIRED_FOR.includes(outcome.outcomeType) ? outcome.severity : undefined,
-      detail: outcome.detail,
-    }),
-  }), "Outcome recorded.", true);
+  // (recordProcedure and addOutcome moved into ProcedureWorkspace with the form. BOTH have
+  // replacements there -- addOutcome as a per-row action on an already-recorded procedure -- which is
+  // the check the first attempt at this rewrite skipped, deleting a writer that had none.)
 
   const transition = (action: string, label: string) => {
     if (action === "sign" && !confirm("Signing locks this encounter. Only a governed amendment can change it afterwards. Sign now?")) return;
@@ -914,141 +896,19 @@ export default function EncounterConsole(props: {
                 CPR-150. What was DONE, as distinct from the plan: a treatment row saying "excision,
                 planned" is not evidence anything happened, and a procedure row is. The patient's recent
                 procedures are listed, not just today's, because an outcome is learned later. */}
+            {/* ⚠ CP-ENC-PROC-001 s1: the one-at-a-time form becomes a working set. BOTH writers moved
+                across -- the procedure form AND outcome recording, the latter now a per-row action on
+                an already-recorded procedure. Two earlier attempts at this swap each lost something
+                (outcome recording, then three capture fields) and were reverted; 13a-1 and 13a-2 are
+                what caught both. The batch is a loop over the SINGLE engine, so the sided-laterality
+                rule stays in one place -- a second opinion there is a wrong-site record. */}
             {tab === "procedures" && (
-              <section>
-                <h3 className="text-[13px] font-bold text-gray-900">Procedures performed</h3>
-                {props.procedures.length === 0 ? (
-                  <p className="mt-2 text-[12px] text-gray-400">Nothing recorded for this patient.</p>
-                ) : (
-                  <ul className="mt-2 flex flex-col gap-2">
-                    {props.procedures.map(p => (
-                      <li key={p.id} className="border-l-2 border-gray-100 pl-2">
-                        <div className="flex items-center gap-2 flex-wrap text-[12px]">
-                          <span className="font-semibold text-gray-800">{p.label}</span>
-                          {SIDED_LATERALITIES.includes(p.laterality) && (
-                            <span className="rounded bg-[var(--cmp-surface-information)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--cmp-text-information)]">
-                              {p.laterality}
-                            </span>
-                          )}
-                          {p.site && <span className="text-gray-600">{p.site}</span>}
-                          {p.status === "ABANDONED" && (
-                            <span className="rounded bg-[var(--cmp-surface-warning)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--cmp-text-warning)]">abandoned</span>
-                          )}
-                          {p.hasComplication && (
-                            <span className="rounded bg-[var(--cmp-surface-critical)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--cmp-text-critical)]">complication</span>
-                          )}
-                          <span className="ml-auto text-[11px] text-gray-400">{String(p.performed_at).slice(0, 10)}</span>
-                        </div>
-                        <p className="text-[10px] text-gray-400">
-                          consent {String(p.consent_status).replace(/_/g, " ")}
-                          {p.encounter_id === props.encounterId ? " · this consultation" : ""}
-                        </p>
-                        {p.outcomes.length > 0 && (
-                          <ul className="mt-0.5 flex flex-col gap-0.5">
-                            {p.outcomes.map((o: any) => (
-                              <li key={o.id} className="text-[11px] text-gray-600">
-                                <span className="text-gray-400">{o.observed_on}</span>{" "}
-                                <span className={o.outcome_type === "complication" ? "font-semibold text-[var(--cmp-text-critical)]" : ""}>
-                                  {o.outcome_type}{o.severity ? ` (${o.severity})` : ""}
-                                </span>{" "}
-                                {o.detail}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                        {editable && props.canProcedure && (
-                          <button type="button" disabled={busy}
-                            onClick={() => { setOutcome({ outcomeType: "healing", severity: "mild", detail: "" }); setOutcomeFor(outcomeFor === p.id ? null : p.id); }}
-                            className="mt-1 rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
-                            Record what has happened since
-                          </button>
-                        )}
-                        {outcomeFor === p.id && (
-                          <form className="mt-1.5 grid grid-cols-2 gap-2 rounded-lg bg-gray-50 p-2"
-                            onSubmit={e => { e.preventDefault(); addOutcome(p.id); }}>
-                            <select aria-label="Outcome type" value={outcome.outcomeType}
-                              onChange={e => setOutcome(o => ({ ...o, outcomeType: e.target.value }))} className={input}>
-                              {OUTCOME_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                            </select>
-                            {SEVERITY_REQUIRED_FOR.includes(outcome.outcomeType) ? (
-                              <select aria-label="Severity" value={outcome.severity}
-                                onChange={e => setOutcome(o => ({ ...o, severity: e.target.value }))} className={input}>
-                                {OUTCOME_SEVERITIES.map(s => <option key={s} value={s}>{s}</option>)}
-                              </select>
-                            ) : <span />}
-                            <input required placeholder="What was observed" value={outcome.detail}
-                              onChange={e => setOutcome(o => ({ ...o, detail: e.target.value }))} className={`${input} col-span-2`} />
-                            <button type="submit" disabled={busy || !outcome.detail.trim()}
-                              className="col-span-2 rounded-lg border border-gray-200 bg-white py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                              Record
-                            </button>
-                            <p className="col-span-2 text-[10px] text-gray-400">
-                              This is filed against today&apos;s consultation as where it was noticed, and against
-                              the procedure as what it is about. The original record is untouched.
-                            </p>
-                          </form>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {editable && props.canProcedure && (
-                  <form className="mt-3 grid grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); recordProcedure(); }}>
-                    <select aria-label="Procedure" value={proc.procedureTypeId}
-                      onChange={e => {
-                        const t = props.procedureTypes.find(x => x.id === e.target.value);
-                        setProc(p => ({
-                          ...p, procedureTypeId: e.target.value, label: t?.name ?? p.label,
-                          // Reset the side when the chosen procedure has none, so a stale "left" cannot
-                          // ride along from a previous selection.
-                          laterality: t?.sided ? p.laterality : "not_applicable",
-                        }));
-                      }}
-                      className={`${input} col-span-2`}>
-                      <option value="">Choose from the catalogue, or type a name below…</option>
-                      {props.procedureTypes.map(t => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}{t.sided ? " (sided)" : ""}{t.consent_required ? " · consent required" : ""}
-                        </option>
-                      ))}
-                    </select>
-                    <input placeholder="Name (if not in the catalogue)" value={proc.label}
-                      onChange={e => setProc(p => ({ ...p, label: e.target.value }))} className={input} />
-                    <input placeholder="Site (optional)" value={proc.site}
-                      onChange={e => setProc(p => ({ ...p, site: e.target.value }))} className={input} />
-                    <select aria-label="Side" value={proc.laterality}
-                      onChange={e => setProc(p => ({ ...p, laterality: e.target.value }))} className={input}>
-                      {LATERALITIES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                    </select>
-                    <select aria-label="Consent" value={proc.consentStatus}
-                      onChange={e => setProc(p => ({ ...p, consentStatus: e.target.value }))} className={input}>
-                      {CONSENT_STATUSES.map(([k, l]) => <option key={k} value={k}>Consent: {l}</option>)}
-                    </select>
-                    <input placeholder="Indication (optional)" value={proc.indication}
-                      onChange={e => setProc(p => ({ ...p, indication: e.target.value }))} className={input} />
-                    <select aria-label="Outcome" value={proc.status}
-                      onChange={e => setProc(p => ({ ...p, status: e.target.value }))} className={input}>
-                      {PROCEDURE_STATUSES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                    </select>
-                    {proc.status === "ABANDONED" && (
-                      <input required placeholder="Why was it abandoned?" value={proc.abandonedReason}
-                        onChange={e => setProc(p => ({ ...p, abandonedReason: e.target.value }))} className={`${input} col-span-2`} />
-                    )}
-                    <input placeholder="Immediate outcome (optional)" value={proc.immediateOutcome}
-                      onChange={e => setProc(p => ({ ...p, immediateOutcome: e.target.value }))} className={`${input} col-span-2`} />
-                    <button type="submit" disabled={busy || !(proc.label.trim() || proc.procedureTypeId)}
-                      className="col-span-2 rounded-lg border border-gray-200 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                      Record procedure
-                    </button>
-                    <p className="col-span-2 text-[10px] text-gray-400">
-                      A procedure marked sided will be refused without a side, and one requiring consent will be
-                      refused while consent reads &ldquo;not recorded&rdquo;. Neither is a warning you can click
-                      past &mdash; the engine says no.
-                    </p>
-                  </form>
-                )}
-              </section>
+              <ProcedureWorkspace
+                encounterId={props.encounterId}
+                recorded={props.procedures}
+                editable={editable}
+                canRecord={props.canProcedure}
+              />
             )}
 
             {/* ══ INVESTIGATIONS -- CPR-INV-001 ════════════════════════════
