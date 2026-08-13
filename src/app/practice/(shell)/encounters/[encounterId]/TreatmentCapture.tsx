@@ -148,37 +148,77 @@ export default function TreatmentCapture(props: {
     } finally { setBusy(false); }
   }
 
-  const addToPlan = (item: PendingTreatment) => {
+  // ⚠ RETURNS WHETHER IT ADDED, so the caller can tell a refusal from a success. It used to return
+  // nothing and the caller cleared the draft regardless -- so hitting the cap ANSWERED A REFUSAL BY
+  // DELETING THE TREATMENT the practitioner had just typed out, dose and all.
+  const addToPlan = (item: PendingTreatment): boolean => {
     if (plan.length >= cap.maxPending) {
       setNotice({ kind: "err", text: `A plan holds at most ${cap.maxPending} treatments.` });
-      return;
+      return false;
     }
     setPlan(p => [...p, item]);
+    return true;
   };
 
-  const commitDraft = () => {
-    if (!draft.label?.trim()) return;
+  // ⚠ ONE PLACE BUILDS THE ITEM, because two callers need it now: "Add to the plan", and the record
+  // button when it is asked to write a draft nobody added. Were these to drift apart, a treatment
+  // recorded directly would carry different frequency wording from the identical one added first --
+  // and the difference would live in the patient's record, where nobody would think to look for it.
+  const draftItem = (): PendingTreatment | null => {
+    if (!draft.label?.trim()) return null;
     const custom = draft.frequencyCode === OTHER_OPTION_CODE;
-    addToPlan({
+    return {
       ...draft,
       // ⚠ s5's REQUIREMENT, HERE. Choosing Other keeps the practitioner's own wording as the frequency,
       // and the engine leaves frequency_code NULL so a reader can tell it was typed rather than tapped.
       frequencyText: custom ? customFrequency.trim() : (draft.frequencyText ?? null),
       frequencyPerDay: custom ? null : draft.frequencyPerDay,
-    });
+    };
+  };
+
+  const clearDraft = () => {
     setDraft(blankDraft(draft.treatmentType));
     setCustomFrequency(""); setMedQuery(""); setDose(null); setCalcOpen(false);
   };
 
+  const commitDraft = () => {
+    const item = draftItem();
+    if (!item) return;
+    if (addToPlan(item)) clearDraft();
+  };
+
+  // ⚠ WHAT THE BUTTON WILL ACTUALLY WRITE, which is the plan PLUS any started draft. The count on the
+  // button has to be the count that gets recorded, or the button is lying about its own effect.
+  const recordCount = plan.length + (draft.label?.trim() ? 1 : 0);
+
   async function record() {
+    // ⚠ THE PRIMARY BUTTON RECORDS THE DRAFT TOO (the owner, 2026-08-13: "have tried recording a
+    // treatment, however it does not seem to record. Stays highlighted"). This was a two-step form in
+    // which only one step looked like an action: a FINISHED draft with an empty plan left this button
+    // DISABLED, so pressing it did nothing whatsoever -- no write, no refusal, no message, and the
+    // chips stayed lit exactly as they were. A disabled control cannot tell you why it is disabled,
+    // which is what made a working screen read as a broken one.
+    // Explaining the trap was the first attempt at this. Removing it is the fix.
+    const pending = draftItem();
+    const submitted = pending ? [...plan, pending] : plan;
+    if (submitted.length === 0) return;
+    if (submitted.length > cap.maxPending) {
+      setNotice({ kind: "err", text: `A plan holds at most ${cap.maxPending} treatments.` });
+      return;
+    }
     const body = await post("/api/v1/practice/treatment-capture", {
-      action: "record", encounterId: props.encounterId, items: plan,
+      action: "record", encounterId: props.encounterId, items: submitted,
     });
     if (!body) return;
     const results = (body.results ?? []) as any[];
     setItemResults(results.map(r => ({ label: r.label, ok: r.ok, message: r.message })));
     const badIdx = new Set(results.filter(r => !r.ok).map(r => Number(r.index)));
-    setPlan(p => p.filter((_, i) => badIdx.has(i)));
+    // ⚠ WHAT FAILED STAYS, WHAT SAVED GOES -- and the draft is judged by that same rule, because by
+    // this point it IS one of the batch. A refused draft comes back as a plan row instead of
+    // vanishing with the form, which is the only outcome where its author can still see what they
+    // wrote. Indices are the engine's own `index` over the array we submitted, so they line up.
+    setPlan(submitted.filter((_, i) => badIdx.has(i)));
+    if (pending) clearDraft();
     setNotice({
       kind: badIdx.size === 0 ? "ok" : "err",
       text: badIdx.size === 0
@@ -820,29 +860,25 @@ export default function TreatmentCapture(props: {
           <div className={`${CARD} mt-3`}>
             <div className="flex items-baseline gap-2 flex-wrap">
               <h4 className="text-[12px] font-bold text-gray-900">
-                {plan.length === 0 ? "Nothing in the plan yet" : `${plan.length} to record`}
+                {recordCount === 0 ? "Nothing to record yet" : `${recordCount} to record`}
               </h4>
             </div>
 
-            {/* ⚠ THE DISABLED BUTTON NOW SAYS WHAT TO DO FIRST (the owner, 2026-08-13: "have tried
-                recording a treatment, however it does not seem to record").
-                THIS IS A TWO-STEP FORM AND ONLY ONE STEP LOOKED LIKE AN ACTION. The fields build a
-                DRAFT; "Add to the plan" moves it into the plan; "Record treatments" writes the plan.
-                Somebody who fills the form and presses the big primary button gets nothing, no message,
-                and no indication that the quiet button above it was the one that mattered -- so the
-                product reads as broken when it is merely silent.
-                Shown only while a draft is actually started, so it is guidance at the moment it applies
-                rather than a permanent instruction nobody reads. */}
+            {/* ⚠ THIS SENTENCE ONCE SAID "Nothing is written until you do" -- true of the two-step form,
+                and FALSE the moment the record button started accepting the draft. Guidance describing
+                behaviour the product no longer has is worse than none: it is read as authoritative and
+                it teaches the wrong model. It is replaced, not merely reworded, and "Add to the plan"
+                is now correctly described as OPTIONAL -- it is for building several, not a toll gate. */}
             {plan.length === 0 && !!draft.label?.trim() && (
-              <p className="mt-1 text-[11.5px] text-[var(--cmp-text-warning)]">
-                <strong>{draft.label.trim()}</strong> is not in the plan yet &mdash; press
-                {" "}<strong>Add to the plan</strong> above, then record. Nothing is written until you do.
+              <p className="mt-1 text-[11.5px] text-gray-600">
+                <strong>{draft.label.trim()}</strong> will be recorded when you press the button below.
+                Use <strong>Add to the plan</strong> first only to build up several together.
               </p>
             )}
-            {plan.length === 0 && !draft.label?.trim() && (
+            {recordCount === 0 && (
               <p className="mt-1 text-[11.5px] text-gray-500">
-                Build a treatment above and press <strong>Add to the plan</strong>. Several can be added
-                before recording them together.
+                Build a treatment above, then record it. Use <strong>Add to the plan</strong> if you
+                want several recorded together.
               </p>
             )}
 
@@ -878,9 +914,14 @@ export default function TreatmentCapture(props: {
 
             <p className="mt-2 text-[10px] text-gray-500">{BATCH_BOUNDARY}</p>
 
+            {/* ⚠ ENABLED BY WHAT IT WILL WRITE, not by the plan alone. A finished draft used to leave
+                this DISABLED, and a disabled control cannot explain itself: the press produced no
+                write, no refusal and no message, which is exactly how a working screen came to be
+                reported as broken. STILL DISABLED AT recordCount === 0 -- there is genuinely nothing
+                to write then, and the sentence above says what to do. */}
             <button type="button" data-step="record-batch" className={`${BTN} mt-2`}
-              disabled={busy || plan.length === 0} onClick={record}>
-              {busy ? "Recording…" : `Record ${plan.length || ""} treatment${plan.length === 1 ? "" : "s"}`}
+              disabled={busy || recordCount === 0} onClick={record}>
+              {busy ? "Recording…" : `Record ${recordCount || ""} treatment${recordCount === 1 ? "" : "s"}`}
             </button>
 
             {itemResults.length > 0 && (
