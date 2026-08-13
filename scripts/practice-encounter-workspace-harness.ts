@@ -470,10 +470,26 @@ async function main() {
   // A grep, because the refusal is about what does NOT exist and no runtime call can prove that.
   const tree = walk(join(process.cwd(), "src", "app", "practice"))
     .concat(walk(join(process.cwd(), "src", "app", "api", "v1", "practice")));
-  const resultWriters = tree.filter(f => /practice_encounter_investigation[\s\S]{0,200}result/.test(readFileSync(f, "utf8")));
+  // ⚠ COMMENTS STRIPPED FIRST, which this assertion was not doing and which withoutComments exists at
+  // the top of this file to do. It reddened against EncounterConsole because a COMMENT there explains
+  // that the investigation row "still refuses to hold a result" -- the file was being punished for
+  // documenting the very rule being asserted, and the fix is the one the helper's own header describes:
+  // "EVERY ASSERTION THAT SOMETHING IS *NOT* RENDERED HAS TO GO THROUGH THIS."
+  //
+  // The failure mode is worth naming because it is self-reinforcing: writing down WHY a thing is absent
+  // is what makes the scan for that thing fail, so the assertion punishes exactly the files that explain
+  // themselves best.
+  const resultWriters = tree.filter(f =>
+    /practice_encounter_investigation[\s\S]{0,200}result/.test(withoutComments(readFileSync(f, "utf8"))));
   ok("src-1. ⚠ nothing in the Practice tree writes or reads a `result` on an investigation",
     resultWriters.length === 0, resultWriters.join(", "));
   ok("src-2. control: the scan is looking at real files", tree.length > 20, `${tree.length} files`);
+  // ⚠ AND A CONTROL THAT STRIPPING DID NOT EMPTY THE FILES, or src-1 would pass on nothing at all --
+  // the vacuity this codebase has already shipped once when a comment-stripper met a heavily commented
+  // file and left it blank.
+  ok("src-1-control. stripping comments left real code behind",
+    tree.filter(f => withoutComments(readFileSync(f, "utf8")).trim().length > 200).length > 20,
+    "most files should still hold code after their comments are removed");
 
   // ── 11. ISOLATION + ANON ──────────────────────────────────────────────────
   const TABLES = ["practice_encounter_decision", "practice_encounter_investigation", "practice_referral"];
