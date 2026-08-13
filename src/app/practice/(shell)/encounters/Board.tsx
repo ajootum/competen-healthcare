@@ -254,11 +254,24 @@ export function WorkSection({ id, title, subtitle, panel, what, empty, canSeePat
         <PanelState permitted={panel.permitted} unavailable={panel.unavailable} detail={panel.detail}
           what={what} empty={empty} />
       ) : (
-        <ul className="mt-3 flex flex-col gap-2.5">
-          {panel.items.map(e => (
-            <EncounterCard key={e.id} e={e} canSeePatient={canSeePatient} canSign={canSign} />
-          ))}
-        </ul>
+        <>
+          <ul className="mt-3 flex flex-col gap-2.5">
+            {panel.items.map(e => (
+              <EncounterCard key={e.id} e={e} canSeePatient={canSeePatient} canSign={canSign} />
+            ))}
+          </ul>
+          {/* ⚠ THE CAP IS PRINTED WHEN IT IS REACHED. Until now this list stopped at BOARD_LIMIT and said
+              nothing, so fifty rows and "everything outstanding" looked identical -- and a board is
+              exactly where the second is believed, because it is meant to BE the complete picture.
+              Somebody hunting a consultation that is not among the first fifty concludes it is not
+              there. The engine over-fetches by one row purely so this sentence can be true. */}
+          {panel.capped && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11.5px] text-amber-900">
+              Showing the first {panel.items.length}. There are more than this &mdash; narrow by session
+              or search to see the rest. <strong>This is not the whole list.</strong>
+            </p>
+          )}
+        </>
       )}
       {/* ⚠ THE BOUND IS PRINTED WHENEVER IT COULD BE HIDING SOMETHING. A panel showing fifty of sixty
           without a word is how somebody concludes they have seen everything. */}

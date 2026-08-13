@@ -187,7 +187,7 @@ const ENC = (over: Partial<LandingEncounter> = {}): LandingEncounter => ({
 });
 
 const PANEL = (over: Partial<Panel<LandingEncounter>> = {}): Panel<LandingEncounter> => ({
-  items: [], permitted: true, unavailable: false, detail: null, ...over,
+  items: [], permitted: true, unavailable: false, detail: null, capped: false, ...over,
 });
 
 const ATT = (over: Partial<AttentionRow> = {}): AttentionRow => ({

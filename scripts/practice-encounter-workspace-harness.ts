@@ -408,10 +408,17 @@ async function main() {
 
   // And the SCREEN says all three in words -- a React branch cannot be reached from here, so the source
   // is checked instead.
-  const dashSrc = readFileSync(join(process.cwd(), "src/app/practice/(shell)/encounters/page.tsx"), "utf8");
-  ok("dash-7. the dashboard page renders all three states in words",
-    /permitted/.test(dashSrc) && /could not be read/.test(dashSrc) && /do not take it as one/i.test(dashSrc),
-    "the page is missing one of the three sentences");
+  // (dashSrc went with dash-7 above -- the three state sentences moved into Board.tsx PanelState, so
+  // there is nothing left on the page itself for this section to scan.)
+  // ⚠ THE THREE SENTENCES MOVED INTO A SHARED COMPONENT, which is why this reddened against a page that
+  // renders them correctly. Board.tsx's PanelState now draws all three -- not permitted, could not be
+  // read, and genuinely empty -- so every panel on the landing page says the same thing the same way.
+  // Scanning page.tsx alone was asserting WHERE the sentences live rather than THAT they exist.
+  const panelStateSrc = readFileSync(join(process.cwd(), "src/app/practice/(shell)/encounters/Board.tsx"), "utf8");
+  ok("dash-7. the three states are rendered in words, wherever the shared panel lives",
+    /do not hold the permission/i.test(panelStateSrc) && /could not be read/.test(panelStateSrc)
+    && /do not take it as one/i.test(panelStateSrc),
+    "one of the three sentences is missing from PanelState");
 
   // ── 9. SIGNATURE CLOSES EVERYTHING, AND THE DATABASE AGREES ───────────────
   await recordDiagnosis(admin, { workspaceId: wsA, encounterId: encId, label: "Epilepsy", certainty: "confirmed", isPrimary: true, ...base });
@@ -513,18 +520,45 @@ async function main() {
   const encDir = join(process.cwd(), "src", "app", "practice", "(shell)", "encounters");
   const listSrc = readFileSync(join(encDir, "page.tsx"), "utf8");
   const menuSrc = readFileSync(join(encDir, "RowMenu.tsx"), "utf8");
+  // ⚠ THE BOARD, NOT THE PAGE. The encounter card, the row menu and the shared PanelState all moved into
+  // Board.tsx; page.tsx composes it. Several assertions below were still reading the page and reporting
+  // features "missing" that had simply been extracted -- the same staleness that hit 13a-1 and 13a-2.
+  const panelSrc = readFileSync(join(encDir, "Board.tsx"), "utf8");
+  const landingSrc = readFileSync(join(process.cwd(), "src/lib/practice/encounters-landing.ts"), "utf8");
 
-  ok("ui-1. a session card filters the lists to its own encounters, by activity id",
-    /\?session=\$\{s\.id\}/.test(listSrc) && /e\.activityId === sessionFilter/.test(listSrc),
-    "the card's link and the filter must agree on the same id, or the button narrows to nothing");
-  ok("ui-2. 'View all' re-reads with a bigger bound rather than revealing hidden rows",
-    /closedLimit: CLOSED_ALL_LIMIT/.test(listSrc) && /closed=all/.test(listSrc),
-    "a client-side reveal would still be capped at twelve however it was labelled");
+  // ⚠ THE FILTER MOVED TO THE SERVER, which is better than what this used to assert. It pinned a
+  // CLIENT-SIDE expression (e.activityId === sessionFilter) filtering rows already fetched; the landing
+  // engine now takes `session` and narrows the QUERY, so a filtered board is not a capped board filtered
+  // down to three. The link moved into RowMenu with it. Both halves are still checked -- the link that
+  // sets the parameter and the page that passes it on -- because a link nobody reads and a parameter
+  // nobody sends fail in exactly the same silent way.
+  ok("ui-1. a session filter is offered, and applied at the SOURCE rather than in the browser",
+    /\?session=\$\{activityId\}/.test(menuSrc) && /session: sessionFilter/.test(listSrc),
+    "the menu must set ?session and the page must pass it to the engine");
+
+  // ⚠ THESE TWO DESCRIBED A SCREEN THAT NO LONGER EXISTS. They pinned closedLimit / CLOSED_ALL_LIMIT on
+  // encountersDashboard -- an engine with NO CALLER IN THE APPLICATION, only this harness. The landing
+  // page was rebuilt on encounters-landing.ts and nobody repointed them, so they reddened for the wrong
+  // reason while the REAL truncation went unguarded the whole time.
+  //
+  // The real one: the board capped at BOARD_LIMIT and said nothing, so fifty rows and "everything
+  // outstanding" looked identical. A board is exactly where the second is believed, because it is meant
+  // to BE the complete picture. The engine now over-fetches by one row purely so the panel can tell.
+  // ⚠ BOTH QUERIES, COUNTED -- not "does the string appear". The first version of this line used
+  // .test(), and its break-test did not redden: removing the over-fetch from the OPEN query left the
+  // READY one matching, so a board half-fixed would have reported itself fully guarded. An assertion
+  // over two call sites has to count them, or it only ever guards whichever one somebody edits last.
+  const overFetches = (landingSrc.match(/BOARD_LIMIT \+ 1/g) ?? []).length;
+  ok("ui-2. BOTH board queries can tell a full page from a truncated one",
+    overFetches >= 2 && /capped/.test(landingSrc),
+    `${overFetches} of 2 queries over-fetch; fetching exactly the bound makes full and truncated indistinguishable`);
   ok("ui-2b. ⚠ and the cap is PRINTED when it is reached -- a silent truncation reads as 'that is all'",
-    /closedCapped/.test(listSrc) && /Stopped at \{CLOSED_ALL_LIMIT\}/.test(listSrc),
-    "this is the assertion that stops 'View all' becoming a lie");
+    /panel\.capped/.test(panelSrc) && /This is not the whole list/.test(panelSrc),
+    "this is the assertion that stops a work list quietly claiming to be complete");
+  // ⚠ RENDERED FROM Board.tsx, not page.tsx -- the encounter card moved into the shared board component
+  // and this assertion kept looking at the page that composes it.
   ok("ui-3. the row menu exists, is keyboard-dismissable, and offers only real destinations",
-    /<RowMenu/.test(listSrc) && /useDismiss/.test(menuSrc)
+    /<RowMenu/.test(panelSrc) && /useDismiss/.test(menuSrc)
     && /\/practice\/patients\/\$\{patientId\}/.test(menuSrc) && /role="menu"/.test(menuSrc),
     "a scrim that closes on click alone traps a keyboard user in the menu");
   // ⚠ BOTH OF THESE MATCH A CALL SITE, NOT A WORD. The first versions searched for "cancel|delete" and

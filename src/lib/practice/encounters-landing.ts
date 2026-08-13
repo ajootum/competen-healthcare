@@ -75,11 +75,22 @@ export type Panel<T> = {
   permitted: boolean;
   unavailable: boolean;
   detail: string | null;
+  /**
+   * ⚠ TRUE WHEN THE LIST WAS CUT SHORT BY BOARD_LIMIT, and the screen MUST say so.
+   *
+   * A silently truncated work list reads as "that is all". Somebody looking for a consultation that is
+   * not among the first fifty concludes it does not exist -- and a board is exactly where that is
+   * believed, because it is meant to be the complete picture of what is outstanding.
+   *
+   * Default false, so every existing caller keeps its meaning: absent evidence of truncation is not
+   * evidence of truncation.
+   */
+  capped: boolean;
 };
 
-const denied = <T,>(): Panel<T> => ({ items: [], permitted: false, unavailable: false, detail: null });
-const failed = <T,>(detail: string): Panel<T> => ({ items: [], permitted: true, unavailable: true, detail });
-const loaded = <T,>(items: T[]): Panel<T> => ({ items, permitted: true, unavailable: false, detail: null });
+const denied = <T,>(): Panel<T> => ({ items: [], permitted: false, unavailable: false, detail: null, capped: false });
+const failed = <T,>(detail: string): Panel<T> => ({ items: [], permitted: true, unavailable: true, detail, capped: false });
+const loaded = <T,>(items: T[], capped = false): Panel<T> => ({ items, permitted: true, unavailable: false, detail: null, capped });
 
 // ── ROWS ────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -630,10 +641,13 @@ export async function encountersLanding(
   const [openRes, readyRes] = await Promise.all([
     withSession(admin.from("practice_encounter").select(ENCOUNTER_COLUMNS)
       .eq("workspace_id", ctx.workspaceId).in("status", LIVE_STATUSES)
-      .order("started_at", { ascending: false }).limit(BOARD_LIMIT)),
+      // ⚠ ONE MORE THAN THE BOUND. Fetching exactly BOARD_LIMIT makes "50 rows" ambiguous -- it could be
+      // everything, or the first fifty of three hundred -- and the screen cannot tell which. The extra
+      // row is trimmed and never rendered; its only job is to answer that question.
+      .order("started_at", { ascending: false }).limit(BOARD_LIMIT + 1)),
     withSession(admin.from("practice_encounter").select(ENCOUNTER_COLUMNS)
       .eq("workspace_id", ctx.workspaceId).eq("status", "COMPLETED")
-      .order("completed_at", { ascending: false, nullsFirst: false }).limit(BOARD_LIMIT)),
+      .order("completed_at", { ascending: false, nullsFirst: false }).limit(BOARD_LIMIT + 1)),
   ]);
 
   // ── history (s4.7), filtered and paginated ────────────────────────────────────────────────────────
@@ -654,8 +668,14 @@ export async function encountersLanding(
     // ONE OVER THE PAGE, so "there is more" is knowable rather than guessed.
     .range(offset, offset + HISTORY_PAGE_SIZE);
 
-  const openRows = openRes.error ? [] : ((openRes.data ?? []) as any[]);
-  const readyRows = readyRes.error ? [] : ((readyRes.data ?? []) as any[]);
+  // ⚠ THE EXTRA ROW IS DETECTED, THEN DROPPED. It is never shaped and never rendered -- it exists only
+  // so the panel can say whether there is more behind it.
+  const openAll = openRes.error ? [] : ((openRes.data ?? []) as any[]);
+  const readyAll = readyRes.error ? [] : ((readyRes.data ?? []) as any[]);
+  const openCapped = openAll.length > BOARD_LIMIT;
+  const readyCapped = readyAll.length > BOARD_LIMIT;
+  const openRows = openAll.slice(0, BOARD_LIMIT);
+  const readyRows = readyAll.slice(0, BOARD_LIMIT);
   const historyRowsRaw = historyRes.error ? [] : ((historyRes.data ?? []) as any[]);
   const historyHasMore = historyRowsRaw.length > HISTORY_PAGE_SIZE;
   const historyRows = historyRowsRaw.slice(0, HISTORY_PAGE_SIZE);
@@ -683,10 +703,10 @@ export async function encountersLanding(
 
   const open = openRes.error
     ? failed<LandingEncounter>(openRes.error.message)
-    : loaded(openRows.map(r => shape(r, shapeInput)));
+    : loaded(openRows.map(r => shape(r, shapeInput)), openCapped);
   const ready = readyRes.error
     ? failed<LandingEncounter>(readyRes.error.message)
-    : loaded(readyRows.map(r => shape(r, shapeInput)));
+    : loaded(readyRows.map(r => shape(r, shapeInput)), readyCapped);
   const history = historyRes.error
     ? failed<LandingEncounter>(historyRes.error.message)
     : loaded(historyRows.map(r => shape(r, { ...shapeInput, components: null })));
