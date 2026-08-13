@@ -51,6 +51,14 @@ export type WaitingQueueCardProps = {
   people: QueuePerson[];
   /** Set when the queue could not be read. An empty list and an unread list are different sentences. */
   unavailableReason: string | null;
+  /**
+   * Set when `people` is only the front of the queue.
+   *
+   * ⚠ ITS OWN FIELD, NOT FOLDED INTO unavailableReason. "could not be read" and "read, but this is not
+   * all of it" are different facts, and the second one still has a usable list under it -- collapsing
+   * them would either hide the rows or claim the read failed when it did not. Three states, not two.
+   */
+  truncatedNotice?: string | null;
   /** "Full queue" destination, when the reader has one. */
   href: string | null;
   /** Drawn per row only when a handler is given -- a button that cannot act is not drawn at all. */
@@ -82,7 +90,7 @@ const GROUP_DOT: Record<QueueGroupKey, string> = {
 };
 
 export default function WaitingQueueCard(props: WaitingQueueCardProps) {
-  const { people, unavailableReason, href, onStartEncounter, onMarkSeen, busyId, error } = props;
+  const { people, unavailableReason, truncatedNotice, href, onStartEncounter, onMarkSeen, busyId, error } = props;
   const [tab, setTab] = useState<QueueTabKey>("all");
 
   const countFor = (k: QueueTabKey) => k === "all" ? people.length : people.filter(p => p.group === k).length;
@@ -95,8 +103,13 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
           {PANEL.queue.icon}
         </span>
         <h2 id="queue-h" className="text-[13px] font-bold text-gray-900">Waiting queue</h2>
+        {/* ⚠ THE "+" IS NOT DECORATION. This badge counts the rows in hand, and when the list was
+            truncated that is a floor rather than a total -- "200" and "200+" are different claims, and
+            the bare one is false. The sentence below says the rest. */}
         {!unavailableReason && (
-          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-600">{people.length}</span>
+          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-600">
+            {people.length}{truncatedNotice ? "+" : ""}
+          </span>
         )}
         {href && (
           <Link href={href} className="ml-auto text-[11px] font-semibold text-[var(--cp-primary)] hover:underline">
@@ -109,6 +122,13 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
         <p className="text-[12px] text-gray-500">{unavailableReason}</p>
       ) : (
         <>
+          {/* ⚠ ABOVE THE TABS, because the tab counts are counts of what was loaded. Left below them it
+              would read as a footnote to one tab rather than a caveat on all four. */}
+          {truncatedNotice && (
+            <p className="mb-2.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11.5px] text-amber-900">
+              {truncatedNotice}
+            </p>
+          )}
           {/* ── THE FOUR TABS ────────────────────────────────────────────────────────────────────── */}
           <div role="tablist" aria-label="Queue groups" className="mb-2.5 flex flex-wrap gap-1">
             {TABS.map(t => {

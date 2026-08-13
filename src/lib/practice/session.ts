@@ -228,18 +228,37 @@ export type QueueRow = {
   patientId: string | null;
 };
 
+/**
+ * How many people this list will draw before it stops.
+ *
+ * ⚠ THE READ USED TO BE UNBOUNDED, which does NOT mean it returned everybody -- PostgREST stops at a
+ * thousand rows on its own and says nothing. The queue then reported `total: rows.length`, so a
+ * practice with more waiting than that was told it had exactly a thousand, and the number looked
+ * ordinary. A silent truncation reads as "that is all", which is the one thing it is not.
+ */
+export const QUEUE_LIMIT = 200;
+
 export async function waitingQueue(
   admin: any, ctx: WorkspaceContext, at: Date = new Date(),
-): Promise<{ groups: QueueGroup[]; total: number | null; unavailable: boolean }> {
-  const { data, error } = await admin.from("practice_queue_entry")
-    .select("id, patient_id, patient_name, status, entered_at, appointment_id, practice_appointment:appointment_id(appointment_type)")
+): Promise<{ groups: QueueGroup[]; total: number | null; unavailable: boolean; capped: boolean }> {
+  // ⚠ THE TOTAL COMES FROM THE DATABASE, NOT FROM THE ROWS. `count: exact` is computed over the whole
+  // matching set and is unaffected by the limit, so the figure on the badge stays true even when the
+  // list beneath it is trimmed. Counting the returned array instead is what made the cap invisible.
+  const { data, error, count } = await admin.from("practice_queue_entry")
+    .select(
+      "id, patient_id, patient_name, status, entered_at, appointment_id, practice_appointment:appointment_id(appointment_type)",
+      { count: "exact" })
     .eq("workspace_id", ctx.workspaceId)
     .in("status", ["WAITING", "READY", "IN_CONSULTATION"])
-    .order("entered_at", { ascending: true });
+    .order("entered_at", { ascending: true })
+    // One past the bound, purely so a full page can be told from a truncated one.
+    .limit(QUEUE_LIMIT + 1);
 
-  if (error) return { groups: [], total: null, unavailable: true };
+  if (error) return { groups: [], total: null, unavailable: true, capped: false };
 
-  const rows = (data ?? []) as any[];
+  const loaded = (data ?? []) as any[];
+  const capped = loaded.length > QUEUE_LIMIT;
+  const rows = capped ? loaded.slice(0, QUEUE_LIMIT) : loaded;
   const shape = (q: any): QueueRow => ({
     id: q.id, name: q.patient_name, status: q.status, patientId: q.patient_id ?? null,
     timeLabel: new Date(q.entered_at).toISOString().slice(11, 16),
@@ -254,7 +273,10 @@ export async function waitingQueue(
     { key: "walk_ins", label: "Walk-ins", entries: rows.filter(q => !isEmergency(q) && isWalkIn(q)).map(shape) },
     { key: "emergency", label: "Emergency", entries: rows.filter(isEmergency).map(shape) },
   ];
-  return { groups, total: rows.length, unavailable: false };
+  // ⚠ `count` FIRST, and rows.length only if the database declined to count. The two differ exactly
+  // when the cap bit, which is the case this whole change exists for -- preferring rows.length would
+  // reinstate the bug while looking like a safe fallback.
+  return { groups, total: count ?? rows.length, unavailable: false, capped };
 }
 
 // ── ACTIVE FOLLOW-UPS, FIVE LENSES (s6) ─────────────────────────────────────────────────────────────

@@ -16,9 +16,11 @@ import WaitingQueueCard, { type QueuePerson } from "./WaitingQueueCard";
 // encounter.edit through requirePracticeContext. `canCapture` decides what is DRAWN; the route decides
 // what is ALLOWED.
 
-export default function QueueWithActions({ people, unavailableReason, href, canCapture }: {
+export default function QueueWithActions({ people, unavailableReason, truncatedNotice, href, canCapture }: {
   people: QueuePerson[];
   unavailableReason: string | null;
+  /** Passed straight through: this wrapper adds handlers, it does not decide what the card may say. */
+  truncatedNotice?: string | null;
   href: string | null;
   canCapture: boolean;
 }) {
@@ -53,6 +55,7 @@ export default function QueueWithActions({ people, unavailableReason, href, canC
     <WaitingQueueCard
       people={people}
       unavailableReason={unavailableReason}
+      truncatedNotice={truncatedNotice ?? null}
       href={href}
       busyId={busyId}
       error={error}

@@ -380,6 +380,18 @@ export default async function PracticeCommandCentre() {
               <p className="text-[12px] text-gray-500">Nobody is waiting.</p>
             ) : (
               <div className="space-y-3">
+                {/* ⚠ THE BADGE ABOVE IS EVERYBODY; THIS LIST MAY NOT BE. The count comes from the
+                    database, the list stops at QUEUE_LIMIT, and when those disagree the difference has
+                    to be said -- otherwise the group headings below, which count only what was drawn,
+                    quietly become the whole truth. The number shown is derived from the rendered groups
+                    rather than from the constant, so this sentence cannot drift from what is on screen. */}
+                {queue.capped && (
+                  <p className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11.5px] text-amber-900">
+                    Showing the first {queue.groups.reduce((n, g) => n + g.entries.length, 0)} of{" "}
+                    {queue.total}. The counts on each group below are of what is shown here, not of
+                    everybody waiting. <strong>This is not the whole queue.</strong>
+                  </p>
+                )}
                 {/* A GROUP WITH NOBODY IN IT DOES NOT RENDER. The comp shows three headings because its
                     fixture has all three; an empty "EMERGENCY (0)" every morning trains people to stop
                     reading the word emergency. */}

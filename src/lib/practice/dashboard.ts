@@ -126,7 +126,9 @@ export type DashboardReadModel = {
   operations: Awaited<ReturnType<typeof operationsHome>> | null;
   /** All twelve of s8's metrics for this scope. The glance shows eight of them. */
   metrics: PracticeMetrics | null;
-  queue: { groups: QueueGroup[]; total: number | null; unavailable: boolean };
+  /** `total` is the database's own count of everybody waiting; `groups` may hold only the first
+   *  QUEUE_LIMIT of them, and `capped` is how a reader tells. See waitingQueue in session.ts. */
+  queue: { groups: QueueGroup[]; total: number | null; unavailable: boolean; capped: boolean };
   timeline: SessionTimeline;
   followUps: FollowUpLens[];
   alerts: { alerts: Alert[]; unavailable: boolean };
@@ -192,7 +194,7 @@ export async function dashboardReadModel(
   const [metrics, queue, timeline, followUps, alerts, drafts, home] = await Promise.all([
     feed(null as PracticeMetrics | null,
       () => practiceMetrics(admin, ctx, mScope, at)),
-    feed({ groups: [], total: null, unavailable: true },
+    feed({ groups: [], total: null, unavailable: true, capped: false },
       () => waitingQueue(admin, ctx, at)),
     feed({ date: plan.date, timezone: plan.timezone, dayStartIso: day.startIso,
            events: [], upcoming: [], sources: [], unavailable: true, partial: false } as SessionTimeline,

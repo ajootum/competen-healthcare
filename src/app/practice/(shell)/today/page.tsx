@@ -174,6 +174,10 @@ export default async function CurrentSessionPage() {
         <QueueWithActions
           href="/practice/calendar"
           unavailableReason={queue.unavailable ? "The queue could not be read just now." : null}
+          truncatedNotice={queue.capped
+            ? `Showing the first ${queue.groups.reduce((n, g) => n + g.entries.length, 0)} of ${queue.total} waiting.`
+              + " The tab counts below are of what is shown here. This is not the whole queue."
+            : null}
           canCapture={hasCapability(shell.ctx, "encounter.edit")}
           people={queue.groups.flatMap(g => g.entries.map(e => ({
             id: e.id,

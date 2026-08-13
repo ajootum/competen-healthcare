@@ -357,9 +357,20 @@ const skip = (id: string, msg: string) => { skips.push(id); console.log(`  SKIP 
 
     // !! THE QUEUE DID NOT SELECT patient_id AT ALL -- it returned the queue-entry id and a denormalised
     // patient_name, so nothing could act on the patient. The button had nothing to attach to.
-    ok("I1", sessionSrc.includes(`select("id, patient_id, patient_name`)
-          && sessionSrc.includes("patientId: q.patient_id"),
+    // ⚠ SCOPED TO THE FUNCTION, AND TOLERANT OF FORMATTING. This pinned the literal
+    // `select("id, patient_id, patient_name` -- the column list immediately after the paren. Adding the
+    // row cap to that query put the columns on their own line and this went RED against code that still
+    // does exactly what the assertion says. A needle that breaks when the same call is reformatted is
+    // pinning the spelling, not the property. Bounded by the next top-level export so that a
+    // `patient_id` belonging to some other function in this file cannot answer for this one.
+    const wqStart = sessionSrc.indexOf("export async function waitingQueue");
+    const wqAfter = sessionSrc.indexOf("\nexport ", wqStart + 1);
+    const wqSrc = wqStart < 0 ? "" : sessionSrc.slice(wqStart, wqAfter < 0 ? undefined : wqAfter);
+    ok("I1", /select\(\s*"[^"]*\bpatient_id\b[^"]*"/.test(wqSrc)
+          && wqSrc.includes("patientId: q.patient_id"),
       "waitingQueue selects patient_id and carries it through");
+    ok("I1-control", wqSrc.includes("practice_queue_entry") && wqSrc.length > 300,
+      "the waitingQueue slice was actually found, so I1 is not passing on an empty string");
 
     ok("I2", cardSrc.includes("onMarkSeen && p.patientId &&"),
       "Seen is drawn only with a handler AND a patient to attach an encounter to");

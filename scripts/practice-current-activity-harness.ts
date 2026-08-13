@@ -21,7 +21,7 @@ import {
   ACTIVITY_CAPABILITIES,
 } from "../src/lib/practice/activity";
 import { todaysWork, TODAYS_WORK_CAPABILITIES } from "../src/lib/practice/todays-work";
-import { sessionMetrics, activeFollowUps, waitingQueue, operationalAlerts } from "../src/lib/practice/session";
+import { sessionMetrics, activeFollowUps, waitingQueue, operationalAlerts, QUEUE_LIMIT } from "../src/lib/practice/session";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { registerPatient } from "../src/lib/practice/patients";
 import { launchEncounter } from "../src/lib/practice/encounters";
@@ -417,6 +417,41 @@ async function main() {
       ok("10m. the queue splits into booked, walk-ins and emergency",
         q.groups.map(g => g.key).join() === "booked,walk_ins,emergency", q.groups.map(g => g.key).join());
 
+      // ── THE CAP, PROVEN BY OVERSHOOTING IT ──────────────────────────────────────────────────────
+      //
+      // ⚠ THE READ USED TO BE UNBOUNDED, and unbounded does not mean complete: PostgREST stops at a
+      // thousand rows on its own and says nothing about it. `total` was rows.length, so a practice with
+      // more people waiting than that was told it had exactly a thousand -- a number that looks ordinary.
+      //
+      // ⚠ AND THIS HAS TO INSERT MORE THAN QUEUE_LIMIT ROWS TO MEAN ANYTHING. A fixture below the bound
+      // cannot tell a capped read from an uncapped one, which is the whole failure mode: every previous
+      // assertion about this queue ran on a handful of rows and would have passed unchanged.
+      ok("10m1. CONTROL: nothing is capped before the fixture is inserted", q.capped === false, JSON.stringify(q.capped));
+      const bulk = Array.from({ length: QUEUE_LIMIT + 5 }, (_, i) => ({
+        workspace_id: wsA, patient_name: `Queue Fixture ${String(i).padStart(3, "0")}`,
+        status: "WAITING", entered_at: new Date(Date.now() - (i + 1) * 60000).toISOString(),
+      }));
+      const ins = await admin.from("practice_queue_entry").insert(bulk);
+      ok("10m2-setup the over-the-bound fixture was inserted", !ins.error, ins.error?.message ?? "");
+
+      const qBig = await waitingQueue(admin, ctxA);
+      ok("10m3. the list stops at the bound rather than wherever PostgREST does",
+        qBig.groups.reduce((n, g) => n + g.entries.length, 0) === QUEUE_LIMIT,
+        `${qBig.groups.reduce((n, g) => n + g.entries.length, 0)} drawn, bound is ${QUEUE_LIMIT}`);
+      ok("10m4. and it SAYS it stopped", qBig.capped === true, JSON.stringify(qBig.capped));
+      // ⚠ THE TOTAL IS THE DATABASE'S, NOT THE ARRAY'S. This is the assertion that would have caught the
+      // original bug: counting the rows in hand gives the bound back and looks like a real figure.
+      ok("10m5. the total is everybody waiting, not the number of rows fetched",
+        qBig.total !== null && qBig.total > QUEUE_LIMIT && qBig.total !== QUEUE_LIMIT,
+        `total=${qBig.total}, bound=${QUEUE_LIMIT}`);
+
+      const delQ = await admin.from("practice_queue_entry").delete()
+        .eq("workspace_id", wsA).like("patient_name", "Queue Fixture %");
+      ok("10m6. the harness removed its own queue fixture", !delQ.error, delQ.error?.message ?? "");
+      const qAfter = await waitingQueue(admin, ctxA);
+      ok("10m7. CONTROL: with the fixture gone the queue is uncapped again (10m4 is not a constant)",
+        qAfter.capped === false, JSON.stringify(qAfter.capped));
+
       const al = await operationalAlerts(admin, ctxA, today);
       ok("10n. a quiet practice raises no alerts rather than four reassurances",
         !al.unavailable && al.alerts.length === 0, JSON.stringify(al.alerts));
@@ -663,6 +698,13 @@ async function main() {
     // two hrefs, both page.tsx files, and that both capabilities are genuinely seeded, which is what
     // makes removing the sidebar entries safe rather than a quiet withdrawal.
     messages: "CPR-DOC-002 s3.1: sub-navigation lives inside the Documents workspace. Linked from WorkspaceHeader.",
+    // ⚠ ARRIVED AT, NEVER NAVIGATED TO. This is where a signed-in person with NO Practice workspace is
+    // sent (the owner's request, 2026-08-11, replacing a redirect to the marketing page that read as a
+    // silent loop). A sidebar entry would be wrong in both directions: the people who can see the
+    // sidebar have a workspace and will never need it, and the people who need it have no sidebar to
+    // put it in. Reachability here is the REDIRECT, and that is what the four WORKSPACE_REQUIRED call
+    // sites pin -- not a nav row.
+    "no-account": "Landing page for an account with no workspace; reached by redirect from WORKSPACE_REQUIRED, not from nav.",
     inbox: "CPR-DOC-002 s3.1: sub-navigation lives inside the Documents workspace. Linked from WorkspaceHeader.",
     // ⚠ CPR-MED-001 CONTAINS NO NAVIGATION SECTION. Its s8 "Integrations" is a list of engines the
     // medication engine reads from and writes to -- six of the seven already exist -- and the word
