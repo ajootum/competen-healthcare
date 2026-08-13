@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import {
   PANEL, SectionHeader, Badge, Tip, EmptyState,
   WS_HEAD, WS_TH, WS_ROW, WS_TD, ROW_REMOVE,
-  REC_TABLE, REC_HEAD, REC_TH, REC_TD, recRow,
 } from "@/components/practice/EncounterKit";
+import {
+  ClinicalRecordTable, type RecordColumn, type RowState,
+} from "@/components/practice/ClinicalRecordTable";
 // ⚠ FROM THE CONSTANTS FILE, NEVER FROM procedures.ts. That module reaches access.ts and next/headers,
 // and one string imported from it into a "use client" component drags the whole server module into the
 // browser bundle -- which tsc and eslint both wave through and only `next build` catches. It has
@@ -55,6 +57,42 @@ type Recorded = {
   id: string; label: string; site?: string | null; laterality?: string | null;
   status?: string | null; immediate_outcome?: string | null;
 };
+
+// CP-UI-TABLE-001 s5: Procedure | Status | Date/Timing | Location/Detail | Actions.
+const PROCEDURE_COLUMNS: RecordColumn<Recorded>[] = [
+  { key: "label", label: "Procedure", priority: "primary",
+    render: p => {
+      const band = procedureBand(p.status ?? "");
+      return (
+        <>
+          <span className={band.struck ? "font-semibold text-gray-400 line-through" : "font-semibold text-gray-800"}>
+            {p.label}
+          </span>
+          {p.laterality && p.laterality !== "not_applicable" && (
+            <span className="ml-1.5"><Badge tone="neutral">{p.laterality}</Badge></span>
+          )}
+        </>
+      );
+    } },
+  // ⚠ EVERY STATUS IS NAMED, INCLUDING PERFORMED. Before the lifecycle existed this column drew a badge
+  // only when something was NOT performed, so the absence of a badge was the only thing separating a
+  // completed procedure from one nobody had done. In a column that is a blank cell.
+  { key: "status", label: "Status", priority: "status",
+    render: p => p.status === "PERFORMED"
+      ? <span className="text-[11.5px] text-gray-600">performed</span>
+      : (
+        <Badge tone={p.status === "ATTEMPTED" || p.status === "ABANDONED" ? "needs" : "muted"}>
+          {(PROCEDURE_STATUSES.find(([k]) => k === p.status)?.[1] ?? p.status ?? "unknown").toLowerCase()}
+        </Badge>
+      ) },
+  { key: "site", label: "Site", priority: "secondary",
+    render: p => p.site ? <span className="text-[11.5px] text-gray-600">{p.site}</span>
+      : <span className="text-gray-400">&mdash;</span> },
+  { key: "outcome", label: "Immediate outcome", priority: "secondary",
+    render: p => p.immediate_outcome
+      ? <span className="text-[11.5px] text-gray-600">{p.immediate_outcome}</span>
+      : <span className="text-gray-400">&mdash;</span> },
+];
 
 let seq = 0;
 const newRow = (): Row => ({
@@ -186,106 +224,57 @@ export default function ProcedureWorkspace(props: {
       />
 
       <div className="p-4">
-        {props.recorded.length === 0 ? (
-          <EmptyState title="No procedure recorded for this encounter"
-            reason="This was read successfully -- add one below if something was done." />
-        ) : (
-          // ⚠ THE SAME TABLE AS DIAGNOSES, WITH THE BAND ANSWERING THIS TAB'S OWN QUESTION: did this
-          // actually happen. One grammar across the encounter -- stripe for position, left edge for
-          // meaning -- so a clinician learns it once rather than per tab.
-          <div className="overflow-x-auto">
-          <table className={REC_TABLE}>
-            <thead className={REC_HEAD}>
-              <tr>
-                <th className={REC_TH}>Procedure</th>
-                <th className={REC_TH}>Status</th>
-                <th className={REC_TH}>Immediate outcome</th>
-                {props.editable && props.canRecord && <th className={REC_TH} aria-label="Row actions" />}
-              </tr>
-            </thead>
-            <tbody>
-            {props.recorded.map((p, i) => {
-              const band = procedureBand(p.status ?? "");
-              const cols = props.editable && props.canRecord ? 4 : 3;
-              return (
-              <Fragment key={p.id}>
-              <tr style={{ borderLeftColor: band.edge, borderLeftStyle: band.dashed ? "dashed" : "solid" }}
-                className={recRow(i)}>
-                <td className={REC_TD}>
-                  <span className={band.struck
-                    ? "font-semibold text-gray-400 line-through"
-                    : "font-semibold text-gray-800"}>{p.label}</span>
-                  {p.site && <span className="ml-1.5 text-[11.5px] text-gray-600">{p.site}</span>}
-                  {p.laterality && p.laterality !== "not_applicable" && (
-                    <span className="ml-1.5"><Badge tone="neutral">{p.laterality}</Badge></span>
-                  )}
-                </td>
-                {/* ⚠ ANYTHING THAT IS NOT PERFORMED SAYS SO. This drew a badge for ABANDONED alone,
-                    which was complete while those were the only two statuses. With six, an ORDERED,
-                    SCHEDULED, CANCELLED or DECLINED procedure would have rendered EXACTLY like a
-                    performed one -- a list of things done to a patient, silently including things that
-                    were not. The label comes from the vocabulary so it cannot drift from the value.
-                    In a table it gets its own column, so the absence of a badge is no longer the only
-                    thing distinguishing a performed procedure from one nobody has done yet. */}
-                <td className={REC_TD}>
-                  {p.status === "PERFORMED"
-                    ? <span className="text-[11.5px] text-gray-600">performed</span>
-                    : (
-                      <Badge tone={p.status === "ATTEMPTED" || p.status === "ABANDONED" ? "needs" : "muted"}>
-                        {(PROCEDURE_STATUSES.find(([k]) => k === p.status)?.[1] ?? p.status ?? "unknown").toLowerCase()}
-                      </Badge>
-                    )}
-                </td>
-                <td className={REC_TD}>
-                  {p.immediate_outcome
-                    ? <span className="text-[11.5px] text-gray-600">{p.immediate_outcome}</span>
-                    : <span className="text-gray-400">&mdash;</span>}
-                </td>
-                {props.editable && props.canRecord && (
-                  <td className={`${REC_TD} text-right whitespace-nowrap`}>
-                    <button type="button" disabled={busy}
-                      onClick={() => setOutcomeFor(outcomeFor === p.id ? null : p.id)}
-                      className="rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
-                      {outcomeFor === p.id ? "Cancel" : "Record outcome"}
-                    </button>
-                  </td>
+        {/* CP-UI-TABLE-001 s13 step 4, s5's columns: Procedure | Status | Date/Timing | Detail | Actions.
+            ⚠ THE OUTCOME FORM IS s3.1's EXPANDABLE DETAIL, attached to the procedure it concerns. It
+            used to be a second row hand-built here; the standard owns that shape now. */}
+        <ClinicalRecordTable
+          label="Procedures recorded for this patient"
+          columns={PROCEDURE_COLUMNS}
+          empty={<EmptyState title="No procedure recorded for this encounter"
+            reason="This was read successfully -- add one below if something was done." />}
+          records={props.recorded.map(p => ({
+            id: p.id,
+            data: p,
+            // ⚠ s4 RESERVES `warning` FOR CLINICALLY ACTIONABLE ISSUES. A cancelled or declined
+            // procedure is a fact rather than a problem, so it reads as `stopped`, not as an alarm.
+            state: (p.status && ["CANCELLED", "DECLINED"].includes(p.status) ? "stopped"
+              : p.status === "PERFORMED" ? "normal" : "normal") as RowState,
+            stateLabel: p.status && p.status !== "PERFORMED" ? `${p.status.toLowerCase()} procedure` : undefined,
+            actions: props.editable && props.canRecord ? (
+              <button type="button" disabled={busy}
+                onClick={() => setOutcomeFor(outcomeFor === p.id ? null : p.id)}
+                aria-label={`Record an outcome for ${p.label}`}
+                className="rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                {outcomeFor === p.id ? "Cancel" : "Record outcome"}
+              </button>
+            ) : undefined,
+            expandedContent: outcomeFor === p.id ? (
+              <form className="flex w-full flex-wrap items-end gap-2 rounded-lg bg-gray-50 p-2"
+                onSubmit={e => { e.preventDefault(); saveOutcome(p.id); }}>
+                <select value={outcome.outcomeType} disabled={busy} aria-label="Outcome"
+                  onChange={e => setOutcome(o => ({ ...o, outcomeType: e.target.value }))}
+                  className="rounded-lg border border-gray-200 px-2 py-1 text-[12px]">
+                  {OUTCOME_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                </select>
+                {SEVERITY_REQUIRED_FOR.includes(outcome.outcomeType) && (
+                  <select value={outcome.severity} disabled={busy} aria-label="Severity"
+                    onChange={e => setOutcome(o => ({ ...o, severity: e.target.value }))}
+                    className="rounded-lg border border-gray-200 px-2 py-1 text-[12px]">
+                    {OUTCOME_SEVERITIES.map(sv => <option key={sv} value={sv}>{sv}</option>)}
+                  </select>
                 )}
-              </tr>
-              {outcomeFor === p.id && (
-                <tr className="border-l-[3px] border-l-transparent">
-                  <td className={REC_TD} colSpan={cols}>
-                  <form className="flex w-full flex-wrap items-end gap-2 rounded-lg bg-gray-50 p-2"
-                    onSubmit={e => { e.preventDefault(); saveOutcome(p.id); }}>
-                    <select value={outcome.outcomeType} disabled={busy} aria-label="Outcome"
-                      onChange={e => setOutcome(o => ({ ...o, outcomeType: e.target.value }))}
-                      className="rounded-lg border border-gray-200 px-2 py-1 text-[12px]">
-                      {OUTCOME_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                    </select>
-                    {SEVERITY_REQUIRED_FOR.includes(outcome.outcomeType) && (
-                      <select value={outcome.severity} disabled={busy} aria-label="Severity"
-                        onChange={e => setOutcome(o => ({ ...o, severity: e.target.value }))}
-                        className="rounded-lg border border-gray-200 px-2 py-1 text-[12px]">
-                        {OUTCOME_SEVERITIES.map(sv => <option key={sv} value={sv}>{sv}</option>)}
-                      </select>
-                    )}
-                    <input value={outcome.detail} disabled={busy} placeholder="What happened (optional)"
-                      onChange={e => setOutcome(o => ({ ...o, detail: e.target.value }))}
-                      className="min-w-[200px] flex-1 rounded-lg border border-gray-200 px-2 py-1 text-[12px]" />
-                    <button type="submit" disabled={busy}
-                      className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
-                      Record outcome
-                    </button>
-                  </form>
-                  </td>
-                </tr>
-              )}
-              </Fragment>
-              );
-            })}
-            </tbody>
-          </table>
-          </div>
-        )}
+                <input value={outcome.detail} disabled={busy} placeholder="What happened (optional)"
+                  aria-label={`Outcome detail for ${p.label}`}
+                  onChange={e => setOutcome(o => ({ ...o, detail: e.target.value }))}
+                  className="min-w-[200px] flex-1 rounded-lg border border-gray-200 px-2 py-1 text-[12px]" />
+                <button type="submit" disabled={busy}
+                  className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
+                  Record outcome
+                </button>
+              </form>
+            ) : undefined,
+          }))}
+        />
 
         {props.editable && props.canRecord && (
           <div className="mt-4">

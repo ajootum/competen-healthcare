@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import {
   PANEL, SectionHeader, Badge, Tip, EmptyState,
   WS_HEAD, WS_TH, WS_ROW, WS_TD, ROW_REMOVE,
-  REC_TABLE, REC_HEAD, REC_TH, REC_TD, recRow,
 } from "@/components/practice/EncounterKit";
+import {
+  ClinicalRecordTable, type RecordColumn, type RowState,
+} from "@/components/practice/ClinicalRecordTable";
 // ⚠ FROM THE CONSTANTS FILE, NEVER FROM THE ENGINE. diagnosis-capture.ts reaches access.ts and
 // next/headers; importing one string from it here breaks `next build` with an import trace on pages
 // nobody touched, and neither tsc nor eslint says a word.
@@ -45,6 +47,29 @@ type Recorded = {
   id: string; label: string; code: string | null; certainty: string;
   is_primary: boolean; problem_id: string | null;
 };
+
+// CP-UI-TABLE-001 s5's diagnosis columns: Diagnosis | Status | Ongoing problem | Actions.
+const DIAGNOSIS_COLUMNS: RecordColumn<Recorded>[] = [
+  { key: "label", label: "Diagnosis", priority: "primary",
+    render: d => (
+      <>
+        {d.is_primary && <><Badge tone="neutral">primary</Badge>{" "}</>}
+        <span className={diagnosisBand(d.certainty).struck
+          ? "font-semibold text-gray-400 line-through" : "font-semibold text-gray-800"}>{d.label}</span>
+        {d.code && <span className="ml-1.5 font-mono text-[11px] text-gray-400">{d.code}</span>}
+      </>
+    ) },
+  { key: "certainty", label: "Status", priority: "status",
+    render: d => (
+      <span className={diagnosisBand(d.certainty).struck ? "text-[11.5px] text-gray-400" : "text-[11.5px] text-gray-600"}>
+        {d.certainty.replace(/_/g, " ")}
+      </span>
+    ) },
+  { key: "problem", label: "Ongoing problem", priority: "secondary",
+    render: d => d.problem_id
+      ? <Badge tone="settled">on problem list</Badge>
+      : <span className="text-gray-400">&mdash;</span> },
+];
 
 let seq = 0;
 const newRow = (): Row => ({
@@ -184,104 +209,64 @@ export default function DiagnosisWorkspace(props: {
       />
 
       <div className="p-4">
-        {/* ── Already recorded ─────────────────────────────────────────────────────────────────── */}
-        {props.recorded.length === 0 ? (
-          <EmptyState title="No diagnosis recorded for this encounter"
-            reason="This was read successfully. A consultation that ends without one is a real consultation -- the honest answer is often that it is not yet known." />
-        ) : (
-          // ⚠ A TABLE, NOT A LIST OF CARDS. Once several diagnoses are recorded the reader is comparing
-          // them -- which is primary, which is confirmed, which is on the problem list -- and comparison
-          // wants columns. The stripe is what makes a six-row table scannable as it grows.
-          //
-          // ⚠ THE BAND IS ON THE RECORDED TABLE ONLY, by the owner's decision. The working set below has
-          // a certainty dropdown still being chosen, and a band that recoloured on every selection would
-          // be movement rather than information.
-          <div className="overflow-x-auto">
-          <table className={REC_TABLE}>
-            <thead className={REC_HEAD}>
-              <tr>
-                <th className={REC_TH}>Diagnosis</th>
-                <th className={REC_TH}>Status</th>
-                <th className={REC_TH}>Ongoing problem</th>
-                {props.editable && props.canDiagnose && <th className={REC_TH} aria-label="Row actions" />}
-              </tr>
-            </thead>
-            <tbody>
-            {props.recorded.map((d, i) => {
-              const band = diagnosisBand(d.certainty);
-              const cols = props.editable && props.canDiagnose ? 4 : 3;
-              return (
-              <tr key={d.id}
-                style={{ borderLeftColor: band.edge, borderLeftStyle: band.dashed ? "dashed" : "solid" }}
-                className={recRow(i, { leading: d.is_primary })}>
-                {editing === d.id ? (
-                  <td className={REC_TD} colSpan={cols}>
-                  {/* ⚠ CORRECTING THE RECORD, NOT ADDING TO IT. This PATCHes the row the database holds. */}
-                  <form className="flex flex-wrap items-center gap-2"
-                    onSubmit={e => { e.preventDefault(); saveEdit(d.id); }}>
-                    <input value={edit.label} disabled={busy} autoFocus
-                      onChange={e => setEdit(v => ({ ...v, label: e.target.value }))}
-                      className="min-w-[200px] flex-1 rounded-lg border border-gray-200 px-2 py-1 text-[12.5px]" />
-                    <select value={edit.certainty} disabled={busy} aria-label="Certainty"
-                      onChange={e => setEdit(v => ({ ...v, certainty: e.target.value }))}
-                      className="rounded-lg border border-gray-200 px-2 py-1 text-[12.5px]">
-                      {DIAGNOSIS_CERTAINTIES.map(c => <option key={c} value={c}>{c.replace(/_/g, " ")}</option>)}
-                    </select>
-                    <button type="submit" disabled={busy || !edit.label.trim()}
-                      className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
-                      Save
-                    </button>
-                    <button type="button" disabled={busy} onClick={() => setEditing(null)}
-                      className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] font-semibold text-gray-600 hover:bg-gray-50">
-                      Cancel
-                    </button>
-                  </form>
-                  </td>
-                ) : (
-                  <>
-                    <td className={REC_TD}>
-                      {d.is_primary && <><Badge tone="neutral">primary</Badge>{" "}</>}
-                      {/* ⚠ STRUCK ONLY WHEN RULED OUT. The band already says it, and saying it twice is
-                          what makes this one legible at a glance rather than decorative -- a ruled-out
-                          finding read as a live one is the misreading with the worst consequence here. */}
-                      <span className={band.struck
-                        ? "font-semibold text-gray-400 line-through"
-                        : "font-semibold text-gray-800"}>{d.label}</span>
-                      {d.code && <span className="ml-1.5 font-mono text-[11px] text-gray-400">{d.code}</span>}
-                    </td>
-                    <td className={REC_TD}>
-                      <span className={band.struck ? "text-[11.5px] text-gray-400" : "text-[11.5px] text-gray-600"}>
-                        {d.certainty.replace(/_/g, " ")}
-                      </span>
-                    </td>
-                    <td className={REC_TD}>
-                      {/* An em dash rather than an empty cell: blank reads as "not loaded". */}
-                      {d.problem_id
-                        ? <Badge tone="settled">on problem list</Badge>
-                        : <span className="text-gray-400">&mdash;</span>}
-                    </td>
-                    {props.editable && props.canDiagnose && (
-                      <td className={`${REC_TD} text-right whitespace-nowrap`}>
-                        <button type="button" disabled={busy}
-                          onClick={() => { setEditing(d.id); setEdit({ label: d.label, certainty: d.certainty }); }}
-                          className="rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
-                          Correct
-                        </button>
-                        <button type="button" disabled={busy} onClick={() => removeRecorded(d.id)}
-                          className="ml-1.5 rounded-lg border border-rose-200 px-2 py-0.5 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50">
-                          Remove
-                        </button>
-                      </td>
-                    )}
-                  </>
-                )}
-              </tr>
-              );
-            })}
-            </tbody>
-          </table>
-          </div>
-        )}
+        {/* ── Already recorded, on the shared standard (CP-UI-TABLE-001 s13 step 2) ───────────────
+            ⚠ "NORMALIZE DIAGNOSES TO THE SHARED COMPONENT WITHOUT MATERIALLY CHANGING ITS CURRENT
+            COMPACT APPEARANCE" -- s13, verbatim. This tab was the reference the standard was written
+            from, so the visible result is nearly identical; what changed is that the row shape now
+            comes from one place instead of being hand-rolled here.
+            ⚠ AND THE LEFT ACCENT NO LONGER ENCODES CERTAINTY. s4 gives the accent to primary and
+            warning only, with status carried by badges. The certainty ramp this file used until now
+            was approved earlier the same day and is superseded by the newer standard. */}
+        <ClinicalRecordTable
+          label="Diagnoses recorded in this encounter"
+          columns={DIAGNOSIS_COLUMNS}
+          empty={<EmptyState title="No diagnosis recorded for this encounter"
+            reason="This was read successfully. A consultation that ends without one is a real consultation -- the honest answer is often that it is not yet known." />}
+          records={props.recorded.map(d => ({
+            id: d.id,
+            data: d,
+            state: (d.is_primary ? "primary" : "normal") as RowState,
+            stateLabel: d.is_primary ? "Primary diagnosis" : undefined,
+            actions: props.editable && props.canDiagnose ? (
+              <span className="inline-flex items-center gap-1.5">
+                <button type="button" disabled={busy}
+                  onClick={() => { setEditing(d.id); setEdit({ label: d.label, certainty: d.certainty }); }}
+                  aria-label={`Correct ${d.label}`}
+                  className="rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                  Correct
+                </button>
+                <button type="button" disabled={busy} onClick={() => removeRecorded(d.id)}
+                  aria-label={`Remove ${d.label}`}
+                  className="rounded-lg border border-rose-200 px-2 py-0.5 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50">
+                  Remove
+                </button>
+              </span>
+            ) : undefined,
+            // s3.1's expandable detail: the correction form stays attached to the row it corrects.
+            expandedContent: editing === d.id ? (
+              <form className="flex flex-wrap items-center gap-2"
+                onSubmit={e => { e.preventDefault(); saveEdit(d.id); }}>
+                <input value={edit.label} disabled={busy} autoFocus
+                  aria-label={`New name for ${d.label}`}
+                  onChange={e => setEdit(v => ({ ...v, label: e.target.value }))}
+                  className="min-w-[200px] flex-1 rounded-lg border border-gray-200 px-2 py-1 text-[12.5px]" />
+                <select value={edit.certainty} disabled={busy} aria-label="Certainty"
+                  onChange={e => setEdit(v => ({ ...v, certainty: e.target.value }))}
+                  className="rounded-lg border border-gray-200 px-2 py-1 text-[12.5px]">
+                  {DIAGNOSIS_CERTAINTIES.map(c => <option key={c} value={c}>{c.replace(/_/g, " ")}</option>)}
+                </select>
+                <button type="submit" disabled={busy || !edit.label.trim()}
+                  className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
+                  Save
+                </button>
+                <button type="button" disabled={busy} onClick={() => setEditing(null)}
+                  className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] font-semibold text-gray-600 hover:bg-gray-50">
+                  Cancel
+                </button>
+              </form>
+            ) : undefined,
+          }))}
+        />
 
         {/* ── The working set ──────────────────────────────────────────────────────────────────── */}
         {props.editable && props.canDiagnose && (

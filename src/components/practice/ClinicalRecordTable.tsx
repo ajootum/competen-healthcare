@@ -53,6 +53,14 @@ export type ClinicalRecord<T> = {
   actions?: ReactNode;
   /** s10: an explicit name for the row's state, because colour alone may not carry it. */
   stateLabel?: string;
+  /**
+   * s3.1 and s11's expandable detail -- a correction form, a result, a drawer's worth of record.
+   *
+   * ⚠ "EXPANDED CONTENT REMAINS VISUALLY ATTACHED TO ITS PARENT ROW" (s3.1). It is drawn inside the
+   * same tbody, on the same surface, with no separator above it, so a form that is editing row four
+   * cannot be read as belonging to row five.
+   */
+  expandedContent?: ReactNode;
 };
 
 const SURFACE: Record<RowState, string> = {
@@ -152,6 +160,11 @@ export function ClinicalRecordTable<T>({ columns, records, empty, label }: {
                     <td className={`${REC_TD} text-right whitespace-nowrap`}>{r.actions}</td>
                   )}
                 </tr>
+                {r.expandedContent && (
+                  <tr style={{ borderLeftColor: ACCENT[state] }} className={rowClass}>
+                    <td colSpan={span} className="px-3 pb-3 pt-0">{r.expandedContent}</td>
+                  </tr>
+                )}
                 {r.secondaryText && (
                   // s2: "Allow a muted secondary line within a row where safety/context information
                   // cannot fit cleanly into columns." Same surface as its parent, no top border, so it
