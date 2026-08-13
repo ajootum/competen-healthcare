@@ -544,6 +544,28 @@ async function main() {
     medRecord.notChecked.length > 0 && treatHtml.includes(medRecord.notChecked[0].label));
   ok("7-15. CONTROL: notChecked is not an empty list", medRecord.notChecked.length >= 5, `${medRecord.notChecked.length}`);
 
+  // ── CPR-TRT-UI-002 s8 AND s21: A QUICK SET, AND EVERYTHING ELSE ONE TAP AWAY ────────────────────
+  //
+  // ⚠ THE CONTROL COMES FIRST AND IT IS NOT DECORATION. If this practice happened to configure fewer
+  // frequencies than the quick set draws, "not all of them are drawn" would be trivially false and
+  // "there is a more button" trivially absent -- both assertions would report on a list too short to
+  // fold, which is indistinguishable from a composer that never folds anything.
+  const freqOpts = ((stagedCapture as any).options?.byField?.frequency ?? []) as any[];
+  const freqChips = stepCount(treatHtml, "frequency");
+  ok("7-16-control. the fixture configures more frequencies than the quick set draws",
+    freqOpts.length > 5, `${freqOpts.length} configured`);
+  ok("7-16. s8: the composer draws the quick set, not the whole configured list",
+    freqOpts.length <= 5 || freqChips < freqOpts.length, `${freqChips} chips of ${freqOpts.length} configured`);
+  ok("7-17. s21: the rest stay reachable in exactly ONE more interaction",
+    freqChips >= freqOpts.length || stepCount(treatHtml, "frequency-more") === 1,
+    `${stepCount(treatHtml, "frequency-more")} disclosure control(s)`);
+  // ⚠ THE CUSTOM-WORDING OPTION IS NOT BEHIND THE DISCLOSURE. It opens the free-text frequency s5
+  // requires, and putting the ordinary act of writing "every other day" behind an extra tap would be a
+  // regression dressed as tidying. Asserted by LABEL from the fixture, not by a string typed here.
+  const otherOpt = freqOpts.find(o => o.code === "other");
+  ok("7-18. the configured Other frequency is drawn without opening the disclosure",
+    !otherOpt || treatHtml.includes(`>${otherOpt.label}<`), `${otherOpt?.label ?? "no other option configured"}`);
+
   // ══ 7b. THE ALLERGY DEAD END, CLOSED ══════════════════════════════════════════════════════════
   //
   // ⚠ THE STORE, THE ENGINE AND THE ROUTE ALL EXISTED SINCE MIGRATION 238 AND NOTHING CALLED THEM.

@@ -722,7 +722,7 @@ export default function TreatmentCapture(props: {
 
             {/* s13's non-drug categories, CONFIGURED. */}
             {shape.nonDrug && (
-              <OptionRow label="Category" options={opts("non_drug_category")}
+              <QuickPick label="Category" quick={6} options={opts("non_drug_category")}
                 value={draft.nonDrugCategory} step="non-drug-category"
                 onPick={(o) => setDraft(d => ({ ...d, nonDrugCategory: o?.code ?? null }))} />
             )}
@@ -730,8 +730,15 @@ export default function TreatmentCapture(props: {
             {/* s5's five tap-fields. EVERY ONE READ FROM CONFIGURATION. */}
             {shape.prescribing && (
               <>
-                <OptionRow label="Formulation" options={opts("formulation")} value={draft.formulation}
-                  step="formulation" onPick={(o) => setDraft(d => ({ ...d, formulation: o?.label ?? null }))} />
+                {/* ⚠ s8: FORMULATION APPEARS ONLY ONCE A MEDICATION IS NAMED. "Do not show the full
+                    formulation chip list initially" -- and the reason is that a formulation chosen
+                    before the drug is a value the practitioner cannot check against anything. It is
+                    also the field with the longest configured list, so it was the largest single block
+                    of the old default view. */}
+                {(draft.label ?? "").trim() !== "" && (
+                  <QuickPick label="Formulation" quick={4} options={opts("formulation")} value={draft.formulation}
+                    step="formulation" onPick={(o) => setDraft(d => ({ ...d, formulation: o?.label ?? null }))} />
+                )}
 
                 <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
                   <label>
@@ -739,14 +746,20 @@ export default function TreatmentCapture(props: {
                     <input className={input} value={draft.dose ?? ""}
                       onChange={e => setDraft(d => ({ ...d, dose: e.target.value }))} placeholder="500" />
                   </label>
-                  <OptionRow label="Unit" options={opts("dose_unit")} value={draft.doseUnit}
+                  <QuickPick label="Unit" quick={4} options={opts("dose_unit")} value={draft.doseUnit}
                     step="dose-unit" onPick={(o) => setDraft(d => ({ ...d, doseUnit: o?.label ?? null }))} />
                 </div>
 
-                <OptionRow label="Route" options={opts("route")} value={draft.route}
+                <QuickPick label="Route" quick={4} options={opts("route")} value={draft.route}
                   step="route" onPick={(o) => setDraft(d => ({ ...d, route: o?.label ?? null }))} />
 
-                <OptionRow label="Frequency" options={opts("frequency")} value={draft.frequencyCode}
+                {/* ⚠ THE CONFIGURED "Other" OPTION IS PINNED INTO THE QUICK SET. It is not a disclosure
+                    toggle -- it is a real option that opens the custom-wording field s5 requires, and
+                    typing a frequency in your own words is a common need rather than a rare one. If it
+                    sorted past the quick set it would sit behind "N more", which would make the ordinary
+                    act of writing "every other day" cost an extra tap for no reason. */}
+                <QuickPick label="Frequency" quick={5} pinCode={OTHER_OPTION_CODE}
+                  options={opts("frequency")} value={draft.frequencyCode}
                   step="frequency" byCode
                   onPick={(o) => setDraft(d => ({
                     ...d, frequencyCode: o?.code ?? null,
@@ -764,7 +777,7 @@ export default function TreatmentCapture(props: {
                   </div>
                 )}
 
-                <OptionRow label="Duration" options={opts("duration")} value={draft.duration}
+                <QuickPick label="Duration" quick={5} options={opts("duration")} value={draft.duration}
                   step="duration" onPick={(o) => setDraft(d => ({ ...d, duration: o?.label ?? null }))} />
               </>
             )}
@@ -1049,29 +1062,75 @@ export default function TreatmentCapture(props: {
  * frozen requirement expressed as a component boundary: this function cannot hard-code a clinical value
  * because it has never been told what one looks like.
  */
-function OptionRow({ label, options, value, onPick, step, byCode }: {
+/**
+ * CPR-TRT-UI-002 s8's PROGRESSIVE DISCLOSURE. Common choices are drawn; the rest are one tap away.
+ *
+ * ⚠ THE QUICK SET IS THE FIRST N IN THE PRACTICE'S OWN ORDER, WHICH NEEDS NO NEW CONFIGURATION.
+ * s17 requires the quick subset to be configurable, and it already is: loadTreatmentOptions sorts by
+ * sort_order with each practice's sort_order_override applied, so a practice that wants BD first moves
+ * it on the configuration screen it already has. A `quick boolean` column would have been a second
+ * thing to configure that says the same thing as the first, and two sources for one answer drift.
+ *
+ * ⚠ THE SELECTED OPTION IS ALWAYS DRAWN, even when it sorts outside the quick set. Without this,
+ * choosing a rare route from More and then re-rendering would show nothing selected -- the practitioner
+ * reads their own choice as lost and picks again, and the second pick is the one that gets recorded.
+ *
+ * ⚠ NOTHING IS PRE-SELECTED HERE. s9 permits pre-populating a configured default, but s9 also REQUIRES
+ * the source of any default to be preserved for audit, and s20 wants to know whether each value was
+ * typed, taken from the catalogue or loaded from a shortcut. There is nowhere to record that yet, and a
+ * default nobody can trace is worse than a field the practitioner filled -- it would be indistinguishable
+ * from a clinical choice. Pre-population lands with the column that can say where it came from.
+ */
+function QuickPick({ label, options, value, onPick, step, byCode, quick = 5, pinCode }: {
   label: string;
   options: TreatmentOption[];
   value: string | null | undefined;
   onPick: (o: TreatmentOption | null) => void;
   step: string;
   byCode?: boolean;
+  /** How many of the practice's own top options to draw before the rest are folded away. */
+  quick?: number;
+  /** Always kept in the quick set wherever it sorts. See the Frequency call site for why. */
+  pinCode?: string;
 }) {
+  const [showAll, setShowAll] = useState(false);
   if (options.length === 0) return null;
   const isOn = (o: TreatmentOption) => (byCode ? value === o.code : value === o.label);
+
+  const shown = options.slice(0, quick);
+  for (const extra of [pinCode ? options.find(o => o.code === pinCode) : undefined, options.find(isOn)])
+    if (extra && !shown.includes(extra)) shown.push(extra);
+  const rest = options.filter(o => !shown.includes(o));
+  const visible = showAll ? [...shown, ...rest] : shown;
+
+  const chip = (on: boolean) => on
+    ? "rounded-full border border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary-deep)]"
+    : "rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-gray-800 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/5";
+
   return (
     <div className="mt-2">
       <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">{label}</span>
       <ul className="mt-1 flex flex-wrap gap-1">
-        {options.map(o => (
+        {visible.map(o => (
           <li key={o.id}>
-            <button type="button" data-step={step}
-              className={isOn(o) ? "rounded-full border border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary-deep)]" : "rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-gray-800 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/5"}
+            <button type="button" data-step={step} className={chip(isOn(o))}
               onClick={() => onPick(isOn(o) ? null : o)}>
               {o.label}
             </button>
           </li>
         ))}
+        {/* ⚠ THE COUNT IS ON THE BUTTON. "More" alone leaves a practitioner guessing whether the thing
+            they want is behind it; "12 more" tells them the list is worth opening. s21 requires every
+            configured value to stay reachable within ONE additional interaction, and this is it. */}
+        {rest.length > 0 && !showAll && (
+          <li>
+            <button type="button" data-step={`${step}-more`}
+              className="rounded-full border border-dashed border-gray-300 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-gray-600 hover:border-[var(--cp-primary)]"
+              onClick={() => setShowAll(true)}>
+              {rest.length} more
+            </button>
+          </li>
+        )}
       </ul>
     </div>
   );
