@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import SessionCard from "./SessionCard";
+import { retimingClause } from "@/lib/practice/generation-report-text";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -164,7 +165,8 @@ export default function WeekBoard({ sessions, locations, clinics, today }: {
               action: "add_session", weekday: addingTo,
               startsMinute: toMinutes(draft.from), endsMinute: toMinutes(draft.to),
               locationId: draft.locationId || null,
-            }, d => `Added.${d.generation?.slotsCreated ? ` ${d.generation.slotsCreated} bookable slot${d.generation.slotsCreated === 1 ? "" : "s"} created.` : ""}`);
+            }, d => `Added.${d.generation?.slotsCreated ? ` ${d.generation.slotsCreated} bookable slot${d.generation.slotsCreated === 1 ? "" : "s"} created.` : ""}`
+              + retimingClause(d.generation));
           }}>
           <label className="flex flex-col text-[10px] font-semibold text-gray-600">
             Day

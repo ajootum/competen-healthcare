@@ -937,6 +937,57 @@ const templateRunsOn = (t: any, date: string) =>
 
 // ── SLOT GENERATION ──────────────────────────────────────────────────────────────────────────────────
 
+/** The statuses that mean a patient is still expecting this appointment. CANCELLED and NO_SHOW are
+ *  not among them; COMPLETED is in the past and cannot be disturbed by moving future capacity. */
+const LIVE_APPOINTMENT_STATUSES = ["REQUESTED", "CONFIRMED", "ARRIVED"];
+
+/**
+ * Which of these slots somebody is booked into.
+ *
+ * ONE RULE, TWO CALLERS: the reaper, which may not DELETE an occupied slot, and the retiming pass,
+ * which may not MOVE one. Written twice it would be two answers to "is this slot free", and the day
+ * they drifted apart one of them would be quietly wrong about a patient's appointment.
+ *
+ * Matched BOTH ways -- by slot_id, and by time overlap, because bookings made before slots existed
+ * carry no slot_id at all.
+ *
+ * ⚠ AN UNREADABLE APPOINTMENT LIST COUNTS AS OCCUPIED, NEVER AS FREE, and it did not before this.
+ * Both reads discarded their error, so a failed appointment read produced an EMPTY booking list --
+ * and an empty booking list is precisely the input that tells this module every slot is free to
+ * delete. The generator would have spent the run clearing a diary it could not see. Three states,
+ * not two: not booked, booked, and could not be read.
+ */
+async function occupiedSlotIds(
+  admin: any, ctx: WorkspaceContext, rows: { id: string; starts_at: string; ends_at: string }[],
+): Promise<{ occupied: Set<string>; unreadable: boolean }> {
+  if (rows.length === 0) return { occupied: new Set<string>(), unreadable: false };
+
+  const ids = rows.map(r => r.id);
+  const earliest = rows.reduce((a, r) => (r.starts_at < a ? r.starts_at : a), rows[0].starts_at);
+  const latest = rows.reduce((a, r) => (r.ends_at > a ? r.ends_at : a), rows[0].ends_at);
+
+  const [bySlot, byTime] = await Promise.all([
+    admin.from("practice_appointment").select("slot_id")
+      .eq("workspace_id", ctx.workspaceId).in("status", LIVE_APPOINTMENT_STATUSES).in("slot_id", ids),
+    admin.from("practice_appointment").select("scheduled_at, duration_minutes")
+      .eq("workspace_id", ctx.workspaceId).in("status", LIVE_APPOINTMENT_STATUSES)
+      .gte("scheduled_at", earliest).lt("scheduled_at", latest),
+  ]);
+  if (bySlot.error || byTime.error) return { occupied: new Set(ids), unreadable: true };
+
+  const occupied = new Set<string>(
+    ((bySlot.data ?? []) as any[]).map(a => a.slot_id).filter(Boolean) as string[]);
+  const appts = ((byTime.data ?? []) as any[]).map(a => {
+    const s = Date.parse(a.scheduled_at);
+    return { s, e: s + (a.duration_minutes ?? 20) * 60000 };
+  });
+  for (const r of rows) {
+    const s = Date.parse(r.starts_at), e = Date.parse(r.ends_at);
+    if (appts.some(a => a.s < e && a.e > s)) occupied.add(r.id);
+  }
+  return { occupied, unreadable: false };
+}
+
 /**
  * Remove generated slots, obeying the two guards this module exists for.
  *
@@ -963,38 +1014,31 @@ async function reapGeneratedSlots(admin: any, ctx: WorkspaceContext, args: {
   const rows = (slots ?? []) as any[];
   if (rows.length === 0) return { slotsRemoved: 0, slotsKept: 0 };
 
-  // GUARD 2: never remove a slot somebody is booked into. Matched BOTH ways -- slot_id, and time
-  // overlap, because bookings made before slots existed carry no slot_id at all.
-  const ids = rows.map(r => r.id);
-  const earliest = rows.reduce((a, r) => (r.starts_at < a ? r.starts_at : a), rows[0].starts_at);
-  const latest = rows.reduce((a, r) => (r.ends_at > a ? r.ends_at : a), rows[0].ends_at);
-
-  const [{ data: bySlot }, { data: byTime }] = await Promise.all([
-    admin.from("practice_appointment").select("slot_id")
-      .eq("workspace_id", ctx.workspaceId).in("status", ["REQUESTED", "CONFIRMED", "ARRIVED"])
-      .in("slot_id", ids),
-    admin.from("practice_appointment").select("scheduled_at, duration_minutes")
-      .eq("workspace_id", ctx.workspaceId).in("status", ["REQUESTED", "CONFIRMED", "ARRIVED"])
-      .gte("scheduled_at", earliest).lt("scheduled_at", latest),
-  ]);
-
-  const takenSlotIds = new Set(((bySlot ?? []) as any[]).map(a => a.slot_id));
-  const appts = ((byTime ?? []) as any[]).map(a => {
-    const s = Date.parse(a.scheduled_at);
-    return { s, e: s + (a.duration_minutes ?? 20) * 60000 };
-  });
-
-  const removable = rows.filter(r => {
-    if (takenSlotIds.has(r.id)) return false;
-    const s = Date.parse(r.starts_at), e = Date.parse(r.ends_at);
-    return !appts.some(a => a.s < e && a.e > s);
-  });
+  // GUARD 2, from the one function that answers it.
+  const { occupied } = await occupiedSlotIds(admin, ctx, rows);
+  const removable = rows.filter(r => !occupied.has(r.id));
 
   if (removable.length > 0)
     await admin.from("practice_availability_slot").delete().eq("workspace_id", ctx.workspaceId).in("id", removable.map(r => r.id));
 
   return { slotsRemoved: removable.length, slotsKept: rows.length - removable.length };
 }
+
+/**
+ * A generated window whose times no longer match the session that made it, and which this generator
+ * REFUSED to move because somebody is booked into it.
+ *
+ * ⚠ THIS IS A REPORT, NOT AN ACTION. Moving a window a patient is booked into changes the hour they
+ * were told to arrive, and nothing here notifies them -- so the choice belongs to a person who can
+ * ring them, not to a diary regeneration running in the background.
+ */
+export type MistimedWindow = {
+  slotId: string; date: string; templateId: string;
+  currentStart: string; currentEnd: string;
+  templateStart: string; templateEnd: string;
+  /** Why it was left alone. Not readable is NOT the same as booked, and the screen must say which. */
+  reason: "booked" | "unreadable";
+};
 
 export type GenerationReport = {
   fromDate: string; toDate: string;
@@ -1008,6 +1052,15 @@ export type GenerationReport = {
    * substitution. Separate from created and removed because it is neither -- the time is still there.
    */
   slotsReshaped: number;
+  /**
+   * Existing windows whose times did not match their session and which were MOVED to match, because
+   * nobody was booked into them. A session edited from 08:30 to 10:30 used to leave every already
+   * generated window sitting at 08:30 for ever: the idempotency key is template-and-date, so the
+   * window counted as present, and the reshaping pass compared only the place and the activity.
+   */
+  slotsRetimed: number;
+  /** The same mismatch, left alone because a patient is booked into it. Needs a person. */
+  windowsNeedingAHuman: MistimedWindow[];
   daysSkippedForLeave: number;
   /**
    * CPR-RECUR-001: (session, date) pairs that fell on the session's weekday and were NOT its week.
@@ -1102,7 +1155,13 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
    * currently has. A Set can only answer "is there one"; s5.2's location change and activity
    * substitution need "is the one that is there still right", which is a different question.
    */
-  const existingByKey = new Map<string, { id: string; location_id: string | null; slot_kind: string }>();
+  // ⚠ THE TIMES ARE KEPT NOW. The query above has always SELECTED starts_at and ends_at, and this map
+  // threw them away -- so the pass that asks "is the one that is there still right" was structurally
+  // incapable of noticing that it is at the wrong hour. A column fetched and then dropped is the same
+  // failure as a column never read, and harder to see.
+  const existingByKey = new Map<string, {
+    id: string; location_id: string | null; slot_kind: string; starts_at: string; ends_at: string;
+  }>();
   for (const s of ((existingSlots ?? []) as any[])) {
     if (s.generated_from_template_id) {
       already.add(`${s.generated_from_template_id}|${s.generated_for_date}`);
@@ -1110,6 +1169,8 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
         id: s.id as string,
         location_id: (s.location_id as string | null) ?? null,
         slot_kind: (s.slot_kind as string) ?? "clinic",
+        starts_at: s.starts_at as string,
+        ends_at: s.ends_at as string,
       });
     } else
       // NORMALISED TO EPOCH MILLISECONDS ON BOTH SIDES. Postgres returns "…T07:00:00+00:00" and the
@@ -1121,6 +1182,13 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
   const toInsert: any[] = [];
   /** Slots that already existed but whose place or kind a s5.2 reshaping change has moved under them. */
   const toReshape: { id: string; location_id: string | null; slot_kind: string; note: string | null }[] = [];
+  const toRetime: {
+    id: string; date: string; templateId: string;
+    currentStart: string; currentEnd: string; starts_at: string; ends_at: string;
+  }[] = [];
+  // ⚠ ONE INSTANT FOR THE WHOLE RUN. Calling nowIso() per window would let a long generation use a
+  // moving boundary, and a window could be judged future at the top of the run and past at the bottom.
+  const runAt = nowIso();
   let daysSkippedForLeave = 0;
 
   /**
@@ -1186,6 +1254,26 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
         const have = existingByKey.get(key);
         if (have && (have.location_id !== shape.locationId || have.slot_kind !== shape.slotKind))
           toReshape.push({ id: have.id, location_id: shape.locationId, slot_kind: shape.slotKind, note: shape.note });
+        // ⚠ AND THE HOUR, which this pass never checked. Editing a session's start or end left every
+        // window already generated from it standing at the OLD time indefinitely -- the key is
+        // template-and-date, so the window counted as present, and "present" was read as "correct".
+        // Compared as instants, not strings: the same moment can be written several ways, and a
+        // string comparison would move a window every single run for ever.
+        // ⚠ FUTURE WINDOWS ONLY, and the boundary is the one editSession's own reap already uses
+        // (fromIso: nowIso()). A past window is the record of a day that has happened: moving it would
+        // rewrite the diary to say the clinic ran at an hour it did not, which is a worse lie than the
+        // stale time it replaces. There is no safe automatic action on a past day and no human action
+        // either, so a past mismatch is neither moved nor reported -- reporting it would raise an alarm
+        // nobody can ever clear.
+        const wantStart = at(t.starts_minute), wantEnd = at(t.ends_minute);
+        if (have && Date.parse(have.starts_at) > Date.parse(runAt)
+                 && (Date.parse(have.starts_at) !== Date.parse(wantStart)
+                  || Date.parse(have.ends_at) !== Date.parse(wantEnd)))
+          toRetime.push({
+            id: have.id, date, templateId: t.id,
+            currentStart: have.starts_at, currentEnd: have.ends_at,
+            starts_at: wantStart, ends_at: wantEnd,
+          });
         continue;
       }
       toInsert.push({
@@ -1250,6 +1338,40 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
     slotsReshaped++;
   }
 
+  // ── s5.2's SIBLING: THE HOUR ITSELF, AND ONLY WHERE MOVING IT DISTURBS NOBODY ─────────────────────
+  //
+  // ⚠ A FREE WINDOW IS MOVED. A BOOKED ONE IS REPORTED AND LEFT EXACTLY WHERE IT IS. Moving a window
+  // somebody is booked into changes the hour that patient was told to arrive, and this generator
+  // cannot ring them to say so -- it runs in the background, off a session edit made days earlier.
+  // Silently correct data and a patient at the clinic at the wrong time is the worse outcome of the
+  // two, so the diary stays wrong and a person is told about it. Same escalation shape the booking
+  // engine already uses: the machine handles what fits, a human handles what does not.
+  let slotsRetimed = 0;
+  const windowsNeedingAHuman: MistimedWindow[] = [];
+  if (toRetime.length > 0) {
+    const { occupied, unreadable } = await occupiedSlotIds(admin, ctx,
+      toRetime.map(r => ({ id: r.id, starts_at: r.currentStart, ends_at: r.currentEnd })));
+    for (const r of toRetime) {
+      if (occupied.has(r.id)) {
+        windowsNeedingAHuman.push({
+          slotId: r.id, date: r.date, templateId: r.templateId,
+          currentStart: r.currentStart, currentEnd: r.currentEnd,
+          templateStart: r.starts_at, templateEnd: r.ends_at,
+          // ⚠ "could not be read" IS NOT "booked", and the screen has to be able to say which. When the
+          // appointment list is unreadable every candidate is treated as occupied -- the safe reading --
+          // but reporting that as `booked` would state a fact about a patient nobody verified.
+          reason: unreadable ? "unreadable" : "booked",
+        });
+        continue;
+      }
+      const { error } = await admin.from("practice_availability_slot")
+        .update({ starts_at: r.starts_at, ends_at: r.ends_at })
+        .eq("id", r.id).eq("workspace_id", ctx.workspaceId);
+      if (error) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: error.message };
+      slotsRetimed++;
+    }
+  }
+
   // Slots this generator made for days that are now on leave, or for sessions no longer in the week.
   let slotsRemoved = 0, slotsKept = 0;
   for (const date of dates) {
@@ -1288,8 +1410,8 @@ export async function generateSlots(admin: any, ctx: WorkspaceContext, args: {
   const report: GenerationReport = {
     fromDate: args.fromDate, toDate: args.toDate,
     daysConsidered: dates.length,
-    slotsCreated, slotsRemoved, slotsKept, slotsReshaped, daysSkippedForLeave,
-    occurrencesSkippedForInterval,
+    slotsCreated, slotsRemoved, slotsKept, slotsReshaped, slotsRetimed, windowsNeedingAHuman,
+    daysSkippedForLeave, occurrencesSkippedForInterval,
     cappedAt: capped ? GENERATION_CAP_DAYS : null,
   };
 

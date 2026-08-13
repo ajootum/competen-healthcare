@@ -14,6 +14,7 @@ import {
   RECURRENCE_INTERVALS, nextOccurrences, nextWeekdayOnOrAfter, alignAnchorToWeekday,
   describeRecurrence, isDateIso, shortDate, addDaysIso,
 } from "@/lib/practice/recurrence";
+import { retimingClause } from "@/lib/practice/generation-report-text";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -296,7 +297,11 @@ export default function SessionWorkspace({
       const skipped = d.generation?.occurrencesSkippedForInterval ?? 0;
       return `${created ? "Session created" : "Session saved"}.`
         + (slots ? ` ${slots} bookable slot${slots === 1 ? "" : "s"} rebuilt.` : "")
-        + (skipped ? ` ${skipped} off-week day${skipped === 1 ? "" : "s"} left out, because not every session repeats weekly.` : "");
+        + (skipped ? ` ${skipped} off-week day${skipped === 1 ? "" : "s"} left out, because not every session repeats weekly.` : "")
+        // ⚠ CHANGING THE HOURS IS WHAT STRANDS A WINDOW, and this is the screen that changes them.
+        // Saying it only on the Availability console would tell the right thing to somebody who did
+        // not make the edit, at a moment they were not looking for it.
+        + retimingClause(d.generation);
     }).then(ok => { if (ok) setDraft(null); });
   }
 

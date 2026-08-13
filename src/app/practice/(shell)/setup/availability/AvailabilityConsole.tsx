@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  generationSummary, mistimedHeading, hhmmOf, type MistimedWindowLike,
+} from "@/lib/practice/generation-report-text";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -48,6 +51,10 @@ export default function AvailabilityConsole({ locations, rules, inert, today, ca
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  // ⚠ SEPARATE FROM `notice`, WHICH IS WHY IT IS HERE AT ALL. The notice strip is cleared by the next
+  // action, and these are windows a patient is booked into at the wrong hour -- an outcome that must
+  // outlive the click that revealed it. Cleared only when a run comes back with none.
+  const [mistimed, setMistimed] = useState<MistimedWindowLike[]>([]);
 
   const [exception, setException] = useState({
     kind: "leave", fromDate: today, toDate: today, from: "09:00", to: "13:00",
@@ -73,11 +80,14 @@ export default function AvailabilityConsole({ locations, rules, inert, today, ca
       return;
     }
     setNotice({ kind: "ok", text: describe(data) });
+    // ⚠ READ OFF EVERY RESPONSE THAT CARRIES A GENERATION, not only the one button that regenerates.
+    // Editing a session's hours is what CAUSES this, so the screen that caused it is where it belongs.
+    const stuck = (data?.generation?.windowsNeedingAHuman ?? []) as MistimedWindowLike[];
+    if (data?.generation) setMistimed(stuck);
     router.refresh();
   }
 
-  const generationLine = (g: any) =>
-    !g ? "" : ` ${g.slotsCreated} slot${g.slotsCreated === 1 ? "" : "s"} generated.`;
+  const generationLine = (g: any) => generationSummary(g);
 
   return (
     <div className="flex flex-col gap-4">
@@ -87,6 +97,39 @@ export default function AvailabilityConsole({ locations, rules, inert, today, ca
           : "bg-rose-50 text-rose-900"}`}>
           {notice.text}
         </p>
+      )}
+
+      {/* ══ WINDOWS THIS GENERATOR REFUSED TO MOVE ══════════════════════════════════════════════════
+          A session whose hours changed leaves its already generated windows at the OLD time. Free ones
+          are moved automatically; these are not, because a patient is booked into them and moving the
+          window would change the hour they were told to arrive without telling them.
+          ⚠ THE PANEL DOES NOT OFFER A "MOVE ANYWAY" BUTTON. The safe half of that action -- ringing the
+          patient -- happens outside this product, so a one-click override here would look like the whole
+          job while doing the dangerous half only. It states the facts and names both times. */}
+      {mistimed.length > 0 && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <h2 className="text-[13px] font-bold text-amber-900">{mistimedHeading(mistimed)}</h2>
+          <p className="mt-1 text-[11.5px] text-amber-900">
+            The session was edited after these windows were generated. They are still bookable at the
+            time shown on the left, which is no longer the session&rsquo;s time. Nobody has been told.
+          </p>
+          <ul className="mt-2 flex flex-col gap-1">
+            {mistimed.map(w => (
+              <li key={w.slotId} className="rounded-lg bg-white/70 px-2.5 py-1.5 text-[12px] text-amber-950">
+                <strong>{w.date}</strong>{" "}
+                <span className="font-semibold">{hhmmOf(w.currentStart)}&ndash;{hhmmOf(w.currentEnd)}</span>
+                {" "}&rarr; the session now runs{" "}
+                <span className="font-semibold">{hhmmOf(w.templateStart)}&ndash;{hhmmOf(w.templateEnd)}</span>
+                {w.reason === "unreadable" && (
+                  <span className="ml-1 text-[11px]">
+                    &mdash; the appointment list could not be read, so this was left alone rather than
+                    assumed free. It may or may not be booked.
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {showChanges && (

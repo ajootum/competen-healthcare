@@ -461,6 +461,118 @@ async function main() {
     cfg.templates.length > 0 && cfg.clinics.length > 0 && cfg.rules.length > 0,
     JSON.stringify([cfg.templates.length, cfg.clinics.length, cfg.rules.length]));
 
+  // ---- 13. ⚠ A SESSION'S HOURS CHANGE AND ITS ALREADY GENERATED WINDOWS DO NOT -------------------
+  //
+  // Found in the owner's live data on 2026-08-13: a window generated at 19:05:01 from a session whose
+  // hours were edited at 19:13:44, still sitting at the old time five days later. The idempotency key
+  // is template-and-date, so the window counted as PRESENT, and the pass that asks "is the one that is
+  // there still right" compared only the place and the activity -- never the hour.
+  //
+  // ⚠ THE TEMPLATE IS UPDATED DIRECTLY HERE, ON PURPOSE. editSession reaps its own future slots, so
+  // going through it would test the reaper and prove nothing about the generator. The generator has to
+  // be correct about a template it did not watch change, because that is the state the live data was
+  // actually in.
+  const RETIME_DAY = 5;                                   // Friday, untouched by every section above
+  const FRI = plusDays(MON, 4);
+  const retimeSession = await addSession(admin, ctxA.ctx, {
+    locationId: locId, weekday: RETIME_DAY, startsMinute: 9 * 60, endsMinute: 11 * 60,
+    actorId: OWNER, correlationId: "av-12a",
+  });
+  ok("13a-setup a Friday session was accepted", retimeSession.ok, JSON.stringify(retimeSession));
+  const retimeTplId = retimeSession.ok ? retimeSession.data.id : "";
+  await generateSlots(admin, ctxA.ctx, { fromDate: MON, toDate: SUN, actorId: OWNER, correlationId: "av-12b" });
+  // ⚠ KEYED ON THE TEMPLATE, NOT THE DATE. Other sections put sessions on these weekdays too, and a
+  // count-by-date would mix their windows in with this one -- which is how 13c first passed for the
+  // wrong reason: the session it was about had been refused as an overlap and never existed.
+  const { data: friBefore } = await admin.from("practice_availability_slot")
+    .select("id, starts_at").eq("workspace_id", wsA).eq("generated_from_template_id", retimeTplId);
+  ok("13a the Friday session generated exactly one window",
+    (friBefore ?? []).length === 1, JSON.stringify(friBefore));
+  const friSlotId = (friBefore ?? [])[0]?.id;
+  const friStartBefore = (friBefore ?? [])[0]?.starts_at;
+
+  await admin.from("practice_availability_template")
+    .update({ starts_minute: 14 * 60, ends_minute: 16 * 60 }).eq("id", retimeTplId);
+  const genRetime = await generateSlots(admin, ctxA.ctx, { fromDate: MON, toDate: SUN, actorId: OWNER, correlationId: "av-12c" });
+  ok("13b an UNBOOKED window is moved to the session's new hours",
+    genRetime.ok && genRetime.data.slotsRetimed === 1, JSON.stringify(genRetime.ok ? genRetime.data : genRetime));
+  const { data: friAfter } = await admin.from("practice_availability_slot")
+    .select("id, starts_at").eq("workspace_id", wsA).eq("generated_from_template_id", retimeTplId);
+  ok("13c it is the SAME row, moved -- not deleted and remade (an appointment's slot_id survives)",
+    (friAfter ?? []).length === 1 && (friAfter ?? [])[0]?.id === friSlotId, JSON.stringify(friAfter));
+  // ⚠ COMPARED AS INSTANTS. The first version of this line compared the strings and failed on a
+  // CORRECT move: kampala() writes 11:00:00.000Z and PostgREST returns 11:00:00+00:00, the same moment
+  // spelled two ways. I had written the warning about exactly this into 13e and then not taken it.
+  ok("13d and it now starts at 14:00, not 09:00",
+    Date.parse((friAfter ?? [])[0]?.starts_at ?? "") === Date.parse(kampala(FRI, 14))
+      && Date.parse(friStartBefore ?? "") !== Date.parse((friAfter ?? [])[0]?.starts_at ?? ""),
+    `${friStartBefore} -> ${(friAfter ?? [])[0]?.starts_at}, wanted ${kampala(FRI, 14)}`);
+
+  // ⚠ AND RUNNING IT AGAIN MOVES NOTHING. Comparing instants rather than strings is what makes this
+  // true: the same moment can be spelled several ways, and a string comparison would rewrite every
+  // window on every run for ever while reporting work it did not need to do.
+  const genAgain = await generateSlots(admin, ctxA.ctx, { fromDate: MON, toDate: SUN, actorId: OWNER, correlationId: "av-12d" });
+  ok("13e a second run moves nothing (the comparison is on instants, not strings)",
+    genAgain.ok && genAgain.data.slotsRetimed === 0, JSON.stringify(genAgain.ok ? genAgain.data : genAgain));
+
+  // ---- 14. THE HALF THAT MUST NOT HAPPEN AUTOMATICALLY -------------------------------------------
+  //
+  // A window somebody is booked into is NOT moved. Moving it changes the hour that patient was told to
+  // arrive, and nothing here can ring them to say so.
+  // ⚠ SUNDAY (ISO 7), THE ONLY WEEKDAY NOTHING ELSE IN THIS FILE USES. It took two tries to find:
+  // Saturday runs section 8's 09:00-13:00, and Monday is where 12f DUPLICATES that session to. Both
+  // times addSession refused the overlap and the assertions below went green anyway, on a session that
+  // did not exist. A setup step whose failure leaves the real assertions passing is worse than no test
+  // at all -- it reports coverage it does not have. Hence the bookedTplId guards on each one now.
+  const bookedSession = await addSession(admin, ctxA.ctx, {
+    locationId: locId, weekday: 7, startsMinute: 9 * 60, endsMinute: 11 * 60,
+    actorId: OWNER, correlationId: "av-13a",
+  });
+  ok("14a-setup a Sunday session was accepted", bookedSession.ok, JSON.stringify(bookedSession));
+  const bookedTplId = bookedSession.ok ? bookedSession.data.id : "";
+  await generateSlots(admin, ctxA.ctx, { fromDate: MON, toDate: SUN, actorId: OWNER, correlationId: "av-13b" });
+  const { data: satBefore } = await admin.from("practice_availability_slot")
+    .select("id, starts_at").eq("workspace_id", wsA).eq("generated_from_template_id", bookedTplId);
+  ok("14a the Sunday session generated one window",
+    bookedTplId !== "" && (satBefore ?? []).length === 1, JSON.stringify(satBefore));
+  const satSlotId = (satBefore ?? [])[0]?.id;
+  const satStartBefore = (satBefore ?? [])[0]?.starts_at;
+
+  const satBooking = await bookAppointment(admin, {
+    workspaceId: wsA, patientName: "Retime Patient", appointmentType: "new_consultation",
+    scheduledAt: kampala(SUN, 10), locationId: locId, actorId: OWNER, correlationId: "av-13c",
+  });
+  ok("14b-setup a patient is booked into that window", satBooking.ok, JSON.stringify(satBooking));
+
+  await admin.from("practice_availability_template")
+    .update({ starts_minute: 15 * 60, ends_minute: 17 * 60 }).eq("id", bookedTplId);
+  const genBooked = await generateSlots(admin, ctxA.ctx, { fromDate: MON, toDate: SUN, actorId: OWNER, correlationId: "av-13d" });
+  const stuck = genBooked.ok ? genBooked.data.windowsNeedingAHuman : [];
+  // ⚠ `slotsRetimed === 0` IS ALSO WHAT A MISSING SESSION LOOKS LIKE, which is exactly how 14c passed
+  // through two broken setups. It has to require that there WAS a window and that it IS booked.
+  ok("14c a BOOKED window is NOT moved",
+    bookedTplId !== "" && satSlotId !== undefined && satBooking.ok
+      && genBooked.ok && genBooked.data.slotsRetimed === 0,
+    JSON.stringify(genBooked.ok ? genBooked.data : genBooked));
+  ok("14d it is reported for a human, naming both times and the reason",
+    stuck.length === 1 && stuck[0]?.slotId === satSlotId && stuck[0]?.reason === "booked"
+      && Date.parse(stuck[0]?.currentStart ?? "") === Date.parse(satStartBefore ?? "")
+      && Date.parse(stuck[0]?.templateStart ?? "") === Date.parse(kampala(SUN, 15)),
+    JSON.stringify(stuck));
+  const { data: satAfter } = await admin.from("practice_availability_slot")
+    .select("starts_at").eq("workspace_id", wsA).eq("id", satSlotId).maybeSingle();
+  ok("14e and the row on disk really did not move (the report is not the only thing that is honest)",
+    satSlotId !== undefined && Date.parse(satAfter?.starts_at ?? "") === Date.parse(satStartBefore ?? ""),
+    `${satStartBefore} -> ${satAfter?.starts_at}`);
+
+  // ⚠ CONTROL: 13c must not pass because retiming never happens at all. Section 12 already moved a free
+  // window in this same workspace, so the two together prove the difference is the BOOKING and nothing
+  // else -- same generator, same run range, same practice, opposite outcomes.
+  ok("14f CONTROL: the same generator DID move the unbooked window, so 14c is about the booking",
+    bookedTplId !== "" && satSlotId !== undefined
+      && genRetime.ok && genRetime.data.slotsRetimed === 1
+      && genBooked.ok && genBooked.data.slotsRetimed === 0);
+
   await cleanup();
 
   console.log(`\n  ${pass} passed, ${fails.length} failed`);
