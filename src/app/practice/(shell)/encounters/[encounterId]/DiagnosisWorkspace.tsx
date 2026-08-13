@@ -9,7 +9,9 @@ import {
 // ⚠ FROM THE CONSTANTS FILE, NEVER FROM THE ENGINE. diagnosis-capture.ts reaches access.ts and
 // next/headers; importing one string from it here breaks `next build` with an import trace on pages
 // nobody touched, and neither tsc nor eslint says a word.
-import { DIAGNOSIS_CERTAINTIES, DEFAULT_CERTAINTY, MAX_PENDING_DIAGNOSES } from "@/lib/practice/diagnosis-constants";
+import {
+  DIAGNOSIS_CERTAINTIES, DEFAULT_CERTAINTY, MAX_PENDING_DIAGNOSES, diagnosisBand,
+} from "@/lib/practice/diagnosis-constants";
 
 // CP-ENC-DIAG-001 s3: "hold one or more selected diagnoses before committing", and s1's replacement of
 // the single-diagnosis form.
@@ -187,8 +189,22 @@ export default function DiagnosisWorkspace(props: {
             reason="This was read successfully. A consultation that ends without one is a real consultation -- the honest answer is often that it is not yet known." />
         ) : (
           <ul className="flex flex-col gap-1">
-            {props.recorded.map(d => (
-              <li key={d.id} className="rounded-lg border border-gray-100 px-2.5 py-1.5">
+            {props.recorded.map(d => {
+              const band = diagnosisBand(d.certainty);
+              return (
+              // ⚠ THE BAND IS ON THE RECORDED LIST ONLY, by the owner's decision. The working set below
+              // has a certainty dropdown still being chosen, and a band that changed colour on every
+              // selection would be movement rather than information.
+              //
+              // ⚠ SQUARE ON THE LEFT, ROUNDED ON THE RIGHT. A 3px accent edge under a rounded corner
+              // reads as a rendering fault -- the border thins into the curve and looks like a clipping
+              // bug rather than a deliberate mark.
+              <li key={d.id}
+                style={{ borderLeftColor: band.edge, borderLeftStyle: band.dashed ? "dashed" : "solid" }}
+                className={`rounded-l-none rounded-r-lg border border-l-[3px] border-gray-100 px-2.5 py-1.5 ${
+                  // The leading diagnosis is findable without reading: a faint wash of the same hue the
+                  // band uses, so the row belongs to the scheme rather than introducing a second one.
+                  d.is_primary ? "bg-[var(--cp-primary-soft)]" : ""}`}>
                 {editing === d.id ? (
                   // ⚠ CORRECTING THE RECORD, NOT ADDING TO IT. This PATCHes the row the database holds.
                   <form className="flex flex-wrap items-center gap-2"
@@ -213,9 +229,16 @@ export default function DiagnosisWorkspace(props: {
                 ) : (
                   <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
                     {d.is_primary && <Badge tone="neutral">primary</Badge>}
-                    <span className="font-semibold text-gray-800">{d.label}</span>
+                    {/* ⚠ STRUCK ONLY WHEN RULED OUT. The band already says it, and saying it twice is
+                        what makes this one legible at a glance rather than decorative -- a ruled-out
+                        finding read as a live one is the misreading with the worst consequence here. */}
+                    <span className={band.struck
+                      ? "font-semibold text-gray-400 line-through"
+                      : "font-semibold text-gray-800"}>{d.label}</span>
                     {d.code && <span className="font-mono text-[11px] text-gray-400">{d.code}</span>}
-                    <span className="text-[11px] text-gray-500">{d.certainty}</span>
+                    <span className={band.struck ? "text-[11px] text-gray-400" : "text-[11px] text-gray-500"}>
+                      {d.certainty.replace(/_/g, " ")}
+                    </span>
                     {d.problem_id && <Badge tone="settled">on problem list</Badge>}
                     {props.editable && props.canDiagnose && (
                       <span className="ml-auto flex items-center gap-1.5">
@@ -233,7 +256,8 @@ export default function DiagnosisWorkspace(props: {
                   </div>
                 )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
 

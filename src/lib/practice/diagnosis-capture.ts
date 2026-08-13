@@ -31,7 +31,7 @@ import {
 // next/headers into the browser bundle -- which tsc and eslint both wave through and only the build
 // catches. See diagnosis-constants.ts.
 export {
-  DIAGNOSIS_CERTAINTIES, DEFAULT_CERTAINTY, MAX_PENDING_DIAGNOSES,
+  DIAGNOSIS_CERTAINTIES, DEFAULT_CERTAINTY, MAX_PENDING_DIAGNOSES, diagnosisBand,
   type DiagnosisCertainty,
 } from "@/lib/practice/diagnosis-constants";
 
