@@ -349,8 +349,15 @@ async function main() {
     !consoleSrc.includes("addTx") && !consoleSrc.includes("TREATMENT_TYPES"));
   ok("4-2. the encounter console no longer holds a per-item investigation form",
     !consoleSrc.includes("addInvestigation") && !consoleSrc.includes("setReviewSummary"));
-  ok("4-3. CONTROL: the same scan DOES still see the diagnosis form (the scan works)",
-    consoleSrc.includes("addDx"));
+  // ⚠ THIS CONTROL WENT RED FOR THE RIGHT REASON AND WAS LEFT RED, WHICH IS THE PART THAT MATTERED.
+  // Its needle was `addDx`, the single-diagnosis form -- replaced by DiagnosisWorkspace, so the needle
+  // stopped existing. 4-1 and 4-2 are NEGATIVE assertions: they pass against an empty string, a renamed
+  // file or a mistyped path just as readily as against a console that genuinely dropped those forms.
+  // The control is the only thing standing between them and passing for nothing, so while it was red
+  // they were decorative. Repointed at a token this file cannot render without.
+  ok("4-3. CONTROL: the same scan DOES still see live code in this file (the scan works)",
+    consoleSrc.includes("props.treatmentCapture") && consoleSrc.length > 5000,
+    `${consoleSrc.length} chars scanned -- if this is 0 the negatives above mean nothing`);
   ok("4-4. both tabs render the new capture components as slots",
     consoleSrc.includes("props.treatmentCapture") && consoleSrc.includes("props.investigationCapture"));
   const pageSrc = src(`${ENC_DIR}/page.tsx`);

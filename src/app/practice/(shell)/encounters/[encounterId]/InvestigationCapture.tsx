@@ -187,9 +187,15 @@ export default function InvestigationCapture(props: {
     <section className={PANEL}>
       <SectionHeader
         title="Investigations"
+        // ⚠ NOT "ordered or done". That was this subtitle until now, and it sat directly above the
+        // boundary paragraph that says IN SO MANY WORDS "it is not an order system" -- the heading
+        // claimed the one thing the notice beneath it spent three sentences disclaiming. AC-10 forbids
+        // both words for a reason: `requested` means the practitioner asked for it, and mustNotImply
+        // that any laboratory received or performed anything. The wording now echoes the boundary's own
+        // language, so the two cannot drift apart into a screen that argues with itself.
         subtitle={recorded.unavailable
           ? "These could not be read -- this is not a statement that none were recorded."
-          : `Record investigations ordered or done during this encounter. ${recorded.items.length} recorded so far.`}
+          : `Record what you asked for and what you have looked at. ${recorded.items.length} recorded so far.`}
       />
       <div className="p-4">
 
