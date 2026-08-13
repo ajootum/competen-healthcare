@@ -18,8 +18,9 @@ import {
 } from "@/lib/practice/longitudinal-constants";
 import type { TreatmentCapturePayload, PendingTreatment, TreatmentOption } from "@/lib/practice/treatment-capture";
 import type { PatientMedications, DoseCalculationResult } from "@/lib/practice/medication";
+import type { EncounterCollection, EncounterParameter } from "@/lib/practice/parameters";
 import {
-  PANEL, SectionHeader, Tip, Advisory, Badge, REC_TABLE, REC_HEAD, REC_TH, REC_TD, recRow,
+  PANEL, SectionHeader, Advisory, Badge,
 } from "@/components/practice/EncounterKit";
 
 // CPR-TREAT-001 -- THE TREATMENT TAB.
@@ -90,6 +91,18 @@ export default function TreatmentCapture(props: {
   bloodGroupLine: SafetyLine;
   /** The capability the existing allergy route already declares. No new code was invented. */
   canEditPatient: boolean;
+  /**
+   * The parameters collected for this encounter, for the comp's per-card safety chips.
+   *
+   * ⚠ TYPE-ONLY IMPORT, so parameters.ts does not follow it into the browser bundle.
+   * ⚠ AND THESE ARE PATIENT-LEVEL FACTS SHOWN PER CARD, WHICH IS WHAT THE COMP DOES. Both cards in the
+   * owner's design carry identical values, because that is what they are -- one patient, one weight,
+   * one allergy status. The chips are a convenience for scanning, NOT a per-drug check, and the wording
+   * never claims otherwise: s11 forbids implying that a drug-specific check has passed, and no chip
+   * says cleared, safe or checked. I withheld these once on the grounds that repeating them implied a
+   * per-treatment evaluation. That was over-cautious -- the duplication is the point of a card.
+   */
+  collection: EncounterCollection;
 }) {
   const router = useRouter();
   const editable = props.canRecord && !props.locked;
@@ -119,10 +132,48 @@ export default function TreatmentCapture(props: {
   // is not paid for by fields most of them never use.
   const [notesOpen, setNotesOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  // The comp's collapsed "Show completed / stopped", and the safety detail each card's Review opens.
+  const [finishedOpen, setFinishedOpen] = useState(false);
+  const [safetyOpen, setSafetyOpen] = useState(false);
   const [dose, setDose] = useState<DoseCalculationResult | null>(null);
 
   const opts = (key: string): TreatmentOption[] => cap.options.byField[key] ?? [];
   const shape = treatmentShape(draft.treatmentType);
+
+  // ── THE COMP'S PER-CARD SAFETY CHIPS ────────────────────────────────────────────────────────────
+  //
+  // ⚠ DERIVED THE SAME WAY SafetySnapshot DERIVES THEM, from the same payload. Two screens reading one
+  // collection and reaching different answers about how many alerts are open is the drift this codebase
+  // has been bitten by before, so the arithmetic is copied from there deliberately rather than invented.
+  //
+  // ⚠ THREE STATES, NOT TWO. Not permitted, could not be read, and genuinely nothing monitored are
+  // different sentences -- "No alerts" over an unreadable collection is the reassurance this product
+  // must never print.
+  const col = props.collection;
+  const paramsReadable = col.permitted && !col.unavailable;
+  const allParams: EncounterParameter[] = paramsReadable
+    ? [...col.priority, ...col.optional, ...col.additions] : [];
+  const vitalParams = allParams.filter(p => p.category === "vital_sign");
+  const vitalsToday = vitalParams.filter(p => p.recordedThisEncounter != null).length;
+  const alertCount = allParams.reduce((n, p) => n + p.openAlerts, 0);
+
+  const vitalsChip = !paramsReadable
+    ? { tone: "unknown" as const, text: col.permitted ? "Could not be read" : "Not permitted" }
+    : vitalParams.length === 0 ? { tone: "unknown" as const, text: "None monitored" }
+      : vitalsToday === 0 ? { tone: "unknown" as const, text: "Not recorded" }
+        : { tone: "ok" as const, text: `${vitalsToday} recorded today` };
+
+  const alertsChip = !paramsReadable
+    ? { tone: "unknown" as const, text: col.permitted ? "Could not be read" : "Not permitted" }
+    : allParams.length === 0 ? { tone: "unknown" as const, text: "Nothing monitored" }
+      : alertCount === 0 ? { tone: "ok" as const, text: "No alerts" }
+        : { tone: "warn" as const, text: `${alertCount} parameter alert${alertCount === 1 ? "" : "s"}` };
+
+  // ⚠ s14's "Show completed / stopped". Splitting on status rather than hiding a count: a card that has
+  // been stopped is still part of what happened in this consultation, so it is collapsed, never dropped.
+  const FINISHED = ["completed", "cancelled"];
+  const liveTreatments = props.recorded.filter(t => !FINISHED.includes(t.status));
+  const finishedTreatments = props.recorded.filter(t => FINISHED.includes(t.status));
 
   // ── s4's search: the configured name list, plus what this practice actually prescribes ────────────
   const medMatches = useMemo(() => {
@@ -265,18 +316,38 @@ export default function TreatmentCapture(props: {
           this encounter": the count is of treatments, and saying `recorded` twice on one screen (here and
           on every card's status) spends words on the mechanism instead of the fact. Singular is handled
           because "1 treatments" is the kind of thing a practitioner stops trusting the screen over. */}
+      {/* ⚠ s5's HEADER ACTION, WHICH THE COMP HAS AND THIS TAB DID NOT. It does not navigate: the
+          composer is already on the page, so this focuses it. A button that scrolled somewhere else
+          would be a worse answer than the one already visible below. */}
       <SectionHeader
         title="Treatment and plan"
         subtitle={props.recorded.length === 1
           ? "1 treatment this encounter."
           : `${props.recorded.length} treatments this encounter.`}
+        about={editable ? (
+          <button type="button" data-step="add-treatment-header" className={BTN}
+            onClick={() => {
+              const el = document.getElementById("treatment-composer");
+              el?.scrollIntoView({ behavior: "smooth", block: "center" });
+              el?.querySelector<HTMLInputElement>("input")?.focus();
+            }}>
+            + Add treatment
+          </button>
+        ) : undefined}
       />
       <div className="p-4">
 
       {/* ⚠ THE BOUNDARY, FROM THE ENGINE'S CONSTANT rather than retyped here -- so it cannot drift from
           the sentence the API and the harness assert on. Now in the kit's Tip band, which is where
           every tab puts the sentence that qualifies what the screen is claiming. */}
-      <Tip>{cap.boundary}</Tip>
+      {/* ⚠ s5: "Replace large purple panel with a single quiet information line." It was a full-width
+          tinted block two lines deep, read once and then scrolled past on every consultation forever.
+          Same sentence, same engine constant -- it is the API's and the harness's, never retyped -- but
+          it now sits on one quiet line instead of taking the top of the tab. */}
+      <p className="flex items-start gap-1.5 text-[11px] leading-snug text-gray-500">
+        <span aria-hidden="true" className="mt-px text-[var(--cp-primary)]">&#9432;</span>
+        <span>{cap.boundary}</span>
+      </p>
 
       {cap.options.storeState === "absent" && (
         <p className="mt-2 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-[11.5px] text-[var(--cmp-text-warning)]">
@@ -307,50 +378,47 @@ export default function TreatmentCapture(props: {
           precisely the duplication s15 exists to remove, and worse, it would imply a per-treatment
           evaluation this product does not perform, which s11 forbids implying. The day a per-treatment
           check exists its verdict belongs here; until then the panel below is the one that carries it. */}
-      {props.recorded.length > 0 && (
-        <div className="mt-3 overflow-x-auto">
-        <table className={REC_TABLE}>
-          <thead className={REC_HEAD}>
-            <tr>
-              <th className={REC_TH}>Treatment</th>
-              <th className={REC_TH}>Regimen</th>
-              <th className={REC_TH}>Type</th>
-              <th className={REC_TH}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-          {props.recorded.map((t, i) => {
-            const band = treatmentBand(t.status);
-            return (
-            <tr key={t.id}
-              style={{ borderLeftColor: band.edge, borderLeftStyle: band.dashed ? "dashed" : "solid" }}
-              className={recRow(i)}>
-              <td className={REC_TD}>
-                <span className={band.struck
-                  ? "font-semibold text-gray-400 line-through"
-                  : "font-semibold text-gray-900"}>{t.label}</span>
-              </td>
-              <td className={REC_TD}>
-                {/* s14's one line: dose - route - frequency - duration, in that order. An em dash
-                    rather than an empty cell, because blank reads as "did not load". */}
-                {[t.dose, t.route, t.frequency, t.duration].filter(Boolean).length > 0
-                  ? <span className="text-[11.5px] text-gray-600">
-                      {[t.dose, t.route, t.frequency, t.duration].filter(Boolean).join(" · ")}
-                    </span>
-                  : <span className="text-gray-400">&mdash;</span>}
-              </td>
-              <td className={REC_TD}>
-                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
-                  {String(t.treatment_type).replace(/_/g, " ")}
-                </span>
-              </td>
-              <td className={REC_TD}><Badge tone="neutral">{t.status}</Badge></td>
-            </tr>
-            );
-          })}
-          </tbody>
-        </table>
-        </div>
+      {/* ══ s14's RECORDED TREATMENT CARDS ═══════════════════════════════════════════════════════
+          ⚠ CARDS HERE, TABLES ON DIAGNOSES AND PROCEDURES, AND THE DIFFERENCE IS DELIBERATE. A
+          diagnosis row is four short facts and reads as a table. A treatment carries a regimen AND the
+          safety context it was written under, which is two lines per item -- squeezed into a table row
+          the regimen truncates and the safety has nowhere to go. The owner's comp draws cards for
+          exactly that reason. I built a table here first and it moved the tab away from the design. */}
+      {liveTreatments.length > 0 && (
+        <ul className="mt-3 flex flex-col gap-2">
+          {liveTreatments.map(t => (
+            <TreatmentCard key={t.id} t={t} allergyLine={props.allergyLine} weightText={med.weight.text}
+              vitals={vitalsChip} alerts={alertsChip} verdict={allergyVerdict}
+              onReview={() => { setSafetyOpen(true); document.getElementById("treatment-safety")?.scrollIntoView({ behavior: "smooth", block: "center" }); }} />
+          ))}
+        </ul>
+      )}
+
+      {/* ⚠ COLLAPSED, NEVER DROPPED. A stopped treatment is still part of what happened in this
+          consultation. The count is on the summary so a closed group is not mistaken for an empty one --
+          "(0)" and a group that is hiding three are different facts. */}
+      {finishedTreatments.length > 0 || liveTreatments.length > 0 ? (
+        <button type="button" data-step="show-finished"
+          className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-100 py-1.5 text-[11.5px] font-semibold text-gray-600 hover:bg-gray-50"
+          onClick={() => setFinishedOpen(o => !o)}>
+          {finishedOpen ? "Hide" : "Show"} completed / stopped ({finishedTreatments.length})
+          <span aria-hidden="true">{finishedOpen ? "⌃" : "⌄"}</span>
+        </button>
+      ) : null}
+      {finishedOpen && (
+        finishedTreatments.length === 0 ? (
+          <p className="mt-2 text-[11.5px] text-gray-500">
+            Nothing has been completed or stopped in this consultation.
+          </p>
+        ) : (
+          <ul className="mt-2 flex flex-col gap-2">
+            {finishedTreatments.map(t => (
+              <TreatmentCard key={t.id} t={t} allergyLine={props.allergyLine} weightText={med.weight.text}
+                vitals={vitalsChip} alerts={alertsChip} verdict={allergyVerdict}
+                onReview={() => setSafetyOpen(true)} />
+            ))}
+          </ul>
+        )
       )}
 
       {/* ══ s10's SAFETY -- COMPACT BY DEFAULT (CPR-TRT-UI-002 s10, s11, s12) ═════════════════════
@@ -370,7 +438,18 @@ export default function TreatmentCapture(props: {
           ⚠ AND THE ONE-TAP ANSWER STAYS IN THE OPEN. Burying `No known drug allergies` behind the
           disclosure would leave assertion 7b-7 -- "answering the common case is ONE tap" -- passing on a
           count while its sentence had quietly become false. Explanations moved; controls did not. */}
-      <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
+      {/* ⚠ A <details>, NOT A CONDITIONAL. The children are in the HTML whether or not it is open, which
+          is what keeps the one-tap allergy answer reachable, printable and in the accessibility tree.
+          Rendering this only when `safetyOpen` would have removed the NKDA control from the page and
+          quietly turned assertion 7b-7 -- "answering the common case is ONE tap" -- into a lie.
+          Each card's Review opens this rather than repeating it: one patient, one safety panel. */}
+      <details id="treatment-safety" open={safetyOpen}
+        className="mt-3 rounded-xl border border-gray-200 bg-white"
+        onToggle={e => setSafetyOpen((e.currentTarget as HTMLDetailsElement).open)}>
+        <summary className="cursor-pointer px-3 py-2 text-[12px] font-semibold text-gray-700">
+          Patient safety for prescribing
+        </summary>
+        <div className="border-t border-gray-100 p-3">
 
         {/* == THE ALLERGY LINE, AND THE TWO ACTIONS THAT ANSWER IT ==============================
             WARNING: THIS WAS A DEAD END UNTIL NOW, AND THAT IS THE DEFECT BEING FIXED. The store
@@ -597,7 +676,8 @@ export default function TreatmentCapture(props: {
             <span className="font-bold text-gray-900">Blood group</span> {props.bloodGroupLine.text}
           </p>
         </Advisory>
-      </div>
+        </div>
+      </details>
 
       {!editable && (
         <p className="mt-3 text-[11px] text-gray-500">
@@ -678,9 +758,12 @@ export default function TreatmentCapture(props: {
             </div>
           )}
 
-          {/* ══ THE BUILDER -- s3 and s5 ═════════════════════════════════════════════════════════ */}
-          <div className={`${CARD} mt-3`}>
+          {/* ══ THE BUILDER -- s3 and s5 ═════════════════════════════════════════════════════════
+              The id is the header action's target. A "+ Add treatment" button that scrolled to nothing
+              would be the same class of defect as a disabled button that cannot say why. */}
+          <div id="treatment-composer" className={`${CARD} mt-3`}>
             <h4 className="text-[12px] font-bold text-gray-900">Add a treatment</h4>
+            <p className="mt-0.5 text-[11.5px] text-gray-500">Choose what you want to add</p>
 
             {/* s3's types, CONFIGURED. Nothing in this component knows what a treatment type is. */}
             {opts("treatment_type").length === 0 ? (
@@ -752,64 +835,66 @@ export default function TreatmentCapture(props: {
 
             {/* s13's non-drug categories, CONFIGURED. */}
             {shape.nonDrug && (
-              <QuickPick label="Category" quick={6} options={opts("non_drug_category")}
+              <PickSelect label="Category" options={opts("non_drug_category")}
                 value={draft.nonDrugCategory} step="non-drug-category"
                 onPick={(o) => setDraft(d => ({ ...d, nonDrugCategory: o?.code ?? null }))} />
             )}
 
             {/* s5's five tap-fields. EVERY ONE READ FROM CONFIGURATION. */}
+            {/* ══ THE COMP'S FIELD ROW ═══════════════════════════════════════════════════════════
+                Dose, unit, frequency, duration and route on ONE line, as labelled dropdowns.
+
+                ⚠ THIS REPLACES THE CHIP ROWS I BUILT EARLIER TODAY, AND THE SPEC AND THE COMP DISAGREE
+                HERE. s8's table asks for visible quick-choice CHIPS with the rest behind "Other". The
+                owner's comp draws DROPDOWNS, and the owner has twice said to build the comp. A select
+                satisfies what the chips were for -- s21 wants every configured value reachable within
+                one additional interaction, and one click on a closed select is exactly that, with the
+                practice's own sort_order deciding what sits at the top. It also costs one line instead
+                of five, which is the whole complaint that started this.
+
+                ⚠ NOTHING IS PRE-SELECTED. Each select opens on "Choose", not on the first configured
+                option. s9 permits a default and REQUIRES its source be recorded for audit; there is
+                nowhere to record that yet, and a default nobody can trace is indistinguishable from a
+                clinical choice the practitioner made. */}
             {shape.prescribing && (
-              <>
-                {/* ⚠ s8: FORMULATION APPEARS ONLY ONCE A MEDICATION IS NAMED. "Do not show the full
-                    formulation chip list initially" -- and the reason is that a formulation chosen
-                    before the drug is a value the practitioner cannot check against anything. It is
-                    also the field with the longest configured list, so it was the largest single block
-                    of the old default view. */}
+              <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                {/* Formulation keeps s8's gate: it appears once a medication is named, because a
+                    formulation chosen before the drug cannot be checked against anything. */}
                 {(draft.label ?? "").trim() !== "" && (
-                  <QuickPick label="Formulation" quick={4} options={opts("formulation")} value={draft.formulation}
-                    step="formulation" onPick={(o) => setDraft(d => ({ ...d, formulation: o?.label ?? null }))} />
+                  <PickSelect label="Formulation" options={opts("formulation")} value={draft.formulation}
+                    step="formulation"
+                    onPick={o => setDraft(d => ({ ...d, formulation: o?.label ?? null }))} />
                 )}
-
-                <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
-                  <label>
-                    <span className={LABEL}>Dose</span>
-                    <input className={input} value={draft.dose ?? ""}
-                      onChange={e => setDraft(d => ({ ...d, dose: e.target.value }))} placeholder="500" />
-                  </label>
-                  <QuickPick label="Unit" quick={4} options={opts("dose_unit")} value={draft.doseUnit}
-                    step="dose-unit" onPick={(o) => setDraft(d => ({ ...d, doseUnit: o?.label ?? null }))} />
-                </div>
-
-                <QuickPick label="Route" quick={4} options={opts("route")} value={draft.route}
-                  step="route" onPick={(o) => setDraft(d => ({ ...d, route: o?.label ?? null }))} />
-
-                {/* ⚠ THE CONFIGURED "Other" OPTION IS PINNED INTO THE QUICK SET. It is not a disclosure
-                    toggle -- it is a real option that opens the custom-wording field s5 requires, and
-                    typing a frequency in your own words is a common need rather than a rare one. If it
-                    sorted past the quick set it would sit behind "N more", which would make the ordinary
-                    act of writing "every other day" cost an extra tap for no reason. */}
-                <QuickPick label="Frequency" quick={5} pinCode={OTHER_OPTION_CODE}
-                  options={opts("frequency")} value={draft.frequencyCode}
-                  step="frequency" byCode
-                  onPick={(o) => setDraft(d => ({
+                <label className="block">
+                  <span className={LABEL}>Dose</span>
+                  <input className={input} value={draft.dose ?? ""}
+                    onChange={e => setDraft(d => ({ ...d, dose: e.target.value }))} placeholder="500" />
+                </label>
+                <PickSelect label="Unit" options={opts("dose_unit")} value={draft.doseUnit}
+                  step="dose-unit" onPick={o => setDraft(d => ({ ...d, doseUnit: o?.label ?? null }))} />
+                <PickSelect label="Frequency" options={opts("frequency")} value={draft.frequencyCode} byCode
+                  step="frequency"
+                  onPick={o => setDraft(d => ({
                     ...d, frequencyCode: o?.code ?? null,
                     frequencyText: o && o.code !== OTHER_OPTION_CODE ? o.label : null,
                     frequencyPerDay: o?.numericValue ?? null,
                   }))} />
-                {/* ⚠ s5, VERBATIM: "Selecting Other for Frequency opens a compact custom-frequency field.
-                    The exact entered wording must be preserved in the encounter record." */}
-                {draft.frequencyCode === OTHER_OPTION_CODE && (
-                  <div className="mt-1">
-                    <input autoFocus className={input} value={customFrequency}
-                      onChange={e => setCustomFrequency(e.target.value)}
-                      placeholder="In your own words — for example: every other day, in the morning" />
-                    <p className="mt-0.5 text-[10px] text-gray-500">{CUSTOM_WORDING_PRESERVED}</p>
-                  </div>
-                )}
-
-                <QuickPick label="Duration" quick={5} options={opts("duration")} value={draft.duration}
-                  step="duration" onPick={(o) => setDraft(d => ({ ...d, duration: o?.label ?? null }))} />
-              </>
+                <PickSelect label="Duration" options={opts("duration")} value={draft.duration}
+                  step="duration" onPick={o => setDraft(d => ({ ...d, duration: o?.label ?? null }))} />
+                <PickSelect label="Route" options={opts("route")} value={draft.route}
+                  step="route" onPick={o => setDraft(d => ({ ...d, route: o?.label ?? null }))} />
+              </div>
+            )}
+            {/* ⚠ s5, VERBATIM: "Selecting Other for Frequency opens a compact custom-frequency field.
+                The exact entered wording must be preserved in the encounter record." Full width, under
+                the row, because it is a sentence rather than a field. */}
+            {shape.prescribing && draft.frequencyCode === OTHER_OPTION_CODE && (
+              <div className="mt-2">
+                <input autoFocus className={input} value={customFrequency}
+                  onChange={e => setCustomFrequency(e.target.value)}
+                  placeholder="In your own words — for example: every other day, in the morning" />
+                <p className="mt-0.5 text-[10px] text-gray-500">{CUSTOM_WORDING_PRESERVED}</p>
+              </div>
             )}
 
             {/* ⚠ s8's COLLAPSED NOTES -- BUT NEVER WHEN THIS PRACTICE REQUIRES THEM. A required field
@@ -1111,57 +1196,135 @@ export default function TreatmentCapture(props: {
  * default nobody can trace is worse than a field the practitioner filled -- it would be indistinguishable
  * from a clinical choice. Pre-population lands with the column that can say where it came from.
  */
-function QuickPick({ label, options, value, onPick, step, byCode, quick = 5, pinCode }: {
+type Chip = { tone: "ok" | "warn" | "unknown"; text: string };
+
+/**
+ * One recorded treatment, in the shape of the owner's comp: an icon tile, the regimen on one line, the
+ * status, and the safety context the prescription was written under.
+ *
+ * ⚠ THE FOUR CHIPS ARE PATIENT-LEVEL FACTS AND SAY SO BY BEING IDENTICAL ON EVERY CARD. They are the
+ * same allergy status and the same weight for every treatment because there is one patient. Nothing
+ * here reads `checked`, `cleared` or `safe` -- s11 forbids implying a drug-specific check has passed,
+ * and this product runs none. What they are for is scanning: the context that was true when this was
+ * prescribed, beside the thing prescribed.
+ *
+ * ⚠ AN UNKNOWN CHIP IS GREY, NEVER AMBER. s10: missing optional data must not look like a warning.
+ * "Vitals not recorded" is the ordinary state of most consultations, and an amber chip on every card
+ * would teach a practitioner to stop seeing amber -- which is the colour the real alert uses.
+ */
+function TreatmentCard({ t, allergyLine, weightText, vitals, alerts, verdict, onReview }: {
+  t: { id: string; treatment_type: string; label: string; dose: string | null; route: string | null;
+    frequency: string | null; duration: string | null; status: string };
+  allergyLine: SafetyLine;
+  weightText: string;
+  vitals: Chip; alerts: Chip;
+  verdict: "clear" | "unknown" | "flagged";
+  onReview: () => void;
+}) {
+  const band = treatmentBand(t.status);
+  const regimen = [t.dose, t.route, t.frequency, t.duration].filter(Boolean).join(" · ");
+  const isMedication = t.treatment_type === "medication";
+
+  const chipTone = (c: Chip) =>
+    c.tone === "warn" ? "text-[var(--cmp-text-warning)]"
+      : c.tone === "ok" ? "text-[var(--cmp-text-success)]" : "text-gray-400";
+  const chipMark = (c: Chip) => (c.tone === "warn" ? "⚠" : c.tone === "ok" ? "✓" : "–");
+
+  return (
+    <li style={{ borderLeftColor: band.edge, borderLeftStyle: band.dashed ? "dashed" : "solid" }}
+      className="rounded-l-none rounded-r-xl border border-l-[3px] border-gray-200 bg-white p-3">
+      <div className="flex items-start gap-3">
+        {/* The comp's icon tile. Hue by KIND -- a medicine and a dressing are different acts, and this is
+            the one place on the card where colour is categorical rather than a confidence weight. */}
+        <span aria-hidden="true"
+          className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[15px] ${
+            isMedication ? "bg-[var(--cp-primary)]/10 text-[var(--cp-primary)]" : "bg-teal-50 text-teal-700"}`}>
+          {isMedication ? "℞" : "✚"}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className={band.struck
+              ? "text-[13.5px] font-bold text-gray-400 line-through"
+              : "text-[13.5px] font-bold text-gray-900"}>{t.label}</span>
+            {regimen && <span className="text-[12px] text-gray-600">{regimen}</span>}
+            <Badge tone={band.struck ? "muted" : "neutral"}>{t.status}</Badge>
+          </div>
+
+          {/* ══ THE SAFETY ROW ═════════════════════════════════════════════════════════════════ */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-gray-100 pt-2">
+            <span className="inline-flex items-baseline gap-1.5">
+              {/* ⚠ GREEN ONLY WHEN A PERSON ANSWERED. `clear` is set from allergyLine.safeToRead, which
+                  is true only once somebody recorded an answer -- never because a list came back empty.
+                  `flagged` is rose; `unknown` is grey, because an unanswered question is not a warning. */}
+              <span aria-hidden="true" className={`text-[11px] ${
+                verdict === "clear" ? "text-[var(--cmp-text-success)]"
+                  : verdict === "flagged" ? "text-[var(--cmp-text-critical)]" : "text-gray-400"}`}>
+                {verdict === "clear" ? "✓" : verdict === "flagged" ? "⚠" : "–"}
+              </span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Allergies</span>
+              <span className="text-[11.5px] text-gray-700">{allergyLine.text}</span>
+            </span>
+            <span className="inline-flex items-baseline gap-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Weight</span>
+              <span className="text-[11.5px] text-gray-700">{weightText}</span>
+            </span>
+            <span className="inline-flex items-baseline gap-1.5">
+              <span aria-hidden="true" className={`text-[11px] ${chipTone(vitals)}`}>{chipMark(vitals)}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Vitals</span>
+              <span className="text-[11.5px] text-gray-700">{vitals.text}</span>
+            </span>
+            <span className="inline-flex items-baseline gap-1.5">
+              <span aria-hidden="true" className={`text-[11px] ${chipTone(alerts)}`}>{chipMark(alerts)}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Alerts</span>
+              <span className="text-[11.5px] text-gray-700">{alerts.text}</span>
+            </span>
+            <button type="button" data-step="review-safety" onClick={onReview}
+              className="ml-auto text-[11.5px] font-semibold text-[var(--cp-primary)] hover:underline">
+              Review &rsaquo;
+            </button>
+          </div>
+        </div>
+      </div>
+    </li>
+  );
+}
+
+
+/**
+ * One configured field as a labelled dropdown -- the comp's shape for dose unit, frequency, duration,
+ * route and formulation.
+ *
+ * ⚠ THIS REPLACED A CHIP ROW WITH A "N more" DISCLOSURE, AND THE PROPERTY IT GUARANTEED SURVIVES.
+ * s21 requires every configured value to stay reachable within one additional interaction: one click on
+ * a closed select is that, and unlike the chips it costs one line rather than five. The practice's own
+ * sort_order still decides what sits at the top of the list, so which values come first is configured
+ * where it always was, with no second place to set it.
+ *
+ * ⚠ THE PLACEHOLDER IS "Choose", NOT THE FIRST OPTION. A select that opens already showing a value has
+ * made a clinical choice on the practitioner's behalf and recorded it as theirs. s9 permits a default
+ * only where its SOURCE can be preserved for audit, and nothing here can record that yet.
+ *
+ * ⚠ AND IT IS A REAL <select>, so it is keyboard-operable, type-ahead searchable and readable by a
+ * screen reader without any work -- which the chip row only approximated.
+ */
+function PickSelect({ label, options, value, onPick, step, byCode }: {
   label: string;
   options: TreatmentOption[];
   value: string | null | undefined;
   onPick: (o: TreatmentOption | null) => void;
   step: string;
   byCode?: boolean;
-  /** How many of the practice's own top options to draw before the rest are folded away. */
-  quick?: number;
-  /** Always kept in the quick set wherever it sorts. See the Frequency call site for why. */
-  pinCode?: string;
 }) {
-  const [showAll, setShowAll] = useState(false);
   if (options.length === 0) return null;
-  const isOn = (o: TreatmentOption) => (byCode ? value === o.code : value === o.label);
-
-  const shown = options.slice(0, quick);
-  for (const extra of [pinCode ? options.find(o => o.code === pinCode) : undefined, options.find(isOn)])
-    if (extra && !shown.includes(extra)) shown.push(extra);
-  const rest = options.filter(o => !shown.includes(o));
-  const visible = showAll ? [...shown, ...rest] : shown;
-
-  const chip = (on: boolean) => on
-    ? "rounded-full border border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary-deep)]"
-    : "rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-gray-800 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/5";
-
+  const current = options.find(o => (byCode ? value === o.code : value === o.label));
   return (
-    <div className="mt-2">
-      <span className="block text-[10px] font-semibold uppercase tracking-wide text-gray-500">{label}</span>
-      <ul className="mt-1 flex flex-wrap gap-1">
-        {visible.map(o => (
-          <li key={o.id}>
-            <button type="button" data-step={step} className={chip(isOn(o))}
-              onClick={() => onPick(isOn(o) ? null : o)}>
-              {o.label}
-            </button>
-          </li>
-        ))}
-        {/* ⚠ THE COUNT IS ON THE BUTTON. "More" alone leaves a practitioner guessing whether the thing
-            they want is behind it; "12 more" tells them the list is worth opening. s21 requires every
-            configured value to stay reachable within ONE additional interaction, and this is it. */}
-        {rest.length > 0 && !showAll && (
-          <li>
-            <button type="button" data-step={`${step}-more`}
-              className="rounded-full border border-dashed border-gray-300 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-gray-600 hover:border-[var(--cp-primary)]"
-              onClick={() => setShowAll(true)}>
-              {rest.length} more
-            </button>
-          </li>
-        )}
-      </ul>
-    </div>
+    <label className="block">
+      <span className={LABEL}>{label}</span>
+      <select className={input} data-step={step} value={current?.id ?? ""}
+        onChange={e => onPick(options.find(o => o.id === e.target.value) ?? null)}>
+        <option value="">Choose</option>
+        {options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+      </select>
+    </label>
   );
 }

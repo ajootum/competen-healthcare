@@ -315,6 +315,12 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
               allergyList={snapshot.allergyList}
               bloodGroupLine={snapshot.bloodGroup}
               canEditPatient={hasCapability(shell.ctx, "patient.edit")}
+              /* ⚠ THE SAME COLLECTION SafetySnapshot READS, not a second query. The vitals and alert
+                 chips on each treatment card are derived from this with the same arithmetic, so the
+                 strip at the top of the page and the cards below it cannot disagree about how many
+                 alerts are open -- two screens counting the same thing differently is a drift this
+                 codebase has already been bitten by. */
+              collection={parameterCollection}
             />
           }
           investigationCapture={

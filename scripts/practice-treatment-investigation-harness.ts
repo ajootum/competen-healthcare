@@ -28,6 +28,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import React from "react";
+import { encounterParameters } from "../src/lib/practice/parameters";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { loadEnvConfig } from "@next/env";
@@ -501,6 +502,11 @@ async function main() {
     recorded: [], canRecord: true, canPrescribe: true, locked: false,
     allergyLine: snapshot.allergies, allergyList: snapshot.allergyList,
     bloodGroupLine: snapshot.bloodGroup, canEditPatient: true,
+    // ⚠ THE REAL COLLECTION FOR THIS ENCOUNTER, not a hand-built stub. The treatment cards derive their
+    // vitals and alert chips from it with the same arithmetic SafetySnapshot uses, and a stub would let
+    // the two drift apart while this stayed green. When the prop was added the render CRASHED here
+    // rather than degrading quietly, which is the failure worth having.
+    collection: await encounterParameters(admin, ctx, encounterId),
   };
   const treatHtml = renderClient(TreatmentCapture, treatProps);
   const templateTaps = stepCount(treatHtml, "apply-template");
@@ -554,11 +560,18 @@ async function main() {
   const freqChips = stepCount(treatHtml, "frequency");
   ok("7-16-control. the fixture configures more frequencies than the quick set draws",
     freqOpts.length > 5, `${freqOpts.length} configured`);
-  ok("7-16. s8: the composer draws the quick set, not the whole configured list",
-    freqOpts.length <= 5 || freqChips < freqOpts.length, `${freqChips} chips of ${freqOpts.length} configured`);
-  ok("7-17. s21: the rest stay reachable in exactly ONE more interaction",
-    freqChips >= freqOpts.length || stepCount(treatHtml, "frequency-more") === 1,
-    `${stepCount(treatHtml, "frequency-more")} disclosure control(s)`);
+  // ⚠ REPOINTED WHEN THE CHIPS BECAME A DROPDOWN, AND THE GUARANTEE GOT STRONGER RATHER THAN WEAKER.
+  // These asserted "a quick set is drawn" and "a `N more` control exists" -- both descriptions of the
+  // chip implementation. The comp uses a select, so the old wording described a control that no longer
+  // exists. The PROPERTY was always s21's: every configured value reachable within one additional
+  // interaction. 7-17 now checks every single configured frequency is actually present, which the
+  // "there is a more button" version never did -- that one would have passed with the button wired to
+  // an empty list.
+  ok("7-16. s8: frequency is ONE compact control, not a row of chips per configured value",
+    freqChips === 1, `${freqChips} control(s) for ${freqOpts.length} configured values`);
+  ok("7-17. s21: EVERY configured frequency is inside it, one interaction away",
+    freqOpts.every(o => treatHtml.includes(`>${o.label}<`)),
+    freqOpts.filter(o => !treatHtml.includes(`>${o.label}<`)).map(o => o.label).join(", ") || "all present");
   // ⚠ THE CUSTOM-WORDING OPTION IS NOT BEHIND THE DISCLOSURE. It opens the free-text frequency s5
   // requires, and putting the ordinary act of writing "every other day" behind an extra tap would be a
   // regression dressed as tidying. Asserted by LABEL from the fixture, not by a string typed here.
