@@ -54,12 +54,33 @@ const skip = (id: string, msg: string) => { skips.push(id); console.log(`  SKIP 
 
   try {
     // ── Fixtures ────────────────────────────────────────────────────────────────────────────────────
-    const { data: wsRows } = await admin.from("practice_workspace").select("id").limit(1);
-    const { data: pRows } = await admin.from("practice_patient").select("id").limit(1);
-    const { data: prof } = await admin.from("profiles").select("id").limit(1);
-    ws = (wsRows ?? [])[0]?.id ?? null;
-    patient = (pRows ?? [])[0]?.id ?? null;
-    actor = (prof ?? [])[0]?.id ?? null;
+    // ⚠ ANCHORED ON A WORKSPACE THAT ACTUALLY HAS AN APPOINTMENT, and the patient is then taken FROM
+    // THAT WORKSPACE. This was three independent `.limit(1)` reads with no ORDER BY, which went wrong
+    // in two ways at once:
+    //
+    //   1. The workspace it happened to pick had NO appointments, so onAppointmentCreated's `n >= 1`
+    //      was never true. H4c-control -- "the same hook against the real client DOES emit" -- could
+    //      not pass however correct the hook was. And H4b, "a FAILED count emits nothing", was passing
+    //      because with nought appointments nothing would have been emitted either way. THAT is what a
+    //      red control means: the assertion beside it is green for a reason nobody checked.
+    //   2. The patient came from its own unrelated read, so it need not belong to that workspace at
+    //      all -- every markSeen below could be a cross-workspace call, which the service role happily
+    //      performs because RLS is not in the path.
+    //
+    // An unordered limit(1) is not a fixture; it is whatever the query planner returns today. Ordered
+    // by created_at so a rerun tomorrow tests the same rows as a rerun now.
+    const { data: apptRows } = await admin.from("practice_appointment")
+      .select("workspace_id").order("created_at", { ascending: true }).limit(1);
+    const anchored = ((apptRows ?? []) as any[])[0]?.workspace_id ?? null;
+    const { data: wsRows } = await admin.from("practice_workspace")
+      .select("id").order("created_at", { ascending: true }).limit(1);
+    ws = anchored ?? ((wsRows ?? []) as any[])[0]?.id ?? null;
+    const { data: pRows } = await admin.from("practice_patient")
+      .select("id").eq("workspace_id", ws ?? "").order("created_at", { ascending: true }).limit(1);
+    const { data: prof } = await admin.from("profiles")
+      .select("id").order("created_at", { ascending: true }).limit(1);
+    patient = ((pRows ?? []) as any[])[0]?.id ?? null;
+    actor = ((prof ?? []) as any[])[0]?.id ?? null;
     if (!ws || !actor) { skip("*", "no practice workspace or profile to build fixtures on"); process.exit(0); }
 
     // ── A. The activation ledger (GROWTH s2, s7) ────────────────────────────────────────────────────
@@ -284,6 +305,12 @@ const skip = (id: string, msg: string) => { skips.push(id); console.log(`  SKIP 
       .select("id", { count: "exact" }).eq("workspace_id", ws).limit(1);
     ok("H2", (apptCount ?? 0) >= 1 ? emitted.includes("booking.first_received") : emitted.length === 0,
       `emitted from the COUNT (${apptCount} appointment(s) -> ${emitted.join(", ") || "nothing"}), not from having been called`);
+    // ⚠ H2 IS A BRANCH, so it passes on a workspace with no appointments by proving the nought case --
+    // honest, and no cover at all for H4b and H4c-control below, which both need the OTHER branch. This
+    // states the precondition out loud so the fixture cannot drift back to an appointment-less workspace
+    // and take those two down with it. It is the assertion that would have caught this in the first place.
+    ok("H2-control", (apptCount ?? 0) >= 1,
+      `the fixture workspace holds ${apptCount} appointment(s) -- at nought, H4b and H4c-control are both vacuous`);
 
     // !! A HOOK THAT THROWS MUST NOT THROW. Telemetry can never fail the booking that triggered it.
     const throwingAdmin = { from: () => { throw new Error("down"); } };
