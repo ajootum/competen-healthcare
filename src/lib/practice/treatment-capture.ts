@@ -6,6 +6,7 @@ import { captureSettings, isMissingTable, type Panel } from "@/lib/practice/inve
 import {
   TREATMENT_FIELD_KEYS, TREATMENT_BOUNDARY, TREATMENT_REFUSALS, TREATMENT_CONFIG_ABSENT_NOTICE,
   OTHER_OPTION_CODE, treatmentShape, MAX_PENDING_TREATMENTS,
+  TREATMENT_SUBTYPE, composeSubtypeSummary,
   type TreatmentFieldKey,
 } from "@/lib/practice/treatment-capture-constants";
 
@@ -373,6 +374,13 @@ export type PendingTreatment = {
   nonDrugCategory?: string | null;
   reason?: string | null;
   templateId?: string | null;
+  /**
+   * CP-TREAT-002 s9. The type's structured fields, keyed by COLUMN NAME from TREATMENT_SUBTYPE --
+   * site, method, body_area and so on. The engine writes them to the migration-296 subtype table AND
+   * composes the display summary from them, so the screen and the structure cannot say different
+   * things about the same treatment.
+   */
+  subtype?: Record<string, string | null> | null;
 };
 
 export type BatchTreatmentResult = {
@@ -451,7 +459,12 @@ export async function recordTreatmentBatch(admin: any, ctx: WorkspaceContext, ar
         dose_unit: trim(item.doseUnit) || null,
         medication_ref: trim(item.medicationRef) || null,
         template_id: trim(item.templateId) || null,
-        non_drug_category: trim(item.nonDrugCategory) || null,
+        // ⚠ THE SUMMARY IS COMPOSED FROM THE STRUCTURED FIELDS WHEN THEY EXIST, in field order, by the
+        // one function the harness asserts on. Display and structure are written in the same breath so
+        // they cannot disagree -- and if the subtype write later fails, this column still carries what
+        // was typed. Structure can be lost gracefully; content cannot.
+        non_drug_category: composeSubtypeSummary(trim(item.treatmentType), item.subtype)
+          ?? (trim(item.nonDrugCategory) || null),
         batch_id: batchId,
         created_by: args.actorId,
       },
@@ -493,6 +506,7 @@ export async function recordTreatmentBatch(admin: any, ctx: WorkspaceContext, ar
   // Match each written row back to the item that produced it, by label, in order.
   const queue = [...written];
   const medicationWork: { index: number; item: PendingTreatment; treatmentId: string }[] = [];
+  const subtypeWork: { index: number; item: PendingTreatment; treatmentId: string; treatmentType: string }[] = [];
   for (const p of prepared) {
     const at = queue.findIndex(w => w.label === String(p.row.label));
     if (at < 0) {
@@ -506,6 +520,35 @@ export async function recordTreatmentBatch(admin: any, ctx: WorkspaceContext, ar
       label: String(p.row.label), code: null, message: null });
     if (treatmentShape(String(p.row.treatment_type)).prescribing) {
       medicationWork.push({ index: p.index, item: p.item, treatmentId });
+    }
+    if (TREATMENT_SUBTYPE[String(p.row.treatment_type)]) {
+      subtypeWork.push({ index: p.index, item: p.item, treatmentId, treatmentType: String(p.row.treatment_type) });
+    }
+  }
+
+  // ── CP-TREAT-002 s9: THE STRUCTURED DETAIL, one row in the type's own table ──────────────────────
+  //
+  // ⚠ A FAILED SUBTYPE WRITE DOES NOT FLIP THE ITEM TO FAILED, AND THE PRACTITIONER IS TOLD WHY NOT.
+  // The treatment row is already written and the summary column already carries every typed word, so
+  // the only thing lost is the STRUCTURE a future report would group by. Failing the item for that
+  // would tell somebody their wound dressing was not recorded when it was -- the recorded-but-degraded
+  // state is reported in the message instead, by name, including the migration that fixes it.
+  for (const s of subtypeWork) {
+    const def = TREATMENT_SUBTYPE[s.treatmentType];
+    const values: Record<string, string | null> = { treatment_id: s.treatmentId };
+    let any = false;
+    for (const f of def.fields) {
+      const v = trim(s.item.subtype?.[f.key]) || null;
+      values[f.key] = v;
+      if (v) any = true;
+    }
+    if (!any) continue;
+    const { error: subErr } = await admin.from(def.table).insert(values);
+    if (subErr) {
+      const r = results.find(x => x.index === s.index);
+      if (r) r.message = isMissingTable(subErr)
+        ? "recorded, with the detail as text only: the structured fields need migration 296, which is not applied here"
+        : `recorded, with the detail as text only: the structured fields were refused (${subErr.message})`;
     }
   }
 

@@ -960,6 +960,56 @@ async function main() {
   ok("11-14. ⚠ AC-13: the treatment row and the medication row are DISTINCT records, never one",
     (txRows ?? []).length === 4 && (medRows ?? []).length === 2);
 
+  // ══ CP-TREAT-002 s9: THE STRUCTURED SUBTYPE ROW, AGAINST THE REAL DATABASE ═════════════════════
+  //
+  // ⚠ PLACED AFTER 11-14 ON PURPOSE. It records a FIFTH treatment on this encounter, and 11-4, 11-5
+  // and 11-14 all count the rows on it -- putting this first turned three correct assertions red by
+  // changing the number they legitimately pin. It must also stay BEFORE the signing below, because a
+  // signed encounter refuses new treatments by design.
+  // ⚠ WRITTEN AND READ BACK, not asserted from source. A source check would prove the engine INTENDS
+  // to write a wound-care row and would pass just as happily if migration 296 were missing, if a key
+  // drifted from its column, or if PostgREST refused the insert -- the three ways this actually breaks.
+  const woundBatch = await recordTreatmentBatch(admin, ctx, {
+    encounterId,
+    items: [{
+      treatmentType: "wound_care", label: "Left heel dressing",
+      subtype: { site: "Left heel", method: "Normal saline and dry dressing" },
+      frequencyCode: "od", frequencyText: "Once a day (OD)", duration: "7 days",
+    }],
+    ...base,
+  });
+  ok("11-14a. a wound-care treatment records", woundBatch.ok && woundBatch.data.recorded === 1,
+    woundBatch.ok ? JSON.stringify(woundBatch.data.results[0]) : woundBatch.message);
+  const woundId = woundBatch.ok ? woundBatch.data.results[0]?.treatmentId : null;
+
+  const { data: woundDetail } = await admin.from("practice_treatment_wound_care")
+    .select("treatment_id, site, method").eq("treatment_id", woundId ?? "").maybeSingle();
+  ok("11-14b. s9: its STRUCTURED detail is in the wound-care table, in its own columns",
+    !!woundDetail && woundDetail.site === "Left heel"
+      && woundDetail.method === "Normal saline and dry dressing",
+    JSON.stringify(woundDetail));
+
+  // ⚠ AND THE SUMMARY IS WRITTEN TOO, from the same fields in field order. Structure is what a report
+  // groups by; the summary is what the Details column shows. Both, or a screen and a report disagree.
+  const { data: woundParent } = await admin.from("practice_treatment")
+    .select("non_drug_category, treatment_type, frequency, duration").eq("id", woundId ?? "").maybeSingle();
+  ok("11-14c. and the display summary is composed from those same fields",
+    woundParent?.non_drug_category === "Left heel · Normal saline and dry dressing",
+    JSON.stringify(woundParent));
+  // s6: a non-medication treatment can finally carry a schedule -- it had nowhere to put one before.
+  ok("11-14d. s6: a non-medication treatment keeps its frequency and duration",
+    woundParent?.frequency === "Once a day (OD)" && woundParent?.duration === "7 days",
+    JSON.stringify(woundParent));
+
+  // ⚠ CONTROL: a MEDICATION must not acquire a subtype row. Nothing should be writing to those tables
+  // for a type that has no entry in TREATMENT_SUBTYPE, and a check that only ever looks at wound care
+  // would never notice if something wrote to all six.
+  const { count: strayWound } = await admin.from("practice_treatment_wound_care")
+    .select("treatment_id", { count: "exact", head: true })
+    .in("treatment_id", batch.ok ? batch.data.results.filter(r => r.ok).map(r => r.treatmentId as string) : []);
+  ok("11-14e. CONTROL: the four medication/legacy rows got NO wound-care detail row",
+    (strayWound ?? 0) === 0, `${strayWound} stray row(s)`);
+
   // ⚠ REFUSAL PAIRED WITH ITS CONTROL. The control above (11-1) already proves the same call works on a
   // live encounter, so a green refusal here cannot be an engine that stopped working.
   await transitionEncounter(admin, { workspaceId: ws, encounterId, to: "COMPLETED", ...base });

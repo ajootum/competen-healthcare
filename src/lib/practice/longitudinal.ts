@@ -70,9 +70,34 @@ export type PatientSnapshot = {
   allergyList: Panel<{ id: string; substance: string; reaction: string | null; severity: string | null; certainty: string }>;
   bloodGroup: SafetyLine;
   activeProblems: Panel<{ id: string; label: string; status: string; onsetDate: string | null }>;
-  currentTreatments: Panel<{ id: string; label: string; treatmentType: string; dose: string | null; route: string | null; frequency: string | null; recordedAt: string }>;
+  currentTreatments: Panel<{ id: string; label: string; treatmentType: string; dose: string | null; route: string | null; frequency: string | null; recordedAt: string; summary: string | null }>;
   milestones: Panel<Milestone>;
 };
+
+/**
+ * CP-TREAT-002 s13's type-aware summary for the snapshot rail.
+ *
+ * ⚠ A MEDICATION AND A DIET ARE SUMMARISED BY DIFFERENT COLUMNS, which is the whole point of the
+ * requirement. A medication reads "5 mg - Oral - OD"; a wound dressing reads what its own detail field
+ * holds. Before this, both were assembled from dose/route/frequency, so every non-drug treatment came
+ * out as an empty string and the rail showed a bare label with nothing after it.
+ *
+ * ⚠ AND THE DOSE CARRIES ITS UNIT HERE TOO. The same defect the encounter table had -- dose without
+ * dose_unit -- was in this rail as well, unread because nobody had recorded a non-medication treatment
+ * to notice it beside.
+ */
+export function currentTreatmentSummary(t: {
+  treatment_type?: string | null; dose?: string | null; dose_unit?: string | null;
+  route?: string | null; frequency?: string | null; duration?: string | null;
+  non_drug_category?: string | null;
+}): string | null {
+  const isDrug = t.treatment_type === "medication" || t.treatment_type === "change_medication";
+  const parts = isDrug
+    ? [[t.dose, t.dose_unit].filter(Boolean).join(" "), t.route, t.frequency]
+    : [t.non_drug_category, t.frequency, t.duration];
+  const shown = parts.map(p => (p ?? "").trim()).filter(Boolean);
+  return shown.length ? shown.join(" · ") : null;
+}
 
 export type Milestone = {
   id: string; kind: string; label: string; occurredOn: string; note: string | null;
@@ -122,8 +147,13 @@ export async function patientSnapshot(
     // "Current treatments" is what has been recorded and not cancelled, newest first. There is no
     // stop-date in this schema, so this is deliberately named for what it is -- the treatments on the
     // record -- rather than being presented as an active medication list nobody reconciled.
+    // ⚠ CP-TREAT-002 s13: "Patient snapshot Current treatments should display both medication and
+    // non-medication active/current treatments, with concise type-aware summaries." This selected
+    // dose, route and frequency only -- medication-shaped columns -- so a wound dressing or a diet
+    // plan arrived with every field null and rendered as a bare label. The list was not wrong about
+    // WHICH treatments existed, it was blank about what any non-drug one actually was.
     admin.from("practice_treatment")
-      .select("id, label, treatment_type, dose, route, frequency, status, created_at")
+      .select("id, label, treatment_type, dose, dose_unit, route, frequency, duration, non_drug_category, status, created_at")
       .eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId).neq("status", "cancelled")
       .order("created_at", { ascending: false }).limit(30),
     admin.from("practice_patient_milestone")
@@ -163,6 +193,9 @@ export async function patientSnapshot(
       : loaded(((treatmentRes.data ?? []) as any[]).map(t => ({
         id: t.id, label: t.label, treatmentType: t.treatment_type, dose: t.dose ?? null,
         route: t.route ?? null, frequency: t.frequency ?? null, recordedAt: t.created_at,
+        // s13's "concise type-aware summary", composed here so every reader of the snapshot gets the
+        // same sentence rather than each screen assembling its own from the raw columns.
+        summary: currentTreatmentSummary(t),
       }))),
     milestones: milestoneRes.error ? failed(milestoneRes.error.message)
       : loaded(((milestoneRes.data ?? []) as any[]).map(shapeMilestone)),

@@ -11,7 +11,7 @@ import {
   TREATMENT_REFUSALS, QUICK_ADD_NOT_A_RECOMMENDATION, TEMPLATES_ARE_REVALIDATED,
   CUSTOM_WORDING_PRESERVED, OTHER_OPTION_CODE, treatmentShape, BATCH_BOUNDARY,
   SAFETY_VERDICT_CHIP, SAFETY_VERDICT_MARK, ALLERGY_UNRESOLVED_ASK, NKDA_IS_SOMETHING_SOMEBODY_SAID,
-  treatmentBand,
+  treatmentBand, TREATMENT_SUBTYPE,
 } from "@/lib/practice/treatment-capture-constants";
 import {
   ALLERGY_SEVERITIES, ALLERGY_CERTAINTIES, BLOOD_GROUPS, type SafetyLine,
@@ -153,6 +153,8 @@ export default function TreatmentCapture(props: {
 
   const opts = (key: string): TreatmentOption[] => cap.options.byField[key] ?? [];
   const shape = treatmentShape(draft.treatmentType);
+  // CP-TREAT-002 s9. Undefined for medication and the legacy types, which have their own fields.
+  const subtypeDef = TREATMENT_SUBTYPE[draft.treatmentType];
 
   /**
    * CP-TREAT-002 s5's type change.
@@ -1017,19 +1019,26 @@ export default function TreatmentCapture(props: {
                 ⚠ AND s11: NO DOSE OR ROUTE IS ASKED FOR HERE. "Do not require Dose or Route for
                 non-medication treatments" -- a wound dressing has neither, and a form that asks for
                 them teaches the practitioner that this screen was built for something else. */}
-            {shape.detailsLabel && (
-              <label className="mt-2 block">
-                <span className={LABEL}>{shape.detailsLabel}</span>
-                <input className={input} value={draft.nonDrugCategory ?? ""}
-                  data-step="type-details"
-                  onChange={e => setDraft(d => ({ ...d, nonDrugCategory: e.target.value }))}
-                  placeholder={shape.detailsHint ?? ""} />
-              </label>
+            {subtypeDef && (
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {subtypeDef.fields.map(f => (
+                  <label key={f.key} className="block">
+                    <span className={LABEL}>
+                      {f.label}{f.optional ? " (optional)" : ""}
+                    </span>
+                    <input className={input} data-step="type-details"
+                      value={draft.subtype?.[f.key] ?? ""}
+                      onChange={e => setDraft(d => ({
+                        ...d, subtype: { ...(d.subtype ?? {}), [f.key]: e.target.value },
+                      }))} />
+                  </label>
+                ))}
+              </div>
             )}
 
             {/* The legacy non_drug type keeps its configured category list. Migration 295 retires it
                 from the offered set, but rows recorded under it still have to be editable. */}
-            {shape.nonDrug && !shape.detailsLabel && (
+            {shape.nonDrug && !subtypeDef && (
               <PickSelect label="Category" options={opts("non_drug_category")}
                 value={draft.nonDrugCategory} step="non-drug-category"
                 onPick={(o) => setDraft(d => ({ ...d, nonDrugCategory: o?.code ?? null }))} />

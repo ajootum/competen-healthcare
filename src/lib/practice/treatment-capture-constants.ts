@@ -47,26 +47,96 @@ export const TREATMENT_TYPE_SHAPE: Record<string, {
   other: { prescribing: false, nonDrug: false, hint: "A treatment decision the configured list does not cover. Your words are kept exactly.",
     detailsLabel: "Details", detailsHint: "What is being done", needsSchedule: true },
 
-  // ── CP-TREAT-002 s2's six new types ────────────────────────────────────────────────────────────
+  // ── CP-TREAT-002 s2's six new types. Their FIELDS live in TREATMENT_SUBTYPE below. ─────────────
   wound_care: { prescribing: false, nonDrug: true, needsSchedule: true,
-    hint: "Wound or dressing care planned today. Not a dressing PERFORMED -- that is a procedure.",
-    detailsLabel: "Dressing / method", detailsHint: "Normal saline and dressing" },
+    hint: "Wound or dressing care planned today. Not a dressing PERFORMED -- that is a procedure." },
   physiotherapy: { prescribing: false, nonDrug: true, needsSchedule: true,
-    hint: "A physiotherapy plan. The sessions themselves are not recorded here.",
-    detailsLabel: "Intervention / body area", detailsHint: "Airway clearance" },
+    hint: "A physiotherapy plan. The sessions themselves are not recorded here." },
   nutrition: { prescribing: false, nonDrug: true, needsSchedule: true,
-    hint: "A diet or nutrition plan, and what it is aiming at.",
-    detailsLabel: "Diet / plan", detailsHint: "Salt restriction" },
+    hint: "A diet or nutrition plan, and what it is aiming at." },
   respiratory: { prescribing: false, nonDrug: true, needsSchedule: true,
-    hint: "A respiratory therapy plan. Parameters go in the detail field.",
-    detailsLabel: "Modality / parameters", detailsHint: "2.5 mg nebulised" },
+    hint: "A respiratory therapy plan. Parameters go with the modality." },
   device_support: { prescribing: false, nonDrug: true, needsSchedule: true,
-    hint: "A device or support to be used, and where.",
-    detailsLabel: "Device / site", detailsHint: "Below knee" },
+    hint: "A device or support to be used, and where." },
   lifestyle: { prescribing: false, nonDrug: true, needsSchedule: true,
-    hint: "A lifestyle intervention and what it is aiming at.",
-    detailsLabel: "Intervention / target", detailsHint: "Stop smoking within three months" },
+    hint: "A lifestyle intervention and what it is aiming at." },
 };
+
+/**
+ * CP-TREAT-002 s9's subtype fields: what each type structurally IS, one migration-296 table per type.
+ *
+ * ⚠ THIS MAP IS THE ONLY DEFINITION. The form renders these fields, the engine writes them to `table`
+ * and composes the display summary from them in this order. A second copy in either place would let
+ * the form capture a field the engine drops on the floor -- the exact shape of the dose_unit defect,
+ * where a column existed, the screen asked, and the value fell between them.
+ *
+ * ⚠ FIELD KEYS ARE COLUMN NAMES, verbatim. The engine builds its insert from them, so a key that
+ * drifts from the migration is refused by PostgREST loudly rather than silently mapped to nothing.
+ */
+export const TREATMENT_SUBTYPE: Record<string, {
+  table: string;
+  fields: { key: string; label: string; optional?: boolean }[];
+}> = {
+  wound_care: {
+    table: "practice_treatment_wound_care",
+    fields: [
+      { key: "site", label: "Site / body area" },
+      { key: "method", label: "Dressing / method" },
+    ],
+  },
+  physiotherapy: {
+    table: "practice_treatment_physiotherapy",
+    fields: [
+      { key: "intervention", label: "Intervention" },
+      { key: "body_area", label: "Body area / indication" },
+    ],
+  },
+  nutrition: {
+    table: "practice_treatment_nutrition",
+    fields: [
+      { key: "plan", label: "Diet / plan" },
+      { key: "targets", label: "Targets", optional: true },
+    ],
+  },
+  respiratory: {
+    table: "practice_treatment_respiratory",
+    fields: [
+      { key: "modality", label: "Modality" },
+      { key: "parameters", label: "Parameters", optional: true },
+    ],
+  },
+  device_support: {
+    table: "practice_treatment_device",
+    fields: [
+      { key: "device", label: "Device / support" },
+      { key: "site", label: "Site / indication", optional: true },
+    ],
+  },
+  lifestyle: {
+    table: "practice_treatment_lifestyle",
+    fields: [
+      { key: "intervention", label: "Intervention" },
+      { key: "target", label: "Target", optional: true },
+      { key: "review_interval", label: "Review interval", optional: true },
+    ],
+  },
+};
+
+/**
+ * The one-line summary the Details column shows, composed from the subtype fields IN FIELD ORDER.
+ *
+ * ⚠ THE SUMMARY IS WRITTEN AS WELL AS THE STRUCTURE (into non_drug_category), on purpose. If migration
+ * 296 is not applied, or a subtype write fails, the summary still carries what was typed -- structure
+ * can be lost gracefully, content cannot. One function, called by the engine, asserted by the harness.
+ */
+export function composeSubtypeSummary(
+  treatmentType: string, subtype: Record<string, string | null | undefined> | null | undefined,
+): string | null {
+  const def = TREATMENT_SUBTYPE[treatmentType];
+  if (!def || !subtype) return null;
+  const parts = def.fields.map(f => (subtype[f.key] ?? "").trim()).filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+}
 
 export const DEFAULT_TREATMENT_SHAPE = { prescribing: false, nonDrug: false, hint: "" };
 

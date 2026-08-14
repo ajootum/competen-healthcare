@@ -44,6 +44,11 @@ const asItem = (i: any): PendingTreatment => ({
     ? null : Number(i.frequencyPerDay),
   duration: i?.duration ?? null,
   nonDrugCategory: i?.nonDrugCategory ?? null,
+  // ⚠ CP-TREAT-002 s9's structured detail, PASSED THROUGH UNTOUCHED. The engine validates the keys
+  // against TREATMENT_SUBTYPE before writing, so this route does not need its own opinion about which
+  // fields a wound dressing has -- and must not have one, or the two would drift. A mapper that
+  // dropped this silently is exactly how dose_unit was lost between a column and a screen.
+  subtype: i?.subtype && typeof i.subtype === "object" ? (i.subtype as Record<string, string | null>) : null,
   reason: i?.reason ?? null,
   templateId: i?.templateId ?? null,
 });

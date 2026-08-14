@@ -219,12 +219,14 @@ export default function ContextPanel(props: {
                 <p className="text-[11px] text-gray-400">Nothing recorded.</p>
               ) : (
                 <ul className="mt-1 flex flex-col gap-1">
+                  {/* ⚠ THE SUMMARY IS THE ENGINE'S, TYPE-AWARE (CP-TREAT-002 s13). This built its own
+                      from dose and frequency, which are medication columns -- so a wound dressing or a
+                      diet plan rendered as a bare label with nothing after it, and the rail silently
+                      told a reader less about every non-drug treatment than it held. */}
                   {s.currentTreatments.items.slice(0, 6).map(t => (
                     <li key={t.id} className="rounded bg-gray-50 px-1.5 py-1 text-[11px] text-gray-700">
                       {t.label}
-                      <span className="text-gray-400">
-                        {[t.dose, t.frequency].filter(Boolean).length ? ` ${[t.dose, t.frequency].filter(Boolean).join(" ")}` : ""}
-                      </span>
+                      {t.summary && <span className="text-gray-400"> {t.summary}</span>}
                     </li>
                   ))}
                 </ul>
