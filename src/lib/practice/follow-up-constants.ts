@@ -236,3 +236,126 @@ export const FOLLOW_UP_VIEW_KEYS = FOLLOW_UP_VIEWS.map(v => v.key);
 export function followUpView(key: string | null | undefined): FollowUpView {
   return FOLLOW_UP_VIEWS.find(v => v.key === key) ?? FOLLOW_UP_VIEWS[0];
 }
+
+// ── CPR-FUP-HFE-008 s5: IS ANYTHING OWED TO THIS PATIENT, ANSWERED BEFORE THE TABLE ─────────────────
+//
+// s3's first HFE goal is "visibility of system status: immediately show whether anything is owed". The
+// encounter tab answered it only by implication -- an empty table meant nothing, a full one meant
+// something, and the practitioner did the counting.
+//
+// ⚠ s5: "DO NOT USE A SUCCESS COLOUR IF AN OVERDUE OR URGENT ITEM EXISTS." That is the whole reason this
+// is a function with a test rather than three lines of JSX. Green here means "you owe this patient
+// nothing", and it is the single most consequential sentence on the tab: a practitioner who reads it
+// wrongly closes a consultation on somebody who is nine days overdue for a swab result.
+
+export type FollowUpSummaryTone = "clear" | "open" | "attention" | "overdue";
+
+export type FollowUpSummary = {
+  tone: FollowUpSummaryTone;
+  owed: number;
+  overdue: number;
+  urgent: number;
+  /** The sentence the card leads with. */
+  headline: string;
+  /** The supporting line. Always says whether the read SUCCEEDED, which is s5's "derive from actual state". */
+  detail: string;
+};
+
+/**
+ * ⚠ THE UNAVAILABLE CASE IS FIRST AND IT IS NOT "NOTHING IS OWED". listFollowUps returns
+ * `{items, unavailable, detail}` precisely because a failed read used to render as an empty list, and an
+ * empty follow-up list reads as "nobody is waiting on you" -- the single worst sentence this product can
+ * get wrong. A summary card that collapsed the three states back into two would undo that fix in the
+ * one place it is read fastest.
+ */
+export function followUpSummary(
+  items: { overdue: boolean; priority?: string | null }[],
+  opts: { unavailable: boolean } = { unavailable: false },
+): FollowUpSummary {
+  if (opts.unavailable) {
+    return {
+      tone: "attention", owed: 0, overdue: 0, urgent: 0,
+      headline: "Follow-ups could not be read",
+      detail: "Do not take this as nothing being owed to this patient.",
+    };
+  }
+
+  const owed = items.length;
+  const overdue = items.filter(f => f.overdue).length;
+  const urgent = items.filter(f => String(f.priority ?? "").toLowerCase() === "urgent").length;
+
+  if (owed === 0) {
+    return {
+      tone: "clear", owed: 0, overdue: 0, urgent: 0,
+      headline: "Nothing is owed to this patient",
+      // s5 wants supporting text, and the three-state rule wants it to say the read WORKED.
+      detail: "No follow-up is open. This was read successfully -- raise one below if something should happen after today.",
+    };
+  }
+
+  // ⚠ OVERDUE OUTRANKS URGENT, AND THE ORDER IS DELIBERATE. An urgent follow-up raised today is working
+  // as intended; an overdue one is a commitment already broken, and s16 gives it "the strongest list
+  // exception state". Reporting the urgent count first would put the louder colour on the calmer fact.
+  const plural = owed === 1 ? "follow-up is" : "follow-ups are";
+  if (overdue > 0) {
+    return {
+      tone: "overdue", owed, overdue, urgent,
+      headline: `${overdue} of ${owed} ${plural} overdue`,
+      detail: "The target date has passed and nothing is booked. This is derived from the date, so it became true on its own.",
+    };
+  }
+  if (urgent > 0) {
+    return {
+      tone: "attention", owed, overdue, urgent,
+      headline: `${owed} ${plural} owed, ${urgent} urgent`,
+      detail: "Nothing is overdue yet. Priority is what somebody set; overdue is what the date decided.",
+    };
+  }
+  return {
+    tone: "open", owed, overdue, urgent,
+    headline: `${owed} ${plural} owed to this patient`,
+    detail: "Nothing is overdue or urgent.",
+  };
+}
+
+/**
+ * s12's filter row for the ENCOUNTER tab.
+ *
+ * ⚠ s8 SAYS PRIORITY AND STATUS ARE SEPARATE CONCEPTS AND s12'S OWN FILTER LIST MIXES THEM
+ * ("All/Open/Soon/Urgent/Overdue"). Soon and Urgent are priorities a person set; Open and Overdue are
+ * states the date and the lifecycle decided. Left in one undifferentiated row they read as one scale,
+ * which is exactly what s8 forbids -- so the `axis` field is carried here and the screen groups by it.
+ *
+ * ⚠ AND THESE ARE PREDICATES, NOT COUNTS-PLUS-A-SEPARATE-FILTER. FOLLOW_UP_VIEWS' header records what
+ * happened when a card's figure and the list it opened were two different functions: the tile said 14
+ * and the list showed 9, and nothing looked wrong. One function, used for both.
+ */
+export type FollowUpTabFilter = {
+  key: string; label: string; axis: "state" | "priority";
+  match: (f: { overdue: boolean; priority?: string | null; status: string }) => boolean;
+};
+
+export const FOLLOW_UP_TAB_FILTERS: FollowUpTabFilter[] = [
+  { key: "all", label: "All", axis: "state", match: () => true },
+  { key: "overdue", label: "Overdue", axis: "state", match: f => f.overdue },
+  {
+    key: "booked", label: "Booked", axis: "state",
+    // s13: "booking must never be conflated with clinical completion." A booked obligation is still
+    // owed -- it is in this list because it is unresolved, and the chip says only that a visit exists.
+    match: f => f.status === "SCHEDULED",
+  },
+  { key: "soon", label: "Soon", axis: "priority", match: f => String(f.priority ?? "").toLowerCase() === "soon" },
+  { key: "urgent", label: "Urgent", axis: "priority", match: f => String(f.priority ?? "").toLowerCase() === "urgent" },
+];
+
+/** s8's priority treatment. Routine is neutral, not green -- green would say "resolved". */
+export const FOLLOW_UP_PRIORITY_CHIP: Record<string, string> = {
+  routine: "border-slate-200 bg-slate-50 text-gray-600",
+  soon: "border-amber-200 bg-amber-50 text-amber-700",
+  urgent: "border-rose-300 bg-rose-50 text-rose-700",
+};
+
+/** s16: colour is never the sole carrier. Every priority has a glyph as well as a tint. */
+export const FOLLOW_UP_PRIORITY_GLYPH: Record<string, string> = {
+  routine: "", soon: "!", urgent: "!!",
+};

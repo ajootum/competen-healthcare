@@ -426,6 +426,11 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
           history={noteVersions}
           documents={documents}
           followUps={followUpList.items}
+          // ⚠ THE THIRD STATE, WHICH USED TO STOP HERE. listFollowUps returns {items, unavailable, detail}
+          // because a failed read rendering as an empty list says "nobody is waiting on you" -- the worst
+          // sentence this product can get wrong. page.tsx passed only `.items`, so the tab printed
+          // "Nothing is owed to this patient. This was read successfully" over a read that had FAILED.
+          followUpsUnavailable={followUpList.unavailable}
           intervals={intervals}
           procedures={procedures}
           procedureTypes={procedureTypes}

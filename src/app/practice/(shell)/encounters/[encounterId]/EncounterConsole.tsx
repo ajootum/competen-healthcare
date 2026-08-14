@@ -4,7 +4,10 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { ENCOUNTER_TRANSITIONS, NOTE_TYPES, LOCKED_STATUSES, actionFor, labelFor } from "@/lib/practice/encounter-constants";
 import { DOC_TYPES } from "@/lib/practice/document-constants";
-import { FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
+import {
+  FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES, FOLLOW_UP_STATUS_LABELS, FOLLOW_UP_TAB_FILTERS,
+  FOLLOW_UP_PRIORITY_CHIP, FOLLOW_UP_PRIORITY_GLYPH, followUpSummary,
+} from "@/lib/practice/follow-up-constants";
 // ⚠ THE PROCEDURE VOCABULARIES MOVED TO ProcedureWorkspace WITH THE FORM. Only what this file still
 // renders stays imported -- a vocabulary imported here and used nowhere is the next person's evidence
 // that procedure capture still lives in this file, which it does not.
@@ -15,6 +18,9 @@ import { SIDED_LATERALITIES } from "@/lib/practice/procedure-constants";
 import {
   RAIL, RAIL_MEDIUM, RAIL_MEDIUM_H, RAIL_LOW, RAIL_LOW_H, RAIL_UTILITY, RAIL_UTILITY_H, RAIL_META,
 } from "@/lib/practice/encounter-rail-constants";
+// CPR-FUP-HFE-008 s3: "reuse the lavender active-work band and semantic colours used in other encounter
+// tabs". The Follow-up composer was the last capture form in the product without one.
+import { BAND_RECORD, BAND_WORK } from "@/lib/practice/encounter-band-constants";
 import {
   ENCOUNTER_TABS, QUICK_ACTIONS, QUICK_ACTION_ICON, ENCOUNTER_OUTCOMES, OUTCOME_SWATCH,
   REFERRAL_CHIP, REFERRAL_STATUSES, CLINICAL_FLOW_BLOCKS, DECISION_CARDS,
@@ -32,19 +38,58 @@ import DocumentationTools from "./DocumentationTools";
 //
 // ⚠ THE DUE COLUMN SAYS "OVERDUE" IN WORDS, not only in colour (s10). A row that relies on its tint
 // to say it is late is a row that says nothing in greyscale, at high zoom, or to a screen reader.
+// CPR-FUP-HFE-008 s12: What | Category | Target | Priority | Status | Actions.
+//
+// ⚠ NO "ASSIGNED TO" COLUMN, AND ITS ABSENCE IS THE HONEST ANSWER. s12 lists one and s21 wants
+// `assigned_to`; `practice_follow_up` has no such column, so a column here could only ever print an
+// em-dash on every row -- a heading promising accountability the record cannot carry. It belongs to the
+// migration half. Same for Location and Instructions.
 const FOLLOW_UP_COLUMNS: RecordColumn<any>[] = [
-  { key: "reason", label: "Follow-up item", priority: "primary",
+  { key: "reason", label: "What", priority: "primary",
     render: f => <span className="font-semibold text-gray-800">{f.reason}</span> },
-  { key: "due", label: "Due", priority: "status",
+  // s12's Category. `kind` IS the category model -- s7's list and FOLLOW_UP_KINDS are the same seven
+  // things under two names, so this is a relabel and not a new field.
+  { key: "kind", label: "Category", priority: "secondary",
     render: f => (
-      <span className={f.overdue ? "text-[11.5px] font-bold text-[var(--cmp-text-critical)]" : "text-[11.5px] text-gray-600"}>
-        {f.overdue ? `${Math.abs(f.dueInDays)} days overdue` : `due ${f.due_on}`}
+      <span className="text-[11.5px] text-gray-600">
+        {FOLLOW_UP_KINDS.find(([k]) => k === f.kind)?.[1] ?? f.kind ?? "—"}
       </span>
     ) },
-  { key: "referred", label: "Detail", priority: "secondary",
-    render: f => f.referredTo
-      ? <span className="text-[11.5px] text-gray-600">{f.referredTo}</span>
-      : <span className="text-gray-400">&mdash;</span> },
+  // ⚠ s9: "DISPLAY THE RESOLVED CALENDAR DATE WHERE THIS REDUCES AMBIGUITY." An overdue row used to say
+  // only "9 days overdue" -- a relative figure with no anchor, on the one row somebody has to act on.
+  // Both are shown now, and the date is the EFFECTIVE one, so a deferred obligation is measured against
+  // the day it comes back rather than the day it was first owed.
+  { key: "target", label: "Target", priority: "status",
+    render: f => (
+      <span className={f.overdue ? "text-[11.5px] font-bold text-[var(--cmp-text-critical)]" : "text-[11.5px] text-gray-600"}>
+        {f.overdue
+          ? `${Math.abs(f.dueInDays)} days overdue`
+          : f.dueInDays === 0 ? "due today" : `in ${f.dueInDays} days`}
+        <span className="ml-1 font-normal text-gray-500">{f.effectiveDueOn ?? f.due_on}</span>
+      </span>
+    ) },
+  // ⚠ s8: PRIORITY AND STATUS ARE SEPARATE COLUMNS BECAUSE THEY ARE SEPARATE CONCEPTS. "An Urgent
+  // follow-up may still be Open, while a Routine follow-up may become Overdue." One column carrying
+  // both would make those two sentences unsayable.
+  { key: "priority", label: "Priority", priority: "secondary",
+    render: f => {
+      const p = String(f.priority ?? "routine").toLowerCase();
+      return (
+        <span className={`rounded-full border px-1.5 py-0.5 text-[10.5px] font-semibold ${FOLLOW_UP_PRIORITY_CHIP[p] ?? FOLLOW_UP_PRIORITY_CHIP.routine}`}>
+          {FOLLOW_UP_PRIORITY_GLYPH[p]}{FOLLOW_UP_PRIORITY_GLYPH[p] ? " " : ""}{p}
+        </span>
+      );
+    } },
+  // s13's lifecycle. ⚠ SCHEDULED SAYS "booked", NOT "done": s13 and s22 both insist booking is never
+  // clinical completion, and a chip reading "scheduled" beside a settled-looking row is how that
+  // conflation starts.
+  { key: "status", label: "Status", priority: "status",
+    render: f => (
+      <span className="text-[11.5px] text-gray-700">
+        {f.status === "SCHEDULED" ? "booked, not yet done"
+          : (FOLLOW_UP_STATUS_LABELS[f.status] ?? f.status ?? "").toLowerCase()}
+      </span>
+    ) },
 ];
 
 // CP-UI-TABLE-001 s5: Document | Type | Date | Source | Actions.
@@ -119,6 +164,7 @@ import ProcedureWorkspace from "./ProcedureWorkspace";
 
 const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 const CARD = "rounded-xl border border-gray-200 bg-white p-4";
+const FU_LABEL = "text-[10.5px] font-semibold uppercase tracking-wide text-gray-600";
 const QUIET_BTN = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50";
 
 /**
@@ -166,7 +212,10 @@ export default function EncounterConsole(props: {
   encounterId: string; patientId: string; status: string; reasonForVisit: string | null;
   notes: any[]; diagnoses: any[]; treatments: any[];
   templates: any[]; history: Record<string, any[]>; documents: any[];
-  followUps: any[]; intervals: { code: string; label: string; days: number }[];
+  followUps: any[];
+  /** ⚠ Whether the follow-up READ failed. Never conflate with an empty list -- see page.tsx. */
+  followUpsUnavailable: boolean;
+  intervals: { code: string; label: string; days: number }[];
   procedures: any[];
   /** CPR-PROC-HFE-005 s7. Loaded since the tab was built, delivered to it only from today. */
   procedureTypes: any[];
@@ -242,6 +291,8 @@ export default function EncounterConsole(props: {
   const [fu, setFu] = useState({ reason: "", kind: "review", intervalCode: "2w", priority: "routine" });
   const [closingFu, setClosingFu] = useState<string | null>(null);
   const [fuOutcome, setFuOutcome] = useState("");
+  /** CPR-FUP-HFE-008 s12's filter, by key from FOLLOW_UP_TAB_FILTERS. "all" is the resting state. */
+  const [fuFilter, setFuFilter] = useState("all");
   // migration 238
   const [decision, setDecision] = useState("");
   const [ref, setRef] = useState({ referredTo: "", reason: "" });
@@ -1029,7 +1080,36 @@ export default function EncounterConsole(props: {
                   subtitle="What this patient is owed, and what should happen after this encounter."
                 />
                 <div className="p-4">
-                {/* CP-UI-TABLE-001 s13 step 6, s5's columns: Follow-up item | Due | Status | Actions.
+                {/* ══ BAND 1 (s4, s5): IS ANYTHING OWED? ════════════════════════════════════════════
+                    s3's first HFE goal, answered before the table rather than by counting its rows.
+                    ⚠ THE TONE IS DERIVED, NOT CHOSEN HERE. s5: "do not use a success colour if an
+                    overdue or urgent item exists", and green on this card means "you owe this patient
+                    nothing" -- the most consequential sentence on the tab. followUpSummary decides it
+                    so the rule is testable, and so a fourth caller cannot reach a different verdict. */}
+                {(() => {
+                  const sum = followUpSummary(props.followUps as any[],
+                    { unavailable: props.followUpsUnavailable });
+                  const tone = {
+                    clear: "border-emerald-200 bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+                    open: "border-slate-200 bg-slate-50 text-gray-700",
+                    attention: "border-amber-300 bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+                    overdue: "border-rose-300 bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
+                  }[sum.tone];
+                  return (
+                    <div className={`rounded-xl border p-3 ${tone}`}>
+                      <p className="text-[13px] font-bold">
+                        {/* s16: colour is never the sole carrier -- the glyph and the words both say it. */}
+                        <span aria-hidden="true" className="mr-1.5">
+                          {sum.tone === "clear" ? "✓" : sum.tone === "overdue" ? "⚠" : sum.tone === "attention" ? "⚠" : "•"}
+                        </span>
+                        {sum.headline}
+                      </p>
+                      <p className="mt-0.5 text-[11.5px] opacity-90">{sum.detail}</p>
+                    </div>
+                  );
+                })()}
+
+                {/* ══ BAND 3 (s4, s12): THE OPEN LIST ═══════════════════════════════════════════════
                     ⚠ OVERDUE IS THE FIRST REAL `warning` IN THIS SYSTEM, and s5 permits exactly that:
                     "overdue/due-soon states may override ordinary banding with appropriate emphasis".
                     An overdue follow-up is something a person must act on, which is s4's test for the
@@ -1037,15 +1117,57 @@ export default function EncounterConsole(props: {
                     spending the alert colour on it would leave nothing louder for the one that is
                     actually late. The count of warnings on this screen should equal the count of
                     things going wrong. */}
+                {props.followUps.length > 0 && (
+                  // ⚠ s12's FILTERS, GROUPED BY AXIS. s8: "priority and status are separate concepts",
+                  // and s12's own list mixes them -- Soon and Urgent are what somebody SET, Overdue and
+                  // Booked are what the date and the lifecycle DECIDED. One undifferentiated row would
+                  // read as a single scale, which is the confusion s8 exists to prevent.
+                  //
+                  // ⚠ AND EVERY CHIP CARRIES THE COUNT FROM THE SAME PREDICATE THAT FILTERS THE LIST.
+                  // FOLLOW_UP_VIEWS' header records what happened when those were two functions: the
+                  // tile said 14 and the list showed 9, and nothing in the code looked wrong.
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                    {(["state", "priority"] as const).map(axis => (
+                      <span key={axis} className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">
+                          {axis === "state" ? "Show" : "Priority"}
+                        </span>
+                        {FOLLOW_UP_TAB_FILTERS.filter(x => x.axis === axis).map(x => {
+                          const n = (props.followUps as any[]).filter(f => x.match(f)).length;
+                          const on = fuFilter === x.key;
+                          return (
+                            <button key={x.key} type="button"
+                              onClick={() => setFuFilter(on && x.key !== "all" ? "all" : x.key)}
+                              aria-pressed={on}
+                              className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${on
+                                ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
+                                : "border-gray-200 bg-white text-gray-700 hover:border-[var(--cp-primary)]/50"}`}>
+                              {x.label} <span className="font-normal text-gray-500">{n}</span>
+                            </button>
+                          );
+                        })}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className={`${BAND_RECORD} mt-2 overflow-hidden p-3`}>
                 <ClinicalRecordTable
                   label="Follow-ups owed by this patient"
                   columns={FOLLOW_UP_COLUMNS}
                   empty={
                     // Three states, not two: this is the READ-SUCCEEDED one, and it says so.
-                    <EmptyState title="Nothing is owed to this patient"
-                      reason="No follow-up is open. This was read successfully -- raise one below if something should happen after today." />
+                    // ⚠ AND IT DISTINGUISHES "NOTHING OWED" FROM "NOTHING MATCHES THIS FILTER". A filter
+                    // that empties the table must not print the sentence that means the patient is clear.
+                    fuFilter === "all"
+                      ? <EmptyState title="Nothing is owed to this patient"
+                        reason="No follow-up is open. This was read successfully -- raise one below if something should happen after today." />
+                      : <EmptyState title="Nothing matches this filter"
+                        reason="Other follow-ups are still owed. Choose All to see them." />
                   }
-                  records={props.followUps.map((f: any) => ({
+                  records={(props.followUps as any[])
+                    .filter(f => (FOLLOW_UP_TAB_FILTERS.find(x => x.key === fuFilter) ?? FOLLOW_UP_TAB_FILTERS[0]).match(f))
+                    .map((f: any) => ({
                     id: f.id,
                     data: f,
                     state: (f.overdue ? "warning" : "normal") as RowState,
@@ -1074,28 +1196,84 @@ export default function EncounterConsole(props: {
                   }))}
                 />
 
+                </div>
+
                 {props.canFollowUp && (
-                  <form className="mt-3 grid grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); raiseFollowUp(); }}>
-                    <input required placeholder="What needs to happen, and why" value={fu.reason}
-                      onChange={e => setFu(p => ({ ...p, reason: e.target.value }))} className={`${input} col-span-2`} />
-                    <select aria-label="Kind of follow-up" value={fu.kind} onChange={e => setFu(p => ({ ...p, kind: e.target.value }))} className={input}>
-                      {FOLLOW_UP_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                    </select>
-                    <select aria-label="When" value={fu.intervalCode} onChange={e => setFu(p => ({ ...p, intervalCode: e.target.value }))} className={input}>
-                      {props.intervals.map(i => <option key={i.code} value={i.code}>{i.label}</option>)}
-                    </select>
-                    <select aria-label="Priority" value={fu.priority} onChange={e => setFu(p => ({ ...p, priority: e.target.value }))} className={input}>
-                      {FOLLOW_UP_PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                    <button type="submit" disabled={busy || !fu.reason.trim()}
-                      className="rounded-lg border border-gray-200 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                      Raise a follow-up
-                    </button>
-                    <div className="col-span-2">
+                  /* ══ BAND 4 (s3, s4, s16): THE ACTIVE WORK ═════════════════════════════════════════
+                     s3's consistency goal names it: "reuse the lavender active-work band and semantic
+                     colours used in other encounter tabs". This composer was a bare two-column grid
+                     sitting on the same surface as the table above it -- the only capture form in the
+                     product with no band, on the fourth tab to be given one. */
+                  <form className={`${BAND_WORK} mt-3 p-4`} onSubmit={e => { e.preventDefault(); raiseFollowUp(); }}>
+                    <h4 className="text-[13px] font-bold text-gray-900">Add follow-up</h4>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      {/* ⚠ s6 MARKS THE REQUIRED FIELDS AND s3 ASKS FOR VISIBLE LABELS. These three
+                          selects carried an aria-label and nothing a sighted user could read, so the
+                          only cue for what a dropdown meant was the value it happened to be showing. */}
+                      <div className="col-span-2">
+                        <label className={FU_LABEL} htmlFor="fu-reason">What needs to happen, and why *</label>
+                        <input id="fu-reason" required placeholder="e.g. Review the swab result"
+                          value={fu.reason}
+                          onChange={e => setFu(p => ({ ...p, reason: e.target.value }))}
+                          className={`${input} mt-1`} />
+                      </div>
+                      <div>
+                        <label className={FU_LABEL} htmlFor="fu-kind">Category *</label>
+                        <select id="fu-kind" aria-label="Kind of follow-up" value={fu.kind}
+                          onChange={e => setFu(p => ({ ...p, kind: e.target.value }))} className={`${input} mt-1`}>
+                          {FOLLOW_UP_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={FU_LABEL} htmlFor="fu-when">Target timeframe *</label>
+                        <select id="fu-when" aria-label="When" value={fu.intervalCode}
+                          onChange={e => setFu(p => ({ ...p, intervalCode: e.target.value }))} className={`${input} mt-1`}>
+                          {props.intervals.map(i => <option key={i.code} value={i.code}>{i.label}</option>)}
+                        </select>
+                        {/* ⚠ s9: "DISPLAY THE RESOLVED CALENDAR DATE WHERE THIS REDUCES AMBIGUITY."
+                            The practitioner used to pick "In 2 weeks" and learn the actual date only
+                            after the page reloaded. The arithmetic is the engine's -- days from the
+                            interval row, added to today -- and this shows the same sum before the click.
+                            ⚠ AND IT IS STILL NOT CLINICAL GUIDANCE, which the tip below keeps saying. */}
+                        {(() => {
+                          const days = props.intervals.find(i => i.code === fu.intervalCode)?.days;
+                          if (days === undefined) return null;
+                          const d = new Date();
+                          d.setDate(d.getDate() + days);
+                          return (
+                            <p className="mt-1 text-[11px] text-gray-600">
+                              {d.toISOString().slice(0, 10)}
+                            </p>
+                          );
+                        })()}
+                      </div>
+                      <div>
+                        <label className={FU_LABEL} htmlFor="fu-priority">Priority *</label>
+                        {/* ⚠ THE OPTIONS USED TO RENDER RAW CODES -- "routine", "soon", "urgent" in
+                            lower case, straight out of the constant, unlike every other select on this
+                            screen. s8 gives priority a visual treatment and a meaning; the least it can
+                            have is a capital letter. */}
+                        <select id="fu-priority" aria-label="Priority" value={fu.priority}
+                          onChange={e => setFu(p => ({ ...p, priority: e.target.value }))} className={`${input} mt-1`}>
+                          {FOLLOW_UP_PRIORITIES.map(p => (
+                            <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-end">
+                        <button type="submit" disabled={busy || !fu.reason.trim()}
+                          className="w-full rounded-lg bg-[var(--cp-primary)] px-3 py-2 text-[12.5px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cp-primary)] focus-visible:ring-offset-2 disabled:opacity-50">
+                          {busy ? "Raising..." : "Raise follow-up"}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-2">
                       <Tip>
                         The intervals are arithmetic on today&apos;s date, not clinical guidance. Once
                         raised, this appears on the follow-up board and becomes overdue on its own if
                         nothing is booked.
+                        {" "}⚠ Raising a follow-up does not book an appointment, and booking one does not
+                        settle the obligation.
                       </Tip>
                     </div>
                   </form>

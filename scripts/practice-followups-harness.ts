@@ -27,6 +27,7 @@
  *   npx --yes tsx scripts/practice-followups-harness.ts
  */
 import { loadEnvConfig } from "@next/env";
+import { followUpSummary, FOLLOW_UP_TAB_FILTERS } from "../src/lib/practice/follow-up-constants";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { registerPatient } from "../src/lib/practice/patients";
@@ -391,6 +392,80 @@ async function main() {
   ok("control. the same call through the real client is AVAILABLE, and returns rows",
     realRead.unavailable === false && realRead.detail === null && realRead.items.length > 0,
     JSON.stringify({ n: realRead.items.length, unavailable: realRead.unavailable, detail: realRead.detail }));
+
+  // ══ CPR-FUP-HFE-008 s5: THE STATUS SUMMARY, AND THE ONE COLOUR IT MAY NOT USE ═══════════════════
+  //
+  // ⚠ s5: "DO NOT USE A SUCCESS COLOUR IF AN OVERDUE OR URGENT ITEM EXISTS." Green on this card means
+  // "you owe this patient nothing", and it is the fastest-read sentence on the tab -- a practitioner who
+  // reads it wrongly closes a consultation on somebody nine days overdue for a swab result. It is a
+  // tested function rather than three lines of JSX for exactly that reason.
+  //
+  // ⚠ AND THE FIXTURES ARE THE ENGINE'S OWN DERIVED ROWS, not hand-written objects. `overdue` is
+  // computed by deriveFollowUp against the practice's today; a literal `{overdue: true}` would test my
+  // idea of the shape rather than the one the screen is handed.
+  //
+  // ⚠ RAISED HERE RATHER THAN BORROWED FROM THE ROWS ABOVE, and s5-0 is why. The first version read
+  // whatever `listFollowUps(ws, {})` happened to return at this point in the file -- and by here the
+  // earlier sections have COMPLETED the back-dated obligation, so the list held two rows and no overdue
+  // one. The assertions would have gone green against a case that no longer existed. A harness that
+  // depends on leftover state from its own earlier sections is testing the order of its sections.
+  const s5Patient = pOther.ok ? pOther.data.id : patientA;
+  await createFollowUp(admin, {
+    workspaceId: wsA, patientId: s5Patient, kind: "review",
+    reason: "s5 fixture: overdue", dueOn: dueDateFrom(today, -4), priority: "routine", ...base,
+  });
+  await createFollowUp(admin, {
+    workspaceId: wsA, patientId: s5Patient, kind: "review",
+    reason: "s5 fixture: not due yet", dueOn: dueDateFrom(today, 21), priority: "routine", ...base,
+  });
+  const s5Read = await listFollowUps(admin, wsA, { patientId: s5Patient, status: ["OPEN", "SCHEDULED"] });
+  const derived = s5Read.items;
+  const anyOverdue = derived.filter(f => f.overdue);
+  const noneOverdue = derived.filter(f => !f.overdue);
+  ok("s5-0. the fixture holds BOTH an overdue and a not-overdue row (the cases below are real)",
+    anyOverdue.length > 0 && noneOverdue.length > 0,
+    `overdue=${anyOverdue.length} other=${noneOverdue.length}`);
+
+  ok("s5-1. nothing owed reads CLEAR, and says the read succeeded",
+    followUpSummary([]).tone === "clear"
+      && followUpSummary([]).headline === "Nothing is owed to this patient"
+      && /read successfully/.test(followUpSummary([]).detail));
+  // ⚠ THE RULE ITSELF. An overdue row present means the card may not be green, whatever else is true.
+  ok("s5-2. s5: ONE overdue row takes the card off the success colour entirely",
+    followUpSummary(anyOverdue).tone === "overdue"
+      && followUpSummary([...noneOverdue, ...anyOverdue]).tone === "overdue",
+    JSON.stringify(followUpSummary([...noneOverdue, ...anyOverdue])));
+  // ⚠ AND URGENT IS NOT GREEN EITHER, even with nothing overdue -- s5 names both.
+  ok("s5-3. s5: an URGENT item with nothing overdue is attention, never clear",
+    followUpSummary([{ overdue: false, priority: "urgent" }]).tone === "attention");
+  ok("s5-4. routine work owed is neither green nor amber -- it is ordinary",
+    followUpSummary([{ overdue: false, priority: "routine" }]).tone === "open");
+  // ⚠ OVERDUE OUTRANKS URGENT. An urgent follow-up raised today is working as intended; an overdue one
+  // is a commitment already broken, and s16 gives it the strongest exception state.
+  ok("s5-5. overdue outranks urgent when both are present",
+    followUpSummary([{ overdue: true, priority: "routine" }, { overdue: false, priority: "urgent" }]).tone === "overdue");
+  // ⚠ THE THIRD STATE, WHICH THE ENCOUNTER TAB USED TO DROP ON THE FLOOR. page.tsx passed only `.items`,
+  // so a FAILED read rendered "Nothing is owed to this patient. This was read successfully" -- a false
+  // statement about a patient, produced by the exact bug listFollowUps was reshaped to prevent.
+  const blind = followUpSummary([], { unavailable: true });
+  ok("s5-6. ⚠ an UNAVAILABLE read is never 'nothing is owed', and never green",
+    blind.tone !== "clear" && /could not be read/.test(blind.headline)
+      && /not take this as nothing being owed/.test(blind.detail),
+    JSON.stringify(blind));
+
+  // s12's filters: the chip count and the filtered list are ONE predicate, so they cannot disagree.
+  for (const f of FOLLOW_UP_TAB_FILTERS) {
+    const matched = derived.filter(x => f.match(x as any));
+    ok(`s12-${f.key}. the ${f.label} filter's count is the length of the list it opens`,
+      matched.length === derived.filter(x => f.match(x as any)).length
+        && matched.every(x => f.match(x as any)));
+  }
+  ok("s12-axes. priority and state filters are declared on separate axes (s8)",
+    FOLLOW_UP_TAB_FILTERS.some(f => f.axis === "state")
+      && FOLLOW_UP_TAB_FILTERS.some(f => f.axis === "priority")
+      && FOLLOW_UP_TAB_FILTERS.filter(f => f.axis === "priority").every(f => ["soon", "urgent"].includes(f.key)));
+  ok("s12-all. the All filter matches every row (a filter that hid rows silently would be worse than none)",
+    derived.every(x => FOLLOW_UP_TAB_FILTERS[0].match(x as any)));
 
   return report();
 }
