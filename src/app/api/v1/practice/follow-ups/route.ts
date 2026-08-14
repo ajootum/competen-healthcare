@@ -77,6 +77,16 @@ export async function POST(req: NextRequest) {
     source: body.source ? String(body.source) : undefined,
     originWorkspace: body.originWorkspace ? String(body.originWorkspace) : undefined,
     status: body.status ? String(body.status) : undefined,
+    // ⚠ MIGRATION 299's FIELDS, AND THIS ROUTE DROPPED ALL SIX. The composer collected a type, an
+    // owner and instructions; the engine accepted them; this file between the two forwarded none --
+    // so every follow-up raised from the screen arrived typeless and unassigned, silently. The third
+    // instance of the dropped-at-the-middle-layer class today (scheduledAt, the batch engine; now
+    // this), and tsc waves every one through because an absent property is not an error.
+    followUpType: body.followUpType ? String(body.followUpType) : undefined,
+    assignedTo: body.assignedTo ? String(body.assignedTo) : undefined,
+    assignedQueue: body.assignedQueue ? String(body.assignedQueue) : undefined,
+    locationId: body.locationId ? String(body.locationId) : undefined,
+    instructions: body.instructions ? String(body.instructions) : undefined,
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });

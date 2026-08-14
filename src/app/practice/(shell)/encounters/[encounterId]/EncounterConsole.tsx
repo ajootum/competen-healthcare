@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { ENCOUNTER_TRANSITIONS, NOTE_TYPES, LOCKED_STATUSES, actionFor, labelFor } from "@/lib/practice/encounter-constants";
 import { DOC_TYPES } from "@/lib/practice/document-constants";
@@ -209,6 +209,38 @@ const QA_BASE =
 const QA_ALLOWED = `${QA_BASE} border-gray-200 bg-white text-gray-700 hover:bg-[var(--cp-primary)]/[0.07] hover:border-[var(--cp-primary)]/40`;
 const QA_DENIED = `${QA_BASE} border-gray-200 bg-gray-50 text-gray-500`;
 
+// CPR-NOTE-HFE-010 s7's anchors: marker, heading, descriptor -- three parts, because the marker and
+// the strong heading are the perceptual anchor and the descriptor is deliberately quieter. NOTE_LABEL
+// below survives as the one-string form the draft-recovery panel still uses.
+const NOTE_SECTIONS: [string, string, string, string][] = [
+  ["subjective", "S", "Subjective", "what the patient reports"],
+  ["objective", "O", "Objective", "examination and findings"],
+  ["assessment", "A", "Assessment", "clinical impression"],
+  ["plan", "P", "Plan", "what happens next"],
+  ["narrative", "N", "Narrative", "free text"],
+];
+
+/**
+ * CPR-NOTE-HFE-010 s9: a compact writing area that grows with the text.
+ *
+ * ⚠ THE FIXED rows={3} BOXES WERE THE TAB'S BIGGEST NOISE. Five empty three-line boxes is fifteen lines
+ * of nothing, and a clinician writing a long objective section then scrolled INSIDE a three-line
+ * viewport -- s9 forbids both directions: "replace large fixed empty boxes with compact starting areas"
+ * and "do not constrain clinically necessary narrative length with a small fixed viewport".
+ */
+function AutoGrowTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const resize = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+  // On value as well as on input: dictation and calculator inserts change the text without a keystroke.
+  useEffect(resize, [props.value]);
+  return <textarea ref={ref} rows={2} {...props} onInput={resize} />;
+}
+
 const NOTE_LABEL: Record<string, string> = {
   subjective: "Subjective — what the patient reports",
   objective: "Objective — examination and findings",
@@ -325,6 +357,8 @@ export default function EncounterConsole(props: {
     // CPR-FUP-HFE-008 s6/s11 (migration 299). `owner` is the screen's word for a choice the database
     // stores in two columns -- one owner, never both.
     followUpType: "review", locationId: "", instructions: "", owner: "none", queue: "",
+    // s10's booking link, at raise time: filled only while the type is "appointment".
+    bookDate: "", bookTime: "09:00",
   });
   const [closingFu, setClosingFu] = useState<string | null>(null);
   const [fuOutcome, setFuOutcome] = useState("");
@@ -357,24 +391,46 @@ export default function EncounterConsole(props: {
   const savedRef = useRef(saved);
   useEffect(() => { bodiesRef.current = bodies; savedRef.current = saved; }, [bodies, saved]);
 
-  useEffect(() => {
-    if (!editable) return;
-    const timer = setInterval(() => {
-      for (const t of NOTE_TYPES) {
-        // Only what has been touched and not yet saved. Autosaving an untouched segment would write a
-        // draft of the text already in the record and then offer it back as a recovery.
-        if (savedRef.current[t] !== false) continue;
-        const body = bodiesRef.current[t] ?? "";
-        fetch(`/api/v1/practice/encounters/${props.encounterId}/drafts`, {
+  // ⚠ s10's THIRD STATE EXISTS NOW. The old autosave swallowed failure with catch(() => {}), so a
+  // practitioner whose drafts had stopped landing saw the same screen as one whose drafts were safe --
+  // the exact silence s10's "Not saved -- Retry" exists to end. One flag across the segments, because
+  // the failure mode (network, session) is never per-segment.
+  const [draftFailed, setDraftFailed] = useState(false);
+  /** CPR-NOTE-HFE-010 s8: which section the writer is in. Focus-driven, and only presentation. */
+  const [activeSeg, setActiveSeg] = useState<string | null>(null);
+  /** s12: the template picker is closed until asked for. */
+  const [templateOpen, setTemplateOpen] = useState(false);
+
+  // Callable, not only scheduled: the Retry control and the interval share one flush, so "retry" cannot
+  // drift into meaning something different from what the timer does.
+  const flushDrafts = useCallback(async () => {
+    let failed = false;
+    for (const t of NOTE_TYPES) {
+      // Only what has been touched and not yet saved. Autosaving an untouched segment would write a
+      // draft of the text already in the record and then offer it back as a recovery.
+      if (savedRef.current[t] !== false) continue;
+      const body = bodiesRef.current[t] ?? "";
+      try {
+        const r = await fetch(`/api/v1/practice/encounters/${props.encounterId}/drafts`, {
           method: "PUT", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ noteType: t, body }),
-        }).then(r => {
-          if (r.ok) setDraftAt(d => ({ ...d, [t]: formatTime(new Date()) }));
-        }).catch(() => {});
-      }
-    }, 120_000);
+        });
+        if (r.ok) setDraftAt(d => ({ ...d, [t]: formatTime(new Date()) }));
+        else failed = true;
+      } catch { failed = true; }
+    }
+    setDraftFailed(failed);
+  }, [props.encounterId]);
+
+  useEffect(() => {
+    if (!editable) return;
+    // ⚠ TWENTY SECONDS, DOWN FROM TWO MINUTES. The draft overwrites in place and writes no version
+    // history, so the only cost of saving often is requests -- and the cost of saving rarely was a
+    // two-minute window of typing that a closed laptop erased. s10 asks for a short debounce; this is
+    // the shortest that does not chatter on every keystroke.
+    const timer = setInterval(() => { void flushDrafts(); }, 20_000);
     return () => clearInterval(timer);
-  }, [editable, props.encounterId]);
+  }, [editable, flushDrafts]);
 
   async function expandInto(noteType: string) {
     const res = await fetch("/api/v1/practice/smart-phrases?expand=1", {
@@ -435,21 +491,73 @@ export default function EncounterConsole(props: {
     }),
   }), "Document created.", true);
 
-  const raiseFollowUp = () => call(() => fetch("/api/v1/practice/follow-ups", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      patientId: props.patientId, originEncounterId: props.encounterId,
-      reason: fu.reason, kind: fu.kind, intervalCode: fu.intervalCode, priority: fu.priority,
-      // ── CPR-FUP-HFE-008 s6/s11 (migration 299) ────────────────────────────────────────────────
-      followUpType: fu.followUpType,
-      locationId: fu.locationId || undefined,
-      instructions: fu.instructions.trim() || undefined,
-      // ⚠ ONE OWNER. The engine and the database both refuse a person AND a queue, so the screen sends
-      // exactly one -- "mine" resolves to the viewer's own id rather than to a name nobody could match.
-      assignedTo: fu.owner === "me" ? props.currentUserId : undefined,
-      assignedQueue: fu.owner === "queue" ? (fu.queue.trim() || undefined) : undefined,
-    }),
-  }), "Follow-up raised.", true);
+  // ══ RAISE, AND -- WHEN THE TYPE IS AN APPOINTMENT -- BOOK AND LINK IN THE SAME PRESS ═══════════
+  //
+  // ⚠ THE OWNER ASKED FOR THIS IN AS MANY WORDS ("would prefer limited clicks"), and it is the
+  // two-write shape the Link-a-visit action deliberately avoided -- so the risk is handled instead of
+  // avoided: each step's failure is reported AS THAT STEP, and nothing pretends the earlier steps did
+  // not happen. A follow-up raised whose booking failed IS raised -- the obligation is real either way
+  // -- and the row's Link a visit action is the retry path. Booking is never completion: the result of
+  // full success is a SCHEDULED follow-up, still owed.
+  const raiseFollowUp = async () => {
+    setBusy(true); setNotice(null);
+    try {
+      const res = await fetch("/api/v1/practice/follow-ups", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patientId: props.patientId, originEncounterId: props.encounterId,
+          reason: fu.reason, kind: fu.kind, intervalCode: fu.intervalCode, priority: fu.priority,
+          followUpType: fu.followUpType,
+          locationId: fu.locationId || undefined,
+          instructions: fu.instructions.trim() || undefined,
+          assignedTo: fu.owner === "me" ? props.currentUserId : undefined,
+          assignedQueue: fu.owner === "queue" ? (fu.queue.trim() || undefined) : undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNotice({ kind: "err", text: data?.error?.message ?? data?.error ?? "That follow-up was not raised." });
+        return;
+      }
+
+      const wantsBooking = fu.followUpType === "appointment" && fu.bookDate;
+      if (!wantsBooking) { window.location.reload(); return; }
+
+      const booked = await fetch("/api/v1/practice/appointments", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patientId: props.patientId, appointmentType: "scheduled_followup",
+          date: fu.bookDate, time: fu.bookTime || "09:00",
+          reason: fu.reason,
+        }),
+      });
+      const bookedData = await booked.json().catch(() => ({}));
+      if (!booked.ok || !bookedData?.appointment?.id) {
+        // ⚠ STEP TWO FAILED AND STEP ONE IS NOT UNDONE. The obligation exists whether or not a visit
+        // is arranged -- that is the whole meaning of a follow-up -- so the message says exactly what
+        // stands and what does not, and where the retry lives.
+        setNotice({
+          kind: "err",
+          text: `The follow-up was raised, but the visit was not booked: ${bookedData?.error?.message ?? bookedData?.error ?? "the booking failed"}. Use "Link a visit" on its row once one is booked.`,
+        });
+        return;
+      }
+
+      const linked = await fetch(`/api/v1/practice/follow-ups/${data.followUp.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId: bookedData.appointment.id }),
+      });
+      if (!linked.ok) {
+        const linkData = await linked.json().catch(() => ({}));
+        setNotice({
+          kind: "err",
+          text: `Follow-up raised and the visit booked, but linking them failed: ${linkData?.error?.message ?? "unknown"}. Use "Link a visit" on the row -- the booking is there.`,
+        });
+        return;
+      }
+      window.location.reload();
+    } finally { setBusy(false); }
+  };
 
   // ══ s10's BOOKING LINK -- scheduleFollowUp's FIRST UI CALLER ═══════════════════════════════════
   //
@@ -1394,7 +1502,23 @@ export default function EncounterConsole(props: {
                       <div>
                         <label className={FU_LABEL} htmlFor="fu-type">Follow-up type</label>
                         <select id="fu-type" value={fu.followUpType}
-                          onChange={e => setFu(p => ({ ...p, followUpType: e.target.value }))}
+                          onChange={e => {
+                            const followUpType = e.target.value;
+                            // ⚠ THE BOOKING DATE PREFILLS FROM THE TIMEFRAME ALREADY CHOSEN, so the
+                            // ordinary path is reason -> type -> Raise: the date is the due date the
+                            // interval resolves to, editable, never invented silently -- it is on
+                            // screen before the press. The TIME is a default somebody can read.
+                            setFu(p => {
+                              const days = props.intervals.find(i => i.code === p.intervalCode)?.days;
+                              const d = new Date();
+                              if (days !== undefined) d.setDate(d.getDate() + days);
+                              return {
+                                ...p, followUpType,
+                                bookDate: followUpType === "appointment" && !p.bookDate
+                                  ? d.toISOString().slice(0, 10) : p.bookDate,
+                              };
+                            });
+                          }}
                           className={`${input} mt-1`}>
                           {FOLLOW_UP_TYPES.map(t => (
                             <option key={t} value={t}>{FOLLOW_UP_TYPE_LABELS[t] ?? t}</option>
@@ -1402,7 +1526,7 @@ export default function EncounterConsole(props: {
                         </select>
                         {fu.followUpType === "appointment" && (
                           <p className="mt-1 text-[11px] text-gray-600">
-                            This says how it should happen. It does not book anything.
+                            Set a date and time below and the visit is booked in the same press.
                           </p>
                         )}
                       </div>
@@ -1442,6 +1566,22 @@ export default function EncounterConsole(props: {
                             className={`${input} mt-1 ${fu.queue.trim() ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
                         )}
                       </div>
+                      {fu.followUpType === "appointment" && (
+                        <>
+                          <div>
+                            <label className={FU_LABEL} htmlFor="fu-book-date">Visit date *</label>
+                            <input id="fu-book-date" type="date" value={fu.bookDate}
+                              onChange={e => setFu(p => ({ ...p, bookDate: e.target.value }))}
+                              className={`${input} mt-1 ${fu.bookDate ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
+                          </div>
+                          <div>
+                            <label className={FU_LABEL} htmlFor="fu-book-time">Visit time *</label>
+                            <input id="fu-book-time" type="time" value={fu.bookTime}
+                              onChange={e => setFu(p => ({ ...p, bookTime: e.target.value }))}
+                              className={`${input} mt-1`} />
+                          </div>
+                        </>
+                      )}
                       <div className="col-span-2">
                         <label className={FU_LABEL} htmlFor="fu-instructions">Clinical instructions</label>
                         {/* Separate from the reason, which migration 196 caps at 400 characters -- one
@@ -1451,14 +1591,28 @@ export default function EncounterConsole(props: {
                           placeholder="Optional. Anything the person doing this needs to know."
                           className={`${input} mt-1`} />
                       </div>
-                      <div className="col-span-2 flex items-end justify-end">
-                        {/* ⚠ THE BUTTON REFUSES A QUEUE WITH NO NAME. The database check would refuse it
-                            too, but as a 400 after the click -- and s17 asks for required fields to be
-                            validated BEFORE Raise Follow-up is enabled. */}
+                      <div className="col-span-2 flex flex-wrap items-center justify-end gap-2">
+                        {/* ⚠ A DISABLED BUTTON THAT CANNOT SAY WHY READS AS A BROKEN PRODUCT -- the
+                            owner pressed exactly this one with the reason empty, got silence, and
+                            reported the feature as not responding. The walkthrough recorded this class
+                            on the Treatment tab; this is the same lesson, missed on a form built the
+                            same day the rule was being applied two tabs away. The sentence names the
+                            first missing thing, in order, because two amber warnings at once read as
+                            noise. */}
+                        {(!fu.reason.trim() || (fu.owner === "queue" && !fu.queue.trim())
+                          || (fu.followUpType === "appointment" && !fu.bookDate)) && (
+                          <span className="text-[11.5px] text-[var(--cmp-text-warning)]">
+                            {!fu.reason.trim() ? "Say what needs to happen first."
+                              : fu.owner === "queue" && !fu.queue.trim() ? "Name the queue, or assign it differently."
+                                : "Pick the visit date, or change the follow-up type."}
+                          </span>
+                        )}
                         <button type="submit"
-                          disabled={busy || !fu.reason.trim() || (fu.owner === "queue" && !fu.queue.trim())}
+                          disabled={busy || !fu.reason.trim() || (fu.owner === "queue" && !fu.queue.trim())
+                            || (fu.followUpType === "appointment" && !fu.bookDate)}
                           className="rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cp-primary)] focus-visible:ring-offset-2 disabled:opacity-50">
-                          {busy ? "Raising..." : "Raise follow-up"}
+                          {busy ? "Raising..."
+                            : fu.followUpType === "appointment" ? "Raise & book visit" : "Raise follow-up"}
                         </button>
                       </div>
                     </div>
@@ -1498,8 +1652,9 @@ export default function EncounterConsole(props: {
                         The intervals are arithmetic on today&apos;s date, not clinical guidance. Once
                         raised, this appears on the follow-up board and becomes overdue on its own if
                         nothing is booked.
-                        {" "}⚠ Raising a follow-up does not book an appointment, and booking one does not
-                        settle the obligation.
+                        {" "}⚠ {fu.followUpType === "appointment"
+                          ? "Raise & book creates the visit and links it. Booking does not settle the obligation — it stays owed until somebody says what happened."
+                          : "Raising a follow-up does not book an appointment, and booking one does not settle the obligation."}
                       </Tip>
                     </div>
                   </form>
@@ -1600,16 +1755,25 @@ export default function EncounterConsole(props: {
 
             {/* ══ NOTES ═════════════════════════════════════════════════════════════════════════ */}
             {tab === "notes" && (
-              // ⚠ FOURTH TAB ON THE ENCOUNTER KIT. Expression position, so // is a real comment here --
-              // unlike the Attachments tab, where the same line sits in JSX children and would render.
+              // ══ CPR-NOTE-HFE-010: THE CALMEST TAB ON THE ENCOUNTER ═══════════════════════════════
               //
-              // Chrome only. The two sentences this tab must never lose are both intact below: WHY it is
-              // read-only when it is (a closed encounter and a missing capability are different reasons
-              // and are still told apart), and that applying a template fills ONLY EMPTY segments.
+              // s3: Notes is a WRITING workspace, not a structured-recording one -- orient, choose
+              // structure if needed, write or dictate, autosave, review. The grammar below follows
+              // that: a quiet header with the save state, the S/O/A/P/N navigator, then the sections.
+              //
+              // ⚠ s10 ASKED FOR THE PER-SECTION SAVE BUTTONS TO GO, AND THEY STAY. This is the one
+              // deliberate departure, and the reason is already written into this file's header: an
+              // autosave that wrote to the RECORD mid-sentence would put half-thoughts into a clinical
+              // note and make "what did I actually save" unanswerable. What s10 actually wants is met
+              // the two-layer way migration 207 built: the DRAFT autosaves continuously (nothing is
+              // lost, and the status line now says so trustworthily, with s10's failure state), and
+              // writing to the RECORD stays a deliberate act -- per section, or all changed sections in
+              // one press, so nobody has to remember five buttons. What is refused is only the claim
+              // that unsaved thought and the clinical record are the same thing.
               <section className={PANEL}>
                 <SectionHeader
                   title="Clinical note"
-                  subtitle="Create and structure your consultation note."
+                  subtitle="Optional structured documentation for this encounter."
                 />
                 <div className="p-4">
                 {!editable && (
@@ -1620,8 +1784,51 @@ export default function EncounterConsole(props: {
                   </p>
                 )}
 
-                {/* Template picker (CPR-130). Fill-empty only, and the copy says so where the click happens. */}
-                {editable && props.templates.length > 0 && (
+                {editable && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* ── s10's SAVE STATE, WORN HONESTLY ─────────────────────────────────────────
+                        Three states, none of them a lie: the draft failing says so with a Retry, a
+                        kept draft says it is NOT the record, and "saved" appears only per section
+                        after a real write. There is no note-level "Saved" chip at all, because five
+                        segments do not have one save state between them. */}
+                    {draftFailed ? (
+                      <span className="flex items-center gap-1.5 text-[11.5px] font-semibold text-[var(--cmp-text-critical)]" role="status">
+                        Draft not saved
+                        <button type="button" onClick={() => void flushDrafts()}
+                          className="rounded border border-[var(--cmp-color-critical)] px-1.5 py-0.5 text-[10.5px] hover:bg-[var(--cmp-surface-critical)]">
+                          Retry
+                        </button>
+                      </span>
+                    ) : (
+                      <span className="text-[11.5px] text-gray-500" role="status">
+                        {Object.values(draftAt).length > 0
+                          ? `Draft kept ${Object.values(draftAt).sort().slice(-1)[0]} — not in the record until saved.`
+                          : "Drafts are kept automatically as you write."}
+                      </span>
+                    )}
+                    <span className="ml-auto flex items-center gap-2">
+                      {/* s12: the template control is COMPACT until wanted. It stood permanently open. */}
+                      {props.templates.length > 0 && (
+                        <button type="button" onClick={() => setTemplateOpen(o => !o)}
+                          aria-expanded={templateOpen}
+                          className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11.5px] font-semibold text-gray-700 hover:bg-gray-50">
+                          Template {templateOpen ? "▴" : "▾"}
+                        </button>
+                      )}
+                      {/* ⚠ s10's REAL COMPLAINT ANSWERED: nobody has to REMEMBER five saves. One press
+                          writes every touched section to the record, in order, through the same
+                          saveNote the per-section buttons use -- one rulebook, two doors. */}
+                      <button type="button"
+                        disabled={busy || !NOTE_TYPES.some(t => saved[t] === false)}
+                        onClick={async () => { for (const t of NOTE_TYPES) if (saved[t] === false) await saveNote(t); }}
+                        className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[11.5px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
+                        Save all changed
+                      </button>
+                    </span>
+                  </div>
+                )}
+
+                {editable && templateOpen && props.templates.length > 0 && (
                   <div className="mt-2 flex items-end gap-2 flex-wrap rounded-lg bg-gray-50 p-2">
                     <div className="flex-1 min-w-[180px]">
                       <label htmlFor="template-pick" className="text-[10px] font-semibold text-gray-500">Structure this note from a template</label>
@@ -1645,69 +1852,127 @@ export default function EncounterConsole(props: {
                   </div>
                 )}
 
-                <div className="mt-2 flex flex-col gap-3">
-                  {NOTE_TYPES.map(t => {
+                {/* ── s6's S/O/A/P/N NAVIGATOR ─────────────────────────────────────────────────────
+                    ⚠ ✓ MEANS "CONTAINS TEXT" AND NOTHING MORE. s6 is emphatic that the indicator must
+                    never be read as clinical completeness -- an empty Assessment on a dressing change
+                    is not an incomplete note -- so the accessible name says "contains text" in words
+                    and the strip carries no colour that could read as pass or fail. */}
+                <nav aria-label="Note sections"
+                  className="sticky top-0 z-10 mt-2 flex flex-wrap gap-1 rounded-lg bg-white/95 py-1 backdrop-blur">
+                  {NOTE_SECTIONS.map(([t, letter, heading]) => (
+                    <button key={t} type="button"
+                      onClick={() => {
+                        document.getElementById(`note-sec-${t}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+                        document.getElementById(`note-${t}`)?.focus({ preventScroll: true });
+                      }}
+                      aria-label={`${heading}: ${(bodies[t] ?? "").trim() ? "contains text" : "empty"}. Jump to section.`}
+                      className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11.5px] font-semibold ${activeSeg === t
+                        ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
+                        : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
+                      <span aria-hidden className="font-bold">{letter}</span>
+                      <span className="hidden sm:inline">{heading}</span>
+                      <span aria-hidden className="text-gray-500">{(bodies[t] ?? "").trim() ? "✓" : "○"}</span>
+                    </button>
+                  ))}
+                </nav>
+
+                <div className="mt-2 flex flex-col">
+                  {NOTE_SECTIONS.map(([t, letter, heading, descriptor], i) => {
                     const versions = props.history[t] ?? [];
+                    const isNarrative = t === "narrative";
                     return (
-                      <div key={t}>
-                        <div className="flex items-center justify-between gap-2">
-                          <label htmlFor={`note-${t}`} className="text-[11px] font-semibold text-gray-500">{NOTE_LABEL[t]}</label>
-                          {editable && (
-                            <Dictation label="Dictate"
-                              onText={text => {
-                                setBodies(b => ({ ...b, [t]: `${b[t]}${b[t] && !b[t].endsWith(" ") ? " " : ""}${text}` }));
-                                setSaved(s => ({ ...s, [t]: false }));
-                                setDictated(d => ({ ...d, [t]: true }));
-                              }} />
-                          )}
-                        </div>
-                        <textarea id={`note-${t}`} rows={t === "narrative" ? 4 : 3} disabled={!editable}
-                          value={bodies[t]} onChange={e => { setBodies(b => ({ ...b, [t]: e.target.value })); setSaved(s => ({ ...s, [t]: false })); }}
-                          className={`${input} mt-1 resize-y disabled:bg-gray-50 disabled:text-gray-500`} />
-                        <div className="mt-1 flex items-center gap-2 flex-wrap">
-                          {editable && (
-                            <>
-                              <button type="button" disabled={busy} onClick={() => saveNote(t)}
-                                className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
-                                Save
-                              </button>
-                              {/* CPR-130 smart text. Expansion is a BUTTON, never something that happens
-                                  as you type: text in a clinical note must not change under somebody's hands. */}
-                              {props.phrases.length > 0 && (
-                                <button type="button" disabled={busy} onClick={() => expandInto(t)}
-                                  className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
-                                  Expand
-                                </button>
-                              )}
-                              {saved[t] && <span className="text-[10px] text-[var(--cmp-text-success)]">saved</span>}
-                              {dictated[t] && <span className="text-[10px] text-gray-400">will be recorded as dictated</span>}
-                              {/* THE AUTOSAVE INDICATOR SAYS "DRAFT", not "saved". A practitioner who read
-                                  this as a save would leave a consultation believing the record held
-                                  something it does not. */}
-                              {draftAt[t] && !saved[t] && (
-                                <span className="text-[10px] text-gray-400">draft kept {draftAt[t]} &mdash; not in the record yet</span>
-                              )}
-                            </>
-                          )}
-                          {versions.length > 0 && (
-                            <button type="button" onClick={() => setShowHistory(h => ({ ...h, [t]: !h[t] }))}
-                              className="ml-auto text-[10px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
-                              {showHistory[t] ? "Hide" : `${versions.length} earlier version${versions.length === 1 ? "" : "s"}`}
-                            </button>
-                          )}
-                        </div>
-                        {showHistory[t] && (
-                          <ul className="mt-1.5 flex flex-col gap-1.5 border-l-2 border-gray-100 pl-2">
-                            {versions.map((v: any) => (
-                              <li key={v.id}>
-                                <p className="text-[10px] text-gray-400">
-                                  v{v.version} · {String(v.created_at).slice(0, 16).replace("T", " ")} · {v.source}
-                                </p>
-                                <p className="whitespace-pre-wrap text-[11px] text-gray-600">{v.body || <span className="text-gray-300">(empty)</span>}</p>
-                              </li>
-                            ))}
-                          </ul>
+                      <div key={t} id={`note-sec-${t}`} className="scroll-mt-12">
+                        {/* s13: NARRATIVE IS NOT A FIFTH SOAP ELEMENT. The divider says what it is for,
+                            and nothing about it implies it is owed. */}
+                        {isNarrative && (
+                          <div className="mt-3 flex items-center gap-2" role="separator" aria-label="Additional narrative">
+                            <span className="h-px flex-1 bg-gray-200" />
+                            <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">
+                              Additional narrative — free text that does not fit the structured sections
+                            </span>
+                            <span className="h-px flex-1 bg-gray-200" />
+                          </div>
                         )}
+                        {/* s8's banding: the ACTIVE section wears the lavender the other tabs give
+                            their active work; inactive sections alternate white and pale blue-grey so
+                            the eye does not migrate between them. Colour is never the only cue -- the
+                            active border is also the only 2px one in the stack, and the focus ring
+                            sits on the textarea itself. */}
+                        <section
+                          className={`${isNarrative || i > 0 ? "mt-2" : ""} rounded-xl border p-3 transition-colors ${activeSeg === t
+                            ? "border-2 border-[var(--cp-primary)]/30 bg-[var(--cp-primary)]/[0.04]"
+                            : `border-gray-200 ${i % 2 === 1 ? "bg-slate-50/60" : "bg-white"}`}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <label htmlFor={`note-${t}`} className="flex min-w-0 items-baseline gap-2">
+                              <span aria-hidden
+                                className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-gray-100 text-[10.5px] font-bold text-gray-600">
+                                {letter}
+                              </span>
+                              <span className="text-[12.5px] font-bold text-gray-900">{heading}</span>
+                              <span className="text-[10.5px] text-gray-500">— {descriptor}</span>
+                            </label>
+                            {/* s7/s11: Dictate lives on the heading line so its target is unmistakable,
+                                and the component itself shows a listening state with a Stop. */}
+                            {editable && (
+                              <Dictation label="Dictate"
+                                onText={text => {
+                                  setBodies(b => ({ ...b, [t]: `${b[t]}${b[t] && !b[t].endsWith(" ") ? " " : ""}${text}` }));
+                                  setSaved(sv => ({ ...sv, [t]: false }));
+                                  setDictated(d => ({ ...d, [t]: true }));
+                                }} />
+                            )}
+                          </div>
+                          <AutoGrowTextarea id={`note-${t}`} disabled={!editable}
+                            placeholder="Start typing or dictate…"
+                            value={bodies[t]}
+                            onFocus={() => setActiveSeg(t)}
+                            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => { setBodies(b => ({ ...b, [t]: e.target.value })); setSaved(sv => ({ ...sv, [t]: false })); }}
+                            className={`${input} mt-1.5 resize-none overflow-hidden disabled:bg-gray-50 disabled:text-gray-500`} />
+                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                            {editable && (
+                              <>
+                                <button type="button" disabled={busy} onClick={() => saveNote(t)}
+                                  className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                                  Save to record
+                                </button>
+                                {/* CPR-130 smart text. Expansion is a BUTTON, never something that happens
+                                    as you type: text in a clinical note must not change under somebody's hands. */}
+                                {props.phrases.length > 0 && (
+                                  <button type="button" disabled={busy} onClick={() => expandInto(t)}
+                                    className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                                    Expand
+                                  </button>
+                                )}
+                                {saved[t] && <span className="text-[10px] text-[var(--cmp-text-success)]">saved</span>}
+                                {dictated[t] && <span className="text-[10px] text-gray-500">will be recorded as dictated</span>}
+                                {/* THE AUTOSAVE INDICATOR SAYS "DRAFT", not "saved". A practitioner who read
+                                    this as a save would leave a consultation believing the record held
+                                    something it does not. */}
+                                {draftAt[t] && !saved[t] && (
+                                  <span className="text-[10px] text-gray-500">draft kept {draftAt[t]} — not in the record yet</span>
+                                )}
+                              </>
+                            )}
+                            {versions.length > 0 && (
+                              <button type="button" onClick={() => setShowHistory(h => ({ ...h, [t]: !h[t] }))}
+                                className="ml-auto text-[10px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                                {showHistory[t] ? "Hide" : `${versions.length} earlier version${versions.length === 1 ? "" : "s"}`}
+                              </button>
+                            )}
+                          </div>
+                          {showHistory[t] && (
+                            <ul className="mt-1.5 flex flex-col gap-1.5 border-l-2 border-gray-100 pl-2">
+                              {versions.map((v: any) => (
+                                <li key={v.id}>
+                                  <p className="text-[10px] text-gray-500">
+                                    v{v.version} · {String(v.created_at).slice(0, 16).replace("T", " ")} · {v.source}
+                                  </p>
+                                  <p className="whitespace-pre-wrap text-[11px] text-gray-600">{v.body || <span className="text-gray-400">(empty)</span>}</p>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </section>
                       </div>
                     );
                   })}
@@ -1715,6 +1980,7 @@ export default function EncounterConsole(props: {
                 </div>
               </section>
             )}
+
           </div>
         </div>
 

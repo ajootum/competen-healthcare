@@ -1015,6 +1015,33 @@ async function main() {
         && attCode.includes("att-kind") && attCode.includes("router.refresh"),
       `${attCode.length} chars after stripping comments`);
 
+    // ── CPR-NOTE-HFE-010: THE WRITING WORKSPACE, AND THE ONE RULE IT MUST NOT BREAK ──────────────
+    const noteConsoleSrc = readFileSync(join(attDir, "EncounterConsole.tsx"), "utf8");
+    const noteCode = noteConsoleSrc.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    // ⚠ s6: THE NAVIGATOR'S TICK MEANS "CONTAINS TEXT", NEVER COMPLETENESS. The accessible name says it
+    // in words, and no wording anywhere near the strip may say complete -- an empty Assessment on a
+    // dressing change is not an incomplete note.
+    ok("13a-16. s6: the S/O/A/P/N navigator exists and its indicator is text-presence, in words",
+      /aria-label="Note sections"/.test(noteCode) && /contains text/.test(noteCode)
+        && !/complete/i.test(noteCode.slice(noteCode.indexOf('aria-label="Note sections"'),
+          noteCode.indexOf('aria-label="Note sections"') + 1500)));
+    // ⚠ s10 RESOLVED, NOT OBEYED: the record-write stays explicit (per section AND one press for all
+    // changed), the draft autosave carries a failure state with a Retry, and the draft wording still
+    // refuses to call itself saved. If "not in the record" ever leaves this file, the autosave has
+    // started lying about what a draft is.
+    ok("13a-17. s10: explicit record-saves survive alongside Save all changed",
+      /Save to record/.test(noteCode) && /Save all changed/.test(noteCode)
+        && /not in the record/.test(noteCode));
+    ok("13a-17b. s10: the draft autosave can FAIL VISIBLY, with a retry that shares the timer's flush",
+      /Draft not saved/.test(noteCode) && /flushDrafts/.test(noteCode)
+        && !noteCode.includes("120_000"),
+      "the old autosave swallowed failure and ran every two minutes");
+    ok("13a-18. s9/s12: auto-grow writing areas, and the template picker closed until asked for",
+      /AutoGrowTextarea/.test(noteCode) && /Start typing or dictate/.test(noteCode)
+        && /templateOpen/.test(noteCode));
+    ok("13a-18b. s13: narrative is separated and never implied mandatory",
+      /Additional narrative — free text that does not fit the structured sections/.test(noteCode));
+
     ok("13a-7b. ⚠ AND THE ROW IS IN practice_encounter_investigation",
       !invErr && !!invRow && invRow.label === "Full blood count",
       invErr?.message ?? (invRow ? `label was ${invRow.label}` : "no row"));

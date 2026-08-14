@@ -542,9 +542,17 @@ async function main() {
     /body: JSON\.stringify\(\{ appointmentId \}\)/.test(consoleSrc)
       && /patientAppointments\.map/.test(consoleSrc),
     "the engine refused a dead booking for months and nothing could ask it to");
-  ok("reach-2. and it LINKS an existing appointment rather than creating one",
-    !/api\/v1\/practice\/appointments/.test(consoleSrc),
-    "book-then-link is two writes with no transaction -- a failed second leaves an orphan appointment");
+  // ⚠ reach-2 USED TO ASSERT THIS TAB NEVER BOOKS, AND THE OWNER OVERRODE THAT DECISION IN AS MANY
+  // WORDS ("why doesn't this book an appointment? would prefer limited clicks", 2026-08-14). The
+  // assertion went red on the change, which is exactly what it was for -- a pinned decision should
+  // cost a deliberate edit to unpin. The two-write risk it guarded is now HANDLED rather than avoided:
+  // the new contract, pinned below, is that every step's failure is reported as that step, and the
+  // ROW action still links an existing visit rather than creating one.
+  ok("reach-2. booking from the tab reports partial failure per STEP, and the row action still only links",
+    /but the visit was not booked/.test(consoleSrc)
+      && /but linking them failed/.test(consoleSrc)
+      && /body: JSON\.stringify\(\{ appointmentId \}\)/.test(consoleSrc),
+    "a two-write flow that cannot say which write happened is worse than no flow");
   ok("reach-3. the encounter tab can reach createPlan (POST follow-up-plans with a templateId)",
     /api\/v1\/practice\/follow-up-plans/.test(consoleSrc) && /templateId/.test(consoleSrc));
   // ⚠ AND THE TEMPLATE CONTROL IS DRAWN ONLY WHEN A TEMPLATE EXISTS. Migration 206 seeds none and there
@@ -553,6 +561,25 @@ async function main() {
   ok("reach-4. the plan control is hidden when this practice has authored no template",
     /props\.planTemplates\.length > 0 &&/.test(consoleSrc),
     "an always-empty menu is an affordance for nothing");
+
+  // ⚠ THE ROUTE FORWARDS EVERY FIELD THE COMPOSER SENDS. Migration 299's six fields were collected by
+  // the screen, accepted by the engine, and DROPPED by the route between them -- the third instance of
+  // the middle-layer class in one day (scheduledAt in the batch engine, then here), found only because
+  // the owner used the form. tsc cannot see it: an absent property is not an error. So the needle is on
+  // the route source, one per field, and a field added to the composer later must be added here too.
+  const fuRouteSrc = readFileSync(
+    "src/app/api/v1/practice/follow-ups/route.ts", "utf8");
+  const forwarded = ["followUpType", "assignedTo", "assignedQueue", "locationId", "instructions"]
+    .filter(f => !new RegExp(`${f}: body\\.${f}`).test(fuRouteSrc));
+  ok("reach-5. ⚠ the POST route forwards all five composer fields to createFollowUp",
+    forwarded.length === 0,
+    forwarded.length ? `DROPPED: ${forwarded.join(", ")}` : "");
+  // And the booking press is wired end to end: raise, book, link -- three calls in one handler.
+  ok("reach-6. Raise & book books a scheduled_followup and LINKS it through the appointmentId PATCH",
+    /appointmentType: "scheduled_followup"/.test(consoleSrc)
+      && /Raise & book visit/.test(consoleSrc)
+      && /The follow-up was raised, but the visit was not booked/.test(consoleSrc),
+    "a partial failure must say which step stands, not pretend nothing happened");
 
   return report();
 }
