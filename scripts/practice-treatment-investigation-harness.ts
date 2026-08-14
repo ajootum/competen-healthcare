@@ -579,6 +579,23 @@ async function main() {
   ok("7-25. the Safety column is drawn for medication rows only",
     /treatment_type !== "medication"/.test(capSrcTreat));
 
+  // ── CP-TREAT-002 s5 AND s6: THE TYPE SELECTOR, AND FORMS THAT FIT THEIR TYPE ────────────────────
+  //
+  // ⚠ THE SAME QUERY-LEVEL TRAP AS dose_unit, CHECKED THE SAME WAY. A form that captures a detail into
+  // a column nobody selects is a field that swallows what a practitioner typed -- it saves, and the
+  // record never shows it again. non_drug_category is what every non-medication type writes to.
+  ok("7-26. the encounter reads the column the type-specific detail is stored in",
+    /\bnon_drug_category\b/.test(treatSelect), `selected: ${treatSelect}`);
+  ok("7-27. s11: changing type warns before discarding fields that do not carry over",
+    /const changeType/.test(capSrcTreat) && /window\.confirm/.test(capSrcTreat));
+  // ⚠ AND THE BLANKING ITSELF, which is the rule that matters more than the warning: a dose typed under
+  // Medication must not ride into a diet plan and be recorded there invisibly.
+  ok("7-28. and it blanks everything except the name and reason",
+    /blankDraft\(code\), label: d\.label, reason: d\.reason/.test(capSrcTreat));
+  // s6: every non-medication type gets a schedule. Before this it had nowhere to put "daily for 5 days".
+  ok("7-29. non-medication types can carry a frequency and duration",
+    /!shape\.prescribing && shape\.needsSchedule/.test(capSrcTreat));
+
   // ── s19's EDIT AND REMOVE EXIST BEHIND THE COMP'S CONTROLS ──────────────────────────────────────
   //
   // ⚠ THE POINT IS THAT THE ENGINE EXISTS, NOT THAT THE ICON DOES. The comp draws a pencil and a menu

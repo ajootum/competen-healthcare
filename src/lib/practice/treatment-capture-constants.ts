@@ -20,15 +20,52 @@
  */
 export const TREATMENT_TYPE_SHAPE: Record<string, {
   prescribing: boolean; nonDrug: boolean; hint: string;
+  /**
+   * CP-TREAT-002 s6. The label for this type's ONE structured detail field -- the thing the comp's
+   * DETAILS column shows ("Normal saline + dressing", "Airway clearance", "Salt restriction").
+   *
+   * ⚠ ONE FIELD, NOT A BESPOKE SCHEMA PER TYPE. s9 asks for subtype tables and this is not them: site,
+   * body area, parameters and targets each want their own column before a report can ever group by
+   * them. What is here is the field that HAS storage today, named correctly per type, rather than a
+   * body area crammed into a notes box where nothing will ever find it again. The rest is named in the
+   * commit and in the tip on the screen instead of being quietly approximated.
+   */
+  detailsLabel?: string;
+  detailsHint?: string;
+  /** s11: "Do not require Dose or Route for non-medication treatments." */
+  needsSchedule?: boolean;
 }> = {
   medication: { prescribing: true, nonDrug: false, hint: "A medication prescribed or continued today." },
   change_medication: { prescribing: true, nonDrug: false, hint: "A change to something already prescribed. Say what it is changing to." },
   stop_medication: { prescribing: false, nonDrug: false, hint: "A decision to stop a medication. Name the medication and why." },
+  // ⚠ RETIRED FROM THE OFFERED LIST BY MIGRATION 295, KEPT HERE. Rows already carry it and s10 requires
+  // historical records keep their original type, so this shape still has to render them.
   non_drug: { prescribing: false, nonDrug: true, hint: "Physiotherapy, wound care, dietary intervention, observation or a configured alternative." },
   advice: { prescribing: false, nonDrug: false, hint: "Advice given, in a sentence." },
   monitoring: { prescribing: false, nonDrug: false, hint: "What you asked to be watched, and how often." },
   no_change: { prescribing: false, nonDrug: false, hint: "Current treatment continues unchanged. Recording this explicitly is the point of it." },
-  other: { prescribing: false, nonDrug: false, hint: "A treatment decision the configured list does not cover. Your words are kept exactly." },
+  other: { prescribing: false, nonDrug: false, hint: "A treatment decision the configured list does not cover. Your words are kept exactly.",
+    detailsLabel: "Details", detailsHint: "What is being done", needsSchedule: true },
+
+  // ── CP-TREAT-002 s2's six new types ────────────────────────────────────────────────────────────
+  wound_care: { prescribing: false, nonDrug: true, needsSchedule: true,
+    hint: "Wound or dressing care planned today. Not a dressing PERFORMED -- that is a procedure.",
+    detailsLabel: "Dressing / method", detailsHint: "Normal saline and dressing" },
+  physiotherapy: { prescribing: false, nonDrug: true, needsSchedule: true,
+    hint: "A physiotherapy plan. The sessions themselves are not recorded here.",
+    detailsLabel: "Intervention / body area", detailsHint: "Airway clearance" },
+  nutrition: { prescribing: false, nonDrug: true, needsSchedule: true,
+    hint: "A diet or nutrition plan, and what it is aiming at.",
+    detailsLabel: "Diet / plan", detailsHint: "Salt restriction" },
+  respiratory: { prescribing: false, nonDrug: true, needsSchedule: true,
+    hint: "A respiratory therapy plan. Parameters go in the detail field.",
+    detailsLabel: "Modality / parameters", detailsHint: "2.5 mg nebulised" },
+  device_support: { prescribing: false, nonDrug: true, needsSchedule: true,
+    hint: "A device or support to be used, and where.",
+    detailsLabel: "Device / site", detailsHint: "Below knee" },
+  lifestyle: { prescribing: false, nonDrug: true, needsSchedule: true,
+    hint: "A lifestyle intervention and what it is aiming at.",
+    detailsLabel: "Intervention / target", detailsHint: "Stop smoking within three months" },
 };
 
 export const DEFAULT_TREATMENT_SHAPE = { prescribing: false, nonDrug: false, hint: "" };

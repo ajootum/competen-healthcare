@@ -477,7 +477,7 @@ export async function getEncounter(admin: any, workspaceId: string, encounterId:
     // encounter screen rendered a dose of "3" with no unit beside it. Three what -- milligrams, grams,
     // millilitres? The record held the answer and the screen could not show it. A number without its
     // unit is not a smaller truth than a number with one, it is a different and dangerous claim.
-    admin.from("practice_treatment").select("id, treatment_type, label, dose, dose_unit, formulation, route, frequency, duration, status").eq("workspace_id", workspaceId).eq("encounter_id", encounterId).order("created_at"),
+    admin.from("practice_treatment").select("id, treatment_type, label, dose, dose_unit, formulation, route, frequency, duration, non_drug_category, status").eq("workspace_id", workspaceId).eq("encounter_id", encounterId).order("created_at"),
     admin.from("practice_encounter_status_history").select("from_status, to_status, occurred_at").eq("workspace_id", workspaceId).eq("encounter_id", encounterId).order("occurred_at"),
   ]);
 

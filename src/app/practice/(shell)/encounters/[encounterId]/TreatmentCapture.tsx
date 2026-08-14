@@ -65,11 +65,14 @@ const CHIP_ON = "rounded-full border border-[var(--cp-primary)] bg-[var(--cp-pri
 const LABEL = "block text-[10px] font-semibold uppercase tracking-wide text-gray-500";
 
 type RecordedTreatment = {
-  id: string; treatment_type: string; label: string; dose: string | null; route: string | null;
+  id: string; treatment_type: string; label: string;
+  dose: string | null; route: string | null;
   frequency: string | null; duration: string | null; status: string; notes?: string | null;
   /** CP-TREAT-002: the unit belongs beside the dose. Read by encounters.ts since this spec. */
   dose_unit?: string | null;
   formulation?: string | null;
+  /** CP-TREAT-002 s6's one type-specific detail, and what the Details column shows for non-drugs. */
+  non_drug_category?: string | null;
 };
 
 const blankDraft = (treatmentType: string): PendingTreatment => ({
@@ -151,6 +154,29 @@ export default function TreatmentCapture(props: {
   const opts = (key: string): TreatmentOption[] => cap.options.byField[key] ?? [];
   const shape = treatmentShape(draft.treatmentType);
 
+  /**
+   * CP-TREAT-002 s5's type change.
+   *
+   * ⚠ s11's LAST RULE WAS ALREADY SATISFIED AND STAYS THAT WAY: "do not permit hidden medication values
+   * from a prior type selection to persist if the user changes to a non-medication type". Everything
+   * except the name and the reason is blanked, so a dose typed under Medication cannot ride along into
+   * a diet plan and be recorded there invisibly.
+   *
+   * ⚠ AND s5 ASKS FOR A WARNING BEFORE THAT HAPPENS. Blanking silently is the safe half; telling
+   * somebody their dose is about to be discarded is the other half, and the difference between a
+   * product that is careful and one that quietly eats work. Only asked when there is something to lose.
+   */
+  const changeType = (code: string) => {
+    if (code === draft.treatmentType) return;
+    const carriesIncompatible = !!(draft.dose || draft.doseUnit || draft.route
+      || draft.frequencyCode || draft.duration || draft.formulation || draft.nonDrugCategory);
+    if (carriesIncompatible
+      && !window.confirm("Changing the treatment type clears the fields that do not apply to the new type. The name and reason are kept. Continue?")) return;
+    setDraft(d => ({ ...blankDraft(code), label: d.label, reason: d.reason }));
+    setCustomFrequency("");
+    setDose(null);
+  };
+
   // ── THE COMP'S PER-CARD SAFETY CHIPS ────────────────────────────────────────────────────────────
   //
   // ⚠ DERIVED THE SAME WAY SafetySnapshot DERIVES THEM, from the same payload. Two screens reading one
@@ -225,9 +251,15 @@ export default function TreatmentCapture(props: {
     // a smaller truth, it is a different claim, and on a dose it is the dangerous one.
     { key: "details", label: "Details",
       render: t => {
+        // ⚠ THE COLUMN IS ADAPTIVE, WHICH IS THE WHOLE POINT OF NOT CALLING IT "Dose / Route". A
+        // medication shows its regimen; every other type shows the one detail its own form asked for,
+        // so what a practitioner typed is what a reader sees.
         const doseWithUnit = [t.dose, t.dose_unit].filter(Boolean).join(" ");
-        const parts = [doseWithUnit, t.formulation, t.route].filter(Boolean);
-        return parts.length ? parts.join(" · ") : <span className="text-gray-400">&mdash;</span>;
+        const parts = t.treatment_type === "medication" || t.treatment_type === "change_medication"
+          ? [doseWithUnit, t.formulation, t.route]
+          : [t.non_drug_category, doseWithUnit, t.route];
+        const shown = parts.filter(Boolean);
+        return shown.length ? shown.join(" · ") : <span className="text-gray-400">&mdash;</span>;
       } },
     { key: "freq", label: "Frequency / duration",
       render: t => [t.frequency, t.duration].filter(Boolean).join(" · ") || <span className="text-gray-400">&mdash;</span> },
@@ -919,7 +951,7 @@ export default function TreatmentCapture(props: {
                 {opts("treatment_type").map(o => (
                   <li key={o.id}>
                     <button type="button" data-step="type" className={draft.treatmentType === o.code ? CHIP_ON : CHIP}
-                      onClick={() => setDraft(d => ({ ...blankDraft(o.code), label: d.label, reason: d.reason }))}>
+                      onClick={() => changeType(o.code)}>
                       {o.label}
                     </button>
                   </li>
@@ -976,11 +1008,57 @@ export default function TreatmentCapture(props: {
               </div>
             )}
 
-            {/* s13's non-drug categories, CONFIGURED. */}
-            {shape.nonDrug && (
+            {/* ══ CP-TREAT-002 s6's TYPE-SPECIFIC DETAIL ═══════════════════════════════════════════
+                ⚠ ONE FIELD, LABELLED BY TYPE, WHICH IS WHAT THE COMP'S DETAILS COLUMN SHOWS -- "Normal
+                saline + dressing" for wound care, "Airway clearance" for physiotherapy, "Salt
+                restriction" for a diet. Each type asks for its own thing in its own words rather than
+                every type meeting a box headed "Category".
+
+                ⚠ AND s11: NO DOSE OR ROUTE IS ASKED FOR HERE. "Do not require Dose or Route for
+                non-medication treatments" -- a wound dressing has neither, and a form that asks for
+                them teaches the practitioner that this screen was built for something else. */}
+            {shape.detailsLabel && (
+              <label className="mt-2 block">
+                <span className={LABEL}>{shape.detailsLabel}</span>
+                <input className={input} value={draft.nonDrugCategory ?? ""}
+                  data-step="type-details"
+                  onChange={e => setDraft(d => ({ ...d, nonDrugCategory: e.target.value }))}
+                  placeholder={shape.detailsHint ?? ""} />
+              </label>
+            )}
+
+            {/* The legacy non_drug type keeps its configured category list. Migration 295 retires it
+                from the offered set, but rows recorded under it still have to be editable. */}
+            {shape.nonDrug && !shape.detailsLabel && (
               <PickSelect label="Category" options={opts("non_drug_category")}
                 value={draft.nonDrugCategory} step="non-drug-category"
                 onPick={(o) => setDraft(d => ({ ...d, nonDrugCategory: o?.code ?? null }))} />
+            )}
+
+            {/* ⚠ s6 GIVES EVERY NON-MEDICATION TYPE A FREQUENCY AND A DURATION, and they were only ever
+                drawn for prescribing types. A wound dressing daily for five days could not be recorded
+                as daily for five days -- the schedule simply had nowhere to go. */}
+            {!shape.prescribing && shape.needsSchedule && (
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <PickSelect label="Frequency" options={opts("frequency")} value={draft.frequencyCode} byCode
+                  step="frequency"
+                  onPick={o => setDraft(d => ({
+                    ...d, frequencyCode: o?.code ?? null,
+                    frequencyText: o && o.code !== OTHER_OPTION_CODE ? o.label : null,
+                    frequencyPerDay: o?.numericValue ?? null,
+                  }))} />
+                <PickSelect label="Duration" options={opts("duration")} value={draft.duration}
+                  step="duration" onPick={o => setDraft(d => ({ ...d, duration: o?.label ?? null }))} />
+              </div>
+            )}
+            {!shape.prescribing && shape.needsSchedule && draft.frequencyCode === OTHER_OPTION_CODE && (
+              <div className="mt-2">
+                <input autoFocus className={input} value={customFrequency}
+                  aria-label="Frequency in your own words"
+                  onChange={e => setCustomFrequency(e.target.value)}
+                  placeholder="In your own words — for example: every other day, in the morning" />
+                <p className="mt-0.5 text-[10px] text-gray-500">{CUSTOM_WORDING_PRESERVED}</p>
+              </div>
             )}
 
             {/* s5's five tap-fields. EVERY ONE READ FROM CONFIGURATION. */}
