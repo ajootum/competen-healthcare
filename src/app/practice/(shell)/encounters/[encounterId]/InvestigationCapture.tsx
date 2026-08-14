@@ -6,8 +6,16 @@ import Link from "next/link";
 import {
   INVESTIGATION_STATUS_CHIP, INVESTIGATION_STATUS_LABEL, INVESTIGATION_STATUSES,
   QUICK_ADD_NOT_A_RECOMMENDATION, SETS_NOT_A_RECOMMENDATION, QUICK_ADD_REASON_LABEL,
-  REPEATS_ARE_NEVER_MERGED, rankInvestigations,
+  QUICK_ADD_REASONS, REPEATS_ARE_NEVER_MERGED, rankInvestigations, investigationReadiness,
 } from "@/lib/practice/investigation-constants";
+// CPR-INV-HFE-006 s3 and s12: "keep the active working list in the same pale-lavender active-work band
+// used in Treatment and Procedures", and s16's acceptance criterion that the band language MATCHES.
+// This tab predates encounter-band-constants.ts and drew Quick add, My sets, the working list and the
+// picker all in one identical CARD -- four surfaces at one volume, which is the exact defect
+// CPR-HFE-TRT-004 s11 was written about for the right rail.
+import {
+  BAND_RECORD, BAND_SHORTCUTS, BAND_WORK,
+} from "@/lib/practice/encounter-band-constants";
 import type { InvestigationCatalogue, CatalogueItem, EncounterInvestigation, Panel } from "@/lib/practice/investigations";
 import { PANEL, SectionHeader, Tip } from "@/components/practice/EncounterKit";
 import {
@@ -219,6 +227,18 @@ export default function InvestigationCapture(props: {
   const recorded = props.recorded;
   const openOnes = recorded.items.filter(i => i.status === "requested");
 
+  // ── s8's READINESS, MIRRORING investigations.ts AND NOTHING ELSE ────────────────────────────────
+  //
+  // ⚠ THE ENGINE ASKS A SET-LEVEL QUESTION AND THIS ANSWERS A PER-ITEM ONE, EQUIVALENTLY. It refuses
+  // unless there is a shared reason OR every item has its own; marking an item unready exactly when it
+  // has neither makes "blocked === 0" mean the same thing. So the button is disabled for precisely the
+  // batches the engine would refuse, and the amber sits on the items that are actually short.
+  const readinessOf = (p: Selected) => investigationReadiness({
+    reasonOverride: p.reasonOverride, reasonShared,
+    reasonRequired: cat.settings.investigationReasonRequired,
+  });
+  const blocked = pending.filter(p => !readinessOf(p).ready).length;
+
   return (
     // ⚠ SECOND TAB ON THE ENCOUNTER KIT. Chrome only -- the panel, the heading and the boundary band.
     // ⚠ AND THE SUBTITLE KEEPS ITS THREE STATES. "could not be read" is NOT "0 recorded", and collapsing
@@ -275,8 +295,9 @@ export default function InvestigationCapture(props: {
       ) : recorded.items.length === 0 ? (
         <p className="mt-3 text-[12px] text-gray-400">None recorded in this encounter.</p>
       ) : (
-        <div className="mt-3">
-          {/* s9's batch review controls. Individual review stays available on each row. */}
+        <div className={`${BAND_RECORD} mt-3 overflow-hidden p-3`}>
+          {/* ══ BAND 1 (s4, s12): THE RECORD ═════════════════════════════════════════════════════
+              s9's batch review controls. Individual review stays available on each row. */}
           {editable && openOnes.length > 0 && (
             <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-gray-50 px-2.5 py-2">
               <button type="button" className={QUIET} disabled={busy}
@@ -372,62 +393,93 @@ export default function InvestigationCapture(props: {
 
       {editable && (
         <>
-          {/* ══ QUICK ADD -- s3 and s10 ══════════════════════════════════════════════════════════ */}
-          <div className={`${CARD} mt-4`}>
+          {/* ══ BAND 2 (s4, s12): SHORTCUTS ═══════════════════════════════════════════════════════
+              s4 calls this band "low-contrast blue-grey" and subordinate. Quick add and My sets used to
+              be two separate white cards at the same weight as the working list below them -- three
+              equal surfaces, so nothing said which one was the task. */}
+          <div className={`${BAND_SHORTCUTS} mt-4 p-3.5`}>
             <div className="flex items-baseline gap-2 flex-wrap">
               <h4 className="text-[12px] font-bold text-gray-900">Quick add</h4>
-              <span className="text-[10px] text-gray-400">one tap, no typing</span>
+              <span className="text-[10.5px] text-gray-500">one tap, no typing</span>
             </div>
             {cat.quickAdd.length === 0 ? (
-              <p className="mt-1.5 text-[11px] text-gray-400">
+              <p className="mt-1.5 text-[11px] text-gray-600">
                 Nothing here yet. Items you pin, and the ones you record most, appear here after you have
                 used them.
               </p>
             ) : (
-              <ul className="mt-2 flex flex-wrap gap-1.5">
-                {cat.quickAdd.map(({ item, reason }) => {
-                  const on = isPending(item.id, item.displayName);
+              // ⚠ s6's THREE GROUPS, MADE REAL. The reason was a 9px suffix on each chip in one flat
+              // list -- true, but a practitioner scanning for something they PINNED had to read every
+              // label to find it. Grouping is what makes the reason usable rather than merely present.
+              //
+              // ⚠ AND THE GROUP ORDER IS THE ENGINE'S RANKING, NOT A NEW ONE. QUICK_ADD_REASONS is
+              // ordered favourite, frequent, recent, and rankQuickAdd sorts by the same order; reading
+              // the array here means the screen cannot disagree with the server about which shortcut
+              // outranks which, and a fourth reason added later appears without touching this file.
+              <div className="mt-2 flex flex-col gap-2">
+                {QUICK_ADD_REASONS.map(({ code, label, explain }) => {
+                  const group = cat.quickAdd.filter(q => q.reason === code);
+                  if (group.length === 0) return null;
                   return (
-                    <li key={item.id}>
-                      <button type="button" data-step="quick-add" disabled={busy}
-                        className={on ? CHIP_ON : CHIP} onClick={() => toggle(item)}>
-                        {item.shortName ?? item.displayName}
-                        <span className="ml-1 text-[9px] font-medium text-gray-400">
-                          {QUICK_ADD_REASON_LABEL[reason] ?? reason}
+                    <div key={code}>
+                      {/* ⚠ THE GROUP HEADING CARRIES THE ENGINE'S OWN EXPLANATION as its title, so the
+                          honesty that used to live in a chip suffix is not lost by grouping -- s10 and
+                          s6 both require the reason to stay visible and non-advisory. */}
+                      <p className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500"
+                        title={explain}>
+                        {label}
+                      </p>
+                      <ul className="mt-1 flex flex-wrap gap-1.5">
+                        {group.map(({ item }) => {
+                          const on = isPending(item.id, item.displayName);
+                          return (
+                            <li key={item.id}>
+                              <button type="button" data-step="quick-add" disabled={busy}
+                                className={on ? CHIP_ON : CHIP} onClick={() => toggle(item)}>
+                                {item.shortName ?? item.displayName}
+                                {/* The per-chip reason stays for a screen reader, which meets the group
+                                    heading only if it happens to be read in order. */}
+                                <span className="sr-only"> ({QUICK_ADD_REASON_LABEL[code] ?? code})</span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <p className="mt-2 text-[11px] text-gray-600">{QUICK_ADD_NOT_A_RECOMMENDATION}</p>
+
+            {/* ══ MY SETS -- s3 and s5, now INSIDE the shortcut band rather than beside it ════════ */}
+            {cat.sets.length > 0 && (
+              <div className="mt-3 border-t border-slate-200 pt-2.5">
+                <h4 className="text-[12px] font-bold text-gray-900">My sets</h4>
+                <ul className="mt-2 flex flex-wrap gap-1.5">
+                  {cat.sets.map(s => (
+                    <li key={s.id}>
+                      <button type="button" data-step="add-set" className={CHIP} disabled={busy}
+                        onClick={() => addSet(s.itemIds)}>
+                        {s.name}
+                        <span className="ml-1 text-[10px] font-medium text-gray-500">
+                          {s.itemIds.length} item{s.itemIds.length === 1 ? "" : "s"}
+                          {s.ownerType === "practice" ? " · shared" : ""}
                         </span>
                       </button>
                     </li>
-                  );
-                })}
-              </ul>
+                  ))}
+                </ul>
+                <p className="mt-1.5 text-[11px] text-gray-600">{SETS_NOT_A_RECOMMENDATION}</p>
+              </div>
             )}
-            <p className="mt-1.5 text-[10px] text-gray-500">{QUICK_ADD_NOT_A_RECOMMENDATION}</p>
           </div>
 
-          {/* ══ MY SETS -- s3 and s5 ════════════════════════════════════════════════════════════ */}
-          {cat.sets.length > 0 && (
-            <div className={`${CARD} mt-3`}>
-              <h4 className="text-[12px] font-bold text-gray-900">My sets</h4>
-              <ul className="mt-2 flex flex-wrap gap-1.5">
-                {cat.sets.map(s => (
-                  <li key={s.id}>
-                    <button type="button" data-step="add-set" className={CHIP} disabled={busy}
-                      onClick={() => addSet(s.itemIds)}>
-                      {s.name}
-                      <span className="ml-1 text-[9px] font-medium text-gray-400">
-                        {s.itemIds.length} item{s.itemIds.length === 1 ? "" : "s"}
-                        {s.ownerType === "practice" ? " · shared" : ""}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-1.5 text-[10px] text-gray-500">{SETS_NOT_A_RECOMMENDATION}</p>
-            </div>
-          )}
-
-          {/* ══ THE PENDING SELECTION -- s4's footer, always showing the count ════════════════════ */}
-          <div className={`${CARD} mt-3`}>
+          {/* ══ BAND 4 (s3, s4, s12): THE ACTIVE WORK ═════════════════════════════════════════════
+              s3: "keep the active working list in the same pale-lavender active-work band used in
+              Treatment and Procedures", and s16 makes matching that language an acceptance criterion.
+              The band constant is the SAME import both sibling tabs use, so the three cannot drift. */}
+          <div className={`${BAND_WORK} mt-3 p-4`}>
             <div className="flex items-center gap-2 flex-wrap">
               <h4 className="text-[12px] font-bold text-gray-900">
                 {pending.length === 0 ? "Nothing selected yet" : `${pending.length} selected`}
@@ -440,39 +492,75 @@ export default function InvestigationCapture(props: {
 
             {pending.length > 0 && (
               <ul className="mt-2 flex flex-col gap-1">
-                {pending.map((p, i) => (
-                  <li key={`${p.id ?? p.label}-${i}`} className="rounded-lg bg-gray-50 px-2.5 py-1.5">
+                {pending.map((p, i) => {
+                  const ready = readinessOf(p);
+                  return (
+                  <li key={`${p.id ?? p.label}-${i}`} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[12px] font-semibold text-gray-800">{p.label}</span>
                       {p.again && (
-                        <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-700">
+                        <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
                           repeat
                         </span>
                       )}
-                      <button type="button" className="ml-auto text-[11px] font-semibold text-gray-500 hover:underline"
+                      {/* ⚠ s8's READINESS INDICATOR, AND s12 GIVES IT A WORD AS WELL AS A COLOUR. Green
+                          for ready, amber for outstanding -- s12 reserves red for a true blocking or
+                          critical state, and a missing clinical question is neither. */}
+                      <span className={`ml-auto rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${ready.ready
+                        ? "border-emerald-200 bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
+                        : "border-amber-300 bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>
+                        {ready.ready ? "✓ Ready" : `⚠ Needs ${ready.missing.join(", ")}`}
+                      </span>
+                      {/* s15: Add / Remove / Review stay spatially distinct. Remove is the only
+                          destructive control on the item and it sits alone at the end of the row. */}
+                      <button type="button"
+                        aria-label={`Remove ${p.label} from the selection`}
+                        className="rounded-lg px-1.5 py-0.5 text-[11px] font-semibold text-gray-500 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                         onClick={() => setPending(list => list.filter((_, n) => n !== i))}>
                         Remove
                       </button>
                     </div>
-                    {/* s6: an individual item may override the shared reason. It is never demanded. */}
-                    <input className={`${input} mt-1`} value={p.reasonOverride}
+                    {/* s6: an individual item may override the shared reason. It is never demanded --
+                        unless this practice requires one and no shared reason has been given, which is
+                        the single configured requirement the catalogue can express today. */}
+                    <input className={`${input} mt-1 ${ready.ready ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`}
+                      value={p.reasonOverride}
+                      aria-label={`Clinical question for ${p.label}`}
                       onChange={e => setPending(list => list.map((x, n) => n === i ? { ...x, reasonOverride: e.target.value } : x))}
                       placeholder="A different clinical question for this one (optional)" />
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
 
             {/* s6: ONE shared reason for the whole selection, never retyped per item. */}
-            <input className={`${input} mt-2`} value={reasonShared} onChange={e => setReasonShared(e.target.value)}
+            <input className={`${input} mt-2 ${cat.settings.investigationReasonRequired && blocked > 0
+              ? "border-amber-300 bg-[var(--cmp-surface-warning)]" : ""}`}
+              value={reasonShared} onChange={e => setReasonShared(e.target.value)}
+              aria-label="Clinical question for all of these"
               placeholder={cat.settings.investigationReasonRequired
                 ? "Clinical question for all of these (required by this practice)"
                 : "Clinical question for all of these (optional)"} />
 
-            <button type="button" data-step="confirm-add" className={`${BTN} mt-2`}
-              disabled={busy || pending.length === 0} onClick={confirmAdd}>
-              {busy ? "Recording…" : `Add ${pending.length || ""} investigation${pending.length === 1 ? "" : "s"}`}
-            </button>
+            {/* ⚠ s15: "make the wrong action difficult or impossible". This button used to be enabled
+                whenever anything was selected, so a practice that requires a clinical question sent the
+                whole batch, got one 422, and was told nothing had been recorded -- after filling the
+                screen. The refusal is now pre-empted, and the sentence beside the button says WHY it is
+                disabled, because a disabled control that cannot explain itself reads as a broken
+                product. That defect was reported on the Treatment tab and is not repeated here. */}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button type="button" data-step="confirm-add" className={BTN}
+                disabled={busy || pending.length === 0 || blocked > 0} onClick={confirmAdd}>
+                {busy ? "Recording…" : `Add ${pending.length || ""} investigation${pending.length === 1 ? "" : "s"}`}
+              </button>
+              {blocked > 0 && (
+                <span className="text-[11.5px] text-[var(--cmp-text-warning)]">
+                  {blocked === 1 ? "One investigation still needs" : `${blocked} investigations still need`}{" "}
+                  a clinical question &mdash; give one above for all of them, or one on each.
+                </span>
+              )}
+            </div>
 
             {refused.length > 0 && (
               <div className="mt-2 rounded-lg bg-[var(--cmp-surface-warning)] px-2.5 py-2">

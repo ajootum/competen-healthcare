@@ -82,6 +82,43 @@ export const QUICK_ADD_REASON_CODES = QUICK_ADD_REASONS.map(r => r.code);
 export const QUICK_ADD_REASON_LABEL: Record<string, string> =
   Object.fromEntries(QUICK_ADD_REASONS.map(r => [r.code, r.label]));
 
+/**
+ * CPR-INV-HFE-006 s8's readiness state, and s15's "make the wrong action difficult".
+ *
+ * ⚠ AN ADVISORY MIRROR OF ONE SERVER RULE, AND ONLY ONE. `recordInvestigations` refuses a batch when
+ * this practice requires a clinical question and neither a shared reason nor a reason on every item is
+ * present. Until today that refusal arrived as a 422 AFTER the click -- the practitioner filled a
+ * screen, pressed Add, and was told the whole batch was rejected. s8 wants the state visible per item
+ * beforehand.
+ *
+ * ⚠ THE SERVER'S CONDITION IS A SET-LEVEL ONE AND THIS IS A PER-ITEM ONE, AND THEY ARE EQUIVALENT.
+ * investigations.ts refuses when `!reasonShared && !items.every(i => i.reasonOverride)`. Turned around:
+ * it ACCEPTS iff a shared reason exists, OR every item carries its own. Marking an item unready exactly
+ * when it has neither makes "nothing is unready" mean "shared, or every item has one" -- the same
+ * sentence. The screen therefore blocks precisely the batches the engine would refuse, and no others.
+ *
+ * ⚠ AN EARLIER VERSION TOOK AN `everyItemHasReason` FLAG AND IT WAS DEAD CODE. If every item carries a
+ * reason then THIS item carries one, so the branch above it had already returned. The break-test found
+ * it: deleting the branch changed no assertion, which is the signature of a rule doing no work. A
+ * redundant condition in a safety mirror is worse than none -- it implies a rule is being enforced
+ * somewhere it is not, and the next person to change the server rule will maintain both.
+ *
+ * ⚠ AND THERE IS NOTHING ELSE TO CHECK YET, WHICH IS THE HONEST ANSWER. s9's per-investigation fields --
+ * specimen, body region, laterality, study subtype, contrast -- do not exist in the catalogue schema, so
+ * no configured requirement can be missing. This function grows when CPR-INV-CAT-007 lands, and it
+ * would be dishonest to draw readiness chips implying more is being checked than is.
+ */
+export function investigationReadiness(args: {
+  reasonOverride: string;
+  reasonShared: string;
+  reasonRequired: boolean;
+}): { ready: boolean; missing: string[] } {
+  if (!args.reasonRequired) return { ready: true, missing: [] };
+  if (args.reasonShared.trim()) return { ready: true, missing: [] };
+  if (args.reasonOverride.trim()) return { ready: true, missing: [] };
+  return { ready: false, missing: ["a clinical question"] };
+}
+
 // ── THE FOUR CONFIGURABLE WORKFLOW SETTINGS (migration 275, practice_capture_setting) ────────────────
 //
 // CPR-INV-001 s6 and s11 and CPR-TREAT-001 s5 each make one behaviour practice-configurable. The

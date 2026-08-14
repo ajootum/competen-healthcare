@@ -51,6 +51,7 @@ import {
 } from "../src/lib/practice/treatment-capture";
 import {
   rankInvestigations, scoreInvestigation, INVESTIGATION_MATCH_SCORE, INVESTIGATION_BOUNDARY,
+  investigationReadiness,
 } from "../src/lib/practice/investigation-constants";
 import { TREATMENT_BOUNDARY, OTHER_OPTION_CODE } from "../src/lib/practice/treatment-capture-constants";
 import { allergyLine } from "../src/lib/practice/longitudinal-constants";
@@ -968,9 +969,97 @@ async function main() {
   });
   ok("8-11. CONTROL: the same batch WITH a reason is accepted",
     withReason.ok && withReason.data.recorded === 1, withReason.ok ? "" : withReason.message);
+  // ⚠ THE SERVER ACCEPTS A REASON ON EVERY ITEM AS AN ALTERNATIVE TO A SHARED ONE, and the screen's
+  // readiness rule has to know that. Proven live, because the mirror below is asserted against these
+  // three outcomes rather than against a hand-written expectation.
+  const perItemReasons = await addInvestigations(admin, ctx, {
+    encounterId: encounterId,
+    items: [
+      { investigationId: library.selectable[6].id, reasonOverride: "first question" },
+      { investigationId: library.selectable[7].id, reasonOverride: "second question" },
+    ],
+    ...base,
+  });
+  ok("8-10b. a reason on EVERY item is accepted instead of a shared one",
+    perItemReasons.ok, perItemReasons.ok ? "" : `${perItemReasons.code}: ${perItemReasons.message}`);
+  // ⚠ AND A REASON ON ONLY SOME OF THEM IS NOT. A clinical question covering half a batch does not
+  // cover the batch, and this is the case a naive per-item client rule would have called ready.
+  const someReasons = await addInvestigations(admin, ctx, {
+    encounterId: encounterId,
+    items: [
+      { investigationId: library.selectable[8].id, reasonOverride: "only this one has a question" },
+      { investigationId: library.selectable[9].id },
+    ],
+    ...base,
+  });
+  ok("8-10c. a reason on SOME items is refused (the all-or-shared rule)",
+    !someReasons.ok && someReasons.code === "REASON_REQUIRED",
+    someReasons.ok ? "was allowed" : someReasons.code);
+
+  // ── CPR-INV-HFE-006 s8: THE SCREEN'S READINESS MIRRORS THAT RULE, AND IS TESTED AGAINST IT ──────
+  //
+  // ⚠ THE SHAPE OF THIS RULE IS ODD AND THE ODDNESS IS THE POINT. "A shared reason, OR one on EVERY
+  // item" is not the same as "every item needs a reason", and a client that implemented the simpler
+  // sentence would block a legitimate shared-reason batch -- the practitioner stuck with a patient in
+  // front of them, which is the unsurvivable direction of a client/server disagreement.
+  // ⚠ TESTED AT THE LEVEL THE RULE LIVES AT: A WHOLE SELECTION, NOT ONE ITEM. The engine's condition is
+  // set-level ("a shared reason, OR one on EVERY item"); the screen's is per-item. The two are
+  // equivalent only in AGGREGATE, so an assertion on a single item cannot prove the equivalence -- and
+  // the first version of this block did exactly that, which is why it could not tell that a whole
+  // branch of investigationReadiness was dead code. `blocked` below is computed the way the component
+  // computes it.
+  const blockedFor = (shared: string, overrides: string[], required: boolean) =>
+    overrides.filter(o =>
+      !investigationReadiness({ reasonOverride: o, reasonShared: shared, reasonRequired: required }).ready).length;
+
+  ok("8-10d. s8: a SHARED-reason selection blocks nothing -- and the server accepted that batch",
+    blockedFor("rule out anaemia", ["", ""], true) === 0 && withReason.ok === true);
+  ok("8-10e. s8: a reason on EVERY item blocks nothing -- and the server accepted that batch",
+    blockedFor("", ["first question", "second question"], true) === 0 && perItemReasons.ok === true);
+  // ⚠ THE CASE THAT SEPARATES THE TWO RULES. Some items with reasons and no shared one: the engine
+  // refuses the batch, and the screen must block it -- naming the ONE item that is short rather than
+  // condemning the whole selection.
+  ok("8-10f. s8: a reason on SOME items blocks exactly the one that lacks it -- and the server refused",
+    blockedFor("", ["only this one has a question", ""], true) === 1
+      && someReasons.ok === false && noReason.ok === false,
+    `blocked=${blockedFor("", ["x", ""], true)}`);
+  ok("8-10f2. and the block names what is missing, in words (s12: never colour alone)",
+    investigationReadiness({ reasonOverride: "", reasonShared: "", reasonRequired: true })
+      .missing.join() === "a clinical question");
+  // ⚠ CONTROL: with the practice setting OFF, nothing is ever blocked. Without it the three above pass
+  // just as well if the function returned "not ready" for everything.
+  ok("8-10g. control: with the requirement off, a selection with no questions blocks nothing",
+    blockedFor("", ["", ""], false) === 0);
+
   await setCaptureSetting(admin, ctx, { key: "investigation_reason_required", value: "false", ...base });
   const settingsBack = await captureSettings(admin, ctx.workspaceId);
   ok("8-12. the setting round-trips through the store", settingsBack.investigationReasonRequired === false);
+
+  // ── CPR-INV-HFE-006 s3/s12/s16: THE BAND LANGUAGE MATCHES ITS SIBLING TABS ──────────────────────
+  //
+  // ⚠ s16 MAKES THIS AN ACCEPTANCE CRITERION, NOT A PREFERENCE: "the active-work band matches the
+  // Treatment and Procedures HFE visual language." This tab drew Quick add, My sets, the working list
+  // and the picker in one identical CARD -- four surfaces at one volume on the tab whose whole job is
+  // to say which one is the task. The assertion is on the shared IMPORT rather than on any class
+  // string, because that is the only thing that keeps three tabs from drifting apart again.
+  const invBandSrc = src(`${ENC_DIR}/InvestigationCapture.tsx`);
+  ok("8-13. s3: the investigations tab uses the SHARED band constants, not its own copies",
+    /encounter-band-constants/.test(invBandSrc)
+      && ["BAND_RECORD", "BAND_SHORTCUTS", "BAND_WORK"].every(b => invBandSrc.includes(b)));
+  ok("8-13b. and all three capture tabs import them from the same place (s17's siblings)",
+    [`${ENC_DIR}/TreatmentCapture.tsx`, `${ENC_DIR}/ProcedureWorkspace.tsx`, `${ENC_DIR}/InvestigationCapture.tsx`]
+      .every(f => /encounter-band-constants/.test(src(f))));
+  // s6: the three shortcut reasons are GROUPS now, and the grouping is driven by the engine's own
+  // ordered vocabulary so the screen cannot rank them differently from rankQuickAdd.
+  ok("8-14. s6: quick add is grouped by reason, from QUICK_ADD_REASONS itself",
+    /QUICK_ADD_REASONS\.map/.test(invBandSrc) && /q\.reason === code/.test(invBandSrc));
+  // ⚠ s15: the commit is pre-empted rather than left to a 422. The old button was disabled only on an
+  // empty selection, so a practice requiring a clinical question filled the screen, pressed Add, and
+  // was told the whole batch had been rejected.
+  ok("8-15. s15: the add button is blocked by unresolved requirements, not only by an empty selection",
+    /disabled=\{busy \|\| pending\.length === 0 \|\| blocked > 0\}/.test(invBandSrc));
+  ok("8-15b. and the sentence beside it says why (a disabled button that cannot explain itself)",
+    /still need/.test(invBandSrc) && /still needs/.test(invBandSrc));
 
   // ══ 9. BATCH REVIEW, AND NOT PURSUED ══════════════════════════════════════════════════════════
   section("9. batch review and not pursued (CPR-INV-001 s8, s9)");
