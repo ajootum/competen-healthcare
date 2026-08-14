@@ -615,6 +615,34 @@ async function main() {
   ok("7-32. the shortcut panel appears for a practice that has only non-medication shortcuts",
     /medShortcuts\.length > 0 \|\| otherShortcuts\.length > 0/.test(capSrcTreat));
 
+  // ── CPR-HFE-TRT-004: THE FOUR BANDS, AND THE COLOUR RULES THAT ARE EASY TO REGRESS ──────────────
+  //
+  // ⚠ THESE GUARD SAFETY MEANING, NOT AESTHETICS. s4 assigns each colour family a job, and the failure
+  // mode this document exists to prevent is habituation: if amber appears on ordinary rows, the day it
+  // means something nobody looks. A visual refactor is exactly when that slips back in.
+  const tableSrc = src("src/components/practice/ClinicalRecordTable.tsx");
+  ok("7-38. s3: the workspace has four distinguishable cognitive bands",
+    ["BAND_RECORD", "BAND_SAFETY_OK", "BAND_SHORTCUTS", "BAND_WORK"].every(b => capSrcTreat.includes(b)));
+  // ⚠ s12: "Do not use amber for neutral missing optional information." The band turns amber for an
+  // open alert or an unanswered allergy question -- never for a vital nobody recorded.
+  ok("7-39. s12: the safety band turns amber only for a real alert or an unanswered allergy question",
+    /alertsChip\.tone === "warn" \|\| allergyVerdict === "flagged"/.test(capSrcTreat)
+      && !/vitalsChip\.tone === "unknown"/.test(capSrcTreat),
+    "amber on ordinary missing data is how a practitioner learns to stop seeing amber");
+  // ⚠ s4/s13: every semantic colour needs a text or icon equivalent. The band says its verdict in words.
+  ok("7-40. s13: the safety band states its verdict in words, not only in colour",
+    /needs a look/.test(capSrcTreat) && /no alerts/.test(capSrcTreat));
+  // ⚠ s5: "Hover/focus state must be visibly stronger than passive zebra banding", and focus-within so a
+  // keyboard user gets what a mouse user gets.
+  ok("7-41. s5: the row hover/focus state is stronger than the zebra, and reaches keyboard users",
+    /focus-within:bg-\[var\(--cp-primary\)\]/.test(tableSrc));
+  // ⚠ s5: "different treatment rows should not receive arbitrary decorative colours". The accent map is
+  // keyed on ROW STATE, so a colour can only ever mean the state it is named for.
+  ok("7-42. s5: the left accent is keyed on row STATE, never on row position or identity",
+    /const ACCENT: Record<RowState, string>/.test(tableSrc)
+      && !/ACCENT\[i % /.test(tableSrc) && !/ACCENT\[index/.test(tableSrc),
+    "a per-row decorative colour would be read as clinical severity");
+
   // ── THE dose_unit SWEEP ─────────────────────────────────────────────────────────────────────────
   //
   // ⚠ A CODEBASE AUDIT FOUND THE UNIT DROPPED IN NINE PLACES, not the two that were found by eye. The

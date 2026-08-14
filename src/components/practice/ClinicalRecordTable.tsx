@@ -136,14 +136,24 @@ export function ClinicalRecordTable<T>({ columns, records, empty, label }: {
             // tint would make one warning look like two different colours depending on whether it
             // landed on an odd or an even row -- s4's "warning overrides banding", literally.
             const painted = overridesBanding(state) || state === "primary" || state === "selected";
-            const zebra = painted ? "" : i % 2 === 1 ? "bg-gray-50/60" : "bg-white";
+            // ⚠ CPR-HFE-TRT-004 s5: "white and a very pale blue-grey/neutral tint; do not use saturated
+            // alternating colours". Blue-grey rather than the neutral grey this used, so the banding
+            // reads as structure rather than as a dimmed row -- and s5's purpose is stated plainly:
+            // "prevent line-jumping across columns" on a seven-column table.
+            const zebra = painted ? "" : i % 2 === 1 ? "bg-slate-50/70" : "bg-white";
             const rowClass = `border-l-[3px] transition-colors ${SURFACE[state]} ${zebra}`;
             return (
               // ⚠ ONE RECORD IS ONE <tbody>, NOT TWO LOOSE ROWS. The second line is a row of its own so
               // the columns above it stay aligned, and grouping the pair keeps "one record, one row"
               // true for a screen reader and for the zebra, which counts records rather than lines.
               <tbody key={r.id} className="border-t border-gray-100">
-                <tr style={{ borderLeftColor: ACCENT[state] }} className={`${rowClass} hover:bg-gray-50/80`}>
+                {/* ⚠ s5: "Hover/focus state must be visibly stronger than passive zebra banding." The
+                    old hover was gray-50/80 against a gray-50/60 zebra -- a two-percent difference that
+                    told a practitioner nothing about which row the pointer was on. Indigo, because s4
+                    gives indigo to interaction, and focus-within so a keyboard user reaching the row
+                    actions gets the same signal a mouse user gets (s13). */}
+                <tr style={{ borderLeftColor: ACCENT[state] }}
+                  className={`${rowClass} hover:bg-[var(--cp-primary)]/[0.07] focus-within:bg-[var(--cp-primary)]/[0.07]`}>
                   {columns.map((c, ci) => (
                     <td key={c.key}
                       className={`${REC_TD} ${c.align === "right" ? "text-right whitespace-nowrap" : ""} ${

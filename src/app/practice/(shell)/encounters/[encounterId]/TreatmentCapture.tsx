@@ -57,6 +57,35 @@ import {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const CARD = "rounded-xl border border-gray-200 bg-white p-3.5";
+
+// ══ CPR-HFE-TRT-004 s3: THE FOUR COGNITIVE BANDS ═══════════════════════════════════════════════════
+//
+// One surface per task, so the eye can find "where do I read" and "where do I work" without reading a
+// word. s6: "Banding should separate cognitive tasks, not create a rainbow interface. Large saturated
+// surfaces are prohibited for routine states." Every tint below is a wash, not a colour.
+//
+// ⚠ THE SPEC AND THE COMP DISAGREE, AND I HAVE FOLLOWED THE SPEC. The picture gives each treatment row
+// its own left-edge colour -- Bisoprolol indigo, Paracetamol green, Amlodipine AMBER -- on three rows
+// whose status is identical: all Planned, all "No alerts". s5 forbids exactly that ("different treatment
+// rows should not receive arbitrary decorative colours"), s12 says why ("do not allow decorative row
+// colours to be mistaken for clinical severity"), and s4's own table reserves amber for "caution /
+// review". An amber edge on a row with nothing wrong is the habituation this document exists to
+// prevent: the day a row IS amber for a reason, it looks like the other three.
+//
+// So the SEMANTIC scheme from the comp is adopted in full -- indigo for interaction, green for a known
+// normal state, amber for caution, navy/blue-grey for ordinary information -- and the per-row rainbow
+// is not. If the owner wants the decorative accents anyway, it is one line in ClinicalRecordTable and
+// I would rather be told than assume.
+
+/** Band 1, the clinical record: the strongest data-table alignment, on the palest surface. */
+const BAND_RECORD = "rounded-xl border border-slate-200 bg-white";
+/** Band 2, safety: pale green-neutral at rest, amber only when attention is genuinely required. */
+const BAND_SAFETY_OK = "rounded-xl border border-emerald-200 bg-emerald-50/40";
+const BAND_SAFETY_ATTENTION = "rounded-xl border border-amber-300 bg-[var(--cmp-surface-warning)]";
+/** Band 3, shortcuts: deliberately subordinate. It is a convenience, not part of the record. */
+const BAND_SHORTCUTS = "rounded-xl border border-slate-200 bg-slate-50/70";
+/** Band 4, the active work: the strongest boundary on the page, because it is the current task. */
+const BAND_WORK = "rounded-xl border-2 border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/[0.04]";
 const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 const BTN = "rounded-lg bg-[var(--cp-primary)] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50";
 const QUIET = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50";
@@ -210,6 +239,7 @@ export default function TreatmentCapture(props: {
   // own way is precisely the drift that made command-centre.ts and session.ts disagree about "overdue"
   // on two screens a click apart, with nothing failing because each was right against itself.
   const { vitals: vitalsChip, alerts: alertsChip } = safetyChips(props.collection);
+
 
   // ── s19's EDIT AND REMOVE, on a card that is already in the record ───────────────────────────────
   //
@@ -484,6 +514,14 @@ export default function TreatmentCapture(props: {
     props.allergyLine.tone === "none" ? "clear"
       : props.allergyLine.tone === "present" ? "flagged"
         : "unknown";
+  // ⚠ CPR-HFE-TRT-004 s7 AND s12: WHAT MAKES THE SAFETY BAND TURN AMBER. An open parameter alert, or an
+  // allergy question nobody has answered. NOT missing optional data -- "vitals not recorded" is the
+  // ordinary state of most consultations, and s12 forbids amber for it in as many words. If everything
+  // merely unknown turned this band amber it would be amber every day, and the day it meant something
+  // nobody would see it.
+  const safetyNeedsAttention = alertsChip.tone === "warn" || allergyVerdict === "flagged"
+    || !props.allergyLine.safeToRead;
+
   const weightTone = WEIGHT_TONE[med.weight.state] ?? { chip: NOT_CHECKED_TONE, mark: "-", label: NOT_CHECKED_LABEL };
 
   const needsWeight = calc.basis === "mg_per_kg" || calc.basis === "mg_per_kg_per_day" || calc.basis === "mg_per_m2";
@@ -572,7 +610,11 @@ export default function TreatmentCapture(props: {
           safety context it was written under, which is two lines per item -- squeezed into a table row
           the regimen truncates and the safety has nowhere to go. The owner's comp draws cards for
           exactly that reason. I built a table here first and it moved the tab away from the design. */}
-      <div className="mt-3">
+      {/* ⚠ BAND 1, THE CLINICAL RECORD (s3). White surface, strongest table alignment, and its own
+          boundary so the recorded treatments read as one perceptual group rather than as rows floating
+          between the boundary notice above and the safety band below. This is what a practitioner is
+          meant to find first, so it is the only band that is pure white. */}
+      <div className={`${BAND_RECORD} mt-3 overflow-hidden`}>
         <ClinicalRecordTable
           label="Treatments recorded in this encounter"
           columns={TREATMENT_COLUMNS}
@@ -632,13 +674,27 @@ export default function TreatmentCapture(props: {
           Rendering this only when `safetyOpen` would have removed the NKDA control from the page and
           quietly turned assertion 7b-7 -- "answering the common case is ONE tap" -- into a lie.
           Each card's Review opens this rather than repeating it: one patient, one safety panel. */}
+      {/* ⚠ BAND 2, AND ITS COLOUR IS EARNED RATHER THAN DECORATIVE (s6, s7). Pale green while nothing
+          needs attention, amber ONLY when something does -- an unresolved allergy question or an open
+          parameter alert, never merely missing optional data. s12: "Do not use amber for neutral
+          missing optional information."
+          ⚠ AND THE COLOUR IS NOT THE MESSAGE. s4 and s13 both require a text or icon equivalent, so the
+          summary line states the verdict in words either way. */}
       <details id="treatment-safety" open={safetyOpen}
-        className="mt-3 rounded-xl border border-gray-200 bg-white"
+        className={`mt-3 ${safetyNeedsAttention ? BAND_SAFETY_ATTENTION : BAND_SAFETY_OK}`}
         onToggle={e => setSafetyOpen((e.currentTarget as HTMLDetailsElement).open)}>
-        <summary className="cursor-pointer px-3 py-2 text-[12px] font-semibold text-gray-700">
+        <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-3 py-2.5 text-[12.5px] font-bold text-gray-800">
+          <span aria-hidden="true" className={safetyNeedsAttention
+            ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"}>
+            {safetyNeedsAttention ? "⚠" : "✓"}
+          </span>
           Patient safety for prescribing
+          <span className={`text-[11.5px] font-semibold ${safetyNeedsAttention
+            ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"}`}>
+            {safetyNeedsAttention ? "needs a look" : "no alerts"}
+          </span>
         </summary>
-        <div className="border-t border-gray-100 p-3">
+        <div className="border-t border-emerald-100 bg-white/70 p-3">
 
         {/* == THE ALLERGY LINE, AND THE TWO ACTIONS THAT ANSWER IT ==============================
             WARNING: THIS WAS A DEAD END UNTIL NOW, AND THAT IS THE DEFECT BEING FIXED. The store
@@ -920,7 +976,10 @@ export default function TreatmentCapture(props: {
               the shortcut panel at all -- and therefore never reach the "Other treatments" filter that
               exists for exactly them. The gate has to match what the panel can now hold. */}
           {(medShortcuts.length > 0 || otherShortcuts.length > 0) && (
-            <div className={`${CARD} mt-3`}>
+            // ⚠ BAND 3, DELIBERATELY SUBORDINATE (s3). These are a typing convenience, not part of the
+            // clinical record, and they sit between the record and the work the practitioner came to
+            // do. A shortcut panel that competes with either is a shortcut panel that costs attention.
+            <div className={`${BAND_SHORTCUTS} mt-3 p-3.5`}>
               {/* ⚠ CP-TREAT-002 s8: renamed from "What you prescribe most". Treatment is the parent
                   concept now and medication is one subtype, so a heading built on the word "prescribe"
                   quietly excludes the wound care, physiotherapy and diet shortcuts the same area is
@@ -1023,9 +1082,14 @@ export default function TreatmentCapture(props: {
           {/* ══ THE BUILDER -- s3 and s5 ═════════════════════════════════════════════════════════
               The id is the header action's target. A "+ Add treatment" button that scrolled to nothing
               would be the same class of defect as a disabled button that cannot say why. */}
-          <div id="treatment-composer" className={`${CARD} mt-3`}>
-            <h4 className="text-[12px] font-bold text-gray-900">Add a treatment</h4>
-            <p className="mt-0.5 text-[11.5px] text-gray-500">Choose what you want to add</p>
+          {/* ⚠ BAND 4, AND IT IS THE LOUDEST THING ON THE PAGE ON PURPOSE (s3, s8). "The active
+              documentation task must be visually dominant" -- this is where the practitioner is
+              working, so it gets the strongest boundary and the only 2px border in the workspace.
+              A pale indigo wash rather than a saturated fill: s6 prohibits large saturated surfaces
+              for routine states, and composing a treatment is the most routine thing here. */}
+          <div id="treatment-composer" className={`${BAND_WORK} mt-3 p-4`}>
+            <h4 className="text-[13.5px] font-bold text-gray-900">Add a treatment</h4>
+            <p className="mt-0.5 text-[11.5px] text-gray-600">Choose what you want to add</p>
 
             {/* s3's types, CONFIGURED. Nothing in this component knows what a treatment type is. */}
             {opts("treatment_type").length === 0 ? (
