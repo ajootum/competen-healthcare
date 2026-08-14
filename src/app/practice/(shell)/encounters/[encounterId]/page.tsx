@@ -13,6 +13,9 @@ import {
 import { listTemplates, noteHistory, listDocuments } from "@/lib/practice/documentation";
 import { listPhrases, listAttachments, myDrafts } from "@/lib/practice/documentation-tools";
 import { listFollowUps, listIntervals } from "@/lib/practice/follow-ups";
+import { listPlanTemplates } from "@/lib/practice/follow-up-plans";
+import { listFacilities } from "@/lib/practice/facilities";
+import { getPatient } from "@/lib/practice/patients";
 import { listProcedures, listProcedureTypes } from "@/lib/practice/procedures";
 import { frequentProcedures } from "@/lib/practice/procedure-capture";
 import { logAccess } from "@/lib/practice/privacy";
@@ -110,7 +113,7 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
   // attach it to.
   const [
     templates, noteVersions, documents, followUpList, intervals, procedures, procedureTypes,
-    frequentProcs,
+    frequentProcs, planTemplates, facilities, patientDetail,
     phrases, attachments, draftState, snapshot, session, practitioner,
   ] = await Promise.all([
     listTemplates(admin, shell.ctx.workspaceId, { kind: "encounter_note" }),
@@ -123,6 +126,15 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
     // CPR-PROC-HFE-005 s6. Derived from what this practice has recorded, not from the catalogue --
     // a shortcut list built from the catalogue is the catalogue in a smaller font.
     frequentProcedures(admin, shell.ctx, shell.ctx.userId),
+    // CPR-FUP-HFE-008 s15. The templates engine has existed since migration 206 and NOTHING in the
+    // encounter surface has ever reached it.
+    listPlanTemplates(admin, shell.ctx.workspaceId),
+    // s6's Location.
+    listFacilities(admin, shell.ctx),
+    // ⚠ FOR s10's BOOKING LINK, AND IT IS A READ OF EXISTING APPOINTMENTS RATHER THAN A BOOKING
+    // FLOW. getPatient returns the patient's last 25 appointments; the tab filters them to live and
+    // future ones. See EncounterConsole for why linking beats booking here.
+    getPatient(admin, shell.ctx.workspaceId, encounter.patient_id),
     // CPR-130 (migration 207). The drafts are the CALLER's own -- myDrafts takes the actor and has no
     // parameter that would return anybody else's unsaved text.
     listPhrases(admin, shell.ctx.workspaceId, shell.ctx.userId),
@@ -431,6 +443,16 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
           // sentence this product can get wrong. page.tsx passed only `.items`, so the tab printed
           // "Nothing is owed to this patient. This was read successfully" over a read that had FAILED.
           followUpsUnavailable={followUpList.unavailable}
+          planTemplates={planTemplates}
+          facilities={facilities}
+          // ⚠ FILTERED TO LIVE AND FUTURE HERE, ON THE SERVER, because scheduleFollowUp refuses anything
+          // else by name -- offering a cancelled or past appointment would be drawing a control whose
+          // only outcome is a 422. getPatient returns the last 25 in either direction.
+          patientAppointments={((patientDetail as any)?.appointments ?? []).filter((a: any) =>
+            ["REQUESTED", "CONFIRMED", "ARRIVED"].includes(a.status)
+            && String(a.scheduled_at) >= new Date().toISOString())}
+          currentUserId={shell.ctx.userId}
+          canBook={hasCapability(shell.ctx, "appointment.manage")}
           intervals={intervals}
           procedures={procedures}
           procedureTypes={procedureTypes}

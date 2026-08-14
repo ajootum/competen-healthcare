@@ -100,6 +100,22 @@ export const FOLLOW_UP_KINDS = [
 export const FOLLOW_UP_PRIORITIES = ["routine", "soon", "urgent"] as const;
 
 /**
+ * CPR-FUP-HFE-008 s6/s10 (migration 299): HOW the obligation is meant to be fulfilled.
+ *
+ * ⚠ THIS IS AN INTENTION AND NEVER A BOOKING. s10: "follow-up type describes how the obligation is
+ * expected to be fulfilled; it does NOT prove fulfillment has been scheduled", and s22 makes
+ * "booking does not imply clinical completion" an acceptance criterion. The column that says a visit
+ * exists is appointment_id, set only by scheduleFollowUp and cleared by migration 196's trigger if
+ * that appointment dies. A screen that read `appointment` as `booked` would be claiming a visit exists
+ * because somebody chose a word in a dropdown.
+ */
+export const FOLLOW_UP_TYPES = ["appointment", "review", "contact", "other"] as const;
+
+export const FOLLOW_UP_TYPE_LABELS: Record<string, string> = {
+  appointment: "Appointment", review: "Review", contact: "Contact", other: "Other",
+};
+
+/**
  * CPR-140's outcome taxonomy (migration 206). Fixed, because the point of it is COUNTING -- "how did the
  * last thirty post-op reviews turn out" is not answerable over free text.
  *

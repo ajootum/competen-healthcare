@@ -7,6 +7,7 @@ import { DOC_TYPES } from "@/lib/practice/document-constants";
 import {
   FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES, FOLLOW_UP_STATUS_LABELS, FOLLOW_UP_TAB_FILTERS,
   FOLLOW_UP_PRIORITY_CHIP, FOLLOW_UP_PRIORITY_GLYPH, followUpSummary,
+  FOLLOW_UP_TYPES, FOLLOW_UP_TYPE_LABELS,
 } from "@/lib/practice/follow-up-constants";
 // ⚠ THE PROCEDURE VOCABULARIES MOVED TO ProcedureWorkspace WITH THE FORM. Only what this file still
 // renders stays imported -- a vocabulary imported here and used nowhere is the next person's evidence
@@ -90,6 +91,26 @@ const FOLLOW_UP_COLUMNS: RecordColumn<any>[] = [
           : (FOLLOW_UP_STATUS_LABELS[f.status] ?? f.status ?? "").toLowerCase()}
       </span>
     ) },
+  // s12's Assigned to, real from migration 299 onwards.
+  //
+  // ⚠ "UNASSIGNED" IS PRINTED, NOT LEFT BLANK. s11: "every trackable follow-up should have an
+  // accountable owner where workflow requires one." An empty cell reads as a rendering gap; the word
+  // reads as a fact, and it is the fact somebody needs to see before closing a consultation.
+  // ⚠ THE COLUMN TAKES THE VIEWER'S OWN ID, because "a practitioner" is not accountability. There is no
+  // member directory in the practice plane to resolve a uuid to a name, so the honest vocabulary is
+  // three words: You, a queue by its own name, or somebody else. Printing the uuid would be worse than
+  // either, and the first draft of this column said "a practitioner" for every assignment including
+  // the reader's own -- which answers the question "is this mine?" with "no comment".
+  { key: "assigned", label: "Assigned to", priority: "secondary",
+    render: f => f.assigned_queue
+      ? <span className="text-[11.5px] text-gray-700">{f.assigned_queue} <span className="text-gray-500">(queue)</span></span>
+      : f.assigned_to
+        ? (
+          <span className="text-[11.5px] text-gray-700">
+            {f.assigned_to === f.__viewer ? "You" : "Another practitioner"}
+          </span>
+        )
+        : <span className="text-[11.5px] text-gray-500">Unassigned</span> },
 ];
 
 // CP-UI-TABLE-001 s5: Document | Type | Date | Source | Actions.
@@ -118,7 +139,7 @@ const DOCUMENT_COLUMNS: RecordColumn<any>[] = [
   { key: "status", label: "Status", priority: "status",
     render: d => <span className="text-[11.5px] text-gray-600">{d.status}</span> },
 ];
-import { formatTime, formatDate } from "@/lib/datetime";
+import { formatTime, formatDate, formatDayTime } from "@/lib/datetime";
 // The shared encounter visual language. Follow-up is the first tab on it; the other seven follow.
 import { PANEL, SectionHeader, EmptyState, Tip, Advisory } from "@/components/practice/EncounterKit";
 import DiagnosisWorkspace from "./DiagnosisWorkspace";
@@ -216,6 +237,16 @@ export default function EncounterConsole(props: {
   /** ⚠ Whether the follow-up READ failed. Never conflate with an empty list -- see page.tsx. */
   followUpsUnavailable: boolean;
   intervals: { code: string; label: string; days: number }[];
+  /** CPR-FUP-HFE-008 s15. Built since migration 206 and never reachable from an encounter until now. */
+  planTemplates: any[];
+  /** s6's Location. */
+  facilities: any[];
+  /** s10: LIVE and FUTURE only, filtered on the server -- see page.tsx. */
+  patientAppointments: any[];
+  /** So the Assigned-to column can say "You" rather than printing a uuid or a vague noun. */
+  currentUserId: string;
+  /** s10's booking link is gated on appointment.manage, which the API enforces and this must match. */
+  canBook: boolean;
   procedures: any[];
   /** CPR-PROC-HFE-005 s7. Loaded since the tab was built, delivered to it only from today. */
   procedureTypes: any[];
@@ -288,11 +319,18 @@ export default function EncounterConsole(props: {
   const [showHistory, setShowHistory] = useState<Record<string, boolean>>({});
   const [templateId, setTemplateId] = useState("");
   const [doc, setDoc] = useState({ title: "", docType: "consultation_summary", addressedTo: "", composeFrom: true });
-  const [fu, setFu] = useState({ reason: "", kind: "review", intervalCode: "2w", priority: "routine" });
+  const [fu, setFu] = useState({
+    reason: "", kind: "review", intervalCode: "2w", priority: "routine",
+    // CPR-FUP-HFE-008 s6/s11 (migration 299). `owner` is the screen's word for a choice the database
+    // stores in two columns -- one owner, never both.
+    followUpType: "review", locationId: "", instructions: "", owner: "none", queue: "",
+  });
   const [closingFu, setClosingFu] = useState<string | null>(null);
   const [fuOutcome, setFuOutcome] = useState("");
   /** CPR-FUP-HFE-008 s12's filter, by key from FOLLOW_UP_TAB_FILTERS. "all" is the resting state. */
   const [fuFilter, setFuFilter] = useState("all");
+  /** s10: which follow-up is having a booked visit linked to it. */
+  const [bookingFu, setBookingFu] = useState<string | null>(null);
   // migration 238
   const [decision, setDecision] = useState("");
   const [ref, setRef] = useState({ referredTo: "", reason: "" });
@@ -401,8 +439,43 @@ export default function EncounterConsole(props: {
     body: JSON.stringify({
       patientId: props.patientId, originEncounterId: props.encounterId,
       reason: fu.reason, kind: fu.kind, intervalCode: fu.intervalCode, priority: fu.priority,
+      // ── CPR-FUP-HFE-008 s6/s11 (migration 299) ────────────────────────────────────────────────
+      followUpType: fu.followUpType,
+      locationId: fu.locationId || undefined,
+      instructions: fu.instructions.trim() || undefined,
+      // ⚠ ONE OWNER. The engine and the database both refuse a person AND a queue, so the screen sends
+      // exactly one -- "mine" resolves to the viewer's own id rather than to a name nobody could match.
+      assignedTo: fu.owner === "me" ? props.currentUserId : undefined,
+      assignedQueue: fu.owner === "queue" ? (fu.queue.trim() || undefined) : undefined,
     }),
   }), "Follow-up raised.", true);
+
+  // ══ s10's BOOKING LINK -- scheduleFollowUp's FIRST UI CALLER ═══════════════════════════════════
+  //
+  // ⚠ ONE WRITE, NOT TWO. See the button for why this links an existing appointment rather than
+  // creating one: book-then-link is two writes with no transaction, and a failed second leaves an
+  // appointment nobody asked for. `{ appointmentId }` is also the ONLY body shape that reaches
+  // scheduleFollowUp -- the route checks dueOn and deferUntil first, so either would win instead.
+  const linkVisit = (id: string, appointmentId: string) =>
+    call(() => fetch(`/api/v1/practice/follow-ups/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ appointmentId }),
+    }), "A visit is now linked to this follow-up. It is booked, not settled.", true);
+
+  // ══ s15's TEMPLATES -- createPlan's FIRST UI CALLER ════════════════════════════════════════════
+  //
+  // ⚠ THE ENGINE HAS BEEN COMPLETE SINCE MIGRATION 206 AND NOTHING COULD REACH IT. createPlan,
+  // createPlanTemplate, setTemplateActive and discontinuePlan had zero UI callers between them -- the
+  // whole write half of follow-up plans was API-only.
+  //
+  // ⚠ AND s15's OWN RULE RIDES ON THE CONTROL: "templates are workflow shortcuts, NOT patient-specific
+  // clinical advice." Applying one raises every step as an ordinary follow-up, each removable.
+  const applyPlan = (templateId: string) => call(() => fetch("/api/v1/practice/follow-up-plans", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      patientId: props.patientId, originEncounterId: props.encounterId, templateId,
+    }),
+  }), "The plan's follow-ups have been raised.", true);
 
   // CLOSING FROM HERE NAMES THIS ENCOUNTER as what settled it, which is the whole point of doing it in
   // the consultation rather than on the board: the record then says WHERE the obligation was met, not
@@ -1167,6 +1240,7 @@ export default function EncounterConsole(props: {
                   }
                   records={(props.followUps as any[])
                     .filter(f => (FOLLOW_UP_TAB_FILTERS.find(x => x.key === fuFilter) ?? FOLLOW_UP_TAB_FILTERS[0]).match(f))
+                    .map((f: any) => ({ ...f, __viewer: props.currentUserId }))
                     .map((f: any) => ({
                     id: f.id,
                     data: f,
@@ -1174,12 +1248,38 @@ export default function EncounterConsole(props: {
                     // s10: never colour alone. The row says "overdue" in words as well.
                     stateLabel: f.overdue ? "Overdue" : undefined,
                     actions: props.canFollowUp ? (
-                      <button type="button" disabled={busy}
-                        onClick={() => { setFuOutcome(""); setClosingFu(closingFu === f.id ? null : f.id); }}
-                        aria-label={`Settle ${f.reason} in this consultation`}
-                        className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
-                        Settle in this consultation
-                      </button>
+                      <span className="inline-flex items-center gap-1.5">
+                        {/* ══ s10's BOOKING LINK -- THE FIRST UI CALLER scheduleFollowUp HAS EVER HAD ══
+                            The engine has existed since migration 196: it refuses a dead appointment, one
+                            belonging to another patient, and a second follow-up against the same booking.
+                            Nothing in the product could reach it -- booking a visit for an obligation was
+                            an API-only operation.
+
+                            ⚠ IT LINKS AN EXISTING APPOINTMENT AND DOES NOT CREATE ONE, DELIBERATELY. The
+                            obvious build is book-then-link: POST an appointment, take its id, PATCH the
+                            follow-up. That is two writes with no transaction between them, and if the
+                            second fails you have an appointment nobody asked for attached to nothing,
+                            with no compensating path anywhere in either engine. Linking is ONE write that
+                            either happens or does not.
+
+                            ⚠ AND IT SAYS "booked, not settled" BECAUSE s13 AND s22 INSIST ON IT. Booking
+                            is never clinical completion; the row stays owed and moves to SCHEDULED. */}
+                        {props.canBook && f.status === "OPEN" && !f.appointment_id
+                          && props.patientAppointments.length > 0 && (
+                          <button type="button" disabled={busy}
+                            onClick={() => setBookingFu(bookingFu === f.id ? null : f.id)}
+                            aria-label={`Link a booked visit to ${f.reason}`}
+                            className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                            {bookingFu === f.id ? "Cancel" : "Link a visit"}
+                          </button>
+                        )}
+                        <button type="button" disabled={busy}
+                          onClick={() => { setFuOutcome(""); setClosingFu(closingFu === f.id ? null : f.id); }}
+                          aria-label={`Settle ${f.reason} in this consultation`}
+                          className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                          Settle in this consultation
+                        </button>
+                      </span>
                     ) : undefined,
                     expandedContent: closingFu === f.id ? (
                       <form className="flex flex-col gap-1.5 rounded-lg bg-gray-50 p-2"
@@ -1192,6 +1292,31 @@ export default function EncounterConsole(props: {
                           Close as done
                         </button>
                       </form>
+                    ) : bookingFu === f.id ? (
+                      <div className="flex flex-col gap-1.5 rounded-lg bg-gray-50 p-2">
+                        <p className="text-[11px] font-semibold text-gray-700">
+                          Which booked visit is this follow-up for?
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {props.patientAppointments.map((a: any) => (
+                            <button key={a.id} type="button" disabled={busy}
+                              onClick={() => linkVisit(f.id, a.id)}
+                              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/[0.07] disabled:opacity-50">
+                              {formatDayTime(a.scheduled_at) ?? String(a.scheduled_at).slice(0, 16)}
+                              <span className="ml-1 font-normal text-gray-500">
+                                {String(a.appointment_type ?? "").replace(/_/g, " ")}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                        {/* ⚠ s13, ON THE CONTROL ITSELF. The whole point of this link is that it is NOT a
+                            completion, and the moment somebody presses it the row will read SCHEDULED. */}
+                        <p className="text-[11px] text-gray-600">
+                          This records that a visit exists for this obligation. It does not settle it
+                          &mdash; the follow-up stays owed until somebody says what happened. If the
+                          appointment is later cancelled, the database puts this back on the board.
+                        </p>
+                      </div>
                     ) : undefined,
                   }))}
                 />
@@ -1260,13 +1385,113 @@ export default function EncounterConsole(props: {
                           ))}
                         </select>
                       </div>
-                      <div className="flex items-end">
-                        <button type="submit" disabled={busy || !fu.reason.trim()}
-                          className="w-full rounded-lg bg-[var(--cp-primary)] px-3 py-2 text-[12.5px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cp-primary)] focus-visible:ring-offset-2 disabled:opacity-50">
+                      {/* ── s6's REMAINING FIELDS, REAL FROM MIGRATION 299 ─────────────────────────
+                          ⚠ TYPE IS AN INTENTION, NOT A BOOKING. s10 is explicit that follow-up type
+                          "does not prove fulfillment has been scheduled", and s22 makes it an
+                          acceptance criterion -- so choosing Appointment here books nothing, and the
+                          only thing that says a visit exists is the Link-a-visit action on the row. */}
+                      <div>
+                        <label className={FU_LABEL} htmlFor="fu-type">Follow-up type</label>
+                        <select id="fu-type" value={fu.followUpType}
+                          onChange={e => setFu(p => ({ ...p, followUpType: e.target.value }))}
+                          className={`${input} mt-1`}>
+                          {FOLLOW_UP_TYPES.map(t => (
+                            <option key={t} value={t}>{FOLLOW_UP_TYPE_LABELS[t] ?? t}</option>
+                          ))}
+                        </select>
+                        {fu.followUpType === "appointment" && (
+                          <p className="mt-1 text-[11px] text-gray-600">
+                            This says how it should happen. It does not book anything.
+                          </p>
+                        )}
+                      </div>
+                      {/* s6: "Location -- shown when relevant". A practice with one site has nothing to
+                          choose between, so the control is not drawn for it. */}
+                      {props.facilities.length > 1 && (
+                        <div>
+                          <label className={FU_LABEL} htmlFor="fu-location">Location</label>
+                          <select id="fu-location" value={fu.locationId}
+                            onChange={e => setFu(p => ({ ...p, locationId: e.target.value }))}
+                            className={`${input} mt-1`}>
+                            <option value="">Not specified</option>
+                            {props.facilities.map((x: any) => (
+                              <option key={x.id} value={x.id}>{x.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      {/* ⚠ s11's OWNER, AND THE VOCABULARY IS HONEST ABOUT WHAT THIS PRODUCT KNOWS.
+                          There is no member directory in the practice plane, so "assign to a named
+                          colleague" is not offerable -- a dropdown of uuids would be worse than none.
+                          What IS offerable is the viewer themselves, or a named queue, and the database
+                          refuses both at once because "whose is this" needs one answer. */}
+                      <div>
+                        <label className={FU_LABEL} htmlFor="fu-owner">Assigned to</label>
+                        <select id="fu-owner" value={fu.owner}
+                          onChange={e => setFu(p => ({ ...p, owner: e.target.value }))}
+                          className={`${input} mt-1`}>
+                          <option value="none">Unassigned</option>
+                          <option value="me">Me</option>
+                          <option value="queue">A team or queue</option>
+                        </select>
+                        {fu.owner === "queue" && (
+                          <input value={fu.queue} aria-label="Queue name"
+                            onChange={e => setFu(p => ({ ...p, queue: e.target.value }))}
+                            placeholder="Which team or queue"
+                            className={`${input} mt-1 ${fu.queue.trim() ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
+                        )}
+                      </div>
+                      <div className="col-span-2">
+                        <label className={FU_LABEL} htmlFor="fu-instructions">Clinical instructions</label>
+                        {/* Separate from the reason, which migration 196 caps at 400 characters -- one
+                            field for both is how a cap starts truncating clinical detail. */}
+                        <input id="fu-instructions" value={fu.instructions}
+                          onChange={e => setFu(p => ({ ...p, instructions: e.target.value }))}
+                          placeholder="Optional. Anything the person doing this needs to know."
+                          className={`${input} mt-1`} />
+                      </div>
+                      <div className="col-span-2 flex items-end justify-end">
+                        {/* ⚠ THE BUTTON REFUSES A QUEUE WITH NO NAME. The database check would refuse it
+                            too, but as a 400 after the click -- and s17 asks for required fields to be
+                            validated BEFORE Raise Follow-up is enabled. */}
+                        <button type="submit"
+                          disabled={busy || !fu.reason.trim() || (fu.owner === "queue" && !fu.queue.trim())}
+                          className="rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cp-primary)] focus-visible:ring-offset-2 disabled:opacity-50">
                           {busy ? "Raising..." : "Raise follow-up"}
                         </button>
                       </div>
                     </div>
+                    {/* ══ s15's TEMPLATES, REACHABLE FOR THE FIRST TIME ═══════════════════════════
+                        ⚠ DRAWN ONLY WHEN THIS PRACTICE HAS AUTHORED ONE. Migration 206 seeds nothing
+                        and there is no authoring screen anywhere in the product, so for most practices
+                        this list is empty -- and an always-empty menu is an affordance for nothing,
+                        which is the trap this session already refused once on the Investigations tab.
+                        The wiring is here so the moment a template exists it is one click away; what is
+                        missing is the screen that creates one, and that is a separate build. */}
+                    {props.planTemplates.length > 0 && (
+                      <div className="mt-3 border-t border-[var(--cp-primary)]/20 pt-2.5">
+                        <p className={FU_LABEL}>Or apply a plan</p>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {props.planTemplates.map((t: any) => (
+                            <button key={t.id} type="button" disabled={busy}
+                              onClick={() => applyPlan(t.id)}
+                              className="rounded-full border border-gray-300 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-gray-700 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/[0.07] disabled:opacity-50">
+                              {t.title}
+                              <span className="ml-1 font-normal text-gray-500">
+                                {(t.steps ?? []).length} step{(t.steps ?? []).length === 1 ? "" : "s"}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                        {/* s15, in the same words the shortcut bands on the other tabs use. */}
+                        <p className="mt-1.5 text-[11px] text-gray-600">
+                          A plan raises several follow-ups at once, each its own obligation you can
+                          remove. It is a workflow shortcut somebody in this practice wrote, not advice
+                          about this patient.
+                        </p>
+                      </div>
+                    )}
+
                     <div className="mt-2">
                       <Tip>
                         The intervals are arithmetic on today&apos;s date, not clinical guidance. Once

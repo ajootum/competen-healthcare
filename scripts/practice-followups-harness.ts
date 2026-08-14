@@ -26,6 +26,7 @@
  *
  *   npx --yes tsx scripts/practice-followups-harness.ts
  */
+import { readFileSync } from "node:fs";
 import { loadEnvConfig } from "@next/env";
 import { followUpSummary, FOLLOW_UP_TAB_FILTERS } from "../src/lib/practice/follow-up-constants";
 import { createClient } from "@supabase/supabase-js";
@@ -466,6 +467,92 @@ async function main() {
       && FOLLOW_UP_TAB_FILTERS.filter(f => f.axis === "priority").every(f => ["soon", "urgent"].includes(f.key)));
   ok("s12-all. the All filter matches every row (a filter that hid rows silently would be worse than none)",
     derived.every(x => FOLLOW_UP_TAB_FILTERS[0].match(x as any)));
+
+  // ══ MIGRATION 299: OWNERSHIP, TYPE, PLACE AND PROVENANCE ═══════════════════════════════════════
+  //
+  // ⚠ ONE OWNER, ASSERTED AT BOTH LAYERS. The engine refuses a person AND a queue so the caller is told
+  // which rule it broke; the CHECK constraint refuses it so nothing that bypasses the engine can write
+  // an obligation with no answer to "whose is this". A test of only the engine would pass against a
+  // database that had never had the constraint applied.
+  const twoOwners = await createFollowUp(admin, {
+    workspaceId: wsA, patientId: patientA, reason: "two owners", dueOn: dueDateFrom(today, 7),
+    assignedTo: USER_A, assignedQueue: "nursing", ...base,
+  });
+  ok("299-1. a follow-up owned by a person AND a queue is refused by the engine",
+    !twoOwners.ok && twoOwners.code === "TWO_OWNERS", twoOwners.ok ? "was allowed" : twoOwners.code);
+  const { error: rawTwoOwners } = await admin.from("practice_follow_up").insert({
+    workspace_id: wsA, patient_id: patientA, reason: "raw two owners", due_on: dueDateFrom(today, 7),
+    assigned_to: USER_A, assigned_queue: "nursing", created_by: USER_A, updated_by: USER_A,
+  });
+  ok("299-1b. and the DATABASE refuses it too, through a raw insert that bypasses the engine",
+    !!rawTwoOwners && /one_owner/.test(rawTwoOwners.message), rawTwoOwners?.message ?? "was allowed");
+
+  const owned = await createFollowUp(admin, {
+    workspaceId: wsA, patientId: patientA, reason: "mine to chase", dueOn: dueDateFrom(today, 7),
+    assignedTo: USER_A, followUpType: "contact", instructions: "ring the mobile first", ...base,
+  });
+  ok("299-2. an owned follow-up records its owner, type and instructions (control)",
+    owned.ok, owned.ok ? "" : owned.message);
+  const ownedRow = owned.ok
+    ? (await admin.from("practice_follow_up")
+      .select("assigned_to, assigned_queue, follow_up_type, instructions, target_interval_code")
+      .eq("id", owned.data.id).maybeSingle()).data
+    : null;
+  ok("299-2b. and the columns hold what was sent, read back rather than taken on trust",
+    ownedRow?.assigned_to === USER_A && ownedRow?.assigned_queue === null
+      && ownedRow?.follow_up_type === "contact" && ownedRow?.instructions === "ring the mobile first",
+    JSON.stringify(ownedRow));
+
+  // ⚠ REFUSED RATHER THAN DEFAULTED. Silently rewriting an unrecognised type to 'review' would let a
+  // stale client turn every appointment-intended follow-up into a review with nothing saying so.
+  const badType = await createFollowUp(admin, {
+    workspaceId: wsA, patientId: patientA, reason: "bad type", dueOn: dueDateFrom(today, 7),
+    followUpType: "telepathy", ...base,
+  });
+  ok("299-3. an unknown follow-up type is REFUSED, not quietly turned into a review",
+    !badType.ok && badType.code === "UNKNOWN_FOLLOW_UP_TYPE", badType.ok ? "was allowed" : badType.code);
+
+  // ⚠ s9/s21: THE INTERVAL IS STAMPED ONLY WHEN AN INTERVAL WAS USED. A caller passing an explicit date
+  // chose a date, and recording a relative code beside it would claim an intent nobody expressed --
+  // which is the whole failure mode of a snapshot column that gets written unconditionally.
+  const byInterval = await createFollowUp(admin, {
+    workspaceId: wsA, patientId: patientA, reason: "in two weeks", intervalCode: "2w", ...base,
+  });
+  const intervalRow = byInterval.ok
+    ? (await admin.from("practice_follow_up").select("target_interval_code, due_on")
+      .eq("id", byInterval.data.id).maybeSingle()).data
+    : null;
+  ok("299-4. s9: choosing an INTERVAL records which interval was chosen, not only the date it became",
+    intervalRow?.target_interval_code === "2w" && intervalRow?.due_on === dueDateFrom(today, 14),
+    JSON.stringify(intervalRow));
+  ok("299-4b. and choosing an explicit DATE records no interval (it would be an intent nobody expressed)",
+    ownedRow?.target_interval_code === null, JSON.stringify(ownedRow?.target_interval_code));
+
+  // ══ TWO ENGINES THAT EXISTED FOR MONTHS WITH NO WAY IN ═════════════════════════════════════════
+  //
+  // ⚠ A SOURCE CHECK, BECAUSE THE DEFECT WAS NEVER IN THE ENGINE. scheduleFollowUp has refused a dead
+  // appointment, another patient's appointment and a double-booked one since migration 196; createPlan
+  // has turned a template into follow-ups since 206. Every assertion about them passed. NOTHING IN THE
+  // PRODUCT COULD CALL EITHER -- both were API-only, which is indistinguishable from a missing feature
+  // to the person using the screen. That is the same class as the unused `procedureTypes` prop found
+  // earlier today, and an engine test cannot see it by construction.
+  const consoleSrc = readFileSync(
+    "src/app/practice/(shell)/encounters/[encounterId]/EncounterConsole.tsx", "utf8");
+  ok("reach-1. the encounter tab can reach scheduleFollowUp (PATCH with appointmentId, its only door)",
+    /body: JSON\.stringify\(\{ appointmentId \}\)/.test(consoleSrc)
+      && /patientAppointments\.map/.test(consoleSrc),
+    "the engine refused a dead booking for months and nothing could ask it to");
+  ok("reach-2. and it LINKS an existing appointment rather than creating one",
+    !/api\/v1\/practice\/appointments/.test(consoleSrc),
+    "book-then-link is two writes with no transaction -- a failed second leaves an orphan appointment");
+  ok("reach-3. the encounter tab can reach createPlan (POST follow-up-plans with a templateId)",
+    /api\/v1\/practice\/follow-up-plans/.test(consoleSrc) && /templateId/.test(consoleSrc));
+  // ⚠ AND THE TEMPLATE CONTROL IS DRAWN ONLY WHEN A TEMPLATE EXISTS. Migration 206 seeds none and there
+  // is no authoring screen, so an unconditional menu would be an always-empty affordance -- the trap
+  // refused on the Investigations tab earlier today for the same reason.
+  ok("reach-4. the plan control is hidden when this practice has authored no template",
+    /props\.planTemplates\.length > 0 &&/.test(consoleSrc),
+    "an always-empty menu is an affordance for nothing");
 
   return report();
 }

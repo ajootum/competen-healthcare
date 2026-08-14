@@ -3,7 +3,7 @@ import { emitEvents } from "@/lib/practice/events";
 import type { EngineResult } from "@/lib/practice/encounters";
 import {
   FOLLOW_UP_TRANSITIONS, CLOSED_FOLLOW_UP_STATUSES, FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES,
-  FOLLOW_UP_OUTCOMES, FOLLOW_UP_SOURCES, FOLLOW_UP_ORIGIN_WORKSPACES, FOLLOW_UP_VIEWS,
+  FOLLOW_UP_OUTCOMES, FOLLOW_UP_SOURCES, FOLLOW_UP_ORIGIN_WORKSPACES, FOLLOW_UP_VIEWS, FOLLOW_UP_TYPES,
   DUE_WEEK_DAYS, type FollowUpDueState, type FollowUpView,
 } from "@/lib/practice/follow-up-constants";
 import { dueDateFrom, workspaceClock } from "@/lib/practice/practice-time";
@@ -127,6 +127,18 @@ export async function createFollowUp(admin: any, args: {
   originWorkspace?: string | null;
   /** DRAFT for one being composed. Anything else is refused -- see below. */
   status?: string;
+  // ── CPR-FUP-HFE-008 s6/s11/s18 (migration 299) ───────────────────────────────────────────────────
+  /** s11's accountable owner. A person OR a queue -- the DB refuses both, because "whose is this" needs one answer. */
+  assignedTo?: string | null;
+  assignedQueue?: string | null;
+  /** s6/s10: how this is meant to be fulfilled. ⚠ 'appointment' is an INTENTION, never a booking. */
+  followUpType?: string;
+  locationId?: string | null;
+  instructions?: string | null;
+  /** s18's typed origins. Deliberately not a polymorphic pointer -- see migration 299's header. */
+  investigationId?: string | null;
+  procedureId?: string | null;
+  treatmentId?: string | null;
   actorId: string; correlationId: string;
 }): Promise<EngineResult<{ id: string; dueOn: string; status: string; source: string }>> {
   if (!args.reason.trim())
@@ -200,11 +212,44 @@ export async function createFollowUp(admin: any, args: {
       message: "a follow-up opens as OPEN, or as DRAFT while it is being composed",
     };
 
+  // ── CPR-FUP-HFE-008 s6, VALIDATED RATHER THAN COERCED ───────────────────────────────────────────
+  //
+  // ⚠ REFUSED, NOT DEFAULTED. The same reasoning as recordProcedure's status: silently rewriting an
+  // unrecognised type to 'review' would let a stale client turn every appointment-intended follow-up
+  // into a review, and nothing would say so. `kind` and `priority` above default because they predate
+  // this and callers rely on it; a NAMED type that is wrong is a different thing from an absent one.
+  const followUpType = args.followUpType ?? "review";
+  if (!(FOLLOW_UP_TYPES as readonly string[]).includes(followUpType))
+    return {
+      ok: false, status: 400, code: "UNKNOWN_FOLLOW_UP_TYPE",
+      message: `a follow-up type must be one of: ${FOLLOW_UP_TYPES.join(", ")}`,
+    };
+
+  // ⚠ s11: ONE OWNER. The database refuses both, and refusing here as well means the caller is told
+  // WHICH rule it broke rather than reading a constraint name out of a 400.
+  if (args.assignedTo && (args.assignedQueue ?? "").trim())
+    return {
+      ok: false, status: 422, code: "TWO_OWNERS",
+      message: "a follow-up is owned by a person or by a queue, not both",
+    };
+
   const { data: f, error } = await admin.from("practice_follow_up").insert({
     workspace_id: args.workspaceId, patient_id: args.patientId, origin_encounter_id: originEncounterId,
     problem_id: args.problemId ?? null, diagnosis_id: args.diagnosisId ?? null,
     kind, reason: args.reason.trim(), due_on: dueOn, priority, status,
     source, origin_workspace: originWorkspace,
+    assigned_to: args.assignedTo ?? null,
+    assigned_queue: (args.assignedQueue ?? "").trim() || null,
+    follow_up_type: followUpType,
+    location_id: args.locationId ?? null,
+    instructions: (args.instructions ?? "").trim() || null,
+    // ⚠ s9/s21: WHAT WAS CHOSEN, NOT ONLY WHAT IT RESOLVED TO. Written only when an interval was
+    // actually used -- a caller passing an explicit dueOn chose a date, and stamping an interval code
+    // beside it would claim a relative intent nobody expressed.
+    target_interval_code: !args.dueOn && args.intervalCode ? args.intervalCode : null,
+    investigation_id: args.investigationId ?? null,
+    procedure_id: args.procedureId ?? null,
+    treatment_id: args.treatmentId ?? null,
     created_by: args.actorId, updated_by: args.actorId,
   }).select("id, due_on, status, source").single();
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
@@ -588,7 +633,9 @@ export async function listFollowUps(admin: any, workspaceId: string, filter: Lis
     // migration 239's three columns are read here and nowhere else: `source` and `origin_workspace` are
     // CPR-FUP-001 s4's Source column, and `deferred_until` is what deriveFollowUp measures a deferred
     // obligation against. A screen cannot show a Source column over a query that does not select it.
-    .select("id, patient_id, origin_encounter_id, problem_id, diagnosis_id, plan_id, step_number, kind, reason, due_on, priority, status, source, origin_workspace, deferred_until, appointment_id, closing_encounter_id, outcome, outcome_code, closed_at, created_at, record_version")
+    // ⚠ MIGRATION 299's COLUMNS ARE READ HERE OR NOWHERE. A screen cannot show an owner over a query
+    // that does not select one -- the same sentence the comment above already had to make about 239.
+    .select("id, patient_id, origin_encounter_id, problem_id, diagnosis_id, plan_id, step_number, kind, reason, due_on, priority, status, source, origin_workspace, deferred_until, appointment_id, closing_encounter_id, outcome, outcome_code, closed_at, created_at, record_version, assigned_to, assigned_queue, follow_up_type, location_id, instructions, target_interval_code, investigation_id, procedure_id, treatment_id")
     .eq("workspace_id", workspaceId);
   if (filter.patientId) q = q.eq("patient_id", filter.patientId);
   if (filter.status?.length) q = q.in("status", filter.status);
