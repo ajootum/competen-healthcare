@@ -357,6 +357,8 @@ export default function EncounterConsole(props: {
     // CPR-FUP-HFE-008 s6/s11 (migration 299). `owner` is the screen's word for a choice the database
     // stores in two columns -- one owner, never both.
     followUpType: "review", locationId: "", instructions: "", owner: "none", queue: "",
+    // s9: the target is an interval OR an exact date. "custom" in the select reveals the calendar.
+    dueDate: "",
     // s10's booking link, at raise time: filled only while the type is "appointment".
     bookDate: "", bookTime: "09:00",
   });
@@ -506,7 +508,13 @@ export default function EncounterConsole(props: {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           patientId: props.patientId, originEncounterId: props.encounterId,
-          reason: fu.reason, kind: fu.kind, intervalCode: fu.intervalCode, priority: fu.priority,
+          reason: fu.reason, kind: fu.kind,
+          // ⚠ "custom" IS A SCREEN WORD, NEVER AN API WORD. The engine refuses unknown intervals by
+          // name (UNKNOWN_INTERVAL), so the calendar path sends dueOn and NO intervalCode -- which is
+          // also what keeps 299-4b true: a chosen date records no interval it never had.
+          intervalCode: fu.intervalCode === "custom" ? undefined : fu.intervalCode,
+          dueOn: fu.intervalCode === "custom" ? fu.dueDate : undefined,
+          priority: fu.priority,
           followUpType: fu.followUpType,
           locationId: fu.locationId || undefined,
           instructions: fu.instructions.trim() || undefined,
@@ -1446,10 +1454,15 @@ export default function EncounterConsole(props: {
                           only cue for what a dropdown meant was the value it happened to be showing. */}
                       <div className="col-span-2">
                         <label className={FU_LABEL} htmlFor="fu-reason">What needs to happen, and why *</label>
+                        {/* ⚠ AMBER WHILE EMPTY, exactly as every other required field on this
+                            encounter. The owner pressed Raise twice with this blank and read the
+                            silence as the product being broken -- the sentence by the button was not
+                            enough, because the eye is ON THE FORM, not on the footer. The blocker has
+                            to be worn by the field that is the blocker. */}
                         <input id="fu-reason" required placeholder="e.g. Review the swab result"
                           value={fu.reason}
                           onChange={e => setFu(p => ({ ...p, reason: e.target.value }))}
-                          className={`${input} mt-1`} />
+                          className={`${input} mt-1 ${fu.reason.trim() ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
                       </div>
                       <div>
                         <label className={FU_LABEL} htmlFor="fu-kind">Category *</label>
@@ -1460,16 +1473,21 @@ export default function EncounterConsole(props: {
                       </div>
                       <div>
                         <label className={FU_LABEL} htmlFor="fu-when">Target timeframe *</label>
+                        {/* ⚠ THE OWNER ASKED FOR A CALENDAR IN AS MANY WORDS. s9 always allowed both --
+                            "support relative intervals and configured exact dates" -- and the composer
+                            only ever offered the intervals. "On a date..." reveals the calendar; the
+                            intervals stay, because "in two weeks" is how follow-up is actually spoken
+                            in a consultation and a date-only control would make the common case type. */}
                         <select id="fu-when" aria-label="When" value={fu.intervalCode}
                           onChange={e => setFu(p => ({ ...p, intervalCode: e.target.value }))} className={`${input} mt-1`}>
                           {props.intervals.map(i => <option key={i.code} value={i.code}>{i.label}</option>)}
+                          <option value="custom">On a date…</option>
                         </select>
-                        {/* ⚠ s9: "DISPLAY THE RESOLVED CALENDAR DATE WHERE THIS REDUCES AMBIGUITY."
-                            The practitioner used to pick "In 2 weeks" and learn the actual date only
-                            after the page reloaded. The arithmetic is the engine's -- days from the
-                            interval row, added to today -- and this shows the same sum before the click.
-                            ⚠ AND IT IS STILL NOT CLINICAL GUIDANCE, which the tip below keeps saying. */}
-                        {(() => {
+                        {fu.intervalCode === "custom" ? (
+                          <input type="date" aria-label="Follow-up date" value={fu.dueDate}
+                            onChange={e => setFu(p => ({ ...p, dueDate: e.target.value }))}
+                            className={`${input} mt-1 ${fu.dueDate ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
+                        ) : (() => {
                           const days = props.intervals.find(i => i.code === fu.intervalCode)?.days;
                           if (days === undefined) return null;
                           const d = new Date();
@@ -1512,10 +1530,12 @@ export default function EncounterConsole(props: {
                               const days = props.intervals.find(i => i.code === p.intervalCode)?.days;
                               const d = new Date();
                               if (days !== undefined) d.setDate(d.getDate() + days);
+                              // A calendar-chosen due date IS the visit date somebody had in mind.
+                              const fromDue = p.intervalCode === "custom" && p.dueDate
+                                ? p.dueDate : d.toISOString().slice(0, 10);
                               return {
                                 ...p, followUpType,
-                                bookDate: followUpType === "appointment" && !p.bookDate
-                                  ? d.toISOString().slice(0, 10) : p.bookDate,
+                                bookDate: followUpType === "appointment" && !p.bookDate ? fromDue : p.bookDate,
                               };
                             });
                           }}
@@ -1600,15 +1620,18 @@ export default function EncounterConsole(props: {
                             first missing thing, in order, because two amber warnings at once read as
                             noise. */}
                         {(!fu.reason.trim() || (fu.owner === "queue" && !fu.queue.trim())
+                          || (fu.intervalCode === "custom" && !fu.dueDate)
                           || (fu.followUpType === "appointment" && !fu.bookDate)) && (
                           <span className="text-[11.5px] text-[var(--cmp-text-warning)]">
                             {!fu.reason.trim() ? "Say what needs to happen first."
-                              : fu.owner === "queue" && !fu.queue.trim() ? "Name the queue, or assign it differently."
-                                : "Pick the visit date, or change the follow-up type."}
+                              : fu.intervalCode === "custom" && !fu.dueDate ? "Pick the follow-up date."
+                                : fu.owner === "queue" && !fu.queue.trim() ? "Name the queue, or assign it differently."
+                                  : "Pick the visit date, or change the follow-up type."}
                           </span>
                         )}
                         <button type="submit"
                           disabled={busy || !fu.reason.trim() || (fu.owner === "queue" && !fu.queue.trim())
+                            || (fu.intervalCode === "custom" && !fu.dueDate)
                             || (fu.followUpType === "appointment" && !fu.bookDate)}
                           className="rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cp-primary)] focus-visible:ring-offset-2 disabled:opacity-50">
                           {busy ? "Raising..."

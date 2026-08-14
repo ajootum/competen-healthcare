@@ -575,6 +575,18 @@ async function main() {
     forwarded.length === 0,
     forwarded.length ? `DROPPED: ${forwarded.join(", ")}` : "");
   // And the booking press is wired end to end: raise, book, link -- three calls in one handler.
+  // s9's exact-date half, added the day the owner asked for a calendar. The sentinel stays a screen
+  // word: the payload sends dueOn and NO intervalCode, which the engine's UNKNOWN_INTERVAL refusal and
+  // 299-4b's no-interval-recorded rule both depend on.
+  ok("reach-5b. the timeframe offers a calendar date, and sends dueOn without the sentinel",
+    consoleSrc.includes("On a date…")
+      && consoleSrc.includes('intervalCode: fu.intervalCode === "custom" ? undefined : fu.intervalCode')
+      && consoleSrc.includes('dueOn: fu.intervalCode === "custom" ? fu.dueDate : undefined'),
+    "a sentinel that reaches the API is refused as UNKNOWN_INTERVAL");
+  // ⚠ THE REQUIRED FIELD WEARS ITS OWN BLOCKER. The owner pressed Raise twice over an empty reason and
+  // read the silence as breakage -- the sentence by the button was not enough on its own.
+  ok("reach-5c. the empty reason field is amber, not merely explained at the footer",
+    /id="fu-reason"[\s\S]{0,500}border-amber-300/.test(consoleSrc));
   ok("reach-6. Raise & book books a scheduled_followup and LINKS it through the appointmentId PATCH",
     /appointmentType: "scheduled_followup"/.test(consoleSrc)
       && /Raise & book visit/.test(consoleSrc)
