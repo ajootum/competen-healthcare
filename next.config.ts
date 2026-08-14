@@ -184,6 +184,26 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   /**
+   * ⚠ VERIFICATION BUILDS MUST NOT SHARE `.next` WITH THE DEV SERVER — THIS HAS COST THE OWNER TWO
+   * SITTINGS.
+   *
+   * `next build` and `next dev` both write here. A day of verifying each commit with `npx next build`
+   * — a dozen production builds into the directory the running dev server was reading — left `.next` at
+   * 1.5 GB of mixed output, and localhost served an OLDER Treatment tab than the deployed site twice,
+   * with correct source on disk and a clean `git status` both times. Nothing looks wrong; the source
+   * cannot be stale, because Turbopack dev compiles per request. The stale thing is the directory.
+   *
+   * So verification builds go somewhere else:
+   *
+   *     NEXT_BUILD_DIR=.next-verify npx next build
+   *
+   * The default is unchanged, so `next dev`, `next build` on Vercel, and every existing script behave
+   * exactly as before — Vercel does not set this variable, and a deployment must keep using `.next`.
+   * The override is opt-in and local only.
+   */
+  distDir: process.env.NEXT_BUILD_DIR || ".next",
+
+  /**
    * Drops `X-Powered-By: Next.js`. Version disclosure only, but it is free to remove and it is the
    * kind of thing a scanner flags. Asserted absent by the harness.
    */

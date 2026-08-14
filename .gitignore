@@ -15,6 +15,9 @@
 
 # next.js
 /.next/
+# Verification builds -- NEXT_BUILD_DIR=.next-verify npx next build. Kept out of .next on purpose so a
+# production build cannot leave the running dev server serving stale UI. See next.config.ts distDir.
+/.next-verify/
 /out/
 
 # production
