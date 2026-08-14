@@ -17,7 +17,8 @@ import { listProcedures, listProcedureTypes } from "@/lib/practice/procedures";
 import { logAccess } from "@/lib/practice/privacy";
 import { formatDayTime } from "@/lib/datetime";
 import EncounterConsole from "./EncounterConsole";
-import ContextPanel from "./ContextPanel";
+import { PatientSafetyCard, EncounterContextCard } from "./ContextPanel";
+import { RAIL_LOW, RAIL_LOW_H, RAIL_META } from "@/lib/practice/encounter-rail-constants";
 import SafetySnapshot from "./SafetySnapshot";
 import { encounterParameters } from "@/lib/practice/parameters";
 import ParameterCollection from "./ParameterCollection";
@@ -335,57 +336,71 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
             />
           }
           weightPrompt={weightPromptState}
-          sidebar={
-            /* ══ s3's RIGHT COLUMN, AUTHORED HERE AND RENDERED THERE ═══════════════════════════
-               ⚠ THE "FIRST RECORDED ENCOUNTER" CLAIM MUST STAY IN THIS FILE. practice-encounters-
-               harness.ts source-checks that the sentence sits behind a timeline.unavailable guard in
-               page.tsx; authoring it in a child component would leave that assertion passing against a
-               file that no longer contains the claim. It is a server-rendered slot, not a move.
+          /* ══ s3's RIGHT COLUMN, AUTHORED HERE AND RENDERED THERE ═════════════════════════════════
+             ⚠ THE "FIRST RECORDED ENCOUNTER" CLAIM MUST STAY IN THIS FILE. practice-encounters-
+             harness.ts source-checks that the sentence sits behind a timeline.unavailable guard in
+             page.tsx; authoring it in a child component would leave that assertion passing against a
+             file that no longer contains the claim. It is a server-rendered slot, not a move.
 
-               ⚠ THE AI ASSISTANT IS NOT HERE, AND THAT IS DELIBERATE. The assistant engine exists and
-               is reachable at /practice/assistant, but nothing on this screen is wired to it. A panel
-               headed "AI Assistant", with the comp's "Suggest with AI" and "Voice to AI" buttons,
-               would be an affordance for a capability this screen does not have. */
+             ⚠ THE AI ASSISTANT IS NOT HERE, AND THAT IS DELIBERATE. The assistant engine exists and
+             is reachable at /practice/assistant, but nothing on this screen is wired to it. A panel
+             headed "AI Assistant", with the comp's "Suggest with AI" and "Voice to AI" buttons,
+             would be an affordance for a capability this screen does not have.
+
+             ⚠ CPR-HFE-TRT-004 s11 SPLIT ONE SLOT INTO TWO, because the rail is now RANKED and these
+             cards belong at opposite ends of it. Patient safety is the rail's highest tier and goes
+             first; encounter context and previous visits are the lowest and sit below the procedure
+             list, which s11 ranks above them. One combined slot could only ever place them adjacent. */
+          railSafety={
+            <PatientSafetyCard
+              snapshot={snapshot}
+              /* ⚠ THE SAME DERIVATION THE TREATMENT ROWS USE, from the same collection. The rail and
+                 the table printing different alert counts on one screen is the failure this shares a
+                 function to prevent. */
+              chips={safetyChips(parameterCollection)}
+              weightText={medicationRecord.weight.text}
+            />
+          }
+          railLower={
             <>
-              <ContextPanel
-                snapshot={snapshot}
+              <EncounterContextCard
                 encounter={encounter}
                 sessionTitle={sessionRow?.title ?? null}
                 sessionUnavailable={sessionUnavailable}
                 facility={sessionRow?.practice_facility?.name ?? null}
                 practitionerName={(practitioner as any)?.data?.full_name ?? null}
-                /* ⚠ THE SAME DERIVATION THE TREATMENT CARDS USE, from the same collection. The rail and
-                   the cards printing different alert counts on one screen is the failure this shares a
-                   function to prevent. */
-                chips={safetyChips(parameterCollection)}
-                weightText={medicationRecord.weight.text}
               />
 
-              <section className="rounded-xl border border-gray-200 bg-white p-3.5">
-                <h2 className="text-[13px] font-bold text-gray-900">Previous visits</h2>
+              <section className={RAIL_LOW}>
+                <h2 className={RAIL_LOW_H}>Previous visits</h2>
                 {/* ⚠ "THIS IS THE FIRST RECORDED ENCOUNTER" IS THE STRONGEST CLAIM ON THIS PAGE, and it
                     is read DURING a consultation, by somebody deciding how much history to take. A
-                    failed timeline read used to produce exactly that sentence. */}
+                    failed timeline read used to produce exactly that sentence.
+
+                    ⚠ AND THE FAILURE MESSAGE KEEPS ITS FULL WEIGHT AT THIS TIER. s11 lowers the card's
+                    contrast; s6 says an alert override outranks the banding, and s4 gives red to
+                    critical safety conditions. A red panel inside a quiet card is exactly the
+                    exception-driven attention s2 asks for -- the tier decides the RESTING state only. */}
                 {timeline.unavailable ? (
                   <p className="mt-2 rounded-lg bg-[var(--cmp-surface-critical)] px-3 py-2 text-[12px] text-[var(--cmp-text-critical)]">
                     Previous visits could not be read. Do <strong>not</strong> take this as a first visit.
                   </p>
                 ) : priors.length === 0 ? (
-                  <p className="mt-2 text-[12px] text-gray-400">This is the first recorded encounter for this patient.</p>
+                  <p className="mt-2 text-[12px] text-gray-500">This is the first recorded encounter for this patient.</p>
                 ) : (
                   <ul className="mt-2 flex flex-col gap-2">
                     {priors.map(p => (
-                      <li key={p.id} className="border-l-2 border-gray-100 pl-2">
+                      <li key={p.id} className="border-l-2 border-gray-200 pl-2">
                         <Link href={`/practice/encounters/${p.id}`} className="text-[12px] font-semibold text-gray-800 hover:underline">
                           {String(p.started_at).slice(0, 10)}
                         </Link>
-                        <span className="ml-1.5 text-[10px] text-gray-400">{p.status}</span>
+                        <span className={`ml-1.5 ${RAIL_META}`}>{p.status}</span>
                         {p.reason_for_visit && <p className="text-[11px] text-gray-600">{p.reason_for_visit}</p>}
                         {timeline.diagnosesUnavailable ? (
                           <p className="text-[11px] text-[var(--cmp-text-critical)]">Diagnoses could not be read.</p>
                         ) : (timeline.diagnosesByEncounter[p.id] ?? []).map((d: any, i: number) => (
-                          <p key={i} className="text-[11px] text-gray-500">
-                            {d.is_primary ? "▪ " : "· "}{d.label} <span className="text-gray-400">({d.certainty})</span>
+                          <p key={i} className="text-[11px] text-gray-600">
+                            {d.is_primary ? "▪ " : "· "}{d.label} <span className="text-gray-500">({d.certainty})</span>
                           </p>
                         ))}
                       </li>

@@ -643,6 +643,83 @@ async function main() {
       && !/ACCENT\[i % /.test(tableSrc) && !/ACCENT\[index/.test(tableSrc),
     "a per-row decorative colour would be read as clinical severity");
 
+  // ── CPR-HFE-TRT-004 s11: THE RIGHT-RAIL HIERARCHY ───────────────────────────────────────────────
+  //
+  // ⚠ THE DEFECT WAS EIGHT CARDS OF EQUAL WEIGHT, AND PATIENT SAFETY WAS THE SECOND ONE. The allergy
+  // line sat below the encounter's start time, in an identically-styled box. s11 ranks the rail
+  // safety > procedures > context/visits/timeline > quick actions, and the ranking is the kind of thing
+  // a later "just add a panel" commit undoes without anyone noticing, because nothing breaks.
+  const railSrc = src("src/lib/practice/encounter-rail-constants.ts");
+  const railConsoleSrc = src(`${ENC_DIR}/EncounterConsole.tsx`);
+  const panelSrc = src(`${ENC_DIR}/ContextPanel.tsx`);
+
+  // ⚠ POSITION IS TESTED AS ORDER IN THE FILE, which is the one thing that decides what a practitioner
+  // meets first. Comparing indices rather than asserting a literal block keeps this true when the
+  // surrounding JSX changes.
+  const railOrder = ["props.railSafety", "Procedures in this encounter", "props.railLower",
+    "Encounter timeline", "Quick actions"].map(s => railConsoleSrc.indexOf(s));
+  ok("7-43. s11: the rail is RANKED -- safety, procedures, context and visits, timeline, then actions",
+    railOrder.every(i => i >= 0) && railOrder.every((v, i) => i === 0 || v > railOrder[i - 1]),
+    // ⚠ patient safety used to be the SECOND card in this column, under the encounter's start time.
+    `positions ${JSON.stringify(railOrder)}`);
+
+  // ⚠ EACH STEP DOWN CHANGES MORE THAN ONE PROPERTY. Border weight alone vanishes at high zoom and
+  // colour alone fails s13 for a colour-blind reader, so surface, border and heading size move together.
+  const tiers = [
+    ["RAIL_PRIMARY", "RAIL_PRIMARY_H"], ["RAIL_MEDIUM", "RAIL_MEDIUM_H"],
+    ["RAIL_LOW", "RAIL_LOW_H"], ["RAIL_UTILITY", "RAIL_UTILITY_H"],
+  ] as const;
+  const tierValues = tiers.map(([card, head]) => {
+    const c = new RegExp(`export const ${card} = "([^"]+)"`).exec(railSrc)?.[1] ?? "";
+    const h = new RegExp(`export const ${head} = "([^"]+)"`).exec(railSrc)?.[1] ?? "";
+    return { card: c, head: h };
+  });
+  ok("7-44. s11: the four rail tiers are distinguished by surface AND heading, not by one property",
+    tierValues.every(t => t.card && t.head)
+      && new Set(tierValues.map(t => t.card)).size === 4
+      && new Set(tierValues.map(t => t.head)).size === 4,
+    JSON.stringify(tierValues));
+
+  // ⚠ s14: "Right-rail content is visibly secondary to the active Treatment workspace." s3 gives the
+  // active-work band the strongest boundary on the page, and TreatmentCapture spends the only 2px
+  // border there. A rail card that took one would invert the whole hierarchy.
+  ok("7-45. s14: no rail tier out-shouts the active-work band",
+    !/border-2/.test(railSrc) && /border-2/.test(capSrcTreat),
+    "a rail that competes with the current task defeats the ranking above it");
+
+  // ⚠ s7 FORBIDS THE OBVIOUS WAY TO SATISFY s11. "Strongest heading/status treatment" invites a single
+  // summary chip beside "Patient safety" -- but s7: "do not imply that 'no known allergies' means an
+  // automated medication-allergy compatibility check has passed unless such a check actually exists".
+  // No such check exists. A rail-level "no alerts" would be read as covering the allergy line above it.
+  ok("7-46. s7: the safety card carries PER-FACT status, never an aggregate all-clear verdict",
+    /MARK_WORD/.test(panelSrc) && /label="Parameter alerts"/.test(panelSrc)
+      && !/allClear|overallSafe|safetyVerdict/.test(panelSrc),
+    "one chip covering four unrelated facts is a claim this product cannot make");
+
+  // ⚠ s13: "avoid very small helper text EVEN WHEN reducing visual prominence." Prominence comes from
+  // the tier -- a quieter surface and heading -- not from shrinking text below what can be read.
+  // gray-400 measures about 2.8:1 on white and fails WCAG AA at any size.
+  //
+  // ⚠ SCOPED TO THE RAIL, AND THE FIRST VERSION OF THIS WAS NOT. Run over whole files it failed on
+  // thirty-one hits in the console's MAIN column and on its own explanatory comment -- a needle
+  // matching itself. Neither is what s11 is about. The region is the <aside> and the safety card, with
+  // comments stripped.
+  const stripComments = (s: string) =>
+    s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const railRegion = stripComments(
+    railConsoleSrc.slice(railConsoleSrc.indexOf("<aside"), railConsoleSrc.indexOf("</aside>")));
+  const panelBody = stripComments(panelSrc);
+  // CONTROL FIRST. Every claim below is a NEGATIVE, and a negative over an empty string passes
+  // perfectly -- one renamed element and this whole block would go green against nothing.
+  ok("7-47a. control: the rail region and the safety card were actually read",
+    railRegion.length > 2000 && railRegion.includes("Quick actions") && panelBody.includes("RailFact"),
+    `${railRegion.length} / ${panelBody.length} chars`);
+  ok("7-47. s13: the rail reduces prominence by tier, not by unreadable text",
+    !/text-\[10px\]/.test(railRegion) && !/text-gray-400/.test(railRegion)
+      && !/text-gray-400/.test(panelBody)
+      && railRegion.includes("RAIL_META") && panelBody.includes("RAIL_META"),
+    "10px at gray-400 was carrying procedure times and audit timestamps");
+
   // ── THE dose_unit SWEEP ─────────────────────────────────────────────────────────────────────────
   //
   // ⚠ A CODEBASE AUDIT FOUND THE UNIT DROPPED IN NINE PLACES, not the two that were found by eye. The

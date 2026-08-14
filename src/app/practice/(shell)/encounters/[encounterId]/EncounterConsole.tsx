@@ -9,6 +9,12 @@ import { FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-
 // renders stays imported -- a vocabulary imported here and used nowhere is the next person's evidence
 // that procedure capture still lives in this file, which it does not.
 import { SIDED_LATERALITIES } from "@/lib/practice/procedure-constants";
+// ⚠ CPR-HFE-TRT-004 s11's rail tiers. Safe to import here BECAUSE THAT MODULE IMPORTS NOTHING -- this
+// file is "use client", and a constants module that reached for a server helper would drag the chain
+// into the browser bundle, which tsc and eslint both pass and only `next build` catches.
+import {
+  RAIL, RAIL_MEDIUM, RAIL_MEDIUM_H, RAIL_LOW, RAIL_LOW_H, RAIL_UTILITY, RAIL_UTILITY_H, RAIL_META,
+} from "@/lib/practice/encounter-rail-constants";
 import {
   ENCOUNTER_TABS, QUICK_ACTIONS, QUICK_ACTION_ICON, ENCOUNTER_OUTCOMES, OUTCOME_SWATCH,
   REFERRAL_CHIP, REFERRAL_STATUSES, CLINICAL_FLOW_BLOCKS, DECISION_CARDS,
@@ -115,6 +121,26 @@ const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] 
 const CARD = "rounded-xl border border-gray-200 bg-white p-4";
 const QUIET_BTN = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50";
 
+/**
+ * CPR-HFE-TRT-004 s11's quick-action tray. "Compact grid/tray; neutral buttons except
+ * destructive/critical actions" -- and none of these eight is destructive, so all eight are neutral.
+ *
+ * ⚠ THE FOCUS RING IS NOT DECORATION. s9: "keyboard focus must be obvious and INDEPENDENT OF COLOUR
+ * ALONE", s13: "support keyboard navigation with visible focus". These were bare bordered buttons whose
+ * only focus state was the browser default, which a `border`/`hover:bg` treatment renders nearly
+ * invisible. A 2px offset ring changes the button's OUTLINE, so it reads as focus in greyscale too.
+ *
+ * ⚠ AND THE UNAVAILABLE STATE MOVED OFF gray-300. It measured about 1.9:1 on white -- below the 3:1
+ * floor for meaningful non-text content, so an action a caller could not use was not merely quiet, it
+ * was close to unreadable. It stays visibly weaker than an allowed action, which is the point (nothing
+ * is hidden -- the screen must not silently differ between two people looking at one consultation), but
+ * a practitioner can now read what it says.
+ */
+const QA_BASE =
+  "flex items-center gap-1.5 rounded-lg border px-2 py-2 text-[11px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cp-primary)] focus-visible:ring-offset-1";
+const QA_ALLOWED = `${QA_BASE} border-gray-200 bg-white text-gray-700 hover:bg-[var(--cp-primary)]/[0.07] hover:border-[var(--cp-primary)]/40`;
+const QA_DENIED = `${QA_BASE} border-gray-200 bg-gray-50 text-gray-500`;
+
 const NOTE_LABEL: Record<string, string> = {
   subjective: "Subjective — what the patient reports",
   objective: "Objective — examination and findings",
@@ -184,7 +210,10 @@ export default function EncounterConsole(props: {
    * 290px action column -- so a consultation was read across three vertical strips, one of which was
    * dedicated to the session the encounter was opened from. s3 names two columns.
    */
-  sidebar: React.ReactNode;
+  /** CPR-HFE-TRT-004 s11's HIGHEST rail tier: the Patient safety card, authored in page.tsx. */
+  railSafety: React.ReactNode;
+  /** s11's LOWER rail tier: encounter context and previous visits, authored in page.tsx. */
+  railLower: React.ReactNode;
   /** The weight prompt, decided by weightPrompt() on the server. ⚠ Never a gate -- see that function. */
   weightPrompt: { state: WeightPromptState; text: string; blocking: false };
 }) {
@@ -1267,55 +1296,76 @@ export default function EncounterConsole(props: {
 
       </div>
 
-      {/* ══ RIGHT COLUMN (CPR-ENC-003 s3) ════════════════════════════════════════════════════════
+      {/* ══ RIGHT COLUMN (CPR-ENC-003 s3, RANKED BY CPR-HFE-TRT-004 s11) ══════════════════════════
           "Patient Summary, AI Assistant, Encounter Timeline and contextual utilities."
-          The patient summary and previous visits arrive as the `sidebar` slot from page.tsx; the
-          timeline and the quick actions are below. ⚠ There is no AI Assistant panel -- see page.tsx. */}
-      <aside className="flex flex-col gap-4">
-        {props.sidebar}
+          ⚠ There is no AI Assistant panel -- see page.tsx.
 
-        <section className={CARD}>
+          ⚠ THE ORDER OF THIS COLUMN IS THE SPECIFICATION, NOT A PREFERENCE. s11 ranks it
+          safety > procedures > context/visits/timeline > quick actions, and it used to run
+          context > safety > visits > procedures > timeline > actions with every card at the same
+          weight. Patient safety -- the allergy line -- was the SECOND thing in the rail, under the
+          encounter's start time. Anything inserted here must take a tier, and the tier decides where
+          it goes. */}
+      <aside className={`flex flex-col gap-3 ${RAIL}`}>
+        {/* HIGHEST (s11). */}
+        {props.railSafety}
+
+        {/* MEDIUM (s11): "compact encounter-context card; procedure rows easy to scan". */}
+        <section className={RAIL_MEDIUM}>
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-[13px] font-bold text-gray-900">Procedures in this encounter</h2>
+            <h2 className={RAIL_MEDIUM_H}>Procedures in this encounter</h2>
             <button type="button" onClick={() => setTab("procedures")}
-              className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">+ Add</button>
+              className="rounded-lg px-1.5 py-1 text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:bg-[var(--cp-primary)]/[0.07] hover:underline">+ Add</button>
           </div>
           {props.procedures.filter(p => p.encounter_id === props.encounterId).length === 0 ? (
-            <p className="mt-2 text-[12px] text-gray-400">None recorded in this consultation.</p>
+            <p className="mt-2 text-[12px] text-gray-500">None recorded in this consultation.</p>
           ) : (
-            <ul className="mt-2 flex flex-col gap-2">
+            <ul className="mt-2 flex flex-col gap-1.5">
               {props.procedures.filter(p => p.encounter_id === props.encounterId).map(p => (
-                <li key={p.id} className="rounded-lg border border-gray-100 px-2.5 py-2">
-                  <p className="text-[12px] font-semibold text-gray-800">{p.label}</p>
-                  <p className="text-[10px] text-gray-400">
-                    {formatTime(p.performed_at)}
-                    {p.site ? ` · ${p.site}` : ""}
-                    {SIDED_LATERALITIES.includes(p.laterality) ? ` · ${p.laterality}` : ""}
-                  </p>
-                  {p.indication && <p className="text-[11px] text-gray-600">Indication: {p.indication}</p>}
+                // ⚠ s11's "EASY TO SCAN" IS A COLUMN, NOT A PARAGRAPH. The time was on a second line
+                // under the label, so reading three procedures in order meant reading six lines in a
+                // zig-zag. It now sits in a fixed-width monospaced column on the SAME line as the
+                // label, which is what lets the eye run straight down the times.
+                <li key={p.id} className="rounded-lg border border-gray-200 px-2.5 py-1.5">
+                  <div className="flex items-baseline gap-2">
+                    <span className={`w-11 shrink-0 font-mono ${RAIL_META}`}>{formatTime(p.performed_at)}</span>
+                    <span className="min-w-0 text-[12px] font-semibold text-gray-800">{p.label}</span>
+                  </div>
+                  {(p.site || SIDED_LATERALITIES.includes(p.laterality)) && (
+                    <p className={`pl-[52px] ${RAIL_META}`}>
+                      {[p.site, SIDED_LATERALITIES.includes(p.laterality) ? p.laterality : null]
+                        .filter(Boolean).join(" · ")}
+                    </p>
+                  )}
+                  {p.indication && <p className="pl-[52px] text-[11px] text-gray-600">Indication: {p.indication}</p>}
                 </li>
               ))}
             </ul>
           )}
         </section>
 
-        {/* THE ENCOUNTER TIMELINE, from the status history the engine writes on every transition. It is
-            a record of what happened to this record, not a narrative anybody composed. */}
-        <section className={CARD}>
-          <h2 className="text-[13px] font-bold text-gray-900">Encounter timeline</h2>
+        {/* LOWER (s11): encounter context and previous visits, from page.tsx. */}
+        {props.railLower}
+
+        {/* LOWER (s11). THE ENCOUNTER TIMELINE, from the status history the engine writes on every
+            transition. It is a record of what happened to this record, not a narrative anybody
+            composed -- which is exactly why it belongs near the bottom of a rail read during a
+            consultation. */}
+        <section className={RAIL_LOW}>
+          <h2 className={RAIL_LOW_H}>Encounter timeline</h2>
           {props.statusHistory.length === 0 ? (
-            <p className="mt-2 text-[12px] text-gray-400">No transitions recorded.</p>
+            <p className="mt-2 text-[12px] text-gray-500">No transitions recorded.</p>
           ) : (
             <ul className="mt-2 flex flex-col gap-1.5">
               {props.statusHistory.map((h: any, i: number) => (
                 <li key={i} className="flex items-baseline gap-2 text-[11px]">
-                  <span className="font-mono text-gray-400">{formatTime(h.occurred_at)}</span>
+                  <span className={`w-11 shrink-0 font-mono ${RAIL_META}`}>{formatTime(h.occurred_at)}</span>
                   <span className="text-gray-700">{h.from_status ? `${h.from_status} → ${h.to_status}` : h.to_status}</span>
                 </li>
               ))}
             </ul>
           )}
-          <p className="mt-2 text-[10px] text-gray-400">
+          <p className={`mt-2 ${RAIL_META}`}>
             Every transition is recorded here and in the workspace audit log. Neither can be edited from the app.
           </p>
         </section>
@@ -1324,8 +1374,8 @@ export default function EncounterConsole(props: {
             -- which is what makes it one click rather than a scroll. An action whose capability the
             caller does not hold is drawn as unavailable rather than hidden, so the screen does not
             silently differ between two people looking at the same consultation. */}
-        <section className={CARD}>
-          <h2 className="text-[13px] font-bold text-gray-900">Quick actions</h2>
+        <section className={RAIL_UTILITY}>
+          <h2 className={RAIL_UTILITY_H}>Quick actions</h2>
           <div className="mt-2 grid grid-cols-2 gap-1.5">
             {QUICK_ACTIONS.map(a => {
               const allowed = held[a.capability] !== false && (a.capability !== "encounter.edit" || editable);
@@ -1333,23 +1383,20 @@ export default function EncounterConsole(props: {
                 // The one action that leaves this screen. It is still capability-gated: a link that
                 // 403s on arrival is worse than a button that says it cannot be pressed.
                 return allowed ? (
-                  <Link key={a.key} href={a.href}
-                    className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-2 py-2 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
-                    <span>{QUICK_ACTION_ICON[a.key]}</span>{a.label}
+                  <Link key={a.key} href={a.href} className={QA_ALLOWED}>
+                    <span aria-hidden="true">{QUICK_ACTION_ICON[a.key]}</span>{a.label}
                   </Link>
                 ) : (
-                  <span key={a.key} title="You do not hold the permission for this"
-                    className="flex items-center gap-1.5 rounded-lg border border-gray-100 px-2 py-2 text-[11px] font-semibold text-gray-300">
-                    <span>{QUICK_ACTION_ICON[a.key]}</span>{a.label}
+                  <span key={a.key} title="You do not hold the permission for this" className={QA_DENIED}>
+                    <span aria-hidden="true">{QUICK_ACTION_ICON[a.key]}</span>{a.label}
                   </span>
                 );
               }
               return (
                 <button key={a.key} type="button" disabled={!allowed} onClick={() => quickAction(a)}
                   title={allowed ? undefined : "You do not hold the permission for this"}
-                  className={`flex items-center gap-1.5 rounded-lg border px-2 py-2 text-[11px] font-semibold ${
-                    allowed ? "border-gray-200 text-gray-700 hover:bg-gray-50" : "border-gray-100 text-gray-300"}`}>
-                  <span>{QUICK_ACTION_ICON[a.key]}</span>{a.label}
+                  className={allowed ? QA_ALLOWED : QA_DENIED}>
+                  <span aria-hidden="true">{QUICK_ACTION_ICON[a.key]}</span>{a.label}
                 </button>
               );
             })}
@@ -1361,8 +1408,8 @@ export default function EncounterConsole(props: {
               the building. The button was previously omitted altogether and the reason lived only in the
               grey text below; the affordance now exists where the comp draws it, and the sentence still
               says what the click actually does. */}
-          <p className="mt-2 text-[10px] text-gray-400">
-            <strong className="font-semibold text-gray-500">Print summary</strong> opens{" "}
+          <p className={`mt-2 ${RAIL_META}`}>
+            <strong className="font-semibold text-gray-700">Print summary</strong> opens{" "}
             <button type="button" onClick={() => setTab("attachments")}
               className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Attachments</button>,
             where a consultation summary is created and printed from the document itself. What gets
