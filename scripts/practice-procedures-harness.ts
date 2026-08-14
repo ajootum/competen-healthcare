@@ -99,14 +99,19 @@ async function main() {
     `${catalogue.length} entries`);
 
   const sided = catalogue.find(t => t.code === "abscess_incision");
-  const unsided = catalogue.find(t => t.code === "wound_dressing");
+  // ⚠ THE UNRESTRICTED CONTROL MOVED OFF wound_dressing, AND THE MOVE IS THE FINDING. Migration 297
+  // seeds site_rule = required on the four wound and skin procedures, so "records with nothing extra" is
+  // no longer true of a dressing -- it needs the site. im_injection carries no rule at all, which is
+  // what this control has always been for. wound_dressing becomes the fixture for the site rule below.
+  const unsided = catalogue.find(t => t.code === "im_injection");
+  const siteRequired = catalogue.find(t => t.code === "wound_dressing");
   const consentOnly = catalogue.find(t => t.code === "urinary_catheter");
   ok("the catalogue carries the flags that do the work (sided, consent_required)",
     sided?.sided === true && sided?.consent_required === true &&
     unsided?.sided === false && unsided?.consent_required === false &&
     consentOnly?.sided === false && consentOnly?.consent_required === true,
     JSON.stringify({ sided: sided?.sided, unsided: unsided?.sided, consentOnly: consentOnly?.consent_required }));
-  if (!sided || !unsided || !consentOnly) return report();
+  if (!sided || !unsided || !consentOnly || !siteRequired) return report();
 
   const pa = await registerPatient(admin, {
     workspaceId: wsA, displayName: "Wamala Joseph", birthDate: "1984-11-02", sex: "male",
@@ -188,9 +193,12 @@ async function main() {
   // consent-required; a hand-typed `{ sided: true, consent_required: false }` would have been a test of
   // my own literal rather than of the row the server consults, and would have gone green while
   // disagreeing with the live entry.
-  const shapeOf = (t: typeof sided) => ({
-    id: t.id, name: t.name, sided: t.sided, consent_required: t.consent_required,
-  });
+  // ⚠ THE WHOLE ROW, NOT FOUR COPIED FIELDS -- AND THE FIRST VERSION COPIED FOUR. It predated migration
+  // 297 and kept only id, name, sided and consent_required, so the mirror was handed a procedure with
+  // no allowed_lateralities and cheerfully called a bilateral abscess incision ready while the server
+  // refused it. 297-3b is the assertion that found it. A shape helper that picks fields is the same
+  // defect as a select that omits columns, one layer up.
+  const shapeOf = (t: typeof sided) => t as any;
   const sidedShape = shapeOf(sided);
   const consentShape = shapeOf(consentOnly);
   const unsidedShape = shapeOf(unsided);
@@ -200,10 +208,14 @@ async function main() {
     procedureReadiness(draft({ consentStatus: "obtained" }), sidedShape).ready === false
       && noSide.ok === false,
     JSON.stringify(procedureReadiness(draft({ consentStatus: "obtained" }), sidedShape)));
-  ok("mirror-2. with a side it IS ready -- and the server accepted exactly that (control)",
-    procedureReadiness(draft({ laterality: "left", consentStatus: "obtained" }), sidedShape).ready === true
-      && abscess.ok === true,
-    JSON.stringify(procedureReadiness(draft({ laterality: "left", consentStatus: "obtained" }), sidedShape)));
+  // ⚠ THE DRAFT CARRIES THE SITE BECAUSE `abscess` DID. Once the mirror was handed the WHOLE catalogue
+  // row it started seeing site_rule = 'required' and correctly refused a draft with no site -- while
+  // this assertion was still comparing it to a server call that HAD one. A mirror fed different inputs
+  // than the server is not a mirror; it is two tests of two different things sharing one name.
+  const readySided = draft({ laterality: "left", site: "left axilla", consentStatus: "obtained" });
+  ok("mirror-2. with a side and a site it IS ready -- and the server accepted exactly that (control)",
+    procedureReadiness(readySided, sidedShape).ready === true && abscess.ok === true,
+    JSON.stringify(procedureReadiness(readySided, sidedShape)));
   ok("mirror-3. consent-required with 'not recorded' is NOT ready -- and the server refused it",
     procedureReadiness(draft(), consentShape).ready === false && noConsent.ok === false,
     JSON.stringify(procedureReadiness(draft(), consentShape)));
@@ -228,6 +240,77 @@ async function main() {
     freeText.governed === false && freeText.side === "optional" && freeText.consent === "optional"
       && procedureReadiness(draft(), null).ready === true,
     JSON.stringify(freeText));
+
+  // ── 1c. MIGRATION 297: APPLICABILITY DRIVEN BY THE DEFINITION ───────────────────────────────────
+  //
+  // ⚠ THE BACKFILL IS ASSERTED AGAINST THE LIVE ROWS, NOT ASSUMED. 297 is hand-applied once with no
+  // rollback, and every rule below rests on it having mapped the two old booleans onto the tri-states
+  // the way its header says. If the file was applied to a database whose catalogue had drifted, this is
+  // the assertion that says so rather than the wrong-site check quietly weakening.
+  ok("297-1. the backfill maps sided and consent_required onto the tri-states, on the LIVE rows",
+    sided.laterality_rule === "required" && sided.consent_rule === "required"
+      && unsided.laterality_rule === "not_applicable" && unsided.consent_rule === "optional"
+      && consentOnly.laterality_rule === "not_applicable" && consentOnly.consent_rule === "required",
+    JSON.stringify({ sided: sided.laterality_rule, unsided: unsided.laterality_rule, consent: consentOnly.consent_rule }));
+
+  // s9's configured choices. abscess_incision is seeded left/right -- bilateral is a valid laterality
+  // everywhere else and must be refused HERE, which is the whole point of a per-procedure list.
+  ok("297-2. the seeded restriction is on the live row (the refusal below is not vacuous)",
+    Array.isArray(sided.allowed_lateralities) && sided.allowed_lateralities.join(",") === "left,right",
+    JSON.stringify(sided.allowed_lateralities));
+  const bilateral = await recordProcedure(admin, {
+    workspaceId: wsA, encounterId: encId, procedureTypeId: sided.id,
+    laterality: "bilateral", site: "left axilla", consentStatus: "obtained", ...base,
+  });
+  ok("297-3. s9: a laterality outside the configured list is REFUSED",
+    !bilateral.ok && bilateral.code === "LATERALITY_NOT_ALLOWED",
+    bilateral.ok ? "was allowed" : `${bilateral.code}: ${bilateral.message}`);
+  ok("297-3b. and the screen would not have offered it either (the mirror agrees)",
+    procedureReadiness(draft({ laterality: "bilateral", site: "x", consentStatus: "obtained" }), shapeOf(sided)).ready === false);
+
+  // s9's site rule. abscess_incision is seeded site_rule = required by 297.
+  ok("297-4. the seeded site rule is on the live row, on BOTH seeded procedures",
+    sided.site_rule === "required" && siteRequired.site_rule === "required",
+    JSON.stringify({ abscess: sided.site_rule, dressing: siteRequired.site_rule }));
+  const noSite = await recordProcedure(admin, {
+    workspaceId: wsA, encounterId: encId, procedureTypeId: sided.id,
+    laterality: "left", consentStatus: "obtained", ...base,
+  });
+  ok("297-5. s9: a required SITE is refused when missing",
+    !noSite.ok && noSite.code === "SITE_REQUIRED", noSite.ok ? "was allowed" : noSite.code);
+  // ⚠ AND A BLANK STRING IS NOT A SITE. Migration 256's scar: `is not null` does not stop "   ".
+  const blankSite = await recordProcedure(admin, {
+    workspaceId: wsA, encounterId: encId, procedureTypeId: sided.id,
+    laterality: "left", site: "   ", consentStatus: "obtained", ...base,
+  });
+  ok("297-5b. a site of whitespace is refused too (a blank string is not null)",
+    !blankSite.ok && blankSite.code === "SITE_REQUIRED", blankSite.ok ? "was allowed" : blankSite.code);
+
+  // ⚠ THE STRICTER-OF-TWO RULE, WHICH IS THE SAFETY DECISION IN THIS WHOLE MIGRATION. A practice-owned
+  // entry with sided = true and laterality_rule left at its default proves the OR: the boolean alone
+  // still refuses. If this ever goes green because the tri-state was consulted instead, the wrong-site
+  // check has become one mis-set column away from silence.
+  const legacyShaped = await createProcedureType(admin, {
+    workspaceId: wsA, code: "legacy_sided_probe", name: "Legacy sided probe", sided: true, ...base,
+  });
+  if (legacyShaped.ok) {
+    await setProcedureTypeStatus(admin, { workspaceId: wsA, procedureTypeId: legacyShaped.data.id, status: "published", ...base });
+    const { data: legacyRow } = await admin.from("practice_procedure_type")
+      .select("id, name, sided, laterality_rule").eq("id", legacyShaped.data.id).maybeSingle();
+    ok("297-6. a new entry created with sided=true has laterality_rule at its DEFAULT, not 'required'",
+      legacyRow?.sided === true && legacyRow?.laterality_rule === "not_applicable",
+      JSON.stringify(legacyRow));
+    const legacyNoSide = await recordProcedure(admin, {
+      workspaceId: wsA, encounterId: encId, procedureTypeId: legacyShaped.data.id, ...base,
+    });
+    ok("297-7. ⚠ THE BOOLEAN ALONE STILL REFUSES -- the check is an OR, so a stale column cannot silence it",
+      !legacyNoSide.ok && legacyNoSide.code === "LATERALITY_REQUIRED",
+      legacyNoSide.ok ? "was allowed" : legacyNoSide.code);
+    ok("297-7b. and the screen mirrors that, from the same disagreeing row",
+      procedureFieldPlan(legacyRow as any).side === "required", JSON.stringify(legacyRow));
+  } else {
+    ok("297-6. a new entry created with sided=true has laterality_rule at its DEFAULT, not 'required'", false, legacyShaped.message);
+  }
 
   // ⚠ ATTEMPTED, NOT ABANDONED, AND THIS PAIR WAS STALE AND HALF-GREEN. Migration 294 renamed the
   // status and procedure-constants.ts stopped offering ABANDONED, so recordProcedure refuses it by name

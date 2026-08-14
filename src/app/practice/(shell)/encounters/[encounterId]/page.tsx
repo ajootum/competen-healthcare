@@ -122,7 +122,7 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
     listProcedureTypes(admin, shell.ctx.workspaceId),
     // CPR-PROC-HFE-005 s6. Derived from what this practice has recorded, not from the catalogue --
     // a shortcut list built from the catalogue is the catalogue in a smaller font.
-    frequentProcedures(admin, shell.ctx),
+    frequentProcedures(admin, shell.ctx, shell.ctx.userId),
     // CPR-130 (migration 207). The drafts are the CALLER's own -- myDrafts takes the actor and has no
     // parameter that would return anybody else's unsaved text.
     listPhrases(admin, shell.ctx.workspaceId, shell.ctx.userId),

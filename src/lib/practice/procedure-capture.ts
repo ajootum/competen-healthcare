@@ -31,6 +31,13 @@ export type FrequentProcedure = {
   procedureTypeId: string | null;
   label: string;
   timesRecorded: number;
+  /**
+   * ⚠ EXPLICIT AND OBSERVED STAY TWO FACTS (migration 297, and the same decision as
+   * practice_investigation_preference in 275). `favourite` is something a practitioner chose;
+   * timesRecorded is something that happened to them. s6 forbids presenting either as a recommendation,
+   * and a screen cannot say honestly why an item is on it unless it can tell the two apart.
+   */
+  favourite: boolean;
 };
 
 export type ProcedurePanel<T> = { items: T[]; permitted: boolean; unavailable: boolean; detail: string | null };
@@ -55,35 +62,56 @@ export type ProcedurePanel<T> = { items: T[]; permitted: boolean; unavailable: b
  * shortcut was selected"). That rule lives in the screen -- this function only supplies names.
  */
 export async function frequentProcedures(
-  admin: any, ctx: WorkspaceContext,
+  admin: any, ctx: WorkspaceContext, practitionerId?: string,
 ): Promise<ProcedurePanel<FrequentProcedure>> {
   if (!hasCapability(ctx, CAP_PROCEDURE_RECORD))
     return { items: [], permitted: false, unavailable: false, detail: null };
 
-  const { data, error } = await admin.from("practice_procedure")
-    .select("procedure_type_id, label")
-    .eq("workspace_id", ctx.workspaceId)
-    .limit(1000);
-  if (error)
-    return { items: [], permitted: true, unavailable: true, detail: `frequently used procedures could not be read: ${error.message}` };
+  const [recorded, prefs] = await Promise.all([
+    admin.from("practice_procedure")
+      .select("procedure_type_id, label")
+      .eq("workspace_id", ctx.workspaceId)
+      .limit(1000),
+    // CPR-PROC-HFE-005 s20 (migration 297). The practitioner's OWN favourites, which is why this is
+    // scoped to them and not to the practice: "what I reach for" and "what this clinic does" are
+    // different questions, and only the first belongs to one person.
+    practitionerId
+      ? admin.from("practice_procedure_preference")
+        .select("procedure_type_id, favourite")
+        .eq("workspace_id", ctx.workspaceId).eq("practitioner_id", practitionerId).eq("favourite", true)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (recorded.error)
+    return { items: [], permitted: true, unavailable: true, detail: `frequently used procedures could not be read: ${recorded.error.message}` };
+
+  const favourites = new Set<string>(((prefs.data ?? []) as any[]).map(p => p.procedure_type_id));
 
   const counts = new Map<string, FrequentProcedure>();
-  for (const r of ((data ?? []) as any[])) {
+  for (const r of ((recorded.data ?? []) as any[])) {
     const label = String(r.label ?? "").trim();
     if (!label) continue;
     // ⚠ KEYED ON THE CATALOGUE ID WHERE THERE IS ONE. Two practices can name the same act differently
     // and one practice can record the same name under two catalogue entries; collapsing on the label
-    // alone would hand the shortcut the wrong `sided` and `consent_required` flags, and those two
-    // booleans are the only field rules this screen has.
+    // alone would hand the shortcut the wrong applicability rules, and those rules are what decide
+    // whether the screen asks for a side.
     const key = r.procedure_type_id ? `t:${r.procedure_type_id}` : `l:${label.toLowerCase()}`;
     const seen = counts.get(key);
     if (seen) seen.timesRecorded += 1;
-    else counts.set(key, { procedureTypeId: r.procedure_type_id ?? null, label, timesRecorded: 1 });
+    else counts.set(key, {
+      procedureTypeId: r.procedure_type_id ?? null, label, timesRecorded: 1,
+      favourite: r.procedure_type_id ? favourites.has(r.procedure_type_id) : false,
+    });
   }
 
   return {
     items: [...counts.values()]
-      .sort((a, b) => b.timesRecorded - a.timesRecorded || a.label.localeCompare(b.label))
+      // ⚠ A FAVOURITE SORTS FIRST, AND IS STILL LABELLED AS ONE ON SCREEN. Sorting it up without saying
+      // why would make an explicit choice look like an observed frequency, which is the confusion s6
+      // forbids -- the screen would be presenting the practitioner's own preference back to them as if
+      // the product had worked something out about this patient.
+      .sort((a, b) => Number(b.favourite) - Number(a.favourite)
+        || b.timesRecorded - a.timesRecorded || a.label.localeCompare(b.label))
       .slice(0, 8),
     permitted: true, unavailable: false, detail: null,
   };
@@ -102,6 +130,8 @@ export type PendingProcedure = {
   immediateOutcome?: string;
   status?: string;
   abandonedReason?: string;
+  /** CPR-PROC-HFE-005 s8. Answers to the catalogue-declared detail fields, keyed by field key. */
+  details?: Record<string, string>;
   /**
    * ⚠ THIS FIELD WAS MISSING AND SCHEDULED PROCEDURES COULD NOT BE RECORDED AT ALL.
    *
@@ -183,6 +213,8 @@ export async function recordProcedureBatch(admin: any, ctx: WorkspaceContext, ar
       abandonedReason: it.abandonedReason,
       // ⚠ SEE PendingProcedure.scheduledAt. Omitting this line refused every SCHEDULED procedure.
       scheduledAt: it.scheduledAt,
+      // s8's configured field answers.
+      details: it.details,
       actorId: args.actorId,
       correlationId: args.correlationId,
     });
@@ -191,5 +223,60 @@ export async function recordProcedureBatch(admin: any, ctx: WorkspaceContext, ar
       : { index: i, label: (it.label ?? "").trim(), ok: false, code: res.code, message: res.message });
   }
 
+  await bumpUsage(admin, ctx.workspaceId, args.actorId, items, results);
+
   return { ok: true, data: { results, recorded: results.filter(r => r.ok).length } };
+}
+
+/**
+ * CPR-PROC-HFE-005 s20's practitioner usage metadata (migration 297).
+ *
+ * ⚠ ONLY WHAT WAS ACTUALLY RECORDED. Counting refused items would make the shortcut list a record of
+ * what somebody kept getting wrong, offered back to them as a convenience.
+ *
+ * ⚠ AND A FAILURE HERE NEVER FAILS THE PROCEDURE. Every write below is best-effort and its result is
+ * ignored on purpose: the clinical fact is already in practice_procedure and committed. Telling a
+ * practitioner their procedure was not recorded because a usage counter would not increment would be a
+ * false statement about a patient's record, and they would enter it all again -- which is how a
+ * duplicated procedure ends up claiming something was done to somebody twice.
+ *
+ * ⚠ READ-THEN-WRITE, AND THE RACE IS ACCEPTED KNOWINGLY. Two consultations recorded in the same second
+ * can each read 4 and each write 5. There is no atomic increment available without a database function,
+ * and migration 297 deliberately adds none -- the house rules ban them precisely because this database
+ * is hand-applied. A shortcut list that occasionally undercounts by one is worth less than nothing going
+ * wrong; a counter is not a clinical fact.
+ */
+async function bumpUsage(
+  admin: any, workspaceId: string, practitionerId: string,
+  items: PendingProcedure[], results: ProcedureResult[],
+) {
+  const wanted = new Map<string, number>();
+  for (const r of results) {
+    if (!r.ok) continue;
+    const typeId = items[r.index]?.procedureTypeId;
+    // A free-text procedure has no catalogue row to count against. It still reaches the shortcut list
+    // through frequentProcedures, which counts recorded EVENTS and does not need this table.
+    if (!typeId) continue;
+    wanted.set(typeId, (wanted.get(typeId) ?? 0) + 1);
+  }
+  if (wanted.size === 0) return;
+
+  const ids = [...wanted.keys()];
+  const { data: existing } = await admin.from("practice_procedure_preference")
+    .select("procedure_type_id, usage_count")
+    .eq("workspace_id", workspaceId).eq("practitioner_id", practitionerId).in("procedure_type_id", ids);
+  const current = new Map<string, number>(
+    ((existing ?? []) as any[]).map(r => [r.procedure_type_id, Number(r.usage_count) || 0]));
+
+  const now = new Date().toISOString();
+  await admin.from("practice_procedure_preference").upsert(
+    ids.map(id => ({
+      workspace_id: workspaceId, practitioner_id: practitionerId, procedure_type_id: id,
+      usage_count: (current.get(id) ?? 0) + (wanted.get(id) ?? 0),
+      last_used_at: now, updated_at: now,
+    })),
+    // ⚠ THE CONFLICT TARGET IS THE FULL UNIQUE INDEX FROM 297, AND IT IS NOT PARTIAL. A partial unique
+    // index as an upsert target is a write that silently does nothing -- the house rules ban them for
+    // this reason, and ux_practice_proc_preference has no WHERE clause.
+    { onConflict: "workspace_id,practitioner_id,procedure_type_id" });
 }

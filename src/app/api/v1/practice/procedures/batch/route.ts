@@ -60,6 +60,13 @@ export async function POST(req: NextRequest) {
       // CPR-TRT-PROC-003 s10. The engine REFUSES a SCHEDULED procedure without it rather than
       // defaulting to now(), so this has to reach it or the status is a dead end on the screen.
       scheduledAt: str(r.scheduledAt),
+      // ⚠ CPR-PROC-HFE-005 s8, PASSED THROUGH AS AN OPAQUE MAP AND NARROWED BY THE ENGINE. Anything not
+      // declared in the catalogue's detail_fields is dropped by detailValuesFor before it reaches the
+      // table, so a caller cannot use this to write arbitrary keys against a patient's procedure.
+      details: r.details && typeof r.details === "object" && !Array.isArray(r.details)
+        ? Object.fromEntries(Object.entries(r.details as Record<string, unknown>)
+          .map(([k, v]) => [k, String(v ?? "")]))
+        : undefined,
     })),
     actorId: auth.caller.userId,
     correlationId: auth.caller.traceId,

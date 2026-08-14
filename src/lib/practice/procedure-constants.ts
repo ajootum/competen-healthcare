@@ -142,8 +142,96 @@ export const SEVERITY_REQUIRED_FOR = ["complication"];
 // migration half of the specification.
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 
-/** The two flags the catalogue actually carries. Structural only -- no server import. */
-export type ProcedureTypeShape = { id: string; name: string; sided?: boolean; consent_required?: boolean } | null;
+/**
+ * What the catalogue can say about a procedure, after migration 297.
+ *
+ * ⚠ THE TWO BOOLEANS SURVIVE ALONGSIDE THE TRI-STATES, DELIBERATELY. `sided` is the wrong-site control
+ * and the oldest rule in the procedure engine. 297 added `laterality_rule` because s20 needs a third
+ * state a boolean cannot express, and backfilled the two consistently -- but an editor, an import or a
+ * hand-run UPDATE can put them out of step, and only one direction of that is survivable. Every check
+ * below reads them as an OR, so a stale boolean can only ever ADD a refusal.
+ */
+export type ProcedureTypeShape = {
+  id: string;
+  name: string;
+  sided?: boolean;
+  consent_required?: boolean;
+  site_rule?: string | null;
+  laterality_rule?: string | null;
+  consent_rule?: string | null;
+  allowed_lateralities?: string[] | null;
+  allowed_statuses?: string[] | null;
+  default_status?: string | null;
+  outcome_required?: boolean;
+  detail_fields?: unknown;
+} | null;
+
+/**
+ * s8/s20's procedure-specific detail field.
+ *
+ * ⚠ A SMALL CLOSED VOCABULARY, NOT A FORM BUILDER. Three kinds, and `choice` must carry its options. A
+ * clinical field with no declared kind cannot be validated, and an unvalidatable clinical field is a
+ * free-text column with extra steps -- migration 297's header says the same thing about the column.
+ */
+export type ProcedureDetailField = {
+  key: string; label: string; kind: "text" | "number" | "choice"; required: boolean; options: string[];
+};
+
+const DETAIL_KINDS = ["text", "number", "choice"];
+
+/**
+ * Read `detail_fields` off a catalogue row.
+ *
+ * ⚠ TOLERANT ON PURPOSE, AND SILENT ONLY ABOUT MALFORMED DEFINITIONS. jsonb is not a schema: the column
+ * check guarantees an array and nothing about what is in it. An entry with no key, no label or an
+ * unknown kind is DROPPED rather than rendered, because a field the screen cannot validate is a field
+ * the server cannot either -- and half-drawing it would collect an answer nothing would check. A
+ * `choice` with no options is dropped for the same reason: it is a select with nothing to select.
+ */
+export function parseDetailFields(raw: unknown): ProcedureDetailField[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ProcedureDetailField[] = [];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry as Record<string, unknown>;
+    const key = String(e.key ?? "").trim();
+    const label = String(e.label ?? "").trim();
+    const kind = String(e.kind ?? "text").trim();
+    if (!key || !label || !DETAIL_KINDS.includes(kind)) continue;
+    // A duplicate key would write two rows against one unique index, so the second is dropped here
+    // rather than refused at insert time.
+    if (seen.has(key)) continue;
+    const options = Array.isArray(e.options)
+      ? e.options.map(o => String(o ?? "").trim()).filter(Boolean) : [];
+    if (kind === "choice" && options.length === 0) continue;
+    seen.add(key);
+    out.push({ key, label, kind: kind as ProcedureDetailField["kind"], required: e.required === true, options });
+  }
+  return out;
+}
+
+/**
+ * What is wrong with the answers given for a set of detail fields, in the practitioner's words.
+ *
+ * ⚠ RETURNS THE MISSING LABELS, NOT A BOOLEAN, because s12 requires the working item to NAME what it
+ * still needs. A count alone over a collapsed item is a puzzle.
+ */
+export function detailFieldIssues(
+  fields: ProcedureDetailField[], values: Record<string, string> | undefined,
+): string[] {
+  const issues: string[] = [];
+  for (const f of fields) {
+    const v = (values?.[f.key] ?? "").trim();
+    if (f.required && !v) { issues.push(f.label.toLowerCase()); continue; }
+    if (!v) continue;
+    if (f.kind === "choice" && !f.options.includes(v)) issues.push(`a valid ${f.label.toLowerCase()}`);
+    // Number is checked as a number rather than by pattern -- "12kg" and "" are both not numbers, and
+    // the practitioner needs to be told which field, not which regex.
+    if (f.kind === "number" && !Number.isFinite(Number(v))) issues.push(`a number for ${f.label.toLowerCase()}`);
+  }
+  return issues;
+}
 
 /** required: must be answered before Ready. optional: offered, never demanded. hidden: not rendered. */
 export type FieldApplicability = "required" | "optional" | "hidden";
@@ -154,6 +242,16 @@ export type ProcedureFieldPlan = {
   site: FieldApplicability;
   /** True when the item came from the catalogue, so its answers are governed rather than guessed. */
   governed: boolean;
+  /** s9's configured choices. EMPTY MEANS UNRESTRICTED, never "no choices" -- migration 297. */
+  lateralities: string[];
+  /** s11's per-procedure lifecycle. Empty means unrestricted. */
+  statuses: string[];
+  /** s11's quiet default, applied only where the practitioner has chosen nothing. */
+  defaultStatus: string | null;
+  /** s14: this procedure must record what happened, where it happened. */
+  outcomeRequired: boolean;
+  /** s8's extra fields, already parsed and validated as definitions. */
+  detailFields: ProcedureDetailField[];
 };
 
 /**
@@ -175,23 +273,46 @@ export type ProcedureFieldPlan = {
  * can honestly require it. s22's "Joint injection can require site/side before becoming Ready" is
  * therefore only half satisfied today -- the side half. That gap is real and belongs to the migration.
  */
+/** Map one 297 rule column onto the screen's vocabulary. `not_applicable` is the only thing that hides. */
+const ruleToField = (rule: string | null | undefined, fallback: FieldApplicability): FieldApplicability =>
+  rule === "required" ? "required" : rule === "not_applicable" ? "hidden"
+    : rule === "optional" ? "optional" : fallback;
+
 export function procedureFieldPlan(type: ProcedureTypeShape): ProcedureFieldPlan {
-  if (!type) return { side: "optional", consent: "optional", site: "optional", governed: false };
+  if (!type)
+    return {
+      side: "optional", consent: "optional", site: "optional", governed: false,
+      lateralities: [], statuses: [], defaultStatus: null, outcomeRequired: false, detailFields: [],
+    };
   return {
-    side: type.sided ? "required" : "hidden",
+    // ⚠ THE OR IS THE POINT. A stale `sided` boolean can only ever make the field MORE required. See
+    // ProcedureTypeShape for why the two columns both survive.
+    side: type.sided === true ? "required" : ruleToField(type.laterality_rule, "hidden"),
     // s10: "do not display 'Consent: Not recorded' on every procedure when separate consent
     // documentation is not required." Where the catalogue does not require it, it moves behind the
     // item's own disclosure rather than off the screen -- a practitioner may still want to record that
-    // consent was obtained for something the catalogue does not mandate.
-    consent: type.consent_required ? "required" : "optional",
-    site: "optional",
+    // consent was obtained for something the catalogue does not mandate. So the fallback is `optional`,
+    // not `hidden`: only an explicit not_applicable takes it away.
+    consent: type.consent_required === true ? "required" : ruleToField(type.consent_rule, "optional"),
+    site: ruleToField(type.site_rule, "optional"),
     governed: true,
+    // ⚠ EMPTY MEANS NO RESTRICTION, NOT NO CHOICES -- migration 297's header, and the reason these are
+    // returned raw rather than defaulted to the full list here. A caller that cannot tell the two apart
+    // would offer nothing at all to every procedure that has no restriction, which is all of them.
+    lateralities: Array.isArray(type.allowed_lateralities) ? type.allowed_lateralities : [],
+    statuses: Array.isArray(type.allowed_statuses) ? type.allowed_statuses : [],
+    defaultStatus: type.default_status ?? null,
+    outcomeRequired: type.outcome_required === true,
+    detailFields: parseDetailFields(type.detail_fields),
   };
 }
 
 export type ProcedureDraft = {
   label: string; site: string; laterality: string; consentStatus: string;
   status: string; abandonedReason: string; scheduledAt: string;
+  /** s8's answers, keyed by field key. Absent on a free-text item, which has no configured fields. */
+  immediateOutcome?: string;
+  details?: Record<string, string>;
 };
 
 /**
@@ -217,11 +338,25 @@ export function procedureReadiness(draft: ProcedureDraft, type: ProcedureTypeSha
   if (!draft.label.trim()) missing.push("a procedure");
 
   const plan = procedureFieldPlan(type);
-  // procedures.ts:148 -- `type?.sided && !SIDED_LATERALITIES.includes(laterality)`.
+  // procedures.ts -- `(type.sided || laterality_rule === "required") && !SIDED_LATERALITIES.includes(...)`.
   if (plan.side === "required" && !SIDED_LATERALITIES.includes(draft.laterality)) missing.push("a side");
-  // procedures.ts:157 -- `type?.consent_required && consentStatus === "not_recorded"`. `refused` passes
-  // deliberately: a patient declining is a real recordable event.
+  // procedures.ts -- the configured choices. Only a SIDED value is judged: `not_applicable` is caught by
+  // the required check above, and judging it here would report two faults for one missing answer.
+  if (plan.lateralities.length > 0 && SIDED_LATERALITIES.includes(draft.laterality)
+    && !plan.lateralities.includes(draft.laterality)) missing.push(`a side of ${plan.lateralities.join(" or ")}`);
+  // procedures.ts -- `site_rule === "required"`, checked with trim because a blank string is not null.
+  if (plan.site === "required" && !draft.site.trim()) missing.push("a site");
+  // procedures.ts -- `(consent_required || consent_rule === "required") && consentStatus === "not_recorded"`.
+  // `refused` passes deliberately: a patient declining is a real recordable event.
   if (plan.consent === "required" && draft.consentStatus === "not_recorded") missing.push("consent");
+  // procedures.ts -- a restricted lifecycle refuses a status outside its list.
+  if (plan.statuses.length > 0 && !plan.statuses.includes(draft.status)) missing.push("an allowed status");
+  // ⚠ procedures.ts DEMANDS AN OUTCOME ONLY WHERE SOMETHING HAPPENED, and so does this. Asking what the
+  // outcome was of a procedure merely ORDERED invites an answer that contradicts the status beside it.
+  if (plan.outcomeRequired && !(PROCEDURE_STATUSES_NOT_DONE as readonly string[]).includes(draft.status)
+    && !(draft.immediateOutcome ?? "").trim()) missing.push("an immediate outcome");
+  // s8's configured fields, by their own labels.
+  missing.push(...detailFieldIssues(plan.detailFields, draft.details));
   // procedures.ts -- a stopped procedure must say why, for every status in the engine's own list.
   if ((PROCEDURE_STATUSES_NEEDING_REASON as readonly string[]).includes(draft.status)
     && !draft.abandonedReason.trim()) missing.push("a reason");

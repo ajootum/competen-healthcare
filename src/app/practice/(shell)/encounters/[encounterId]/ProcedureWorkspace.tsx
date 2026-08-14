@@ -16,7 +16,8 @@ import {
 // browser bundle -- which tsc and eslint both wave through and only `next build` catches. It has
 // happened three times in this codebase; procedure-constants.ts exists precisely so it cannot here.
 import {
-  LATERALITIES, CONSENT_STATUSES, PROCEDURE_STATUSES, PROCEDURE_STATUSES_NEEDING_REASON, procedureBand,
+  LATERALITIES, CONSENT_STATUSES, PROCEDURE_STATUSES, PROCEDURE_STATUSES_NEEDING_REASON,
+  PROCEDURE_STATUSES_NOT_DONE, procedureBand,
   OUTCOME_TYPES, OUTCOME_SEVERITIES, SEVERITY_REQUIRED_FOR,
   procedureFieldPlan, procedureReadiness, type ProcedureTypeShape,
 } from "@/lib/practice/procedure-constants";
@@ -60,6 +61,8 @@ type Item = {
   indication: string;
   immediateOutcome: string;
   abandonedReason: string;
+  /** s8's answers to the catalogue-declared fields, keyed by field key. */
+  details: Record<string, string>;
   /** CPR-TRT-PROC-003 s10. Only meaningful while the status is SCHEDULED, and required by the engine then. */
   scheduledAt: string;
   /** s12: the item's own optional detail, open only when the practitioner opens it. */
@@ -72,9 +75,23 @@ type Recorded = {
   status?: string | null; immediate_outcome?: string | null;
 };
 
-type CatalogueType = { id: string; name: string; category?: string | null; sided?: boolean; consent_required?: boolean };
+/**
+ * ⚠ THE CATALOGUE ROW IS PASSED THROUGH WHOLE AND HANDED TO procedureFieldPlan, NOT PICKED APART HERE.
+ * Migration 297 took the definition from two booleans to nine columns, and a component that copied out
+ * the fields it happened to need would be a second, quieter opinion about what a procedure requires --
+ * silently dropping any rule added after it was written.
+ */
+type CatalogueType = {
+  id: string; name: string; category?: string | null;
+  sided?: boolean; consent_required?: boolean;
+  site_rule?: string | null; laterality_rule?: string | null; consent_rule?: string | null;
+  allowed_lateralities?: string[] | null; allowed_statuses?: string[] | null;
+  default_status?: string | null; outcome_required?: boolean; detail_fields?: unknown;
+};
 
-type Frequent = { procedureTypeId: string | null; label: string; timesRecorded: number };
+type Frequent = {
+  procedureTypeId: string | null; label: string; timesRecorded: number; favourite?: boolean;
+};
 
 // CP-UI-TABLE-001 s5 + CPR-PROC-HFE-005 s5: Procedure | Status | Time | Site | Actions.
 const PROCEDURE_COLUMNS: RecordColumn<Recorded>[] = [
@@ -123,7 +140,7 @@ let seq = 0;
 const newItem = (seed: Partial<Item> = {}): Item => ({
   key: `p${++seq}`, procedureTypeId: null, label: "", site: "", laterality: "not_applicable",
   consentStatus: "not_recorded", status: "PERFORMED",
-  indication: "", immediateOutcome: "", abandonedReason: "", scheduledAt: "", open: false,
+  indication: "", immediateOutcome: "", abandonedReason: "", scheduledAt: "", details: {}, open: false,
   ...seed,
 });
 
@@ -153,10 +170,9 @@ export default function ProcedureWorkspace(props: {
     return m;
   }, [props.catalogue]);
 
-  const shapeOf = (it: Item): ProcedureTypeShape => {
-    const t = it.procedureTypeId ? byId.get(it.procedureTypeId) : undefined;
-    return t ? { id: t.id, name: t.name, sided: t.sided, consent_required: t.consent_required } : null;
-  };
+  // ⚠ THE WHOLE ROW, NOT A COPY OF THE FIELDS I HAPPEN TO NEED. See CatalogueType.
+  const shapeOf = (it: Item): ProcedureTypeShape =>
+    (it.procedureTypeId ? byId.get(it.procedureTypeId) : undefined) ?? null;
 
   // s7 step 1. Substring on the name, because a practitioner types what they call it rather than a code.
   const matches = useMemo(() => {
@@ -170,7 +186,14 @@ export default function ProcedureWorkspace(props: {
   // was selected" is the rule, and the reason is that a shortcut is a typing convenience -- treating
   // one click as a clinical assertion would put procedures on records nobody performed.
   const addFromCatalogue = (t: CatalogueType) => {
-    setItems(p => [...p, newItem({ procedureTypeId: t.id, label: t.name, open: true })]);
+    // ⚠ s11's QUIET DEFAULT, AND IT IS A SEED RATHER THAN A LOCK. The catalogue's default_status only
+    // decides what the item OPENS as; every allowed status is still one click away on the item, and the
+    // engine applies the same default only when the caller sent nothing. A default that overrode a
+    // choice would be the PERFORMED coercion this engine already carries a warning about.
+    setItems(p => [...p, newItem({
+      procedureTypeId: t.id, label: t.name, open: true,
+      status: t.default_status ?? "PERFORMED",
+    })]);
     setQuery("");
     setNotice(null);
   };
@@ -259,6 +282,11 @@ export default function ProcedureWorkspace(props: {
                 ? (it.abandonedReason.trim() || undefined) : undefined,
               // Likewise: a scheduled time is meaningless on anything but SCHEDULED, and required there.
               scheduledAt: it.status === "SCHEDULED" ? (it.scheduledAt || undefined) : undefined,
+              // ⚠ s8's ANSWERS, SENT ONLY FOR A GOVERNED ITEM. A free-text procedure declares no fields,
+              // so anything sitting in `details` from a type the practitioner switched away from must
+              // not travel -- the engine drops undeclared keys anyway, and sending them would make the
+              // request say something the screen never asked.
+              details: plan.detailFields.length > 0 ? it.details : undefined,
             };
           }),
         }),
@@ -456,6 +484,9 @@ export default function ProcedureWorkspace(props: {
                       const plan = procedureFieldPlan(shape);
                       const ready = readiness[n];
                       const named = it.label || `item ${n + 1}`;
+                      // s14, mirroring the engine: required only where the procedure actually happened.
+                      const outcomeDemanded = plan.outcomeRequired
+                        && !(PROCEDURE_STATUSES_NOT_DONE as readonly string[]).includes(it.status);
                       return (
                         <li key={it.key} className="rounded-xl border border-slate-200 bg-white p-3">
                           {/* ⚠ THE READINESS INDICATOR KEEPS ONE LOCATION ACROSS EVERY ITEM (s21), and
@@ -524,6 +555,13 @@ export default function ProcedureWorkspace(props: {
                                       // somebody picks to get past a required field, the engine refuses
                                       // it by name, and wrong-site is the canonical never-event.
                                       .filter(([k]) => !(plan.side === "required" && k === "not_applicable"))
+                                      // s9: "show only valid CONFIGURED choices". A knee injection that
+                                      // is only ever left or right does not offer bilateral. ⚠ An empty
+                                      // list means UNRESTRICTED, never "no choices" -- reading it the
+                                      // other way would leave every unrestricted procedure, which is
+                                      // almost all of them, with an empty dropdown.
+                                      .filter(([k]) => plan.lateralities.length === 0
+                                        || k === "not_applicable" || plan.lateralities.includes(k))
                                       .map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                                   </select>
                                 </div>
@@ -557,7 +595,15 @@ export default function ProcedureWorkspace(props: {
                                 <select id={`status-${it.key}`} value={it.status} disabled={busy}
                                   onChange={e => set(it.key, { status: e.target.value })}
                                   className={`${input} mt-1`}>
-                                  {PROCEDURE_STATUSES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                                  {PROCEDURE_STATUSES
+                                    // s11's per-procedure lifecycle, with the same empty-means-
+                                    // unrestricted rule as laterality above. The CURRENT value is always
+                                    // offered even if it falls outside the list -- a catalogue narrowed
+                                    // after an item was staged would otherwise leave the control showing
+                                    // a value it does not contain, which browsers render as blank.
+                                    .filter(([k]) => plan.statuses.length === 0
+                                      || plan.statuses.includes(k) || k === it.status)
+                                    .map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                                 </select>
                               </div>
 
@@ -600,15 +646,58 @@ export default function ProcedureWorkspace(props: {
                               </div>
 
                               {/* s14: outcome is progressive disclosure, not a field on every routine
-                                  uncomplicated procedure. It stays available inside Details rather than
-                                  standing open on the item. */}
+                                  uncomplicated procedure -- EXCEPT where the catalogue says this
+                                  procedure must document one, and then it is marked required and the
+                                  item will not go Ready without it. ⚠ Only where something HAPPENED:
+                                  asking the outcome of a procedure merely ordered invites an answer
+                                  that contradicts the status above it, so the demand follows the
+                                  engine's own not-done list. */}
                               <div className="sm:col-span-2">
-                                <label className={FIELD_LABEL} htmlFor={`imm-${it.key}`}>Immediate outcome</label>
+                                <label className={FIELD_LABEL} htmlFor={`imm-${it.key}`}>
+                                  Immediate outcome{outcomeDemanded ? " *" : ""}
+                                </label>
                                 <input id={`imm-${it.key}`} value={it.immediateOutcome} disabled={busy}
-                                  placeholder="Optional"
+                                  placeholder={outcomeDemanded ? "What happened" : "Optional"}
                                   onChange={e => set(it.key, { immediateOutcome: e.target.value })}
-                                  className={`${input} mt-1`} />
+                                  className={`${input} mt-1 ${outcomeDemanded && !it.immediateOutcome.trim()
+                                    ? "border-amber-300 bg-[var(--cmp-surface-warning)]" : ""}`} />
                               </div>
+
+                              {/* ── s8's PROCEDURE-SPECIFIC FIELDS ────────────────────────────────
+                                  Declared by the catalogue entry, rendered only for the procedure that
+                                  declares them. ⚠ Three kinds and no more: a clinical field whose kind
+                                  the screen cannot validate is one the server cannot either, and
+                                  parseDetailFields DROPS any definition it cannot read rather than
+                                  drawing an input that would collect an unchecked answer. */}
+                              {plan.detailFields.map(f => (
+                                <div key={f.key} className={f.kind === "text" ? "sm:col-span-2" : ""}>
+                                  <label className={FIELD_LABEL} htmlFor={`d-${it.key}-${f.key}`}>
+                                    {f.label}{f.required ? " *" : ""}
+                                  </label>
+                                  {f.kind === "choice" ? (
+                                    <select id={`d-${it.key}-${f.key}`} value={it.details[f.key] ?? ""}
+                                      disabled={busy}
+                                      onChange={e => set(it.key, { details: { ...it.details, [f.key]: e.target.value } })}
+                                      className={`${input} mt-1 ${f.required && !(it.details[f.key] ?? "").trim()
+                                        ? "border-amber-300 bg-[var(--cmp-surface-warning)]" : ""}`}>
+                                      {/* ⚠ THE EMPTY OPTION IS FIRST AND IS NOT A VALUE. A required
+                                          choice that pre-selects its first option records an answer
+                                          nobody gave -- the same trap as "Not sided" on a sided
+                                          procedure. */}
+                                      <option value="">{f.required ? "Choose..." : "Not recorded"}</option>
+                                      {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+                                    </select>
+                                  ) : (
+                                    <input id={`d-${it.key}-${f.key}`} value={it.details[f.key] ?? ""}
+                                      disabled={busy}
+                                      inputMode={f.kind === "number" ? "decimal" : undefined}
+                                      placeholder={f.required ? "" : "Optional"}
+                                      onChange={e => set(it.key, { details: { ...it.details, [f.key]: e.target.value } })}
+                                      className={`${input} mt-1 ${f.required && !(it.details[f.key] ?? "").trim()
+                                        ? "border-amber-300 bg-[var(--cmp-surface-warning)]" : ""}`} />
+                                  )}
+                                </div>
+                              ))}
                             </div>
                           )}
 

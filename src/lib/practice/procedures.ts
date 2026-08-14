@@ -4,6 +4,7 @@ import {
   PROCEDURE_CATEGORIES, SIDED_LATERALITIES, LATERALITIES, CONSENT_STATUSES,
   OUTCOME_TYPES, OUTCOME_SEVERITIES, SEVERITY_REQUIRED_FOR,
   PROCEDURE_STATUSES, PROCEDURE_STATUSES_NOT_DONE, PROCEDURE_STATUSES_NEEDING_REASON,
+  parseDetailFields, detailFieldIssues,
 } from "@/lib/practice/procedure-constants";
 
 // CPR-150 PROCEDURE AND CLINICAL ACTIVITY -- what was actually DONE to a person, as distinct from what
@@ -40,25 +41,93 @@ export async function listProcedureTypes(admin: any, workspaceId: string, opts: 
 } = {}) {
   const statuses = opts.includeUnpublished ? ["draft", "published"] : ["published"];
   const build = (q: any) => {
-    let out = q.select("id, workspace_id, code, name, category, sided, consent_required, typical_duration_minutes, aftercare, status, version")
+    // ⚠ THE RULE COLUMNS TRAVEL WITH THE LIST, because the screen decides what to DRAW from them. This
+    // select omitting one is the same failure as resolveProcedureType omitting one: the rule arrives
+    // undefined and reads as "no rule", except here it silently hides or shows a field rather than
+    // silently skipping a refusal.
+    let out = q.select("id, workspace_id, code, name, category, sided, consent_required, typical_duration_minutes, aftercare, status, version, "
+      + "site_rule, laterality_rule, consent_rule, allowed_lateralities, allowed_statuses, default_status, outcome_required, detail_fields")
       .in("status", statuses);
     if (opts.category) out = out.eq("category", opts.category);
     return out.order("name");
   };
-  const [platform, mine] = await Promise.all([
+  const [platform, mine, activation] = await Promise.all([
     build(admin.from("practice_procedure_type")).is("workspace_id", null),
     build(admin.from("practice_procedure_type")).eq("workspace_id", workspaceId),
+    // CPR-PROC-HFE-005 s20 (migration 297). The catalogue's nullable workspace_id has always let a
+    // practice ADD entries; it has never let one hide or rename a supplied entry, which is why a
+    // practice that does no obstetrics has always had obstetric procedures in its search results.
+    admin.from("practice_procedure_type_activation")
+      .select("procedure_type_id, enabled, local_display_name, sort_order")
+      .eq("workspace_id", workspaceId),
   ]);
+
+  // ⚠ A FAILED ACTIVATION READ MUST NOT SILENTLY DISABLE THE CATALOGUE, NOR SILENTLY ENABLE IT. The
+  // table records only DEPARTURES from the default, so `error` and "no rows" are indistinguishable in
+  // the data itself -- and treating an error as "no departures" would quietly re-enable everything a
+  // practice had switched off. The offering is left whole and the failure is reported on the row, so a
+  // caller can say so rather than guess.
+  const overrides = new Map<string, any>();
+  for (const a of ((activation.data ?? []) as any[])) overrides.set(a.procedure_type_id, a);
+  const activationUnavailable = !!activation.error;
+
   return [...((platform.data ?? []) as any[]), ...((mine.data ?? []) as any[])]
-    .map(r => ({ ...r, scope: r.workspace_id === null ? "platform" : "workspace" }));
+    .map(r => {
+      const o = overrides.get(r.id);
+      return {
+        ...r,
+        scope: r.workspace_id === null ? "platform" : "workspace",
+        // The local name overrides the display only. `name` is untouched, because migration 197 writes
+        // the label DOWN onto each procedure event and a renamed catalogue entry must not rewrite
+        // history -- the local name is what this practice calls it from now on, not what it called it.
+        name: (o?.local_display_name ?? "").trim() || r.name,
+        catalogueName: r.name,
+        enabled: o ? o.enabled !== false : true,
+        sortOrder: o?.sort_order ?? null,
+        activationUnavailable,
+      };
+    })
+    .filter(r => r.enabled)
+    .sort((a, b) => {
+      if (a.sortOrder !== null && b.sortOrder !== null && a.sortOrder !== b.sortOrder)
+        return a.sortOrder - b.sortOrder;
+      if (a.sortOrder !== null && b.sortOrder === null) return -1;
+      if (a.sortOrder === null && b.sortOrder !== null) return 1;
+      return String(a.name).localeCompare(String(b.name));
+    });
 }
+
+/**
+ * ⚠ ONE COLUMN LIST, BECAUSE A RULE THIS SELECT FORGETS IS A RULE THAT SILENTLY STOPS BEING ENFORCED.
+ * `resolveProcedureType` feeds every refusal in recordProcedure. A column missing from it arrives as
+ * `undefined`, and `undefined` reads as "no rule" in every check below -- which is exactly how this tab
+ * shipped with `sided` unreachable, by a different route. Migration 297 added six more rules to forget.
+ */
+const PROCEDURE_TYPE_RULE_COLUMNS =
+  "id, workspace_id, name, sided, consent_required, status, aftercare, site_rule, laterality_rule, "
+  + "consent_rule, allowed_lateralities, allowed_statuses, default_status, outcome_required, detail_fields";
 
 async function resolveProcedureType(admin: any, workspaceId: string, typeId: string) {
   const { data } = await admin.from("practice_procedure_type")
-    .select("id, workspace_id, name, sided, consent_required, status, aftercare").eq("id", typeId).maybeSingle();
+    .select(PROCEDURE_TYPE_RULE_COLUMNS).eq("id", typeId).maybeSingle();
   if (!data) return null;
   if (data.workspace_id !== null && data.workspace_id !== workspaceId) return null;
   return data;
+}
+
+/**
+ * The s8 detail answers that are actually going to be written, with their labels beside them.
+ *
+ * ⚠ ONLY WHAT THE CATALOGUE DECLARED. A caller can post any keys it likes; anything not in
+ * `detail_fields` is dropped rather than stored, so this table cannot become an unschema'd bag of
+ * whatever a client felt like sending. Blank answers are dropped too -- a row whose value_text is empty
+ * would fail the column's own check and says nothing anyway.
+ */
+function detailValuesFor(type: any, values: Record<string, string> | undefined) {
+  if (!values) return [];
+  return parseDetailFields(type?.detail_fields)
+    .map(f => ({ key: f.key, label: f.label, value: (values[f.key] ?? "").trim() }))
+    .filter(d => d.value.length > 0 && d.value.length <= 500);
 }
 
 export async function createProcedureType(admin: any, args: {
@@ -127,6 +196,11 @@ export async function recordProcedure(admin: any, args: {
   immediateOutcome?: string; status?: string; abandonedReason?: string; performedAt?: string;
   /** CPR-TRT-PROC-003 s10. Required by the engine when the status is SCHEDULED -- see recordProcedure. */
   scheduledAt?: string;
+  /**
+   * CPR-PROC-HFE-005 s8. Answers to the procedure-specific fields the catalogue declares, keyed by
+   * field key. Anything not declared on the type is dropped rather than stored.
+   */
+  details?: Record<string, string>;
   actorId: string; correlationId: string;
 }): Promise<EngineResult<{ id: string; label: string }>> {
   const guard = await editableEncounter(admin, args.workspaceId, args.encounterId);
@@ -144,20 +218,46 @@ export async function recordProcedure(admin: any, args: {
 
   const laterality = LATERALITIES.some(([l]) => l === args.laterality) ? args.laterality! : "not_applicable";
 
-  // SAFETY RULE 1. See the header.
-  if (type?.sided && !SIDED_LATERALITIES.includes(laterality))
+  // ⚠ SAFETY RULE 1, AND MIGRATION 297 DID NOT REPLACE THE BOOLEAN -- IT ADDED A SECOND WAY TO SAY YES.
+  //
+  // `sided` is the wrong-site control and it is the oldest thing in this file. 297 added
+  // `laterality_rule` because s20 needs a third state (not_applicable) that a boolean cannot express,
+  // and the backfill set the two consistently. But a catalogue editor, a bad import or a hand-run UPDATE
+  // can put them out of step, and only one direction of that is survivable: the check is an OR, so a
+  // stale boolean can only ever ADD a refusal. If they ever disagree, the answer is the stricter one.
+  const requiresSide = type?.sided === true || type?.laterality_rule === "required";
+  if (requiresSide && !SIDED_LATERALITIES.includes(laterality))
     return {
       ok: false, status: 422, code: "LATERALITY_REQUIRED",
-      message: `${type.name} has sides; record left, right or bilateral`,
+      message: `${type!.name} has sides; record left, right or bilateral`,
+    };
+
+  // s9: "show only valid configured choices such as Left, Right or Bilateral." An empty list is NO
+  // RESTRICTION, not no choices -- see migration 297's header for why it is not seeded with all three.
+  const allowedLat: string[] = Array.isArray(type?.allowed_lateralities) ? type!.allowed_lateralities : [];
+  if (allowedLat.length > 0 && SIDED_LATERALITIES.includes(laterality) && !allowedLat.includes(laterality))
+    return {
+      ok: false, status: 422, code: "LATERALITY_NOT_ALLOWED",
+      message: `${type!.name} is recorded as ${allowedLat.join(" or ")}, not ${laterality}`,
+    };
+
+  // s9 and s21: site follows the same required / optional / not-applicable model. Checked with btrim
+  // rather than a null test -- a blank string is not null, which is migration 256's scar.
+  if (type?.site_rule === "required" && !(args.site ?? "").trim())
+    return {
+      ok: false, status: 422, code: "SITE_REQUIRED",
+      message: `${type.name} needs the site it was done on`,
     };
 
   const consentStatus = CONSENT_STATUSES.some(([c]) => c === args.consentStatus) ? args.consentStatus! : "not_recorded";
-  // SAFETY RULE 2. `refused` passes deliberately -- a patient declining is a real recordable event, and
-  // the record should be able to say so rather than forcing a false "obtained".
-  if (type?.consent_required && consentStatus === "not_recorded")
+  // SAFETY RULE 2, with the same stricter-of-two rule as laterality above. `refused` passes
+  // deliberately -- a patient declining is a real recordable event, and the record should be able to
+  // say so rather than forcing a false "obtained".
+  const requiresConsent = type?.consent_required === true || type?.consent_rule === "required";
+  if (requiresConsent && consentStatus === "not_recorded")
     return {
       ok: false, status: 422, code: "CONSENT_REQUIRED",
-      message: `${type.name} requires consent; record whether it was obtained, refused, or not required`,
+      message: `${type!.name} requires consent; record whether it was obtained, refused, or not required`,
     };
 
   // ⚠ THE STATUS IS VALIDATED, NOT COERCED, AND THAT IS A BUG FIX RATHER THAN A REFACTOR. This line
@@ -166,11 +266,24 @@ export async function recordProcedure(admin: any, args: {
   // consequential value in the set: the record would assert that a procedure was carried out on a
   // patient because a string did not match. With six statuses instead of two the odds of a near-miss
   // rise sharply, so an unknown status is now refused by name.
-  const status = (args.status ?? "PERFORMED").trim();
+  //
+  // ⚠ THE CATALOGUE'S DEFAULT APPLIES ONLY WHEN THE CALLER SAID NOTHING. `args.status ?? default` --
+  // never an override. A procedure the practitioner explicitly marked ORDERED must not become PERFORMED
+  // because the catalogue prefers it, which is the same class of failure as the coercion this line
+  // already carries a warning about.
+  const status = (args.status ?? type?.default_status ?? "PERFORMED").trim();
   if (!PROCEDURE_STATUSES.some(([s]) => s === status))
     return {
       ok: false, status: 400, code: "VALIDATION_ERROR",
       message: `${status} is not a procedure status`,
+    };
+
+  // s11 and s20's per-procedure lifecycle. Empty means unrestricted, as everywhere in 297.
+  const allowedStatuses: string[] = Array.isArray(type?.allowed_statuses) ? type!.allowed_statuses : [];
+  if (allowedStatuses.length > 0 && !allowedStatuses.includes(status))
+    return {
+      ok: false, status: 422, code: "STATUS_NOT_ALLOWED",
+      message: `${type!.name} cannot be recorded as ${status.toLowerCase()}`,
     };
 
   const needsReason = (PROCEDURE_STATUSES_NEEDING_REASON as readonly string[]).includes(status);
@@ -192,6 +305,26 @@ export async function recordProcedure(admin: any, args: {
     };
 
   const notDone = (PROCEDURE_STATUSES_NOT_DONE as readonly string[]).includes(status);
+
+  // ⚠ s14's OUTCOME REQUIREMENT, DEMANDED ONLY WHERE SOMETHING ACTUALLY HAPPENED. "Where a configured
+  // procedure requires outcome documentation, surface the field automatically" -- but asking what the
+  // outcome was of a procedure that is merely ORDERED or was DECLINED invites an answer that
+  // contradicts the status sitting beside it. notDone is the engine's own list, so the two cannot drift.
+  if (type?.outcome_required && !notDone && !(args.immediateOutcome ?? "").trim())
+    return {
+      ok: false, status: 422, code: "OUTCOME_REQUIRED",
+      message: `${type.name} needs its immediate outcome recorded`,
+    };
+
+  // s8's configured fields, refused BEFORE the insert. detailFieldIssues is the same function the
+  // screen's readiness indicator calls, so the words a practitioner reads here and the words they read
+  // on the working item come from one place and cannot describe the same fault differently.
+  const detailIssues = detailFieldIssues(parseDetailFields(type?.detail_fields), args.details);
+  if (detailIssues.length > 0)
+    return {
+      ok: false, status: 422, code: "PROCEDURE_DETAIL_REQUIRED",
+      message: `${type!.name} needs ${detailIssues.join(", ")}`,
+    };
 
   // A named plan must belong to this encounter -- linking a procedure to another visit's treatment would
   // make the "was this carried out" question unanswerable in both directions.
@@ -226,6 +359,34 @@ export async function recordProcedure(admin: any, args: {
     created_by: args.actorId,
   }).select("id, label").single();
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
+
+  // ── s8's PROCEDURE-SPECIFIC DETAIL FIELDS ──────────────────────────────────────────────────────
+  //
+  // ⚠ THE LABEL IS WRITTEN DOWN BESIDE THE VALUE, exactly as practice_procedure.label is written down
+  // rather than joined (migration 197 s2). A field definition renamed or deleted from the catalogue
+  // next year must not be able to rewrite, or orphan, what somebody recorded today.
+  //
+  // ⚠ AND A REQUIRED DETAIL FIELD IS REFUSED BEFORE THE INSERT, NOT AFTER -- see the validation loop
+  // above. This block only writes what has already been accepted.
+  const detailRows = detailValuesFor(type, args.details);
+  if (detailRows.length > 0) {
+    const { error: detailError } = await admin.from("practice_procedure_detail").insert(
+      detailRows.map(d => ({
+        workspace_id: args.workspaceId, procedure_id: p.id,
+        field_key: d.key, field_label: d.label, value_text: d.value, created_by: args.actorId,
+      })));
+    // ⚠ THE PROCEDURE IS NOT ROLLED BACK IF THE DETAIL WRITE FAILS, AND THAT IS THE SAFER DIRECTION.
+    // The procedure event is the clinical fact -- that something was done to a patient. A configured
+    // extra field is description of it. Losing the description is bad; deleting the record of the act
+    // because its description would not save is worse, and there is no transaction across these two
+    // statements from here. The failure is audited so it is recoverable rather than silent.
+    if (detailError)
+      await audit(admin, {
+        workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.procedure_detail_failed",
+        payload: { procedureId: p.id, detail: detailError.message, fields: detailRows.map(d => d.key) },
+        correlationId: args.correlationId,
+      });
+  }
 
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.procedure_recorded",
