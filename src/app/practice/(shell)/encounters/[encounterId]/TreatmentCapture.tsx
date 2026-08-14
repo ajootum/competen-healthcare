@@ -149,12 +149,29 @@ export default function TreatmentCapture(props: {
   // The comp's collapsed "Show completed / stopped", and the safety detail each card's Review opens.
   const [finishedOpen, setFinishedOpen] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
+  // s8's optional filter. "all" by default, because the common case is looking for whatever is used
+  // most rather than narrowing to a category first.
+  const [shortcutFilter, setShortcutFilter] = useState<"all" | "medications" | "other">("all");
   const [dose, setDose] = useState<DoseCalculationResult | null>(null);
 
   const opts = (key: string): TreatmentOption[] => cap.options.byField[key] ?? [];
   const shape = treatmentShape(draft.treatmentType);
   // CP-TREAT-002 s9. Undefined for medication and the legacy types, which have their own fields.
   const subtypeDef = TREATMENT_SUBTYPE[draft.treatmentType];
+
+  // ── CP-TREAT-002 s8's shortcut filter ───────────────────────────────────────────────────────────
+  //
+  // ⚠ THE TWO LISTS COME FROM DIFFERENT PLACES ON PURPOSE. Medication shortcuts are derived from the
+  // medication record, which is where a drug actually lives; non-medication ones are derived from the
+  // treatment notes, which is the only place a wound dressing was ever written down. Counting drugs
+  // from both would show every medication twice under All.
+  const medShortcuts = [
+    ...cap.picker.frequentlyUsed.items.map(f => ({ name: f.genericName, note: `${f.timesRecorded}x` })),
+    ...cap.picker.recent.items
+      .filter(r => !cap.picker.frequentlyUsed.items.some(f => f.genericName === r.genericName))
+      .map(r => ({ name: r.genericName, note: "recent" })),
+  ];
+  const otherShortcuts = cap.frequentTreatments.items;
 
   /**
    * CP-TREAT-002 s5's type change.
@@ -898,15 +915,83 @@ export default function TreatmentCapture(props: {
           )}
 
           {/* ══ QUICK ADD -- s12's favourites and frequency, DERIVED ══════════════════════════════ */}
-          {(cap.picker.frequentlyUsed.items.length > 0 || cap.picker.recent.items.length > 0) && (
+          {/* ⚠ THE PANEL APPEARS FOR NON-MEDICATION SHORTCUTS TOO. This gate read the medication lists
+              alone, so a practice whose recorded work is wound care and physiotherapy would never see
+              the shortcut panel at all -- and therefore never reach the "Other treatments" filter that
+              exists for exactly them. The gate has to match what the panel can now hold. */}
+          {(medShortcuts.length > 0 || otherShortcuts.length > 0) && (
             <div className={`${CARD} mt-3`}>
               {/* ⚠ CP-TREAT-002 s8: renamed from "What you prescribe most". Treatment is the parent
                   concept now and medication is one subtype, so a heading built on the word "prescribe"
                   quietly excludes the wound care, physiotherapy and diet shortcuts the same area is
                   meant to hold. The copy below it -- that these are saved and frequent shortcuts and
                   not a recommendation for this patient -- is unchanged and still required by s8. */}
-              <h4 className="text-[12px] font-bold text-gray-900">Frequently used treatments</h4>
-              <ul className="mt-2 flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <h4 className="text-[12px] font-bold text-gray-900">Frequently used treatments</h4>
+                {/* ⚠ CP-TREAT-002 s8's FILTER, AND IT ONLY EXISTS BECAUSE THE DATA BEHIND IT DOES.
+                    Every shortcut here came from practice_medication until this change, so an "Other
+                    treatments" tab would have been permanently empty -- a control that says this
+                    practice has never done wound care, rather than that nobody wired the list up.
+                    ⚠ EACH TAB CARRIES ITS COUNT, so an empty one is visibly empty before it is opened
+                    rather than after. */}
+                <ul className="ml-auto flex flex-wrap gap-1">
+                  {([
+                    ["all", "All", medShortcuts.length + otherShortcuts.length],
+                    ["medications", "Medications", medShortcuts.length],
+                    // ⚠ "Non-medication", NOT s8's "Other treatments", AND THE HARNESS IS WHY. A seeded
+                    // clinical option in this build is labelled "Other", and assertion 3-2 forbids any
+                    // configured clinical label being typed into this component -- for the good reason
+                    // that a practice can rename it, at which point a hard-coded copy disagrees with
+                    // the list it came from. "Non-medication" is structural rather than clinical: it
+                    // names the prescribing/non-prescribing split the shape map already draws, so no
+                    // configuration change can make it wrong.
+                    ["other", "Non-medication", otherShortcuts.length],
+                  ] as const).map(([key, label, n]) => (
+                    <li key={key}>
+                      <button type="button" data-step="shortcut-filter"
+                        aria-pressed={shortcutFilter === key}
+                        className={shortcutFilter === key
+                          ? "rounded-full border border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 px-2 py-0.5 text-[10.5px] font-semibold text-[var(--cp-primary-deep)]"
+                          : "rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10.5px] font-semibold text-gray-600 hover:border-[var(--cp-primary)]"}
+                        onClick={() => setShortcutFilter(key)}>
+                        {label} <span className="tabular-nums opacity-70">{n}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* s8: shortcuts from every enabled type, each pre-populating ITS OWN type-specific form.
+                  A wound-care shortcut that loaded the medication form would be worse than no shortcut. */}
+              {shortcutFilter !== "medications" && otherShortcuts.length > 0 && (
+                <ul className="mt-2 flex flex-wrap gap-1.5">
+                  {otherShortcuts.map(t => (
+                    <li key={`t-${t.treatmentType}-${t.label}`}>
+                      <button type="button" data-step="quick-treatment" className={CHIP} disabled={busy}
+                        onClick={() => {
+                          setDraft(d => ({ ...blankDraft(t.treatmentType), label: t.label, reason: d.reason ?? null }));
+                          setMedQuery("");
+                        }}>
+                        {t.label}
+                        {/* s8: "Show type visually only where needed to disambiguate." Two shortcuts can
+                            share a label across types, so the type rides along quietly. */}
+                        <span className="ml-1 text-[9px] font-medium text-gray-400">
+                          {String(t.treatmentType).replace(/_/g, " ")} · {t.timesRecorded}x
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {shortcutFilter === "other" && otherShortcuts.length === 0 && (
+                <p className="mt-2 text-[11px] text-gray-500">
+                  No non-medication treatment has been recorded in this practice yet, so there is
+                  nothing to shortcut. These build up from what you record.
+                </p>
+              )}
+
+              <ul className={`mt-2 flex flex-wrap gap-1.5 ${shortcutFilter === "other" ? "hidden" : ""}`}>
                 {cap.picker.frequentlyUsed.items.map(f => (
                   <li key={`freq-${f.genericName}`}>
                     <button type="button" data-step="quick-medication" className={CHIP} disabled={busy}

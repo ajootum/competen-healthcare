@@ -304,6 +304,8 @@ export type TreatmentCapturePayload = {
   permitted: boolean;
   options: TreatmentOptionSet;
   picker: MedicationPicker;
+  /** CP-TREAT-002 s8's non-medication shortcuts. The medication ones live on `picker`. */
+  frequentTreatments: Panel<{ treatmentType: string; label: string; timesRecorded: number }>;
   templates: Panel<TreatmentTemplate>;
   reasonRequired: boolean;
   boundary: string;
@@ -318,6 +320,51 @@ export type TreatmentCapturePayload = {
  * every API test, and kills the page at render. Nothing here is a function, and the harness walks the
  * payload to prove it.
  */
+/**
+ * CP-TREAT-002 s8's non-medication shortcuts, DERIVED from what this practice has actually recorded.
+ *
+ * ⚠ THIS EXISTS BECAUSE THE FILTER WOULD OTHERWISE BE A DEAD CONTROL. s8 asks for All / Medications /
+ * Other treatments, and every shortcut on this screen came from practice_medication -- so an "Other
+ * treatments" tab would have been permanently empty, which is worse than no tab at all: it says this
+ * practice has never done wound care, rather than that nobody wired the list up.
+ *
+ * ⚠ DERIVED, NEVER CURATED, and the same rule the medication shortcuts follow: this is a COUNT of what
+ * was recorded, not a recommendation. s8 requires the copy saying so to stay, and it does.
+ *
+ * ⚠ KEYED ON TYPE AND LABEL TOGETHER. "Dressing" under wound_care and "Dressing" under other are two
+ * different shortcuts -- collapsing them by label would pre-populate the wrong type-specific form, and
+ * the practitioner would meet a body-area field for something that has none.
+ */
+export async function frequentTreatments(
+  admin: any, ctx: WorkspaceContext,
+): Promise<Panel<{ treatmentType: string; label: string; timesRecorded: number }>> {
+  const { data, error } = await admin.from(TREATMENT_TABLES.treatment)
+    .select("treatment_type, label")
+    .eq("workspace_id", ctx.workspaceId)
+    .neq("status", "cancelled")
+    // ⚠ THE SAME EXPLICIT 1000-ROW CAP THE MEDICATION PICKER USES. An unstated cap turns "we could not
+    // see far enough" into "there is nothing there".
+    .limit(1000);
+  if (error) return failedPanel(`frequently used treatments could not be computed: ${error.message}`);
+
+  const counts = new Map<string, { treatmentType: string; label: string; timesRecorded: number }>();
+  for (const r of ((data ?? []) as any[])) {
+    const type = trim(r.treatment_type);
+    const label = trim(r.label);
+    // Medications have their own shortcut list, derived from the medication record rather than from
+    // the treatment note. Counting them here as well would show every drug twice under All.
+    if (!type || !label || treatmentShape(type).prescribing) continue;
+    const key = `${type}|${label.toLowerCase()}`;
+    const seen = counts.get(key);
+    if (seen) seen.timesRecorded += 1;
+    else counts.set(key, { treatmentType: type, label, timesRecorded: 1 });
+  }
+  return {
+    items: [...counts.values()].sort((a, b) => b.timesRecorded - a.timesRecorded || a.label.localeCompare(b.label)).slice(0, 12),
+    permitted: true, unavailable: false, detail: null,
+  };
+}
+
 export async function treatmentCapture(
   admin: any, ctx: WorkspaceContext, practitionerId: string,
 ): Promise<TreatmentCapturePayload> {
@@ -329,21 +376,23 @@ export async function treatmentCapture(
         frequentlyUsed: { items: [], permitted: false, unavailable: false, detail: null },
         recent: { items: [], permitted: false, unavailable: false, detail: null },
       },
+      frequentTreatments: { items: [], permitted: false, unavailable: false, detail: null },
       templates: { items: [], permitted: false, unavailable: false, detail: null },
       reasonRequired: false, boundary: TREATMENT_BOUNDARY, refusals: TREATMENT_REFUSALS,
       maxPending: MAX_PENDING_TREATMENTS,
     };
   }
 
-  const [options, picker, templates, settings] = await Promise.all([
+  const [options, picker, templates, settings, freqTreatments] = await Promise.all([
     treatmentOptions(admin, ctx),
     medicationPicker(admin, ctx, practitionerId),
     treatmentTemplates(admin, ctx, practitionerId),
     captureSettings(admin, ctx.workspaceId),
+    frequentTreatments(admin, ctx),
   ]);
 
   return {
-    permitted: true, options, picker, templates,
+    permitted: true, options, picker, templates, frequentTreatments: freqTreatments,
     reasonRequired: settings.treatmentReasonRequired,
     boundary: TREATMENT_BOUNDARY, refusals: TREATMENT_REFUSALS,
     maxPending: MAX_PENDING_TREATMENTS,

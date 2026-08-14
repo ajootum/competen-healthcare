@@ -596,6 +596,24 @@ async function main() {
   ok("7-29. non-medication types can carry a frequency and duration",
     /!shape\.prescribing && shape\.needsSchedule/.test(capSrcTreat));
 
+  // ── CP-TREAT-002 s8's SHORTCUT FILTER, AND THE DATA THAT MAKES IT HONEST ────────────────────────
+  //
+  // ⚠ THE FILTER IS NOT THE POINT -- THE SECOND LIST IS. Every shortcut on this tab came from
+  // practice_medication, so an "other treatments" tab would have been permanently empty: a control
+  // saying this practice has never done wound care, rather than that nobody wired the list up. The
+  // guard is therefore on the ENGINE deriving non-medication shortcuts, not on the chips existing.
+  const capEngineSrc = src("src/lib/practice/treatment-capture.ts");
+  ok("7-30. non-medication shortcuts are DERIVED from recorded treatments, not from the drug list",
+    /export async function frequentTreatments/.test(capEngineSrc)
+      && /TREATMENT_TABLES\.treatment/.test(capEngineSrc));
+  ok("7-31. and they are keyed on TYPE and label together",
+    /\$\{type\}\|\$\{label\.toLowerCase\(\)\}/.test(capEngineSrc),
+    "two types can share a label, and collapsing them would open the wrong type-specific form");
+  // ⚠ THE PANEL'S OWN GATE HAD TO MOVE TOO. It tested the medication lists alone, so a practice whose
+  // recorded work is wound care would never see the panel that holds its own shortcuts.
+  ok("7-32. the shortcut panel appears for a practice that has only non-medication shortcuts",
+    /medShortcuts\.length > 0 \|\| otherShortcuts\.length > 0/.test(capSrcTreat));
+
   // ── s19's EDIT AND REMOVE EXIST BEHIND THE COMP'S CONTROLS ──────────────────────────────────────
   //
   // ⚠ THE POINT IS THAT THE ENGINE EXISTS, NOT THAT THE ICON DOES. The comp draws a pencil and a menu
