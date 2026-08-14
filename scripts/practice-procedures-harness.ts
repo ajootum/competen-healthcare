@@ -268,23 +268,68 @@ async function main() {
   ok("297-3b. and the screen would not have offered it either (the mirror agrees)",
     procedureReadiness(draft({ laterality: "bilateral", site: "x", consentStatus: "obtained" }), shapeOf(sided)).ready === false);
 
-  // s9's site rule. abscess_incision is seeded site_rule = required by 297.
-  ok("297-4. the seeded site rule is on the live row, on BOTH seeded procedures",
-    sided.site_rule === "required" && siteRequired.site_rule === "required",
+  // ── s9's SITE RULE, PROVED AGAINST A FIXTURE THIS HARNESS BUILDS ITSELF ─────────────────────────
+  //
+  // ⚠ THIS USED TO LEAN ON THE SEEDED PLATFORM ROWS AND THAT WAS THE WRONG PLACE TO STAND. Migration
+  // 297 shipped site_rule = 'required' on the four wound and skin procedures; the owner ruled it back
+  // to 'optional' in 298, and these three assertions would have gone quietly vacuous -- still green,
+  // proving nothing, because no row in the catalogue would demand a site any more.
+  //
+  // A seed is a product decision and it can change tomorrow. THE RULE is what this harness is for. So
+  // the fixture is built here, switched on here, and torn down with the workspace -- and 298 relaxing
+  // the platform rows now leaves it completely unmoved. 298-1 below asserts the relaxation itself,
+  // separately, which is the honest way to test a decision that could be reversed again.
+  const siteType = await createProcedureType(admin, {
+    workspaceId: wsA, code: "site_required_probe", name: "Site required probe", ...base,
+  });
+  if (siteType.ok) {
+    await setProcedureTypeStatus(admin, { workspaceId: wsA, procedureTypeId: siteType.data.id, status: "published", ...base });
+    await admin.from("practice_procedure_type").update({ site_rule: "required" }).eq("id", siteType.data.id);
+    const { data: siteRow } = await admin.from("practice_procedure_type")
+      .select("id, site_rule").eq("id", siteType.data.id).maybeSingle();
+    ok("297-4. the fixture really carries site_rule = required (the refusals below are not vacuous)",
+      siteRow?.site_rule === "required", JSON.stringify(siteRow));
+
+    const noSite = await recordProcedure(admin, {
+      workspaceId: wsA, encounterId: encId, procedureTypeId: siteType.data.id, ...base,
+    });
+    ok("297-5. s9: a required SITE is refused when missing",
+      !noSite.ok && noSite.code === "SITE_REQUIRED", noSite.ok ? "was allowed" : noSite.code);
+    // ⚠ AND A BLANK STRING IS NOT A SITE. Migration 256's scar: `is not null` does not stop "   ".
+    const blankSite = await recordProcedure(admin, {
+      workspaceId: wsA, encounterId: encId, procedureTypeId: siteType.data.id, site: "   ", ...base,
+    });
+    ok("297-5b. a site of whitespace is refused too (a blank string is not null)",
+      !blankSite.ok && blankSite.code === "SITE_REQUIRED", blankSite.ok ? "was allowed" : blankSite.code);
+    // CONTROL. Without it the two refusals above pass just as well if this type refused everything.
+    const withSite = await recordProcedure(admin, {
+      workspaceId: wsA, encounterId: encId, procedureTypeId: siteType.data.id, site: "left forearm", ...base,
+    });
+    ok("297-5c. and it records once a site is given (control)", withSite.ok, withSite.ok ? "" : withSite.message);
+    ok("297-5d. the screen mirrors the site rule from the same row",
+      procedureFieldPlan(siteRow as any).site === "required"
+        && procedureReadiness(draft(), siteRow as any).ready === false
+        && procedureReadiness(draft({ site: "left forearm" }), siteRow as any).ready === true);
+  } else {
+    ok("297-4. the fixture really carries site_rule = required (the refusals below are not vacuous)",
+      false, siteType.message);
+  }
+
+  // ── 298: THE OWNER RELAXED THE SEEDED SITE REQUIREMENT ──────────────────────────────────────────
+  //
+  // ⚠ ASSERTED BECAUSE IT IS A DECISION, NOT A DEFAULT. 297 shipped these four as `required` -- my
+  // judgement, imposed on every practice as a hard block on a screen used with a patient in the room,
+  // in a migration whose stated purpose was to make applicability CONFIGURABLE. The owner ruled it
+  // back. This assertion is what stops it drifting back in unnoticed, and it names the four rows so a
+  // future seed cannot re-tighten one of them quietly.
+  ok("298-1. the four seeded wound and skin procedures do NOT demand a site",
+    [sided, siteRequired].every(t => t.site_rule === "optional"),
     JSON.stringify({ abscess: sided.site_rule, dressing: siteRequired.site_rule }));
-  const noSite = await recordProcedure(admin, {
-    workspaceId: wsA, encounterId: encId, procedureTypeId: sided.id,
-    laterality: "left", consentStatus: "obtained", ...base,
-  });
-  ok("297-5. s9: a required SITE is refused when missing",
-    !noSite.ok && noSite.code === "SITE_REQUIRED", noSite.ok ? "was allowed" : noSite.code);
-  // ⚠ AND A BLANK STRING IS NOT A SITE. Migration 256's scar: `is not null` does not stop "   ".
-  const blankSite = await recordProcedure(admin, {
-    workspaceId: wsA, encounterId: encId, procedureTypeId: sided.id,
-    laterality: "left", site: "   ", consentStatus: "obtained", ...base,
-  });
-  ok("297-5b. a site of whitespace is refused too (a blank string is not null)",
-    !blankSite.ok && blankSite.code === "SITE_REQUIRED", blankSite.ok ? "was allowed" : blankSite.code);
+  const { data: stillRequired } = await admin.from("practice_procedure_type")
+    .select("code").is("workspace_id", null).eq("site_rule", "required");
+  ok("298-1b. and no supplied procedure anywhere demands one",
+    (stillRequired ?? []).length === 0,
+    JSON.stringify((stillRequired ?? []).map((r: any) => r.code)));
 
   // ⚠ THE STRICTER-OF-TWO RULE, WHICH IS THE SAFETY DECISION IN THIS WHOLE MIGRATION. A practice-owned
   // entry with sided = true and laterality_rule left at its default proves the OR: the boolean alone
