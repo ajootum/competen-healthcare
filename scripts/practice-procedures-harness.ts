@@ -30,6 +30,7 @@ import { runProvisioning, type IndividualRequest } from "../src/lib/practice/pro
 import { registerPatient } from "../src/lib/practice/patients";
 import { launchEncounter, transitionEncounter, recordTreatment } from "../src/lib/practice/encounters";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
+import { procedureFieldPlan, procedureReadiness } from "../src/lib/practice/procedure-constants";
 import {
   listProcedureTypes, createProcedureType, setProcedureTypeStatus,
   recordProcedure, recordProcedureOutcome, listProcedures, procedureActivity, getProcedure,
@@ -163,16 +164,87 @@ async function main() {
     abscess.ok, abscess.ok ? "" : abscess.message);
   if (!abscess.ok || !dressing.ok) return report();
 
-  const abandoned = await recordProcedure(admin, {
-    workspaceId: wsA, encounterId: encId, label: "Attempted lumbar puncture", status: "ABANDONED", ...base,
+  // ── 1b. THE SCREEN'S READINESS RULES AGREE WITH THE SERVER, CHECKED AGAINST THE SERVER ───────────
+  //
+  // ⚠ CPR-PROC-HFE-005 s21 REQUIRES THE SCREEN TO PRE-EMPT THESE REFUSALS ("make the wrong action
+  // difficult or impossible; do not depend on clinicians repeatedly reading warnings"), and the moment a
+  // screen decides anything a procedure engine also decides, there are two rulebooks for one clinical
+  // act. The sided-laterality rule is the one where a second opinion is a wrong-site record.
+  //
+  // ⚠ SO THE MIRROR IS NOT TESTED AGAINST ITSELF. Every verdict below is paired with the LIVE result of
+  // the same input through recordProcedure, a few lines above. A hand-written expectation would go green
+  // against a client rule and a server rule that had drifted apart together.
+  //
+  // ⚠ AND THE TWO DIRECTIONS OF DISAGREEMENT ARE NOT EQUALLY SURVIVABLE. Client says ready, server
+  // refuses: the refusal still arrives, by name, per item -- annoying and self-correcting. Client says
+  // NOT ready when the server would have accepted: the practitioner is blocked with a patient in front
+  // of them and no way through. That asymmetry is why every check in procedureReadiness is a copy of one
+  // in procedures.ts and none is an invention.
+  const draft = (over: Partial<Parameters<typeof procedureReadiness>[0]> = {}) => ({
+    label: "probe", site: "", laterality: "not_applicable", consentStatus: "not_recorded",
+    status: "PERFORMED", abandonedReason: "", scheduledAt: "", ...over,
   });
-  ok("an abandoned procedure needs a reason (something happened to the patient either way)",
-    !abandoned.ok && abandoned.code === "VALIDATION_ERROR", abandoned.ok ? "was allowed" : abandoned.code);
-  const abandonedOk = await recordProcedure(admin, {
+  // ⚠ THE SHAPES ARE READ OFF THE CATALOGUE, NOT HAND-WRITTEN. `abscess_incision` is sided AND
+  // consent-required; a hand-typed `{ sided: true, consent_required: false }` would have been a test of
+  // my own literal rather than of the row the server consults, and would have gone green while
+  // disagreeing with the live entry.
+  const shapeOf = (t: typeof sided) => ({
+    id: t.id, name: t.name, sided: t.sided, consent_required: t.consent_required,
+  });
+  const sidedShape = shapeOf(sided);
+  const consentShape = shapeOf(consentOnly);
+  const unsidedShape = shapeOf(unsided);
+
+  // The draft mirrors `noSide` exactly -- consent obtained, so only the missing side can be at fault.
+  ok("mirror-1. a sided procedure with no side is NOT ready -- and the server refused exactly that",
+    procedureReadiness(draft({ consentStatus: "obtained" }), sidedShape).ready === false
+      && noSide.ok === false,
+    JSON.stringify(procedureReadiness(draft({ consentStatus: "obtained" }), sidedShape)));
+  ok("mirror-2. with a side it IS ready -- and the server accepted exactly that (control)",
+    procedureReadiness(draft({ laterality: "left", consentStatus: "obtained" }), sidedShape).ready === true
+      && abscess.ok === true,
+    JSON.stringify(procedureReadiness(draft({ laterality: "left", consentStatus: "obtained" }), sidedShape)));
+  ok("mirror-3. consent-required with 'not recorded' is NOT ready -- and the server refused it",
+    procedureReadiness(draft(), consentShape).ready === false && noConsent.ok === false,
+    JSON.stringify(procedureReadiness(draft(), consentShape)));
+  // ⚠ THE ONE THAT WOULD BLOCK A LEGITIMATE RECORD IF IT DRIFTED. `refused` is a real recordable event
+  // and the server accepts it; a client that treated consent as a yes/no would stop it being recorded.
+  ok("mirror-4. consent REFUSED is ready -- and the server accepted it (a patient declining is real)",
+    procedureReadiness(draft({ consentStatus: "refused" }), consentShape).ready === true
+      && refusedConsent.ok === true,
+    JSON.stringify(procedureReadiness(draft({ consentStatus: "refused" }), consentShape)));
+  ok("mirror-5. an unsided, no-consent procedure is ready with nothing extra -- as the server agreed",
+    procedureReadiness(draft(), unsidedShape).ready === true && dressing.ok === true);
+
+  // s9/s22: EEG and endotracheal intubation must not display laterality at all.
+  ok("plan-1. s9: Side is HIDDEN on a procedure the catalogue says has no sides",
+    procedureFieldPlan(unsidedShape).side === "hidden"
+      && procedureFieldPlan(sidedShape).side === "required");
+  // ⚠ AND FREE TEXT IS NOT A STATEMENT THAT A PROCEDURE HAS NO SIDES. Hiding the control on an
+  // unrecognised name would silently drop laterality from anything not yet in the catalogue -- a capture
+  // loss dressed as a simplification, and on a sided procedure a wrong-site record.
+  const freeText = procedureFieldPlan(null);
+  ok("plan-2. a procedure typed in by hand hides nothing and demands nothing",
+    freeText.governed === false && freeText.side === "optional" && freeText.consent === "optional"
+      && procedureReadiness(draft(), null).ready === true,
+    JSON.stringify(freeText));
+
+  // ⚠ ATTEMPTED, NOT ABANDONED, AND THIS PAIR WAS STALE AND HALF-GREEN. Migration 294 renamed the
+  // status and procedure-constants.ts stopped offering ABANDONED, so recordProcedure refuses it by name
+  // as "ABANDONED is not a procedure status". The FIRST assertion below kept passing anyway -- it only
+  // checked for VALIDATION_ERROR, and got one for a completely different reason than the missing reason
+  // it was written to prove. A control that passes for the wrong reason is worse than one that fails.
+  const attempted = await recordProcedure(admin, {
+    workspaceId: wsA, encounterId: encId, label: "Attempted lumbar puncture", status: "ATTEMPTED", ...base,
+  });
+  ok("an attempted procedure needs a reason (something happened to the patient either way)",
+    !attempted.ok && attempted.code === "VALIDATION_ERROR" && /say why/.test(attempted.message),
+    attempted.ok ? "was allowed" : `${attempted.code}: ${attempted.message}`);
+  const attemptedOk = await recordProcedure(admin, {
     workspaceId: wsA, encounterId: encId, label: "Attempted lumbar puncture",
-    status: "ABANDONED", abandonedReason: "patient could not tolerate positioning", ...base,
+    status: "ATTEMPTED", abandonedReason: "patient could not tolerate positioning", ...base,
   });
-  ok("an abandoned procedure records WITH a reason (control)", abandonedOk.ok, abandonedOk.ok ? "" : abandonedOk.message);
+  ok("an attempted procedure records WITH a reason (control)", attemptedOk.ok, attemptedOk.ok ? "" : attemptedOk.message);
 
   const unpublished = await createProcedureType(admin, {
     workspaceId: wsA, code: "practice_special", name: "Practice-specific thing", sided: true, ...base,
@@ -323,7 +395,7 @@ async function main() {
   // ── 6. Clinical activity ──────────────────────────────────────────────────
   const activity = await procedureActivity(admin, wsA);
   ok("activity counts real rows", activity.total === listed.length, `${activity.total} vs ${listed.length}`);
-  ok("activity separates performed from abandoned",
+  ok("activity separates performed from attempted-not-completed",
     activity.byLabel.some(l => l.label === "Attempted lumbar puncture" && l.abandoned === 1 && l.performed === 0),
     JSON.stringify(activity.byLabel.map(l => [l.label, l.performed, l.abandoned])));
   ok("activity reports complications as a COUNT AND A DENOMINATOR, never as a rate",

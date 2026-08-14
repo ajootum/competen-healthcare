@@ -201,11 +201,15 @@ const nextConfig: NextConfig = {
    * exactly as before — Vercel does not set this variable, and a deployment must keep using `.next`.
    * The override is opt-in and local only.
    *
-   * ⚠ THE FIRST OVERRIDDEN BUILD REWRITES `tsconfig.json`, AND THAT IS EXPECTED. Next appends
-   * `.next-verify/types/**/*.ts` to `include` (and reformats the file) the way it already maintains the
+   * ⚠ THE FIRST OVERRIDDEN BUILD REWRITES `tsconfig.json`, AND THAT IS EXPECTED. Next appends a
+   * `.next-verify/types` glob to `include` (and reformats the file) the way it already maintains the
    * `.next/types` entry. Leave it: an `include` glob matching nothing is not an error, `.next/types`
    * stays listed, so a Vercel build is unaffected. Deleting the entry only makes the next local
    * verification build add it back and dirty the tree again.
+   *
+   * ⚠ AND DO NOT WRITE THAT GLOB OUT IN FULL IN A BLOCK COMMENT. The literal pattern contains the
+   * characters that CLOSE a block comment, so spelling it here terminated this comment early and turned
+   * the rest of the file into 8 syntax errors.
    */
   distDir: process.env.NEXT_BUILD_DIR || ".next",
 

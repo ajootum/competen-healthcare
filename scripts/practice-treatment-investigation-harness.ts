@@ -683,8 +683,16 @@ async function main() {
   // ⚠ s14: "Right-rail content is visibly secondary to the active Treatment workspace." s3 gives the
   // active-work band the strongest boundary on the page, and TreatmentCapture spends the only 2px
   // border there. A rail card that took one would invert the whole hierarchy.
+  // ⚠ THE CONTROL HALF MOVED WITH THE BANDS, AND IT HAD TO BE REPOINTED RATHER THAN DROPPED. This read
+  // `/border-2/.test(capSrcTreat)`, which went red the moment CPR-PROC-HFE-005 s17 moved the four bands
+  // into encounter-band-constants.ts so the Procedures tab could share them. The claim is unchanged --
+  // the active-work band holds the only 2px boundary and no rail tier takes one -- so the needle follows
+  // the constant instead of the file that used to declare it.
+  const bandSrc = src("src/lib/practice/encounter-band-constants.ts");
   ok("7-45. s14: no rail tier out-shouts the active-work band",
-    !/border-2/.test(railSrc) && /border-2/.test(capSrcTreat),
+    !/border-2/.test(railSrc)
+      && /export const BAND_WORK = "[^"]*border-2/.test(bandSrc)
+      && capSrcTreat.includes("BAND_WORK"),
     "a rail that competes with the current task defeats the ranking above it");
 
   // ⚠ s7 FORBIDS THE OBVIOUS WAY TO SATISFY s11. "Strongest heading/status treatment" invites a single

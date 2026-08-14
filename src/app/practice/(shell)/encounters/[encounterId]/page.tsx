@@ -14,6 +14,7 @@ import { listTemplates, noteHistory, listDocuments } from "@/lib/practice/docume
 import { listPhrases, listAttachments, myDrafts } from "@/lib/practice/documentation-tools";
 import { listFollowUps, listIntervals } from "@/lib/practice/follow-ups";
 import { listProcedures, listProcedureTypes } from "@/lib/practice/procedures";
+import { frequentProcedures } from "@/lib/practice/procedure-capture";
 import { logAccess } from "@/lib/practice/privacy";
 import { formatDayTime } from "@/lib/datetime";
 import EncounterConsole from "./EncounterConsole";
@@ -109,6 +110,7 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
   // attach it to.
   const [
     templates, noteVersions, documents, followUpList, intervals, procedures, procedureTypes,
+    frequentProcs,
     phrases, attachments, draftState, snapshot, session, practitioner,
   ] = await Promise.all([
     listTemplates(admin, shell.ctx.workspaceId, { kind: "encounter_note" }),
@@ -118,6 +120,9 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
     listIntervals(admin),
     listProcedures(admin, shell.ctx.workspaceId, { patientId: encounter.patient_id, limit: 20 }),
     listProcedureTypes(admin, shell.ctx.workspaceId),
+    // CPR-PROC-HFE-005 s6. Derived from what this practice has recorded, not from the catalogue --
+    // a shortcut list built from the catalogue is the catalogue in a smaller font.
+    frequentProcedures(admin, shell.ctx),
     // CPR-130 (migration 207). The drafts are the CALLER's own -- myDrafts takes the actor and has no
     // parameter that would return anybody else's unsaved text.
     listPhrases(admin, shell.ctx.workspaceId, shell.ctx.userId),
@@ -424,6 +429,7 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
           intervals={intervals}
           procedures={procedures}
           procedureTypes={procedureTypes}
+          frequentProcedures={frequentProcs}
           canFollowUp={hasCapability(shell.ctx, "followup.manage")}
           canProcedure={hasCapability(shell.ctx, "procedure.record")}
           canEdit={hasCapability(shell.ctx, "encounter.edit")}

@@ -121,3 +121,112 @@ export const OUTCOME_SEVERITIES = ["mild", "moderate", "severe"] as const;
 
 /** Severity belongs to a complication and to nothing else -- the engine enforces both directions. */
 export const SEVERITY_REQUIRED_FOR = ["complication"];
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-PROC-HFE-005 s3/s9/s10: FIELD APPLICABILITY, DRIVEN BY THE PROCEDURE DEFINITION.
+//
+// ⚠ THE CATALOGUE WAS ALREADY THERE AND THE SCREEN NEVER ASKED IT. page.tsx loaded the procedure types,
+// passed them to EncounterConsole, and EncounterConsole declared the prop and used it nowhere. So the
+// Procedures tab was a free-text box that never sent `procedure_type_id` -- which meant the two safety
+// checks in procedures.ts (a SIDED type cannot be recorded without a side, a CONSENT_REQUIRED type
+// cannot be recorded as "not recorded") could NEVER FIRE from the encounter screen, because `type` was
+// always null. A practice could mark Joint injection sided and consent-required and this screen would
+// still record it with neither. That is what this section closes.
+//
+// ⚠ AND THE CATALOGUE ONLY KNOWS TWO THINGS. s20 asks for tri-state applicability on site, laterality
+// and consent, an allowed-laterality list, per-procedure status lists and a detail-field schema.
+// `practice_procedure_type` has `sided boolean` and `consent_required boolean` and nothing else, so
+// everything below is derived from those two plus one honest third state: NOTHING WAS CHOSEN FROM THE
+// CATALOGUE. Free text tells us nothing about the procedure, so a free-text item cannot claim a field is
+// inapplicable -- it offers the field quietly instead of hiding it. Widening this properly is the
+// migration half of the specification.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** The two flags the catalogue actually carries. Structural only -- no server import. */
+export type ProcedureTypeShape = { id: string; name: string; sided?: boolean; consent_required?: boolean } | null;
+
+/** required: must be answered before Ready. optional: offered, never demanded. hidden: not rendered. */
+export type FieldApplicability = "required" | "optional" | "hidden";
+
+export type ProcedureFieldPlan = {
+  side: FieldApplicability;
+  consent: FieldApplicability;
+  site: FieldApplicability;
+  /** True when the item came from the catalogue, so its answers are governed rather than guessed. */
+  governed: boolean;
+};
+
+/**
+ * Which fields this procedure should show, and which it must have.
+ *
+ * ⚠ s9: "For non-sided procedures, HIDE SIDE ENTIRELY", and s22 names EEG and endotracheal intubation
+ * as the cases. A catalogue entry with `sided: false` is a statement by the practice that the procedure
+ * has no sides, so the control is not drawn -- s21: "do not allow non-sided procedures to generate
+ * laterality errors", and s3: "do not display Site, Side, Consent, Status, Outcome or Complication
+ * merely because those fields exist".
+ *
+ * ⚠ BUT FREE TEXT IS NOT A STATEMENT THAT A PROCEDURE HAS NO SIDES. It is the absence of one. Hiding
+ * Side on an unrecognised procedure name would silently drop laterality from anything not yet in the
+ * catalogue -- a capture loss dressed as a simplification, and on a sided procedure a wrong-site record.
+ * So `governed: false` keeps every field visible and demands none.
+ *
+ * ⚠ SITE IS ALWAYS OPTIONAL, and that is the schema speaking rather than a decision. s20 wants site
+ * applicability per procedure and `practice_procedure_type` has no site column at all, so nothing here
+ * can honestly require it. s22's "Joint injection can require site/side before becoming Ready" is
+ * therefore only half satisfied today -- the side half. That gap is real and belongs to the migration.
+ */
+export function procedureFieldPlan(type: ProcedureTypeShape): ProcedureFieldPlan {
+  if (!type) return { side: "optional", consent: "optional", site: "optional", governed: false };
+  return {
+    side: type.sided ? "required" : "hidden",
+    // s10: "do not display 'Consent: Not recorded' on every procedure when separate consent
+    // documentation is not required." Where the catalogue does not require it, it moves behind the
+    // item's own disclosure rather than off the screen -- a practitioner may still want to record that
+    // consent was obtained for something the catalogue does not mandate.
+    consent: type.consent_required ? "required" : "optional",
+    site: "optional",
+    governed: true,
+  };
+}
+
+export type ProcedureDraft = {
+  label: string; site: string; laterality: string; consentStatus: string;
+  status: string; abandonedReason: string; scheduledAt: string;
+};
+
+/**
+ * s12's readiness state: Ready, or the list of what is still missing.
+ *
+ * ⚠ THIS IS AN ADVISORY MIRROR OF THE SERVER, AND IT MUST NEVER BE MORE PERMISSIVE THAN ONE. procedures.ts
+ * remains the only authority -- it refuses a sided procedure with no side, a consent-required procedure
+ * recorded as "not recorded", a stopped procedure with no reason and a SCHEDULED one with no time. The
+ * screen used to pre-empt none of that and let every refusal arrive after the click, which s21 now
+ * forbids: "make the wrong action difficult or impossible; do not depend on clinicians repeatedly
+ * reading warnings."
+ *
+ * ⚠ THE FAILURE MODE OF A SECOND RULEBOOK IS A SCREEN THAT SAYS READY AND A SERVER THAT SAYS NO. That is
+ * survivable and self-correcting -- the refusal still arrives, by name, per item. The UNSURVIVABLE
+ * direction is the opposite: a client rule stricter or differently-shaped than the server's would block
+ * a legitimate record with no way through, and the practitioner has a patient in front of them. So every
+ * check below is a copy of a check that exists in procedures.ts, and nothing here invents a new one.
+ */
+export function procedureReadiness(draft: ProcedureDraft, type: ProcedureTypeShape): {
+  ready: boolean; missing: string[];
+} {
+  const missing: string[] = [];
+  if (!draft.label.trim()) missing.push("a procedure");
+
+  const plan = procedureFieldPlan(type);
+  // procedures.ts:148 -- `type?.sided && !SIDED_LATERALITIES.includes(laterality)`.
+  if (plan.side === "required" && !SIDED_LATERALITIES.includes(draft.laterality)) missing.push("a side");
+  // procedures.ts:157 -- `type?.consent_required && consentStatus === "not_recorded"`. `refused` passes
+  // deliberately: a patient declining is a real recordable event.
+  if (plan.consent === "required" && draft.consentStatus === "not_recorded") missing.push("consent");
+  // procedures.ts -- a stopped procedure must say why, for every status in the engine's own list.
+  if ((PROCEDURE_STATUSES_NEEDING_REASON as readonly string[]).includes(draft.status)
+    && !draft.abandonedReason.trim()) missing.push("a reason");
+  // procedures.ts -- a SCHEDULED procedure needs the time it is scheduled for, never defaulted to now().
+  if (draft.status === "SCHEDULED" && !draft.scheduledAt.trim()) missing.push("a date and time");
+
+  return { ready: missing.length === 0, missing };
+}

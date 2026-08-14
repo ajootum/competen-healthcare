@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  BAND_RECORD, BAND_SAFETY_OK, BAND_SAFETY_ATTENTION, BAND_SHORTCUTS, BAND_WORK,
+} from "@/lib/practice/encounter-band-constants";
+import {
   WEIGHT_TONE, NOT_CHECKED_TONE, NOT_CHECKED_LABEL, doseSafetyNotice,
   DOSE_BASES, WEIGHT_STATES_NEEDING_DECISION, weightDecisionHeadline, WEIGHT_DECISION_ASK,
   BSA_NEEDS_MEASUREMENTS, ADULT_NO_WEIGHT_REFUSED,
@@ -77,15 +80,11 @@ const CARD = "rounded-xl border border-gray-200 bg-white p-3.5";
 // is not. If the owner wants the decorative accents anyway, it is one line in ClinicalRecordTable and
 // I would rather be told than assume.
 
-/** Band 1, the clinical record: the strongest data-table alignment, on the palest surface. */
-const BAND_RECORD = "rounded-xl border border-slate-200 bg-white";
-/** Band 2, safety: pale green-neutral at rest, amber only when attention is genuinely required. */
-const BAND_SAFETY_OK = "rounded-xl border border-emerald-200 bg-emerald-50/40";
-const BAND_SAFETY_ATTENTION = "rounded-xl border border-amber-300 bg-[var(--cmp-surface-warning)]";
-/** Band 3, shortcuts: deliberately subordinate. It is a convenience, not part of the record. */
-const BAND_SHORTCUTS = "rounded-xl border border-slate-200 bg-slate-50/70";
-/** Band 4, the active work: the strongest boundary on the page, because it is the current task. */
-const BAND_WORK = "rounded-xl border-2 border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/[0.04]";
+// ⚠ THE FOUR BANDS MOVED OUT SO THE PROCEDURES TAB CANNOT DRIFT FROM THEM. CPR-PROC-HFE-005 s17 asks
+// for the two tabs to read as siblings; two hand-maintained copies of five Tailwind strings do not stay
+// siblings for a week. BAND_RECORD / BAND_SAFETY_OK / BAND_SAFETY_ATTENTION / BAND_SHORTCUTS / BAND_WORK
+// now live in encounter-band-constants.ts, imported at the top of this file, with the reasoning for each.
+
 const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 const BTN = "rounded-lg bg-[var(--cp-primary)] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50";
 const QUIET = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50";

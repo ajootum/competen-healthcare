@@ -35,7 +35,10 @@ import { registerPatient } from "../src/lib/practice/patients";
 import { resolveWorkspaceContext, type WorkspaceContext } from "../src/lib/practice/access";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
 import { diagnosisBand } from "../src/lib/practice/diagnosis-constants";
-import { procedureBand } from "../src/lib/practice/procedure-constants";
+import {
+  procedureBand, PROCEDURE_STATUSES, PROCEDURE_STATUSES_NEEDING_REASON,
+  procedureFieldPlan, procedureReadiness,
+} from "../src/lib/practice/procedure-constants";
 import { treatmentBand } from "../src/lib/practice/treatment-capture-constants";
 import {
   launchEncounter, transitionEncounter, recordDiagnosis, recordTreatment, setEncounterOutcome,
@@ -749,18 +752,24 @@ async function main() {
     // The aria-labels became PER-ROW ("Side for Wound dressing") rather than bare, which is better for a
     // screen reader working down a table of several procedures and is why the old bare literals no
     // longer match. The capability is unchanged; the wording is not pinned.
-    'placeholder="Name the procedure..."', 'aria-label={`Side for', 'aria-label={`Consent for',
-    // ⚠ THE REASON FIELD IS PINNED BY ITS aria-label NOW, NOT BY ITS PLACEHOLDER. It was
-    // "Why was it abandoned?" -- a literal, and correct while ABANDONED was the only status that asked
-    // for a reason. Migration 294 gave procedures six statuses, three of which need one, so the
-    // placeholder became computed ("Why was it not completed?", "Why was it cancelled?"). The FIELD is
-    // unchanged and still guarded; only the prose moved, and this list already refuses to pin prose --
-    // see the investigation note below for the same decision made for the same reason.
-    "Indication (optional)", 'aria-label={`Reason for', "Immediate outcome (optional)",
-    // NEW with the lifecycle: a SCHEDULED procedure needs the time it is scheduled for, and the engine
-    // refuses without it. Pinned here so a later reorganisation cannot quietly drop it and leave the
-    // status selectable but unrecordable.
-    'aria-label={`Scheduled for',
+    // ⚠ REPOINTED AGAIN FOR CPR-PROC-HFE-005, AND EVERY ONE WAS CHECKED BY HAND BEFORE THE NEEDLE MOVED.
+    // The working set stopped being a table of <input>s with aria-labels and became a card per procedure
+    // with real <label htmlFor> elements -- which is better for a screen reader and for a pointer, and
+    // which means seven of these literals stopped matching on the same commit. Seven at once is exactly
+    // when a tired person deletes the assertion, so: the procedure NAME is now typed into the catalogue
+    // search, Side / Consent / Indication / Reason / Immediate outcome / Scheduled-for are all still
+    // collected, and 13a-10c now proves independently that every status the screen offers can actually
+    // be written. The htmlFor id is the stable thing to pin -- it is what ties the label to the control,
+    // so a field cannot lose its needle without also losing its accessibility.
+    'placeholder="Start typing a procedure name..."', 'htmlFor={`side-', 'htmlFor={`consent-',
+    'htmlFor={`indication-', 'htmlFor={`reason-', 'htmlFor={`imm-',
+    // A SCHEDULED procedure needs the time it is scheduled for, and the engine refuses without it.
+    // Pinned so a later reorganisation cannot drop it and leave the status selectable but unrecordable
+    // -- which is precisely what happened through a different route: see PendingProcedure.scheduledAt.
+    'htmlFor={`when-',
+    // ⚠ AND THE SITE FIELD IS PINNED FOR THE FIRST TIME. It was never in this list, so nothing would
+    // have noticed it going missing during a rewrite that hides fields on purpose.
+    'htmlFor={`site-',
     'aria-label="Outcome"', 'aria-label="Severity"', "What happened (optional)",
     // investigations
     // ⚠ TWO INVESTIGATION PROMPTS REMOVED AND ONE KEPT, and the difference is worth stating. "What did
@@ -904,6 +913,56 @@ async function main() {
     ok("13a-10b. ⚠ AND THE ROW IS IN practice_procedure, read back rather than taken on trust",
       !procErr && !!procRow && procRow.label === "Wound dressing" && procRow.site === "Left forearm",
       procErr?.message ?? JSON.stringify(procRow));
+
+    // ── 13a-10c. EVERY STATUS THE SCREEN OFFERS CAN ACTUALLY BE WRITTEN THROUGH THE SCREEN'S PATH ──
+    //
+    // ⚠ THIS EXISTS BECAUSE SCHEDULED WAS A DEAD END AND NOTHING NOTICED. The workspace collected a date
+    // and time, the route read it off the body and passed it in, and `PendingProcedure` did not declare
+    // the field -- so recordProcedureBatch never forwarded it, and recordProcedure refused every
+    // SCHEDULED procedure with "a scheduled procedure needs the date and time it is scheduled for". A
+    // field the practitioner had just filled in, on the only writer this screen has.
+    //
+    // ⚠ AND EVERY EXISTING CHECK PASSED THROUGH IT. tsc waved the route's excess property by, the
+    // engine's refusal was correct and well-worded, the UI drew the control, and 13a-10 above proved a
+    // procedure reaches the database -- with the DEFAULT status. One status out of six was tested and
+    // the untested five included the only one with a required companion field.
+    //
+    // So the loop is over PROCEDURE_STATUSES itself. A status added to that list tomorrow arrives here
+    // automatically, and if the plumbing for it is missing this reddens instead of shipping.
+    const statusProbe: { status: string; ok: boolean; detail: string }[] = [];
+    for (const [code] of PROCEDURE_STATUSES) {
+      const needsReason = (PROCEDURE_STATUSES_NEEDING_REASON as readonly string[]).includes(code);
+      const res = await recordProcedureBatch(admin, ctxA, {
+        encounterId: encTx.data.id,
+        items: [{
+          label: `Status probe ${code}`,
+          status: code,
+          abandonedReason: needsReason ? "probing the lifecycle" : undefined,
+          // The value the screen sends for SCHEDULED, in the shape the screen sends it.
+          scheduledAt: code === "SCHEDULED" ? "2026-09-01T09:30" : undefined,
+        }],
+        ...base,
+      });
+      const first = res.ok ? res.data.results[0] : null;
+      statusProbe.push({
+        status: code,
+        ok: !!first?.ok,
+        detail: res.ok ? (first?.message ?? "recorded") : `${res.code}: ${res.message}`,
+      });
+    }
+    const badStatuses = statusProbe.filter(s => !s.ok);
+    ok("13a-10c. ⚠ EVERY procedure status the UI offers can be RECORDED through recordProcedureBatch",
+      badStatuses.length === 0,
+      badStatuses.length ? JSON.stringify(badStatuses) : `${statusProbe.length} statuses all wrote`);
+
+    // ⚠ AND THE SCHEDULED TIME REACHED THE COLUMN, not merely the insert. Migration 294 constrains
+    // `status <> 'SCHEDULED' or scheduled_at is not null`, so a dropped value could in principle have
+    // been rescued by a default and left the row lying about when the appointment is.
+    const { data: schedRow } = await admin.from("practice_procedure")
+      .select("status, scheduled_at").eq("encounter_id", encTx.data.id).eq("status", "SCHEDULED").maybeSingle();
+    ok("13a-10d. ⚠ and the scheduled time the practitioner typed is the one in the row",
+      !!schedRow?.scheduled_at && String(schedRow.scheduled_at).startsWith("2026-09-01"),
+      JSON.stringify(schedRow));
 
     ok("13a-7b. ⚠ AND THE ROW IS IN practice_encounter_investigation",
       !invErr && !!invRow && invRow.label === "Full blood count",

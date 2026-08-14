@@ -167,7 +167,11 @@ export default function EncounterConsole(props: {
   notes: any[]; diagnoses: any[]; treatments: any[];
   templates: any[]; history: Record<string, any[]>; documents: any[];
   followUps: any[]; intervals: { code: string; label: string; days: number }[];
-  procedures: any[]; procedureTypes: any[];
+  procedures: any[];
+  /** CPR-PROC-HFE-005 s7. Loaded since the tab was built, delivered to it only from today. */
+  procedureTypes: any[];
+  /** s6's shortcuts, derived from recorded procedures. Carries its own three states. */
+  frequentProcedures: { items: any[]; permitted: boolean; unavailable: boolean; detail: string | null };
   canEdit: boolean; canSign: boolean; canDiagnose: boolean; canTreat: boolean;
   canDocument: boolean; canFollowUp: boolean; canProcedure: boolean; canTask: boolean;
   phrases: any[]; attachments: any[]; drafts: any[];
@@ -983,11 +987,18 @@ export default function EncounterConsole(props: {
                 what caught both. The batch is a loop over the SINGLE engine, so the sided-laterality
                 rule stays in one place -- a second opinion there is a wrong-site record. */}
             {tab === "procedures" && (
+              // ⚠ `procedureTypes` WAS DECLARED ON THIS COMPONENT AND USED NOWHERE. page.tsx loaded
+              // the catalogue, passed it here, and it stopped -- so the Procedures tab was a free-text
+              // box that never sent `procedure_type_id`, and the server's sided/consent rules read a
+              // null type and passed everything. Nothing errored: an unused prop is not a compile
+              // failure, and the tab worked. It simply enforced nothing.
               <ProcedureWorkspace
                 encounterId={props.encounterId}
                 recorded={props.procedures}
                 editable={editable}
                 canRecord={props.canProcedure}
+                catalogue={props.procedureTypes ?? []}
+                frequent={props.frequentProcedures}
               />
             )}
 
