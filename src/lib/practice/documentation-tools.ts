@@ -237,12 +237,18 @@ export const ATTACHMENT_MIME = new Set([
   "image/png", "image/jpeg", "image/webp", "image/heic", "application/pdf",
 ]);
 
+// ⚠ THE ORDER OF THIS LIST IS THE ORDER OF THE SELECT, and migration 300's CHECK is the same nine
+// values. CPR-ATT-HFE-009 s9 added the last three; the first six predate it and every one survives,
+// because a dropped value in use makes existing rows unwritable on their next update.
 export const ATTACHMENT_KINDS = [
   ["photograph", "Clinical photograph"],
   ["scan", "Scan or imaging"],
   ["result", "Result or report"],
   ["consent", "Consent form"],
   ["referral", "Referral or letter"],
+  ["procedure_document", "Procedure document"],
+  ["external_record", "External clinical record"],
+  ["administrative", "Administrative"],
   ["other", "Other"],
 ] as const;
 
@@ -264,32 +270,104 @@ export async function ensureAttachmentBucket(admin: any): Promise<{ ok: boolean;
 export async function recordAttachment(admin: any, args: {
   workspaceId: string; encounterId: string; storagePath: string; fileName: string;
   mimeType: string; byteSize: number; kind?: string; caption?: string;
+  // ── CPR-ATT-HFE-009 s8/s10/s13 (migration 300) ───────────────────────────────────────────────────
+  /** s8's display title. Falls back to the filename so a row is never nameless. */
+  title?: string;
+  tags?: string[];
+  /** s10. TRUE unless the caller says otherwise, because visible is what every attachment was before. */
+  patientVisible?: boolean;
+  /** sha256 hex of the bytes, computed by the ROUTE from what it received -- never by the browser. */
+  contentHash?: string;
+  /** s13's explicit confirmation. Without it, bytes this encounter already holds are refused. */
+  allowDuplicate?: boolean;
   actorId: string; correlationId: string;
 }): Promise<EngineResult<{ id: string; patientId: string }>> {
   const guard = await editableEncounter(admin, args.workspaceId, args.encounterId);
   if (!guard.ok) return guard;
 
+  // ⚠ s13's DUPLICATE REFUSAL, ON THE HASH AND NOTHING WEAKER. The screen warns on name+size, which is
+  // a guess; this is the bytes. Refused BEFORE the storage object was recorded against the encounter,
+  // and only refused -- the same call with allowDuplicate succeeds, because a re-attached corrected
+  // scan is a legitimate act the practitioner has confirmed. Rows with no hash predate migration 300
+  // and are not matched: no claim is made about bytes nobody hashed.
+  if (args.contentHash && !args.allowDuplicate) {
+    const { data: dup } = await admin.from("practice_attachment")
+      .select("id, file_name").eq("encounter_id", args.encounterId)
+      .eq("content_hash", args.contentHash).is("removed_at", null).limit(1);
+    if (dup?.length)
+      return {
+        ok: false, status: 409, code: "DUPLICATE_ATTACHMENT",
+        message: `this encounter already holds these exact bytes (${dup[0].file_name}); confirm to attach a second copy`,
+      };
+  }
+
   const kind = ATTACHMENT_KINDS.some(([k]) => k === args.kind) ? args.kind! : "other";
   const { data, error } = await admin.from("practice_attachment").insert({
     workspace_id: args.workspaceId, patient_id: guard.encounter.patient_id, encounter_id: args.encounterId,
     storage_path: args.storagePath, file_name: args.fileName, mime_type: args.mimeType,
-    byte_size: args.byteSize, kind, caption: args.caption?.trim() || null, created_by: args.actorId,
+    byte_size: args.byteSize, kind, caption: args.caption?.trim() || null,
+    title: (args.title ?? "").trim() || null,
+    tags: (args.tags ?? []).map(t => t.trim()).filter(Boolean).slice(0, 12),
+    patient_visible: args.patientVisible !== false,
+    content_hash: args.contentHash ?? null,
+    created_by: args.actorId,
   }).select("id").single();
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 
   await audit(admin, {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.attachment_added",
-    payload: { attachmentId: data.id, encounterId: args.encounterId, kind, bytes: args.byteSize },
+    payload: {
+      attachmentId: data.id, encounterId: args.encounterId, kind, bytes: args.byteSize,
+      patientVisible: args.patientVisible !== false, duplicateConfirmed: args.allowDuplicate === true,
+    },
     correlationId: args.correlationId,
   });
   return { ok: true, data: { id: data.id as string, patientId: guard.encounter.patient_id } };
+}
+
+/**
+ * CPR-ATT-HFE-009 s10/s15: show or hide one attachment in the patient's Documents.
+ *
+ * ⚠ A PROJECTION CHANGE, NOT A REMOVAL, AND THE TWO ARE DIFFERENT FUNCTIONS ON PURPOSE. s15 requires
+ * "remove from encounter" and "hide from Patient Documents" to be distinguishable acts, and the surest
+ * way to keep two acts distinguishable is two functions with two audit events -- a shared function with
+ * a mode flag is how the labels drift back into one word. The file, the encounter link and the record
+ * of who attached it are all untouched; only where it is PROJECTED changes, and s10 requires the change
+ * itself to be audited.
+ */
+export async function setAttachmentVisibility(admin: any, args: {
+  workspaceId: string; attachmentId: string; patientVisible: boolean;
+  actorId: string; correlationId: string;
+}): Promise<EngineResult<{ patientVisible: boolean }>> {
+  const { data: a } = await admin.from("practice_attachment")
+    .select("id, encounter_id, patient_visible, removed_at")
+    .eq("workspace_id", args.workspaceId).eq("id", args.attachmentId).maybeSingle();
+  if (!a) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  if (a.removed_at)
+    return { ok: false, status: 422, code: "ATTACHMENT_REMOVED", message: "that attachment was removed; there is nothing to project" };
+  // The write is still gated on the encounter being editable -- the same gate as attaching. A signed
+  // encounter's record does not change shape, and its projections are part of its shape.
+  const guard = await editableEncounter(admin, args.workspaceId, a.encounter_id);
+  if (!guard.ok) return guard;
+
+  const { error } = await admin.from("practice_attachment")
+    .update({ patient_visible: args.patientVisible }).eq("id", a.id);
+  if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
+
+  await audit(admin, {
+    workspaceId: args.workspaceId, actorId: args.actorId,
+    eventType: args.patientVisible ? "practice.attachment_shown" : "practice.attachment_hidden",
+    payload: { attachmentId: a.id, encounterId: a.encounter_id, was: a.patient_visible },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { patientVisible: args.patientVisible } };
 }
 
 export async function listAttachments(admin: any, workspaceId: string, filter: {
   encounterId?: string; patientId?: string; includeRemoved?: boolean;
 }) {
   let q = admin.from("practice_attachment")
-    .select("id, patient_id, encounter_id, procedure_id, storage_path, file_name, mime_type, byte_size, kind, caption, removed_at, removed_reason, created_at, created_by")
+    .select("id, patient_id, encounter_id, procedure_id, storage_path, file_name, mime_type, byte_size, kind, caption, title, tags, patient_visible, removed_at, removed_reason, created_at, created_by")
     .eq("workspace_id", workspaceId);
   if (filter.encounterId) q = q.eq("encounter_id", filter.encounterId);
   if (filter.patientId) q = q.eq("patient_id", filter.patientId);

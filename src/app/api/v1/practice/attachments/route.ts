@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import {
   ATTACHMENT_BUCKET, ATTACHMENT_MIME, MAX_ATTACHMENT_BYTES,
   ensureAttachmentBucket, recordAttachment, listAttachments, removeAttachment, signedAttachmentUrl,
+  setAttachmentVisibility,
 } from "@/lib/practice/documentation-tools";
 import { logAccess } from "@/lib/practice/privacy";
 
@@ -10,6 +12,7 @@ import { logAccess } from "@/lib/practice/privacy";
 // GET    /api/v1/practice/attachments?id=                      -- a 60-second signed link to the bytes
 // POST   /api/v1/practice/attachments                          -- multipart upload
 // DELETE /api/v1/practice/attachments?id=                      -- remove, with a reason
+// PATCH  /api/v1/practice/attachments                          -- show or hide in patient Documents
 //
 // UPLOADING TAKES encounter.edit, NOT A NEW CAPABILITY. Attaching a photograph to a consultation IS
 // writing to the clinical record; minting attachment.upload would let a practice grant the ability to
@@ -60,6 +63,7 @@ export async function GET(req: NextRequest) {
       id: a.id, patient_id: a.patient_id, encounter_id: a.encounter_id, procedure_id: a.procedure_id,
       file_name: a.file_name, mime_type: a.mime_type, byte_size: a.byte_size,
       kind: a.kind, caption: a.caption, removed_at: a.removed_at, removed_reason: a.removed_reason,
+      title: a.title, tags: a.tags, patient_visible: a.patient_visible,
       created_at: a.created_at, created_by: a.created_by,
     })),
     correlationId: auth.caller.traceId,
@@ -92,8 +96,14 @@ export async function POST(req: NextRequest) {
   // objects never share a prefix with another's.
   const path = `${auth.ctx.workspaceId}/${encounterId}/${crypto.randomUUID()}-${safeName}`;
 
+  // ⚠ THE HASH IS COMPUTED HERE, FROM THE BYTES THE SERVER RECEIVED -- never accepted from the browser.
+  // A client-supplied hash would let a caller attach one file while recording the fingerprint of
+  // another, which turns the duplicate guard into a lie about what is in the bucket.
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const contentHash = createHash("sha256").update(bytes).digest("hex");
+
   const { error: upErr } = await auth.caller.admin.storage.from(ATTACHMENT_BUCKET)
-    .upload(path, Buffer.from(await file.arrayBuffer()), { contentType: file.type });
+    .upload(path, bytes, { contentType: file.type });
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
   const result = await recordAttachment(auth.caller.admin, {
@@ -101,8 +111,17 @@ export async function POST(req: NextRequest) {
     mimeType: file.type, byteSize: file.size,
     kind: form.get("kind") ? String(form.get("kind")) : undefined,
     caption: form.get("caption") ? String(form.get("caption")) : undefined,
+    // CPR-ATT-HFE-009 s8/s10/s13 (migration 300).
+    title: form.get("title") ? String(form.get("title")) : undefined,
+    tags: form.get("tags") ? String(form.get("tags")).split(",").map(t => t.trim()).filter(Boolean) : undefined,
+    patientVisible: String(form.get("patientVisible") ?? "true") !== "false",
+    contentHash,
+    allowDuplicate: String(form.get("allowDuplicate") ?? "") === "true",
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
+  // ⚠ A DUPLICATE REFUSAL ALSO CLEANS UP ITS OBJECT, through the same branch a failed insert uses. The
+  // bytes were uploaded before the engine could rule, so a refused duplicate would otherwise leave an
+  // orphan copy in the bucket that no row points at.
   // The row is what makes the bytes findable. If it fails, the object is removed rather than left in the
   // bucket as something nobody can reach and nobody knows is there.
   if (!result.ok) {
@@ -123,6 +142,30 @@ export async function DELETE(req: NextRequest) {
   const result = await removeAttachment(auth.caller.admin, {
     workspaceId: auth.ctx.workspaceId, attachmentId: id,
     reason: url.searchParams.get("reason") ?? "",
+    actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+  });
+  if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
+  return NextResponse.json({ ...result.data, correlationId: auth.caller.traceId });
+}
+
+/**
+ * CPR-ATT-HFE-009 s10/s15: show or hide one attachment in the patient's Documents.
+ *
+ * A PROJECTION change, not a removal -- see setAttachmentVisibility for why the two are separate
+ * functions with separate audit events. Gated on encounter.edit exactly as attaching is: deciding what
+ * an encounter's record projects is part of editing that encounter.
+ */
+export async function PATCH(req: NextRequest) {
+  const auth = await requirePracticeContext("encounter.edit");
+  if (isDenied(auth)) return auth;
+
+  const body = await req.json().catch(() => null);
+  const id = String(body?.id ?? "");
+  if (!id || typeof body?.patientVisible !== "boolean")
+    return NextResponse.json({ error: "id and patientVisible (boolean) are required" }, { status: 400 });
+
+  const result = await setAttachmentVisibility(auth.caller.admin, {
+    workspaceId: auth.ctx.workspaceId, attachmentId: id, patientVisible: body.patientVisible,
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });

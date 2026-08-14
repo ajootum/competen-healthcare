@@ -164,9 +164,14 @@ export async function documentRegister(
   const incomingQ = admin.from("practice_incoming_document")
     .select("id, patient_id, doc_type, source, title, summary, received_on, where_held, priority, status, created_at, created_by")
     .eq("workspace_id", workspaceId);
+  // ⚠ CPR-ATT-HFE-009 s10 (migration 300): AN ATTACHMENT HIDDEN FROM PATIENT DOCUMENTS IS EXCLUDED
+  // HERE, AT THE SOURCE OF EVERY PROJECTION THIS MODULE SERVES. The register feeds the Patient tab, My
+  // Documents, the Overview cards and the attention queues -- one filter in one query, or five screens
+  // that each remember to apply it. The row itself is untouched and still lists on its encounter's
+  // Attachments tab, which is the whole meaning of the flag: a projection rule, not an access rule.
   const attachmentQ = admin.from("practice_attachment")
-    .select("id, patient_id, encounter_id, file_name, kind, caption, created_at, created_by")
-    .eq("workspace_id", workspaceId).is("removed_at", null);
+    .select("id, patient_id, encounter_id, file_name, title, kind, caption, created_at, created_by")
+    .eq("workspace_id", workspaceId).is("removed_at", null).eq("patient_visible", true);
 
   const [authored, incoming, attachments] = await Promise.all([
     (bounded ? authoredQ.or(eitherWithin("signed_at", false, "created_at")!) : authoredQ)
@@ -266,7 +271,9 @@ export async function documentRegister(
     ...attachmentRows.map(a => ({
       id: a.id as string,
       origin: "uploaded_by_staff" as DocOrigin,
-      title: (a.caption?.trim() || a.file_name) as string,
+      // s8's display title first, then the old fallbacks -- so rows from before migration 300 read
+      // exactly as they always did.
+      title: (a.title?.trim() || a.caption?.trim() || a.file_name) as string,
       docType: a.kind as string,
       patientId: (a.patient_id ?? null) as string | null,
       patientName: nameFor(a.patient_id ?? null),

@@ -30,25 +30,22 @@ import { formatDayTime } from "@/lib/datetime";
 // uncontrolled inputs, so React had no idea what was being sent. Picking a file is now a selection; the
 // upload is a separate, explicit act.
 //
-// ⚠ WHAT IS DELIBERATELY NOT HERE, because it needs a migration and this half does not have one:
-//   TITLE          s8 wants one, required, defaulting from the filename and editable. There is no
-//                  `title` column; `file_name` is the storage-sanitised name and overloading it would
-//                  make the record's copy of the filename editable, which it must not be.
-//   TAGS           s8. No column, no join table.
-//   VISIBILITY     s8/s10's "Show in patient's Documents". Visibility is STRUCTURAL today -- a row in
-//                  practice_attachment appears in the Documents workspace because of the table it is
-//                  in, and there is no way to keep one out. A checkbox with nothing behind it would be
-//                  a control that silently does nothing, which is worse than its absence.
-//   CATEGORIES     s9 wants procedure document, external clinical record and administrative. The `kind`
-//                  CHECK in migration 207 is a closed allowlist of six and does not contain them.
-//   REMOVAL KINDS  s15 wants remove-from-encounter, hide-from-patient-documents and delete-document
-//                  told apart. There is one verb and one soft-delete, so the screen offers one and says
-//                  plainly what it does rather than implying three.
+// ⚠ MIGRATION 300 CLOSED THE LIST THIS HEADER USED TO CARRY. Title, tags, the "Show in patient's
+// Documents" visibility, the content-hash duplicate guard and the three s9 categories all exist now,
+// and everything below reads or writes the real columns. What remains open, deliberately:
+//
+//   REMOVAL KINDS  s15 names three verbs. Two exist as two acts with two audit events -- Remove (the
+//                  audited soft-delete; the bytes go, the row and reason stay) and Hide from Documents
+//                  (a projection change, migration 300). The third, deleting the underlying document
+//                  object, does not exist for attachments: the row IS the record and is never deleted,
+//                  which is the same retention rule practice_clinical_document lives under.
+//   TITLE ON OLD ROWS  rows from before 300 have none; every display falls back to file_name.
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 
 type Attachment = {
   id: string; file_name: string; kind: string; caption: string | null;
   byte_size: number; created_at: string;
+  title: string | null; tags: string[] | null; patient_visible: boolean;
 };
 
 const KIND_LABEL = Object.fromEntries(ATTACHMENT_KINDS as readonly (readonly [string, string])[]);
@@ -73,7 +70,7 @@ export default function EncounterAttachments(props: {
   // s7: the file is CHOSEN into state and committed separately. `pending` being non-null is what makes
   // the metadata appear -- s7 forbids "a large empty metadata form before a file has been selected".
   const [pending, setPending] = useState<File | null>(null);
-  const [meta, setMeta] = useState({ kind: "photograph", caption: "" });
+  const [meta, setMeta] = useState({ kind: "photograph", caption: "", title: "", tags: "", visible: true });
   const [dragging, setDragging] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeReason, setRemoveReason] = useState("");
@@ -95,6 +92,9 @@ export default function EncounterAttachments(props: {
   const choose = (f: File | undefined | null) => {
     if (!f) return;
     setPending(f);
+    // s8: the title DEFAULTS from the filename and stays editable. Extension stripped, because
+    // "Chest X-ray report" is a title and "chest-xray-report.pdf" is a filename.
+    setMeta(m => ({ ...m, title: f.name.replace(/.[A-Za-z0-9]+$/, "").slice(0, 200) }));
     setConfirmDuplicate(false);
     setNotice(null);
   };
@@ -106,16 +106,27 @@ export default function EncounterAttachments(props: {
       const form = new FormData();
       form.set("file", pending); form.set("encounterId", props.encounterId);
       form.set("kind", meta.kind); form.set("caption", meta.caption);
+      form.set("title", meta.title); form.set("tags", meta.tags);
+      form.set("patientVisible", String(meta.visible));
+      form.set("allowDuplicate", String(confirmDuplicate));
       const res = await fetch("/api/v1/practice/attachments", { method: "POST", body: form });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        // ⚠ THE SERVER'S HASH REFUSAL IS THE REAL DUPLICATE GUARD; the name+size warning below is only
+        // a heads-up. On DUPLICATE_ATTACHMENT the selection is kept and the confirm checkbox appears,
+        // because the refusal is the engine ASKING, not the engine forbidding.
+        if (data?.error?.code === "DUPLICATE_ATTACHMENT") {
+          setNotice({ kind: "err", text: data.error.message + " Tick the confirmation below to attach it anyway." });
+          setConfirmDuplicate(false);
+          return;
+        }
         // ⚠ s13: "A FAILED UPLOAD MUST NEVER APPEAR SUCCESSFULLY ATTACHED." The selection is kept so the
         // practitioner can retry without finding the file again, and nothing is added to the list --
         // which is the server's list, re-read, not an optimistic row.
         setNotice({ kind: "err", text: data?.error?.message ?? data?.error ?? "That did not upload, and nothing was attached." });
         return;
       }
-      setPending(null); setMeta({ kind: "photograph", caption: "" }); setConfirmDuplicate(false);
+      setPending(null); setMeta({ kind: "photograph", caption: "", title: "", tags: "", visible: true }); setConfirmDuplicate(false);
       setNotice({ kind: "ok", text: "Attached to this encounter." });
       // ⚠ router.refresh(), NOT window.location.reload(). A full reload of a live consultation threw
       // away every unsaved note segment on the screen -- on the tab whose whole job is adding a file.
@@ -132,6 +143,28 @@ export default function EncounterAttachments(props: {
     // The URL is signed and expires in a minute; the storage path never reaches the browser.
     if (res.ok && data.url) window.open(data.url, "_blank", "noopener");
     else setNotice({ kind: "err", text: "That file could not be opened." });
+  }
+
+  async function setVisibility(id: string, patientVisible: boolean) {
+    setBusy(true); setNotice(null);
+    try {
+      const res = await fetch("/api/v1/practice/attachments", {
+        method: "PATCH", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, patientVisible }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setNotice({ kind: "err", text: data?.error?.message ?? "That was not changed." });
+        return;
+      }
+      setNotice({
+        kind: "ok",
+        text: patientVisible
+          ? "Now shown in the patient's Documents."
+          : "Hidden from the patient's Documents. It stays on this encounter.",
+      });
+      router.refresh();
+    } finally { setBusy(false); }
   }
 
   async function remove(id: string) {
@@ -163,6 +196,13 @@ export default function EncounterAttachments(props: {
       ) },
     { key: "kind", label: "Type", priority: "secondary",
       render: a => <span className="text-[11.5px] text-gray-600">{KIND_LABEL[a.kind] ?? a.kind}</span> },
+    // ⚠ s6's "Patient Documents" COLUMN: where else this file appears, stated per row. "Shown" means
+    // the same object is projected into the Documents workspace; "encounter only" means it lists only
+    // here. One object either way -- the column describes projection, never a copy.
+    { key: "visible", label: "Patient Documents", priority: "secondary",
+      render: a => a.patient_visible
+        ? <span className="text-[11.5px] text-gray-600">Shown</span>
+        : <span className="text-[11.5px] font-semibold text-gray-500">Encounter only</span> },
     // ⚠ s6's "Added" WAS NEVER DRAWN, and it was already on the row: created_at is selected by
     // listAttachments and published by the route, and no screen has ever shown it. A file with no date
     // in a clinical record is a file nobody can place in a sequence of events.
@@ -214,6 +254,20 @@ export default function EncounterAttachments(props: {
                     className="rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50">
                     Open
                   </button>
+                  {props.editable && (
+                    // ⚠ s15's SECOND VERB, DISTINCT FROM REMOVE. Hiding changes where the file is
+                    // PROJECTED -- it leaves this encounter's list untouched and takes it out of the
+                    // patient's Documents. Removing detaches it here and deletes the bytes. Two acts,
+                    // two labels, two audit events; migration 300 is what made the first one real.
+                    <button type="button" disabled={busy}
+                      onClick={() => setVisibility(a.id, !a.patient_visible)}
+                      aria-label={a.patient_visible
+                        ? `Hide ${a.file_name} from the patient's Documents`
+                        : `Show ${a.file_name} in the patient's Documents`}
+                      className="rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                      {a.patient_visible ? "Hide from Documents" : "Show in Documents"}
+                    </button>
+                  )}
                   {props.editable && (
                     // ⚠ s15: NOT LABELLED "DELETE", because it is not one. It detaches the file from
                     // this encounter and keeps the row, the reason and who did it. The other two verbs
@@ -307,6 +361,14 @@ export default function EncounterAttachments(props: {
                 )}
 
                 <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    {/* s8: required, defaulted from the filename, and editable -- a title is what a
+                        person calls the file; file_name stays the record of what was uploaded. */}
+                    <label className={LABEL} htmlFor="att-title">Title *</label>
+                    <input id="att-title" value={meta.title} disabled={busy}
+                      onChange={e => setMeta(m => ({ ...m, title: e.target.value }))}
+                      className={`${input} mt-1 ${meta.title.trim() ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
+                  </div>
                   <div>
                     <label className={LABEL} htmlFor="att-kind">Category *</label>
                     {/* ⚠ CONTROLLED, unlike the getElementById pair this replaces. */}
@@ -323,11 +385,33 @@ export default function EncounterAttachments(props: {
                       placeholder="Optional. What this file is."
                       className={`${input} mt-1`} />
                   </div>
+                  <div className="sm:col-span-2">
+                    <label className={LABEL} htmlFor="att-tags">Tags</label>
+                    <input id="att-tags" value={meta.tags} disabled={busy}
+                      onChange={e => setMeta(m => ({ ...m, tags: e.target.value }))}
+                      placeholder="Optional. Comma-separated, e.g. radiology, result"
+                      className={`${input} mt-1`} />
+                  </div>
+                  {/* ⚠ s10's LABEL, VERBATIM: "Show in patient's Documents", because the architecture
+                      uses one document object. Not "add to" -- nothing is added anywhere; unticking
+                      changes where this one object is PROJECTED, and the file stays on this encounter
+                      either way. Default checked, which is what every attachment did before. */}
+                  <label className="sm:col-span-2 flex items-start gap-2 text-[12px] text-gray-700">
+                    <input type="checkbox" checked={meta.visible} disabled={busy} className="mt-0.5"
+                      onChange={e => setMeta(m => ({ ...m, visible: e.target.checked }))} />
+                    <span>
+                      <span className="font-semibold">Show in patient&apos;s Documents</span>
+                      <span className="block text-[11px] text-gray-600">
+                        The same file, listed in the Documents workspace as well as here. Unticked, it
+                        stays on this encounter only.
+                      </span>
+                    </span>
+                  </label>
                 </div>
 
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button type="button" onClick={commit}
-                    disabled={busy || (!!duplicate && !confirmDuplicate)}
+                    disabled={busy || !meta.title.trim() || (!!duplicate && !confirmDuplicate)}
                     className="rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cp-primary)] focus-visible:ring-offset-2 disabled:opacity-50">
                     {/* s13: progress, in words, naming the file so a slow upload is legible. */}
                     {busy ? `Uploading ${pending.name}...` : "Add attachment"}

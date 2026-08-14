@@ -33,9 +33,10 @@ import { launchEncounter, transitionEncounter } from "../src/lib/practice/encoun
 import { saveNoteSegment, noteHistory } from "../src/lib/practice/documentation";
 import {
   saveDraft, myDrafts, discardDraft, listPhrases, createPhrase, deletePhrase, expandPhrases,
-  recordAttachment, listAttachments, removeAttachment,
+  recordAttachment, listAttachments, removeAttachment, setAttachmentVisibility,
 } from "../src/lib/practice/documentation-tools";
 import { CALCULATORS, calculatorByKey } from "../src/lib/practice/clinical-calculators";
+import { documentRegister } from "../src/lib/practice/documents-workspace";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
@@ -332,6 +333,72 @@ async function main() {
     JSON.stringify({ live: live.length, all: all.length, reason: all[0]?.removed_reason }));
   const twice = await removeAttachment(admin, { workspaceId: wsA, attachmentId: att.data.id, reason: "again", ...base });
   ok("and it cannot be removed twice", !twice.ok && twice.code === "ALREADY_REMOVED");
+
+  // ══ CPR-ATT-HFE-009 (MIGRATION 300): TITLE, TAGS, VISIBILITY, AND THE HASH GUARD ═════════════════
+  //
+  // ⚠ THE PROJECTION TEST IS THE POINT OF THE WHOLE MIGRATION. One document object, two views: a hidden
+  // attachment must still list on its ENCOUNTER and must vanish from the DOCUMENTS REGISTER -- the same
+  // row, two projections, asserted through both readers. Anything weaker tests a column, not the rule.
+  const HASH_A = "a".repeat(64);
+  const hidden = await recordAttachment(admin, {
+    workspaceId: wsA, encounterId: enc2.data.id, storagePath: `${wsA}/${enc2.data.id}/hidden.pdf`,
+    fileName: "wound-photo-private.pdf", mimeType: "application/pdf", byteSize: 2048,
+    kind: "procedure_document", title: "Wound photo, pre-closure", tags: ["wound", "theatre"],
+    patientVisible: false, contentHash: HASH_A, ...base,
+  });
+  ok("300-1. an attachment records with a title, tags, a NEW s9 kind, and visibility off",
+    hidden.ok, hidden.ok ? "" : hidden.message);
+  if (!hidden.ok) return report();
+
+  const withMeta = (await listAttachments(admin, wsA, { encounterId: enc2.data.id }))
+    .find(a => a.id === hidden.data.id);
+  ok("300-2. the columns hold what was sent, read back rather than taken on trust",
+    withMeta?.title === "Wound photo, pre-closure" && withMeta?.patient_visible === false
+      && Array.isArray(withMeta?.tags) && withMeta.tags.join(",") === "wound,theatre"
+      && withMeta?.kind === "procedure_document",
+    JSON.stringify({ t: withMeta?.title, v: withMeta?.patient_visible, tags: withMeta?.tags, k: withMeta?.kind }));
+
+  const registerHidden = await documentRegister(admin, wsA);
+  ok("300-3. ⚠ THE PROJECTION RULE: hidden from the Documents register, still on the encounter",
+    !registerHidden.rows.some(r => r.id === hidden.data.id) && !!withMeta,
+    "the same row must answer differently to the two readers, or the flag means nothing");
+
+  const shown = await setAttachmentVisibility(admin, {
+    workspaceId: wsA, attachmentId: hidden.data.id, patientVisible: true, ...base,
+  });
+  const registerShown = await documentRegister(admin, wsA);
+  const projected = registerShown.rows.find(r => r.id === hidden.data.id);
+  ok("300-4. showing it projects the SAME OBJECT into the register -- no second row anywhere",
+    shown.ok && !!projected
+      && registerShown.rows.filter(r => r.title === "Wound photo, pre-closure").length === 1,
+    JSON.stringify({ ok: shown.ok, found: !!projected }));
+  ok("300-4b. and the register shows s8's TITLE, not the storage filename",
+    projected?.title === "Wound photo, pre-closure", projected?.title);
+
+  // ⚠ s13's REFUSAL IS ON THE BYTES, AND IT ASKS RATHER THAN FORBIDS. Same hash, no confirmation:
+  // refused by name. Same hash WITH confirmation: recorded. Different hash: never questioned.
+  const dupRefused = await recordAttachment(admin, {
+    workspaceId: wsA, encounterId: enc2.data.id, storagePath: `${wsA}/${enc2.data.id}/dup.pdf`,
+    fileName: "same-bytes.pdf", mimeType: "application/pdf", byteSize: 2048,
+    contentHash: HASH_A, ...base,
+  });
+  ok("300-5. the same bytes on the same encounter are refused without explicit confirmation",
+    !dupRefused.ok && dupRefused.code === "DUPLICATE_ATTACHMENT",
+    dupRefused.ok ? "was allowed" : dupRefused.code);
+  const dupConfirmed = await recordAttachment(admin, {
+    workspaceId: wsA, encounterId: enc2.data.id, storagePath: `${wsA}/${enc2.data.id}/dup2.pdf`,
+    fileName: "same-bytes.pdf", mimeType: "application/pdf", byteSize: 2048,
+    contentHash: HASH_A, allowDuplicate: true, ...base,
+  });
+  ok("300-5b. CONFIRMED, the same bytes are accepted -- s13 permits legitimate duplicates",
+    dupConfirmed.ok, dupConfirmed.ok ? "" : dupConfirmed.message);
+  const freshHash = await recordAttachment(admin, {
+    workspaceId: wsA, encounterId: enc2.data.id, storagePath: `${wsA}/${enc2.data.id}/fresh.pdf`,
+    fileName: "same-bytes.pdf", mimeType: "application/pdf", byteSize: 2048,
+    contentHash: "b".repeat(64), ...base,
+  });
+  ok("300-5c. CONTROL: different bytes under the SAME NAME pass without a question -- the guard is the hash",
+    freshHash.ok, freshHash.ok ? "" : freshHash.message);
 
   // ── 10. Isolation ────────────────────────────────────────────────────────
   const crossDraft = await saveDraft(admin, {
