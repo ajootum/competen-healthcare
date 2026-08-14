@@ -67,6 +67,9 @@ const LABEL = "block text-[10px] font-semibold uppercase tracking-wide text-gray
 type RecordedTreatment = {
   id: string; treatment_type: string; label: string; dose: string | null; route: string | null;
   frequency: string | null; duration: string | null; status: string; notes?: string | null;
+  /** CP-TREAT-002: the unit belongs beside the dose. Read by encounters.ts since this spec. */
+  dose_unit?: string | null;
+  formulation?: string | null;
 };
 
 const blankDraft = (treatmentType: string): PendingTreatment => ({
@@ -204,23 +207,50 @@ export default function TreatmentCapture(props: {
           </span>
         );
       } },
-    { key: "dose", label: "Dose / route",
-      render: t => [t.dose, t.route].filter(Boolean).join(" · ") || <span className="text-gray-400">&mdash;</span> },
+    // CP-TREAT-002 s4: the TYPE is its own column, because Treatment is now the parent concept and
+    // medication is one subtype. A reader scanning six rows needs to know which are drugs.
+    { key: "type", label: "Type", priority: "status",
+      render: t => (
+        <span className="text-[11.5px] text-gray-600">
+          {String(t.treatment_type).replace(/_/g, " ")}
+        </span>
+      ) },
+    // ⚠ s4: "DETAILS is adaptive by treatment type; do not label the universal column 'Dose / Route'."
+    // A wound dressing has no dose, and a column headed Dose over an em dash asks the reader to
+    // notice an absence rather than read a fact.
+    //
+    // ⚠ AND THE DOSE CARRIES ITS UNIT. This column joined dose and route and dropped dose_unit
+    // entirely, so a 3 mg tablet rendered as "3 · Oral". The unit was in the database the whole time
+    // and simply was not selected -- see the query in encounters.ts. A number without its unit is not
+    // a smaller truth, it is a different claim, and on a dose it is the dangerous one.
+    { key: "details", label: "Details",
+      render: t => {
+        const doseWithUnit = [t.dose, t.dose_unit].filter(Boolean).join(" ");
+        const parts = [doseWithUnit, t.formulation, t.route].filter(Boolean);
+        return parts.length ? parts.join(" · ") : <span className="text-gray-400">&mdash;</span>;
+      } },
     { key: "freq", label: "Frequency / duration",
       render: t => [t.frequency, t.duration].filter(Boolean).join(" · ") || <span className="text-gray-400">&mdash;</span> },
     { key: "status", label: "Status", priority: "status",
       render: t => <Badge tone={treatmentBand(t.status).struck ? "muted" : "neutral"}>{t.status}</Badge> },
+    // ⚠ CP-TREAT-002 s7, AND THIS IS THE HONESTY FIX ON THIS TAB: "Do not falsely present medication
+    // safety checks as having been performed for non-medication treatment types." The allergy line was
+    // drawn on EVERY row, so a wound dressing and a low-salt diet each carried "no known allergies" as
+    // though a medication safety check had been considered for them. It had not, and there is no such
+    // check to consider. Non-medication rows get a dash, which s4 explicitly permits.
     { key: "safety", label: "Safety", priority: "secondary",
-      render: () => (
-        <span className="inline-flex items-baseline gap-1.5">
-          <span aria-hidden="true" className={
-            allergyVerdict === "clear" ? "text-[var(--cmp-text-success)]"
-              : allergyVerdict === "flagged" ? "text-[var(--cmp-text-critical)]" : "text-gray-400"}>
-            {allergyVerdict === "clear" ? "✓" : allergyVerdict === "flagged" ? "⚠" : "–"}
+      render: t => t.treatment_type !== "medication"
+        ? <span className="text-gray-400">&mdash;</span>
+        : (
+          <span className="inline-flex items-baseline gap-1.5">
+            <span aria-hidden="true" className={
+              allergyVerdict === "clear" ? "text-[var(--cmp-text-success)]"
+                : allergyVerdict === "flagged" ? "text-[var(--cmp-text-critical)]" : "text-gray-400"}>
+              {allergyVerdict === "clear" ? "✓" : allergyVerdict === "flagged" ? "⚠" : "–"}
+            </span>
+            <span className="text-[11.5px] text-gray-700">{props.allergyLine.text}</span>
           </span>
-          <span className="text-[11.5px] text-gray-700">{props.allergyLine.text}</span>
-        </span>
-      ) },
+        ) },
   ];
 
   const treatmentRow = (t: RecordedTreatment) => ({
@@ -228,10 +258,12 @@ export default function TreatmentCapture(props: {
     data: t,
     state: (FINISHED.includes(t.status) ? "completed" : "normal") as RowState,
     stateLabel: FINISHED.includes(t.status) ? `${t.status} treatment` : undefined,
-    // s6's second line, verbatim in shape: weight with its age, vitals, alerts.
-    secondaryText: (
+    // ⚠ THE SAFETY SECOND LINE IS FOR MEDICATION ROWS ONLY (CP-TREAT-002 s7). Weight, vitals and
+    // alerts under a low-salt diet imply that prescribing context was weighed for it. It was not, and
+    // there is no rule that would weigh it -- the line would be decoration wearing a safety costume.
+    secondaryText: t.treatment_type === "medication" ? (
       <>Weight: {med.weight.text} &middot; Vitals: {vitalsChip.text} &middot; Alerts: {alertsChip.text}</>
-    ),
+    ) : undefined,
     actions: (
       <span className="inline-flex items-center gap-1">
         <button type="button" data-step="review-safety"
@@ -834,7 +866,12 @@ export default function TreatmentCapture(props: {
           {/* ══ QUICK ADD -- s12's favourites and frequency, DERIVED ══════════════════════════════ */}
           {(cap.picker.frequentlyUsed.items.length > 0 || cap.picker.recent.items.length > 0) && (
             <div className={`${CARD} mt-3`}>
-              <h4 className="text-[12px] font-bold text-gray-900">What you prescribe most</h4>
+              {/* ⚠ CP-TREAT-002 s8: renamed from "What you prescribe most". Treatment is the parent
+                  concept now and medication is one subtype, so a heading built on the word "prescribe"
+                  quietly excludes the wound care, physiotherapy and diet shortcuts the same area is
+                  meant to hold. The copy below it -- that these are saved and frequent shortcuts and
+                  not a recommendation for this patient -- is unchanged and still required by s8. */}
+              <h4 className="text-[12px] font-bold text-gray-900">Frequently used treatments</h4>
               <ul className="mt-2 flex flex-wrap gap-1.5">
                 {cap.picker.frequentlyUsed.items.map(f => (
                   <li key={`freq-${f.genericName}`}>

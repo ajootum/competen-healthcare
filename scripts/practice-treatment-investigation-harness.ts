@@ -558,12 +558,32 @@ async function main() {
   // fold, which is indistinguishable from a composer that never folds anything.
   const freqOpts = ((stagedCapture as any).options?.byField?.frequency ?? []) as any[];
   const freqChips = stepCount(treatHtml, "frequency");
+  // ── CP-TREAT-002: A DOSE CARRIES ITS UNIT, AND A NON-DRUG CLAIMS NO DRUG SAFETY ─────────────────
+  //
+  // ⚠ THE UNIT WAS MISSING FOR MONTHS AND NOTHING SAID SO. dose_unit has existed on practice_treatment
+  // since migration 275; getEncounter simply never selected it, so a 3 mg tablet rendered as "3". The
+  // record held the answer and the screen could not show it. Guarded at the QUERY, because that is
+  // where it was lost -- a component assertion would have passed the whole time.
+  const capSrcTreat = src(`${ENC_DIR}/TreatmentCapture.tsx`);
+  const encSrc = src("src/lib/practice/encounters.ts");
+  const treatSelect = encSrc.match(/from\("practice_treatment"\)\.select\("([^"]+)"\)/)?.[1] ?? "";
+  ok("7-23. the encounter reads dose_unit, so a dose can be drawn with its unit",
+    /\bdose_unit\b/.test(treatSelect), `selected: ${treatSelect || "(query not found)"}`);
+  ok("7-23-control. the same scan found a real select list (7-23 is not passing on an empty string)",
+    treatSelect.includes("dose") && treatSelect.length > 30, `${treatSelect.length} chars`);
+  ok("7-24. and the screen joins the unit to the dose rather than dropping it",
+    /t\.dose, t\.dose_unit/.test(capSrcTreat));
+  // ⚠ CP-TREAT-002 s7: "Do not falsely present medication safety checks as having been performed for
+  // non-medication treatment types." Every row used to carry the allergy line, so a wound dressing
+  // read as though a medication check had been considered for it.
+  ok("7-25. the Safety column is drawn for medication rows only",
+    /treatment_type !== "medication"/.test(capSrcTreat));
+
   // ── s19's EDIT AND REMOVE EXIST BEHIND THE COMP'S CONTROLS ──────────────────────────────────────
   //
   // ⚠ THE POINT IS THAT THE ENGINE EXISTS, NOT THAT THE ICON DOES. The comp draws a pencil and a menu
   // on every card; there was no correction or withdrawal path for a treatment at all until this change.
   // An icon wired to nothing is the defect this codebase keeps finding, so the guard is on the pair.
-  const capSrcTreat = src(`${ENC_DIR}/TreatmentCapture.tsx`);
   const engineSrc = src("src/lib/practice/treatment-capture.ts");
   ok("7-19. the card's Correct and Withdraw controls are drawn",
     stepCount(treatHtml, "edit-treatment") >= 0 && /data-step="edit-treatment"/.test(capSrcTreat)

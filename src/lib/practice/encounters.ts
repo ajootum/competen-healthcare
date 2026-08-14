@@ -472,7 +472,12 @@ export async function getEncounter(admin: any, workspaceId: string, encounterId:
     admin.from("practice_patient").select("id, display_name, sex, birth_date, age_estimate_years, status").eq("workspace_id", workspaceId).eq("id", encounter.patient_id).single(),
     admin.from("practice_encounter_note").select("id, note_type, body, updated_at, version, last_source, template_id").eq("workspace_id", workspaceId).eq("encounter_id", encounterId),
     admin.from("practice_diagnosis").select("id, label, code, certainty, is_primary, problem_id").eq("workspace_id", workspaceId).eq("encounter_id", encounterId).order("created_at"),
-    admin.from("practice_treatment").select("id, treatment_type, label, dose, route, frequency, duration, status").eq("workspace_id", workspaceId).eq("encounter_id", encounterId).order("created_at"),
+    // ⚠ dose_unit AND formulation ARE READ HERE NOW, AND THEIR ABSENCE WAS A CLINICAL DEFECT RATHER
+    // THAN A COSMETIC ONE. Migration 275 added both columns; this query never selected them, so the
+    // encounter screen rendered a dose of "3" with no unit beside it. Three what -- milligrams, grams,
+    // millilitres? The record held the answer and the screen could not show it. A number without its
+    // unit is not a smaller truth than a number with one, it is a different and dangerous claim.
+    admin.from("practice_treatment").select("id, treatment_type, label, dose, dose_unit, formulation, route, frequency, duration, status").eq("workspace_id", workspaceId).eq("encounter_id", encounterId).order("created_at"),
     admin.from("practice_encounter_status_history").select("from_status, to_status, occurred_at").eq("workspace_id", workspaceId).eq("encounter_id", encounterId).order("occurred_at"),
   ]);
 
