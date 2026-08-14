@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { IDENTIFIER_LABELS } from "@/lib/practice/patient-workspace-constants";
+import { doseWithUnit } from "@/lib/practice/medication-constants";
 import StartEncounterAction from "../encounters/StartEncounterAction";
 import { Absence, Boundary, CARD, day } from "./Honesty";
 import type { FamilyView, Probe, ScreenCapabilities, SummaryView } from "./types";
@@ -448,7 +449,11 @@ export default function SummaryPanel({ summary, summaryError, family, capabiliti
               <li key={F(r, "id")}>
                 <span className="text-gray-900">{F(r, "label")}</span>
                 <span className="block text-[11px] text-gray-500">
-                  {[F(r, "dose"), F(r, "route"), F(r, "frequency"), F(r, "duration")].filter(Boolean).join(" · ")}
+                  {/* ⚠ THE UNIT IS JOINED HERE because this list is handed the raw rows with no engine
+                      mapping to compose it in. doseWithUnit is the shared, idempotent composer -- the
+                      same one the engines use -- so this screen cannot drift from them. */}
+                  {[doseWithUnit(F(r, "dose"), F(r, "dose_unit")), F(r, "route"), F(r, "frequency"), F(r, "duration")]
+                    .filter(Boolean).join(" · ")}
                 </span>
                 <span className="text-[11px] text-gray-400">{F(r, "status")} · decided {day(F(r, "created_at"))}</span>
               </li>

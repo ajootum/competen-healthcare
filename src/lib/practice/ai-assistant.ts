@@ -5,6 +5,7 @@ import type { EngineResult } from "@/lib/practice/encounters";
 import { getEncounter, patientTimeline } from "@/lib/practice/encounters";
 import { type WorkspaceContext } from "@/lib/practice/access";
 import { logAccess } from "@/lib/practice/privacy";
+import { doseWithUnit } from "@/lib/practice/medication-constants";
 
 // CPR-210 AI CLINICAL ASSISTANT.
 //
@@ -281,7 +282,12 @@ async function buildContext(admin: any, ctx: WorkspaceContext, args: {
       grounding.push({ kind: "diagnosis", id: d.id, label: d.label });
     }
     for (const t of e.treatments as any[]) {
-      lines.push(`TREATMENT RECORDED: ${t.label}${t.dose ? ` ${t.dose}` : ""}${t.route ? ` ${t.route}` : ""}${t.frequency ? ` ${t.frequency}` : ""}${t.duration ? ` for ${t.duration}` : ""} (${t.status})`);
+      // ⚠ THIS IS GROUNDING TEXT, SO A MISSING UNIT IS WORSE HERE THAN ON A SCREEN. It is what the
+      // model reasons over and what its draft echoes into notes and letters, where a person then reads
+      // it as though a clinician wrote it. getEncounter already selects dose_unit -- the value was in
+      // hand and simply not concatenated. The non-drug detail rides along for the same reason.
+      const dose = doseWithUnit(t.dose, t.dose_unit);
+      lines.push(`TREATMENT RECORDED: ${t.label}${dose ? ` ${dose}` : ""}${t.non_drug_category ? ` ${t.non_drug_category}` : ""}${t.route ? ` ${t.route}` : ""}${t.frequency ? ` ${t.frequency}` : ""}${t.duration ? ` for ${t.duration}` : ""} (${t.status})`);
       grounding.push({ kind: "treatment", id: t.id, label: t.label });
     }
     return { text: lines.join("\n\n"), grounding, patientId: e.encounter.patient_id };

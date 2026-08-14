@@ -14,7 +14,7 @@ import {
   WEIGHT_PARAMETER_CODE, HEIGHT_PARAMETER_CODE,
   DEFERRED_SAFETY_CHECKS, DEFERRED_CHECK_KEYS, MEDICATION_REFUSALS,
   MEDICATION_LIST_BOUNDARY, LEGACY_TREATMENT_REASON, TIMELINE_BOUNDARY,
-  doseSafetyNotice, allergyDisplayNotice,
+  doseSafetyNotice, allergyDisplayNotice, doseWithUnit,
   currentLine, verificationLine, weightLine, reviewLine, reconciliationLine,
   type CurrentVerdict, type VerificationVerdict, type WeightVerdict, type ReviewVerdict,
   type ReconciliationVerdict,
@@ -889,7 +889,7 @@ export async function patientMedications(
   // lands, and hiding them would make a half-built module look like an empty patient.
   const [legacyRes, allergyRes, weightRes, ageRes] = await Promise.all([
     admin.from("practice_treatment")
-      .select("id, label, dose, route, frequency, duration, status, encounter_id, created_at")
+      .select("id, label, dose, dose_unit, route, frequency, duration, status, encounter_id, created_at")
       .eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId).eq("treatment_type", "medication")
       .order("created_at", { ascending: false }).limit(100),
     admin.from("practice_patient_allergy")
@@ -903,7 +903,9 @@ export async function patientMedications(
   const legacy: Panel<LegacyTreatment> = legacyRes.error
     ? failed<LegacyTreatment>(`earlier treatment decisions could not be read: ${legacyRes.error.message}`)
     : loaded(legacyRows.map(t => ({
-      id: t.id, label: t.label, dose: t.dose ?? null, route: t.route ?? null,
+      // ⚠ COMPOSED AT THE ENGINE so the screens reading this cannot forget the unit -- there were
+      // three of them, each joining its own string. One mapping, one answer.
+      id: t.id, label: t.label, dose: doseWithUnit(t.dose, t.dose_unit) || null, route: t.route ?? null,
       frequency: t.frequency ?? null, duration: t.duration ?? null, status: t.status,
       encounterId: t.encounter_id, decidedAt: t.created_at ?? null,
     })));
@@ -1462,7 +1464,10 @@ export async function carryForwardTreatment(
     return fail(403, "FORBIDDEN", "carrying a treatment into the medication record needs medication.record");
 
   const { data: t, error } = await admin.from("practice_treatment")
-    .select("id, patient_id, encounter_id, treatment_type, label, dose, route, frequency, duration, created_at")
+    // ⚠ dose_unit IS SELECTED BECAUSE THIS PATH WRITES A PERMANENT RECORD. Without it, carrying a
+    // treatment forward turned "3 mg" into the string "3" in the patient's medication list and the
+    // unit was gone for good -- destroyed at the moment of carry-forward, not merely hidden.
+    .select("id, patient_id, encounter_id, treatment_type, label, dose, dose_unit, route, frequency, duration, created_at")
     .eq("id", input.treatmentId).eq("workspace_id", ctx.workspaceId).maybeSingle();
   if (error) return fail(503, "UNAVAILABLE", `the treatment could not be read: ${error.message}`);
   if (!t) return fail(404, "NOT_FOUND", "no such treatment");
@@ -1479,7 +1484,10 @@ export async function carryForwardTreatment(
     genericName: trim(input.genericName) || t.label,
     // ⚠ THE FREE-TEXT DOSE IS CARRIED AS TEXT AND IS NOT PARSED. "1/12" and "5 days" are what somebody
     // wrote, and a parser inventing numbers from them would put a fabricated dose in a clinical record.
-    doseText: trim(input.doseText) || trim(t.dose) || "as recorded in the consultation",
+    doseText: trim(input.doseText) || doseWithUnit(trim(t.dose), trim(t.dose_unit))
+      || "as recorded in the consultation",
+    // The structured unit travels too, so the carried row is as complete as the one it came from.
+    doseUnit: trim(t.dose_unit) || null,
     route: t.route, frequency: t.frequency, durationText: t.duration,
     startedOn: input.startedOn ?? (t.created_at ? String(t.created_at).slice(0, 10) : null),
     source: "practitioner",

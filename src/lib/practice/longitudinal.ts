@@ -6,6 +6,7 @@ import {
   MILESTONE_KIND_CODES, ALLERGY_SEVERITIES, ALLERGY_CERTAINTIES, BLOOD_GROUPS,
   allergyLine, bloodGroupLine, type SafetyLine,
 } from "@/lib/practice/longitudinal-constants";
+import { doseWithUnit } from "@/lib/practice/medication-constants";
 
 // CPR-ENC-003: the practitioner-owned longitudinal record.
 //
@@ -435,11 +436,13 @@ export async function treatmentHistory(admin: any, ctx: WorkspaceContext, patien
   type Row = { id: string; label: string; treatmentType: string; dose: string | null; frequency: string | null; status: string; encounterId: string; recordedAt: string };
   if (!hasCapability(ctx, CAP_LIST_ENCOUNTERS)) return denied<Row>();
   const { data, error } = await admin.from("practice_treatment")
-    .select("id, label, treatment_type, dose, frequency, status, encounter_id, created_at")
+    .select("id, label, treatment_type, dose, dose_unit, frequency, status, encounter_id, created_at")
     .eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId).order("created_at", { ascending: false });
   if (error) return failed<Row>(error.message);
   return loaded(((data ?? []) as any[]).map(t => ({
-    id: t.id, label: t.label, treatmentType: t.treatment_type, dose: t.dose ?? null,
+    // ⚠ COMPOSED HERE, not by the timeline that renders it. The record page printed `{t.dose}` bare.
+    id: t.id, label: t.label, treatmentType: t.treatment_type,
+    dose: doseWithUnit(t.dose, t.dose_unit) || null,
     frequency: t.frequency ?? null, status: t.status, encounterId: t.encounter_id, recordedAt: t.created_at,
   })));
 }

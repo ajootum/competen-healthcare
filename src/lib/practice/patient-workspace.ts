@@ -1325,7 +1325,7 @@ export async function patientSummary(
     // course has finished, so "still running" is not a question this data answers. Everything decided
     // here is returned with the status somebody actually set, newest first.
     probe(can("encounter.list"), L, () => admin.from("practice_treatment")
-      .select("id, encounter_id, treatment_type, label, dose, route, frequency, duration, notes, status, created_at")
+      .select("id, encounter_id, treatment_type, label, dose, dose_unit, route, frequency, duration, notes, status, created_at")
       .eq("workspace_id", ws).eq("patient_id", patientId).eq("treatment_type", "medication")
       .order("created_at", { ascending: false }).limit(L + 1)),
     probe(can("encounter.list"), L, () => admin.from("practice_diagnosis")

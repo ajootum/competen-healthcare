@@ -29,6 +29,7 @@ import fs from "node:fs";
 import path from "node:path";
 import React from "react";
 import { encounterParameters } from "../src/lib/practice/parameters";
+import { doseWithUnit } from "../src/lib/practice/medication-constants";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { loadEnvConfig } from "@next/env";
@@ -613,6 +614,34 @@ async function main() {
   // recorded work is wound care would never see the panel that holds its own shortcuts.
   ok("7-32. the shortcut panel appears for a practice that has only non-medication shortcuts",
     /medShortcuts\.length > 0 \|\| otherShortcuts\.length > 0/.test(capSrcTreat));
+
+  // ── THE dose_unit SWEEP ─────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ A CODEBASE AUDIT FOUND THE UNIT DROPPED IN NINE PLACES, not the two that were found by eye. The
+  // root cause was that `dose_text` -- documented by migration 258 as "what a person reads" -- was
+  // being written as a bare number, so every screen, the referral letter and the offline copy printed
+  // "500" for a 500 mg dose. These guard the paths where the loss was PERMANENT or left the building.
+  const medEngine = src("src/lib/practice/medication.ts");
+  const docEngine = src("src/lib/practice/documentation.ts");
+  const aiEngine = src("src/lib/practice/ai-assistant.ts");
+
+  ok("7-33. doseWithUnit is idempotent, so composing twice cannot produce a doubled unit",
+    doseWithUnit("500 mg", "mg") === "500 mg" && doseWithUnit("500", "mg") === "500 mg"
+      && doseWithUnit("500", null) === "500" && doseWithUnit(null, "mg") === "",
+    `${doseWithUnit("500 mg", "mg")} | ${doseWithUnit("500", "mg")}`);
+  // ⚠ THE WRITE PATHS MATTER MOST: a display bug shows the wrong thing, a write bug DESTROYS the unit.
+  // carryForwardTreatment turned "3 mg" into the permanent string "3" in the medication list.
+  ok("7-34. carrying a treatment forward keeps the unit in the column a person reads",
+    /doseWithUnit\(trim\(t\.dose\), trim\(t\.dose_unit\)\)/.test(medEngine)
+      && /select\("id, patient_id, encounter_id, treatment_type, label, dose, dose_unit/.test(medEngine));
+  ok("7-35. and the Treatment tab writes its medications the same way",
+    /doseWithUnit\(trim\(work\.item\.dose\), trim\(work\.item\.doseUnit\)\)/.test(capEngineSrc));
+  // ⚠ THIS ONE LEAVES THE BUILDING -- referral letters, discharge summaries, the patient's own copy.
+  ok("7-36. composed documents carry the unit and the non-drug detail",
+    /dose_unit/.test(docEngine) && /doseWithUnit\(t\.dose, t\.dose_unit\)/.test(docEngine));
+  // ⚠ AND THIS IS WHAT THE MODEL REASONS OVER, then echoes into notes a person signs.
+  ok("7-37. assistant grounding text carries the unit",
+    /doseWithUnit\(t\.dose, t\.dose_unit\)/.test(aiEngine));
 
   // ── s19's EDIT AND REMOVE EXIST BEHIND THE COMP'S CONTROLS ──────────────────────────────────────
   //

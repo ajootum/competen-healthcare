@@ -200,7 +200,12 @@ export default async function PatientRecordPage({ params }: { params: Promise<{ 
                   <ul className="mt-1 flex flex-col gap-1">
                     {snapshot.currentTreatments.items.slice(0, 8).map(t => (
                       <li key={t.id} className="rounded bg-gray-50 px-1.5 py-1 text-[11px] text-gray-700">
-                        {t.label}<span className="text-gray-400"> {[t.dose, t.frequency].filter(Boolean).join(" ")}</span>
+                        {/* ⚠ THE ENGINE'S SUMMARY, NOT A SECOND STRING BUILT HERE. This was
+                            [dose, frequency] joined locally -- the same defect fixed in ContextPanel,
+                            in a second copy of the same rail that was missed. It printed a dose with no
+                            unit, and a wound dressing as a bare label with its site and method absent.
+                            currentTreatmentSummary already composes all of that, type-aware. */}
+                        {t.label}<span className="text-gray-400"> {t.summary ?? ""}</span>
                       </li>
                     ))}
                   </ul>

@@ -3,6 +3,7 @@ import { editableEncounter, type EngineResult } from "@/lib/practice/encounters"
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { recordMedication } from "@/lib/practice/medication";
 import { captureSettings, isMissingTable, type Panel } from "@/lib/practice/investigations";
+import { doseWithUnit } from "@/lib/practice/medication-constants";
 import {
   TREATMENT_FIELD_KEYS, TREATMENT_BOUNDARY, TREATMENT_REFUSALS, TREATMENT_CONFIG_ABSENT_NOTICE,
   OTHER_OPTION_CODE, treatmentShape, MAX_PENDING_TREATMENTS,
@@ -611,7 +612,12 @@ export async function recordTreatmentBatch(admin: any, ctx: WorkspaceContext, ar
   // ⚠ AND IT IS SKIPPED, NOT FAKED, WITHOUT medication.record. recordMedication refuses without the
   // capability, and the item comes back saying the treatment was recorded and the medication row was not.
   for (const work of medicationWork) {
-    const doseText = trim(work.item.dose) || trim(work.item.label);
+    // ⚠ THE UNIT GOES INTO dose_text, WHICH IS THE COLUMN A PERSON READS. This was `trim(item.dose)`
+    // alone, so every medication prescribed on this tab landed in the medication record as a bare
+    // "500" with "mg" in a parallel column that no screen, letter or export ever re-joined. Migration
+    // 258 says it plainly: "dose_text is what a person reads and is REQUIRED". The structured pair
+    // beside it still receives the unit separately, for the dose engine.
+    const doseText = doseWithUnit(trim(work.item.dose), trim(work.item.doseUnit)) || trim(work.item.label);
     const med = await recordMedication(admin, ctx, {
       patientId: guard.data.patient_id, encounterId: args.encounterId, treatmentId: work.treatmentId,
       genericName: trim(work.item.label), brandName: trim(work.item.brandName) || null,

@@ -852,3 +852,35 @@ export const WEIGHT_TONE: Record<string, { chip: string; mark: string; label: st
 
 export const NOT_CHECKED_TONE = "border border-dashed border-slate-300 bg-white text-slate-500";
 export const NOT_CHECKED_LABEL = "Not checked";
+
+/**
+ * A dose and its unit, as one string a person can read.
+ *
+ * ⚠ THIS EXISTS BECAUSE A NUMBER WITHOUT ITS UNIT IS A DIFFERENT CLAIM, NOT A SHORTER ONE. "3" beside
+ * a drug name could be 3 mg or 3 g, and the record held the answer while five screens, the referral
+ * letter and the offline copy all printed the bare number. An audit of the whole codebase found the
+ * unit dropped in three write paths and six render paths.
+ *
+ * ⚠ IDEMPOTENT, AND THAT IS THE WHOLE DESIGN. It is called at the WRITE boundary so new rows are
+ * correct, and at DISPLAY so rows already written bare still read correctly -- and those two paths
+ * overlap. Composing twice must not produce "500 mg mg", so a text that already ends in the unit is
+ * returned untouched.
+ *
+ * ⚠ migration 258, VERBATIM: "dose_text is what a person reads and is REQUIRED. The numeric pair beside
+ * it is optional and exists so a dose calculation can be attached." That is why the unit belongs INSIDE
+ * dose_text rather than being joined on by each screen -- a screen that forgets is a screen that lies,
+ * and there turned out to be five of them.
+ */
+export function doseWithUnit(
+  doseText: string | null | undefined, doseUnit: string | null | undefined,
+): string {
+  const dose = (doseText ?? "").trim();
+  const unit = (doseUnit ?? "").trim();
+  if (!dose) return "";
+  if (!unit) return dose;
+  // Already carries it -- "500 mg", "500mg", or a free-text dose that names the unit itself.
+  const lower = dose.toLowerCase();
+  const u = unit.toLowerCase();
+  if (lower.endsWith(u) || lower.includes(` ${u} `) || lower.includes(`${u}/`)) return dose;
+  return `${dose} ${unit}`;
+}

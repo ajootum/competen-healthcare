@@ -1,6 +1,7 @@
 import { audit } from "@/lib/practice/audit";
 import { editableEncounter, type EngineResult } from "@/lib/practice/encounters";
 import { NOTE_TYPES } from "@/lib/practice/encounter-constants";
+import { doseWithUnit } from "@/lib/practice/medication-constants";
 import {
   DOCUMENT_TRANSITIONS, LOCKED_DOCUMENT_STATUSES, AMEND_ONLY_STATUSES, NOTE_SOURCES,
 } from "@/lib/practice/document-constants";
@@ -347,7 +348,11 @@ export async function composeFromEncounter(admin: any, workspaceId: string, enco
     admin.from("practice_encounter").select("reason_for_visit, started_at").eq("id", encounterId).eq("workspace_id", workspaceId).maybeSingle(),
     admin.from("practice_encounter_note").select("note_type, body").eq("workspace_id", workspaceId).eq("encounter_id", encounterId),
     admin.from("practice_diagnosis").select("label, certainty, is_primary").eq("workspace_id", workspaceId).eq("encounter_id", encounterId).order("created_at"),
-    admin.from("practice_treatment").select("treatment_type, label, dose, route, frequency, duration").eq("workspace_id", workspaceId).eq("encounter_id", encounterId).order("created_at"),
+    // ⚠ dose_unit AND THE NON-DRUG DETAIL ARE SELECTED BECAUSE THIS TEXT LEAVES THE BUILDING. What this
+    // composes becomes a referral letter to another clinician, a discharge summary, or the consultation
+    // summary handed to the patient. Without the unit it printed "Amoxicillin (3, Oral, TDS)" -- three
+    // of something, to a reader who cannot ask.
+    admin.from("practice_treatment").select("treatment_type, label, dose, dose_unit, route, frequency, duration, non_drug_category").eq("workspace_id", workspaceId).eq("encounter_id", encounterId).order("created_at"),
   ]);
   if (!enc) return "";
 
@@ -370,9 +375,16 @@ export async function composeFromEncounter(admin: any, workspaceId: string, enco
   }
   const tx = (treatments ?? []) as any[];
   if (tx.length) {
-    parts.push(["Treatment and plan", ...tx.map(t =>
-      `- ${t.label}${[t.dose, t.route, t.frequency, t.duration].filter(Boolean).length ? ` (${[t.dose, t.route, t.frequency, t.duration].filter(Boolean).join(", ")})` : ""}`,
-    )].join("\n"));
+    // ⚠ THE DOSE CARRIES ITS UNIT, AND A NON-DRUG CARRIES ITS OWN DETAIL. A wound dressing used to
+    // print as a bare label in a discharge summary -- the site and method it was recorded with simply
+    // absent from the letter, because this line only knew how to describe a medication.
+    parts.push(["Treatment and plan", ...tx.map(t => {
+      const detail = [
+        doseWithUnit(t.dose, t.dose_unit),
+        t.non_drug_category, t.route, t.frequency, t.duration,
+      ].filter(Boolean);
+      return `- ${t.label}${detail.length ? ` (${detail.join(", ")})` : ""}`;
+    })].join("\n"));
   }
   return parts.join("\n\n");
 }
