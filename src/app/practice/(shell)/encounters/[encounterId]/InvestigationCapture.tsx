@@ -10,6 +10,9 @@ import {
 } from "@/lib/practice/investigation-constants";
 import type { InvestigationCatalogue, CatalogueItem, EncounterInvestigation, Panel } from "@/lib/practice/investigations";
 import { PANEL, SectionHeader, Tip } from "@/components/practice/EncounterKit";
+import {
+  ClinicalRecordTable, type RecordColumn, type RowState,
+} from "@/components/practice/ClinicalRecordTable";
 
 // CPR-INV-001 -- THE INVESTIGATIONS TAB.
 //
@@ -50,6 +53,42 @@ const CHIP = "rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11.
 const CHIP_ON = "rounded-full border border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary-deep)]";
 
 type Selected = { id: string | null; label: string; reasonOverride: string; again: boolean };
+
+/** The row's own view model: the record, plus the selection state the review batch needs. */
+type InvRow = {
+  i: EncounterInvestigation; selected: boolean; editable: boolean; onSelect: () => void;
+};
+
+// CP-UI-TABLE-001 s5: Investigation | Type | Status | Result/Date | Actions.
+const INVESTIGATION_COLUMNS: RecordColumn<InvRow>[] = [
+  { key: "label", label: "Investigation", priority: "primary",
+    render: ({ i, selected, editable, onSelect }) => (
+      <span className="inline-flex items-center gap-2">
+        {editable && i.status === "requested" && (
+          <input type="checkbox" aria-label={`Select ${i.label} for review`}
+            checked={selected} onChange={onSelect} />
+        )}
+        <span className="font-semibold text-gray-800">{i.label}</span>
+      </span>
+    ) },
+  { key: "category", label: "Type", priority: "secondary",
+    render: ({ i }) => i.category
+      ? <span className="text-[11.5px] text-gray-600">{i.category}</span>
+      : <span className="text-gray-400">&mdash;</span> },
+  { key: "status", label: "Status", priority: "status",
+    render: ({ i }) => (
+      <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${INVESTIGATION_STATUS_CHIP[i.status] ?? "bg-gray-100 text-gray-600"}`}>
+        {INVESTIGATION_STATUS_LABEL[i.status] ?? i.status}
+      </span>
+    ) },
+  // ⚠ s8 AGAIN: THIS IS WHAT A PRACTITIONER WROTE DOWN, NOT A RESULT FROM A LABORATORY. The column is
+  // headed "Summary" rather than the spec's "Result/Date" for that reason -- nothing here came back
+  // from anywhere, and a column called Result would say it did.
+  { key: "summary", label: "Summary", priority: "secondary",
+    render: ({ i }) => i.summary
+      ? <span className="text-[11.5px] text-gray-700">{i.summary}</span>
+      : <span className="text-gray-400">&mdash;</span> },
+];
 
 export default function InvestigationCapture(props: {
   encounterId: string;
@@ -256,68 +295,70 @@ export default function InvestigationCapture(props: {
             </div>
           )}
 
-          <ul className="flex flex-col gap-1.5">
-            {recorded.items.map(i => (
-              <li key={i.id} className="rounded-lg border border-gray-100 px-2.5 py-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {editable && i.status === "requested" && (
-                    <input type="checkbox" aria-label={`Select ${i.label}`}
-                      checked={reviewSelection.includes(i.id)}
-                      onChange={() => setReviewSelection(s =>
-                        s.includes(i.id) ? s.filter(x => x !== i.id) : [...s, i.id])} />
-                  )}
-                  <span className="text-[12px] font-semibold text-gray-800">{i.label}</span>
-                  {i.category && (
-                    <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
-                      {i.category}
-                    </span>
-                  )}
-                  <span className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold ${INVESTIGATION_STATUS_CHIP[i.status] ?? "bg-gray-100 text-gray-600"}`}>
-                    {INVESTIGATION_STATUS_LABEL[i.status] ?? i.status}
-                  </span>
-                </div>
-                <p className="text-[10px] text-gray-400">
+          {/* CP-UI-TABLE-001 s13 step 5, s5's columns: Investigation | Type | Status | Result/Date.
+              ⚠ THE SELECT-FOR-REVIEW CHECKBOX STAYS IN THE FIRST COLUMN, not in an actions column. It
+              selects the record rather than acting on it, and s2 keeps the primary clinical information
+              left-most -- an action column that mixed "choose this" with "do this to it" would be two
+              different verbs sharing a heading.
+              ⚠ AND THE TIMESTAMPS BECOME s2's SECONDARY LINE. They are context, never the fact, and
+              they were the longest thing on every row. */}
+          <ClinicalRecordTable
+            label="Investigations recorded in this encounter"
+            columns={INVESTIGATION_COLUMNS}
+            empty={<></>}
+            records={recorded.items.map(i => ({
+              id: i.id,
+              data: { i, selected: reviewSelection.includes(i.id), editable,
+                onSelect: () => setReviewSelection(s =>
+                  s.includes(i.id) ? s.filter(x => x !== i.id) : [...s, i.id]) },
+              // ⚠ `stopped`, NOT `warning`. An investigation nobody pursued is a decision that was
+              // recorded, not an alarm -- s4 keeps the alert treatment for what needs acting on.
+              state: (i.status === "cancelled" ? "stopped" : "normal") as RowState,
+              stateLabel: i.status === "cancelled" ? "Not pursued" : undefined,
+              secondaryText: (
+                <>
                   recorded {String(i.requestedAt).slice(0, 16).replace("T", " ")}
                   {i.reviewedAt ? ` · reviewed ${String(i.reviewedAt).slice(0, 16).replace("T", " ")}` : ""}
                   {i.cancelledAt ? ` · not pursued ${String(i.cancelledAt).slice(0, 10)}` : ""}
-                </p>
-                {i.reason && <p className="mt-0.5 text-[11px] text-gray-600">Clinical question: {i.reason}</p>}
-                {i.summary && <p className="mt-0.5 text-[11px] text-gray-700">{i.summary}</p>}
-                {i.cancelledReason && <p className="mt-0.5 text-[11px] text-gray-500">Not pursued: {i.cancelledReason}</p>}
-
-                {editable && i.status === "requested" && (
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    <button type="button" className={QUIET} disabled={busy}
-                      onClick={() => markReviewed([i.id])}>Mark as reviewed</button>
-                    <button type="button" className={QUIET} disabled={busy}
-                      onClick={() => { setCancelReason(""); setCancelling(cancelling === i.id ? null : i.id); }}>
-                      Not pursued
-                    </button>
-                  </div>
-                )}
-                {cancelling === i.id && (
-                  <form className="mt-1.5 flex flex-wrap items-center gap-1.5 rounded-lg bg-gray-50 p-2"
-                    onSubmit={async ev => {
-                      ev.preventDefault();
-                      const body = await post({
-                        action: "cancel", encounterId: props.encounterId,
-                        investigationId: i.id, reason: cancelReason,
-                      });
-                      if (body) { setCancelling(null); setNotice({ kind: "ok", text: "Recorded as not pursued." }); router.refresh(); }
-                    }}>
-                    <input autoFocus className={`${input} max-w-[320px]`} value={cancelReason}
-                      onChange={e => setCancelReason(e.target.value)}
-                      placeholder="Why was it not pursued?" />
-                    <button type="submit" className={QUIET} disabled={busy || !cancelReason.trim()}>Record</button>
-                    {/* ⚠ s8's MUST NOT. Nothing was ever sent, so nothing was cancelled anywhere. */}
-                    <p className="w-full text-[10px] text-gray-500">
-                      {INVESTIGATION_STATUSES.find(s => s.code === "cancelled")?.mustNotImply}
-                    </p>
-                  </form>
-                )}
-              </li>
-            ))}
-          </ul>
+                  {i.reason ? ` · clinical question: ${i.reason}` : ""}
+                  {i.cancelledReason ? ` · not pursued: ${i.cancelledReason}` : ""}
+                </>
+              ),
+              actions: editable && i.status === "requested" ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <button type="button" className={QUIET} disabled={busy}
+                    aria-label={`Mark ${i.label} as reviewed`}
+                    onClick={() => markReviewed([i.id])}>Mark as reviewed</button>
+                  <button type="button" className={QUIET} disabled={busy}
+                    aria-label={`Record ${i.label} as not pursued`}
+                    onClick={() => { setCancelReason(""); setCancelling(cancelling === i.id ? null : i.id); }}>
+                    Not pursued
+                  </button>
+                </span>
+              ) : undefined,
+              expandedContent: cancelling === i.id ? (
+                <form className="flex flex-wrap items-center gap-1.5 rounded-lg bg-gray-50 p-2"
+                  onSubmit={async ev => {
+                    ev.preventDefault();
+                    const body = await post({
+                      action: "cancel", encounterId: props.encounterId,
+                      investigationId: i.id, reason: cancelReason,
+                    });
+                    if (body) { setCancelling(null); setNotice({ kind: "ok", text: "Recorded as not pursued." }); router.refresh(); }
+                  }}>
+                  <input autoFocus className={`${input} max-w-[320px]`} value={cancelReason}
+                    aria-label={`Why ${i.label} was not pursued`}
+                    onChange={e => setCancelReason(e.target.value)}
+                    placeholder="Why was it not pursued?" />
+                  <button type="submit" className={QUIET} disabled={busy || !cancelReason.trim()}>Record</button>
+                  {/* ⚠ s8's MUST NOT. Nothing was ever sent, so nothing was cancelled anywhere. */}
+                  <p className="w-full text-[10px] text-gray-500">
+                    {INVESTIGATION_STATUSES.find(s => s.code === "cancelled")?.mustNotImply}
+                  </p>
+                </form>
+              ) : undefined,
+            }))}
+          />
         </div>
       )}
 

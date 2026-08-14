@@ -14,8 +14,59 @@ import {
   REFERRAL_CHIP, REFERRAL_STATUSES, CLINICAL_FLOW_BLOCKS, DECISION_CARDS,
   type EncounterWarning, type WeightPromptState,
 } from "@/lib/practice/encounter-workspace-constants";
+import {
+  ClinicalRecordTable, type RecordColumn, type RowState,
+} from "@/components/practice/ClinicalRecordTable";
 import Dictation from "@/components/practice/Dictation";
 import DocumentationTools from "./DocumentationTools";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+// CP-UI-TABLE-001 s5: Follow-up item | Due | Status | Actions.
+//
+// ⚠ THE DUE COLUMN SAYS "OVERDUE" IN WORDS, not only in colour (s10). A row that relies on its tint
+// to say it is late is a row that says nothing in greyscale, at high zoom, or to a screen reader.
+const FOLLOW_UP_COLUMNS: RecordColumn<any>[] = [
+  { key: "reason", label: "Follow-up item", priority: "primary",
+    render: f => <span className="font-semibold text-gray-800">{f.reason}</span> },
+  { key: "due", label: "Due", priority: "status",
+    render: f => (
+      <span className={f.overdue ? "text-[11.5px] font-bold text-[var(--cmp-text-critical)]" : "text-[11.5px] text-gray-600"}>
+        {f.overdue ? `${Math.abs(f.dueInDays)} days overdue` : `due ${f.due_on}`}
+      </span>
+    ) },
+  { key: "referred", label: "Detail", priority: "secondary",
+    render: f => f.referredTo
+      ? <span className="text-[11.5px] text-gray-600">{f.referredTo}</span>
+      : <span className="text-gray-400">&mdash;</span> },
+];
+
+// CP-UI-TABLE-001 s5: Document | Type | Date | Source | Actions.
+//
+// ⚠ s5: "Use file-type icon only when helpful; avoid large document cards." The type stays as a WORD in
+// its own column rather than becoming a coloured tile -- a table already answers "which row" by
+// position, and an icon per row would be the document-card weight this standard is removing.
+//
+// ⚠ THE VERSION IS KEPT. It was a quiet "v2" beside the title and could have been dropped as noise on
+// the way to a tidier row -- s12 forbids exactly that: "do not remove clinical data merely to make a
+// row shorter". A letter that has been reissued is a different document from one that has not.
+const DOCUMENT_COLUMNS: RecordColumn<any>[] = [
+  { key: "title", label: "Document", priority: "primary",
+    render: d => (
+      <>
+        <span className="font-semibold text-gray-800">{d.title}</span>
+        {d.version > 1 && <span className="ml-1.5 text-[10px] text-gray-400">v{d.version}</span>}
+      </>
+    ) },
+  { key: "type", label: "Type", priority: "secondary",
+    render: d => (
+      <span className="text-[11.5px] text-gray-600">
+        {(DOC_TYPES.find(([k]) => k === d.doc_type)?.[1]) ?? d.doc_type}
+      </span>
+    ) },
+  { key: "status", label: "Status", priority: "status",
+    render: d => <span className="text-[11.5px] text-gray-600">{d.status}</span> },
+];
 import { formatTime, formatDate } from "@/lib/datetime";
 // The shared encounter visual language. Follow-up is the first tab on it; the other seven follow.
 import { PANEL, SectionHeader, EmptyState, Tip, Advisory } from "@/components/practice/EncounterKit";
@@ -938,42 +989,50 @@ export default function EncounterConsole(props: {
                   subtitle="What this patient is owed, and what should happen after this encounter."
                 />
                 <div className="p-4">
-                {props.followUps.length === 0 ? (
-                  // Three states, not two: this is the READ-SUCCEEDED one, and it says so.
-                  <EmptyState title="Nothing is owed to this patient"
-                    reason="No follow-up is open. This was read successfully -- raise one below if something should happen after today." />
-                ) : (
-                  <ul className="flex flex-col gap-1.5">
-                    {props.followUps.map(f => (
-                      <li key={f.id} className={`text-[12px] ${f.overdue ? "border-l-2 border-[var(--cmp-color-critical)] pl-2" : ""}`}>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-gray-800">{f.reason}</span>
-                          <span className={`text-[11px] ${f.overdue ? "font-bold text-[var(--cmp-text-critical)]" : "text-gray-500"}`}>
-                            {f.overdue ? `${Math.abs(f.dueInDays)} days overdue` : `due ${f.due_on}`}
-                          </span>
-                          {props.canFollowUp && (
-                            <button type="button" disabled={busy}
-                              onClick={() => { setFuOutcome(""); setClosingFu(closingFu === f.id ? null : f.id); }}
-                              className="ml-auto rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
-                              Settle in this consultation
-                            </button>
-                          )}
-                        </div>
-                        {closingFu === f.id && (
-                          <form className="mt-1.5 flex flex-col gap-1.5 rounded-lg bg-gray-50 p-2"
-                            onSubmit={e => { e.preventDefault(); closeFollowUp(f.id); }}>
-                            <input autoFocus placeholder="What happened? (optional — this encounter is recorded as the closer)"
-                              value={fuOutcome} onChange={e => setFuOutcome(e.target.value)} className={input} />
-                            <button type="submit" disabled={busy}
-                              className="self-start rounded-lg bg-[var(--cp-primary)] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
-                              Close as done
-                            </button>
-                          </form>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {/* CP-UI-TABLE-001 s13 step 6, s5's columns: Follow-up item | Due | Status | Actions.
+                    ⚠ OVERDUE IS THE FIRST REAL `warning` IN THIS SYSTEM, and s5 permits exactly that:
+                    "overdue/due-soon states may override ordinary banding with appropriate emphasis".
+                    An overdue follow-up is something a person must act on, which is s4's test for the
+                    state. DUE-SOON IS NOT PAINTED -- it is a date approaching, not a failure, and
+                    spending the alert colour on it would leave nothing louder for the one that is
+                    actually late. The count of warnings on this screen should equal the count of
+                    things going wrong. */}
+                <ClinicalRecordTable
+                  label="Follow-ups owed by this patient"
+                  columns={FOLLOW_UP_COLUMNS}
+                  empty={
+                    // Three states, not two: this is the READ-SUCCEEDED one, and it says so.
+                    <EmptyState title="Nothing is owed to this patient"
+                      reason="No follow-up is open. This was read successfully -- raise one below if something should happen after today." />
+                  }
+                  records={props.followUps.map((f: any) => ({
+                    id: f.id,
+                    data: f,
+                    state: (f.overdue ? "warning" : "normal") as RowState,
+                    // s10: never colour alone. The row says "overdue" in words as well.
+                    stateLabel: f.overdue ? "Overdue" : undefined,
+                    actions: props.canFollowUp ? (
+                      <button type="button" disabled={busy}
+                        onClick={() => { setFuOutcome(""); setClosingFu(closingFu === f.id ? null : f.id); }}
+                        aria-label={`Settle ${f.reason} in this consultation`}
+                        className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                        Settle in this consultation
+                      </button>
+                    ) : undefined,
+                    expandedContent: closingFu === f.id ? (
+                      <form className="flex flex-col gap-1.5 rounded-lg bg-gray-50 p-2"
+                        onSubmit={e => { e.preventDefault(); closeFollowUp(f.id); }}>
+                        <input autoFocus placeholder="What happened? (optional — this encounter is recorded as the closer)"
+                          aria-label={`Outcome for ${f.reason}`}
+                          value={fuOutcome} onChange={e => setFuOutcome(e.target.value)} className={input} />
+                        <button type="submit" disabled={busy}
+                          className="self-start rounded-lg bg-[var(--cp-primary)] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
+                          Close as done
+                        </button>
+                      </form>
+                    ) : undefined,
+                  }))}
+                />
 
                 {props.canFollowUp && (
                   <form className="mt-3 grid grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); raiseFollowUp(); }}>
@@ -1025,25 +1084,28 @@ export default function EncounterConsole(props: {
                     subtitle="Letters and summaries drafted from this consultation."
                   />
                   <div className="p-4">
-                  {props.documents.length === 0 ? (
-                    // The read-succeeded empty state, said as such rather than left as a grey line that
-                    // could equally mean the documents could not be read.
-                    <EmptyState title="Nothing has been drafted from this consultation"
-                      reason="No document has been created here yet. This was read successfully -- draft one below if something needs to be issued." />
-                  ) : (
-                    <ul className="flex flex-col gap-1">
-                      {props.documents.map(d => (
-                        <li key={d.id} className="flex items-center gap-2 text-[12px] flex-wrap">
-                          <Link href={`/practice/documents/${d.id}`} className="font-semibold text-gray-800 hover:underline">{d.title}</Link>
-                          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
-                            {(DOC_TYPES.find(([k]) => k === d.doc_type)?.[1]) ?? d.doc_type}
-                          </span>
-                          {d.version > 1 && <span className="text-[10px] text-gray-400">v{d.version}</span>}
-                          <span className="ml-auto text-[11px] text-gray-400">{d.status}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  {/* CP-UI-TABLE-001 s13 step 7, s5's columns: Document | Type | Date | Source. */}
+                  <ClinicalRecordTable
+                    label="Documents drafted from this consultation"
+                    columns={DOCUMENT_COLUMNS}
+                    empty={
+                      // The read-succeeded empty state, said as such rather than left as a grey line
+                      // that could equally mean the documents could not be read.
+                      <EmptyState title="Nothing has been drafted from this consultation"
+                        reason="No document has been created here yet. This was read successfully -- draft one below if something needs to be issued." />
+                    }
+                    records={props.documents.map((d: any) => ({
+                      id: d.id,
+                      data: d,
+                      actions: (
+                        <Link href={`/practice/documents/${d.id}`}
+                          aria-label={`Open ${d.title}`}
+                          className="text-[11.5px] font-semibold text-[var(--cp-primary)] hover:underline">
+                          Open &rsaquo;
+                        </Link>
+                      ),
+                    }))}
+                  />
 
                   {props.canDocument && (
                     <form className="mt-3 grid grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); createDocument(); }}>
