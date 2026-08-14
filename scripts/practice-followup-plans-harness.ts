@@ -26,6 +26,7 @@
  *
  *   npx --yes tsx scripts/practice-followup-plans-harness.ts
  */
+import { readFileSync } from "node:fs";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
@@ -350,6 +351,34 @@ async function main() {
   ok("B's recall queue holds none of A's patients", bQueue.patients.length === 0, String(bQueue.patients.length));
   ok("A's queue is non-empty (the isolation test is not vacuous)",
     (await recallQueue(admin, wsA)).patients.length > 0);
+
+  // ══ THE AUTHORING SCREEN -- THE PIECE THAT WAS MISSING FOR THE WHOLE FEATURE ════════════════════
+  //
+  // ⚠ SOURCE CHECKS, because the defect was reachability, not behaviour. Everything above proves the
+  // ENGINE works, and it has passed since migration 206 while no practice could ever author a template
+  // -- zero UI callers, zero seeds, so the encounter's "Or apply a plan" control was invisible
+  // everywhere. An engine harness is structurally blind to that; these are not.
+  const studioSrc = readFileSync(
+    "src/app/practice/(shell)/follow-ups/templates/TemplateStudio.tsx", "utf8");
+  const boardSrc = readFileSync("src/app/practice/(shell)/follow-ups/page.tsx", "utf8");
+  ok("ui-1. the authoring screen reaches createPlanTemplate through the route's template body",
+    studioSrc.includes("template: {") && studioSrc.includes("follow-up-plans")
+      && studioSrc.includes("templateId, active"),
+    "author and retire both need a door, or the screen is half a screen");
+  ok("ui-2. the BOARD links to it -- a screen nobody is told about is the built-but-unreachable class",
+    boardSrc.includes("follow-ups/templates"));
+  // ⚠ THE ONE SENTENCE THE WHOLE FIELD TURNS ON. Offsets count from the plan's start; read
+  // cumulatively, a wound plan's six-week check lands at eight weeks.
+  ok("ui-3. the offsets-from-start rule is stated where the offsets are typed",
+    /from the day the plan is applied, not from the previous step/.test(studioSrc));
+  ok("ui-4. the client mirrors validateSteps -- duplicates and empty steps are worn by the fields",
+    /Two steps fall on the same day/.test(studioSrc) && /border-amber-300/.test(studioSrc)
+      && /say what this step is for/.test(studioSrc));
+  ok("ui-5. retiring says plans already running are untouched (retire must not read as clinical)",
+    /Plans already running from it are untouched/.test(studioSrc));
+  ok("ui-6. the screen never claims Competen supplies or recommends a plan",
+    studioSrc.includes("Competen supplies no plan templates")
+      && studioSrc.includes("not clinical"));
 
   return report();
 }

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
@@ -62,6 +63,14 @@ export default async function FollowUpsPage({ searchParams }: {
   return (
     <div className="max-w-[1400px]">
       <div className="mb-4">
+        {/* The door to plan authoring. Without it the templates screen is a URL nobody was told about,
+            which is the built-but-unreachable class this codebase keeps finding the hard way. */}
+        <div className="mb-1.5 flex justify-end">
+          <Link href="/practice/follow-ups/templates"
+            className="text-[11.5px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+            Plan templates &rarr;
+          </Link>
+        </div>
         <FollowUpsNavigator
           period={period} todayDate={clock.today} timezone={clock.timezone}
           keep={{
