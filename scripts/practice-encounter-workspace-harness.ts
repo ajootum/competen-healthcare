@@ -790,6 +790,11 @@ async function main() {
     // documents
     'placeholder="Title"', 'aria-label="Document type"', "Addressed to (optional)",
     "Start from what is recorded in this consultation",
+    // ⚠ ATTACHMENTS WERE NEVER IN THIS INVENTORY, on the tab where a capture path is a FILE. The
+    // category and the note were two uncontrolled inputs read by getElementById, and a rewrite could
+    // have dropped either without a single assertion noticing -- which is exactly what this list is
+    // for. Pinned by htmlFor id, the same stable marker the procedure fields use.
+    'htmlFor="att-kind"', 'htmlFor="att-caption"',
   ];
   // ⚠ THE WHOLE TREE, NOT THE CONSOLE ALONE. This searched EncounterConsole.tsx only, so nine fields
   // read as lost the day treatment and investigation capture became their own components. The point of
@@ -963,6 +968,52 @@ async function main() {
     ok("13a-10d. ⚠ and the scheduled time the practitioner typed is the one in the row",
       !!schedRow?.scheduled_at && String(schedRow.scheduled_at).startsWith("2026-09-01"),
       JSON.stringify(schedRow));
+
+    // ── CPR-ATT-HFE-009: THE FILES ARE THE TAB, AND THE UPLOAD IS AN ACT ─────────────────────────
+    //
+    // ⚠ SOURCE CHECKS, BECAUSE BOTH DEFECTS WERE ABOUT WHERE THINGS WERE, NOT WHETHER THEY WORKED.
+    // Uploading worked. Listing worked. Removal worked, with a reason, audited. What was wrong is that
+    // the files sat in a CLOSED ACCORDION on the tab named after them, and that choosing a file
+    // uploaded it immediately while reading the category and note out of the DOM with getElementById --
+    // so anything typed after picking the file was silently discarded. No runtime assertion can see
+    // either, which is why these are the shape they are.
+    const attDir = join(process.cwd(), "src", "app", "practice", "(shell)", "encounters", "[encounterId]");
+    const attSrc = readFileSync(join(attDir, "EncounterAttachments.tsx"), "utf8");
+    const toolsSrc = readFileSync(join(attDir, "DocumentationTools.tsx"), "utf8");
+    // ⚠ THE NEGATIVES RUN OVER STRIPPED SOURCE, AND ALL THREE FAILED BEFORE THIS LINE EXISTED. The new
+    // component's header comment QUOTES the code it replaced -- getElementById, window.location.reload,
+    // prompt() -- because a comment that says "this used to do X" is worth more than one that says "do
+    // not do X". Every negative below then matched the explanation of the bug rather than the bug. This
+    // repository has recorded a needle matching its own documentation nine separate times now.
+    const attCode = attSrc.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    ok("13a-11. s4: attachments are a section on the tab, not a pane inside Documentation tools",
+      attSrc.length > 2000
+        && /EncounterAttachments/.test(readFileSync(join(attDir, "EncounterConsole.tsx"), "utf8"))
+        && !/open === "files"/.test(toolsSrc),
+      "a closed accordion cannot answer 'what files belong to this encounter'");
+    // ⚠ s7's ORDER. `pending` gates the metadata: no file chosen, no form drawn.
+    ok("13a-12. s7: the metadata form appears only after a file has been chosen",
+      /\{!pending \? \(/.test(attSrc) && /const \[pending, setPending\] = useState<File \| null>/.test(attSrc));
+    // ⚠ AND THE UPLOAD IS NO LONGER A SIDE EFFECT OF onChange. This is the assertion that would have
+    // caught the original: choosing a file called upload() directly.
+    ok("13a-13. s7: choosing a file SELECTS it -- the upload is a separate, explicit act",
+      /onChange=\{e => choose\(e\.target\.files\?\.\[0\]\)\}/.test(attCode)
+        && !/getElementById/.test(attCode),
+      "picking a file used to upload it instantly and read its metadata out of the DOM");
+    // s13/s16: a failed upload must never look attached, and the list is the server's, re-read.
+    ok("13a-14. s13: nothing is added optimistically -- the list is re-read from the server",
+      /router\.refresh\(\)/.test(attCode) && !/window\.location\.reload/.test(attCode),
+      "a full page reload of a live consultation also discarded every unsaved note segment");
+    // ⚠ s15: THE REMOVAL VERB IS NOT "DELETE", and the reason is a form rather than a browser prompt.
+    ok("13a-15. s15: removal is named for what it does, and its reason is collected in the page",
+      /Remove from this encounter/.test(attCode) && !/prompt\(/.test(attCode));
+    // ⚠ CONTROL. Three of the five checks above are NEGATIVES, and a negative over a string that is
+    // empty, mis-pathed or over-stripped passes perfectly. This proves the stripped source is still
+    // the component: long enough to be real code, and still carrying the three positives.
+    ok("13a-15-control. the stripped source is still the component (the negatives above are not vacuous)",
+      attCode.length > 1500 && attCode.includes("EncounterAttachments")
+        && attCode.includes("att-kind") && attCode.includes("router.refresh"),
+      `${attCode.length} chars after stripping comments`);
 
     ok("13a-7b. ⚠ AND THE ROW IS IN practice_encounter_investigation",
       !invErr && !!invRow && invRow.label === "Full blood count",

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { CALCULATORS } from "@/lib/practice/clinical-calculators";
-import { ATTACHMENT_KINDS } from "@/lib/practice/documentation-tools";
 
 // CPR-130's "Documentation tools" panel, as the comp lays it out: calculators, attachments and the
 // phrase library. Voice dictation is already on each segment; AI write-assist is CPR-210 and is not
@@ -21,16 +20,14 @@ const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] 
 type Phrase = { id: string; shortcut: string; body: string; scope: string; description: string | null };
 
 export default function DocumentationTools({
-  encounterId, editable, segments, phrases, attachments, onInsert,
+  editable, segments, phrases, onInsert,
 }: {
-  encounterId: string;
   editable: boolean;
   segments: readonly string[];
   phrases: Phrase[];
-  attachments: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   onInsert: (noteType: string, text: string) => void;
 }) {
-  const [open, setOpen] = useState<"calc" | "files" | "phrases" | null>(null);
+  const [open, setOpen] = useState<"calc" | "phrases" | null>(null);
   const [calcKey, setCalcKey] = useState(CALCULATORS[0].key);
   const [values, setValues] = useState<Record<string, string>>({});
   const [target, setTarget] = useState(segments[0] ?? "narrative");
@@ -40,32 +37,6 @@ export default function DocumentationTools({
 
   const calc = CALCULATORS.find(c => c.key === calcKey)!;
   const result = calc.compute(values);
-
-  async function upload(file: File, kind: string, caption: string) {
-    setBusy(true); setNotice(null);
-    const form = new FormData();
-    form.set("file", file); form.set("encounterId", encounterId);
-    form.set("kind", kind); form.set("caption", caption);
-    const res = await fetch("/api/v1/practice/attachments", { method: "POST", body: form });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) { setNotice(data?.error?.message ?? data?.error ?? "That did not upload."); setBusy(false); return; }
-    window.location.reload();
-  }
-
-  async function openAttachment(id: string) {
-    const res = await fetch(`/api/v1/practice/attachments?id=${id}`);
-    const data = await res.json().catch(() => ({}));
-    if (res.ok && data.url) window.open(data.url, "_blank", "noopener");
-    else setNotice("That file could not be opened.");
-  }
-
-  async function removeAttachment(id: string) {
-    const reason = prompt("Why is this being removed? It stays in the record with your reason.");
-    if (!reason?.trim()) return;
-    setBusy(true);
-    await fetch(`/api/v1/practice/attachments?id=${id}&reason=${encodeURIComponent(reason)}`, { method: "DELETE" });
-    window.location.reload();
-  }
 
   async function addPhrase() {
     setBusy(true); setNotice(null);
@@ -77,7 +48,7 @@ export default function DocumentationTools({
     window.location.reload();
   }
 
-  const tab = (k: "calc" | "files" | "phrases", label: string, n?: number) => (
+  const tab = (k: "calc" | "phrases", label: string, n?: number) => (
     <button type="button" onClick={() => setOpen(open === k ? null : k)}
       aria-expanded={open === k}
       className={`rounded-lg border px-3 py-1.5 text-[12px] font-semibold ${
@@ -92,7 +63,6 @@ export default function DocumentationTools({
       <h2 className="text-[13px] font-bold text-gray-900">Documentation tools</h2>
       <div className="mt-2 flex flex-wrap gap-2">
         {tab("calc", "Clinical calculators")}
-        {tab("files", "Attachments", attachments.length)}
         {tab("phrases", "Smart text", phrases.length)}
         {/* The comp's fourth tile. CPR-210 is not built, so it says so rather than offering a button. */}
         <span className="rounded-lg border border-dashed border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-400"
@@ -158,60 +128,6 @@ export default function DocumentationTools({
             {/* Two things a reader of this panel should know without asking. */}
             The sentence carries the numbers you typed, so anybody reading the note later can check it.
             Nothing is written to the record until you save the segment.
-          </p>
-        </div>
-      )}
-
-      {open === "files" && (
-        <div className="mt-3 border-t border-gray-100 pt-3">
-          {attachments.length === 0 ? (
-            <p className="text-[12px] text-gray-400">Nothing attached.</p>
-          ) : (
-            <ul className="flex flex-col">
-              {attachments.map(a => (
-                <li key={a.id} className="flex items-baseline gap-2 border-b border-gray-100 py-1.5 last:border-0">
-                  <span className="min-w-0">
-                    <button type="button" onClick={() => openAttachment(a.id)}
-                      className="block truncate text-[12px] font-semibold text-gray-800 hover:underline">
-                      {a.file_name}
-                    </button>
-                    <span className="block text-[10px] text-gray-500">
-                      {String(a.kind).replace(/_/g, " ")} · {Math.round(a.byte_size / 1024)} KB
-                      {a.caption ? ` · ${a.caption}` : ""}
-                    </span>
-                  </span>
-                  {editable && (
-                    <button type="button" onClick={() => removeAttachment(a.id)}
-                      className="ml-auto text-[11px] text-[var(--cmp-text-critical)] hover:underline">
-                      Remove
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {editable && (
-            <div className="mt-2 flex flex-wrap items-end gap-2">
-              <label className="flex flex-col gap-1">
-                <span className="text-[11px] font-semibold text-gray-500">Add an image or PDF</span>
-                <input type="file" accept="image/png,image/jpeg,image/webp,image/heic,application/pdf"
-                  disabled={busy} className="text-[12px]"
-                  onChange={e => {
-                    const f = e.target.files?.[0];
-                    if (f) upload(f, (document.getElementById("att-kind") as HTMLSelectElement)?.value ?? "other",
-                      (document.getElementById("att-caption") as HTMLInputElement)?.value ?? "");
-                  }} />
-              </label>
-              <select id="att-kind" defaultValue="photograph" className={`${input} w-40`} aria-label="Attachment kind">
-                {ATTACHMENT_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-              </select>
-              <input id="att-caption" placeholder="Caption (optional)" className={`${input} w-48`} aria-label="Caption" />
-            </div>
-          )}
-          <p className="mt-1 text-[10px] text-gray-500">
-            Images and PDFs only, up to 25 MB. Files are private and opened through a link that expires
-            after a minute. Removing one keeps the record of it, with your reason.
           </p>
         </div>
       )}

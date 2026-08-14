@@ -32,6 +32,7 @@ import {
 } from "@/components/practice/ClinicalRecordTable";
 import Dictation from "@/components/practice/Dictation";
 import DocumentationTools from "./DocumentationTools";
+import EncounterAttachments from "./EncounterAttachments";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -1577,12 +1578,21 @@ export default function EncounterConsole(props: {
                   </div>
                 </section>
 
-                <DocumentationTools
+                {/* ⚠ CPR-ATT-HFE-009 s4: THE FILES ARE THE TAB, so they are drawn here rather than
+                    left inside a collapsed chip in Documentation tools. "Immediately answer: what files
+                    belong to this encounter?" was answered by a closed accordion beside clinical
+                    calculators, on the tab named after them. */}
+                <EncounterAttachments
                   encounterId={props.encounterId}
+                  patientId={props.patientId}
+                  attachments={props.attachments}
+                  editable={editable}
+                />
+
+                <DocumentationTools
                   editable={editable}
                   segments={NOTE_TYPES}
                   phrases={props.phrases}
-                  attachments={props.attachments}
                   onInsert={insertIntoSegment}
                 />
               </div>
