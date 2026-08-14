@@ -113,6 +113,16 @@ export default function RegisterTable({
           <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">To</span>
           <input type="date" name="to" defaultValue={filter.to ?? ""} className={selectClass} />
         </label>
+        {/* ⚠ THE PATIENT FILTER EXISTED IN THE ENGINE AND HAD NO WAY IN. `parseDocFilter` has always read
+            `patientId` and `applyFilter` has always honoured it -- and NOTHING SET IT. No control here,
+            no link anywhere in src/ carrying it. So the tab called "Patient Documents" could not be
+            narrowed to a patient, which is the one question its name promises to answer.
+
+            ⚠ AND IT IS A HIDDEN INPUT BECAUSE THIS IS A GET FORM. Without it, applying any other filter
+            while a patient is selected would silently drop the patient and widen the list back to the
+            whole practice -- a filter that quietly returns MORE than it did before is worse than one
+            that cannot be set. */}
+        {filter.patientId && <input type="hidden" name="patientId" value={filter.patientId} />}
         <button type="submit"
           className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-gray-700 hover:bg-gray-50">
           Apply
@@ -126,6 +136,24 @@ export default function RegisterTable({
           {register.unreadable.length > 0 && " that could be read"}
         </span>
       </form>
+
+      {/* ⚠ THE ACTIVE PATIENT IS STATED, NOT LEFT TO BE INFERRED FROM THE ROWS. A narrowed register and
+          a practice with one patient's worth of documents look identical, and the difference matters
+          before somebody concludes a patient has nothing on file. The name comes off the rows; when the
+          filter matches nothing there is no name to show, and it says the id rather than inventing one. */}
+      {filter.patientId && (
+        <p className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--cp-primary)]/30 bg-[var(--cp-primary)]/[0.06] px-3 py-2 text-[12.5px]">
+          <span className="font-semibold text-[var(--cp-primary-deep)]">
+            Showing only {rows[0]?.patientName ?? "one patient"}
+          </span>
+          <span className="text-gray-600">
+            {rows.length === 1 ? "1 document" : `${rows.length} documents`} on this patient.
+          </span>
+          <Link href={action} className="ml-auto font-semibold text-[var(--cp-primary-deep)] hover:underline">
+            Show every patient
+          </Link>
+        </p>
+      )}
 
       {/* ── THE ROWS ──────────────────────────────────────────────────────────────────────────────── */}
       <section className="rounded-2xl border border-gray-200 bg-white">
@@ -182,9 +210,27 @@ export default function RegisterTable({
                   <p className="mt-0.5 text-[11.5px] text-gray-500">
                     {link.ok
                       ? (
-                        <Link href={`/practice/patients/${r.patientId}`} className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
-                          {r.patientName}
-                        </Link>
+                        <>
+                          <Link href={`/practice/patients/${r.patientId}`} className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                            {r.patientName}
+                          </Link>
+                          {/* ⚠ THE WAY INTO THE PATIENT FILTER, AND WITHOUT IT THE FILTER IS STILL
+                              UNREACHABLE. A hidden input preserves a patient somebody already chose; this
+                              is what lets them choose one. It is a separate control from the name beside
+                              it on purpose -- that link LEAVES for the patient's record, this one narrows
+                              the list in place, and one link doing both would have to guess which was
+                              meant. */}
+                          {filter.patientId !== r.patientId && (
+                            <>
+                              {" "}
+                              <Link href={`${action}?patientId=${r.patientId}`}
+                                aria-label={`Show only ${r.patientName}'s documents`}
+                                className="text-[11px] font-semibold text-gray-500 hover:text-[var(--cp-primary-deep)] hover:underline">
+                                (only this patient)
+                              </Link>
+                            </>
+                          )}
+                        </>
                       )
                       : <span className="font-semibold text-rose-600">{link.reason}</span>}
                     <> &middot; {r.source}</>

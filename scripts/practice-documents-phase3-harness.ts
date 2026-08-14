@@ -1005,11 +1005,24 @@ async function main() {
       src.startsWith('"use client"') && FORBIDDEN.every(f => !src.includes(f)),
       FORBIDDEN.filter(f => src.includes(f)).join(", ") || "missing \"use client\"");
   }
-  ok("10a-control. ...and the forbidden list really matches something -- the ENGINE imports the audit "
-    + "writer, so the scan is capable of finding a violation",
-    readFileSync(join(process.cwd(), "src", "lib", "practice", "documents-workspace-review.ts"), "utf8")
-      .includes("@/lib/practice/provisioning"),
-    "the scan would never fire");
+  // ⚠ THE CANARY IS DERIVED FROM THE FORBIDDEN LIST, NOT A SECOND HARD-CODED STRING.
+  //
+  // It used to name `@/lib/practice/provisioning` and assert the review ENGINE imported it, proving the
+  // scan above could fire. The engine stopped importing provisioning at some point and the control went
+  // red -- correctly, but for a reason that had nothing to do with what it guards: the scan was still
+  // perfectly capable, because the engine imports `@/lib/practice/tasks` and `documents-workspace`,
+  // both of which are on the list two lines up.
+  //
+  // A control that names one specific violation goes stale every time the code legitimately changes,
+  // and a control nobody trusts is the one that gets deleted along with the check it protects. Asking
+  // "does ANY forbidden import appear in a server module" is the same proof and cannot rot this way.
+  const engineSrc =
+    readFileSync(join(process.cwd(), "src", "lib", "practice", "documents-workspace-review.ts"), "utf8");
+  const canaryHits = FORBIDDEN.filter(f => engineSrc.includes(f));
+  ok("10a-control. ...and the forbidden list really matches something -- the ENGINE carries imports on "
+    + "that list, so the scan is capable of finding a violation",
+    canaryHits.length > 0,
+    `no forbidden import found in the review engine, so the scan above would never fire`);
 
   const payloadForClient = await documentsReview(admin, await ctxFor(USER_A, wsA));
   const found = functionPaths(payloadForClient);

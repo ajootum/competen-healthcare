@@ -3,7 +3,7 @@ import type { EngineResult } from "@/lib/practice/encounters";
 import { workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
 import { INCOMING_DOC_TYPES } from "@/lib/practice/communication-constants";
 import {
-  DOC_AUDIT_EVENTS, DOC_CARD_KEYS, DOC_CARD_VIEW, authoredStatus, receivedStatus,
+  DOC_AUDIT_EVENTS, DOC_CARD_KEYS, docCardHref, authoredStatus, receivedStatus,
   type DocCardKey, type DocFilter, type DocOrigin, type DocStatus,
 } from "@/lib/practice/documents-workspace-constants";
 
@@ -436,29 +436,37 @@ export async function documentsOverview(admin: any, workspaceId: string, opts: {
   const priorWindowExisted = !wsError && !!ws?.created_at && dayOf(ws.created_at) <= prior.from;
   const priorCount = applyFilter(rows, { origin: ["created_in_cp"], from: prior.from, to: prior.to }, today).length;
 
-  // ⚠ THE HREF COMES FROM DOC_CARD_VIEW, NOT FROM A LITERAL WRITTEN HERE. Two copies of a card's
+  // ⚠ THE HREF COMES FROM docCardHref, NOT FROM A LITERAL WRITTEN HERE. Two copies of a card's
   // querystring is two predicates that have to agree, and the first build had them disagree: the card
   // counted authored documents from this month while its href opened everything from this month.
+  //
+  // ⚠ AND IT NOW CARRIES THE PERIOD, WHICH IS THE SAME BUG ON THE AXIS THE PERIOD CONTROL ADDED.
+  // `rows` comes from documentRegister({from, to}), so EVERY count on this dashboard is already bounded
+  // by the reader's period -- while DOC_CARD_VIEW is a static string carrying none. Narrowed to last
+  // March, a card reading 3 opened a list of 47, and all three attention queues did the same, because
+  // their rows are these same filtered arrays. One function now, so there is one place for the next
+  // axis to be added rather than a second literal.
+  const period = { from: opts.from, to: opts.to };
   const cards: DocCard[] = [
-    { key: "total", count: reading(ALL, rows.length), against: null, href: DOC_CARD_VIEW.total },
+    { key: "total", count: reading(ALL, rows.length), against: null, href: docCardHref("total", period) },
     {
       key: "created_this_month",
       count: reading(["authored documents"], created.length),
       against: !bounded && priorWindowExisted && !failed.has("authored documents")
         ? { label: prior.label, count: priorCount } : null,
-      href: DOC_CARD_VIEW.created_this_month,
+      href: docCardHref("created_this_month", period),
     },
     {
       key: "awaiting_review", count: reading(["incoming register"], awaiting.length), against: null,
-      href: DOC_CARD_VIEW.awaiting_review,
+      href: docCardHref("awaiting_review", period),
     },
     {
       key: "drafts", count: reading(["authored documents"], drafts.length), against: null,
-      href: DOC_CARD_VIEW.drafts,
+      href: docCardHref("drafts", period),
     },
     {
       key: "unlinked", count: reading(["incoming register"], unlinked.length), against: null,
-      href: DOC_CARD_VIEW.unlinked,
+      href: docCardHref("unlinked", period),
     },
   ];
 
@@ -469,17 +477,17 @@ export async function documentsOverview(admin: any, workspaceId: string, opts: {
     {
       key: "awaiting_review", label: "Awaiting review",
       blurb: "Arrived, and nobody has looked. A result nobody read is the classic way a practice harms somebody by omission.",
-      rows: awaiting.slice(0, 8), href: DOC_CARD_VIEW.awaiting_review,
+      rows: awaiting.slice(0, 8), href: docCardHref("awaiting_review", period),
     },
     {
       key: "unlinked", label: "No patient link",
       blurb: "These arrived without a patient. Until one is chosen they cannot be found from anybody's record.",
-      rows: unlinked.slice(0, 8), href: DOC_CARD_VIEW.unlinked,
+      rows: unlinked.slice(0, 8), href: docCardHref("unlinked", period),
     },
     {
       key: "drafts", label: "Written, not signed",
       blurb: "Drafts and documents marked ready. Nothing here has been issued to anybody.",
-      rows: drafts.slice(0, 8), href: DOC_CARD_VIEW.drafts,
+      rows: drafts.slice(0, 8), href: docCardHref("drafts", period),
     },
   ].filter(s => s.rows.length > 0);
 

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
@@ -6,6 +5,7 @@ import { hasCapability } from "@/lib/practice/access";
 import { listTemplates, getTemplate } from "@/lib/practice/documentation";
 import { TEMPLATE_KINDS } from "@/lib/practice/document-constants";
 import TemplateConsole from "./TemplateConsole";
+import WorkspaceHeader from "../_workspace/WorkspaceHeader";
 
 // /practice/documents/templates -- CPR-130's template library.
 //
@@ -62,7 +62,15 @@ export default async function TemplatesPage() {
 
   return (
     <div className="max-w-4xl">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+      {/* ⚠ THE WORKSPACE STRIP WAS MISSING ON THIS TAB AND ON LIBRARY -- TWO OF THE SEVEN.
+          Both pages predate WorkspaceHeader and each grew its own "← Documents" link instead, so
+          arriving here by clicking Templates DROPPED the tab strip and the only way onward was back to
+          Overview. A tab that removes the tabs is a dead end wearing a tab's clothes, and it is the same
+          class as the two screens this component's own header comment records being stranded before.
+          The back link goes with it: the strip already contains Overview, and two ways back is one more
+          than a reader needs. */}
+      <WorkspaceHeader active="templates" capabilities={shell.ctx.capabilities} />
+      <div className="mt-4 flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Template library</h1>
           <p className="mt-0.5 text-[13px] text-gray-500">
@@ -70,7 +78,6 @@ export default async function TemplatesPage() {
             template never overwrites text you have already written.
           </p>
         </div>
-        <Link href="/practice/documents" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">← Documents</Link>
       </div>
 
       <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">

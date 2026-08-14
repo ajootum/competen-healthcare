@@ -289,6 +289,85 @@ async function main() {
   ok("3e-control. all three sections were checked (an empty attention queue would pass 3e vacuously)",
     overview.attention.length === 3, JSON.stringify(overview.attention.map(q => q.key)));
 
+  // ── 3f. THE SAME TWO CHECKS UNDER A CHOSEN PERIOD, WHICH IS WHERE THEY WERE FAILING ─────────────
+  //
+  // ⚠ 3a AND 3e ONLY EVER RAN WITH NO PERIOD, AND THAT IS WHY THIS SHIPPED. documentsOverview passes
+  // {from, to} into documentRegister, so under a period EVERY count on the dashboard is bounded --
+  // while DOC_CARD_VIEW was a static string carrying no period at all. Narrowed to a range, a card
+  // reading 3 opened a list of 47, and all three attention queues did the same. Every existing
+  // assertion stayed green because none of them ever chose a period.
+  //
+  // ⚠ AND THE COMMENT ABOVE DOC_CARD_VIEW ALREADY RECORDS THIS BUG BEING FOUND ONCE, on `origin`:
+  // "card said 5, list showed 8, and both were correct answers to two different questions". It was
+  // fixed there and the period control reintroduced it on a new axis. A test that covers one axis of a
+  // predicate does not cover the next one somebody adds.
+  // ⚠ THE FIXTURE HAS TO BE BACK-DATED FIRST, AND THE CONTROL IS WHAT FOUND THAT OUT. Every row this
+  // harness creates is made in the same run, so the whole register shares one date -- and a period over
+  // a single-date register selects everything, which is the unbounded run wearing a period's clothes.
+  // 3f and 3g passed vacuously until 3f-control failed and said so.
+  //
+  // Back-dating ONE authored row is enough for two distinct dates, and it is done AFTER 3a-3e have run
+  // so nothing above sees a changed register. `at` for an authored row is signed_at ?? created_at, so
+  // both move together or the row keeps today's date through the column that was not touched.
+  const backAt = new Date(Date.now() - 45 * 86400000).toISOString();
+  const { data: toAge } = await admin.from("practice_clinical_document")
+    .select("id").eq("workspace_id", wsA).limit(1);
+  if (toAge?.[0]) {
+    await admin.from("practice_clinical_document")
+      .update({ created_at: backAt, signed_at: null }).eq("id", toAge[0].id);
+  }
+
+  const spread = await documentsOverview(admin, wsA, { userId: USER_A, capabilities: ["document.view"] });
+  const allDates = [...new Set(spread.register.rows.map(r => r.at))].sort();
+  // A boundary that genuinely splits the register, so the bounded run is not the unbounded run again.
+  const cutoff = allDates[Math.floor(allDates.length / 2)];
+  const bounded = await documentsOverview(admin, wsA, {
+    userId: USER_A, capabilities: ["document.view"], from: cutoff,
+  });
+  ok("3f-control. the period actually narrowed the register (otherwise 3f and 3g are the unbounded run)",
+    allDates.length >= 2 && bounded.register.rows.length > 0
+      && bounded.register.rows.length < spread.register.rows.length,
+    `dates ${allDates.length}, bounded ${bounded.register.rows.length} of ${spread.register.rows.length}, from ${cutoff}`);
+
+  // ⚠ THE HREF IS RE-APPLIED TO THE **UNBOUNDED** REGISTER, AND THE FIRST VERSION USED THE BOUNDED ONE.
+  // That version could not fail: `bounded.register.rows` are already period-filtered, so re-applying a
+  // filter that has LOST the period selects exactly the same rows. It passed with the bug deliberately
+  // reintroduced. What actually happens when somebody clicks a card is a fresh navigation to
+  // /documents/patient, which re-reads the WHOLE register through parseDocFilter -- so the honest
+  // simulation is the whole register, and only that shape can see a period going missing.
+  const boundedMismatch = bounded.cards.filter(card => {
+    if (card.count.state !== "ok") return false;
+    const sp = Object.fromEntries(new URLSearchParams(card.href.split("?")[1] ?? "").entries());
+    return applyFilter(spread.register.rows, parseDocFilter(sp), spread.register.today).length
+      !== card.count.value;
+  });
+  ok("3f. ⚠ UNDER A PERIOD, every card's figure still equals the list its own href opens",
+    boundedMismatch.length === 0,
+    boundedMismatch.map(c => `${c.key}: card ${c.count.state === "ok" ? c.count.value : "?"} href ${c.href}`).join(" | "));
+
+  // ⚠ AND EVERY CARD'S HREF MUST CARRY THE PERIOD. Without this, 3f could pass by the href happening to
+  // select the same rows -- true today for a small fixture, and false the moment the register grows.
+  ok("3f-b. and every card href carries the period it was counted under",
+    bounded.cards.every(c => c.href.includes(`from=${cutoff}`)),
+    bounded.cards.map(c => c.href).join(" | "));
+
+  // Same correction as 3f: the whole register, because that is what the link opens.
+  const boundedQueueMismatch = bounded.attention.filter(q => {
+    const sp = Object.fromEntries(new URLSearchParams(q.href.split("?")[1] ?? "").entries());
+    const opened = applyFilter(spread.register.rows, parseDocFilter(sp), spread.register.today);
+    return opened.slice(0, 8).map(r => r.id).join() !== q.rows.map(r => r.id).join();
+  });
+  ok("3g. ⚠ UNDER A PERIOD, each attention section opens exactly the rows it is showing",
+    boundedQueueMismatch.length === 0,
+    boundedQueueMismatch.map(q => `${q.key} -> ${q.href}`).join(", "));
+
+  // ⚠ created_this_month DROPS ITS WINDOW WHEN BOUNDED, because the COUNT drops it -- intersecting the
+  // reader's range with "this month" would read nought. An href that kept it would open the one list
+  // guaranteed to be empty, which is the failure mode this whole section exists to prevent.
+  const createdCard = bounded.cards.find(c => c.key === "created_this_month");
+  ok("3g-b. the created card drops window=this_month under a period, exactly as its count does",
+    !!createdCard && !createdCard.href.includes("window=this_month"), createdCard?.href);
+
   // ── 4. s17 RULE 1 -- NO PATIENT-SPECIFIC DOCUMENT WITHOUT A PATIENT LINK ────────────────────────
   const rawNullPatient = await admin.from("practice_clinical_document").insert({
     workspace_id: wsA, patient_id: null, title: "HARNESS no patient", body: "x", status: "DRAFT",

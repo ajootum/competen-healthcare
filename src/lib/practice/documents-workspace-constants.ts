@@ -401,6 +401,40 @@ export const DOC_CARD_VIEW: Record<DocCardKey, string> = {
   unlinked: "/practice/documents/patient?link=unlinked",
 };
 
+/**
+ * The card's href WITH the period the reader has chosen carried into it.
+ *
+ * ⚠ EVERY CARD DIVERGED FROM ITS OWN LIST UNDER A PERIOD, NOT JUST ONE. `documentsOverview` calls
+ * `documentRegister` with `{from, to}`, so every count on the dashboard is already period-bounded --
+ * while `DOC_CARD_VIEW` is a static string carrying no period at all. Narrow to last March, and a card
+ * reading 3 opened a list of 47. The same held for all three attention queues, whose rows are the same
+ * filtered arrays.
+ *
+ * ⚠ THE COMMENT ABOVE DOC_CARD_VIEW ALREADY RECORDS THIS EXACT BUG BEING FOUND AND FIXED ONCE -- "card
+ * said 5, list showed 8, and both were correct answers to two different questions". It was fixed for
+ * `origin` and the period control later reintroduced it on a different axis. Which is the argument for
+ * this being a FUNCTION: a static map cannot express a href that depends on state, so the next axis
+ * added to this dashboard has somewhere to go other than a second literal.
+ *
+ * ⚠ AND created_this_month DROPS ITS WINDOW WHEN BOUNDED, because the COUNT does. documentsOverview
+ * removes the `this_month` sub-filter under a period -- intersecting the reader's March with "this
+ * month" would read nought -- so an href that kept it would open the one list guaranteed to be empty.
+ */
+export function docCardHref(
+  key: DocCardKey, period: { from?: string; to?: string } = {},
+): string {
+  const base = DOC_CARD_VIEW[key];
+  if (!period.from && !period.to) return base;
+
+  const [path, query] = base.split("?");
+  const params = new URLSearchParams(query ?? "");
+  // Mirrors documentsOverview's `bounded ? {origin} : {origin, window}`.
+  if (key === "created_this_month") params.delete("window");
+  if (period.from) params.set("from", period.from);
+  if (period.to) params.set("to", period.to);
+  return `${path}?${params.toString()}`;
+}
+
 export const DOC_CARD_LABEL: Record<DocCardKey, { label: string; caption: string; blurb: string }> = {
   total: {
     label: "Documents held", caption: "All time",

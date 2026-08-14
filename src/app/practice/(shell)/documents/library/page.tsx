@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { listLibrary, listFolders, librarySummary } from "@/lib/practice/document-library";
 import LibraryConsole from "./LibraryConsole";
+import WorkspaceHeader from "../_workspace/WorkspaceHeader";
 
 // /practice/documents/library -- CPR-320's SHARED DOCUMENT LIBRARY.
 //
@@ -42,7 +42,12 @@ export default async function LibraryPage({ searchParams }: {
 
   return (
     <div className="max-w-5xl">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+      {/* ⚠ See the same note on templates/page.tsx: this tab dropped the workspace strip. The
+          "Clinical documents" button went with it -- Patient Documents is one of the tabs now visible,
+          under the name the rest of the product calls it, which is better than a button whose label
+          matched no tab. */}
+      <WorkspaceHeader active="library" capabilities={shell.ctx.capabilities} />
+      <div className="mt-4 flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Document library</h1>
           <p className="mt-0.5 text-[13px] text-gray-500">
@@ -50,10 +55,6 @@ export default async function LibraryPage({ searchParams }: {
             belongs to a patient; patient documents live on the patient.
           </p>
         </div>
-        <Link href="/practice/documents"
-          className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
-          Clinical documents
-        </Link>
       </div>
 
       <LibraryConsole
