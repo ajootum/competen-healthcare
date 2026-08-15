@@ -100,6 +100,79 @@ export const METRIC_REGISTRY: MetricRegistryEntry[] = [
   },
 ];
 
+// ── CPR-PI-001 v2 P0: the intelligence screens' own entries ─────────────────────────────────────────
+METRIC_REGISTRY.push(
+  {
+    metricId: "pi.followup_completion", version: 1, displayName: "Follow-up completion",
+    definition: "Of the follow-ups RAISED in the period, how many are completed -- the cohort whose fate is attributable to the period, with the not-yet-due share disclosed beside it rather than hidden in the denominator.",
+    sourceDomains: ["follow_up"],
+    numerator: "follow-ups raised in period, now COMPLETED", denominator: "follow-ups raised in period",
+    timeField: "practice_follow_up.created_at", comparisonRule: "none",
+    nullHandling: "An unreadable cohort is unavailable, never 0 of 0.",
+    drillthrough: "/practice/follow-ups", releaseState: "required", owner: "CPR-PI-001 v2 s9",
+  },
+  {
+    metricId: "pi.median_days_followup", version: 1, displayName: "Median days to follow-up",
+    definition: "Median elapsed days between due date and completion over valid completed pairs; an early completion is a negative value and is kept, never clamped.",
+    sourceDomains: ["follow_up"], timeField: "practice_follow_up.closed_at", comparisonRule: "none",
+    nullHandling: "No valid pairs = no median, never 0.",
+    drillthrough: "/practice/follow-ups", releaseState: "required", owner: "CPR-PI-001 v2 s15",
+  },
+  {
+    metricId: "pi.recency_last_visit", version: 1, displayName: "Recency of last visit",
+    definition: "Active (non-merged) patients bucketed by days since their last recorded encounter, as at today; never-seen patients are their own visible group.",
+    sourceDomains: ["patient", "encounter"],
+    numerator: "patients in each bucket", denominator: "all active patients (shown)",
+    timeField: "practice_encounter.started_at (latest per patient)", comparisonRule: "none",
+    nullHandling: "Truncated reads are flagged; a capped list is said to be capped.",
+    drillthrough: "/practice/patients", releaseState: "required", owner: "CPR-PI-001 v2 s7",
+  },
+  {
+    metricId: "pi.avg_visits_per_patient", version: 1, displayName: "Average visits per patient",
+    definition: "Qualifying encounters in the period divided by distinct patients seen in it; both halves shown wherever the ratio renders.",
+    sourceDomains: ["encounter"],
+    numerator: "qualifying encounters in period", denominator: "distinct patients seen in period",
+    timeField: "practice_encounter.started_at", comparisonRule: "none",
+    nullHandling: "No patients seen = no ratio, never a divide-by-zero zero.",
+    drillthrough: "/practice/encounters", releaseState: "required", owner: "CPR-PI-001 v2 s7",
+  },
+  {
+    metricId: "pi.top_conditions_by_patients", version: 1, displayName: "Top conditions by patients",
+    definition: "Distinct patients with a qualifying recorded diagnosis in the period, per condition AS TYPED -- tidying labels would invent a coding.",
+    sourceDomains: ["diagnosis"],
+    numerator: "distinct patients with the condition", denominator: "patients seen in the period (the eligible set)",
+    timeField: "practice_diagnosis recorded date", comparisonRule: "none",
+    nullHandling: "Unreadable diagnoses render as unavailable.",
+    drillthrough: "/practice/intelligence?tab=clinical", releaseState: "required", owner: "CPR-PI-001 v2 s8/s15",
+  },
+  {
+    metricId: "pi.top_conditions_by_encounters", version: 1, displayName: "Top conditions by records",
+    definition: "Qualifying diagnosis RECORDS per condition -- occurrence, not prevalence, and the two are never presented as the same number (v2 s15).",
+    sourceDomains: ["diagnosis"],
+    numerator: "diagnosis records naming the condition", denominator: "all diagnosis records in period",
+    timeField: "practice_diagnosis recorded date", comparisonRule: "none",
+    nullHandling: "Unreadable diagnoses render as unavailable.",
+    drillthrough: "/practice/intelligence?tab=clinical", releaseState: "required", owner: "CPR-PI-001 v2 s8/s15",
+  },
+  {
+    metricId: "pi.consultations_trend", version: 1, displayName: "Consultations over time",
+    definition: "Daily encounter counts in the practice's calendar, from the ONE shared trend (encounterTrend) -- never a second bucketing that can disagree with it.",
+    sourceDomains: ["encounter"], timeField: "practice_encounter.started_at (practice timezone)",
+    comparisonRule: "preceding_equal_period",
+    nullHandling: "An unreadable trend renders as unavailable.",
+    drillthrough: "/practice/encounters", releaseState: "required", owner: "CPR-PI-001 v2 s6/s10",
+  },
+  {
+    metricId: "pi.day_of_week", version: 1, displayName: "Consultations by weekday",
+    definition: "Encounter counts per weekday in the practice's own calendar, derived from the one encounter trend every screen shares.",
+    sourceDomains: ["encounter"],
+    numerator: "encounters on the weekday", denominator: "all encounters in period",
+    timeField: "practice_encounter.started_at (practice timezone)", comparisonRule: "none",
+    nullHandling: "An unreadable trend renders as unavailable.",
+    drillthrough: "/practice/intelligence?tab=patterns", releaseState: "required", owner: "CPR-PI-001 v2 s10",
+  },
+);
+
 export const metricById = (id: string): MetricRegistryEntry | null =>
   METRIC_REGISTRY.find(m => m.metricId === id) ?? null;
 

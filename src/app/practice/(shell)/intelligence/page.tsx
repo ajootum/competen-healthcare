@@ -6,8 +6,10 @@ import { hasCapability } from "@/lib/practice/access";
 import { intelligenceSuite, isCohortDimension } from "@/lib/practice/intelligence";
 import { financialIntelligence } from "@/lib/practice/financial-intelligence";
 import FinancialArea from "./FinancialArea";
+import { piV2Extras } from "@/lib/practice/pi-v2";
+import { OverviewV2Area, PatientV2Area, ClinicalV2Area, FollowUpV2Area, PatternsV2Area } from "./AreasV2";
 import {
-  INTELLIGENCE_TABS, DEFAULT_TAB, isIntelligenceTab, TAB_SWATCH, DEFAULT_RANGE_DAYS,
+  INTELLIGENCE_TABS, INTELLIGENCE_TAB_STRIP, DEFAULT_TAB, isIntelligenceTab, TAB_SWATCH, DEFAULT_RANGE_DAYS,
   type IntelligenceTabKey,
 } from "@/lib/practice/intelligence-constants";
 import RangePicker from "./RangePicker";
@@ -25,11 +27,12 @@ import {
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 // THE THREE THINGS THIS SCREEN GETS ASKED FOR THAT IT DOES NOT DO, AND WHY.
 //
-// 1. NO RATES. All three comps are built on them: "82% Follow-up Compliance", "78% of VP shunt patients
-//    had no complications", donut slices labelled "6 (33%)" and "22 (25%)", "▲12% vs last week" on every
-//    tile in the strip. A percentage is where a small number hides -- "follow-up completion 75%" is the
-//    same sentence whether it is 3 of 4 or 750 of 1000, and only one of those is worth changing a clinic
-//    over. Every figure here is a count and its denominator, as two separate values.
+// 1. RATES ARE GOVERNED NOW, NOT REFUSED (CPR-PI-001 v2, 2026-08-15, superseding the rule this
+//    comment used to state). A percentage may render ONLY beside its own counts and only under a
+//    metric-registry definition naming numerator and denominator -- "72 of 96 (75%)", never a bare
+//    75% and never a judgement. The old refusal's spirit survives as the registry (s14), the
+//    denominator rule (s19) and the low-denominator withholding (s22); the v2 P0 areas in AreasV2.tsx
+//    are built on exactly that contract, and the older areas stay counts-only until re-specified.
 //
 // 2. NO SIDEBAR SUBMENU. All three comps draw s6's nine areas as an expanded tree under Practice
 //    Intelligence. s4 forbids exactly that, in the paragraph that lists them: "Practice Intelligence may
@@ -129,7 +132,10 @@ export default async function IntelligencePage({ searchParams }: {
       {/* ── s6 INTERNAL NAVIGATION -- TABS, NOT SIDEBAR ENTRIES ─────────────────────────────────── */}
       <nav aria-label="Practice intelligence areas"
         className="mt-4 flex gap-1 overflow-x-auto border-b border-gray-200 pb-px">
-        {INTELLIGENCE_TABS.map(t => {
+        {/* CPR-PI-001 v2 s3: the STRIP is v2's order (mapped from the strip, not filtered from the
+            catalogue, so declaration order cannot quietly reorder the screen); off-strip keys stay
+            valid for old links. */}
+        {INTELLIGENCE_TAB_STRIP.map(k => INTELLIGENCE_TABS.find(t => t.key === k)!).map(t => {
           const on = t.key === tab;
           const s = TAB_SWATCH[t.swatch] ?? TAB_SWATCH.primary;
           return (
@@ -177,6 +183,25 @@ export default async function IntelligencePage({ searchParams }: {
         {tab === "reports" && <ReportsArea suite={suite} />}
         {/* Phase 3 (CPR-PAY-001 s17) under CPR-PI-001 v2: computed ONLY when its tab is open --
             two extra billing sweeps have no business running under every other tab's load. */}
+        {/* v2 P0: the five rebuilt screen contracts. The extras module runs only for tabs that
+            read it -- three additional reads have no business under the other tabs' load. */}
+        {tab === "overview" && (
+          <OverviewV2Area suite={suite} extras={await piV2Extras(admin, shell.ctx, {
+            fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay, todayDate: suite.range.period.toDay,
+          })} />
+        )}
+        {tab === "patients" && (
+          <PatientV2Area suite={suite} extras={await piV2Extras(admin, shell.ctx, {
+            fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay, todayDate: suite.range.period.toDay,
+          })} />
+        )}
+        {tab === "followups" && (
+          <FollowUpV2Area suite={suite} extras={await piV2Extras(admin, shell.ctx, {
+            fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay, todayDate: suite.range.period.toDay,
+          })} />
+        )}
+        {tab === "clinical" && <ClinicalV2Area suite={suite} />}
+        {tab === "patterns" && <PatternsV2Area suite={suite} />}
         {tab === "financial" && (
           <FinancialArea financial={await financialIntelligence(admin, shell.ctx, {
             fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay,

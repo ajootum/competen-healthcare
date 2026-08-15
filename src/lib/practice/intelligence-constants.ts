@@ -33,7 +33,8 @@
 
 export type IntelligenceTabKey =
   | "overview" | "brief" | "patients" | "cohorts" | "clinical"
-  | "pathways" | "performance" | "reports" | "assistant" | "financial";
+  | "pathways" | "performance" | "reports" | "assistant" | "financial"
+  | "followups" | "patterns";
 
 export type IntelligenceTab = {
   key: IntelligenceTabKey;
@@ -50,15 +51,20 @@ export const INTELLIGENCE_TABS: IntelligenceTab[] = [
     blurb: "What needs attention now, and what the period adds up to." },
   { key: "brief", label: "Today's Brief", swatch: "indigo",
     blurb: "Today's sessions, obligations and outstanding reviews, derived from the record and labelled as derived." },
-  { key: "patients", label: "Patients", swatch: "rose",
-    blurb: "Patients the dates say need attention -- overdue, inactive, lost to follow-up." },
+  { key: "patients", label: "Patient Intelligence", swatch: "rose",
+    blurb: "Who makes up my practice, and how continuous is their relationship with it." },
+  // v2 s3 destinations 4 and 5, new with the P0 rebuild.
+  { key: "followups", label: "Follow-up & Outcomes", swatch: "amber",
+    blurb: "What continuity was promised, what became of it, and the gaps the record can prove." },
+  { key: "patterns", label: "Practice Patterns", swatch: "cyan",
+    blurb: "How this practice operates across time, locations and consultation types." },
   { key: "cohorts", label: "Cohorts", swatch: "violet",
     blurb: "Groups of patients defined by an attribute the record actually holds." },
-  { key: "clinical", label: "Clinical Insights", swatch: "emerald",
+  { key: "clinical", label: "Clinical Intelligence", swatch: "emerald",
     blurb: "Diagnoses, procedures, outcomes and follow-up conclusions over the period." },
   { key: "pathways", label: "Pathways", swatch: "cyan",
     blurb: "Enrolment, stage progression and milestones that have passed their date." },
-  { key: "performance", label: "Performance & Portfolio", swatch: "amber",
+  { key: "performance", label: "Professional Portfolio", swatch: "violet",
     blurb: "Your own activity over the period, and the portfolio it feeds." },
   // CPR-PAY-001 s17 Phase 3 under CPR-PI-001 v2: descriptive money patterns, billing.view-gated in
   // the MODULE (financial permissions are not clinical ones), registry-defined, Payments-routed.
@@ -66,8 +72,20 @@ export const INTELLIGENCE_TABS: IntelligenceTab[] = [
     blurb: "What was charged, collected and actually received, described from the billing records and routed to Payments." },
   { key: "reports", label: "Reports", swatch: "sky",
     blurb: "Reports this practice has defined, and the exports it has permission to take." },
-  { key: "assistant", label: "Assistant", swatch: "assistant",
+  { key: "assistant", label: "Ask Practice", swatch: "assistant",
     blurb: "Questions about the records in front of you. It works from them and from nothing else." },
+];
+
+// ── CPR-PI-001 v2 s3: THE STRIP IS v2's ORDER; THE KEYS ARE A SUPERSET ──────────────────────────────
+//
+// The strip renders v2's eight destinations in v2's order (Financial slots after Patterns -- it is
+// PAY-001 s17's addition, and v2 s12 conditions financial surfaces on the governed module existing).
+// brief, cohorts and pathways LEAVE THE STRIP -- v2 s3: "Cohorts are filters, not a primary
+// destination. Pathways are not part of the initial redesigned navigation." -- but their KEYS stay
+// valid so every old bookmark still lands on its area. Removed from the strip is not deleted.
+export const INTELLIGENCE_TAB_STRIP: IntelligenceTabKey[] = [
+  "overview", "patients", "clinical", "followups", "patterns", "financial",
+  "performance", "reports", "assistant",
 ];
 
 export const DEFAULT_TAB: IntelligenceTabKey = "overview";
