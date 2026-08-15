@@ -686,10 +686,16 @@ export function PathwaysArea({ suite }: { suite: Suite }) {
 
 // ── PERFORMANCE & PORTFOLIO ──────────────────────────────────────────────────────────────────────────
 
-export function PerformanceArea({ suite }: { suite: Suite }) {
+export function PerformanceArea({ suite, portfolio, exportHrefs }: {
+  suite: Suite;
+  /** CPR-PI-001 v2 s11's period summary -- person-scoped, one owner (portfolio.ts) for tab and report. */
+  portfolio?: import("@/lib/practice/portfolio").PortfolioPeriodSummary;
+  exportHrefs?: { csv: string; xlsx: string; print: string };
+}) {
   const overview = suite.workspace.modules.overview;
   const growth = suite.workspace.modules.growth;
   const locations = suite.workspace.modules.locations;
+  const pp = portfolio?.available ? portfolio.data : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -788,6 +794,57 @@ export function PerformanceArea({ suite }: { suite: Suite }) {
           ))}
         </div>
       </section>
+
+      {/* ── CPR-PI-001 v2 s11's CONDITIONAL ROWS, gates met: reflections (mig 216), teaching
+             (activity kinds, mig 209) and CPD minutes are all INTENTIONALLY CAPTURED. Person-scoped:
+             this is YOUR record in the selected period, not the practice's. ─────────────────────── */}
+      {portfolio && (
+        <section className={CARD}>
+          <PanelHead panel="performance" title="Reflections, teaching and CPD this period"
+            note="Only what you intentionally captured. Nothing is inferred, and CPD counts only items carrying minutes." />
+          {!pp ? (
+            <p className="mt-2 text-[12px] text-gray-600">{portfolio.reason ?? "Could not be read."}</p>
+          ) : (
+            <>
+              <div className="mt-2 grid gap-x-6 gap-y-1 sm:grid-cols-2">
+                {[
+                  ["Reflections you authored", pp.reflections],
+                  ["Teaching or training sessions", pp.teaching.sessions],
+                  ["Teaching minutes (where entered)", pp.teaching.minutes],
+                  ["CPD minutes (where entered)", pp.cpd.minutes],
+                ].map(([k, v]) => (
+                  <p key={String(k)} className="flex items-baseline gap-2 text-[12px]">
+                    <span className="text-gray-700">{k}</span>
+                    <span className="ml-auto font-bold tabular-nums text-gray-900">{v}</span>
+                  </p>
+                ))}
+              </div>
+              {pp.teaching.withoutDuration > 0 && (
+                <p className="mt-1 text-[10px] text-amber-700">
+                  {pp.teaching.withoutDuration} teaching session{pp.teaching.withoutDuration === 1 ? "" : "s"} carr
+                  {pp.teaching.withoutDuration === 1 ? "ies" : "y"} no duration and contribute{pp.teaching.withoutDuration === 1 ? "s" : ""} no
+                  minutes &mdash; never estimated.
+                </p>
+              )}
+              {exportHrefs && (
+                <div className="mt-3 border-t border-gray-100 pt-2">
+                  <p className="text-[11px] font-semibold text-gray-700">Portfolio report for this period</p>
+                  <p className="mt-0.5 text-[10px] leading-relaxed text-gray-500">
+                    Governed like every report: date range, definitions and provenance travel with the
+                    file. s11&apos;s own rule: appraisal and credentialing support &mdash; not a claim of
+                    competence or quality, and nothing in it is verified by this product.
+                  </p>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    <a href={exportHrefs.csv} className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">CSV ↓</a>
+                    <a href={exportHrefs.xlsx} className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">XLSX ↓</a>
+                    <Link href={exportHrefs.print} className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">Print</Link>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      )}
     </div>
   );
 }

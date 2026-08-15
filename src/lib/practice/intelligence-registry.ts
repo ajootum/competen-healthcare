@@ -292,6 +292,14 @@ METRIC_REGISTRY.push(
     drillthrough: "/practice/intelligence?tab=patterns", releaseState: "conditional", owner: "CPR-PI-001 v2 s10",
   },
   {
+    metricId: "pi.portfolio_period", version: 1, displayName: "Portfolio period summary",
+    definition: "The practitioner's OWN recorded work in a chosen period: consultations they created, procedures they performed, teaching/training sessions, CPD minutes where entered, reflections they authored, and their case mix as typed. PERSON-SCOPED throughout -- a portfolio is the practitioner's record, not the practice's -- and per s11 it supports reflection, appraisal and credentialing, never a claim of competence or quality. Nothing here is verified by this product.",
+    sourceDomains: ["encounter", "procedure", "clinical_activity", "reflection", "diagnosis"],
+    timeField: "each store's own occurrence date, person-scoped", comparisonRule: "none",
+    nullHandling: "A failed read is unavailable. CPD counts only items carrying cpd_minutes; sessions without a duration are named, never estimated.",
+    drillthrough: "/practice/activity", releaseState: "conditional", owner: "CPR-PI-001 v2 s11",
+  },
+  {
     metricId: "pi.day_of_week", version: 1, displayName: "Consultations by weekday",
     definition: "Encounter counts per weekday in the practice's own calendar, derived from the one encounter trend every screen shares.",
     sourceDomains: ["encounter"],

@@ -1,6 +1,6 @@
 import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
-import { type WorkspaceContext } from "@/lib/practice/access";
+import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { practiceToday, workspaceClock } from "@/lib/practice/practice-time";
 
 // CPR-240 PROFESSIONAL PORTFOLIO.
@@ -818,3 +818,94 @@ export async function exportProfessionalRecord(admin: any, userId: string, args:
 //
 // notify pgrst, 'reload schema';
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+// ── CPR-PI-001 v2 s11 -- THE PERIOD PORTFOLIO SUMMARY, one owner for two surfaces ────────────────────
+//
+// The Professional Portfolio tab and the governed portfolio report both render THIS. buildPortfolio
+// above is the whole-career document; this is the s11 period view -- user-selectable range, and
+// everything in it is PERSON-SCOPED (created_by / performed_by / author_id = the caller), because a
+// portfolio is the practitioner's own record, not the practice's.
+//
+// THE s11 GATES, checked: reflections ARE intentionally captured (practice_reflection, mig 216);
+// teaching IS captured (practice_clinical_activity kind teaching/training, mig 209); CPD IS captured
+// (cpd_minutes on activities and procedures). None of this is inferred -- a session without
+// cpd_minutes contributes nothing, and the uncounted share is named.
+
+export type PortfolioPeriodSummary = {
+  available: boolean;
+  reason: string | null;
+  data: {
+    encounters: number;
+    distinctPatients: number;
+    proceduresPerformed: number;
+    teaching: { sessions: number; minutes: number; withoutDuration: number };
+    cpd: { minutes: number; contributingItems: number };
+    reflections: number;
+    caseMix: { label: string; total: number }[];
+    truncated: boolean;
+  } | null;
+};
+
+export async function portfolioPeriodSummary(admin: any, ctx: WorkspaceContext, period: {
+  fromIso: string; toIso: string;
+}): Promise<PortfolioPeriodSummary> {
+  if (!hasCapability(ctx, "report.view"))
+    return { available: false, reason: "needs report.view", data: null };
+
+  const CAP = 999;
+  const me = ctx.userId;
+  const ws = ctx.workspaceId;
+  const [encRes, procRes, actRes, refRes, dxRes] = await Promise.all([
+    admin.from("practice_encounter").select("patient_id")
+      .eq("workspace_id", ws).eq("created_by", me)
+      .not("status", "in", "(CANCELLED,ENTERED_IN_ERROR)")
+      .gte("started_at", period.fromIso).lt("started_at", period.toIso).limit(CAP + 1),
+    admin.from("practice_procedure").select("cpd_minutes")
+      .eq("workspace_id", ws).eq("performed_by", me).eq("status", "PERFORMED")
+      .gte("performed_at", period.fromIso).lt("performed_at", period.toIso).limit(CAP + 1),
+    admin.from("practice_clinical_activity").select("kind, duration_minutes, cpd_minutes")
+      .eq("workspace_id", ws).eq("performed_by", me)
+      .gte("occurred_at", period.fromIso).lt("occurred_at", period.toIso).limit(CAP + 1),
+    admin.from("practice_reflection").select("id", { count: "exact", head: true })
+      .eq("workspace_id", ws).eq("author_id", me)
+      .gte("created_at", period.fromIso).lt("created_at", period.toIso),
+    admin.from("practice_diagnosis").select("label")
+      .eq("workspace_id", ws).eq("created_by", me)
+      .gte("created_at", period.fromIso).lt("created_at", period.toIso).limit(CAP + 1),
+  ]);
+  const firstError = encRes.error ?? procRes.error ?? actRes.error ?? refRes.error ?? dxRes.error;
+  if (firstError) return { available: false, reason: firstError.message, data: null };
+  // ⚠ null-count is not zero (the PostgREST missing-table trap).
+  if (refRes.count === null) return { available: false, reason: "the reflection count could not be read", data: null };
+
+  const encs = ((encRes.data ?? []) as any[]).slice(0, CAP);
+  const procs = ((procRes.data ?? []) as any[]).slice(0, CAP);
+  const acts = ((actRes.data ?? []) as any[]).slice(0, CAP);
+  const dxs = ((dxRes.data ?? []) as any[]).slice(0, CAP);
+
+  const teachingActs = acts.filter(a => a.kind === "teaching" || a.kind === "training");
+  const cpdItems = [...procs, ...acts].filter(x => typeof x.cpd_minutes === "number" && x.cpd_minutes > 0);
+  const mix = new Map<string, number>();
+  for (const d of dxs) mix.set(d.label, (mix.get(d.label) ?? 0) + 1);
+
+  return {
+    available: true, reason: null,
+    data: {
+      encounters: encs.length,
+      distinctPatients: new Set(encs.map(e => e.patient_id).filter(Boolean)).size,
+      proceduresPerformed: procs.length,
+      teaching: {
+        sessions: teachingActs.length,
+        minutes: teachingActs.reduce((n, a) => n + (a.duration_minutes ?? 0), 0),
+        withoutDuration: teachingActs.filter(a => !a.duration_minutes).length,
+      },
+      cpd: {
+        minutes: cpdItems.reduce((n, x) => n + x.cpd_minutes, 0),
+        contributingItems: cpdItems.length,
+      },
+      reflections: refRes.count,
+      caseMix: [...mix.entries()].map(([label, total]) => ({ label, total })).sort((a, b) => b.total - a.total).slice(0, 5),
+      truncated: [encRes, procRes, actRes, dxRes].some(r => ((r.data ?? []) as any[]).length > CAP),
+    },
+  };
+}

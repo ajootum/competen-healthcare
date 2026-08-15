@@ -9,6 +9,7 @@ import { financialIntelligence } from "@/lib/practice/financial-intelligence";
 import { piV2Extras } from "@/lib/practice/pi-v2";
 import { metricById } from "@/lib/practice/intelligence-registry";
 import { reportTemplateById } from "@/lib/practice/report-templates";
+import { portfolioPeriodSummary } from "@/lib/practice/portfolio";
 import { formatMinor } from "@/lib/practice/billing-constants";
 
 // CPR-PI-001 v2 s12 -- THE REPORT ENGINE.
@@ -327,6 +328,42 @@ export async function generateReport(admin: any, ctx: WorkspaceContext, args: {
         ] as (string | number)[][],
         note: "Counted through the located session each consultation ran inside. The unplaceable are disclosed, never dropped or redistributed.",
       }];
+    }
+  } else if (tpl.id === "professional_portfolio") {
+    // s11's export: PERSON-SCOPED throughout (portfolio.ts owns the derivation), and the two honesty
+    // sentences travel in the sections because a printed portfolio outlives the screen that framed it.
+    const ps = await portfolioPeriodSummary(admin, ctx, { fromIso: period.fromIso, toIso: period.toIso });
+    if (!ps.available || !ps.data) sections = [refusedSection("Portfolio", { reason: ps.reason })];
+    else {
+      const p = ps.data;
+      sections = [
+        {
+          title: "Your recorded activity", columns: ["Measure", "Count"],
+          rows: [
+            ["Consultations you created", p.encounters],
+            ["Distinct patients in those", p.distinctPatients],
+            ["Procedures you performed", p.proceduresPerformed],
+            ["Reflections you authored", p.reflections],
+          ],
+          note: "Person-scoped: work YOU recorded here, not the practice's whole record. Nothing in this document has been verified by this product.",
+        },
+        {
+          title: "Teaching and CPD", columns: ["Measure", "Count"],
+          rows: [
+            ["Teaching or training sessions", p.teaching.sessions],
+            ["Teaching minutes (where a duration was entered)", p.teaching.minutes],
+            ["Sessions without a recorded duration", p.teaching.withoutDuration],
+            ["CPD minutes (where entered)", p.cpd.minutes],
+            ["Items carrying CPD minutes", p.cpd.contributingItems],
+          ],
+          note: "CPD counts only items on which minutes were entered -- a session without them contributes nothing and is never estimated.",
+        },
+        {
+          title: "Your case mix", columns: ["Condition", "Records"],
+          rows: p.caseMix.map(m => [m.label, m.total]),
+          note: `Diagnoses you recorded, as typed.${p.truncated ? " A read hit its cap, so these are floors." : ""} s11's own rule: this document supports reflection, appraisal and credentialing -- it is not a claim of competence or quality.`,
+        },
+      ];
     }
   } else if (tpl.id === "financial_summary") {
     const fin = await financialIntelligence(admin, ctx, { fromDay: period.fromDay, toDay: period.toDay });

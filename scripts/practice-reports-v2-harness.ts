@@ -70,8 +70,11 @@ async function main() {
   ok("1-1. ⚠ the ten core templates are s12's list, by name, verbatim",
     S12_TEN.every(n => REPORT_TEMPLATES.some(t => t.name === n)),
     S12_TEN.filter(n => !REPORT_TEMPLATES.some(t => t.name === n)).join(", "));
-  ok("1-2. the category set is s12's (financial present because the governed module exists)",
-    REPORT_CATEGORIES.map(c => c.key).join() === "clinical,patients,followups,operations,financial");
+  // Repointed 2026-08-15: s11's Export row ("governed portfolio report with date range, definitions
+  // and provenance") joins the catalogue as its own category -- the document for the change is the
+  // portfolio contract itself, not a drift.
+  ok("1-2. the category set is s12's plus s11's portfolio export",
+    REPORT_CATEGORIES.map(c => c.key).join() === "clinical,patients,followups,operations,financial,portfolio");
   ok("1-3. the financial template is gated by billing.view, not hidden",
     reportTemplateById("financial_summary")?.capability === "billing.view");
   const claimed = REPORT_TEMPLATES.flatMap(t => t.registryIds);
@@ -183,8 +186,30 @@ async function main() {
     locs.ok && locs.data.sections[0].rows.some(r => r[0] === "No location recorded" && r[1] === 1),
     JSON.stringify(locs.ok ? locs.data.sections[0] : locs));
 
+  // 3-10. The s11 portfolio report: person-scoped, both honesty sentences travelling in the file.
+  // The CONTROL that makes person-scoping detectable: a stranger's encounter in the same workspace.
+  // Without it, every fixture row is the caller's own and dropping the created_by filter would pass.
+  const STRANGER = "00000000-0000-4000-8000-0000000b0b0b";
+  const { error: strangerErr } = await admin.from("practice_encounter").insert({
+    workspace_id: ws, patient_id: p1.data.id, status: "COMPLETED",
+    entry_pathway: "new_walk_in", encounter_mode: "in_person",
+    started_at: new Date().toISOString(), completed_at: new Date().toISOString(), created_by: STRANGER,
+  });
+  if (strangerErr) { ok("stranger control inserts", false, strangerErr.message); return report(); }
+  const pf = await generateReport(admin, ctx, { templateId: "professional_portfolio", ...genArgs });
+  ok("3-10. ⚠ portfolio is PERSON-SCOPED: the stranger's encounter in the same workspace does NOT"
+    + " count; not-verified and not-a-claim-of-competence both travel in the sections",
+    pf.ok && JSON.stringify(pf.data.sections[0].rows).includes('["Consultations you created",1]')
+      && JSON.stringify(pf.data.sections[0].rows).includes('["Distinct patients in those",1]')
+      && /has been verified by this product/.test(pf.data.sections[0].note ?? "")
+      && /not a claim of competence or quality/.test(pf.data.sections[2].note ?? "")
+      && pf.data.definition.metrics[0]?.id === "pi.portfolio_period",
+    JSON.stringify(pf.ok ? pf.data.sections[0] : pf));
+  ok("3-11. portfolio case mix is the CALLER's own diagnoses, as typed",
+    pf.ok && pf.data.sections[2].rows.some(r => r[0] === "Hypertension, essential" && r[1] === 1));
+
   // ── 4. The definition block, on every report ──────────────────────────────
-  const all = [conditions, invReport, treatments, referrals, followups, summary, demo, outcomes, locs];
+  const all = [conditions, invReport, treatments, referrals, followups, summary, demo, outcomes, locs, pf];
   ok("4-1. ⚠ s12: EVERY report carries practice, period, filters, timestamp and metric versions",
     all.every(r => r.ok
       && r.data.definition.practiceName.length > 0
@@ -272,6 +297,12 @@ async function main() {
     + " and carries the regeneration honesty footer",
     printSrc.includes("generateReport(") && printSrc.includes("browser&apos;s print for paper or PDF")
       && printSrc.includes("printing this page again after more records exist will show different"));
+  const perfSrc = readFileSync(join(process.cwd(), "src", "app", "practice", "(shell)", "intelligence", "Areas.tsx"), "utf8");
+  ok("8-6. s11's zone is on the Portfolio tab: intentionally-captured counts, never-estimated CPD,"
+    + " and the governed export links wired to the report engine",
+    perfSrc.includes("Reflections, teaching and CPD this period")
+      && perfSrc.includes("never estimated")
+      && pageSrc.includes("template=professional_portfolio"));
 
   return report();
 }

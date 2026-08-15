@@ -9,6 +9,7 @@ import FinancialArea from "./FinancialArea";
 import { piV2Extras } from "@/lib/practice/pi-v2";
 import { conditionalZones, patternsConditionals } from "@/lib/practice/pi-conditional";
 import { computeSegments, cohortPatients, listCohorts } from "@/lib/practice/cohort-engine";
+import { portfolioPeriodSummary } from "@/lib/practice/portfolio";
 import { isSegmentId } from "@/lib/practice/segment-registry";
 import { OverviewV2Area, PatientV2Area, ClinicalV2Area, FollowUpV2Area, PatternsV2Area } from "./AreasV2";
 import {
@@ -185,7 +186,17 @@ export default async function IntelligencePage({ searchParams }: {
         {tab === "cohorts" && <CohortsArea suite={suite} query={carried.toString()} />}
         {tab === "clinical" && <ClinicalArea suite={suite} />}
         {tab === "pathways" && <PathwaysArea suite={suite} />}
-        {tab === "performance" && <PerformanceArea suite={suite} />}
+        {tab === "performance" && (
+          <PerformanceArea suite={suite}
+            portfolio={await portfolioPeriodSummary(admin, shell.ctx, {
+              fromIso: suite.range.period.fromIso, toIso: suite.range.period.toIso,
+            })}
+            exportHrefs={{
+              csv: `/api/v1/practice/reports/generate?template=professional_portfolio&from=${suite.range.period.fromDay}&to=${suite.range.period.toDay}`,
+              xlsx: `/api/v1/practice/reports/generate?template=professional_portfolio&from=${suite.range.period.fromDay}&to=${suite.range.period.toDay}&format=xlsx`,
+              print: `/practice/reports/view?template=professional_portfolio&from=${suite.range.period.fromDay}&to=${suite.range.period.toDay}`,
+            }} />
+        )}
         {/* v2 s12: the rebuilt Reports tab -- catalogue, quick access, audit-derived recent list.
             The old ReportsArea still serves the overview side panel. */}
         {tab === "reports" && (

@@ -12,7 +12,7 @@
 // notification/delivery permissions and destination controls are implemented" -- and this product's
 // standing no-sending doctrine means that precondition does not exist yet. The screen says so.
 
-export type ReportCategoryKey = "clinical" | "patients" | "followups" | "operations" | "financial";
+export type ReportCategoryKey = "clinical" | "patients" | "followups" | "operations" | "financial" | "portfolio";
 
 export type ReportTemplateDef = {
   id: string;
@@ -34,6 +34,10 @@ export const REPORT_CATEGORIES: { key: ReportCategoryKey; label: string }[] = [
   { key: "followups", label: "Follow-up & Outcomes" },
   { key: "operations", label: "Operations & Patterns" },
   { key: "financial", label: "Financial" },
+  // s11's export row, not s12's catalogue: "Governed portfolio report with date range, definitions
+  // and provenance." It rides the same engine so it gets all three for free -- and it is
+  // PERSON-SCOPED, which its own definition states.
+  { key: "portfolio", label: "Portfolio" },
 ];
 
 export const REPORT_TEMPLATES: ReportTemplateDef[] = [
@@ -91,6 +95,11 @@ export const REPORT_TEMPLATES: ReportTemplateDef[] = [
     id: "financial_summary", name: "Financial Summary", category: "financial", state: "conditional",
     blurb: "Charged, collected and received per currency -- collected is not received, and it says so.",
     capability: "billing.view", registryIds: ["fin.charged", "fin.collected", "fin.received"],
+  },
+  {
+    id: "professional_portfolio", name: "Professional Portfolio", category: "portfolio", state: "conditional",
+    blurb: "Your own recorded work in the period: consultations, procedures, teaching, CPD, reflections, case mix. Appraisal support, never a claim of competence.",
+    capability: null, registryIds: ["pi.portfolio_period"],
   },
 ];
 
