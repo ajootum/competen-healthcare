@@ -33,7 +33,7 @@
 
 export type IntelligenceTabKey =
   | "overview" | "brief" | "patients" | "cohorts" | "clinical"
-  | "pathways" | "performance" | "reports" | "assistant";
+  | "pathways" | "performance" | "reports" | "assistant" | "financial";
 
 export type IntelligenceTab = {
   key: IntelligenceTabKey;
@@ -60,6 +60,10 @@ export const INTELLIGENCE_TABS: IntelligenceTab[] = [
     blurb: "Enrolment, stage progression and milestones that have passed their date." },
   { key: "performance", label: "Performance & Portfolio", swatch: "amber",
     blurb: "Your own activity over the period, and the portfolio it feeds." },
+  // CPR-PAY-001 s17 Phase 3 under CPR-PI-001 v2: descriptive money patterns, billing.view-gated in
+  // the MODULE (financial permissions are not clinical ones), registry-defined, Payments-routed.
+  { key: "financial", label: "Financial", swatch: "teal",
+    blurb: "What was charged, collected and actually received, described from the billing records and routed to Payments." },
   { key: "reports", label: "Reports", swatch: "sky",
     blurb: "Reports this practice has defined, and the exports it has permission to take." },
   { key: "assistant", label: "Assistant", swatch: "assistant",

@@ -445,6 +445,64 @@ async function main() {
     !/\d+(\.\d+)?%/.test(everything2) && !/"(rate|share_?percent|percent(?!_?bp"\s*:)\w*)"\s*:/i.test(everything2),
     (everything2.match(/\d+(\.\d+)?%|"(rate|share_?percent|percent(?!_?bp"\s*:)\w*)"\s*:/i) ?? ["no match?"])[0]);
 
+  // ══ PHASE 3: FINANCIAL INTELLIGENCE AND THE REPORT PACK (CPR-PAY-001 s17, CPR-PI-001 v2) ═══════
+  const { financialIntelligence, precedingPeriod } = await import("../src/lib/practice/financial-intelligence");
+  const { financialReportCsv } = await import("../src/lib/practice/billing");
+  const { metricById, LOW_DENOMINATOR_FLOOR } = await import("../src/lib/practice/intelligence-registry");
+  const { practiceToday } = await import("../src/lib/practice/practice-time");
+  const todayKla = practiceToday("Africa/Kampala");
+
+  ok("FIN-P1. the preceding period is equal-length and immediately adjacent (PI v2 s5)",
+    JSON.stringify(precedingPeriod("2026-08-01", "2026-08-15"))
+      === JSON.stringify({ fromDay: "2026-07-17", toDay: "2026-07-31" }));
+
+  const noMoney = { ...a.ctx, capabilities: a.ctx.capabilities.filter(c => c !== "billing.view") };
+  const finDenied = await financialIntelligence(admin, noMoney, { fromDay: "2020-01-01", toDay: todayKla });
+  ok("FIN-1. ⚠ s18 HOLDS IN INTELLIGENCE TOO: without billing.view the module is unavailable BY NAME",
+    !finDenied.available && /billing\.view/.test(String(finDenied.unavailableReason)),
+    String(finDenied.unavailableReason).slice(0, 60));
+
+  const finIntel = await financialIntelligence(admin, a.ctx, { fromDay: "2020-01-01", toDay: todayKla });
+  const finUgx = finIntel.data?.byCurrency.find(c => c.currency === "UGX");
+  ok("FIN-2. the module repeats the Payments workspace's OWN arithmetic -- one figure, two screens",
+    finIntel.available && !!finUgx
+      && finUgx.charged.minor === ugx3!.chargedMinor
+      && finUgx.received.minor === ugx3!.receivedByPractitionerMinor + 50000
+      && finUgx.received.settledMinor === 105000,
+    JSON.stringify({ c: finUgx?.charged.minor, r: finUgx?.received.minor, s: finUgx?.received.settledMinor }));
+  ok("FIN-3. ⚠ NO FABRICATED DELTA: an empty previous period yields NO comparison at all, never +100 percent",
+    !!finUgx && finUgx.delta === null, JSON.stringify(finUgx?.delta));
+  ok("FIN-4. every emitted metric id resolves in the registry, and the delta metric declares its denominator",
+    finIntel.registry.length >= 8 && finIntel.registry.every(id => metricById(id) !== null)
+      && !!metricById("fin.period_delta")?.numerator && !!metricById("fin.period_delta")?.denominator
+      && LOW_DENOMINATOR_FLOOR === 10,
+    finIntel.registry.filter(id => !metricById(id)).join(", "));
+  const svcRows = (finIntel.data?.serviceMix ?? []).filter(m => m.currency === "UGX");
+  ok("FIN-5. every mix row CARRIES its denominator, and manual charges are named as manual",
+    svcRows.length > 0 && svcRows.every(m => m.ofCount === svcRows.reduce((n, r) => n + r.count, 0))
+      && svcRows.some(m => m.label === "manual"),
+    JSON.stringify(svcRows.map(m => [m.label, m.count, m.ofCount])));
+
+  const noExport = { ...a.ctx, capabilities: a.ctx.capabilities.filter(c => c !== "billing.export") };
+  const csvDenied = await financialReportCsv(admin, noExport, { ...base });
+  ok("FIN-6. the report pack needs billing.export -- report.view alone never carries money out",
+    !csvDenied.ok && csvDenied.code === "FORBIDDEN", csvDenied.ok ? "exported" : String(csvDenied.code));
+  const csv = await financialReportCsv(admin, a.ctx, { ...base });
+  const csvNeedles: [string, boolean][] = csv.ok ? [
+    ["provenance line", csv.data.csv.includes("Collected is not received")],
+    ["received figure", csv.data.csv.includes("Summary,UGX,Received by practitioner,185000")],
+    ["settlement section", csv.data.csv.includes('Settlement,"CP-SET-')],
+    ["receivable section", csv.data.csv.includes("FacilityReceivable,")],
+    ["no percent literal", !/\d+(\.\d+)?%/.test(csv.data.csv)],
+  ] : [];
+  ok("FIN-7. the CSV carries every section with its provenance, and not one percent sign",
+    csv.ok && csvNeedles.every(([, hit]) => hit),
+    csv.ok ? csvNeedles.filter(([, hit]) => !hit).map(([n]) => n).join(", ") : (csv as any).message);
+  const { data: exportAudit } = await admin.from("practice_audit_event")
+    .select("id").eq("workspace_id", wsA).eq("event_type", "practice.report_exported");
+  ok("FIN-7b. and the export is in the audit trail",
+    ((exportAudit ?? []) as any[]).length >= 1, `${(exportAudit ?? []).length} rows`);
+
   // ── 12. The surfaces, source-pinned ───────────────────────────────────────
   const navSrc = readFileSync(join(process.cwd(), "src", "lib", "practice", "navigation.ts"), "utf8");
   ok("12-1. Payments is a PRIMARY nav item in the PRACTICE section, gated on billing.view",

@@ -1011,6 +1011,85 @@ export async function listSettlements(admin: any, ctx: WorkspaceContext, filter:
   })));
 }
 
+// ── FINANCIAL REPORTS ── PAY-001 s16 / PI v2 s12, Phase 3 ───────────────────────────────────────────
+
+/**
+ * The financial report pack as ONE sectioned CSV -- the activityCsv shape, which every spreadsheet
+ * opens and no renderer has to be licensed for. Sections: daily collections, charges by service
+ * type, payments by method and collector, outstanding invoices, settlements. Derived from the same
+ * rows as the Payments screens (s16: "reports derive from the same underlying records").
+ *
+ * ⚠ billing.export, NOT report.view. s18: a report that carries money inherits the MONEY permission.
+ * ⚠ NO PERCENTAGES. Sums and counts with their scope in the section headers; the reader divides.
+ */
+export async function financialReportCsv(admin: any, ctx: WorkspaceContext, opts: {
+  fromDay?: string; toDay?: string; actorId: string; correlationId: string;
+}): Promise<EngineResult<{ csv: string; filename: string }>> {
+  if (!hasCapability(ctx, "billing.export"))
+    return fail(403, "FORBIDDEN", "exporting financial figures needs billing.export");
+
+  const { today } = await workspaceClock(admin, ctx.workspaceId);
+  const [overview, outstanding, settlements, receivables] = await Promise.all([
+    paymentsOverview(admin, ctx, { fromDay: opts.fromDay, toDay: opts.toDay }),
+    outstandingBalances(admin, ctx),
+    listSettlements(admin, ctx, {}),
+    facilityReceivables(admin, ctx),
+  ]);
+  if (overview.unavailable)
+    return fail(503, "UNAVAILABLE", `the billing figures could not be read, so no report was produced: ${overview.detail}`);
+
+  const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const lines: string[] = [
+    `# CompetenPractice financial report`,
+    `# Practice period: ${opts.fromDay ?? "all"} to ${opts.toDay ?? today}. Generated ${today}.`,
+    `# Derived from the practice's own billing records (migrations 303/304). Amounts are integer minor units.`,
+    `# Collected is not received: facility-collected money joins received only through a recorded settlement.`,
+    "",
+    `Section,Currency,Measure,AmountMinor,Count`,
+  ];
+  for (const c of overview.byCurrency) {
+    lines.push(
+      `Summary,${c.currency},Charged,${c.chargedMinor},${c.chargedCount}`,
+      `Summary,${c.currency},Collected (by anyone),${c.collectedMinor},${c.collectedCount}`,
+      `Summary,${c.currency},Received by practitioner,${c.receivedByPractitionerMinor},`,
+      `Summary,${c.currency},...of which collected directly,${c.collectedDirectlyMinor},`,
+      `Summary,${c.currency},...of which settled by facilities,${c.settledToPractitionerMinor},`,
+      `Summary,${c.currency},Collected by others (not yet yours),${c.collectedByOthersMinor},`,
+      `Summary,${c.currency},Outstanding on issued invoices,${c.outstandingInvoicedMinor},${c.overdueCount} overdue`,
+      `Summary,${c.currency},Owed by facilities (unsettled share),${c.outstandingSettlementMinor},${c.settlementNeedsDecision} need a share decision`,
+    );
+  }
+
+  lines.push("", `OutstandingInvoice,Number,Payer,Currency,BalanceMinor,AgeDays`);
+  for (const r of outstanding.items) {
+    lines.push(`OutstandingInvoice,${esc(r.invoice_number)},${esc(r.patientName ?? r.payer_label ?? r.payer_kind)},${r.currency},${r.balanceMinor},${esc(r.age)}`);
+  }
+
+  lines.push("", `Settlement,Number,Location,PeriodFrom,PeriodTo,Currency,ExpectedMinor,ReceivedMinor,DifferenceMinor`);
+  for (const s of settlements.items) {
+    lines.push(`Settlement,${esc(s.settlement_number)},${esc(s.locationName ?? "")},${s.period_from},${s.period_to},${s.currency},${s.expectedMinor ?? ""},${s.received_minor},${s.differenceMinor ?? ""}`);
+  }
+
+  if (receivables.permitted && !receivables.unavailable) {
+    lines.push("", `FacilityReceivable,Location,Currency,CollectedMinor,YourShareMinor,CollectionsNeedingDecision`);
+    for (const f of receivables.facilities) {
+      lines.push(`FacilityReceivable,${esc(f.locationName ?? "no location recorded")},${f.currency},${f.collectedMinor},${f.entitlementMinor},${f.needsDecision}`);
+    }
+  } else if (receivables.unavailable) {
+    lines.push("", `# The facility receivable could not be read; its section is ABSENT, not zero.`);
+  }
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: opts.actorId, eventType: "practice.report_exported",
+    payload: { kind: "financial", fromDay: opts.fromDay ?? null, toDay: opts.toDay ?? null },
+    correlationId: opts.correlationId,
+  });
+  return {
+    ok: true,
+    data: { csv: lines.join("\n") + "\n", filename: `financial-report-${opts.fromDay ?? "all"}-to-${opts.toDay ?? today}.csv` },
+  };
+}
+
 /** Uninvoiced charges, for s11 step 3's picker and the encounter handoff. */
 export async function uninvoicedCharges(admin: any, ctx: WorkspaceContext, filter: {
   patientId?: string; encounterId?: string;

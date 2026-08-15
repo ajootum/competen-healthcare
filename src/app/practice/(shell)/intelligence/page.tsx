@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { intelligenceSuite, isCohortDimension } from "@/lib/practice/intelligence";
+import { financialIntelligence } from "@/lib/practice/financial-intelligence";
+import FinancialArea from "./FinancialArea";
 import {
   INTELLIGENCE_TABS, DEFAULT_TAB, isIntelligenceTab, TAB_SWATCH, DEFAULT_RANGE_DAYS,
   type IntelligenceTabKey,
@@ -173,6 +175,13 @@ export default async function IntelligencePage({ searchParams }: {
         {tab === "pathways" && <PathwaysArea suite={suite} />}
         {tab === "performance" && <PerformanceArea suite={suite} />}
         {tab === "reports" && <ReportsArea suite={suite} />}
+        {/* Phase 3 (CPR-PAY-001 s17) under CPR-PI-001 v2: computed ONLY when its tab is open --
+            two extra billing sweeps have no business running under every other tab's load. */}
+        {tab === "financial" && (
+          <FinancialArea financial={await financialIntelligence(admin, shell.ctx, {
+            fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay,
+          })} />
+        )}
         {tab === "assistant" && (
           <AssistantArea admin={admin} ctx={shell.ctx} sessionId={sp.sessionId} question={sp.q} />
         )}

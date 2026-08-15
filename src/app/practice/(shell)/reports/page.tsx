@@ -93,6 +93,14 @@ export default async function ReportsPage({ searchParams }: {
             className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
             Templates
           </Link>
+          {/* PI v2 s12: Financial appears ONLY because a governed financial module exists (303/304),
+              and only to holders of the money permission -- report.view alone does not see money. */}
+          {hasCapability(shell.ctx, "billing.export") && (
+            <a href={`/api/v1/practice/billing/export${period.bounded ? `?from=${period.fromDate}&to=${period.toDate}` : ""}`}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+              Financial report (CSV)
+            </a>
+          )}
         </div>
       </div>
 
