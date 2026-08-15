@@ -42,6 +42,7 @@ export default async function ReportsV2Area({ admin, ctx, suite, fromDay, toDay 
     .order("occurred_at", { ascending: false }).limit(10);
   const recent = ((recentRows ?? []) as any[]).map(r => ({
     templateId: r.payload?.templateId ?? null,
+    activityId: r.payload?.activityId ?? null,
     name: r.payload?.templateId
       ? (reportTemplateById(r.payload.templateId)?.name ?? r.payload.templateId)
       : (r.event_type === "practice.report_exported" ? "Data export (CSV)" : "Report"),
@@ -169,7 +170,7 @@ export default async function ReportsV2Area({ admin, ctx, suite, fromDay, toDay 
                       </span>
                     </span>
                     {r.templateId && r.fromDay && r.toDay && (
-                      <a href={`/api/v1/practice/reports/generate?template=${r.templateId}&from=${r.fromDay}&to=${r.toDay}`}
+                      <a href={`/api/v1/practice/reports/generate?template=${r.templateId}&from=${r.fromDay}&to=${r.toDay}${r.activityId ? `&activity=${r.activityId}` : ""}`}
                         className="ml-auto shrink-0 rounded-lg border border-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-700 hover:bg-gray-50">
                         Regenerate ↓
                       </a>

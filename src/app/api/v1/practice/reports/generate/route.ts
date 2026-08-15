@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
     fromDay: url.searchParams.get("from") ?? undefined,
     toDay: url.searchParams.get("to") ?? undefined,
     days: Number.isFinite(days) && days > 0 ? Math.min(366, Math.round(days)) : undefined,
+    activityId: url.searchParams.get("activity") ?? undefined,
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   if (!result.ok)

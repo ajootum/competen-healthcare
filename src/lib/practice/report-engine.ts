@@ -10,6 +10,7 @@ import { piV2Extras } from "@/lib/practice/pi-v2";
 import { metricById } from "@/lib/practice/intelligence-registry";
 import { reportTemplateById } from "@/lib/practice/report-templates";
 import { portfolioPeriodSummary } from "@/lib/practice/portfolio";
+import { sessionSummary, sessionClinicalActivity, windowClinicalActivity } from "@/lib/practice/activity";
 import { formatMinor } from "@/lib/practice/billing-constants";
 
 // CPR-PI-001 v2 s12 -- THE REPORT ENGINE.
@@ -115,6 +116,8 @@ const refusedSection = (title: string, m: any): ReportSection => ({
 
 export async function generateReport(admin: any, ctx: WorkspaceContext, args: {
   templateId: string; fromDay?: string; toDay?: string; days?: number;
+  /** HFE-001 s8: the Session Report is ABOUT one session. Required by that template, ignored by the rest. */
+  activityId?: string;
   actorId: string; correlationId: string;
 }): Promise<EngineResult<GeneratedReport>> {
   const tpl = reportTemplateById(args.templateId);
@@ -365,6 +368,114 @@ export async function generateReport(admin: any, ctx: WorkspaceContext, args: {
         },
       ];
     }
+  } else if (tpl.id === "session_report") {
+    // HFE-001 s8: same governed contracts as Session Complete -- sessionSummary owns the timings and
+    // metrics, sessionClinicalActivity owns the window counts. This builder only arranges them.
+    if (!args.activityId)
+      return fail(422, "SESSION_REQUIRED", "a Session Report is about one session -- reach it from Session Complete, which supplies it");
+    const [sum, clin] = await Promise.all([
+      sessionSummary(admin, ctx, args.activityId),
+      sessionClinicalActivity(admin, ctx, args.activityId),
+    ]);
+    if (!sum.ok) return fail(sum.status, sum.code, sum.message);
+    const s = sum.value;
+    const sm: any = s.metrics.metrics;
+    const mrow = (label: string, x: any): (string | number)[] =>
+      [label, x?.value ?? `not shown -- ${x?.reason ?? "could not be read"}`];
+    sections = [
+      {
+        title: "Session", columns: ["Field", "Value"],
+        rows: [
+          ["Activity", s.title || s.label], ["Date", s.planDate],
+          ["Planned window", `${String(Math.floor(s.plannedStartMinute / 60)).padStart(2, "0")}:${String(s.plannedStartMinute % 60).padStart(2, "0")} to ${String(Math.floor(s.plannedEndMinute / 60)).padStart(2, "0")}:${String(s.plannedEndMinute % 60).padStart(2, "0")}`,],
+          ["Actual start", s.startedAtIso], ["Actual end", s.endedAtIso ?? "still running"],
+          ["Active minutes", s.activeMinutes ?? "pause ledger unreadable"],
+          ["Paused minutes", s.pausedMinutes ?? "pause ledger unreadable"],
+        ] as (string | number)[][],
+      },
+      {
+        title: "Patients and activity", columns: ["Measure", "Value"],
+        rows: [
+          mrow("Booked", sm?.booked), mrow("Patients seen", sm?.patients_seen),
+          mrow("Walk-ins", sm?.walk_in), mrow("No-shows", sm?.no_show),
+          mrow("Average consult minutes", sm?.average_consult_time),
+          mrow("Average wait minutes", sm?.average_wait_time),
+        ],
+        note: "Operational metrics render only where their governed definitions earned a figure -- an unreliable timestamp arrives as a reason, never a number (s8 metric safety).",
+      },
+      {
+        title: "Clinical activity and continuity", columns: ["Measure", "Count"],
+        rows: !clin.available || !clin.data ? [] : [
+          ["Consultations started", clin.data.encountersStarted],
+          ["Follow-ups created", clin.data.followUpsCreated],
+          ["Investigations requested", clin.data.investigationsRequested],
+          ["Procedures performed", clin.data.proceduresPerformed],
+          ["Documents signed", clin.data.documentsSigned],
+          ["Still unsigned from this session", clin.data.encountersUnsigned],
+          ["Follow-ups raised, not yet booked", clin.data.followUpsNeedingBooking],
+        ],
+        unavailable: clin.available ? undefined : clin.reason ?? undefined,
+        note: "Counted inside the session's own window by when each row was recorded.",
+      },
+    ];
+    // s8's optional PERMISSION-CONTROLLED patient appendix: names only under patient.view.
+    if (hasCapability(ctx, "patient.view")) {
+      const { data: encs } = await admin.from("practice_encounter")
+        .select("patient_id").eq("workspace_id", ctx.workspaceId)
+        .gte("started_at", s.startedAtIso).lte("started_at", s.endedAtIso ?? new Date().toISOString())
+        .not("patient_id", "is", null).limit(51);
+      const ids = [...new Set(((encs ?? []) as any[]).map(e => e.patient_id))].slice(0, 50);
+      if (ids.length > 0) {
+        const { data: pats } = await admin.from("practice_patient").select("id, display_name").in("id", ids);
+        sections.push({
+          title: "Patient appendix", columns: ["Patient"],
+          rows: ((pats ?? []) as any[]).map(p => [p.display_name]),
+          note: "Included because you hold patient.view -- a caller without it gets this report WITHOUT this section, and the counts above are identical either way.",
+        });
+      }
+    }
+  } else if (tpl.id === "daily_practice_report") {
+    // HFE-001 s8: every completed session of the day, aggregate person-scoped counts, outstanding.
+    const { data: acts, error: actErr } = await admin.from("practice_activity")
+      .select("title, activity_type, planned_start_minute, planned_end_minute, started_at, ended_at")
+      .eq("workspace_id", ctx.workspaceId).eq("practitioner_id", ctx.userId)
+      .eq("plan_date", period.fromDay).order("planned_start_minute").limit(100);
+    const dayWindow = { fromIso: period.fromIso, toIso: period.toIso };
+    const [own, clin] = await Promise.all([
+      portfolioPeriodSummary(admin, ctx, dayWindow),
+      windowClinicalActivity(admin, ctx, dayWindow),
+    ]);
+    sections = [
+      {
+        title: "Sessions and activities", columns: ["Activity", "Planned", "State"],
+        rows: actErr ? [] : ((acts ?? []) as any[]).map(a => [
+          a.title || a.activity_type,
+          `${String(Math.floor(a.planned_start_minute / 60)).padStart(2, "0")}:${String(a.planned_start_minute % 60).padStart(2, "0")}`,
+          a.ended_at ? "completed" : a.started_at ? "still running" : "never started",
+        ]),
+        unavailable: actErr ? `could not be read: ${actErr.message}` : undefined,
+        note: "The day's planned activities and what became of each -- one lifecycle, the same rows Planner and Current Session use (s11).",
+      },
+      {
+        title: "Your day in numbers", columns: ["Measure", "Count"],
+        rows: !own.available || !own.data ? [] : [
+          ["Consultations you created", own.data.encounters],
+          ["Distinct patients", own.data.distinctPatients],
+          ["Procedures you performed", own.data.proceduresPerformed],
+          ["Reflections you authored", own.data.reflections],
+        ],
+        unavailable: own.available ? undefined : own.reason ?? undefined,
+        note: "Person-scoped: your work, not the practice's whole day.",
+      },
+      {
+        title: "Outstanding at day end", columns: ["Measure", "Count"],
+        rows: !clin.available || !clin.data ? [] : [
+          ["Unsigned consultations from today", clin.data.encountersUnsigned],
+          ["Follow-ups raised today, not yet booked", clin.data.followUpsNeedingBooking],
+        ],
+        unavailable: clin.available ? undefined : clin.reason ?? undefined,
+      },
+    ];
   } else if (tpl.id === "financial_summary") {
     const fin = await financialIntelligence(admin, ctx, { fromDay: period.fromDay, toDay: period.toDay });
     if (!fin.available || !fin.data) sections = [refusedSection("Money", { reason: fin.unavailableReason })];
@@ -405,6 +516,7 @@ export async function generateReport(admin: any, ctx: WorkspaceContext, args: {
     payload: {
       templateId: tpl.id, fromDay: period.fromDay, toDay: period.toDay,
       identified: report.definition.identified, metrics: tpl.registryIds,
+      activityId: args.activityId ?? null,
     },
     correlationId: args.correlationId,
   });

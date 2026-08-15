@@ -40,6 +40,9 @@ export default function SessionControls({ activityId, header }: Props) {
       // ALREADY_ENDED, NOT_STARTED -- is a sentence a practitioner can act on, and a button that
       // silently did nothing would be indistinguishable from a broken one.
       if (!r.ok) { setError(j.error ?? "That did not work."); return; }
+      // HFE-001 v1.1 s6: ending a session is a TRANSITION, not a disappearance -- the closure state
+      // shows what the session amounted to before returning to Today.
+      if (action === "end") { router.push(`/practice/today/complete?activity=${activityId}`); return; }
       router.refresh();
     } catch {
       setError("That did not reach the server.");

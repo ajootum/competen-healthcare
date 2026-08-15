@@ -10,7 +10,6 @@ import SessionControls from "./SessionControls";
 import SessionTiles from "./SessionTiles";
 import SessionSummaryCard from "./SessionSummaryCard";
 import QueueWithActions from "./QueueWithActions";
-import SessionPerformance from "./SessionPerformance";
 import LiveRefresh from "../LiveRefresh";
 import OfflineCacheWriter from "../OfflineCacheWriter";
 import { offlineCacheGate } from "@/lib/practice/offline-gate";
@@ -86,7 +85,7 @@ export default async function CurrentSessionPage() {
           <p className="mt-0.5 text-[13px] text-gray-500">
             {formatDate(plan.date)} · {dash.scope.kind === "session"
               ? "figures below count this session, not the whole day"
-              : "nothing is running, so figures below count the whole day"}
+              : "nothing is running — day figures live on the Command Centre, not here (s5.2)"}
           </p>
         </div>
         <LiveRefresh asOf={dash.asOf} timezone={dash.timezone} />
@@ -127,21 +126,48 @@ export default async function CurrentSessionPage() {
             }}
           />
         ) : (
+          /* ── CPR-HFE-001 v1.1 s5.2: THE NO-ACTIVE-SESSION STATE. No zero grids, no day-scoped
+                figures wearing session clothes -- a simple statement, the next planned activity where
+                one exists, and the two routes onward. Everything session-scoped below renders ONLY
+                when a session exists, because fabricating session metrics from whole-day activity is
+                exactly what s5.2 forbids. ─────────────────────────────────────────────────────── */
           <section className="rounded-2xl border border-gray-200 bg-white p-4">
-            <h2 className="text-[13px] font-bold text-gray-900">No session is running</h2>
-            <p className="mt-1 text-[12.5px] leading-relaxed text-gray-600">
-              {plan.activities.length === 0
-                ? "Nothing is planned for today. Start an activity on the command centre and this page becomes the cockpit for it."
-                : "Start one of today's planned activities from the command centre, and everything below scopes to it."}
-            </p>
-            <Link href="/practice/home"
-              className="mt-3 inline-block rounded-lg bg-[var(--cp-primary)] px-3.5 py-2 text-[12.5px] font-semibold text-white hover:opacity-90">
-              Go to the command centre →
-            </Link>
+            <h2 className="text-[13px] font-bold text-gray-900">No active session</h2>
+            {(() => {
+              const next = plan.activities.find((a: any) => !a.startedAtIso && !a.endedAtIso) ?? null;
+              return next ? (
+                <div className="mt-2 rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Next planned</p>
+                  <p className="mt-0.5 text-[13px] font-semibold text-gray-900">{next.title ?? next.label}</p>
+                  <p className="text-[11px] text-gray-500">
+                    {formatMinuteOfDay(next.plannedStartMinute)} – {formatMinuteOfDay(next.plannedEndMinute)}
+                    {next.facilityName ? ` · ${next.facilityName}` : ""}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-1 text-[12.5px] leading-relaxed text-gray-600">
+                  Nothing further is planned for today.
+                </p>
+              );
+            })()}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link href="/practice/home"
+                className="rounded-lg bg-[var(--cp-primary)] px-3.5 py-2 text-[12.5px] font-semibold text-white hover:opacity-90">
+                Start from the Command Centre →
+              </Link>
+              <Link href="/practice/calendar"
+                className="rounded-lg border border-gray-200 px-3.5 py-2 text-[12.5px] font-semibold text-gray-700 hover:bg-gray-50">
+                Open Planner
+              </Link>
+            </div>
           </section>
         )}
       </div>
 
+
+      {/* s5.1: everything below is the RUNNING session's cockpit, and renders only when one
+          exists -- the six tiles, the queue, the summary and the session activity log. */}
+      {session && (<>
       {/* ── THE SIX TILES ─────────────────────────────────────────────────────────────────────── */}
       <div className="mt-4">
         <SessionTiles
@@ -263,52 +289,10 @@ export default async function CurrentSessionPage() {
           </ol>
         )}
       </section>
-
-      {/* ── SESSION PERFORMANCE ───────────────────────────────────────────────────────────────── */}
-      <div className="mt-4">
-        <SessionPerformance
-          unavailableReason={metrics ? null : "These figures could not be read just now."}
-          note={
-            "Counts and durations from your own records. No rate, no target and no comparison: nothing "
-            + "here stores a goal, and a figure measured against an invented one would be a judgement "
-            + "nobody made."
-          }
-          figures={[
-            {
-              key: "patients_seen", label: "Patients seen", value: m?.patients_seen.value ?? null,
-              of: m?.booked.value ?? null, unit: "count" as const,
-              reason: m?.patients_seen.reason ?? null,
-              observations: m?.patients_seen.observations ?? null,
-              excluded: m?.patients_seen.excluded ?? null,
-              basis: m?.patients_seen.formula ?? null,
-            },
-            {
-              key: "average_consult_time", label: "Average consult time",
-              value: m?.average_consult_time.value ?? null, of: null, unit: "minutes" as const,
-              reason: m?.average_consult_time.reason ?? null,
-              observations: m?.average_consult_time.observations ?? null,
-              excluded: m?.average_consult_time.excluded ?? null,
-              basis: m?.average_consult_time.formula ?? null,
-            },
-            {
-              key: "average_wait_time", label: "Average waiting time",
-              value: m?.average_wait_time.value ?? null, of: null, unit: "minutes" as const,
-              reason: m?.average_wait_time.reason ?? null,
-              observations: m?.average_wait_time.observations ?? null,
-              excluded: m?.average_wait_time.excluded ?? null,
-              basis: m?.average_wait_time.formula ?? null,
-            },
-            {
-              key: "clinic_delay", label: "Clinic delay",
-              value: m?.clinic_delay.value ?? null, of: null, unit: "minutes" as const,
-              reason: m?.clinic_delay.reason ?? null,
-              observations: m?.clinic_delay.observations ?? null,
-              excluded: m?.clinic_delay.excluded ?? null,
-              basis: m?.clinic_delay.formula ?? null,
-            },
-          ]}
-        />
-      </div>
+      </>)}
+      {/* s5.3: the "How this session ran" performance summary left the LIVE state -- its
+          figures belong to Session Complete and the governed reports, where the session is
+          finished enough to be summarised. */}
 
       <p className="mt-4 text-[10.5px] text-gray-400">
         As of {clock(dash.asOf, dash.timezone)} · {dash.timezone}. Every figure above is the same one the

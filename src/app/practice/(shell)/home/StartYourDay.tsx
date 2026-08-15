@@ -44,6 +44,11 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setError(j.error ?? "That did not work."); return false; }
+      // HFE-001 v1.1 s6: ending routes to the Session Complete state; everything else re-renders here.
+      if (body.action === "end" && body.id) {
+        router.push(`/practice/today/complete?activity=${body.id}`);
+        return true;
+      }
       router.refresh();
       return true;
     } catch {

@@ -20,7 +20,7 @@ import { generateReport } from "@/lib/practice/report-engine";
 export const dynamic = "force-dynamic";
 
 export default async function ReportPrintPage({ searchParams }: {
-  searchParams: Promise<{ template?: string; from?: string; to?: string; days?: string }>;
+  searchParams: Promise<{ template?: string; from?: string; to?: string; days?: string; activity?: string }>;
 }) {
   const shell = await resolvePracticeShell();
   if (shell.state !== "READY") redirect("/practice");
@@ -33,6 +33,7 @@ export default async function ReportPrintPage({ searchParams }: {
     templateId: sp.template ?? "",
     fromDay: sp.from, toDay: sp.to,
     days: Number.isFinite(days) && days > 0 ? Math.min(366, Math.round(days)) : undefined,
+    activityId: sp.activity,
     actorId: shell.ctx.userId, correlationId: crypto.randomUUID(),
   });
 

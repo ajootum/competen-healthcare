@@ -926,3 +926,86 @@ export async function sessionSummary(
     },
   };
 }
+
+// ── CPR-HFE-001 v1.1 s6 -- WHAT THE SESSION PRODUCED, AND WHAT IT LEFT OPEN ─────────────────────────
+//
+// Session Complete and the Session Report both render THIS. Counts are of rows created inside the
+// session's own window [started_at, ended_at] -- "where reliably recorded" (s6) means created_at is
+// the reliability, and nothing is attributed by guesswork. Outstanding items are the s6 list:
+// encounters from the window still unsigned, and follow-ups the window raised that are not yet
+// booked. ⚠ null-count is never zero: a failed read says so.
+
+export type SessionClinicalActivity = {
+  available: boolean;
+  reason: string | null;
+  data: {
+    followUpsCreated: number;
+    investigationsRequested: number;
+    proceduresPerformed: number;
+    documentsSigned: number;
+    /** Encounters STARTED in the window, and how many of those are not yet signed. */
+    encountersStarted: number;
+    encountersUnsigned: number;
+    /** Follow-ups the window raised that are OPEN with no appointment yet -- "requiring booking". */
+    followUpsNeedingBooking: number;
+  } | null;
+};
+
+export async function sessionClinicalActivity(
+  admin: any, ctx: WorkspaceContext, activityId: string,
+): Promise<SessionClinicalActivity> {
+  if (!ctx.capabilities.includes(CAN_VIEW))
+    return { available: false, reason: `${CAN_VIEW} is required`, data: null };
+
+  const { data: row, error } = await admin.from("practice_activity")
+    .select("started_at, ended_at")
+    .eq("id", activityId).eq("workspace_id", ctx.workspaceId).eq("practitioner_id", ctx.userId)
+    .maybeSingle();
+  if (error) return { available: false, reason: error.message, data: null };
+  if (!row?.started_at) return { available: false, reason: "that session never started", data: null };
+  return windowClinicalActivity(admin, ctx, {
+    fromIso: row.started_at, toIso: row.ended_at ?? new Date().toISOString(),
+  });
+}
+
+/** The same window counts over an arbitrary range -- the Daily Practice Report's day is a window too. */
+export async function windowClinicalActivity(
+  admin: any, ctx: WorkspaceContext, window: { fromIso: string; toIso: string },
+): Promise<SessionClinicalActivity> {
+  if (!ctx.capabilities.includes(CAN_VIEW))
+    return { available: false, reason: `${CAN_VIEW} is required`, data: null };
+  const { fromIso, toIso } = window;
+
+  const ws = ctx.workspaceId;
+  const count = async (table: string, timeCol: string, extra?: (q: any) => any) => {
+    let q = admin.from(table).select("id", { count: "exact", head: true })
+      .eq("workspace_id", ws).gte(timeCol, fromIso).lte(timeCol, toIso);
+    if (extra) q = extra(q);
+    const r = await q;
+    if (r.error || r.count === null) return null;
+    return r.count as number;
+  };
+
+  const [fu, inv, proc, docs, encs, unsigned, fuOpen] = await Promise.all([
+    count("practice_follow_up", "created_at"),
+    count("practice_encounter_investigation", "requested_at"),
+    count("practice_procedure", "performed_at", q => q.eq("status", "PERFORMED")),
+    count("practice_clinical_document", "signed_at", q => q.not("signed_at", "is", null)),
+    count("practice_encounter", "started_at", q => q.not("status", "in", "(CANCELLED,ENTERED_IN_ERROR)")),
+    count("practice_encounter", "started_at",
+      q => q.not("status", "in", "(CANCELLED,ENTERED_IN_ERROR)").is("signed_at", null)),
+    count("practice_follow_up", "created_at", q => q.eq("status", "OPEN")),
+  ]);
+  const all = [fu, inv, proc, docs, encs, unsigned, fuOpen];
+  if (all.some(v => v === null))
+    return { available: false, reason: "one of the session's counts could not be read, so none is shown -- a partial summary reads as a complete one", data: null };
+
+  return {
+    available: true, reason: null,
+    data: {
+      followUpsCreated: fu!, investigationsRequested: inv!, proceduresPerformed: proc!,
+      documentsSigned: docs!, encountersStarted: encs!, encountersUnsigned: unsigned!,
+      followUpsNeedingBooking: fuOpen!,
+    },
+  };
+}

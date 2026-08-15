@@ -101,6 +101,17 @@ export const REPORT_TEMPLATES: ReportTemplateDef[] = [
     blurb: "Your own recorded work in the period: consultations, procedures, teaching, CPD, reflections, case mix. Appraisal support, never a claim of competence.",
     capability: null, registryIds: ["pi.portfolio_period"],
   },
+  // CPR-HFE-001 v1.1 s8's two report types. Report types within Reports, never sidebar items (s3).
+  {
+    id: "session_report", name: "Session Report", category: "operations", state: "conditional",
+    blurb: "The formal account of one completed session -- reached from Session Complete, which supplies the session. Generating it here without one is refused by name.",
+    capability: null, registryIds: ["pi.avg_consult_duration"],
+  },
+  {
+    id: "daily_practice_report", name: "Daily Practice Report", category: "operations", state: "conditional",
+    blurb: "Your completed activity across one day: every session, aggregate counts, outstanding items, provenance.",
+    capability: null, registryIds: ["pi.portfolio_period"],
+  },
 ];
 
 export const reportTemplateById = (id: string): ReportTemplateDef | null =>

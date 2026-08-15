@@ -30,13 +30,6 @@ const STATUS_TONE: Record<string, string> = {
   NO_SHOW: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
 
-const QUEUE_TONE: Record<string, string> = {
-  WAITING: "bg-gray-100 text-gray-600",
-  READY: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]",
-  IN_CONSULTATION: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
-  PAUSED: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
-};
-
 const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 
 export default function CalendarConsole({ date, timezone, canManage, canQueue, canStartEncounter, initial, locations = [] }: {
@@ -90,10 +83,8 @@ export default function CalendarConsole({ date, timezone, canManage, canQueue, c
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }),
     }), label);
 
-  const queueMove = (id: string, action: string, label: string) =>
-    act(() => fetch(`/api/v1/practice/queue/${id}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }),
-    }), label);
+  // The queueMove handler left with the queue card (HFE-001 s7.2): queue transitions are Current
+  // Session's verbs now, through the same /api/v1/practice/queue route that page calls.
 
   // FLOW-001 pathway 1: booked patient arrives -> open the encounter. Resume-before-create lives in the
   // engine, so clicking this twice lands on the same encounter rather than forking the visit.
@@ -125,7 +116,8 @@ export default function CalendarConsole({ date, timezone, canManage, canQueue, c
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Calendar</h1>
-          <p className="text-[13px] text-gray-500">{date} · times shown in UTC</p>
+          {/* The label used to say UTC while fmt() rendered practice time -- a lie in small print. */}
+          <p className="text-[13px] text-gray-500">{date} &middot; times in the practice&apos;s timezone</p>
         </div>
         <div className="flex gap-1.5">
           {[-1, 0, 1].map(off => {
@@ -206,32 +198,23 @@ export default function CalendarConsole({ date, timezone, canManage, canQueue, c
         </section>
 
         <div className="flex flex-col gap-4">
-          {/* Waiting queue (CPR-V2-003 "Waiting Queue") */}
+          {/* CPR-HFE-001 v1.1 s7.2: THE LIVE QUEUE LEFT THE PLANNER. Once a patient has arrived and is
+              waiting, that state is managed in Current Session -- the planner keeps a COUNT that
+              routes there (s10: pointer, never a duplicate console). Check-in stays above, because
+              marking an arrival is appointment-book work; what happens to the arrived patient is not. */}
           <section className="rounded-xl border border-gray-200 bg-white p-4">
-            <h2 className="text-[13px] font-bold text-gray-900">Waiting queue</h2>
-            {day.queue.length === 0 ? (
-              <p className="mt-2 text-[12px] text-gray-400">Nobody is waiting.</p>
-            ) : (
-              <ul className="mt-2 flex flex-col gap-1.5">
-                {day.queue.map(q => (
-                  <li key={q.id} className="rounded-lg border border-gray-100 px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-semibold text-gray-900">{q.patient_name}</span>
-                      <span className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold ${QUEUE_TONE[q.status] ?? "bg-gray-100 text-gray-500"}`}>{q.status.replace(/_/g, " ")}</span>
-                    </div>
-                    {canQueue && (
-                      <div className="mt-1.5 flex gap-1.5 flex-wrap">
-                        {q.status === "WAITING" && <button disabled={busy} onClick={() => queueMove(q.id, "start", "Consultation started.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50">Start</button>}
-                        {q.status === "IN_CONSULTATION" && <button disabled={busy} onClick={() => queueMove(q.id, "complete", "Consultation completed.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50">Finish</button>}
-                        {q.status === "IN_CONSULTATION" && <button disabled={busy} onClick={() => queueMove(q.id, "pause", "Paused.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50">Pause</button>}
-                        {q.status === "PAUSED" && <button disabled={busy} onClick={() => queueMove(q.id, "start", "Resumed.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50">Resume</button>}
-                        {["WAITING", "READY"].includes(q.status) && <button disabled={busy} onClick={() => queueMove(q.id, "left", "Marked as left.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-gray-500 hover:bg-gray-50">Left</button>}
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <h2 className="text-[13px] font-bold text-gray-900">Waiting</h2>
+            <a href="/practice/today"
+              className="mt-2 flex items-baseline gap-2 rounded-lg border border-gray-100 px-3 py-2 text-[12px] hover:bg-gray-50">
+              <span className="text-gray-800">
+                {day.queue.length === 0 ? "Nobody is waiting" : `${day.queue.length} waiting`}
+              </span>
+              <span className="ml-auto font-semibold text-[var(--cp-primary-deep)]">Manage in Current Session &rarr;</span>
+            </a>
+            <p className="mt-1.5 text-[10px] leading-relaxed text-gray-400">
+              The planner plans. Starting, pausing and finishing consultations for people who have
+              arrived happens in Current Session, so there is exactly one place a live queue is run.
+            </p>
           </section>
 
           {/* Book / walk-in (quick actions) */}
