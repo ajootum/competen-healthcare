@@ -43,8 +43,18 @@ const ROLE_LABEL = Object.fromEntries(PARTICIPANT_ROLES as readonly (readonly [s
 
 type Row = any;
 
-export default function ActivityConsole({ records, portfolio, locations, onlyMine, kind, me, periodQuery = "" }: {
+export default function ActivityConsole({ records, portfolio, locations, onlyMine, kind, me, periodQuery = "", monthGrid = null }: {
   records: Row[]; portfolio: any; locations: any[]; onlyMine: boolean; kind: string; me: string;
+  /**
+   * s6's Month view, computed by the PAGE (the timezone and the period live there) and null in List
+   * view. weeks are Monday-first with null padding; buckets and hrefs are keyed by YYYY-MM-DD.
+   */
+  monthGrid?: {
+    weeks: (string | null)[][];
+    buckets: Record<string, { procedures: number; activities: number; cpdMinutes: number }>;
+    hrefs: Record<string, string>;
+    today: string;
+  } | null;
   /**
    * ⚠ THE PERIOD, AS QUERY TEXT, ON EVERY LINK THIS CONSOLE BUILDS.
    *
@@ -473,6 +483,63 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
           ))}
         </div>
 
+        {monthGrid ? (
+          // ══ s6's MONTH GRID ══ Each cell is the two summary bands in miniature: procedures and
+          // logged activities counted APART, in words and numbers -- never colour alone (s10). A cell
+          // links to its own day as a single-day List, so the drill-down is one click and lands on a
+          // period the control describes truthfully.
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full min-w-[560px] table-fixed border-collapse"
+              aria-label="Calendar of procedures and professional activities for this month">
+              <thead>
+                <tr>
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => (
+                    <th key={d} scope="col"
+                      className="border-b border-gray-200 pb-1 text-left text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                      {d}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {monthGrid.weeks.map((week, wi) => (
+                  <tr key={wi}>
+                    {week.map((day, di) => day === null ? (
+                      <td key={di} className="h-20 border border-gray-100 bg-gray-50/40" aria-hidden="true" />
+                    ) : (
+                      <td key={di} className="h-20 border border-gray-100 p-0 align-top">
+                        <Link href={monthGrid.hrefs[day] ?? "#"}
+                          aria-label={`Open ${day} as a list`}
+                          className="flex h-full flex-col gap-0.5 p-1.5 hover:bg-gray-50">
+                          <span className={`self-start rounded px-1 text-[11px] font-semibold ${
+                            day === monthGrid.today
+                              ? "bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)] ring-1 ring-[var(--cp-primary-border)]"
+                              : "text-gray-600"}`}>
+                            {Number(day.slice(8, 10))}
+                          </span>
+                          {(monthGrid.buckets[day]?.procedures ?? 0) > 0 && (
+                            <span className="rounded bg-indigo-50 px-1 text-[10px] font-semibold text-indigo-700">
+                              {monthGrid.buckets[day]!.procedures} proc
+                            </span>
+                          )}
+                          {(monthGrid.buckets[day]?.activities ?? 0) > 0 && (
+                            <span className="rounded bg-gray-100 px-1 text-[10px] font-semibold text-gray-600">
+                              {monthGrid.buckets[day]!.activities} act
+                            </span>
+                          )}
+                        </Link>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-1.5 text-[10.5px] text-gray-500">
+              A day&apos;s counts are the record above filtered to that day &mdash; open one to read it
+              as a list. Days shown empty were read successfully.
+            </p>
+          </div>
+        ) : (
         <div className="mt-2 overflow-x-auto">
           <ClinicalRecordTable
             label="Procedures and professional activities, most recent first"
@@ -529,6 +596,7 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
             }))}
           />
         </div>
+        )}
       </section>
 
       {/* ══ s5's FOOTER: LOW-SALIENCE GUIDANCE, AND THE ONE HONEST COMPETENCY SENTENCE ═════════════ */}

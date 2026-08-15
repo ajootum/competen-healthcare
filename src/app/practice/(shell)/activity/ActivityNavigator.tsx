@@ -42,6 +42,12 @@ export default function ActivityNavigator({ period, todayDate, timezone, keep }:
       timezone={timezone}
       href={toHref}
       onChange={next => router.push(toHref(next))}
+      // s6's toggle: List | Month, and ONLY those two -- Day and Week were period views a list page
+      // had no business offering as "views" (their date ranges live in the period menu where they
+      // belong). Month earned its button on 2026-08-15, the day the grid became real; s20 forbade it
+      // while the button would have changed nothing but the date range.
+      views={["agenda", "month"]}
+      viewLabels={{ agenda: "List" }}
       showRollingPeriods
       showAllDates
       note={

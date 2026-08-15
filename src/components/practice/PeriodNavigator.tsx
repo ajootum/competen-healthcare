@@ -52,7 +52,7 @@ export type PeriodChange = {
 
 export default function PeriodNavigator({
   period, todayDate, onChange, href, timezone, trailing, views = PERIOD_VIEWS.map(v => v.key),
-  showLongPeriods = true, showRollingPeriods = false, showAllDates = false, note,
+  viewLabels, showLongPeriods = true, showRollingPeriods = false, showAllDates = false, note,
 }: {
   period: PeriodRange;
   todayDate: string;
@@ -65,6 +65,12 @@ export default function PeriodNavigator({
   trailing?: ReactNode;
   /** Optional: a screen with no month grid can offer fewer views. Defaults to all four. */
   views?: readonly PeriodView[];
+  /**
+   * Optional: what a view is CALLED on this screen. The activity portfolio's comp says "List" where
+   * the shared vocabulary says "Agenda" -- same view, same arrows, different word -- and renaming the
+   * shared PERIOD_VIEWS entry would rename it on every screen that mounts this control.
+   */
+  viewLabels?: Partial<Record<PeriodView, string>>;
   showLongPeriods?: boolean;
   /**
    * ⚠ BOTH OFF BY DEFAULT, WHICH IS DELIBERATE AND IS NOT TIMIDITY. The planner mounts this control and
@@ -149,7 +155,7 @@ export default function PeriodNavigator({
                   // cannot survive the press and leave the switcher lit over a window it does not describe.
                   anchoring: "calendar",
                 }}
-                label={v.label} title={v.purpose}
+                label={viewLabels?.[v.key] ?? v.label} title={v.purpose}
                 current={period.anchoring === "calendar" && period.view === v.key}
                 className={`rounded-md px-2.5 py-1 text-[12px] font-semibold ${period.anchoring === "calendar" && period.view === v.key
                   ? "bg-[var(--cp-primary)] text-white"

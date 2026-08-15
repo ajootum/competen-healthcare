@@ -35,6 +35,7 @@ import {
   createProcedureTemplate, applyProcedureTemplate, portfolioSummary, setPortfolio, ACTIVITY_KINDS,
   activityRecord, recordExternalProcedure, removeExternalProcedure,
 } from "../src/lib/practice/clinical-activity";
+import { zonedDayOf, monthGridWeeks, bucketActivityDays } from "../src/lib/practice/activity-grid";
 
 loadEnvConfig(process.cwd());
 
@@ -539,6 +540,53 @@ async function main() {
   ok("302-UI-4. the DELETE verb is confined to the external subject -- clinical rows gain no delete",
     routeSrc.includes('url.searchParams.get("subject") !== "external_procedure"')
       && routeSrc.includes("removeExternalProcedure"));
+
+  // ══ s6: THE LIST/MONTH TOGGLE, AND THE GRID THAT EARNED IT ═══════════════════════════════════
+  //
+  // Pure arithmetic first, because the one bug a month grid reliably ships with is the zoned-day
+  // boundary: an evening entry bucketed in UTC renders on the previous day's cell.
+  ok("VIEW-1. ⚠ THE KAMPALA MIDNIGHT TRAP: 21:30 UTC on July 31st is AUGUST 1st in Africa/Kampala",
+    zonedDayOf("2026-07-31T21:30:00Z", "Africa/Kampala") === "2026-08-01",
+    zonedDayOf("2026-07-31T21:30:00Z", "Africa/Kampala"));
+  ok("VIEW-1b. CONTROL: the same instant bucketed in UTC stays July 31st -- the zone is doing the work",
+    zonedDayOf("2026-07-31T21:30:00Z", "UTC") === "2026-07-31",
+    zonedDayOf("2026-07-31T21:30:00Z", "UTC"));
+
+  // August 2026: 31 days, the 1st is a Saturday, the 31st is a Monday. Checked against a wall
+  // calendar, not against this function -- an assertion computed by the code under test tests nothing.
+  const aug = monthGridWeeks("2026-08-15");
+  ok("VIEW-2. August 2026 lays out as 6 Monday-first weeks of 7",
+    aug.length === 6 && aug.every(w => w.length === 7),
+    JSON.stringify({ weeks: aug.length, widths: aug.map(w => w.length) }));
+  ok("VIEW-2b. the 1st sits under Saturday with five leading blanks, and every day appears exactly once",
+    aug[0].slice(0, 5).every(c => c === null) && aug[0][5] === "2026-08-01"
+      && aug.flat().filter(Boolean).length === 31
+      && aug[5][0] === "2026-08-31",
+    JSON.stringify({ first: aug[0], lastRowStart: aug[5]?.[0] }));
+
+  const buckets = bucketActivityDays([
+    { occurredAt: "2026-08-10T06:00:00Z", recordKind: "procedure", cpd_minutes: 30 },
+    { occurredAt: "2026-08-10T09:00:00Z", recordKind: "activity", cpd_minutes: 15 },
+    { occurredAt: "2026-07-31T21:30:00Z", recordKind: "activity" },
+  ], "Africa/Kampala");
+  ok("VIEW-3. a day's bucket counts procedures and activities APART, and sums the CPD",
+    buckets["2026-08-10"]?.procedures === 1 && buckets["2026-08-10"]?.activities === 1
+      && buckets["2026-08-10"]?.cpdMinutes === 45,
+    JSON.stringify(buckets["2026-08-10"]));
+  ok("VIEW-3b. and the late-evening entry landed on the practice's August 1st, not UTC's July 31st",
+    buckets["2026-08-01"]?.activities === 1 && !buckets["2026-07-31"],
+    JSON.stringify({ aug1: buckets["2026-08-01"], jul31: buckets["2026-07-31"] ?? null }));
+
+  const navSrc = readFileSync(join(appDir, "ActivityNavigator.tsx"), "utf8");
+  ok("VIEW-4. s6/s20: the switcher offers exactly List and Month -- the label the comp uses, the view the grid earns",
+    navSrc.includes('views={["agenda", "month"]}') && navSrc.includes('viewLabels={{ agenda: "List" }}'));
+  ok("VIEW-5. the grid is REAL only for a calendar month -- rolling and unbounded ranges have no grid shape",
+    pageSrc.includes('period.view === "month" && period.anchoring === "calendar" && period.bounded'));
+  ok("VIEW-6. a cell drills to its own day as the SAME single-day period the List would build",
+    pageSrc.includes('view: "agenda", anchorDate: day, from: day, to: day, anchoring: "calendar"'));
+  ok("VIEW-7. cells speak in words and numbers, never colour alone, and blank days say they were read",
+    consoleSrc.includes("} proc") && consoleSrc.includes("} act")
+      && consoleSrc.includes("Days shown empty were read successfully."));
 
   // ── 10. Isolation ────────────────────────────────────────────────────────
   const crossItem = await addItem(admin, {

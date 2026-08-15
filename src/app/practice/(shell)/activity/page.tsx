@@ -9,6 +9,7 @@ import { workspaceClock } from "@/lib/practice/practice-time";
 import {
   periodFromParams, periodLabel, periodSpanDays, allDatesTarget, periodToParams,
 } from "@/lib/practice/period-range";
+import { monthGridWeeks, bucketActivityDays } from "@/lib/practice/activity-grid";
 import ActivityConsole from "./ActivityConsole";
 import ActivityNavigator from "./ActivityNavigator";
 
@@ -71,6 +72,30 @@ export default async function ActivityPage({ searchParams }: {
   ]);
 
   const keep = { mine: onlyMine ? null : "0", kind: kind || null };
+
+  // ── s6's MONTH VIEW ─────────────────────────────────────────────────────────────────────────────
+  // Real only when the period IS a calendar month: a rolling or unbounded range has no grid shape,
+  // and pretending it does would draw a calendar around dates it does not describe.
+  const monthView = period.view === "month" && period.anchoring === "calendar" && period.bounded;
+  const dayHref = (day: string) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(keep)) if (v) q.set(k, v);
+    // One click from a cell to its day: the SAME single-day period the List view would build, so the
+    // drill-down and the period control cannot disagree about what is on screen.
+    for (const [k, v] of Object.entries(periodToParams({
+      view: "agenda", anchorDate: day, from: day, to: day, anchoring: "calendar", backDays: null,
+    }))) if (v) q.set(k, v);
+    return `/practice/activity?${q.toString()}`;
+  };
+  const monthGrid = monthView
+    ? {
+      weeks: monthGridWeeks(period.anchorDate),
+      buckets: bucketActivityDays(record.items, clock.timezone),
+      hrefs: Object.fromEntries(monthGridWeeks(period.anchorDate).flat().filter(Boolean)
+        .map(d => [d as string, dayHref(d as string)])),
+      today: clock.today,
+    }
+    : null;
   // ⚠ THE PERIOD, FOR THE LINKS THE CONSOLE BUILDS ITSELF. Without it, pressing a kind filter would
   // widen the log back out to every date under a control still lit as though it were narrow.
   const periodQuery = Object.entries(periodToParams({
@@ -164,6 +189,7 @@ export default async function ActivityPage({ searchParams }: {
         kind={kind ?? ""}
         me={shell.ctx.userId}
         periodQuery={periodQuery}
+        monthGrid={monthGrid}
       />
     </div>
   );
