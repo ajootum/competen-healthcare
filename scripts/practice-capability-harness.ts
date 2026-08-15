@@ -729,9 +729,12 @@ async function main() {
   // ══ 13. HISTORY SURVIVES DEACTIVATION (s6 bullet five, s8) ═════════════════════════════════════
   section("13. nothing is deleted");
 
+  // The phone is here because this fixture predates CPR-V2-005's minimum dataset (a primary contact
+  // is required) and sat red for some time before anyone noticed -- the engine was right, the
+  // fixture was old.
   const patient = await registerPatient(admin, {
     workspaceId: ws, displayName: "Harness Capability Patient", sex: "female",
-    ageEstimateYears: 40, actorId: OWNER, correlationId: CID, confirmNew: true,
+    ageEstimateYears: 40, phone: "0772 555 400", actorId: OWNER, correlationId: CID, confirmNew: true,
   });
   ok("13-1. PRECONDITION: a patient exists", patient.ok, JSON.stringify(patient));
   let encounterId: string | null = null;
