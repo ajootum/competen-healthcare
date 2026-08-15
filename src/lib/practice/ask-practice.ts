@@ -7,6 +7,7 @@ import { financialIntelligence } from "@/lib/practice/financial-intelligence";
 import { piV2Extras } from "@/lib/practice/pi-v2";
 import { metricById } from "@/lib/practice/intelligence-registry";
 import { formatMinor } from "@/lib/practice/billing-constants";
+import { investigationsOrdered } from "@/lib/practice/report-engine";
 
 // CPR-PI-001 v2 s13 -- ASK PRACTICE, THE GROUNDED FLOW.
 //
@@ -204,22 +205,19 @@ export async function askPractice(admin: any, ctx: WorkspaceContext, args: {
   } else if (intent === "investigations") {
     domains.push("investigation");
     registry = ["ask.investigations_ordered"];
-    const { data: inv, error } = await admin.from("practice_encounter_investigation")
-      .select("label, requested_at").eq("workspace_id", ctx.workspaceId)
-      .gte("requested_at", range.period.fromIso).lt("requested_at", range.period.toIso).limit(1000);
-    if (error) {
+    // The SAME aggregate the Investigations report uses (report-engine owns it) -- two group-bys of
+    // one table is how an answer here and a report there come to disagree by one row.
+    const inv = await investigationsOrdered(admin, ctx, range.period);
+    if (!inv.ok) {
       answered = false;
-      sentence = `The investigation record could not be read: ${error.message}. That is not "no investigations".`;
+      sentence = `The investigation record could not be read: ${inv.detail}. That is not "no investigations".`;
     } else {
-      const byLabel = new Map<string, number>();
-      for (const r of (inv ?? []) as any[]) byLabel.set(r.label, (byLabel.get(r.label) ?? 0) + 1);
-      const top = [...byLabel.entries()].sort((x, y) => y[1] - x[1]).slice(0, 5);
-      const total = (inv ?? []).length;
+      const top = inv.rows.slice(0, 5);
       sentence = top.length === 0
         ? `No investigations were recorded as requested in ${period.periodLabel}.`
-        : `Most requested in ${period.periodLabel}: ${top.map(([l, n]) => `${l} (${n} of ${total})`).join(", ")}. These are what you recorded asking for -- nothing here left this product.`;
-      figures = top.map(([l, n]) => ({ label: l, value: String(n), of: `${total} requests`, registryId: "ask.investigations_ordered" }));
-      evidence = { rows: [], total, identified: false, note: "Requested is not resulted; result linking lives on the encounter.", href: "/practice/encounters" };
+        : `Most requested in ${period.periodLabel}: ${top.map(r => `${r.label} (${r.total} of ${inv.total})`).join(", ")}. These are what you recorded asking for -- nothing here left this product.`;
+      figures = top.map(r => ({ label: r.label, value: String(r.total), of: `${inv.total} requests`, registryId: "ask.investigations_ordered" }));
+      evidence = { rows: [], total: inv.total, identified: false, note: "Requested is not resulted; result linking lives on the encounter.", href: "/practice/encounters" };
     }
   } else if (intent === "patients_seen" || intent === "consultations") {
     domains.push("encounter");

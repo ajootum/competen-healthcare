@@ -504,3 +504,18 @@ export const ACTIONABLE_INSIGHT_KEYS = Object.keys(INSIGHT_ACTIONS);
 export const INSIGHTS_WITHOUT_AN_ACTION = [
   { key: "patients_attention", why: "its next step is another intelligence tab, so acting would only mean looking" },
 ];
+
+/**
+ * Weekday grouping over the ONE shared encounter trend's daily buckets (pi.day_of_week's derivation).
+ * Lives here so the Patterns screen and the report engine read the SAME arithmetic -- a second copy of
+ * this loop is how two surfaces come to disagree about what a Tuesday is.
+ */
+export function weekdayPattern(buckets: { day: string; total: number }[]): { label: string; count: number }[] {
+  const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const counts = new Array(7).fill(0);
+  for (const b of buckets ?? []) {
+    const dow = (new Date(b.day + "T00:00:00Z").getUTCDay() + 6) % 7;
+    counts[dow] += b.total;
+  }
+  return names.map((label, i) => ({ label, count: counts[i] }));
+}

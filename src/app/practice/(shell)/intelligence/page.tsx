@@ -17,6 +17,7 @@ import AskField from "./AskField";
 import PriorityStrip from "./PriorityStrip";
 import AssistantArea from "./AssistantArea";
 import AskPracticeArea from "./AskPracticeArea";
+import ReportsV2Area from "./ReportsV2Area";
 import { askPractice } from "@/lib/practice/ask-practice";
 import { CARD } from "./Ui";
 import {
@@ -182,7 +183,12 @@ export default async function IntelligencePage({ searchParams }: {
         {tab === "clinical" && <ClinicalArea suite={suite} />}
         {tab === "pathways" && <PathwaysArea suite={suite} />}
         {tab === "performance" && <PerformanceArea suite={suite} />}
-        {tab === "reports" && <ReportsArea suite={suite} />}
+        {/* v2 s12: the rebuilt Reports tab -- catalogue, quick access, audit-derived recent list.
+            The old ReportsArea still serves the overview side panel. */}
+        {tab === "reports" && (
+          <ReportsV2Area admin={admin} ctx={shell.ctx} suite={suite}
+            fromDay={suite.range.period.fromDay} toDay={suite.range.period.toDay} />
+        )}
         {/* Phase 3 (CPR-PAY-001 s17) under CPR-PI-001 v2: computed ONLY when its tab is open --
             two extra billing sweeps have no business running under every other tab's load. */}
         {/* v2 P0: the five rebuilt screen contracts. The extras module runs only for tabs that

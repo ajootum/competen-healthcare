@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { IntelligenceSuite } from "@/lib/practice/intelligence";
 import type { PiV2Extras } from "@/lib/practice/pi-v2";
 import { metricById } from "@/lib/practice/intelligence-registry";
+import { weekdayPattern } from "@/lib/practice/intelligence-constants";
 
 // CPR-PI-001 v2 P0 -- the five rebuilt screen contracts (s6-s10), composed from the EXISTING modules
 // plus pi-v2's three extras. No figure here is computed in this file: presentation only, so a screen
@@ -58,15 +59,8 @@ function metricValue(m: any): string {
   return m?.value === null || m?.value === undefined ? "—" : String(m.value);
 }
 
-function weekdayPattern(buckets: { day: string; total: number }[]): { label: string; count: number }[] {
-  const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const counts = new Array(7).fill(0);
-  for (const b of buckets ?? []) {
-    const dow = (new Date(b.day + "T00:00:00Z").getUTCDay() + 6) % 7;
-    counts[dow] += b.total;
-  }
-  return names.map((label, i) => ({ label, count: counts[i] }));
-}
+// weekdayPattern moved to intelligence-constants.ts: the report engine renders the same weekday
+// grouping, and two copies of that loop is how two surfaces disagree about what a Tuesday is.
 
 function MiniTrend({ buckets }: { buckets: { day: string; total: number }[] }) {
   const max = Math.max(1, ...buckets.map(b => b.total));
@@ -256,7 +250,7 @@ export function PatientV2Area({ suite, extras }: { suite: Suite; extras: PiV2Ext
             <li key={s.key} className="flex items-baseline gap-2 text-[12px]">
               <span className="text-gray-800">{s.label}</span>
               {/* Distribution slices carry the module's own `of` denominator -- v2 s19 satisfied by shape. */}
-              <span className="ml-auto text-[11px] text-gray-500">{ofPct(s.count ?? s.value ?? null, dist.of)}</span>
+              <span className="ml-auto text-[11px] text-gray-500">{ofPct(s.total ?? null, dist.of)}</span>
             </li>
           ))}
           {dist.unrecorded > 0 && (
@@ -399,7 +393,7 @@ export function ClinicalV2Area({ suite }: { suite: Suite }) {
               {(((c.data as any).byMode?.slices ?? []) as any[]).map((s: any) => (
                 <li key={s.key} className="flex items-baseline gap-2 text-[12px]">
                   <span className="text-gray-800">{s.label}</span>
-                  <span className="ml-auto text-[11px] text-gray-500">{ofPct(s.count ?? s.value ?? null, (c.data as any).byMode?.of ?? null)}</span>
+                  <span className="ml-auto text-[11px] text-gray-500">{ofPct(s.total ?? null, (c.data as any).byMode?.of ?? null)}</span>
                 </li>
               ))}
             </ul>
@@ -440,7 +434,7 @@ export function FollowUpV2Area({ suite, extras }: { suite: Suite; extras: PiV2Ex
             {((d.byKind?.slices ?? []) as any[]).map((s: any) => (
               <li key={s.key} className="flex items-baseline gap-2 text-[12px]">
                 <span className="text-gray-800">{s.label}</span>
-                <span className="ml-auto text-[11px] text-gray-500">{ofPct(s.count ?? s.value ?? null, d.byKind?.of ?? null)}</span>
+                <span className="ml-auto text-[11px] text-gray-500">{ofPct(s.total ?? null, d.byKind?.of ?? null)}</span>
               </li>
             ))}
           </ul>
@@ -504,7 +498,7 @@ export function PatternsV2Area({ suite }: { suite: Suite }) {
             {((d.byMode?.slices ?? []) as any[]).map((s: any) => (
               <li key={s.key} className="flex items-baseline gap-2 text-[12px]">
                 <span className="text-gray-800">{s.label}</span>
-                <span className="ml-auto text-[11px] text-gray-500">{ofPct(s.count ?? s.value ?? null, d.byMode?.of ?? null)}</span>
+                <span className="ml-auto text-[11px] text-gray-500">{ofPct(s.total ?? null, d.byMode?.of ?? null)}</span>
               </li>
             ))}
           </ul>
@@ -513,7 +507,7 @@ export function PatternsV2Area({ suite }: { suite: Suite }) {
             {((d.byPathway?.slices ?? []) as any[]).map((s: any) => (
               <li key={s.key} className="flex items-baseline gap-2 text-[12px]">
                 <span className="text-gray-800">{s.label}</span>
-                <span className="ml-auto text-[11px] text-gray-500">{ofPct(s.count ?? s.value ?? null, d.byPathway?.of ?? null)}</span>
+                <span className="ml-auto text-[11px] text-gray-500">{ofPct(s.total ?? null, d.byPathway?.of ?? null)}</span>
               </li>
             ))}
           </ul>

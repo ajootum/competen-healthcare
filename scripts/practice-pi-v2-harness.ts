@@ -176,6 +176,12 @@ async function main() {
     !areasSrc.includes("Consolidating them into this screen is part of the remaining P0 work")
       && areasSrc.includes("No location recorded")
       && areasSrc.includes('"pi.encounters_by_location"'));
+  // ⚠ 2026-08-15: five slice renders read `s.count ?? s.value` against IntelSlice, whose one count
+  // field is `total` -- every distribution on the frozen screens drew a dash instead of its number,
+  // and the reports build found it. The wrong field names may not come back.
+  ok("4-10. ⚠ distribution slices read IntelSlice.total -- the field that exists",
+    !areasSrc.includes("s.count ?? s.value") && (areasSrc.match(/s\.total \?\? null/g) ?? []).length === 5,
+    `${(areasSrc.match(/s\.total \?\? null/g) ?? []).length} of 5 slice renders on .total`);
 
   return report();
 }
