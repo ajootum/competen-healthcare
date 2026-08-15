@@ -7,6 +7,7 @@ import { intelligenceSuite, isCohortDimension } from "@/lib/practice/intelligenc
 import { financialIntelligence } from "@/lib/practice/financial-intelligence";
 import FinancialArea from "./FinancialArea";
 import { piV2Extras } from "@/lib/practice/pi-v2";
+import { conditionalZones } from "@/lib/practice/pi-conditional";
 import { OverviewV2Area, PatientV2Area, ClinicalV2Area, FollowUpV2Area, PatternsV2Area } from "./AreasV2";
 import {
   INTELLIGENCE_TABS, INTELLIGENCE_TAB_STRIP, DEFAULT_TAB, isIntelligenceTab, TAB_SWATCH, DEFAULT_RANGE_DAYS,
@@ -206,9 +207,15 @@ export default async function IntelligencePage({ searchParams }: {
         {tab === "followups" && (
           <FollowUpV2Area suite={suite} extras={await piV2Extras(admin, shell.ctx, {
             fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay, todayDate: suite.range.period.toDay,
+          })} zones={await conditionalZones(admin, shell.ctx, {
+            fromIso: suite.range.period.fromIso, toIso: suite.range.period.toIso,
           })} />
         )}
-        {tab === "clinical" && <ClinicalV2Area suite={suite} />}
+        {tab === "clinical" && (
+          <ClinicalV2Area suite={suite} zones={await conditionalZones(admin, shell.ctx, {
+            fromIso: suite.range.period.fromIso, toIso: suite.range.period.toIso,
+          })} />
+        )}
         {tab === "patterns" && <PatternsV2Area suite={suite} />}
         {tab === "financial" && (
           <FinancialArea financial={await financialIntelligence(admin, shell.ctx, {

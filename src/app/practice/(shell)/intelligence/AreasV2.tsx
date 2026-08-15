@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { IntelligenceSuite } from "@/lib/practice/intelligence";
 import type { PiV2Extras } from "@/lib/practice/pi-v2";
+import type { ConditionalZones } from "@/lib/practice/pi-conditional";
 import { metricById } from "@/lib/practice/intelligence-registry";
 import { weekdayPattern } from "@/lib/practice/intelligence-constants";
 
@@ -325,7 +326,7 @@ export function PatientV2Area({ suite, extras }: { suite: Suite; extras: PiV2Ext
 
 // ══ 3. CLINICAL INTELLIGENCE (v2 s8) ════════════════════════════════════════════════════════════════
 
-export function ClinicalV2Area({ suite }: { suite: Suite }) {
+export function ClinicalV2Area({ suite, zones }: { suite: Suite; zones: ConditionalZones }) {
   const p = suite.workspace.modules.patients;
   const c = suite.workspace.modules.clinicalActivity;
   const proc = suite.workspace.modules.procedures;
@@ -400,18 +401,88 @@ export function ClinicalV2Area({ suite }: { suite: Suite }) {
           )}
         </section>
       </div>
-      <TrustFooter ids={["pi.top_conditions_by_patients", "pi.top_conditions_by_encounters"]} />
+      {/* ── s8's CONDITIONAL ZONES, both gates met -- see pi-conditional.ts's header. ───────────── */}
+      <div className="grid gap-3 md:grid-cols-2">
+        <section className={CARD}>
+          <h3 className="text-[13px] font-bold text-gray-900">Condition &rarr; treatment</h3>
+          {(() => {
+            if (!zones.available || !zones.data)
+              return <p className="mt-1 text-[12px] text-gray-600">{zones.unavailableReason ?? "could not be read"}</p>;
+            const ct = zones.data.conditionTreatment;
+            if (ct.total === 0)
+              return <p className="mt-2 text-[12px] text-gray-500">No treatments recorded in this period.</p>;
+            return (
+              <>
+                {ct.pairs.length === 0 ? (
+                  <p className="mt-2 text-[12px] text-gray-600">
+                    0 of {ct.total} treatment rows carry a diagnosis link, so no pair can be drawn.
+                    Linking happens at capture &mdash; a pair is a practitioner&apos;s own connection,
+                    never a guess.
+                  </p>
+                ) : (
+                  <ul className="mt-1 flex flex-col gap-0.5">
+                    {ct.pairs.map((p, i) => (
+                      <li key={i} className="flex items-baseline gap-2 text-[12px]">
+                        <span className="min-w-0 truncate text-gray-800">{p.condition} &rarr; {p.treatment}</span>
+                        <span className="ml-auto shrink-0 text-[11px] text-gray-500">{ofPct(p.total, ct.linked)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-1.5 text-[10px] text-gray-500">
+                  {ct.linked} of {ct.total} treatment rows carry the link; the {ct.unlinked} without
+                  it are counted here, never guessed into a pair.
+                </p>
+              </>
+            );
+          })()}
+        </section>
+        <section className={CARD}>
+          <h3 className="text-[13px] font-bold text-gray-900">Referrals</h3>
+          {(() => {
+            const refs: any = suite.referrals;
+            if (!refs?.available || !refs.data) return <Unavailable module={refs} />;
+            const rd: any = refs.data;
+            return (
+              <>
+                <ul className="mt-1 flex flex-col gap-0.5">
+                  {((rd.byStatus?.slices ?? []) as any[]).map((s: any) => (
+                    <li key={s.key} className="flex items-baseline gap-2 text-[12px]">
+                      <span className="text-gray-800">{s.label}</span>
+                      <span className="ml-auto text-[11px] text-gray-500">{ofPct(s.total ?? null, rd.byStatus?.of ?? null)}</span>
+                    </li>
+                  ))}
+                </ul>
+                {(rd.destinations ?? []).length > 0 && (
+                  <ul className="mt-2 border-t border-gray-100 pt-1.5">
+                    {(rd.destinations as any[]).slice(0, 5).map((x: any, i: number) => (
+                      <li key={i} className="flex items-baseline gap-2 text-[11px]">
+                        <span className="min-w-0 truncate text-gray-700">{x.label}</span>
+                        <span className="ml-auto shrink-0 text-gray-500">{x.total} ({x.patients} patient{x.patients === 1 ? "" : "s"})</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-1.5 text-[10px] leading-relaxed text-amber-700">{rd.limitation}</p>
+              </>
+            );
+          })()}
+        </section>
+      </div>
+      <TrustFooter ids={["pi.top_conditions_by_patients", "pi.top_conditions_by_encounters", "pi.condition_treatment_pairs", "pi.referrals_recorded"]} />
     </div>
   );
 }
 
 // ══ 4. FOLLOW-UP & OUTCOMES (v2 s9) ═════════════════════════════════════════════════════════════════
 
-export function FollowUpV2Area({ suite, extras }: { suite: Suite; extras: PiV2Extras }) {
+export function FollowUpV2Area({ suite, extras, zones }: { suite: Suite; extras: PiV2Extras; zones: ConditionalZones }) {
   const f = suite.workspace.modules.followUps;
   if (!f.available) return <section className={CARD}><Unavailable module={f} /></section>;
   const d: any = f.data;
   const median = extras.available && extras.data ? extras.data.medianDaysToFollowUp : null;
+  const refs: any = suite.referrals;
+  const inv = zones.available && zones.data ? zones.data.investigationsAwaiting : null;
 
   return (
     <div className="flex flex-col gap-3">
@@ -450,6 +521,39 @@ export function FollowUpV2Area({ suite, extras }: { suite: Suite; extras: PiV2Ex
                 <span aria-hidden="true" className="text-gray-400">&rarr;</span>
               </Link>
             </li>
+            {/* v2 s9's conditional gaps, each gated on real structure -- see pi-conditional.ts. */}
+            <li>
+              <Link href="/practice/encounters"
+                className="flex items-baseline gap-2 rounded-lg border border-gray-100 px-2.5 py-1.5 text-[12px] hover:bg-gray-50">
+                <span className="text-gray-800">Investigations with nothing back</span>
+                <span className="ml-auto font-bold text-gray-900">{inv ? inv.nothingBack : "—"}</span>
+                <span aria-hidden="true" className="text-gray-400">&rarr;</span>
+              </Link>
+              {inv && inv.linkedNotReviewed > 0 && (
+                <p className="mt-0.5 px-2.5 text-[10px] text-amber-700">
+                  Plus {inv.linkedNotReviewed} where a report arrived and is not yet marked reviewed.
+                </p>
+              )}
+            </li>
+            <li>
+              <Link href="/practice/patients"
+                className="flex items-baseline gap-2 rounded-lg border border-gray-100 px-2.5 py-1.5 text-[12px] hover:bg-gray-50">
+                <span className="text-gray-800">Referrals without subsequent information</span>
+                <span className="ml-auto font-bold text-gray-900">
+                  {refs?.available ? ((refs.data as any)?.awaitingNews?.count ?? "—") : "—"}
+                </span>
+                <span aria-hidden="true" className="text-gray-400">&rarr;</span>
+              </Link>
+            </li>
+            {/* The gap that failed its gate, refused IN POSITION (s7 "where supported"): */}
+            <li className="rounded-lg border border-dashed border-slate-200 px-2.5 py-1.5">
+              <p className="text-[12px] text-gray-500">Planned procedures incomplete</p>
+              <p className="text-[10px] leading-relaxed text-gray-500">
+                Not supported: procedures here have exactly two states, performed and abandoned
+                (migration 197) &mdash; a planned-procedure state does not exist, so this gap cannot
+                be computed and no number pretends otherwise.
+              </p>
+            </li>
           </ul>
           <p className="mt-1 text-[10px] text-gray-500">
             Every gap routes to the workspace that owns the work (v2 s17). No subsequent record in
@@ -457,7 +561,32 @@ export function FollowUpV2Area({ suite, extras }: { suite: Suite; extras: PiV2Ex
           </p>
         </section>
       </div>
-      <TrustFooter ids={["pi.followup_completion", "pi.median_days_followup"]} />
+      {/* ── s9's OUTCOMES ZONE, conditional and its gate is met: outcome_code is an explicit
+             assessment vocabulary. Rendered from outcomePicture's own counts -- NEVER inferred from
+             notes or from absence, and the uncoded share sits beside the coded rows. ─────────── */}
+      <section className={CARD}>
+        <h3 className="text-[13px] font-bold text-gray-900">Outcomes, as recorded</h3>
+        <div className="mt-1 grid gap-3 md:grid-cols-2">
+          <ul className="flex flex-col gap-0.5">
+            {((d.concluded?.byOutcome ?? []) as any[]).map((b: any) => (
+              <li key={b.code} className="flex items-baseline gap-2 text-[12px]">
+                <span className="text-gray-800">{b.label}</span>
+                <span className="ml-auto text-[11px] text-gray-500">{ofPct(b.total ?? null, d.concluded?.concluded ?? null)}</span>
+              </li>
+            ))}
+            <li className="flex items-baseline gap-2 text-[12px]">
+              <span className="italic text-gray-500">Completed without an outcome code</span>
+              <span className="ml-auto text-[11px] text-gray-500">{ofPct(d.concluded?.uncoded ?? null, d.concluded?.concluded ?? null)}</span>
+            </li>
+          </ul>
+          <p className="text-[10px] leading-relaxed text-gray-500">
+            Only what a practitioner explicitly coded at closure counts here &mdash; an outcome is
+            never inferred from notes or from absence, so the coded rows understate what happened
+            and the uncoded row says by how much.
+          </p>
+        </div>
+      </section>
+      <TrustFooter ids={["pi.followup_completion", "pi.median_days_followup", "pi.followup_outcomes", "pi.investigations_awaiting_result", "pi.referrals_awaiting_news"]} />
     </div>
   );
 }

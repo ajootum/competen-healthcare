@@ -25,7 +25,11 @@ import { launchEncounter } from "../src/lib/practice/encounters";
 import { createFollowUp, closeFollowUp } from "../src/lib/practice/follow-ups";
 import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import { piV2Extras, medianOf } from "../src/lib/practice/pi-v2";
-import { intelRange, locationIntelligence } from "../src/lib/practice/intelligence";
+import { intelRange, locationIntelligence, outcomePicture } from "../src/lib/practice/intelligence";
+import { conditionalZones } from "../src/lib/practice/pi-conditional";
+import { recordDiagnosis, recordTreatment } from "../src/lib/practice/encounters";
+import { recordInvestigation, recordReferral } from "../src/lib/practice/encounter-workspace";
+import { resolvePeriod } from "../src/lib/practice/reports";
 import { METRIC_REGISTRY, metricById } from "../src/lib/practice/intelligence-registry";
 import { INTELLIGENCE_TAB_STRIP, INTELLIGENCE_TABS, isIntelligenceTab } from "../src/lib/practice/intelligence-constants";
 import { practiceToday } from "../src/lib/practice/practice-time";
@@ -64,7 +68,8 @@ async function main() {
   ok("2-1. the P0 metric set is registered", piIds.length >= 7, piIds.join(", "));
   const rateBearing = ["pi.followup_completion", "pi.recency_last_visit", "pi.avg_visits_per_patient",
     "pi.top_conditions_by_patients", "pi.top_conditions_by_encounters", "pi.day_of_week",
-    "pi.encounters_by_location"];
+    "pi.encounters_by_location", "pi.followup_outcomes", "pi.condition_treatment_pairs",
+    "pi.investigations_awaiting_result"];
   ok("2-2. ⚠ v2 s14: every percentage-capable metric declares BOTH numerator and denominator",
     rateBearing.every(id => !!metricById(id)?.numerator && !!metricById(id)?.denominator),
     rateBearing.filter(id => !metricById(id)?.numerator || !metricById(id)?.denominator).join(", "));
@@ -98,16 +103,31 @@ async function main() {
   const e3 = await launchEncounter(admin, { workspaceId: ws, patientId: p2.data.id, pathway: "new_walk_in", ...base });
   if (!e1.ok || !e2.ok || !e3.ok) { ok("encounters launch", false); return report(); }
 
-  // Two completed follow-ups with CONTROLLED due dates: closed today, due 7 and 3 days ago -> late by
-  // 7 and 3 -> median 5. A third completed EARLY (due tomorrow) makes the negative-keeping visible.
-  for (const [dueOffset] of [[-7], [-3], [1]] as const) {
+  // Completed follow-ups with CONTROLLED due dates, all closed today. Three uncoded (due -7, -3, +1
+  // -> elapsed 7, 3, -1) plus ONE coded "improved" (due -5 -> elapsed 5) for the s9 outcomes zone.
+  // Pairs are therefore (-1, 3, 5, 7): median 4 -- and dropping the negative would say 5, so the
+  // negative-keeping stays visible in the arithmetic.
+  for (const [dueOffset, code] of [[-7, null], [-3, null], [1, null], [-5, "improved"]] as const) {
     const fu = await createFollowUp(admin, {
       workspaceId: ws, patientId: p1.data.id, reason: "harness pair", dueOn: dayShift(dueOffset), ...base,
     });
     if (!fu.ok) { ok("follow-up fixture", false, (fu as any).message); return report(); }
-    const closed = await closeFollowUp(admin, { workspaceId: ws, followUpId: fu.data.id, to: "COMPLETED", outcome: "harness", ...base });
+    const closed = await closeFollowUp(admin, {
+      workspaceId: ws, followUpId: fu.data.id, to: "COMPLETED", outcome: "harness",
+      outcomeCode: code ?? undefined, ...base,
+    });
     if (!closed.ok) { ok("follow-up closes", false, (closed as any).message); return report(); }
   }
+
+  // s8/s9 conditional-zone fixtures: a diagnosis, one LINKED and one UNLINKED treatment, an
+  // investigation with nothing back, and a referral nobody has news about.
+  const dx = await recordDiagnosis(admin, { workspaceId: ws, encounterId: e3.data.id, label: "Asthma", certainty: "confirmed", ...base });
+  if (!dx.ok) { ok("diagnosis fixture", false, (dx as any).message); return report(); }
+  const t1 = await recordTreatment(admin, { workspaceId: ws, encounterId: e3.data.id, treatmentType: "medication", label: "Salbutamol inhaler", diagnosisId: dx.data.id, ...base });
+  const t2 = await recordTreatment(admin, { workspaceId: ws, encounterId: e3.data.id, treatmentType: "advice", label: "Trigger avoidance", ...base });
+  const invFix = await recordInvestigation(admin, { workspaceId: ws, encounterId: e3.data.id, label: "Peak flow diary", ...base });
+  const refFix = await recordReferral(admin, { workspaceId: ws, encounterId: e3.data.id, referredTo: "Respiratory clinic", reason: "poor control", ...base });
+  if (!t1.ok || !t2.ok || !invFix.ok || !refFix.ok) { ok("conditional-zone fixtures record", false); return report(); }
 
   const extras = await piV2Extras(admin, ctx, { fromDay: dayShift(-30), toDay: today, todayDate: today });
   ok("3-1. the extras compute", extras.available, extras.unavailableReason ?? "");
@@ -125,8 +145,11 @@ async function main() {
     extras.data.avgVisitsPerPatient.encounters === 2 && extras.data.avgVisitsPerPatient.patients === 2
       && e1.data.id === e2.data.id,
     JSON.stringify({ ...extras.data.avgVisitsPerPatient, sameEncounter: e1.data.id === e2.data.id }));
-  ok("3-4. ⚠ the median keeps the EARLY completion negative: (-1, 3, 7) -> 3, over 3 pairs",
-    extras.data.medianDaysToFollowUp.medianDays === 3 && extras.data.medianDaysToFollowUp.pairs === 3,
+  // Repointed 2026-08-15 when the coded-outcome fixture joined the cohort: pairs are now
+  // (-1, 3, 5, 7) -> median 4. WITHOUT the kept negative the set would be (3, 5, 7) -> 5, so the
+  // subject of this assertion -- early completions stay negative -- is still what decides the value.
+  ok("3-4. ⚠ the median keeps the EARLY completion negative: (-1, 3, 5, 7) -> 4, over 4 pairs",
+    extras.data.medianDaysToFollowUp.medianDays === 4 && extras.data.medianDaysToFollowUp.pairs === 4,
     JSON.stringify(extras.data.medianDaysToFollowUp));
 
   // v2 s10's By location card (consolidated 2026-08-15): these encounters ran outside any located
@@ -138,6 +161,27 @@ async function main() {
     li.available && liEnc.status === "ok" && liEnc.rows.length === 0
       && liEnc.unattributed === 2 && liEnc.of === 2,
     JSON.stringify(liEnc ?? li));
+
+  // ── 3b. THE CONDITIONAL ZONES (v2 s7/s8/s9), against the fixtures above ───
+  const zones = await conditionalZones(admin, ctx, { fromIso: liRange.period.fromIso, toIso: liRange.period.toIso });
+  ok("3-6. investigations awaiting: the unanswered request is a backlog row, nothing-back vs linked split",
+    zones.available && zones.data!.investigationsAwaiting.nothingBack === 1
+      && zones.data!.investigationsAwaiting.linkedNotReviewed === 0
+      && zones.data!.investigationsAwaiting.oldestRequestedDay === today,
+    JSON.stringify(zones.available ? zones.data!.investigationsAwaiting : zones));
+  ok("3-7. ⚠ condition->treatment: only the LINKED row makes a pair, and the unlinked row is counted, never guessed",
+    zones.available && zones.data!.conditionTreatment.pairs.length === 1
+      && zones.data!.conditionTreatment.pairs[0].condition === "Asthma"
+      && zones.data!.conditionTreatment.pairs[0].treatment === "Salbutamol inhaler"
+      && zones.data!.conditionTreatment.linked === 1 && zones.data!.conditionTreatment.unlinked === 1
+      && zones.data!.conditionTreatment.total === 2,
+    JSON.stringify(zones.available ? zones.data!.conditionTreatment : zones));
+  const period = await resolvePeriod(admin, ws, { fromDay: dayShift(-30), toDay: today });
+  const oc = await outcomePicture(admin, ctx, period);
+  ok("3-8. outcomes as recorded: ONE coded improved, THREE uncoded named beside it -- never inferred",
+    oc.followUps.byOutcome.find((b: any) => b.code === "improved")?.total === 1
+      && oc.followUps.uncoded === 3 && oc.followUps.concluded === 4,
+    JSON.stringify(oc.followUps));
 
   // ── 4. THE FROZEN CONTENT (owner, 2026-08-15) ──────────────────────────────
   ok("4-1. ⚠ FROZEN: the strip is CPR-PI-001 v2 s3's order, verbatim -- a change arrives with a document",
@@ -180,8 +224,20 @@ async function main() {
   // field is `total` -- every distribution on the frozen screens drew a dash instead of its number,
   // and the reports build found it. The wrong field names may not come back.
   ok("4-10. ⚠ distribution slices read IntelSlice.total -- the field that exists",
-    !areasSrc.includes("s.count ?? s.value") && (areasSrc.match(/s\.total \?\? null/g) ?? []).length === 5,
-    `${(areasSrc.match(/s\.total \?\? null/g) ?? []).length} of 5 slice renders on .total`);
+    !areasSrc.includes("s.count ?? s.value") && (areasSrc.match(/s\.total \?\? null/g) ?? []).length >= 5,
+    `${(areasSrc.match(/s\.total \?\? null/g) ?? []).length} slice renders on .total`);
+  ok("4-11. s9's conditional zones are ON the screens: outcomes never inferred, gaps route, the"
+    + " unsupported gap refused in its position",
+    areasSrc.includes("Outcomes, as recorded")
+      && areasSrc.includes("never inferred from notes or from absence")
+      && areasSrc.includes("Investigations with nothing back")
+      && areasSrc.includes("Referrals without subsequent information")
+      && areasSrc.includes("a planned-procedure state does not exist"));
+  ok("4-12. s8's zones are on Clinical: pairs disclose the unlinked share, referrals carry mig 238's limitation",
+    areasSrc.includes("never guessed into a pair")
+      && areasSrc.includes('"pi.condition_treatment_pairs"')
+      && areasSrc.includes('"pi.followup_outcomes"')
+      && areasSrc.includes("rd.limitation"));
 
   return report();
 }
