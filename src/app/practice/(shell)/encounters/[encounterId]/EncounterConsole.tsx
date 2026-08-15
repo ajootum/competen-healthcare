@@ -799,6 +799,16 @@ export default function EncounterConsole(props: {
             Moving it did not give it a second list of buttons to drift from. */}
         <section className={`${CARD} flex flex-wrap items-center gap-2`}>
           <h2 className="text-[13px] font-bold text-gray-900">This encounter</h2>
+          {/* CPR-PAY-001 s13: the handoff to money, AFTER the clinical work and never blocking it.
+              A quiet link, not a panel -- HFE-001 v1.1 routes ALL financial activity to Payments,
+              so this door leads there with the encounter's context rather than growing a second
+              billing surface inside the consultation. */}
+          {(props.status === "COMPLETED" || props.status === "SIGNED") && (
+            <a href={`/practice/payments?encounter=${props.encounterId}`}
+              className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-600 hover:bg-gray-50">
+              Charges &amp; payment &rarr;
+            </a>
+          )}
           {targets.length === 0 ? (
             <p className="text-[12px] text-gray-400">Closed. No further transitions are possible.</p>
           ) : (

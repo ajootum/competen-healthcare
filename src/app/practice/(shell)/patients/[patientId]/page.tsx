@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { getPatient, registerNeighbours } from "@/lib/practice/patients";
+import { patientFinancial } from "@/lib/practice/billing";
+import { formatMinor } from "@/lib/practice/billing-constants";
 import { workspaceClock } from "@/lib/practice/practice-time";
 import { patientTimeline } from "@/lib/practice/encounters";
 import { listFollowUps } from "@/lib/practice/follow-ups";
@@ -103,6 +105,9 @@ export default async function PatientPage({ params, searchParams }: {
   // the exact failure the three states exist to prevent -- and this page has been bitten by it before
   // (see the clinical-timeline note below).
   const monitoring = await monitoringPlan(admin, shell.ctx, patientId);
+  // s12/s18: read only when the caller holds billing.view -- clinical access does not imply money.
+  const financial = hasCapability(shell.ctx, "billing.view")
+    ? await patientFinancial(admin, shell.ctx, patientId) : null;
 
   // CPR-MED-001. The medication record, as MED s8's first named integration and as the design comp draws
   // it.
@@ -287,6 +292,33 @@ export default async function PatientPage({ params, searchParams }: {
 
       {/* CPR-LCP-001 s10.2. Rendered unconditionally: a panel that disappears when it cannot be read is
           the failed-read-as-zero bug wearing a layout. */}
+      {/* ── CPR-PAY-001 s12: the COMPACT financial panel -- balance and a door, never a billing
+          workspace inside the clinical record. Rendered only for holders of billing.view, because
+          s18 keeps financial data outside clinical permission grants. */}
+      {financial && financial.permitted && (
+        <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex items-baseline justify-between gap-2 flex-wrap">
+            <h2 className="text-[13px] font-bold text-gray-900">Money</h2>
+            <a href={`/practice/payments?tab=transactions&patientId=${patientId}`}
+              className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+              Full financial history &rarr;
+            </a>
+          </div>
+          {financial.unavailable ? (
+            <p className="mt-1 text-[12px] text-rose-800">
+              The money figures could not be read. This is not a statement that nothing is owed.
+            </p>
+          ) : (financial.balances ?? []).length === 0 ? (
+            <p className="mt-1 text-[12px] text-gray-600">Nothing outstanding on any issued invoice.</p>
+          ) : (
+            <p className="mt-1 text-[13px] text-gray-800">
+              Outstanding:{" "}
+              {(financial.balances ?? []).map((b: any) => formatMinor(b.balanceMinor, b.currency)).join(" · ")}
+            </p>
+          )}
+        </section>
+      )}
+
       <MonitoringPlanPanel plan={monitoring} patientId={patientId} />
 
       {/* CPR-MED-001 s2, s6, s7 and reconciliation. Rendered unconditionally, like the panel above: a

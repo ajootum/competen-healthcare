@@ -195,7 +195,7 @@ export const REASON_MAX = 1000;
 export type ClosureVerdict = "met" | "unmet" | "unreadable" | "no_store";
 
 export const CLOSURE_NO_STORE: Record<string, string> = {
-  invoices: "There is no billing module in this product -- no fees, no invoices, no payments table -- so nothing here can tell you whether an invoice is outstanding. This line cannot be checked by software and has to be checked by you.",
+  invoices: "The billing store EXISTS now (migration 303: charges, invoices, payments, receipts) but the closure checklist has not yet been taught to read it -- so this line still cannot be checked by software and has to be checked by you, in the Payments workspace, before closing. Wiring closure to the billing tables is a named open gap, not an oversight.",
   integrations: "There is no integration store in this product. practice_integration does not exist, no calendar, messaging, payment or FHIR connection is recorded anywhere, so there is nothing to disconnect and nothing to report on.",
 };
 

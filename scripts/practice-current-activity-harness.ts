@@ -570,7 +570,8 @@ async function main() {
   // CPR-PAT-002 s2: ten. The submenu went with it -- see the note in navigation.ts.
   // CPR-PI-001 s4: NINE. The Assistant left the sidebar and became an area inside Practice
   // Intelligence -- s15's first acceptance criterion is that the separate item is removed.
-  ok("9b. the sidebar declares CPR-PI-001 s4's nine sections", sections.length === 9,
+  // Repointed 2026-08-15 to CPR-HFE-001 v1.1's eleven (Encounters back, Payments and Reports in).
+  ok("9b. the sidebar declares CPR-HFE-001 v1.1's eleven sections", sections.length === 11,
     `${sections.length}: ${sections.map(i => i.label).join(", ")}`);
 
   // 9b-order. THE ORDER IS PART OF THE SPECIFICATION, not an accident of where entries sit in the array.
@@ -583,8 +584,11 @@ async function main() {
   // CPR-HFE-001 s3 is the owner's unfreeze and the new master: Encounters leaves primary navigation,
   // Reports returns as the formal-output workspace. Still written out in full -- the next change
   // still has to arrive with a specification.
+  // v1.1 (the final source of truth, same day) restored Encounters to CARE and added Payments
+  // under PRACTICE -- eleven now, still written out in full.
   const HFE_ORDER = ["/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
-    "/practice/follow-ups", "/practice/documents",
+    "/practice/encounters", "/practice/follow-ups", "/practice/documents",
+    "/practice/payments",
     "/practice/intelligence", "/practice/reports", "/practice/setup"];
   const rendered = primaryNav([...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[]);
   ok("9b-order. and renders them in the order CPR-HFE-001 lists",
@@ -603,7 +607,7 @@ async function main() {
   const allCaps = [...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[];
   const shown = primaryNav(allCaps);
   ok("9d-control. an owner sees the built sections, not an empty sidebar",
-    shown.length === sections.filter(i => i.built).length && shown.length === 9, `${shown.length} shown`);
+    shown.length === sections.filter(i => i.built).length && shown.length === 11, `${shown.length} shown`);
   // EVERY built non-primary module appears exactly once, under its parent. Asserted as an EQUALITY
   // against the catalogue rather than a threshold: ">= 15" went stale the moment V5-002 promoted
   // Current Session out of the children, and a stale threshold fails for the right reason once and
@@ -673,8 +677,8 @@ async function main() {
   // ⚠ REPOINTED 2026-08-15: CPR-HFE-001 s3 RESTORES labelled sections (the owner's unfreeze), so the
   // flat list this pinned is superseded by the later document -- the exact mechanism the old comment
   // said a change must arrive by. The labels are pinned verbatim so a sixth section needs a spec.
-  ok("9h. the sidebar is CPR-HFE-001's five labelled sections, verbatim",
-    SIDEBAR_SECTIONS.map(x => x.label).join() === "Today,Care,Insights,Report,Setup",
+  ok("9h. the sidebar is CPR-HFE-001 v1.1's five labelled sections, verbatim",
+    SIDEBAR_SECTIONS.map(x => x.label).join() === "Today,Care,Practice,Insights,Setup",
     SIDEBAR_SECTIONS.map(x => JSON.stringify(x.label)).join());
   ok("9h-b. and every primary section belongs to exactly one of them",
     PRACTICE_NAV.filter(i => i.primary).every(i =>
@@ -746,8 +750,8 @@ async function main() {
     // /practice/today and from the Synchronisation Centre. Both are asserted below.
     offline: "Outside the (shell) group so it renders with no connection. Linked from OfflineCacheWriter and the Synchronisation Centre.",
     medications: "CPR-MED-001 has no navigation section. Nine primary items, no submenus. Linked from the patient workspace and the encounter console.",
-    // ── CPR-HFE-001 s3 (2026-08-15): five removals, each with the spec's own sentence ──
-    encounters: "HFE-001 s3 verbatim: removed from primary navigation; reachable through patient, current-session, search and unfinished-work routes.",
+    // ── CPR-HFE-001 v1.1 s3 (2026-08-15): the Intelligence children stay out; Encounters RETURNED
+    // to CARE in v1.1 and has a nav entry again, so it is no longer exempt here ──
     assistant: "HFE-001 s3: Intelligence keeps no sidebar children. Linked from the Intelligence areas (Areas.tsx).",
     cases: "HFE-001 s3: Intelligence keeps no sidebar children. Linked from the Intelligence areas.",
     reflection: "HFE-001 s3: Intelligence keeps no sidebar children. Linked from the Intelligence areas.",

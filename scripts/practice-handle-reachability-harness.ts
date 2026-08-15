@@ -129,13 +129,14 @@ async function main() {
   // the specification, so moving one means editing this line and explaining why.
   const FROZEN_NINE = [
     "/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
-    "/practice/follow-ups", "/practice/documents",
+    "/practice/encounters", "/practice/follow-ups", "/practice/documents",
+    "/practice/payments",
     "/practice/intelligence", "/practice/reports", "/practice/setup",
   ];
-  // Repointed 2026-08-15: the V5-002 freeze ended the way its own text said it would -- by
-  // practitioner usability findings, written up as CPR-HFE-001 and ordered by the owner. Still nine,
-  // still written out in full, so the NEXT change also has to arrive holding a document.
-  ok("1a. ⚠ PRIMARY_ORDER is CPR-HFE-001's nine, in order",
+  // Repointed 2026-08-15 twice, and the second one is v1.1 -- the final source of truth, which
+  // restored Encounters and added Payments. Eleven now, still written out in full, so the NEXT
+  // change also has to arrive holding a document.
+  ok("1a. ⚠ PRIMARY_ORDER is CPR-HFE-001 v1.1's eleven, in order",
     PRIMARY_ORDER.join() === FROZEN_NINE.join(), PRIMARY_ORDER.join(" "));
 
   const allCaps = [...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[];
@@ -144,7 +145,7 @@ async function main() {
     rendered.map(i => i.href).join() === FROZEN_NINE.join(), rendered.map(i => i.href).join(" "));
   // NON-VACUITY. 1a and 1b would both pass against an empty catalogue.
   ok("1c-control. the catalogue is populated and the sidebar is not empty",
-    PRACTICE_NAV.length >= 20 && rendered.length === 9,
+    PRACTICE_NAV.length >= 20 && rendered.length === 11,
     `${PRACTICE_NAV.length} entries, ${rendered.length} primary`);
 
   // ══ 2. THE IDENTITY PAGE IS REACHABLE ═════════════════════════════════════════════════════════

@@ -23,7 +23,8 @@
 // is arranged, not how a clinic morning is. Patients and Follow-ups are about PEOPLE and now sit with
 // Register Patient; Documents belongs with the record it comes from.
 //
-// TWO COMP ITEMS ARE DELIBERATELY NOT HERE. `Billing` has no module (CPR-440 unbuilt) and `Investigations`
+// ONE COMP ITEM IS DELIBERATELY NOT HERE (Billing sat in this sentence for months; CPR-PAY-001 built
+// it as Payments on 2026-08-15 and it lives in the PRACTICE section below). `Investigations`
 // has no table -- results arrive through CPR-320's inbox and there is nothing else to open. A sidebar
 // entry leading to a blank page is the exact thing s7.2 forbids, and a comp drawing it does not change
 // that. The inbox carries the same work under a name that is true.
@@ -122,9 +123,9 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // each declares the section that owns it and appears under it: Tasks under Current Session,
   // Analytics and Patient Insights under the Command Centre they are surfaced from. orphanedNav()
   // fails the harness on any built module that loses its way in.
-  // CPR-HFE-001 s3: the sidebar LABEL is Today; the page heading may stay Practice Command Centre,
-  // and does -- the label answers "when", the heading answers "what this screen is".
-  { href: "/practice/home", label: "Today", icon: "⌂", capability: "practice.home.view", group: "Practice", phase: 0, built: true, primary: true },
+  // v1.1 s3: "Retain Practice Command Centre as the primary sidebar destination under TODAY" --
+  // Today is workflow language, the section label carries it, and the item keeps the product's name.
+  { href: "/practice/home", label: "Practice Command Centre", icon: "⌂", capability: "practice.home.view", group: "Practice", phase: 0, built: true, primary: true },
   // Today's Work is now a VIEW INSIDE the command centre rather than a section beside it: V5-001 puts
   // the current activity, the queue and the day's work on the command centre itself, so a second screen
   // showing the same six panels would be two answers to one question.
@@ -175,9 +176,8 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // through bookmarks and links to buy a tidiness nobody is asking for.
   //
   // ⚠ THIS AMENDS THE CPR-V5-002 FREEZE, and CPR-V5-005 is the product change control s17 requires.
-  // HFE-001's comp says simply Planner; the longer name was carrying the rename story, and that story
-  // lives in the comment above rather than in every sidebar glance.
-  { href: "/practice/calendar", label: "Planner", icon: "▦", capability: "practice.calendar.view", group: "Practice", phase: 1, built: true, primary: true },
+  // v1.1 s3 keeps the implemented product's name.
+  { href: "/practice/calendar", label: "Practice Planner", icon: "▦", capability: "practice.calendar.view", group: "Practice", phase: 1, built: true, primary: true },
   { href: "/practice/tasks", label: "Tasks", icon: "☑", capability: "task.view", group: "Practice", phase: 4, built: true, parent: "/practice/today" },
   // ⚠ NOT PRIMARY, AND THE FREEZE IS WHY. CPR-V5-002 is a design freeze on the nine primary sections and
   // this is not one of them -- so it is filed under the Planner, which is where somebody who reads a
@@ -187,21 +187,22 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
 
   // -- Patients: the people, and the record made about them -----------------------------------------
   //
-  // ⚠ ENCOUNTERS HAS NO NAV ENTRY, BY SPECIFICATION AND ON PURPOSE. CPR-HFE-001 s3, verbatim: "Remove
-  // Encounters from primary global navigation. Encounters remain fully available through patient,
-  // current-session, search, unfinished-work and other contextual routes." The pages, the routes and
-  // every deep link are untouched -- what is gone is only the idea that a consultation is a place you
-  // GO rather than a thing you do about a patient. This entry's removal is the sentence the old
-  // comment demanded somebody write.
+  // ⚠ ENCOUNTERS LEFT THE SIDEBAR FOR SIX HOURS. v1.0 removed it; v1.1 -- the final source of truth,
+  // the owner's words -- put it back the same day: "global retrieval/review of encounters remains a
+  // valid practitioner task" (s3), even though most encounter CREATION is contextual. Both moves are
+  // recorded because the churn is the argument for v1.1 s15's doctrine: the workflow model explains
+  // how work moves, the sidebar is the stable map, and the two are not forced into one shape.
+  { href: "/practice/encounters", label: "Encounters", icon: "✎", capability: "encounter.list", group: "Clinical", phase: 3, built: true, primary: true },
+  // Home restored with its parent: the ritual under the workspace it closes, as before v1.0's detour.
+  { href: "/practice/close-my-day", label: "Close My Day", icon: "☾", capability: "encounter.list", group: "Clinical", phase: 4, built: true, parent: "/practice/encounters" },
+  { href: "/practice/activity", label: "Procedures", icon: "◷", capability: "procedure.record", group: "Clinical", phase: 4, built: true, parent: "/practice/encounters" },
+
+  // -- Practice: the money side of the same work (CPR-PAY-001 s2, v1.1 s3/s15) ----------------------
   //
-  // Close My Day moves under Today: it is the day's closing ritual, and CPR-ADOPT-001 s3 always wanted
-  // it entered from the Command Centre.
-  { href: "/practice/close-my-day", label: "Close My Day", icon: "☾", capability: "encounter.list", group: "Clinical", phase: 4, built: true, parent: "/practice/home" },
-  // The longitudinal Procedures & Clinical Activity portfolio files under Reports: it is the record
-  // formal output is built FROM, its own header action already points at the exportable portfolio, and
-  // HFE-001 forbids it the two other candidate parents (Intelligence may hold no sidebar children, and
-  // Encounters no longer has a sidebar presence to hold it).
-  { href: "/practice/activity", label: "Procedures", icon: "◷", capability: "procedure.record", group: "Clinical", phase: 4, built: true, parent: "/practice/reports" },
+  // "Payments belongs under PRACTICE because it is an operational personal-practice workspace" --
+  // v1.1 s15, and the routing rule beside it: ALL financial activity is in Payments. billing.view is
+  // the financial-permissions-are-not-clinical rule (PAY-001 s18) at the door.
+  { href: "/practice/payments", label: "Payments", icon: "◈", capability: "billing.view", group: "Practice", phase: 10, built: true, primary: true },
   { href: "/practice/search", label: "Search", icon: "⌕", capability: "search.use", group: "Practice", phase: 5, built: true, parent: "/practice/patients" },
 
   // ⚠ THE PATIENTS SUBMENU IS GONE (CPR-PAT-002 s2, verbatim: "Replace the expandable Patients submenu
@@ -359,20 +360,23 @@ export function visibleNav(capabilities: string[]): PracticeNavItem[] {
 // sidebar and updating it to this spec." So this is not churn against a freeze; it is the freeze's
 // own exit clause being exercised, and the next freeze is HFE-001 s14 step 8, after acceptance.
 //
-// WHAT s3 CHANGES: labelled sections return (TODAY / CARE / INSIGHTS / REPORT / SETUP -- CPR-PAY-001
-// s2 adds PRACTICE holding Payments when that workspace ships); "Practice Command Centre" is LABELLED
-// Today while its page heading stays; ENCOUNTERS LEAVES PRIMARY NAVIGATION and remains reachable
-// through patient, session, search and unfinished-work routes; Practice Intelligence keeps NO sidebar
-// children -- its internal areas own Assistant, Case Memory, Reflection and Portfolio.
+// ⚠ v1.1 (SAME DAY) IS THE FINAL SOURCE OF TRUTH -- the owner's words -- and it CORRECTED v1.0 in
+// three places this file had already followed: Encounters RETURNS to CARE ("global retrieval/review
+// of encounters remains a valid practitioner task", s3), the labels stay the product's own
+// ("navigation terminology must remain consistent with the implemented product" -- so Practice
+// Command Centre and Practice Planner, with Today as workflow language only), and Reports files
+// INSIDE INSIGHTS rather than a section of its own. v1.1 s15 is the doctrine that settles all three:
+// the WORKFLOW model (Plan..Report) explains how work moves, the SIDEBAR is the stable map, and the
+// two must not be forced into a one-to-one mapping.
 //
-// REPORT is in the section list on the COMP's authority: s3's table omits Reports, but the comp draws
-// it as item 7 ("Formal output") and CPR-PAY-001 s16 files the financial reports inside it -- a
-// workspace that is about to gain that weight does not lose its door the same week.
+// WHAT SURVIVES FROM v1.0 UNCHANGED: five labelled groups, Intelligence keeps no sidebar children,
+// and no report type ever becomes a global item. PRACTICE holds Payments (CPR-PAY-001 s2), shipped
+// in the same commit as its pages because built:true before the page exists is forbidden below.
 export const PRIMARY_ORDER: string[] = [
   "/practice/home", "/practice/today", "/practice/calendar",
-  "/practice/patients", "/practice/follow-ups", "/practice/documents",
-  "/practice/intelligence",
-  "/practice/reports",
+  "/practice/patients", "/practice/encounters", "/practice/follow-ups", "/practice/documents",
+  "/practice/payments",
+  "/practice/intelligence", "/practice/reports",
   "/practice/setup",
 ];
 
@@ -405,9 +409,9 @@ export const PRIMARY_ORDER: string[] = [
 // sidebar reads as the day reads: plan and run it, care for people, understand it, report it.
 export const SIDEBAR_SECTIONS: { label: string; hrefs: string[] }[] = [
   { label: "Today", hrefs: ["/practice/home", "/practice/today", "/practice/calendar"] },
-  { label: "Care", hrefs: ["/practice/patients", "/practice/follow-ups", "/practice/documents"] },
-  { label: "Insights", hrefs: ["/practice/intelligence"] },
-  { label: "Report", hrefs: ["/practice/reports"] },
+  { label: "Care", hrefs: ["/practice/patients", "/practice/encounters", "/practice/follow-ups", "/practice/documents"] },
+  { label: "Practice", hrefs: ["/practice/payments"] },
+  { label: "Insights", hrefs: ["/practice/intelligence", "/practice/reports"] },
   { label: "Setup", hrefs: ["/practice/setup"] },
 ];
 

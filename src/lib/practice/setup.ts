@@ -216,10 +216,12 @@ const CATALOGUE: Entry[] = [
     specUnbuilt: true, domain: "administration",
   },
   {
+    // CPR-PAY-001 Phase 1 (migration 303, 2026-08-15): the refusal this card carried for months is
+    // FALSE now, and the card opens the fee catalogue inside the Payments workspace. Taxes and a
+    // payment gateway remain unbuilt and are named in the workspace itself, not promised here.
     n: 16, key: "billing", title: "Billing & Payments",
-    description: "Set consultation fees, payment methods, invoices, taxes and discounts.",
-    icon: "▣", hue: "var(--cp-area-2)", href: null, capability: null, specUnbuilt: true, domain: "administration",
-    notBuilt: "There is no billing module. Fees, invoices, taxes and a payment gateway are a financial system with its own reconciliation and audit obligations, not a settings page.",
+    description: "Set your service fees and per-location overrides. Invoices and payments live in the Payments workspace.",
+    icon: "▣", hue: "var(--cp-area-2)", href: "/practice/payments?tab=fees", capability: "fee.manage", domain: "administration",
   },
   {
     n: 17, key: "analytics", title: "Practice Analytics",

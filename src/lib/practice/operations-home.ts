@@ -468,11 +468,11 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
     },
     {
       key: "revenue", label: "Revenue", value: null, of: null,
-      available: false, reason: "No billing module (CPR-440) is built.",
+      available: false, reason: "Billing exists now (CPR-PAY-001) but this platform-side tile is not wired to it; the practice reads its own figures in Payments.",
     },
     {
       key: "collection", label: "Collection", value: null, of: null,
-      available: false, reason: "No billing module (CPR-440) is built.",
+      available: false, reason: "Billing exists now (CPR-PAY-001) but this platform-side tile is not wired to it; the practice reads its own figures in Payments.",
     },
   ];
 

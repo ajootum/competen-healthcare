@@ -56,7 +56,7 @@ export const REFUSED_ON_CALENDAR = [
   {
     key: "balance",
     label: "Outstanding balance",
-    detail: "The design shows $0.00 and a Billing tab. There is no billing in this product -- no invoice, no payment, no ledger -- so a zero balance would be a financial statement made from nothing.",
+    detail: "The design shows $0.00 and a Billing tab. Billing exists now (CPR-PAY-001) and that is exactly why it is still refused HERE: HFE-001 v1.1 routes all financial activity to Payments, and a balance on a calendar tile would be a second money surface that can disagree with the first. The planner plans; Payments answers what is owed.",
   },
   {
     key: "questionnaires",

@@ -43,8 +43,10 @@ function main() {
     kids.length > 0, `${kids.length} children`);
   ok("1b. every built module is reachable: none is an orphan",
     orphanedNav().length === 0, orphanedNav().map(i => i.href).join(", "));
-  ok("1c-control. the resting sidebar is still the comp's nine",
-    primaryNav(ALL_CAPS).length === PRIMARY_ORDER.length && PRIMARY_ORDER.length === 9,
+  // v1.1 (2026-08-15): eleven, by the final source of truth -- Encounters restored, Payments and
+  // Reports first-class. Still pinned as an exact number so the next change needs a document.
+  ok("1c-control. the resting sidebar is CPR-HFE-001 v1.1's eleven",
+    primaryNav(ALL_CAPS).length === PRIMARY_ORDER.length && PRIMARY_ORDER.length === 11,
     `${primaryNav(ALL_CAPS).length} primary`);
 
   const parentsWithChildren = PRIMARY_ORDER.filter(h => childrenOf(h, ALL_CAPS).length > 0);
@@ -114,8 +116,9 @@ function main() {
   // Repointed 2026-08-15: CPR-HFE-001 s3 removed Encounters from primary navigation, so Close My Day
   // moved under Today -- the day-close ritual under the day, which is where CPR-ADOPT-001 s3 wanted a
   // door anyway. The assertion pins the NEW home; the discoverability rule it protects is unchanged.
-  ok("7b. ⚠ Close My Day is filed under Today and advertised from it",
-    childrenOf("/practice/home", ALL_CAPS).some(c => c.href === "/practice/close-my-day"));
+  // v1.1 restored Encounters to CARE, so the ritual is back under the workspace it closes.
+  ok("7b. ⚠ Close My Day is filed under Encounters and advertised from it",
+    childrenOf("/practice/encounters", ALL_CAPS).some(c => c.href === "/practice/close-my-day"));
   ok("7c. every parent that owns modules is in PRIMARY_ORDER, so the chevron is always visible",
     parentsWithChildren.every(h => PRIMARY_ORDER.includes(h)));
   ok("7d-control. and there are several such parents, not one",

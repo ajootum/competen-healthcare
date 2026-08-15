@@ -253,10 +253,10 @@ const skip = (id: string, msg: string) => { skips.push(id); console.log(`  SKIP 
 
     // ⚠ THE FREEZE. CPR-V5-002 pinned PRIMARY_ORDER at nine sections and 16 assertions hold it there.
     const navLine = nav.split("\n").find(l => l.includes('"/practice/close-my-day"')) ?? "";
-    // Repointed 2026-08-15: CPR-HFE-001 s3 (the owner's unfreeze) removed Encounters from primary
-    // navigation, so the ritual now files under Today -- the door CPR-ADOPT-001 s3 wanted anyway.
-    ok("G2", /parent: "\/practice\/home"/.test(navLine) && !/primary: true/.test(navLine),
-      "...as a CHILD of Today, not an eleventh primary section -- HFE-001 s3 is the change control");
+    // v1.1 (the final source of truth) restored Encounters to CARE the same day v1.0 removed it, so
+    // the ritual is back under the workspace it closes -- HFE-001 v1.1 s3 is the change control.
+    ok("G2", /parent: "\/practice\/encounters"/.test(navLine) && !/primary: true/.test(navLine),
+      "...as a CHILD of Encounters, not a twelfth primary section");
 
     ok("G3", /requirePracticeContext\("encounter\.edit"\)/.test(api) && /requirePracticeContext\("encounter\.list"\)/.test(api),
       "writes gate on encounter.edit and the queue read on encounter.list, at the API boundary");
