@@ -703,7 +703,10 @@ export function FollowUpV2Area({ suite, extras, zones }: { suite: Suite; extras:
 
 // ══ 5. PRACTICE PATTERNS (v2 s10) ═══════════════════════════════════════════════════════════════════
 
-export function PatternsV2Area({ suite }: { suite: Suite }) {
+export function PatternsV2Area({ suite, patterns }: {
+  suite: Suite;
+  patterns: import("@/lib/practice/pi-conditional").PatternsConditionals;
+}) {
   const c = suite.workspace.modules.clinicalActivity;
   const loc = suite.workspace.modules.locations;
   if (!c.available) return <section className={CARD}><Unavailable module={c} /></section>;
@@ -711,6 +714,9 @@ export function PatternsV2Area({ suite }: { suite: Suite }) {
   const weekdays = weekdayPattern(d.trend?.buckets ?? []);
   const weekTotal = weekdays.reduce((n, w) => n + w.count, 0);
   const max = Math.max(1, ...weekdays.map(w => w.count));
+  const pd = patterns.available ? patterns.data : null;
+  const dur: any = (suite.workspace.modules.overview.data as any)?.metrics?.metrics?.average_consult_time ?? null;
+  const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
 
   return (
     <div className="flex flex-col gap-3">
@@ -813,7 +819,115 @@ export function PatternsV2Area({ suite }: { suite: Suite }) {
           );
         })()}
       </section>
-      <TrustFooter ids={["pi.day_of_week", "pi.consultations_trend", "pi.encounters_by_location"]} />
+      {/* ── s10's CONDITIONALS -- gates in pi-conditional.ts's header; each panel names what it is
+             and is not showing. ─────────────────────────────────────────────────────────────────── */}
+      <div className="grid gap-3 md:grid-cols-2">
+        <section className={CARD}>
+          <h3 className="text-[13px] font-bold text-gray-900">Average consultation duration</h3>
+          {!dur ? (
+            <p className="mt-1 text-[12px] text-gray-500">The duration metric was not computed for this view.</p>
+          ) : dur.value === null ? (
+            <p className="mt-1 text-[12px] text-gray-600">{dur.reason}</p>
+          ) : (
+            <>
+              <p className="mt-1 text-[18px] font-bold tabular-nums text-gray-900">{dur.value} min</p>
+              <p className="mt-0.5 text-[10px] leading-relaxed text-gray-500">
+                Over {dur.observations} completed consultation{dur.observations === 1 ? "" : "s"}
+                {dur.excluded > 0 ? `; ${dur.excluded} excluded (missing or unusable timestamps or transition log)` : ""}.
+                Paused time is subtracted from the transition log &mdash; an open record is not a long consultation.
+              </p>
+            </>
+          )}
+        </section>
+        <section className={CARD}>
+          <h3 className="text-[13px] font-bold text-gray-900">Capacity booked</h3>
+          {!pd ? (
+            <p className="mt-1 text-[12px] text-gray-600">{patterns.unavailableReason ?? "could not be read"}</p>
+          ) : !pd.utilisation.recorded ? (
+            <p className="mt-1 text-[12px] leading-relaxed text-gray-600">{pd.utilisation.reason}</p>
+          ) : (
+            <>
+              <p className="mt-1 text-[13px] text-gray-800">
+                {ofPct(pd.utilisation.bookedMinutes, pd.utilisation.slotMinutes)} minutes booked against recorded availability
+              </p>
+              <p className="mt-0.5 text-[10px] leading-relaxed text-gray-500">
+                {pd.utilisation.apptCount} appointment{pd.utilisation.apptCount === 1 ? "" : "s"} against{" "}
+                {pd.utilisation.slotCount} recorded slot{pd.utilisation.slotCount === 1 ? "" : "s"}. Two universes,
+                named: slots offered versus appointments booked &mdash; consultations held live in the trend above.
+                {pd.utilisation.truncated ? " A read hit its cap, so these are floors." : ""}
+              </p>
+            </>
+          )}
+        </section>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <section className={CARD}>
+          <h3 className="text-[13px] font-bold text-gray-900">By hour of day</h3>
+          <p className="mt-0.5 text-[10px] text-gray-500">
+            Consultations STARTED, on the practice&apos;s own clock &mdash; activity, not booked demand.
+          </p>
+          {!pd ? null : pd.hourly.total === 0 ? (
+            <p className="mt-2 text-[12px] text-gray-500">No consultations in this period.</p>
+          ) : (
+            <>
+              <ul className="mt-2 flex flex-col gap-1">
+                {pd.hourly.hours.map(h => (
+                  <li key={h.hour} className="flex items-center gap-2 text-[12px]">
+                    <span className="w-12 text-gray-600">{hh(h.hour)}</span>
+                    <span className="h-2.5 rounded bg-[var(--cp-primary)]/50"
+                      style={{ width: `${Math.round((h.count / Math.max(1, ...pd.hourly.hours.map(x => x.count))) * 70)}%` }} />
+                    <span className="ml-auto text-[11px] text-gray-500">{ofPct(h.count, pd.hourly.total)}</span>
+                  </li>
+                ))}
+              </ul>
+              {pd.peak.busiestHour !== null && (
+                <p className="mt-1.5 text-[11px] text-gray-600">
+                  Peak: {pd.peak.busiestWeekday ?? "—"}, around {hh(pd.peak.busiestHour)}. Descriptive only
+                  &mdash; never a target.
+                </p>
+              )}
+            </>
+          )}
+        </section>
+        <section className={CARD}>
+          <h3 className="text-[13px] font-bold text-gray-900">Workload by time band</h3>
+          {!pd ? null : (
+            <ul className="mt-1 flex flex-col gap-0.5">
+              {pd.bands.map(b => (
+                <li key={b.key} className="flex items-baseline gap-2 text-[12px]">
+                  <span className="text-gray-800">{b.label}</span>
+                  <span className="ml-auto text-[11px] text-gray-500">{ofPct(b.count, pd.hourly.total || null)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <h3 className="mt-3 text-[13px] font-bold text-gray-900">Referral sources</h3>
+          {!pd ? null : pd.referralSources.captured === 0 ? (
+            <p className="mt-1 text-[11px] leading-relaxed text-gray-600">
+              No booking request in this period captured a referral source
+              {pd.referralSources.requests > 0 ? ` (${pd.referralSources.requests} requests arrived without one)` : ""}.
+              Capture is an intake setting on booking rules &mdash; and consultations themselves carry no
+              referral-source field, so nothing is borrowed to stand in for one.
+            </p>
+          ) : (
+            <>
+              <ul className="mt-1 flex flex-col gap-0.5">
+                {pd.referralSources.rows.map(r => (
+                  <li key={r.value} className="flex items-baseline gap-2 text-[12px]">
+                    <span className="min-w-0 truncate text-gray-800">{r.value}</span>
+                    <span className="ml-auto text-[11px] text-gray-500">{ofPct(r.count, pd.referralSources.captured)}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-[10px] text-gray-500">
+                As typed at intake; {pd.referralSources.captured} of {pd.referralSources.requests} requests
+                captured one.
+              </p>
+            </>
+          )}
+        </section>
+      </div>
+      <TrustFooter ids={["pi.day_of_week", "pi.consultations_trend", "pi.encounters_by_location", "pi.avg_consult_duration", "pi.time_of_day", "pi.workload_bands", "pi.utilisation", "pi.referral_sources"]} />
     </div>
   );
 }

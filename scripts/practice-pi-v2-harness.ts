@@ -26,7 +26,8 @@ import { createFollowUp, closeFollowUp } from "../src/lib/practice/follow-ups";
 import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import { piV2Extras, medianOf } from "../src/lib/practice/pi-v2";
 import { intelRange, locationIntelligence, outcomePicture } from "../src/lib/practice/intelligence";
-import { conditionalZones } from "../src/lib/practice/pi-conditional";
+import { conditionalZones, patternsConditionals } from "../src/lib/practice/pi-conditional";
+import { TIME_BANDS, timeBandOf } from "../src/lib/practice/intelligence-constants";
 import { recordDiagnosis, recordTreatment } from "../src/lib/practice/encounters";
 import { recordInvestigation, recordReferral } from "../src/lib/practice/encounter-workspace";
 import { resolvePeriod } from "../src/lib/practice/reports";
@@ -183,6 +184,25 @@ async function main() {
       && oc.followUps.uncoded === 3 && oc.followUps.concluded === 4,
     JSON.stringify(oc.followUps));
 
+  // ── 3c. THE s10 PATTERNS CONDITIONALS ──────────────────────────────────────
+  const pat = await patternsConditionals(admin, ctx, {
+    fromIso: liRange.period.fromIso, toIso: liRange.period.toIso, timezone: "Africa/Kampala",
+  });
+  ok("3-9. hourly: both fixture encounters land in one practice-clock hour, and bands SUM to the total",
+    pat.available && pat.data!.hourly.total === 2
+      && pat.data!.hourly.hours.reduce((n, h) => n + h.count, 0) === 2
+      && pat.data!.bands.reduce((n, b) => n + b.count, 0) === pat.data!.hourly.total,
+    JSON.stringify(pat.available ? { hourly: pat.data!.hourly, bands: pat.data!.bands } : pat));
+  ok("3-10. ⚠ utilisation REFUSES without recorded availability -- never 0% against a denominator nobody entered",
+    pat.available && pat.data!.utilisation.recorded === false
+      && /governed capacity denominator/.test((pat.data!.utilisation as any).reason),
+    JSON.stringify(pat.available ? pat.data!.utilisation : pat));
+  ok("3-11. referral sources: nothing captured renders as a statement about intake, not zero referrals",
+    pat.available && pat.data!.referralSources.captured === 0 && pat.data!.referralSources.rows.length === 0);
+  ok("3-12. the governed bands cover every hour exactly once (the night band wraps midnight)",
+    Array.from({ length: 24 }, (_, h) => h)
+      .every(h => TIME_BANDS.filter(b => timeBandOf(h) === b.key).length === 1));
+
   // ── 4. THE FROZEN CONTENT (owner, 2026-08-15) ──────────────────────────────
   ok("4-1. ⚠ FROZEN: the strip is CPR-PI-001 v2 s3's order, verbatim -- a change arrives with a document",
     INTELLIGENCE_TAB_STRIP.join() ===
@@ -238,6 +258,12 @@ async function main() {
       && areasSrc.includes('"pi.condition_treatment_pairs"')
       && areasSrc.includes('"pi.followup_outcomes"')
       && areasSrc.includes("rd.limitation"));
+  ok("4-13. s10's conditionals are on Patterns: activity-not-demand stated, paused time named on the"
+    + " duration, peak descriptive-only, and the footer names the new entries",
+    areasSrc.includes("activity, not booked demand")
+      && areasSrc.includes("Paused time is subtracted from the transition log")
+      && areasSrc.includes("Descriptive only")
+      && areasSrc.includes('"pi.utilisation"') && areasSrc.includes('"pi.referral_sources"'));
 
   return report();
 }

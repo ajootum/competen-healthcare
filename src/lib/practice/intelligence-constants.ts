@@ -519,3 +519,23 @@ export function weekdayPattern(buckets: { day: string; total: number }[]): { lab
   }
   return names.map((label, i) => ({ label, count: counts[i] }));
 }
+
+/**
+ * CPR-PI-001 v2 s10's GOVERNED TIME BANDS -- the workload distribution's vocabulary, named here so
+ * a band boundary is a decision on the record rather than an if-chain someone retunes quietly.
+ * Hours are in the PRACTICE's timezone, inclusive of `from`, inclusive of `to`.
+ */
+export const TIME_BANDS: { key: string; label: string; from: number; to: number }[] = [
+  { key: "morning", label: "Morning (05:00 to 11:59)", from: 5, to: 11 },
+  { key: "afternoon", label: "Afternoon (12:00 to 16:59)", from: 12, to: 16 },
+  { key: "evening", label: "Evening (17:00 to 20:59)", from: 17, to: 20 },
+  { key: "night", label: "Night (21:00 to 04:59)", from: 21, to: 4 },
+];
+
+/** Which band an hour falls in. The night band wraps midnight, hence the explicit membership test. */
+export function timeBandOf(hour: number): string {
+  for (const b of TIME_BANDS) {
+    if (b.from <= b.to ? hour >= b.from && hour <= b.to : hour >= b.from || hour <= b.to) return b.key;
+  }
+  return "night";
+}

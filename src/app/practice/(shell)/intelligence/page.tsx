@@ -7,7 +7,7 @@ import { intelligenceSuite, isCohortDimension } from "@/lib/practice/intelligenc
 import { financialIntelligence } from "@/lib/practice/financial-intelligence";
 import FinancialArea from "./FinancialArea";
 import { piV2Extras } from "@/lib/practice/pi-v2";
-import { conditionalZones } from "@/lib/practice/pi-conditional";
+import { conditionalZones, patternsConditionals } from "@/lib/practice/pi-conditional";
 import { computeSegments, cohortPatients, listCohorts } from "@/lib/practice/cohort-engine";
 import { isSegmentId } from "@/lib/practice/segment-registry";
 import { OverviewV2Area, PatientV2Area, ClinicalV2Area, FollowUpV2Area, PatternsV2Area } from "./AreasV2";
@@ -243,7 +243,11 @@ export default async function IntelligencePage({ searchParams }: {
             fromIso: suite.range.period.fromIso, toIso: suite.range.period.toIso,
           })} />
         )}
-        {tab === "patterns" && <PatternsV2Area suite={suite} />}
+        {tab === "patterns" && (
+          <PatternsV2Area suite={suite} patterns={await patternsConditionals(admin, shell.ctx, {
+            fromIso: suite.range.period.fromIso, toIso: suite.range.period.toIso, timezone: suite.timezone,
+          })} />
+        )}
         {tab === "financial" && (
           <FinancialArea financial={await financialIntelligence(admin, shell.ctx, {
             fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay,
