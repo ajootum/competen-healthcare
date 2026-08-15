@@ -322,10 +322,17 @@ async function main() {
   if (!booking.ok) { await wipe(DOCTOR); await wipe(STRANGER); report(); return; }
 
   const { data: apptRow, error: apptErr } = await admin.from("practice_appointment")
-    .select("patient_id, patient_name").eq("id", booking.data.id).maybeSingle();
+    .select("patient_id, patient_name, status").eq("id", booking.data.id).maybeSingle();
   ok("2a. a booking against a registered patient is keyed by the identifier, and carries the registry's name",
     !apptErr && apptRow?.patient_id === p1.data.id && apptRow?.patient_name === REGISTRY_NAME,
     apptErr?.message ?? JSON.stringify(apptRow));
+  // ⚠ BORN CONFIRMED, and this assertion exists because its absence cost this file a red. 2ee597ae
+  // ("A staff booking confirms itself") made staff bookings skip the BOOKED limbo -- and this
+  // harness's section 3 kept trying to CONFIRM an already-confirmed appointment, failing with the
+  // engine's own honest "CONFIRMED cannot become CONFIRMED". The rule is pinned here so the NEXT
+  // change to a booking's birth state reddens a sentence that explains itself.
+  ok("2a-b. a staff booking is BORN CONFIRMED (2ee597ae) -- no limbo between booking and confirming",
+    apptRow?.status === "CONFIRMED", String(apptRow?.status));
 
   const byName = await searchPatients(admin, ws, REGISTRY_NAME);
   ok("2b-control. a name search finds the patient at all", byName.results.length >= 1,
@@ -424,9 +431,26 @@ async function main() {
       });
       return r.ok;
     }],
-    ["scheduling.transitionAppointment(CONFIRMED)", async () => (await transitionAppointment(admin, {
-      workspaceId: ws, appointmentId: booking.data.id, to: "CONFIRMED", actorId: DOCTOR, correlationId: CORR,
-    })).ok],
+    // Repointed 2026-08-15: bookings are BORN CONFIRMED since 2ee597ae (asserted at 2a-b), so the
+    // old BOOKED->CONFIRMED step is a transition the product can no longer produce. The probe still
+    // exercises transitionAppointment -- via a throwaway booking cancelled on the spot, which keeps
+    // the main fixture's chain to ARRIVED untouched.
+    ["scheduling.transitionAppointment(CANCELLED)", async () => {
+      const throwaway = await bookAppointment(admin, {
+        workspaceId: ws, patientId: p1.data.id, patientName: REGISTRY_NAME,
+        appointmentType: "new_consultation", scheduledAt: at(16), durationMinutes: 30,
+        // ⚠ allowOverlap, deliberately: this booking exists only to be cancelled, and the day's
+        // other probes move appointments around it -- its first draft landed on a slot the
+        // reschedule probe had just filled and died DOUBLE_BOOKED. Overlapping on purpose is the
+        // engine's own offered path and makes this fixture immune to slot drift.
+        allowOverlap: true,
+        actorId: DOCTOR, correlationId: CORR,
+      });
+      if (!throwaway.ok) return false;
+      return (await transitionAppointment(admin, {
+        workspaceId: ws, appointmentId: throwaway.data.id, to: "CANCELLED", actorId: DOCTOR, correlationId: CORR,
+      })).ok;
+    }],
     ["scheduling.transitionAppointment(ARRIVED)", async () => {
       const r = await transitionAppointment(admin, {
         workspaceId: ws, appointmentId: booking.data.id, to: "ARRIVED", actorId: DOCTOR, correlationId: CORR,
