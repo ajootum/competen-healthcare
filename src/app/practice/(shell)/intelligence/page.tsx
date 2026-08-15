@@ -8,6 +8,8 @@ import { financialIntelligence } from "@/lib/practice/financial-intelligence";
 import FinancialArea from "./FinancialArea";
 import { piV2Extras } from "@/lib/practice/pi-v2";
 import { conditionalZones } from "@/lib/practice/pi-conditional";
+import { computeSegments, cohortPatients, listCohorts } from "@/lib/practice/cohort-engine";
+import { isSegmentId } from "@/lib/practice/segment-registry";
 import { OverviewV2Area, PatientV2Area, ClinicalV2Area, FollowUpV2Area, PatternsV2Area } from "./AreasV2";
 import {
   INTELLIGENCE_TABS, INTELLIGENCE_TAB_STRIP, DEFAULT_TAB, isIntelligenceTab, TAB_SWATCH, DEFAULT_RANGE_DAYS,
@@ -61,7 +63,7 @@ export const dynamic = "force-dynamic";
 export default async function IntelligencePage({ searchParams }: {
   searchParams: Promise<{
     tab?: string; days?: string; from?: string; to?: string;
-    cohortBy?: string; sessionId?: string; q?: string;
+    cohortBy?: string; sessionId?: string; q?: string; segment?: string; cohort?: string;
   }>;
 }) {
   const shell = await resolvePracticeShell();
@@ -199,11 +201,36 @@ export default async function IntelligencePage({ searchParams }: {
             fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay, todayDate: suite.range.period.toDay,
           })} />
         )}
-        {tab === "patients" && (
-          <PatientV2Area suite={suite} extras={await piV2Extras(admin, shell.ctx, {
-            fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay, todayDate: suite.range.period.toDay,
-          })} />
-        )}
+        {tab === "patients" && await (async () => {
+          // v2 s6 cohort controls: registered segments + saved combinations, filters not destinations.
+          const activeSegment = isSegmentId(sp.segment) ? sp.segment : null;
+          const saved = await listCohorts(admin, shell.ctx);
+          const savedCohorts = saved.ok ? saved.cohorts : [];
+          const activeCohort = sp.cohort ? savedCohorts.find(c => c.id === sp.cohort) ?? null : null;
+          const filterSegs = activeCohort ? activeCohort.segmentIds : activeSegment ? [activeSegment] : [];
+          const hrefWith = (k: "segment" | "cohort", v: string | null) => {
+            const p2 = new URLSearchParams(carried);
+            p2.set("tab", "patients");
+            if (v) p2.set(k, v);
+            return `/practice/intelligence?${p2.toString()}`;
+          };
+          return (
+            <PatientV2Area suite={suite} extras={await piV2Extras(admin, shell.ctx, {
+              fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay, todayDate: suite.range.period.toDay,
+            })}
+              segments={await computeSegments(admin, shell.ctx, { noVisitDays: activeCohort?.noVisitDays ?? undefined })}
+              cohort={filterSegs.length > 0
+                ? await cohortPatients(admin, shell.ctx, { segmentIds: filterSegs, noVisitDays: activeCohort?.noVisitDays ?? undefined })
+                : null}
+              activeSegment={activeSegment}
+              segmentHref={(id) => hrefWith("segment", id)}
+              savedCohorts={savedCohorts}
+              activeCohortId={activeCohort?.id ?? null}
+              cohortHref={(id) => hrefWith("cohort", id)}
+              canManageCohorts={hasCapability(shell.ctx, "cohort.manage")}
+            />
+          );
+        })()}
         {tab === "followups" && (
           <FollowUpV2Area suite={suite} extras={await piV2Extras(admin, shell.ctx, {
             fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay, todayDate: suite.range.period.toDay,

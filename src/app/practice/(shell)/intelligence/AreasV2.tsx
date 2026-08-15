@@ -2,6 +2,8 @@ import Link from "next/link";
 import type { IntelligenceSuite } from "@/lib/practice/intelligence";
 import type { PiV2Extras } from "@/lib/practice/pi-v2";
 import type { ConditionalZones } from "@/lib/practice/pi-conditional";
+import CohortSaveControl from "./CohortSaveControl";
+import { SEGMENT_REGISTRY } from "@/lib/practice/segment-registry";
 import { metricById } from "@/lib/practice/intelligence-registry";
 import { weekdayPattern } from "@/lib/practice/intelligence-constants";
 
@@ -234,7 +236,18 @@ function TrendSection({ suite }: { suite: Suite }) {
 
 // ══ 2. PATIENT INTELLIGENCE (v2 s7) ═════════════════════════════════════════════════════════════════
 
-export function PatientV2Area({ suite, extras }: { suite: Suite; extras: PiV2Extras }) {
+export function PatientV2Area({ suite, extras, segments, cohort, activeSegment, segmentHref, savedCohorts, activeCohortId, cohortHref, canManageCohorts }: {
+  suite: Suite; extras: PiV2Extras;
+  /** v2 s6 cohort controls: registered segment counts, and the filtered list when one is open. */
+  segments: Awaited<ReturnType<typeof import("@/lib/practice/cohort-engine").computeSegments>> | null;
+  cohort: Awaited<ReturnType<typeof import("@/lib/practice/cohort-engine").cohortPatients>> | null;
+  activeSegment: string | null;
+  segmentHref: (id: string | null) => string;
+  savedCohorts: { id: string; name: string; segmentIds: string[] }[];
+  activeCohortId: string | null;
+  cohortHref: (id: string) => string;
+  canManageCohorts: boolean;
+}) {
   const p = suite.workspace.modules.patients;
   if (!p.available) return <section className={CARD}><Unavailable module={p} /></section>;
   const d: any = p.data;
@@ -313,6 +326,103 @@ export function PatientV2Area({ suite, extras }: { suite: Suite; extras: PiV2Ext
               </p>
             )}
           </>
+        )}
+      </section>
+      {/* ── v2 s6 COHORT CONTROLS -- cohorts are FILTERS, not destinations. Segments are REGISTERED
+             derivations (segment-registry.ts) computed at read time; membership is never stored. ── */}
+      <section className={CARD}>
+        <h3 className="text-[13px] font-bold text-gray-900">Cohorts</h3>
+        {!segments ? (
+          <p className="mt-1 text-[12px] text-gray-500">Segment counts were not computed for this view.</p>
+        ) : !segments.ok ? (
+          <p className="mt-1 text-[12px] text-gray-600">{segments.message}</p>
+        ) : (
+          <>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <Link href={segmentHref(null)}
+                className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold ${activeSegment === null
+                  ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
+                  : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
+                All patients
+              </Link>
+              {segments.results.map(r => (
+                <Link key={r.segment.segmentId} href={segmentHref(r.segment.segmentId)}
+                  title={r.segment.definition}
+                  className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold ${activeSegment === r.segment.segmentId
+                    ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
+                    : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
+                  {r.segment.displayName} &middot; {ofPct(r.count, r.denominator)}
+                  {r.truncated ? "+" : ""}
+                </Link>
+              ))}
+              {/* Gate-failed segments: the registry's refusal, worn as a disabled chip -- a zero here
+                  would read as a fact about patients instead of a missing writer. */}
+              {SEGMENT_REGISTRY.filter(s => s.gateFailed).map(s => (
+                <span key={s.segmentId} title={s.gateFailed}
+                  className="cursor-help rounded-lg border border-dashed border-slate-300 px-2.5 py-1 text-[11px] text-slate-400">
+                  {s.displayName} &middot; not computable yet
+                </span>
+              ))}
+            </div>
+            {savedCohorts.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-baseline gap-1.5 border-t border-gray-100 pt-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Saved</span>
+                {savedCohorts.map(c => (
+                  <Link key={c.id} href={cohortHref(c.id)}
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold ${activeCohortId === c.id
+                      ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
+                      : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
+                    {c.name}
+                  </Link>
+                ))}
+              </div>
+            )}
+            <p className="mt-1.5 text-[10px] text-gray-500">
+              {segments.timezoneNote}. A count marked + hit the read cap and is a floor. Age segments
+              exclude patients with no recorded date of birth, and say so in their definitions. A saved
+              cohort stores its definition, never its members &mdash; the list is recomputed every time.
+            </p>
+            {canManageCohorts && activeSegment && (
+              <CohortSaveControl segmentIds={[activeSegment]}
+                noVisitDays={segments.results.find(r => r.segment.segmentId === activeSegment)?.noVisitDays ?? null} />
+            )}
+          </>
+        )}
+
+        {cohort && (activeSegment || activeCohortId) && (
+          <div className="mt-3 border-t border-gray-100 pt-2.5">
+            {!cohort.ok ? (
+              <p className="text-[12px] text-gray-600">{cohort.message}</p>
+            ) : (
+              <>
+                {cohort.definitionSentences.map((s, i) => (
+                  <p key={i} className="text-[11px] leading-relaxed text-gray-600">{s}</p>
+                ))}
+                <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                  {cohort.total} patient{cohort.total === 1 ? "" : "s"}
+                  {cohort.rows.length < cohort.total ? ` (first ${cohort.rows.length} shown)` : ""}
+                  {cohort.truncated ? " -- a read hit its cap, so this is a floor" : ""}
+                </p>
+                <ul className="mt-1 flex flex-col">
+                  {cohort.rows.map(r => (
+                    <li key={r.id} className="flex items-baseline gap-2 border-b border-gray-50 py-1 last:border-0">
+                      {cohort.identified ? (
+                        <Link href={`/practice/patients/${r.id}`} className="min-w-0 truncate text-[12px] text-gray-800 hover:underline">{r.label}</Link>
+                      ) : (
+                        <span className="min-w-0 truncate text-[12px] text-gray-600">{r.label}</span>
+                      )}
+                      <span className="ml-auto shrink-0 text-[10px] text-gray-500">{r.detail}</span>
+                    </li>
+                  ))}
+                </ul>
+                {!cohort.identified && (
+                  <p className="mt-1 text-[10px] text-gray-500">
+                    Names need patient.view -- the count is complete, the list is deliberately unnamed.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         )}
       </section>
       <section className={CARD}>
