@@ -481,6 +481,25 @@ async function main() {
   ok("12c. CONTROL: the other practitioner can build their own portfolio perfectly well", bEntry.ok,
     bEntry.ok ? "" : bEntry.message);
 
+  // ⚠ 12d PINS THE SILENT HALF OF THE BUG 12b EXPOSED. removeEntry kept a workspace filter from before
+  // migration 270, which produced 12b's wrong refusal code -- but the worse harm had no assertion at
+  // all: 270 NULLS workspace_id when a practice closes, and a null pointer matched no workspace, so an
+  // entry that outlived its practice could never be removed BY ITS OWN AUTHOR. The fixture clears the
+  // pointer exactly the way 270 does, then the author removes it.
+  const orphanable = await addEntry(admin, a.ctx, {
+    kind: "certification", title: "Typed in a practice that later closed", correlationId: "harness-pf",
+  });
+  ok("12d-fixture. the entry records", orphanable.ok, orphanable.ok ? "" : (orphanable as any).message);
+  if (orphanable.ok) {
+    const { error: orphanErr } = await admin.from("practice_portfolio_entry")
+      .update({ workspace_id: null }).eq("id", orphanable.data.id);
+    const orphanRemoval = orphanErr
+      ? { ok: false as const, code: "FIXTURE_BROKEN", message: orphanErr.message }
+      : await removeEntry(admin, a.ctx, { id: orphanable.data.id, correlationId: "harness-pf" });
+    ok("12d. AN ENTRY THAT OUTLIVED ITS PRACTICE IS STILL ITS AUTHOR'S TO REMOVE -- the person is the scope",
+      orphanRemoval.ok === true, orphanRemoval.ok ? "" : `${(orphanRemoval as any).code}: ${(orphanRemoval as any).message}`);
+  }
+
   // ══ 13. THE ENTRY OUTLIVES THE PRACTICE ═══════════════════════════════════
   //
   // The reachable failure the survey found, reproduced and then shown not to happen. Nothing is deleted

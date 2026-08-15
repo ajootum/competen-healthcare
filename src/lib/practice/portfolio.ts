@@ -370,13 +370,23 @@ export async function removeEntry(admin: any, ctx: WorkspaceContext, args: {
 }): Promise<EngineResult<{ deleted: true }>> {
   // ⚠ THERE IS ONE SCOPE ON THIS TABLE NOW, AND IT IS THE PERSON. Looking the entry up by workspace
   // would refuse an author their own entry the moment they moved practice -- the exact failure D1 fixes.
+  //
+  // ⚠ AND FOR MONTHS THIS FUNCTION SAID THAT AND DID THE OPPOSITE: the lookup and the delete both kept
+  // an .eq("workspace_id", ...) from before migration 270. Two harms, one worse than the harness red
+  // that exposed it. The red: another person's removal refused as NOT_FOUND from a different practice
+  // but NOT_YOURS from the same one -- two reasons for one refusal. The silent one: 270 NULLS the
+  // workspace pointer when a practice closes, so an entry that outlived its practice matched no
+  // workspace and its own author could never remove it -- a dead end on the one table whose whole
+  // design is that it outlives the practice.
   const { data: e } = await admin.from("practice_portfolio_entry")
-    .select("id, user_id").eq("workspace_id", ctx.workspaceId).eq("id", args.id).maybeSingle();
+    .select("id, user_id").eq("id", args.id).maybeSingle();
   if (!e) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (e.user_id !== ctx.userId)
     return { ok: false, status: 403, code: "NOT_YOURS", message: "that is somebody else's portfolio" };
 
-  await admin.from("practice_portfolio_entry").delete().eq("workspace_id", ctx.workspaceId).eq("id", e.id);
+  // Keyed on the id AND the person, so the ownership decision above and the delete cannot disagree
+  // even if the row changed hands between the two statements.
+  await admin.from("practice_portfolio_entry").delete().eq("id", e.id).eq("user_id", ctx.userId);
   await audit(admin, {
     workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.portfolio_entry_removed",
     payload: { entryId: e.id }, correlationId: args.correlationId,
