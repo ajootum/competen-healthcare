@@ -33,7 +33,7 @@ import { join } from "node:path";
 import {
   recordActivity, listActivities, addParticipant, addItem, procedureDetail, procedureItemTrace,
   createProcedureTemplate, applyProcedureTemplate, portfolioSummary, setPortfolio, ACTIVITY_KINDS,
-  activityRecord,
+  activityRecord, recordExternalProcedure, removeExternalProcedure,
 } from "../src/lib/practice/clinical-activity";
 
 loadEnvConfig(process.cwd());
@@ -406,6 +406,96 @@ async function main() {
       JSON.stringify({ exists: !!schedRow, performedAt: schedRow?.performed_at ?? "missing" }));
   }
 
+  // ══ MIGRATION 302: EXTERNAL PROCEDURES ════════════════════════════════════════════════════════
+  //
+  // s13's explicit off-platform workflow. What must hold: it projects as Type Procedure with external
+  // provenance, it carries NO complication claim, its idempotency folds case and whitespace, it never
+  // records future work, and it stays out of the encounter-derived counts.
+  // ⚠ A DELTA, NOT A PINNED TOTAL. Earlier sections claim CPD of their own (the subject-procedure
+  // branch writes cpd onto a procedure), so a fixed number here would be the pinned-count trap this
+  // memory file records five instances of in one day.
+  const pfBefore = await portfolioSummary(admin, wsA, OWNER);
+  ok("302-0. PRECONDITION: no external procedures exist yet (302-5 measures a delta from zero)",
+    pfBefore.procedures.external === 0, String(pfBefore.procedures.external));
+
+  const ext = await recordExternalProcedure(admin, {
+    workspaceId: wsA, label: "Caesarean section", source: "Mulago Hospital, obstetric theatre",
+    sourceRef: "LOGBOOK-2024-117", role: "assistant", performedAt: "2024-03-12T09:30:00Z",
+    cpdMinutes: 60, portfolio: true, ...base,
+  });
+  ok("302-1. an external procedure records with its source and reference", ext.ok,
+    ext.ok ? "" : (ext as any).message);
+  if (!ext.ok) return report();
+
+  const extRec = await activityRecord(admin, wsA, { performedBy: OWNER, kind: "procedure" });
+  const extRow = extRec.items.find((r: any) => r.id === ext.data.id);
+  ok("302-2. it projects as Type PROCEDURE wearing EXTERNAL provenance -- s9 and s12 together",
+    !!extRow && extRow.recordKind === "procedure" && extRow.external === true
+      && extRow.source === "Mulago Hospital, obstetric theatre" && extRow.role === "assistant"
+      && extRow.encounterId === null,
+    JSON.stringify({ found: !!extRow, ext: extRow?.external, src: extRow?.source }));
+  ok("302-2b. and it makes NO complication claim -- the assessment never happened here (s15, structural)",
+    !!extRow && extRow.complicationsAssessed === false && extRow.hasComplication === false,
+    JSON.stringify({ assessed: extRow?.complicationsAssessed, has: extRow?.hasComplication }));
+  const encRow = extRec.items.find((r: any) => r.title === "Knee arthroscopy");
+  ok("302-2c. CONTROL: the encounter procedure beside it IS assessed and says so",
+    !!encRow && encRow.external === false && encRow.complicationsAssessed === true && encRow.hasComplication === true);
+
+  const dupRef = await recordExternalProcedure(admin, {
+    workspaceId: wsA, label: "Caesarean section again", source: "Mulago Hospital",
+    sourceRef: "  logbook-2024-117 ", performedAt: "2024-03-12T09:30:00Z", ...base,
+  });
+  ok("302-3. s13's idempotency: the same reference, case- and space-mangled, is refused BY NAME",
+    !dupRef.ok && dupRef.code === "DUPLICATE_EXTERNAL", dupRef.ok ? "recorded twice" : String(dupRef.code));
+  const refless1 = await recordExternalProcedure(admin, {
+    workspaceId: wsA, label: "Wound debridement", source: "Field clinic", performedAt: "2023-06-01T10:00:00Z", ...base,
+  });
+  const refless2 = await recordExternalProcedure(admin, {
+    workspaceId: wsA, label: "Wound debridement", source: "Field clinic", performedAt: "2023-06-02T10:00:00Z", ...base,
+  });
+  ok("302-3b. CONTROL: rows WITHOUT a reference are never treated as duplicates of each other",
+    refless1.ok && refless2.ok, JSON.stringify({ a: refless1.ok, b: refless2.ok }));
+
+  const future = await recordExternalProcedure(admin, {
+    workspaceId: wsA, label: "Planned future case", source: "Somewhere",
+    performedAt: new Date(Date.now() + 7 * 86400000).toISOString(), ...base,
+  });
+  ok("302-4. FUTURE WORK IS REFUSED -- the record counts work done, and there is no scheduled external",
+    !future.ok && future.code === "NOT_YET_DONE", future.ok ? "recorded" : String(future.code));
+  const noSource = await recordExternalProcedure(admin, {
+    workspaceId: wsA, label: "Sourceless claim", source: "  ", performedAt: "2024-01-01T10:00:00Z", ...base,
+  });
+  ok("302-4b. and a record with no source is refused -- provenance is what makes it checkable",
+    !noSource.ok, noSource.ok ? "recorded" : "");
+
+  const pf = await portfolioSummary(admin, wsA, OWNER);
+  ok("302-5. the portfolio counts externals SEPARATELY -- never inside the encounter-derived figures",
+    pf.procedures.external === 3 && pf.procedures.performed === pfBefore.procedures.performed,
+    JSON.stringify({ external: pf.procedures.external, performed: [pfBefore.procedures.performed, pf.procedures.performed] }));
+  ok("302-5b. and their CPD joins the period total (as a delta against the pre-external figure)",
+    pf.cpdMinutes === pfBefore.cpdMinutes + 60,
+    JSON.stringify({ before: pfBefore.cpdMinutes, after: pf.cpdMinutes }));
+  ok("302-5c. a portfolio-flagged external counts as a portfolio item",
+    pf.portfolioItems === pfBefore.portfolioItems + 1,
+    JSON.stringify({ before: pfBefore.portfolioItems, after: pf.portfolioItems }));
+
+  const notMineRemoval = await removeExternalProcedure(admin, {
+    workspaceId: wsA, id: ext.data.id, actorId: REGISTRAR, correlationId: "harness-act",
+  });
+  ok("302-6. somebody else cannot remove it -- refused as NOT_YOURS, the honest reason",
+    !notMineRemoval.ok && notMineRemoval.code === "NOT_YOURS",
+    notMineRemoval.ok ? "removed" : String(notMineRemoval.code));
+  const ownRemovalExt = refless2.ok ? await removeExternalProcedure(admin, {
+    workspaceId: wsA, id: refless2.data.id, ...base,
+  }) : { ok: false as const };
+  ok("302-6b. CONTROL: its own author can", ownRemovalExt.ok === true,
+    ownRemovalExt.ok ? "" : (ownRemovalExt as any).code ?? "fixture missing");
+
+  const crossExt = await activityRecord(admin, wsB, { kind: "procedure" });
+  ok("302-7. another workspace's record holds none of them (non-vacuous: A has some)",
+    !crossExt.items.some((r: any) => r.external) && extRec.items.some((r: any) => r.external),
+    JSON.stringify({ b: crossExt.items.length }));
+
   // ── The page and console, source-checked (s3, s17, s18) ──
   const appDir = join(process.cwd(), "src", "app", "practice", "(shell)", "activity");
   const pageSrc = readFileSync(join(appDir, "page.tsx"), "utf8");
@@ -425,14 +515,30 @@ async function main() {
   ok("012-UI-3b. and each area's empty state is local and specific",
     consoleSrc.includes("No procedures recorded for this period.")
       && consoleSrc.includes("No other professional activity recorded for this period."));
+  // Needle repointed 2026-08-15 when the Encounter branch grew its external sibling -- the string is
+  // now `: "Encounter")`, and deleting the assertion instead of repointing it is the recorded sin.
   ok("012-UI-4. s12: rows wear their provenance -- Encounter for projections, You/name for logged work",
-    consoleSrc.includes('? "Encounter"') && consoleSrc.includes('? "You"'));
+    consoleSrc.includes(': "Encounter"') && consoleSrc.includes('? "You"'));
   ok("012-UI-5. s11: five direct filters plus More, not a chip for every category",
     consoleSrc.includes("DIRECT_FILTERS") && consoleSrc.includes("MORE_FILTERS")
       && (consoleSrc.match(/\["procedure", "Procedures"\]/) !== null));
   ok("012-UI-6. s5/s19: the footer explains automatic capture; Export / report is a header action",
     consoleSrc.includes("captured automatically from encounter records")
       && pageSrc.includes('href="/practice/portfolio"'));
+
+  ok("302-UI-1. s13: the external workflow is EXPLICIT and separate -- its own button, its own form",
+    consoleSrc.includes("Record external procedure")
+      && consoleSrc.includes("Record an external procedure")
+      && /recording\s+one of those again would double it/.test(consoleSrc),
+    "an external procedure must never be a mode of Log activity");
+  ok("302-UI-2. s15: an external row's outcome cell says the assessment never happened here",
+    consoleSrc.includes("outcomes not assessed here"));
+  ok("302-UI-3. s12: external provenance renders as External with its source, beside Encounter rows",
+    consoleSrc.includes("`External · ${r.source}`"));
+  const routeSrc = readFileSync(join(process.cwd(), "src", "app", "api", "v1", "practice", "activities", "route.ts"), "utf8");
+  ok("302-UI-4. the DELETE verb is confined to the external subject -- clinical rows gain no delete",
+    routeSrc.includes('url.searchParams.get("subject") !== "external_procedure"')
+      && routeSrc.includes("removeExternalProcedure"));
 
   // ── 10. Isolation ────────────────────────────────────────────────────────
   const crossItem = await addItem(admin, {

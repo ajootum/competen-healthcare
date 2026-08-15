@@ -121,7 +121,13 @@ export default async function ActivityPage({ searchParams }: {
           Logged activities are missing from the record below; the procedures shown are unaffected.
         </p>
       )}
-      {!record.procedures.unavailable && !record.activities.unavailable
+      {record.external.unavailable && (
+        <p className="mt-3 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+          <strong>The external procedures could not be read.</strong> {record.external.detail}{" "}
+          Work recorded from outside this practice is missing from the record below.
+        </p>
+      )}
+      {!record.procedures.unavailable && !record.activities.unavailable && !record.external.unavailable
         && record.items.length === 0 && period.bounded && (
         <p className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[12px] text-gray-600">
           Nothing is recorded in <strong>{periodLabel(period)}</strong>

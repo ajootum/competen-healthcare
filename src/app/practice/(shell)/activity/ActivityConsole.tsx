@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ACTIVITY_KINDS, PARTICIPATION } from "@/lib/practice/clinical-activity";
+import { ACTIVITY_KINDS, PARTICIPATION, PARTICIPANT_ROLES } from "@/lib/practice/clinical-activity";
 import { ClinicalRecordTable, type RecordColumn } from "@/components/practice/ClinicalRecordTable";
 
 // CPR-PCA-HFE-012 -- the Procedures & Clinical Activity portfolio console.
@@ -39,6 +39,7 @@ const PROCEDURE_STATUS_LABEL: Record<string, string> = {
   PERFORMED: "Performed", ATTEMPTED: "Attempted", ABANDONED: "Abandoned",
   CANCELLED: "Cancelled", DECLINED: "Declined",
 };
+const ROLE_LABEL = Object.fromEntries(PARTICIPANT_ROLES as readonly (readonly [string, string])[]);
 
 type Row = any;
 
@@ -64,6 +65,46 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
     occurredAt: new Date().toISOString().slice(0, 16),
     durationMinutes: "", cpdMinutes: "", locationId: "", portfolio: false,
   });
+  // s13's explicit external-procedure workflow (migration 302) -- its own form, never a mode of the
+  // activity log, so recording encounter work here stays structurally impossible.
+  const [extOpen, setExtOpen] = useState(false);
+  const [extForm, setExtForm] = useState({
+    label: "", source: "", sourceRef: "", role: "operator", detail: "",
+    performedAt: new Date().toISOString().slice(0, 16), cpdMinutes: "", portfolio: true,
+  });
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+
+  async function submitExternal() {
+    setBusy(true); setNotice(null);
+    const res = await fetch("/api/v1/practice/activities", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        externalProcedure: {
+          label: extForm.label, source: extForm.source,
+          sourceRef: extForm.sourceRef || null, role: extForm.role,
+          detail: extForm.detail || undefined,
+          performedAt: new Date(extForm.performedAt).toISOString(),
+          cpdMinutes: extForm.cpdMinutes ? Number(extForm.cpdMinutes) : null,
+          portfolio: extForm.portfolio,
+        },
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setNotice({ kind: "err", text: data?.error?.message ?? data?.error ?? "That did not work." });
+      setBusy(false); return;
+    }
+    window.location.reload();
+  }
+
+  async function removeExternal(id: string) {
+    setBusy(true); setNotice(null);
+    const res = await fetch(`/api/v1/practice/activities?subject=external_procedure&id=${encodeURIComponent(id)}`,
+      { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { setNotice({ kind: "err", text: data?.error?.message ?? "That was not removed." }); setBusy(false); return; }
+    window.location.reload();
+  }
 
   async function submit() {
     setBusy(true); setNotice(null);
@@ -90,7 +131,10 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
     setBusy(true);
     const res = await fetch("/api/v1/practice/activities", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subject: "activity", id: a.id, portfolio: !a.portfolio }),
+      body: JSON.stringify({
+        subject: a.recordKind === "activity" ? "activity" : a.external ? "external_procedure" : "procedure",
+        id: a.id, portfolio: !a.portfolio,
+      }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { setNotice({ kind: "err", text: data?.error?.message ?? "That did not work." }); setBusy(false); return; }
@@ -134,7 +178,7 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
         // s12: where each row came from, so nobody has to remember what was auto-captured.
         <span className="text-[11.5px] text-gray-600">
           {r.recordKind === "procedure"
-            ? "Encounter"
+            ? (r.external ? `External · ${r.source}` : "Encounter")
             : r.performed_by === me
               ? "You"
               : (r.performedByName ?? (r.performedByNameUnavailable ? "name could not be read" : "practitioner"))}
@@ -144,13 +188,22 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
       ) },
     { key: "outcome", label: "Outcome / Details", priority: "secondary",
       render: r => r.recordKind === "procedure" ? (
-        <span className="text-[11.5px] text-gray-700">
-          {PROCEDURE_STATUS_LABEL[r.status] ?? r.status}
-          {/* s15: visible without alarm-like presentation -- a word in amber, not a red row. And a
-              failed outcome read is NOT rendered as complication-free: absence of evidence is said. */}
-          {r.hasComplication && <span className="ml-1 font-semibold text-amber-700">· complication recorded</span>}
-          {r.complicationsUnread && <span className="ml-1 text-gray-400">· outcomes not read</span>}
-        </span>
+        r.external ? (
+          // s15 made structural: an external row HAS no complication column, so the screen says the
+          // assessment never happened here rather than implying a clean one did.
+          <span className="text-[11.5px] text-gray-700">
+            {ROLE_LABEL[r.role] ?? r.role}
+            <span className="ml-1 text-gray-400">· outcomes not assessed here</span>
+          </span>
+        ) : (
+          <span className="text-[11.5px] text-gray-700">
+            {PROCEDURE_STATUS_LABEL[r.status] ?? r.status}
+            {/* s15: visible without alarm-like presentation -- a word in amber, not a red row. And a
+                failed outcome read is NOT rendered as complication-free: absence of evidence is said. */}
+            {r.hasComplication && <span className="ml-1 font-semibold text-amber-700">· complication recorded</span>}
+            {r.complicationsUnread && <span className="ml-1 text-gray-400">· outcomes not read</span>}
+          </span>
+        )
       ) : (
         <span className="text-[11.5px] text-gray-700">
           {r.participation}
@@ -204,10 +257,25 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
               </span>
             </div>
           )}
-          <Link href={filterHref("procedure")}
-            className="mt-2 inline-block text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
-            View all procedures &rarr;
-          </Link>
+          {portfolio.procedures.external > 0 && (
+            // Kept OUT of the headline count: the sentence above says the figures come from encounter
+            // records, and externals are exactly the rows that do not.
+            <p className="mt-1 text-[11px] text-gray-600">
+              + {portfolio.procedures.external} recorded from outside this practice
+            </p>
+          )}
+          <div className="mt-2 flex items-center gap-3 flex-wrap">
+            <Link href={filterHref("procedure")}
+              className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+              View all procedures &rarr;
+            </Link>
+            {/* s13: EXPLICIT and quiet -- a bordered secondary action, never the band's primary one.
+                The automatic path is the normal path; this exists for work done somewhere else. */}
+            <button type="button" onClick={() => setExtOpen(o => !o)}
+              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-600 hover:bg-gray-50">
+              {extOpen ? "Cancel" : "Record external procedure"}
+            </button>
+          </div>
         </section>
 
         <section className="rounded-xl border border-emerald-100 bg-emerald-50/30 p-4">
@@ -243,6 +311,70 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
           )}
         </section>
       </div>
+
+      {extOpen && (
+        <section className="mt-3 rounded-xl border border-gray-200 bg-white p-4">
+          <h3 className="text-[13px] font-bold text-gray-900">Record an external procedure</h3>
+          <p className="mt-0.5 text-[11px] text-gray-500">
+            Work done outside this practice &mdash; another hospital, a mission, before you joined.
+            Procedures done HERE are recorded in the consultation and arrive automatically; recording
+            one of those again would double it.
+          </p>
+          <form className="mt-3 flex flex-col gap-2" onSubmit={e => { e.preventDefault(); submitExternal(); }}>
+            <div className="grid sm:grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-semibold text-gray-500">What procedure *</span>
+                <input required value={extForm.label} placeholder="e.g. Open appendicectomy"
+                  onChange={e => setExtForm(f => ({ ...f, label: e.target.value }))}
+                  className={`${input} ${extForm.label.trim().length >= 3 ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
+              </label>
+              <label className="flex flex-col gap-1">
+                {/* The source is what makes an external record checkable, so the field wears its own
+                    requirement the way every required field on this estate now does. */}
+                <span className="text-[11px] font-semibold text-gray-500">Where it was done *</span>
+                <input required value={extForm.source} placeholder="e.g. Mulago Hospital, general theatre"
+                  onChange={e => setExtForm(f => ({ ...f, source: e.target.value }))}
+                  className={`${input} ${extForm.source.trim().length >= 3 ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
+              </label>
+            </div>
+            <div className="grid sm:grid-cols-4 gap-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-semibold text-gray-500">Your role</span>
+                <select value={extForm.role} onChange={e => setExtForm(f => ({ ...f, role: e.target.value }))} className={input}>
+                  {PARTICIPANT_ROLES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-semibold text-gray-500">When performed</span>
+                <input type="datetime-local" required value={extForm.performedAt}
+                  onChange={e => setExtForm(f => ({ ...f, performedAt: e.target.value }))} className={input} />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-semibold text-gray-500">Reference</span>
+                <input value={extForm.sourceRef} placeholder="logbook / op-note no."
+                  onChange={e => setExtForm(f => ({ ...f, sourceRef: e.target.value }))} className={input} />
+                <span className="text-[10px] text-gray-400">Optional. The same reference is refused twice.</span>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] font-semibold text-gray-500">CPD minutes</span>
+                <input type="number" min={0} max={1440} value={extForm.cpdMinutes} placeholder="minutes"
+                  onChange={e => setExtForm(f => ({ ...f, cpdMinutes: e.target.value }))} className={input} />
+              </label>
+            </div>
+            <textarea rows={2} value={extForm.detail} placeholder="Anything worth remembering (optional)"
+              onChange={e => setExtForm(f => ({ ...f, detail: e.target.value }))} className={input} />
+            <label className="flex items-center gap-2 text-[12px] text-gray-700">
+              <input type="checkbox" checked={extForm.portfolio}
+                onChange={e => setExtForm(f => ({ ...f, portfolio: e.target.checked }))} />
+              Keep this in my portfolio
+            </label>
+            <button type="submit" disabled={busy || extForm.label.trim().length < 3 || extForm.source.trim().length < 3}
+              className="self-start rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[12px] font-semibold text-white disabled:opacity-40">
+              Record it
+            </button>
+          </form>
+        </section>
+      )}
 
       {open && (
         <section className="mt-3 rounded-xl border border-gray-200 bg-white p-4">
@@ -359,8 +491,27 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
             records={records.map(r => ({
               id: `${r.recordKind}-${r.id}`,
               data: r,
-              secondaryText: r.recordKind === "activity" && r.detail ? r.detail : undefined,
-              actions: r.recordKind === "procedure" ? (
+              secondaryText: (r.recordKind === "activity" || r.external) && r.detail ? r.detail : undefined,
+              actions: r.recordKind === "procedure" && r.external ? (
+                r.performed_by === me ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <button type="button" disabled={busy} onClick={() => togglePortfolio(r)}
+                      className="rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                      {r.portfolio ? "In portfolio" : "Add to portfolio"}
+                    </button>
+                    {/* Two clicks, in words -- the first names what the second will do. An external row
+                        is the practitioner's own claim, so removing a mis-entry is theirs alone. */}
+                    <button type="button" disabled={busy}
+                      onClick={() => confirmRemove === r.id ? removeExternal(r.id) : setConfirmRemove(r.id)}
+                      className={`rounded-lg px-2 py-0.5 text-[11px] font-semibold disabled:opacity-50 ${
+                        confirmRemove === r.id
+                          ? "border border-rose-300 text-rose-700 hover:bg-rose-50"
+                          : "text-gray-500 hover:bg-gray-50"}`}>
+                      {confirmRemove === r.id ? "Confirm remove" : "Remove"}
+                    </button>
+                  </span>
+                ) : undefined
+              ) : r.recordKind === "procedure" ? (
                 // s23: the portfolio row LINKS to the encounter; it does not re-publish it. The
                 // encounter page enforces its own permissions on arrival.
                 <Link href={`/practice/encounters/${r.encounterId}`}

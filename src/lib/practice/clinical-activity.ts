@@ -224,6 +224,89 @@ export async function listActivities(admin: any, workspaceId: string, filter: Ac
   return (await listActivitiesResult(admin, workspaceId, filter)).items;
 }
 
+// ── EXTERNAL PROCEDURES ── CPR-PCA-HFE-012 s13 (migration 302) ───────────────────────────────────────
+//
+// A procedure the practitioner performed OUTSIDE this practice, recorded EXPLICITLY -- s13 forbids a
+// generic manual procedure workflow precisely because it would invite duplicate entry of encounter
+// work. The table carries no complication column and no outcome enum ON PURPOSE: this product never
+// observed the procedure, so the screen says "not assessed here" instead of rendering an assessment
+// nobody made (s15's recorded-none versus not-assessed, made structural).
+
+export async function recordExternalProcedure(admin: any, args: {
+  workspaceId: string; label: string; source: string; sourceRef?: string | null;
+  role?: string; detail?: string; performedAt: string; cpdMinutes?: number | null;
+  portfolio?: boolean; performedBy?: string | null;
+  actorId: string; correlationId: string;
+}): Promise<EngineResult<{ id: string }>> {
+  if (args.label.trim().length < 3)
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "name the procedure" };
+  // THE SOURCE IS REQUIRED, NOT POLITE. Provenance is the whole difference between this row and an
+  // encounter procedure -- an external row with no source is an unverifiable claim wearing a record's
+  // clothes (s12).
+  if (args.source.trim().length < 3)
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "say where it was done -- the source is what makes an external record checkable" };
+  if (!args.performedAt || Number.isNaN(Date.parse(args.performedAt)))
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "say when it was performed" };
+  // WORK DONE, NEVER WORK INTENDED. There is no scheduled external procedure -- the same rule that
+  // keeps SCHEDULED encounter procedures out of the record (five minutes of clock skew allowed).
+  if (Date.parse(args.performedAt) > Date.now() + 5 * 60 * 1000)
+    return { ok: false, status: 422, code: "NOT_YET_DONE", message: "that date is in the future; this records work already done" };
+
+  const role = PARTICIPANT_ROLES.some(([r]) => r === args.role) ? args.role! : "operator";
+  if (args.cpdMinutes != null && (!Number.isInteger(args.cpdMinutes) || args.cpdMinutes < 0 || args.cpdMinutes > 1440))
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "CPD time must be a whole number of minutes, up to 1440" };
+
+  // Credited to whoever did it, the recordActivity rule -- with the same membership check, so a
+  // portfolio row cannot be pinned on somebody who is not here.
+  const performedBy = args.performedBy ?? args.actorId;
+  if (performedBy !== args.actorId) {
+    const { data: m } = await admin.from("practice_membership")
+      .select("id").eq("workspace_id", args.workspaceId).eq("user_id", performedBy).eq("status", "active").limit(1).maybeSingle();
+    if (!m) return { ok: false, status: 422, code: "NOT_A_MEMBER", message: "that person is not an active member of this practice" };
+  }
+
+  const { data, error } = await admin.from("practice_external_procedure").insert({
+    workspace_id: args.workspaceId, performed_by: performedBy,
+    label: args.label.trim(), source: args.source.trim(),
+    source_ref: args.sourceRef?.trim() || null, role,
+    detail: args.detail?.trim() || null, performed_at: args.performedAt,
+    cpd_minutes: args.cpdMinutes ?? null, portfolio: args.portfolio === true,
+    created_by: args.actorId,
+  }).select("id").single();
+  if (error) {
+    // s13's idempotency, refused BY NAME. The index name was read off a live refusal, not assumed, and
+    // it folds case and whitespace -- "OpNote-302" and "  opnote-302 " are one reference.
+    if (String(error.code) === "23505" || /ux_practice_ext_proc_source_ref/.test(String(error.message)))
+      return { ok: false, status: 409, code: "DUPLICATE_EXTERNAL", message: "that reference is already in this person's record; the same procedure is not recorded twice" };
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
+  }
+
+  await audit(admin, {
+    workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.external_procedure_recorded",
+    payload: { externalProcedureId: data.id, performedBy, source: args.source.trim() }, correlationId: args.correlationId,
+  });
+  return { ok: true, data: { id: data.id as string } };
+}
+
+export async function removeExternalProcedure(admin: any, args: {
+  workspaceId: string; id: string; actorId: string; correlationId: string;
+}): Promise<EngineResult<{ deleted: true }>> {
+  const { data: row, error: readError } = await admin.from("practice_external_procedure")
+    .select("id, performed_by").eq("id", args.id).eq("workspace_id", args.workspaceId).maybeSingle();
+  if (readError) return { ok: false, status: 500, code: "READ_FAILED", message: readError.message };
+  if (!row) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  if (row.performed_by !== args.actorId)
+    return { ok: false, status: 403, code: "NOT_YOURS", message: "that is somebody else's record" };
+
+  // Keyed on the id AND the person -- the removeEntry lesson, applied before the bug this time.
+  await admin.from("practice_external_procedure").delete().eq("id", row.id).eq("performed_by", args.actorId);
+  await audit(admin, {
+    workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.external_procedure_removed",
+    payload: { externalProcedureId: row.id }, correlationId: args.correlationId,
+  });
+  return { ok: true, data: { deleted: true } };
+}
+
 // ── THE UNIFIED ACTIVITY RECORD ── CPR-PCA-HFE-012 s2/s10/s13 ────────────────────────────────────────
 //
 // One chronological record from TWO sources: procedures PROJECTED from practice_procedure, and the
@@ -250,6 +333,8 @@ export async function activityRecord(admin: any, workspaceId: string, filter: Ac
   items: any[]; truncated: boolean; limit: number;
   procedures: { unavailable: boolean; detail: string | null };
   activities: { unavailable: boolean; detail: string | null };
+  /** Migration 302's third source. Fails separately for the same reason the first two do. */
+  external: { unavailable: boolean; detail: string | null };
 }> {
   const limit = Math.min(Math.max(filter.limit ?? 100, 1), 999);
   const wantProcedures = !filter.kind || filter.kind === "procedure";
@@ -302,24 +387,63 @@ export async function activityRecord(admin: any, workspaceId: string, filter: Ac
     }
   }
 
+  // s13's explicit external procedures (migration 302). Type: Procedure in the record (s9), external
+  // in provenance (s12). They carry NO complication state -- complicationsAssessed says so, and the
+  // screen renders "not assessed here" rather than complication-free.
+  let extItems: any[] = [];
+  let extTruncated = false;
+  let extUnavailable = false;
+  let extDetail: string | null = null;
+  if (wantProcedures) {
+    let q = admin.from("practice_external_procedure")
+      .select("id, label, source, source_ref, role, detail, performed_at, performed_by, cpd_minutes, portfolio")
+      .eq("workspace_id", workspaceId);
+    if (filter.performedBy) q = q.eq("performed_by", filter.performedBy);
+    if (filter.fromDay || filter.toDay) {
+      const { timezone } = await workspaceClock(admin, workspaceId);
+      if (filter.fromDay) q = q.gte("performed_at", zonedDayRange(filter.fromDay, timezone).startIso);
+      if (filter.toDay) q = q.lt("performed_at", zonedDayRange(filter.toDay, timezone).endIso);
+    }
+    const { data, error } = await q.order("performed_at", { ascending: false }).limit(limit + 1);
+    if (error) { extUnavailable = true; extDetail = error.message; }
+    else {
+      const all = (data ?? []) as any[];
+      extTruncated = all.length > limit;
+      extItems = extTruncated ? all.slice(0, limit) : all;
+    }
+  }
+
   const merged = [
     ...procItems.map(p => ({
-      recordKind: "procedure" as const,
+      recordKind: "procedure" as const, external: false,
       id: p.id, kind: "procedure", kindLabel: "Procedure",
       title: p.label, occurredAt: p.performed_at,
       status: p.status, hasComplication: !!p.hasComplication, complicationsUnread: !!p.complicationsUnread,
+      complicationsAssessed: !p.complicationsUnread,
       encounterId: p.encounter_id, performed_by: p.performed_by,
       cpd_minutes: p.cpd_minutes ?? null, portfolio: !!p.portfolio,
     })),
-    ...acts.items.map(a => ({ ...a, recordKind: "activity" as const, occurredAt: a.occurred_at })),
+    ...extItems.map(x => ({
+      recordKind: "procedure" as const, external: true,
+      id: x.id, kind: "procedure", kindLabel: "Procedure",
+      title: x.label, occurredAt: x.performed_at,
+      status: null, hasComplication: false, complicationsUnread: false,
+      complicationsAssessed: false,
+      source: x.source, sourceRef: x.source_ref ?? null, role: x.role,
+      detail: x.detail ?? null,
+      encounterId: null, performed_by: x.performed_by,
+      cpd_minutes: x.cpd_minutes ?? null, portfolio: !!x.portfolio,
+    })),
+    ...acts.items.map(a => ({ ...a, recordKind: "activity" as const, external: false, occurredAt: a.occurred_at })),
   ].sort((a, b) => String(b.occurredAt).localeCompare(String(a.occurredAt)));
 
   return {
     items: merged.length > limit ? merged.slice(0, limit) : merged,
-    truncated: procTruncated || acts.truncated || merged.length > limit,
+    truncated: procTruncated || acts.truncated || extTruncated || merged.length > limit,
     limit,
     procedures: { unavailable: procUnavailable, detail: procDetail },
     activities: { unavailable: acts.unavailable, detail: acts.detail },
+    external: { unavailable: extUnavailable, detail: extDetail },
   };
 }
 
@@ -542,12 +666,18 @@ export async function portfolioSummary(admin: any, workspaceId: string, userId: 
   // matters here because a portfolio is a claim about EVERYTHING somebody did, and a portfolio that
   // silently stopped at a thousand understates the person it belongs to.
   const PORTFOLIO_ROW_CAP = 999;
-  const [procRes, actRes] = await Promise.all([
+  const [procRes, actRes, extRes] = await Promise.all([
     range("performed_at")(admin.from("practice_procedure")
       .select("id, status, procedure_type_id, label, performed_at, cpd_minutes, portfolio")
       .eq("workspace_id", workspaceId).eq("performed_by", userId)).limit(PORTFOLIO_ROW_CAP + 1),
     range("occurred_at")(admin.from("practice_clinical_activity")
       .select("id, kind, title, occurred_at, duration_minutes, participation, cpd_minutes, portfolio")
+      .eq("workspace_id", workspaceId).eq("performed_by", userId)).limit(PORTFOLIO_ROW_CAP + 1),
+    // Migration 302. Counted SEPARATELY from the encounter-derived figures -- the band's headline says
+    // "captured automatically from your encounter records" and folding externals into it would make
+    // that sentence false.
+    range("performed_at")(admin.from("practice_external_procedure")
+      .select("id, cpd_minutes, portfolio")
       .eq("workspace_id", workspaceId).eq("performed_by", userId)).limit(PORTFOLIO_ROW_CAP + 1),
   ]);
 
@@ -556,12 +686,16 @@ export async function portfolioSummary(admin: any, workspaceId: string, userId: 
   // had no complications, on the strength of a query that never answered.
   const proceduresUnavailable = !!procRes.error;
   const activitiesUnavailable = !!actRes.error;
+  const externalUnavailable = !!extRes.error;
   const allProcs = (procRes.data ?? []) as any[];
   const allActs = (actRes.data ?? []) as any[];
+  const allExt = (extRes.data ?? []) as any[];
   const proceduresTruncated = allProcs.length > PORTFOLIO_ROW_CAP;
   const activitiesTruncated = allActs.length > PORTFOLIO_ROW_CAP;
+  const externalTruncated = allExt.length > PORTFOLIO_ROW_CAP;
   const procs = allProcs.slice(0, PORTFOLIO_ROW_CAP);
   const acts = allActs.slice(0, PORTFOLIO_ROW_CAP);
+  const exts = allExt.slice(0, PORTFOLIO_ROW_CAP);
 
   const performed = procs.filter(p => p.status === "PERFORMED");
   const { data: outcomes } = performed.length
@@ -579,12 +713,13 @@ export async function portfolioSummary(admin: any, workspaceId: string, userId: 
   return {
     // ⚠ CARRIED ON THE PAYLOAD, NOT ONLY LOGGED. A screen cannot distinguish an empty portfolio from an
     // unreadable one unless the payload says which, and this is the field that lets it.
-    unavailable: proceduresUnavailable || activitiesUnavailable,
+    unavailable: proceduresUnavailable || activitiesUnavailable || externalUnavailable,
     unavailableDetail: [
       procRes.error ? `procedures: ${procRes.error.message}` : null,
       actRes.error ? `activities: ${actRes.error.message}` : null,
+      extRes.error ? `external procedures: ${extRes.error.message}` : null,
     ].filter(Boolean).join("; ") || null,
-    truncated: proceduresTruncated || activitiesTruncated,
+    truncated: proceduresTruncated || activitiesTruncated || externalTruncated,
     procedures: {
       total: procs.length,
       performed: performed.length,
@@ -593,24 +728,31 @@ export async function portfolioSummary(admin: any, workspaceId: string, userId: 
       withComplication: withComplication.size,
       complicationDenominator: performed.length,
       outcomesRecorded: new Set(outcomeRows.map(o => o.procedure_id)).size,
+      // Migration 302, kept OUT of `performed`: those figures are encounter-derived and say so on the
+      // screen. External procedures carry no complication state, so they must not join a denominator.
+      external: exts.length,
     },
     activities: { total: acts.length, byKind },
     cpdMinutes:
       procs.reduce((n, p) => n + (p.cpd_minutes ?? 0), 0) +
-      acts.reduce((n, a) => n + (a.cpd_minutes ?? 0), 0),
-    portfolioItems: procs.filter(p => p.portfolio).length + acts.filter(a => a.portfolio).length,
+      acts.reduce((n, a) => n + (a.cpd_minutes ?? 0), 0) +
+      exts.reduce((n, x) => n + (x.cpd_minutes ?? 0), 0),
+    portfolioItems: procs.filter(p => p.portfolio).length + acts.filter(a => a.portfolio).length
+      + exts.filter(x => x.portfolio).length,
     // Stated in the payload, not only in the UI, so a client cannot render this as a competency record.
     competencyLinked: false,
     competencyNote: "Not linked to the platform's competency records; this is the practice's own log.",
   };
 }
 
-/** Mark a procedure or activity as portfolio evidence, with the CPD time it is worth. */
+/** Mark a procedure, activity or external procedure as portfolio evidence, with the CPD time it is worth. */
 export async function setPortfolio(admin: any, args: {
-  workspaceId: string; subject: "procedure" | "activity"; id: string;
+  workspaceId: string; subject: "procedure" | "activity" | "external_procedure"; id: string;
   portfolio: boolean; cpdMinutes?: number | null; actorId: string; correlationId: string;
 }): Promise<EngineResult<{ portfolio: boolean }>> {
-  const table = args.subject === "procedure" ? "practice_procedure" : "practice_clinical_activity";
+  const table = args.subject === "procedure" ? "practice_procedure"
+    : args.subject === "external_procedure" ? "practice_external_procedure"
+      : "practice_clinical_activity";
   // ONLY AN ACTIVITY HAS A DURATION. practice_procedure has never had a duration_minutes column -- the
   // catalogue carries typical_duration_minutes, the performed procedure carries nothing. Selecting it
   // anyway made PostgREST error, and because the error was DISCARDED the row came back null and this
