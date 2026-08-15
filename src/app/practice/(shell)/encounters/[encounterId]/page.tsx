@@ -345,6 +345,7 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
           investigationCapture={
             <InvestigationCapture
               encounterId={encounter.id}
+              patientId={encounter.patient_id}
               catalogue={investigationLibrary}
               recorded={encounterInvestigationList}
               canEdit={hasCapability(shell.ctx, "encounter.edit")}

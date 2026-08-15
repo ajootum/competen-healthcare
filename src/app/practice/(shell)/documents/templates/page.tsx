@@ -32,6 +32,13 @@ export default async function TemplatesPage() {
   );
   const platform = withSections.filter(t => t.scope === "platform");
   const mine = withSections.filter(t => t.scope === "workspace");
+  // The Use action needs document.author, which is a DIFFERENT capability from the template.manage
+  // that opens this page -- an action a person cannot complete is not offered to them.
+  const canGenerate = hasCapability(shell.ctx, "document.author");
+
+  // The three server-side conditions generateFromTemplate enforces, decided HERE so the link is only
+  // shown where following it can work: published, a document kind, and a body to merge into.
+  const generable = (t: any) => t.status === "published" && t.kind !== "encounter_note" && t.mergeable;
 
   const card = (t: any) => (
     <li key={t.id} className="rounded-lg border border-gray-100 p-3">
@@ -47,6 +54,17 @@ export default async function TemplatesPage() {
           {t.status}
         </span>
         <span className="ml-auto font-mono text-[10px] text-gray-400">{t.code}</span>
+        {canGenerate && generable(t) && (
+          <a href={`/practice/reports?template=${t.id}`}
+            className="rounded-lg border border-[var(--cp-primary)] px-2 py-0.5 text-[11px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/5">
+            Use template &rarr;
+          </a>
+        )}
+        {canGenerate && !generable(t) && t.status === "published" && t.kind !== "encounter_note" && (
+          // The card wears its own reason: a published document template with no body cannot be
+          // generated from, and "why is there no Use button on this one" should not be a support question.
+          <span className="text-[10px] text-gray-400">sections only &mdash; no body to generate from</span>
+        )}
       </div>
       {t.description && <p className="mt-1 text-[12px] text-gray-600">{t.description}</p>}
       <ul className="mt-1.5 flex flex-col gap-0.5">

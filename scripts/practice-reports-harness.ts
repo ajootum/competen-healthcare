@@ -264,6 +264,47 @@ async function main() {
   ok("A's report is non-empty (the isolation test is not vacuous)",
     wideActivity.lines.some(l => l.value > 0));
 
+  // ══ USE TEMPLATE (2026-08-15): the Templates tab's door into generation ═══════════════════════════
+  //
+  // The tab could author templates but not do the thing it is named for -- "selecting a template
+  // creates a document" lived on a different screen with no route between them. These pin the door:
+  // the LINK is gated by the same three conditions the server enforces, the reports page FORWARDS the
+  // parameter (the middle-layer dropped-field class), and the console validates it against the SAME
+  // list its own dropdown renders from.
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const appDir = join(process.cwd(), "src", "app", "practice", "(shell)");
+  const tplPage = readFileSync(join(appDir, "documents", "templates", "page.tsx"), "utf8");
+  const repPage = readFileSync(join(appDir, "reports", "page.tsx"), "utf8");
+  const consoleSrc = readFileSync(join(appDir, "reports", "GenerateConsole.tsx"), "utf8");
+
+  const { listTemplates } = await import("../src/lib/practice/documentation");
+  const lib = await listTemplates(admin, wsA, { includeUnpublished: true }) as any[];
+  ok("UT-1. listTemplates says WHETHER each template is generable and never ships the body to a list",
+    lib.length > 0 && lib.every(t => typeof t.mergeable === "boolean" && !("body_template" in t)),
+    JSON.stringify(lib.slice(0, 2).map(t => ({ id: t.id, mergeable: t.mergeable, hasBody: "body_template" in t }))));
+
+  ok("UT-2. the Use link exists and is gated by ALL THREE server conditions -- published, a document kind, a body",
+    tplPage.includes("/practice/reports?template=")
+      && /status === "published" && t\.kind !== "encounter_note" && t\.mergeable/.test(tplPage),
+    "the link must not be offerable where following it gets a refusal");
+  ok("UT-2b. and by document.author -- an action the person cannot complete is not offered",
+    /hasCapability\(shell\.ctx, "document\.author"\)/.test(tplPage) && tplPage.includes("canGenerate && generable(t)"));
+
+  ok("UT-3. the reports page FORWARDS ?template= into the console (the dropped-field class, pinned)",
+    /one\("template"\)/.test(repPage) && /initialTemplateId=\{initialTemplateId\}/.test(repPage));
+
+  ok("UT-4. the console validates the preselection against `usable` -- the SAME list its dropdown renders",
+    /usable\.find\(t => t\.id === initialTemplateId\)/.test(consoleSrc),
+    "a second copy of the usability rule here would be the client-mirror drift class");
+  ok("UT-4b. a link naming an unusable template gets a SENTENCE, rendered while the panel is closed",
+    consoleSrc.includes("cannot be generated from right now") && /\{!mode && notice &&/.test(consoleSrc),
+    "the notice inside the panel is invisible exactly when this case leaves the panel shut");
+  // CONTROL: the needle can fail. The gate expression UT-4b matched must live OUTSIDE the `mode &&`
+  // block -- if the standalone render were deleted, this derived source would no longer contain it.
+  ok("UT-4c. CONTROL: removing the standalone render would redden UT-4b, not pass vacuously",
+    consoleSrc.split("{!mode && notice &&").length === 2, "expected exactly one standalone notice render");
+
   return report();
 }
 

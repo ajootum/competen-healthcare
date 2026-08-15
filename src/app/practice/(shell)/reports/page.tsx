@@ -70,6 +70,10 @@ export default async function ReportsPage({ searchParams }: {
     fromDay: period.fromDate, toDay: period.toDate,
   });
   const canAuthor = hasCapability(shell.ctx, "document.author");
+  // ?template=<id> -- the Templates tab's "Use template" door. Passed through raw: the console decides
+  // whether it names a usable template, because the usable list lives there and a second copy of that
+  // rule here would be the client-mirror drift class.
+  const initialTemplateId = one("template") ?? null;
 
   return (
     <div className="max-w-6xl">
@@ -258,6 +262,7 @@ export default async function ReportsPage({ searchParams }: {
             templates={board.templates}
             canAuthor={canAuthor}
             canFindPatients={hasCapability(shell.ctx, "patient.list")}
+            initialTemplateId={initialTemplateId}
           />
 
           {/* THE COMP'S AI REPORT ASSISTANT, rendered as the empty slot it is. Not a button that does

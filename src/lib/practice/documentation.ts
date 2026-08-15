@@ -55,7 +55,7 @@ export async function listTemplates(admin: any, workspaceId: string, opts: {
   const statuses = opts.includeUnpublished ? ["draft", "published"] : ["published"];
 
   const build = (q: any) => {
-    let out = q.select("id, workspace_id, code, title, description, kind, specialty, status, version, updated_at")
+    let out = q.select("id, workspace_id, code, title, description, kind, specialty, status, version, updated_at, body_template")
       .in("status", statuses);
     if (opts.kind) out = out.eq("kind", opts.kind);
     return out.order("title");
@@ -66,7 +66,13 @@ export async function listTemplates(admin: any, workspaceId: string, opts: {
   ]);
 
   const rows = [...((platform.data ?? []) as any[]), ...((mine.data ?? []) as any[])];
-  const mapped = rows.map(r => ({ ...r, scope: r.workspace_id === null ? "platform" : "workspace" }));
+  // `mergeable` is the boolean, never the body: a LIST does not ship every template's full text to the
+  // page, and generateFromTemplate re-checks the real column at generation time anyway.
+  const mapped = rows.map(({ body_template, ...r }) => ({
+    ...r,
+    scope: r.workspace_id === null ? "platform" : "workspace",
+    mergeable: !!(body_template && String(body_template).trim()),
+  }));
 
   const specialty = (opts.specialty ?? "").trim().toLowerCase();
   if (!specialty) return mapped;

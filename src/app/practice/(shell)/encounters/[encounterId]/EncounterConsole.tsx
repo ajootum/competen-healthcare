@@ -1765,6 +1765,11 @@ export default function EncounterConsole(props: {
                   patientId={props.patientId}
                   attachments={props.attachments}
                   editable={editable}
+                  // ATT-009 s12: only THIS encounter's procedures are offered, the same filter the
+                  // Procedures tab itself applies to this patient-scoped list.
+                  procedures={props.procedures
+                    .filter((p: any) => p.encounter_id === props.encounterId)
+                    .map((p: any) => ({ id: p.id, label: p.label }))}
                 />
 
                 <DocumentationTools

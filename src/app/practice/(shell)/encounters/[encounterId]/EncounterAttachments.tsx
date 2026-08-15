@@ -46,6 +46,9 @@ type Attachment = {
   id: string; file_name: string; kind: string; caption: string | null;
   byte_size: number; created_at: string;
   title: string | null; tags: string[] | null; patient_visible: boolean;
+  // ATT-009 s12. The route has published this field since migration 209; this type dropping it was the
+  // component-boundary field loss the follow-ups route made a named class.
+  procedure_id: string | null;
 };
 
 const KIND_LABEL = Object.fromEntries(ATTACHMENT_KINDS as readonly (readonly [string, string])[]);
@@ -62,6 +65,9 @@ export default function EncounterAttachments(props: {
   patientId: string;
   attachments: Attachment[];
   editable: boolean;
+  /** THIS encounter's procedures, filtered by the caller -- the linking offer never reaches wider
+      than the screen the person is on, even though the engine would accept any same-patient one. */
+  procedures: { id: string; label: string }[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -70,7 +76,7 @@ export default function EncounterAttachments(props: {
   // s7: the file is CHOSEN into state and committed separately. `pending` being non-null is what makes
   // the metadata appear -- s7 forbids "a large empty metadata form before a file has been selected".
   const [pending, setPending] = useState<File | null>(null);
-  const [meta, setMeta] = useState({ kind: "photograph", caption: "", title: "", tags: "", visible: true });
+  const [meta, setMeta] = useState({ kind: "photograph", caption: "", title: "", tags: "", visible: true, procedureId: "" });
   const [dragging, setDragging] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeReason, setRemoveReason] = useState("");
@@ -109,6 +115,7 @@ export default function EncounterAttachments(props: {
       form.set("title", meta.title); form.set("tags", meta.tags);
       form.set("patientVisible", String(meta.visible));
       form.set("allowDuplicate", String(confirmDuplicate));
+      if (meta.procedureId) form.set("procedureId", meta.procedureId);
       const res = await fetch("/api/v1/practice/attachments", { method: "POST", body: form });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -126,7 +133,7 @@ export default function EncounterAttachments(props: {
         setNotice({ kind: "err", text: data?.error?.message ?? data?.error ?? "That did not upload, and nothing was attached." });
         return;
       }
-      setPending(null); setMeta({ kind: "photograph", caption: "", title: "", tags: "", visible: true }); setConfirmDuplicate(false);
+      setPending(null); setMeta({ kind: "photograph", caption: "", title: "", tags: "", visible: true, procedureId: "" }); setConfirmDuplicate(false);
       setNotice({ kind: "ok", text: "Attached to this encounter." });
       // ⚠ router.refresh(), NOT window.location.reload(). A full reload of a live consultation threw
       // away every unsaved note segment on the screen -- on the tab whose whole job is adding a file.
@@ -195,7 +202,19 @@ export default function EncounterAttachments(props: {
         </>
       ) },
     { key: "kind", label: "Type", priority: "secondary",
-      render: a => <span className="text-[11.5px] text-gray-600">{KIND_LABEL[a.kind] ?? a.kind}</span> },
+      render: a => (
+        <span className="text-[11.5px] text-gray-600">
+          {KIND_LABEL[a.kind] ?? a.kind}
+          {a.procedure_id && (
+            // The row says WHICH procedure when this screen knows it, and still says THAT there is one
+            // when it does not -- an older link to a same-patient procedure from another visit must not
+            // render as unlinked.
+            <span className="ml-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
+              {props.procedures.find(p => p.id === a.procedure_id)?.label ?? "a procedure"}
+            </span>
+          )}
+        </span>
+      ) },
     // ⚠ s6's "Patient Documents" COLUMN: where else this file appears, stated per row. "Shown" means
     // the same object is projected into the Documents workspace; "encounter only" means it lists only
     // here. One object either way -- the column describes projection, never a copy.
@@ -378,6 +397,20 @@ export default function EncounterAttachments(props: {
                       {ATTACHMENT_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                     </select>
                   </div>
+                  {props.procedures.length > 0 && (
+                    // ATT-009 s12, and the control only EXISTS when there is a procedure to point at --
+                    // a "link to procedure" select with no options is a form asking a question this
+                    // consultation cannot answer.
+                    <div>
+                      <label className={LABEL} htmlFor="att-procedure">Documents a procedure</label>
+                      <select id="att-procedure" value={meta.procedureId} disabled={busy}
+                        onChange={e => setMeta(m => ({ ...m, procedureId: e.target.value }))}
+                        className={`${input} mt-1`}>
+                        <option value="">Not tied to a procedure</option>
+                        {props.procedures.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label className={LABEL} htmlFor="att-caption">Note</label>
                     <input id="att-caption" value={meta.caption} disabled={busy}

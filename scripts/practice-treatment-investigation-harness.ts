@@ -44,7 +44,9 @@ import {
   investigationCatalogue, encounterInvestigations, addInvestigations, reviewInvestigations,
   cancelInvestigation, createCustomInvestigation, setInvestigationActivation,
   setInvestigationFavourite, saveInvestigationSet, setCaptureSetting, captureSettings, addLocalAlias,
+  linkInvestigationDocument,
 } from "../src/lib/practice/investigations";
+import { recordIncoming } from "../src/lib/practice/communication";
 import {
   treatmentCapture, treatmentOptions, recordTreatmentBatch, setTreatmentOptionState,
   createTreatmentOption, saveTreatmentTemplate,
@@ -1484,6 +1486,105 @@ async function main() {
       !!plain301 && plain301.ok && plain301.data.results[0].ok,
       plain301 && plain301.ok ? plain301.data.results[0].code + "" : "call failed");
   } else skip("301-4..301-6. dynamic fields", "the custom investigation fixture failed");
+
+  // ══ MIGRATION 275'S linked_document_id, GIVEN ITS WRITER (2026-08-15) ════════════════════════════
+  //
+  // The column and its reader existed since 275; nothing ever wrote it. The clinical shape under test:
+  // a report ARRIVES AFTER THE ENCOUNTER IS SIGNED, so linking must work on a frozen record -- and the
+  // signed-ness is proven by a control, not assumed, or the headline assertion tests nothing.
+  const encL = await launchEncounter(admin, { workspaceId: ws, patientId, pathway: "new_walk_in", ...base });
+  const encLId = encL.ok ? encL.data.id : "";
+  if (encL.ok) await transitionEncounter(admin, { workspaceId: ws, encounterId: encLId, to: "ACTIVE", ...base });
+  const linkAdd = encL.ok ? await addInvestigations(admin, ctx, {
+    encounterId: encLId, reasonShared: "harness link fixture",
+    items: [{ label: "Harness chest x-ray" }, { label: "Harness abandoned test" }], ...base }) : null;
+  const linkInvId = linkAdd?.ok && linkAdd.data.results[0]?.ok ? linkAdd.data.results[0].id : null;
+  const cancelInvId = linkAdd?.ok && linkAdd.data.results[1]?.ok ? linkAdd.data.results[1].id : null;
+  if (cancelInvId) await cancelInvestigation(admin, ctx, {
+    encounterId: encLId, investigationId: cancelInvId, reason: "harness: never pursued", ...base });
+
+  const docMine = await recordIncoming(admin, {
+    workspaceId: ws, patientId, docType: "imaging_report", source: "harness radiology",
+    title: "HARNESS chest film report", ...base });
+  const docLoose = await recordIncoming(admin, {
+    workspaceId: ws, source: "harness radiology", title: "HARNESS unassigned report", ...base });
+  const pat2 = await registerPatient(admin, {
+    workspaceId: ws, displayName: "HARNESS Second Patient (synthetic)", sex: "male",
+    birthDate: "1990-01-01", phone: "0772 000 111", ...base });
+  const docOther = pat2.ok ? await recordIncoming(admin, {
+    workspaceId: ws, patientId: pat2.data.id, docType: "lab_result", source: "harness lab",
+    title: "HARNESS other patient report", ...base }) : null;
+  const docB = otherCtxRes.ok ? await recordIncoming(admin, {
+    workspaceId: otherWs, source: "harness", title: "HARNESS tenant B report",
+    actorId: OWNER_B, correlationId: "harness-ti" }) : null;
+
+  if (linkInvId && cancelInvId && docMine.ok && docLoose.ok && docOther?.ok) {
+    const linked = await linkInvestigationDocument(admin, ctx, {
+      encounterId: encLId, investigationId: linkInvId, incomingDocumentId: docMine.data.id, ...base });
+    ok("275-L1. a recorded investigation takes a link to the inbox document that answers it",
+      linked.ok, linked.ok ? "" : linked.message);
+    const readBack = await encounterInvestigations(admin, ctx, encLId);
+    const linkedRow = readBack.items.find(i => i.id === linkInvId);
+    ok("275-L1b. the row reads back with the id AND the report's TITLE -- which report, not merely that one exists",
+      linkedRow?.linkedDocumentId === docMine.data.id && linkedRow?.linkedDocumentTitle === "HARNESS chest film report",
+      JSON.stringify({ id: linkedRow?.linkedDocumentId, title: linkedRow?.linkedDocumentTitle }));
+
+    const toCancelled = await linkInvestigationDocument(admin, ctx, {
+      encounterId: encLId, investigationId: cancelInvId, incomingDocumentId: docMine.data.id, ...base });
+    ok("275-L2. an investigation nobody pursued refuses a report by name -- nothing answers a question never asked",
+      !toCancelled.ok && toCancelled.code === "INVESTIGATION_CANCELLED",
+      toCancelled.ok ? "was linked" : String(toCancelled.code));
+
+    const unassigned = await linkInvestigationDocument(admin, ctx, {
+      encounterId: encLId, investigationId: linkInvId, incomingDocumentId: docLoose.data.id, ...base });
+    ok("275-L3. an UNASSIGNED inbox document is refused with directions, never silently adopted -- "
+      + "classifyIncoming stays the one owner of patient assignment",
+      !unassigned.ok && unassigned.code === "DOCUMENT_UNASSIGNED" && /inbox/.test(String(unassigned.message)),
+      unassigned.ok ? "was linked" : `${unassigned.code}: ${unassigned.message}`);
+
+    const wrongPatient = await linkInvestigationDocument(admin, ctx, {
+      encounterId: encLId, investigationId: linkInvId, incomingDocumentId: docOther.data.id, ...base });
+    ok("275-L4. another PATIENT'S report is refused by name",
+      !wrongPatient.ok && wrongPatient.code === "WRONG_PATIENT",
+      wrongPatient.ok ? "was linked" : String(wrongPatient.code));
+
+    ok("275-L5a. PRECONDITION: the tenant-B document really exists (L5 is not vacuous)", !!docB?.ok,
+      docB ? (docB.ok ? "" : docB.message) : "no second tenant");
+    if (docB?.ok) {
+      const crossTenant = await linkInvestigationDocument(admin, ctx, {
+        encounterId: encLId, investigationId: linkInvId, incomingDocumentId: docB.data.id, ...base });
+      ok("275-L5. ⚠ another PRACTICE'S document does not exist as far as this one can see",
+        !crossTenant.ok && crossTenant.code === "DOCUMENT_NOT_FOUND",
+        crossTenant.ok ? "was linked across tenants" : String(crossTenant.code));
+    }
+
+    const ghostInv = await linkInvestigationDocument(admin, ctx, {
+      encounterId: encLId, investigationId: "00000000-0000-4000-8000-00000000dead",
+      incomingDocumentId: docMine.data.id, ...base });
+    ok("275-L6. an investigation that is not on this encounter is refused",
+      !ghostInv.ok && ghostInv.code === "NOT_FOUND", ghostInv.ok ? "was linked" : String(ghostInv.code));
+
+    // ── THE CLINICAL POINT: the encounter is SIGNED, and the link still writes ──
+    await transitionEncounter(admin, { workspaceId: ws, encounterId: encLId, to: "COMPLETED", ...base });
+    await transitionEncounter(admin, { workspaceId: ws, encounterId: encLId, to: "SIGNED", ...base });
+    // The control that makes L7 mean something: the signed record refuses ORDINARY writes. Without
+    // this, a broken signing fixture would let L7 pass against an encounter that was never frozen.
+    const frozenAdd = await addInvestigations(admin, ctx, {
+      encounterId: encLId, items: [{ label: "after signing" }], reasonShared: "x", ...base });
+    ok("275-L7a. CONTROL: the signed encounter refuses an ordinary write (the fixture really is frozen)",
+      !frozenAdd.ok, frozenAdd.ok ? "the encounter is not signed; L7 would prove nothing" : String(frozenAdd.code));
+
+    const unlinkSigned = await linkInvestigationDocument(admin, ctx, {
+      encounterId: encLId, investigationId: linkInvId, incomingDocumentId: null, ...base });
+    const relinkSigned = await linkInvestigationDocument(admin, ctx, {
+      encounterId: encLId, investigationId: linkInvId, incomingDocumentId: docMine.data.id, ...base });
+    const afterSigned = await encounterInvestigations(admin, ctx, encLId);
+    const rowSigned = afterSigned.items.find(i => i.id === linkInvId);
+    ok("275-L7. ⚠ THE REPORT ARRIVES AFTER SIGNING: unlink and relink both write on the frozen record, "
+      + "because a link points at a document -- it changes no clinical content",
+      unlinkSigned.ok && relinkSigned.ok && rowSigned?.linkedDocumentId === docMine.data.id,
+      JSON.stringify({ unlink: unlinkSigned.ok ? "ok" : unlinkSigned.code, relink: relinkSigned.ok ? "ok" : relinkSigned.code, readBack: rowSigned?.linkedDocumentId ?? null }));
+  } else skip("275-L1..275-L7. report linking", "the link fixtures failed to build");
 
   // ══ 14. CLEAN UP AND PROVE IT ═════════════════════════════════════════════════════════════════
   section("14. fixtures");

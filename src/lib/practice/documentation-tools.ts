@@ -280,10 +280,32 @@ export async function recordAttachment(admin: any, args: {
   contentHash?: string;
   /** s13's explicit confirmation. Without it, bytes this encounter already holds are refused. */
   allowDuplicate?: boolean;
+  /**
+   * ── ATT-009 s12: which procedure this file documents ────────────────────────────────────────────
+   * The column arrived in migration 209 and procedureDetail() has read it ever since -- this is the
+   * writer that was never built (the recorded built-but-unreachable class). Checked below against the
+   * WORKSPACE and the PATIENT, not merely existence: a plain FK cannot see tenancy, so an unchecked id
+   * here would file one patient's wound photograph against another patient's operation.
+   */
+  procedureId?: string | null;
   actorId: string; correlationId: string;
 }): Promise<EngineResult<{ id: string; patientId: string }>> {
   const guard = await editableEncounter(admin, args.workspaceId, args.encounterId);
   if (!guard.ok) return guard;
+
+  let procedureId: string | null = null;
+  if (args.procedureId) {
+    const { data: proc, error: procErr } = await admin.from("practice_procedure")
+      .select("id, workspace_id, patient_id")
+      .eq("id", args.procedureId).eq("workspace_id", args.workspaceId).maybeSingle();
+    if (procErr)
+      return { ok: false, status: 503, code: "PROCEDURE_UNAVAILABLE", message: "the procedure could not be read, so the link cannot be checked; try again" };
+    if (!proc)
+      return { ok: false, status: 404, code: "PROCEDURE_NOT_FOUND", message: "that procedure does not exist in this practice" };
+    if (proc.patient_id !== guard.encounter.patient_id)
+      return { ok: false, status: 422, code: "WRONG_PATIENT", message: "that procedure belongs to a different patient than this encounter" };
+    procedureId = proc.id;
+  }
 
   // ⚠ s13's DUPLICATE REFUSAL, ON THE HASH AND NOTHING WEAKER. The screen warns on name+size, which is
   // a guess; this is the bytes. Refused BEFORE the storage object was recorded against the encounter,
@@ -310,6 +332,7 @@ export async function recordAttachment(admin: any, args: {
     tags: (args.tags ?? []).map(t => t.trim()).filter(Boolean).slice(0, 12),
     patient_visible: args.patientVisible !== false,
     content_hash: args.contentHash ?? null,
+    procedure_id: procedureId,
     created_by: args.actorId,
   }).select("id").single();
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
@@ -319,6 +342,7 @@ export async function recordAttachment(admin: any, args: {
     payload: {
       attachmentId: data.id, encounterId: args.encounterId, kind, bytes: args.byteSize,
       patientVisible: args.patientVisible !== false, duplicateConfirmed: args.allowDuplicate === true,
+      procedureId,
     },
     correlationId: args.correlationId,
   });

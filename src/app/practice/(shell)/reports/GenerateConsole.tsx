@@ -19,21 +19,39 @@ type Patient = { id: string; displayName?: string; display_name?: string };
 
 const DOC_KINDS = TEMPLATE_KINDS.filter(([k]) => k !== "encounter_note");
 
-export default function GenerateConsole({ templates, canAuthor, canFindPatients }: {
-  templates: Template[]; canAuthor: boolean; canFindPatients: boolean;
+export default function GenerateConsole({ templates, canAuthor, canFindPatients, initialTemplateId = null }: {
+  templates: Template[]; canAuthor: boolean; canFindPatients: boolean; initialTemplateId?: string | null;
 }) {
-  const [mode, setMode] = useState<"single" | "bulk" | null>(null);
-  const [kind, setKind] = useState<string | null>(null);
-  const [templateId, setTemplateId] = useState("");
+  // Only templates with a body can be generated from: the section-based ones fill a consultation's SOAP
+  // segments and have nothing to merge into.
+  const usable = templates.filter(t => t.mergeable && t.kind !== "encounter_note");
+
+  // ?template=<id> from the Templates tab's "Use template" link. The panel opens ALREADY ON that
+  // template -- the person chose it on the previous screen; asking again is the extra click the owner
+  // has already objected to once. Validated against `usable`, the SAME list the select renders from,
+  // so the preselection can never name a template the dropdown would refuse: a link pointing at a
+  // template that has since been retired or emptied falls through to a visible sentence, never to a
+  // silently closed panel.
+  const preselected = (canAuthor && initialTemplateId)
+    ? usable.find(t => t.id === initialTemplateId) ?? null : null;
+
+  const [mode, setMode] = useState<"single" | "bulk" | null>(preselected ? "single" : null);
+  const [kind, setKind] = useState<string | null>(preselected ? preselected.kind : null);
+  const [templateId, setTemplateId] = useState(preselected ? preselected.id : "");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Patient[]>([]);
   const [picked, setPicked] = useState<Patient[]>([]);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<{ kind: "ok" | "err" | "gap"; text: string } | null>(null);
+  const [notice, setNotice] = useState<{ kind: "ok" | "err" | "gap"; text: string } | null>(
+    initialTemplateId && canAuthor && !preselected
+      ? {
+        kind: "gap",
+        text: "The link pointed at a template that cannot be generated from right now -- it may be "
+          + "unpublished or have no body to merge into. Choose one below.",
+      }
+      : null,
+  );
 
-  // Only templates with a body can be generated from: the section-based ones fill a consultation's SOAP
-  // segments and have nothing to merge into.
-  const usable = templates.filter(t => t.mergeable && t.kind !== "encounter_note");
   const shown = kind ? usable.filter(t => t.kind === kind) : usable;
 
   function open(nextMode: "single" | "bulk", nextKind: string | null) {
@@ -100,6 +118,16 @@ export default function GenerateConsole({ templates, canAuthor, canFindPatients 
       {!canAuthor && (
         <p className="mt-1 text-[11px] text-gray-500">
           You can read reports but not author documents, so these are shown and not enabled.
+        </p>
+      )}
+
+      {/* A ?template= link that named an unusable template leaves the panel CLOSED, so its explanation
+          cannot live inside the panel -- it renders here or the link fails silently. */}
+      {!mode && notice && (
+        <p className={`mt-2 rounded-lg px-2.5 py-2 text-[11px] ${
+          notice.kind === "ok" ? "bg-emerald-50 text-emerald-800"
+            : notice.kind === "gap" ? "bg-amber-50 text-amber-900" : "bg-red-50 text-red-800"}`}>
+          {notice.text}
         </p>
       )}
 

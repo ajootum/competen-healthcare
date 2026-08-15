@@ -374,6 +374,8 @@ export type EncounterInvestigation = {
   reason: string | null; reasonShared: string | null; reasonOverride: string | null;
   requestedAt: string; reviewedAt: string | null; cancelledAt: string | null;
   cancelledReason: string | null; linkedDocumentId: string | null; batchId: string | null;
+  /** The linked inbox document's title, so a row can say WHICH report answers it, not merely that one does. */
+  linkedDocumentTitle: string | null;
 };
 
 /**
@@ -405,7 +407,7 @@ export async function encounterInvestigations(
       investigationId: null, displayNameSnapshot: null, category: null,
       reason: null, reasonShared: null, reasonOverride: null,
       requestedAt: r.requested_at, reviewedAt: r.reviewed_at ?? null, cancelledAt: null,
-      cancelledReason: null, linkedDocumentId: null, batchId: null,
+      cancelledReason: null, linkedDocumentId: null, batchId: null, linkedDocumentTitle: null,
     })));
   }
 
@@ -415,6 +417,16 @@ export async function encounterInvestigations(
     ? await admin.from(INVESTIGATION_TABLES.catalogue).select("id, category").in("id", ids)
     : { data: [] };
   const catBy = new Map(((cats ?? []) as any[]).map(c => [c.id, c.category]));
+
+  // The linked report's title, read WORKSPACE-SCOPED even though the FK narrows it already -- the same
+  // rule the alias read follows since 301: a child read keyed only on parent ids is one schema change
+  // away from a leak. Best-effort: a failed title read renders "a report", never a broken tab.
+  const docIds = [...new Set(rows.map(r => r.linked_document_id).filter(Boolean))];
+  const { data: docs } = docIds.length
+    ? await admin.from("practice_incoming_document").select("id, title")
+      .eq("workspace_id", ctx.workspaceId).in("id", docIds)
+    : { data: [] };
+  const titleBy = new Map(((docs ?? []) as any[]).map(d => [d.id, d.title]));
 
   return loaded(rows.map(r => ({
     id: r.id, label: r.label, status: r.status, summary: r.summary ?? null,
@@ -426,6 +438,7 @@ export async function encounterInvestigations(
     requestedAt: r.requested_at, reviewedAt: r.reviewed_at ?? null,
     cancelledAt: r.cancelled_at ?? null, cancelledReason: r.cancelled_reason ?? null,
     linkedDocumentId: r.linked_document_id ?? null, batchId: r.batch_id ?? null,
+    linkedDocumentTitle: r.linked_document_id ? (titleBy.get(r.linked_document_id) ?? null) : null,
   })));
 }
 
@@ -704,6 +717,71 @@ export async function reviewInvestigations(admin: any, ctx: WorkspaceContext, ar
     correlationId: args.correlationId,
   });
   return { ok: true, data: { reviewed, reviewedAt } };
+}
+
+/**
+ * CPR-INV-001 s7 / migration 275: point a recorded investigation at the incoming document that answers
+ * it. 275's own words apply -- THE RESULT LIVES THERE, NOT HERE. This writes a reference, never a
+ * result, and unlinking (null) is the same act pointed at nothing.
+ *
+ * ⚠ DELIBERATELY NOT GUARDED BY editableEncounter. A report normally arrives AFTER the consultation is
+ * signed, so requiring an editable encounter would confine linking to the one window in which there is
+ * nothing to link. The encounter row is still read -- the link is checked against its WORKSPACE and its
+ * PATIENT, because linked_document_id is a plain FK and a plain FK cannot see tenancy (the migration-301
+ * alias lesson, applied before the bug this time).
+ *
+ * ⚠ AN UNASSIGNED INBOX DOCUMENT IS REFUSED, NOT ADOPTED. classifyIncoming is the one place a document
+ * acquires its patient; quietly assigning it here because a link implies it would be a second owner of
+ * that decision, and the refusal says where to go instead.
+ */
+export async function linkInvestigationDocument(admin: any, ctx: WorkspaceContext, args: {
+  encounterId: string; investigationId: string; incomingDocumentId: string | null;
+  actorId: string; correlationId: string;
+}): Promise<EngineResult<{ id: string; linkedDocumentId: string | null }>> {
+  if (!hasCapability(ctx, CAP_ENCOUNTER_EDIT))
+    return fail(403, "FORBIDDEN", `linking a report needs ${CAP_ENCOUNTER_EDIT}`);
+
+  const { data: enc, error: encErr } = await admin.from("practice_encounter")
+    .select("id, patient_id").eq("id", args.encounterId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (encErr) return fail(503, "ENCOUNTER_UNAVAILABLE", "the encounter could not be read, so the link cannot be checked; try again");
+  if (!enc) return fail(404, "NOT_FOUND", "that encounter does not exist in this practice");
+
+  const { data: inv, error: invErr } = await admin.from(INVESTIGATION_TABLES.encounterInvestigation)
+    .select("id, status, label").eq("id", trim(args.investigationId))
+    .eq("workspace_id", ctx.workspaceId).eq("encounter_id", args.encounterId).maybeSingle();
+  if (invErr) return fail(503, "INVESTIGATION_UNAVAILABLE", "the investigation could not be read, so the link cannot be checked; try again");
+  if (!inv) return fail(404, "NOT_FOUND", "that investigation is not on this encounter");
+  if (inv.status === "cancelled")
+    return fail(422, "INVESTIGATION_CANCELLED", "this investigation was not pursued, so a report cannot belong to it");
+
+  let linked: string | null = null;
+  let linkedTitle: string | null = null;
+  if (args.incomingDocumentId) {
+    const { data: doc, error: docErr } = await admin.from("practice_incoming_document")
+      .select("id, patient_id, title").eq("id", trim(args.incomingDocumentId))
+      .eq("workspace_id", ctx.workspaceId).maybeSingle();
+    if (docErr) return fail(503, "DOCUMENT_UNAVAILABLE", "the inbox document could not be read, so the link cannot be checked; try again");
+    if (!doc) return fail(404, "DOCUMENT_NOT_FOUND", "that inbox document does not exist in this practice");
+    if (!doc.patient_id)
+      return fail(422, "DOCUMENT_UNASSIGNED",
+        "that inbox document is not assigned to a patient yet; assign it in the inbox first, then link it here");
+    if (doc.patient_id !== enc.patient_id)
+      return fail(422, "WRONG_PATIENT", "that document belongs to a different patient than this encounter");
+    linked = doc.id; linkedTitle = doc.title ?? null;
+  }
+
+  const { error } = await admin.from(INVESTIGATION_TABLES.encounterInvestigation)
+    .update({ linked_document_id: linked })
+    .eq("id", inv.id).eq("workspace_id", ctx.workspaceId);
+  if (error) return fail(422, "WRITE_FAILED", `the link was not recorded: ${error.message}`);
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: args.actorId,
+    eventType: linked ? "practice.investigation_report_linked" : "practice.investigation_report_unlinked",
+    payload: { encounterId: args.encounterId, investigationId: inv.id, incomingDocumentId: linked },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { id: inv.id as string, linkedDocumentId: linked, ...(linkedTitle ? { linkedDocumentTitle: linkedTitle } : {}) } as any };
 }
 
 /**

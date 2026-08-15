@@ -35,6 +35,8 @@ import {
   saveDraft, myDrafts, discardDraft, listPhrases, createPhrase, deletePhrase, expandPhrases,
   recordAttachment, listAttachments, removeAttachment, setAttachmentVisibility,
 } from "../src/lib/practice/documentation-tools";
+import { recordProcedure } from "../src/lib/practice/procedures";
+import { procedureDetail } from "../src/lib/practice/clinical-activity";
 import { CALCULATORS, calculatorByKey } from "../src/lib/practice/clinical-calculators";
 import { documentRegister } from "../src/lib/practice/documents-workspace";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
@@ -399,6 +401,92 @@ async function main() {
   });
   ok("300-5c. CONTROL: different bytes under the SAME NAME pass without a question -- the guard is the hash",
     freshHash.ok, freshHash.ok ? "" : freshHash.message);
+
+  // ══ ATTACHMENT -> PROCEDURE LINKING (migration 209's column, given its writer 2026-08-15) ═════════
+  //
+  // procedure_id existed for months with a READER (procedureDetail) and no writer -- the recorded
+  // built-but-unreachable class. These assertions prove the loop end to end: written by the engine,
+  // carried by the list, surfaced by the reader that was always waiting for it -- and refused across
+  // the two boundaries a plain FK cannot see, workspace and patient.
+  const proc = await recordProcedure(admin, {
+    workspaceId: wsA, encounterId: enc2.data.id, label: "Wound closure", ...base,
+  });
+  ok("LINK-1. a procedure records on the consultation", proc.ok, proc.ok ? "" : (proc as any).message);
+  if (!proc.ok) return report();
+
+  const linked = await recordAttachment(admin, {
+    workspaceId: wsA, encounterId: enc2.data.id, storagePath: `${wsA}/${enc2.data.id}/closure.png`,
+    fileName: "closure.png", mimeType: "image/png", byteSize: 512, kind: "photograph",
+    procedureId: proc.data.id, ...base,
+  });
+  ok("LINK-2. an attachment records POINTING AT the procedure it documents", linked.ok,
+    linked.ok ? "" : (linked as any).message);
+  if (!linked.ok) return report();
+
+  const linkedRow = (await listAttachments(admin, wsA, { encounterId: enc2.data.id }))
+    .find((a: any) => a.id === linked.data.id);
+  ok("LINK-2b. the list carries the link, read back rather than taken on trust",
+    linkedRow?.procedure_id === proc.data.id, JSON.stringify({ got: linkedRow?.procedure_id }));
+
+  // ⚠ THE READER THAT WAS ALWAYS WAITING. procedureDetail has selected attachments by procedure_id
+  // since migration 209; this is the first time anything it can find has ever been written.
+  const detail = await procedureDetail(admin, wsA, proc.data.id);
+  ok("LINK-3. procedureDetail -- the reader built before the writer -- now finds the file",
+    detail.attachments.some((a: any) => a.id === linked.data.id),
+    JSON.stringify(detail.attachments.map((a: any) => a.id)));
+  // The control must be able to fail: it names a REAL unlinked attachment on the same encounter
+  // (300-5c's), and it first requires that attachment to exist -- a control comparing against an id
+  // that was never created passes vacuously, which is the needle-matching-nothing class.
+  ok("LINK-3b. CONTROL: an unlinked attachment on the same encounter does NOT appear under the procedure",
+    freshHash.ok && !detail.attachments.some((a: any) => a.id === (freshHash as any).data.id),
+    "if it did, the reader would be joining on the encounter, not the link");
+
+  // ── The two boundaries a plain FK cannot see ──
+  const p2 = await registerPatient(admin, {
+    workspaceId: wsA, displayName: "Okello James", sex: "male", birthDate: "1984-06-02",
+    phone: "0772 555 401", ...base,
+  });
+  if (!p2.ok) { ok("second patient registers", false, p2.message); return report(); }
+  const encP2 = await launchEncounter(admin, {
+    workspaceId: wsA, patientId: p2.data.id, pathway: "new_walk_in", reasonForVisit: "Review", ...base,
+  });
+  if (!encP2.ok) { ok("second patient's encounter launches", false, encP2.message); return report(); }
+  const wrongPatient = await recordAttachment(admin, {
+    workspaceId: wsA, encounterId: encP2.data.id, storagePath: "x", fileName: "misfiled.png",
+    mimeType: "image/png", byteSize: 10, procedureId: proc.data.id, ...base,
+  });
+  ok("LINK-4. ⚠ ANOTHER PATIENT'S procedure is refused BY NAME -- a wound photo filed across patients",
+    !wrongPatient.ok && wrongPatient.code === "WRONG_PATIENT",
+    wrongPatient.ok ? "was attached" : String(wrongPatient.code));
+
+  const ghost = await recordAttachment(admin, {
+    workspaceId: wsA, encounterId: enc2.data.id, storagePath: "x", fileName: "ghost.png",
+    mimeType: "image/png", byteSize: 10, procedureId: "00000000-0000-4000-8000-00000000dead", ...base,
+  });
+  ok("LINK-5. a procedure that does not exist is refused, and NOTHING was attached without its link",
+    !ghost.ok && ghost.code === "PROCEDURE_NOT_FOUND", ghost.ok ? "was attached" : String(ghost.code));
+
+  // ⚠ THE TENANT BOUNDARY, NON-VACUOUSLY. Workspace B gets its own real patient and encounter, so the
+  // refusal below can only come from the PROCEDURE lookup -- an encounter-level NOT_FOUND would be the
+  // control passing for the wrong reason.
+  const pB = await registerPatient(admin, {
+    workspaceId: wsB, displayName: "Namutebi Grace", sex: "female", birthDate: "1979-11-23",
+    phone: "0772 555 402", actorId: OTHER, correlationId: "harness-doct",
+  });
+  if (!pB.ok) { ok("workspace B's patient registers", false, pB.message); return report(); }
+  const encB = await launchEncounter(admin, {
+    workspaceId: wsB, patientId: pB.data.id, pathway: "new_walk_in", reasonForVisit: "Checkup",
+    actorId: OTHER, correlationId: "harness-doct",
+  });
+  if (!encB.ok) { ok("workspace B's encounter launches", false, encB.message); return report(); }
+  const crossLink = await recordAttachment(admin, {
+    workspaceId: wsB, encounterId: encB.data.id, storagePath: "x", fileName: "cross.png",
+    mimeType: "image/png", byteSize: 10, procedureId: proc.data.id,
+    actorId: OTHER, correlationId: "harness-doct",
+  });
+  ok("LINK-6. ⚠ ANOTHER PRACTICE'S procedure does not exist as far as this one can see",
+    !crossLink.ok && crossLink.code === "PROCEDURE_NOT_FOUND",
+    crossLink.ok ? "was attached across tenants" : String(crossLink.code));
 
   // ── 10. Isolation ────────────────────────────────────────────────────────
   const crossDraft = await saveDraft(admin, {

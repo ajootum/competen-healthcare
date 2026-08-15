@@ -117,6 +117,10 @@ export async function POST(req: NextRequest) {
     patientVisible: String(form.get("patientVisible") ?? "true") !== "false",
     contentHash,
     allowDuplicate: String(form.get("allowDuplicate") ?? "") === "true",
+    // ATT-009 s12: forwarded whole, checked by the ENGINE against workspace and patient. This line is
+    // load-bearing -- the route silently dropping an engine's field is the middle-layer class the
+    // follow-ups route fell to with all six of 299's fields.
+    procedureId: form.get("procedureId") ? String(form.get("procedureId")) : null,
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   // ⚠ A DUPLICATE REFUSAL ALSO CLEANS UP ITS OBJECT, through the same branch a failed insert uses. The

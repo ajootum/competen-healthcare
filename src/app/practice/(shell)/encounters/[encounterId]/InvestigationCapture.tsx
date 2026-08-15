@@ -103,6 +103,7 @@ const INVESTIGATION_COLUMNS: RecordColumn<InvRow>[] = [
 
 export default function InvestigationCapture(props: {
   encounterId: string;
+  patientId: string;
   catalogue: InvestigationCatalogue;
   recorded: Panel<EncounterInvestigation>;
   canEdit: boolean;
@@ -126,6 +127,33 @@ export default function InvestigationCapture(props: {
   const [reviewSummary, setReviewSummary] = useState("");
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+
+  // ── s7's report link (275's column, writable at last) ──────────────────────────────────────────────
+  // ⚠ AVAILABLE ON A SIGNED ENCOUNTER ON PURPOSE: a report arrives after the consultation is signed,
+  // so this one action gates on the CAPABILITY alone, not on `editable` -- linking changes no clinical
+  // content, it points at a document the inbox already holds.
+  const [linking, setLinking] = useState<string | null>(null);
+  const [linkChoice, setLinkChoice] = useState("");
+  /** Three states, never two: null = not fetched yet; {error} = the read failed and says so. */
+  const [inbox, setInbox] = useState<{ items: any[] } | { error: string } | null>(null);
+
+  async function openLink(rowId: string) {
+    setLinkChoice("");
+    if (linking === rowId) { setLinking(null); return; }
+    setLinking(rowId);
+    if (inbox !== null) return;
+    try {
+      const res = await fetch(`/api/v1/practice/inbox?patientId=${encodeURIComponent(props.patientId)}`);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setInbox({ error: body?.error?.message ?? "the inbox could not be read, so nothing can be offered to link" });
+        return;
+      }
+      setInbox({ items: (body.incoming ?? []) as any[] });
+    } catch {
+      setInbox({ error: "the inbox could not be reached, so nothing can be offered to link" });
+    }
+  }
 
   const [creating, setCreating] = useState(false);
   /** migration 301: which existing investigation the missed search word should be taught to. */
@@ -361,21 +389,101 @@ export default function InvestigationCapture(props: {
                   {i.cancelledAt ? ` · not pursued ${String(i.cancelledAt).slice(0, 10)}` : ""}
                   {i.reason ? ` · clinical question: ${i.reason}` : ""}
                   {i.cancelledReason ? ` · not pursued: ${i.cancelledReason}` : ""}
+                  {i.linkedDocumentId && (
+                    // s7: the row says WHICH report answers it. The link goes to the register -- there
+                    // is deliberately no per-document viewer, the same decision documents-workspace made.
+                    <>
+                      {" · report: "}
+                      <a href="/practice/inbox" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                        {i.linkedDocumentTitle ?? "in the inbox"}
+                      </a>
+                    </>
+                  )}
                 </>
               ),
-              actions: editable && i.status === "requested" ? (
+              actions: (editable && i.status === "requested") || (props.canEdit && i.status !== "cancelled") ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <button type="button" className={QUIET} disabled={busy}
-                    aria-label={`Mark ${i.label} as reviewed`}
-                    onClick={() => markReviewed([i.id])}>Mark as reviewed</button>
-                  <button type="button" className={QUIET} disabled={busy}
-                    aria-label={`Record ${i.label} as not pursued`}
-                    onClick={() => { setCancelReason(""); setCancelling(cancelling === i.id ? null : i.id); }}>
-                    Not pursued
-                  </button>
+                  {editable && i.status === "requested" && (
+                    <>
+                      <button type="button" className={QUIET} disabled={busy}
+                        aria-label={`Mark ${i.label} as reviewed`}
+                        onClick={() => markReviewed([i.id])}>Mark as reviewed</button>
+                      <button type="button" className={QUIET} disabled={busy}
+                        aria-label={`Record ${i.label} as not pursued`}
+                        onClick={() => { setCancelReason(""); setCancelling(cancelling === i.id ? null : i.id); }}>
+                        Not pursued
+                      </button>
+                    </>
+                  )}
+                  {props.canEdit && i.status !== "cancelled" && (
+                    // Capability-gated, NOT `editable`-gated -- see the state block above. A signed
+                    // encounter still takes a report link, because that is when reports exist.
+                    <button type="button" className={QUIET} disabled={busy}
+                      aria-label={i.linkedDocumentId ? `Change the report linked to ${i.label}` : `Link a report to ${i.label}`}
+                      onClick={() => openLink(i.id)}>
+                      {linking === i.id ? "Cancel" : i.linkedDocumentId ? "Change report" : "Link report"}
+                    </button>
+                  )}
                 </span>
               ) : undefined,
-              expandedContent: cancelling === i.id ? (
+              expandedContent: linking === i.id ? (
+                <div className="rounded-lg bg-gray-50 p-2">
+                  {inbox === null ? (
+                    <p className="text-[11px] text-gray-500">Reading the inbox&hellip;</p>
+                  ) : "error" in inbox ? (
+                    // The failed read says it failed -- it never renders as "this patient has no
+                    // documents", which is a different fact.
+                    <p className="text-[11px] text-[var(--cmp-text-warning)]">{inbox.error}</p>
+                  ) : inbox.items.length === 0 ? (
+                    <p className="text-[11px] text-gray-600">
+                      No inbox document is recorded for this patient. When the report arrives,{" "}
+                      <a href="/practice/inbox" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                        record it in the inbox
+                      </a>{" "}
+                      first, then link it here.
+                    </p>
+                  ) : (
+                    <form className="flex flex-wrap items-center gap-1.5"
+                      onSubmit={async ev => {
+                        ev.preventDefault();
+                        if (!linkChoice) return;
+                        const body = await post({
+                          action: "linkDocument", encounterId: props.encounterId,
+                          investigationId: i.id, incomingDocumentId: linkChoice,
+                        });
+                        if (body) { setLinking(null); setNotice({ kind: "ok", text: "Report linked. The result stays in the inbox document; this row now points at it." }); router.refresh(); }
+                      }}>
+                      <select className={`${input} max-w-[360px]`} value={linkChoice}
+                        aria-label={`Which report answers ${i.label}`}
+                        onChange={e => setLinkChoice(e.target.value)}>
+                        <option value="">Choose the report that answers this</option>
+                        {inbox.items.map(d => (
+                          <option key={d.id} value={d.id}>
+                            {(d.title ?? "Untitled")} · {String(d.doc_type ?? "").replace(/_/g, " ")} · {String(d.received_on ?? "").slice(0, 10)}
+                          </option>
+                        ))}
+                      </select>
+                      <button type="submit" className={QUIET} disabled={busy || !linkChoice}>Link</button>
+                      {i.linkedDocumentId && (
+                        <button type="button" className={QUIET} disabled={busy}
+                          onClick={async () => {
+                            const body = await post({
+                              action: "linkDocument", encounterId: props.encounterId,
+                              investigationId: i.id, incomingDocumentId: null,
+                            });
+                            if (body) { setLinking(null); setNotice({ kind: "ok", text: "Unlinked. The inbox document itself is untouched." }); router.refresh(); }
+                          }}>
+                          Unlink current report
+                        </button>
+                      )}
+                      <p className="w-full text-[10px] text-gray-500">
+                        A link points; it never copies. The result stays on the inbox document with its
+                        own review trail, and unlinking removes the pointer only.
+                      </p>
+                    </form>
+                  )}
+                </div>
+              ) : cancelling === i.id ? (
                 <form className="flex flex-wrap items-center gap-1.5 rounded-lg bg-gray-50 p-2"
                   onSubmit={async ev => {
                     ev.preventDefault();

@@ -4,6 +4,7 @@ import {
   addInvestigations, reviewInvestigations, cancelInvestigation,
   createCustomInvestigation, setInvestigationActivation, setInvestigationFavourite,
   saveInvestigationSet, retireInvestigationSet, setCaptureSetting, addLocalAlias,
+  linkInvestigationDocument,
 } from "@/lib/practice/investigations";
 import { CAPTURE_SETTING_KEYS, type CaptureSettingKey } from "@/lib/practice/investigation-constants";
 
@@ -121,6 +122,19 @@ export async function POST(req: NextRequest) {
         // ⚠ THE PRACTITIONER IS THE CALLER, NEVER THE BODY. A pin written on somebody else's behalf is
         // the subject-versus-caller bug class this codebase has already closed twice.
         practitionerId: caller.userId,
+        ...actor,
+      });
+      return respond(result, caller.traceId);
+    }
+
+    case "linkDocument": {
+      // s7's report link (migration 275's column, given its writer at last). null unlinks -- the same
+      // act pointed at nothing -- so the field is passed through as-is rather than String()-coerced,
+      // which would turn null into the string "null" and 404 every unlink.
+      const result = await linkInvestigationDocument(caller.admin, ctx, {
+        encounterId: String(body.encounterId ?? ""),
+        investigationId: String(body.investigationId ?? ""),
+        incomingDocumentId: body.incomingDocumentId ? String(body.incomingDocumentId) : null,
         ...actor,
       });
       return respond(result, caller.traceId);
