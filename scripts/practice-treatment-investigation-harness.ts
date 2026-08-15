@@ -43,7 +43,7 @@ import { patientMedications } from "../src/lib/practice/medication";
 import {
   investigationCatalogue, encounterInvestigations, addInvestigations, reviewInvestigations,
   cancelInvestigation, createCustomInvestigation, setInvestigationActivation,
-  setInvestigationFavourite, saveInvestigationSet, setCaptureSetting, captureSettings,
+  setInvestigationFavourite, saveInvestigationSet, setCaptureSetting, captureSettings, addLocalAlias,
 } from "../src/lib/practice/investigations";
 import {
   treatmentCapture, treatmentOptions, recordTreatmentBatch, setTreatmentOptionState,
@@ -1396,6 +1396,94 @@ async function main() {
     ok("13-9. CONTROL: the custom item IS in the workspace that made it",
       afterCustom.all.some(i => custom.ok && i.id === custom.data.id));
   } else skip("13-8b..13-9. tenant isolation", "the second tenant is not a distinct workspace");
+
+  // ══ MIGRATION 301: CLASSIFICATION, LOCAL ALIASES, AND THE DEFINITION'S OWN FIELDS ═══════════════
+  //
+  // ⚠ EVERYTHING HERE RUNS AGAINST THE LIVE ENGINE AND THE LIVE ROWS. The classification backfill, the
+  // alias tenancy and the detail refusal are all things a source scan cannot see.
+  const lib301 = await investigationCatalogue(admin, ctx, OWNER);
+  const dualCodes = ["OTH-002", "OTH-003", "RAD-FL-002"];
+  const duals = lib301.all.filter(i => dualCodes.includes(i.code));
+  const fbc301 = lib301.all.find(i => i.code === "LAB-HAEM-001");
+  ok("301-1. s10: the three endoscopy and HSG rows read dual_purpose, and FBC reads investigation",
+    duals.length === 3 && duals.every(i => i.classification === "dual_purpose")
+      && fbc301?.classification === "investigation",
+    JSON.stringify({ duals: duals.map(i => [i.code, i.classification]), fbc: fbc301?.classification }));
+
+  // ── s12: a practice teaches the search its own word, and only that practice hears it ────────────
+  if (fbc301 && otherCtxRes.ok) {
+    const taught = await addLocalAlias(admin, ctx, {
+      investigationId: fbc301.id, alias: "HARNESS-FHG-301", ...base });
+    ok("301-2. teaching a local word for a PLATFORM item succeeds", taught.ok,
+      taught.ok ? "" : taught.message);
+    const libAfter = await investigationCatalogue(admin, ctx, OWNER);
+    const hit = rankInvestigations(libAfter.selectable, "HARNESS-FHG-301");
+    ok("301-2b. and the word now FINDS the item, through the same ranking the picker runs",
+      hit.length > 0 && hit[0].id === fbc301.id, JSON.stringify(hit.map(h => h.code)));
+    // ⚠ THE ISOLATION HALF IS THE POINT OF THE COLUMN. Without the scoped read, tenant B would
+    // inherit tenant A's private vocabulary through the shared platform row.
+    const libB = await investigationCatalogue(admin, otherCtxRes.ctx, OWNER_B);
+    ok("301-2c. AC-07: the other tenant's search does NOT hear it",
+      rankInvestigations(libB.selectable, "HARNESS-FHG-301").length === 0);
+    const twice = await addLocalAlias(admin, ctx, {
+      investigationId: fbc301.id, alias: "HARNESS-FHG-301", ...base });
+    ok("301-3. the same practice teaching the same word twice is refused by name",
+      !twice.ok && twice.code === "ALIAS_EXISTS", twice.ok ? "was allowed" : twice.code);
+    const bTeaches = await addLocalAlias(admin, otherCtxRes.ctx, {
+      investigationId: fbc301.id, alias: "HARNESS-FHG-301", actorId: OWNER_B, correlationId: "harness-ti" });
+    ok("301-3b. and the OTHER practice may teach the same word -- uniqueness is per tenant",
+      bTeaches.ok, bTeaches.ok ? "" : bTeaches.message);
+  } else skip("301-2..301-3b. local aliases", "fixtures missing");
+
+  // ── s6/s9: a definition's declared fields are demanded, in the practitioner's words ─────────────
+  //
+  // ⚠ ON A FRESH ENCOUNTER, because the one above has been SIGNED by section 11 -- the first run of
+  // this block failed all three assertions with "this encounter is signed", which is the engine
+  // correctly refusing writes to a frozen record, not the rule under test. A fixture that depends on
+  // an earlier section leaving the record open is the section-order trap the s5 block already hit.
+  const enc301 = await launchEncounter(admin, { workspaceId: ws, patientId, pathway: "new_walk_in", ...base });
+  const encounterId301 = enc301.ok ? enc301.data.id : "";
+  if (enc301.ok) await transitionEncounter(admin, { workspaceId: ws, encounterId: encounterId301, to: "ACTIVE", ...base });
+  if (custom.ok && enc301.ok) {
+    await admin.from("practice_investigation_catalogue").update({
+      detail_fields: [
+        { key: "body_region", label: "Body region", kind: "choice", required: true, options: ["Head", "Chest"] },
+        { key: "protocol", label: "Protocol", kind: "text", required: false },
+      ],
+    }).eq("id", custom.data.id);
+
+    const short301 = await addInvestigations(admin, ctx, {
+      encounterId: encounterId301, items: [{ investigationId: custom.data.id }], ...base });
+    const shortRes = short301.ok ? short301.data.results[0] : null;
+    ok("301-4. s6: a missing REQUIRED field refuses that item, naming the field",
+      !!shortRes && !shortRes.ok && shortRes.code === "DETAIL_REQUIRED"
+        && String(shortRes.message).includes("body region"),
+      shortRes ? shortRes.code + ": " + shortRes.message : short301.ok ? "no result" : short301.message);
+
+    const filled301 = await addInvestigations(admin, ctx, {
+      encounterId: encounterId301, items: [{ investigationId: custom.data.id, details: { body_region: "Chest", protocol: "low dose" } }],
+      allowDuplicate: [0], ...base });
+    const filledRes = filled301.ok ? filled301.data.results[0] : null;
+    ok("301-5. with the field answered, the item records", !!filledRes && filledRes.ok,
+      filledRes ? filledRes.code + ": " + filledRes.message : filled301.ok ? "no result" : filled301.message);
+    if (filledRes?.ok && filledRes.id) {
+      const { data: answers } = await admin.from("practice_investigation_detail")
+        .select("field_key, field_label, value_text").eq("encounter_investigation_id", filledRes.id)
+        .order("field_key");
+      ok("301-5b. the answers are in practice_investigation_detail with the LABEL written down",
+        (answers ?? []).length === 2
+          && (answers ?? []).some((a: any) => a.field_key === "body_region" && a.field_label === "Body region" && a.value_text === "Chest")
+          && (answers ?? []).some((a: any) => a.field_key === "protocol" && a.value_text === "low dose"),
+        JSON.stringify(answers));
+    }
+    // CONTROL. An item whose definition declares nothing is never asked for anything -- otherwise
+    // every FBC in the product would have gone amber the day 301 landed.
+    const plain301 = fbc301 ? await addInvestigations(admin, ctx, {
+      encounterId: encounterId301, items: [{ investigationId: fbc301.id }], allowDuplicate: [0], ...base }) : null;
+    ok("301-6. CONTROL: an undeclared definition records with no details demanded",
+      !!plain301 && plain301.ok && plain301.data.results[0].ok,
+      plain301 && plain301.ok ? plain301.data.results[0].code + "" : "call failed");
+  } else skip("301-4..301-6. dynamic fields", "the custom investigation fixture failed");
 
   // ══ 14. CLEAN UP AND PROVE IT ═════════════════════════════════════════════════════════════════
   section("14. fixtures");

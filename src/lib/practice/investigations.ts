@@ -1,4 +1,9 @@
 import { audit } from "@/lib/practice/audit";
+// ⚠ BORROWED FROM THE PROCEDURE VOCABULARY ON PURPOSE. parseDetailFields and detailFieldIssues are
+// generic over {key,label,kind,required,options} and import nothing -- migration 301 gave
+// investigations the SAME detail_fields shape 297 gave procedures, and two parsers for one shape is
+// how the two drift. If a third domain adopts the shape, promote these to their own module.
+import { parseDetailFields, detailFieldIssues, type ProcedureDetailField } from "@/lib/practice/procedure-constants";
 import { editableEncounter, type EngineResult } from "@/lib/practice/encounters";
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import {
@@ -153,6 +158,10 @@ export type CatalogueItem = {
   category: string;
   subcategory: string | null;
   aliases: string[];
+  /** CPR-INV-CAT-007 s10 (migration 301): investigation, procedure, or dual_purpose. */
+  classification: string;
+  /** s6/s9's dynamic field profile, parsed and validated as definitions. Empty for most items. */
+  detailFields: ProcedureDetailField[];
   /** Where the row came from. A practice item is one this practice created. */
   source: "platform" | "practice";
   /** Practice activation. ⚠ A missing activation row is ENABLED -- see migration 275 section 3. */
@@ -231,7 +240,7 @@ export async function investigationCatalogue(
   // Keying the children on their resolved parents costs one round trip and makes the cap per-practice.
   const [catRes, actRes, prefRes, setRes, settings] = await Promise.all([
     admin.from(INVESTIGATION_TABLES.catalogue)
-      .select("id, workspace_id, code, canonical_name, short_name, category, subcategory, active")
+      .select("id, workspace_id, code, canonical_name, short_name, category, subcategory, active, classification, detail_fields")
       .or(`workspace_id.is.null,workspace_id.eq.${ctx.workspaceId}`)
       .eq("active", true).order("category").order("canonical_name").limit(1000),
     admin.from(INVESTIGATION_TABLES.activation)
@@ -250,8 +259,13 @@ export async function investigationCatalogue(
   const none = { data: [] as any[], error: null };
   const [aliasRes, setItemRes] = await Promise.all([
     catalogueIds.length
-      ? admin.from(INVESTIGATION_TABLES.alias).select("investigation_id, alias")
-        .in("investigation_id", catalogueIds).limit(2000)
+      // ⚠ GLOBAL PLUS OWN-WORKSPACE, NEVER EVERYTHING. Before migration 301 every alias was global and
+      // keying on the parent was scope enough. 301 added workspace-local aliases, so an unfiltered read
+      // here would pour every tenant's private vocabulary into every other tenant's search -- the
+      // cross-tenant class the tenant-scope audit exists for, created by a migration between audits.
+      ? admin.from(INVESTIGATION_TABLES.alias).select("investigation_id, alias, workspace_id")
+        .in("investigation_id", catalogueIds)
+        .or(`workspace_id.is.null,workspace_id.eq.${ctx.workspaceId}`).limit(2000)
       : none,
     setIds.length
       ? admin.from(INVESTIGATION_TABLES.setItem).select("set_id, investigation_id, sort_order")
@@ -286,6 +300,8 @@ export async function investigationCatalogue(
       displayName: localName ?? row.canonical_name,
       category: row.category, subcategory: row.subcategory ?? null,
       aliases: aliasesBy.get(row.id) ?? [],
+      classification: String(row.classification ?? "investigation"),
+      detailFields: parseDetailFields(row.detail_fields),
       source: row.workspace_id ? "practice" : "platform",
       // ⚠ ABSENCE IS ENABLED. A practice that has configured nothing must still see the whole catalogue.
       enabled: act ? !!act.enabled : true,
@@ -413,7 +429,11 @@ export async function encounterInvestigations(
   })));
 }
 
-export type BatchItemInput = { investigationId?: string | null; label?: string | null; reasonOverride?: string | null };
+export type BatchItemInput = {
+  investigationId?: string | null; label?: string | null; reasonOverride?: string | null;
+  /** s6/s9 (migration 301): answers to the definition's detail fields, keyed by field key. */
+  details?: Record<string, string> | null;
+};
 export type BatchItemResult = {
   index: number; ok: boolean; id: string | null; label: string;
   code: string | null; message: string | null;
@@ -462,7 +482,7 @@ export async function addInvestigations(admin: any, ctx: WorkspaceContext, args:
   const catBy = new Map<string, any>();
   if (ids.length > 0) {
     const { data, error } = await admin.from(INVESTIGATION_TABLES.catalogue)
-      .select("id, workspace_id, canonical_name, code")
+      .select("id, workspace_id, canonical_name, code, detail_fields")
       .in("id", ids).or(`workspace_id.is.null,workspace_id.eq.${ctx.workspaceId}`);
     if (error && isMissingTable(error)) return storeAbsent();
     if (error) return fail(503, "UNAVAILABLE", `the catalogue could not be read: ${error.message}`);
@@ -500,6 +520,16 @@ export async function addInvestigations(admin: any, ctx: WorkspaceContext, args:
     const label = trim(item.label) || (catalogue ? String(catalogue.canonical_name) : "");
     if (!label) {
       results.push({ index, ok: false, id: null, label: "", code: "VALIDATION_ERROR", message: "name the investigation" });
+      return;
+    }
+    // s6's validation, applied only where a definition declares fields. detailFieldIssues returns the
+    // missing LABELS, so the refusal names the field rather than counting it.
+    const fieldIssues = catalogue
+      ? detailFieldIssues(parseDetailFields(catalogue.detail_fields), item.details ?? undefined)
+      : [];
+    if (fieldIssues.length > 0) {
+      results.push({ index, ok: false, id: null, label, code: "DETAIL_REQUIRED",
+        message: `needs ${fieldIssues.join(", ")}` });
       return;
     }
     if (already(catalogueId, label) && !allow.has(index)) {
@@ -545,6 +575,38 @@ export async function addInvestigations(admin: any, ctx: WorkspaceContext, args:
     } else {
       assignIds(results, (data ?? []) as any[]);
     }
+  }
+
+  // ── s6's DETAIL ANSWERS (migration 301), keyed to the rows the insert just returned ─────────────
+  //
+  // ⚠ THE LABEL IS WRITTEN DOWN BESIDE EVERY VALUE, exactly as 297's practice_procedure_detail does: a
+  // field renamed in the catalogue next year must not rewrite what was recorded today. Only values for
+  // DECLARED fields travel -- detailValues filters against the definition -- so a caller cannot use
+  // this to store arbitrary keys against a patient's investigation.
+  const detailRows: Record<string, unknown>[] = [];
+  for (const r of results) {
+    if (!r.ok || !r.id) continue;
+    const item = items[r.index];
+    const catalogue = item?.investigationId ? catBy.get(trim(item.investigationId)) : null;
+    if (!catalogue || !item?.details) continue;
+    for (const f of parseDetailFields(catalogue.detail_fields)) {
+      const value = String(item.details[f.key] ?? "").trim();
+      if (!value || value.length > 500) continue;
+      detailRows.push({
+        workspace_id: ctx.workspaceId, encounter_investigation_id: r.id,
+        field_key: f.key, field_label: f.label, value_text: value, created_by: args.actorId,
+      });
+    }
+  }
+  if (detailRows.length > 0) {
+    const { error: detailError } = await admin.from("practice_investigation_detail").insert(detailRows);
+    if (detailError)
+      await audit(admin, {
+        workspaceId: ctx.workspaceId, actorId: args.actorId,
+        eventType: "practice.investigation_detail_failed",
+        payload: { batchId, detail: detailError.message, fields: detailRows.map(d => d.field_key) },
+        correlationId: args.correlationId,
+      });
   }
 
   // CINV-CAP-001 s7's observed frequency. ⚠ AFTER the write, and a failure here never fails the
@@ -688,6 +750,51 @@ export async function cancelInvestigation(admin: any, ctx: WorkspaceContext, arg
  * The code is GENERATED, never taken from the user. It is the stable identity historical rows point at,
  * and two practices inventing the same abbreviation must not collide.
  */
+/**
+ * CPR-INV-CAT-007 s12 (migration 301): teach the search this practice's own word for a test.
+ *
+ * ⚠ THE WRITER THE COLUMN SHIPPED WITH, IN THE SAME COMMIT. practice_investigation_alias.workspace_id
+ * with nothing writing it would be the dead-FK class this codebase has now recorded three times --
+ * attachment.document_id, attachment.procedure_id, and the unused procedureTypes prop before them.
+ *
+ * ⚠ AN ALIAS RESOLVES, IT NEVER CREATES (s5, s14). It points at an existing catalogue row -- platform
+ * or this practice's own -- and the foreign key holds that. Nothing here can mint a definition, and a
+ * word already taken for that investigation (globally or by this practice) is refused rather than
+ * silently doubled.
+ */
+export async function addLocalAlias(admin: any, ctx: WorkspaceContext, args: {
+  investigationId: string; alias: string; actorId: string; correlationId: string;
+}): Promise<EngineResult<{ alias: string }>> {
+  if (!hasCapability(ctx, CAP_INVESTIGATION_CONFIGURE))
+    return fail(403, "FORBIDDEN", `teaching the catalogue a word needs ${CAP_INVESTIGATION_CONFIGURE}`);
+
+  const alias = trim(args.alias);
+  if (!alias || alias.length > 120)
+    return fail(422, "VALIDATION_ERROR", "an alias needs 1 to 120 characters");
+
+  const { data: inv } = await admin.from(INVESTIGATION_TABLES.catalogue)
+    .select("id, workspace_id, canonical_name").eq("id", args.investigationId)
+    .or(`workspace_id.is.null,workspace_id.eq.${ctx.workspaceId}`).maybeSingle();
+  if (!inv) return fail(404, "NOT_FOUND", "Not found");
+
+  const { error } = await admin.from(INVESTIGATION_TABLES.alias).insert({
+    investigation_id: inv.id, alias, workspace_id: ctx.workspaceId,
+  });
+  if (error) {
+    if (/duplicate|unique/i.test(error.message))
+      return fail(409, "ALIAS_EXISTS", `"${alias}" already finds ${inv.canonical_name}`);
+    return fail(400, "VALIDATION_ERROR", error.message);
+  }
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: args.actorId,
+    eventType: "practice.investigation_alias_added",
+    payload: { investigationId: inv.id, alias },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { alias } };
+}
+
 export async function createCustomInvestigation(admin: any, ctx: WorkspaceContext, args: {
   canonicalName: string; shortName?: string | null; category: string;
   subcategory?: string | null; aliases?: string[]; favourite?: boolean;

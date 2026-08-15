@@ -16,6 +16,9 @@ import {
 import {
   BAND_RECORD, BAND_SHORTCUTS, BAND_WORK,
 } from "@/lib/practice/encounter-band-constants";
+// Generic over the shared detail_fields shape and import-free -- see investigations.ts for why the
+// procedure vocabulary is borrowed rather than copied.
+import { detailFieldIssues } from "@/lib/practice/procedure-constants";
 import type { InvestigationCatalogue, CatalogueItem, EncounterInvestigation, Panel } from "@/lib/practice/investigations";
 import { PANEL, SectionHeader, Tip } from "@/components/practice/EncounterKit";
 import {
@@ -60,7 +63,7 @@ const QUIET = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-
 const CHIP = "rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-gray-800 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/5 disabled:opacity-50";
 const CHIP_ON = "rounded-full border border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary-deep)]";
 
-type Selected = { id: string | null; label: string; reasonOverride: string; again: boolean };
+type Selected = { id: string | null; label: string; reasonOverride: string; again: boolean; details: Record<string, string> };
 
 /** The row's own view model: the record, plus the selection state the review batch needs. */
 type InvRow = {
@@ -125,6 +128,8 @@ export default function InvestigationCapture(props: {
   const [cancelReason, setCancelReason] = useState("");
 
   const [creating, setCreating] = useState(false);
+  /** migration 301: which existing investigation the missed search word should be taught to. */
+  const [teachTarget, setTeachTarget] = useState("");
   const [custom, setCustom] = useState({ canonicalName: "", shortName: "", category: "", aliases: "" });
 
   const [savingSet, setSavingSet] = useState(false);
@@ -172,7 +177,7 @@ export default function InvestigationCapture(props: {
   const toggle = (item: CatalogueItem) => {
     setPending(p => isPending(item.id, item.displayName)
       ? p.filter(x => x.id !== item.id)
-      : [...p, { id: item.id, label: item.displayName, reasonOverride: "", again: false }]);
+      : [...p, { id: item.id, label: item.displayName, reasonOverride: "", again: false, details: {} }]);
   };
 
   const addSet = (itemIds: string[]) => {
@@ -182,7 +187,7 @@ export default function InvestigationCapture(props: {
         const item = byId.get(id);
         if (!item) continue;
         if (next.some(x => x.id === id)) continue;
-        next.push({ id, label: item.displayName, reasonOverride: "", again: false });
+        next.push({ id, label: item.displayName, reasonOverride: "", again: false, details: {} });
       }
       return next;
     });
@@ -192,7 +197,12 @@ export default function InvestigationCapture(props: {
     const body = await post({
       action: "add", encounterId: props.encounterId,
       reasonShared: reasonShared || null,
-      items: pending.map(p => ({ investigationId: p.id, label: p.label, reasonOverride: p.reasonOverride || null })),
+      items: pending.map(p => ({
+        investigationId: p.id, label: p.label, reasonOverride: p.reasonOverride || null,
+        // migration 301: only a governed item can have declared fields, and the engine drops
+        // undeclared keys anyway -- sent only when there is something to send.
+        details: Object.keys(p.details).length > 0 ? p.details : null,
+      })),
       allowDuplicate: pending.map((p, i) => (p.again ? i : -1)).filter(i => i >= 0),
     });
     if (!body) return;
@@ -233,10 +243,18 @@ export default function InvestigationCapture(props: {
   // unless there is a shared reason OR every item has its own; marking an item unready exactly when it
   // has neither makes "blocked === 0" mean the same thing. So the button is disabled for precisely the
   // batches the engine would refuse, and the amber sits on the items that are actually short.
-  const readinessOf = (p: Selected) => investigationReadiness({
-    reasonOverride: p.reasonOverride, reasonShared,
-    reasonRequired: cat.settings.investigationReasonRequired,
-  });
+  const readinessOf = (p: Selected) => {
+    const base = investigationReadiness({
+      reasonOverride: p.reasonOverride, reasonShared,
+      reasonRequired: cat.settings.investigationReasonRequired,
+    });
+    // ⚠ THE GROWTH investigationReadiness PROMISED IN ITS OWN COMMENT ("this function grows when
+    // CPR-INV-CAT-007 lands"). detailFieldIssues is the same function the ENGINE refuses with, so the
+    // words on the item and the words in a refusal cannot describe one fault two ways.
+    const fields = p.id ? (byId.get(p.id)?.detailFields ?? []) : [];
+    const missing = [...base.missing, ...detailFieldIssues(fields, p.details)];
+    return { ready: missing.length === 0, missing };
+  };
   const blocked = pending.filter(p => !readinessOf(p).ready).length;
 
   return (
@@ -521,13 +539,50 @@ export default function InvestigationCapture(props: {
                       </button>
                     </div>
                     {/* s6: an individual item may override the shared reason. It is never demanded --
-                        unless this practice requires one and no shared reason has been given, which is
-                        the single configured requirement the catalogue can express today. */}
-                    <input className={`${input} mt-1 ${ready.ready ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`}
+                        unless this practice requires one and no shared reason has been given. */}
+                    <input className={`${input} mt-1 ${ready.missing.includes("a clinical question") ? "border-amber-300 bg-[var(--cmp-surface-warning)]" : ""}`}
                       value={p.reasonOverride}
                       aria-label={`Clinical question for ${p.label}`}
                       onChange={e => setPending(list => list.map((x, n) => n === i ? { ...x, reasonOverride: e.target.value } : x))}
                       placeholder="A different clinical question for this one (optional)" />
+
+                    {/* ── CPR-INV-CAT-007 s6/s9 (migration 301): THE DEFINITION'S OWN FIELDS ─────────
+                        Drawn only for the investigation that declares them -- an FBC shows nothing
+                        here, a CT configured with a body-region field asks for one. parseDetailFields
+                        already dropped anything unvalidatable on the server, and every blocker is worn
+                        by its own field, amber, the same grammar as everywhere else on this page. */}
+                    {(p.id ? (byId.get(p.id)?.detailFields ?? []) : []).length > 0 && (
+                      <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+                        {(byId.get(p.id!)?.detailFields ?? []).map(f => {
+                          const value = p.details[f.key] ?? "";
+                          const short = f.required && !value.trim();
+                          const setDetail = (v: string) => setPending(list =>
+                            list.map((x, n) => n === i ? { ...x, details: { ...x.details, [f.key]: v } } : x));
+                          return (
+                            <label key={f.key} className="flex flex-col gap-0.5">
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">
+                                {f.label}{f.required ? " *" : ""}
+                              </span>
+                              {f.kind === "choice" ? (
+                                <select value={value} disabled={busy}
+                                  onChange={e => setDetail(e.target.value)}
+                                  className={`${input} ${short ? "border-amber-300 bg-[var(--cmp-surface-warning)]" : ""}`}>
+                                  {/* An empty first option, never a preselected answer nobody gave. */}
+                                  <option value="">{f.required ? "Choose..." : "Not recorded"}</option>
+                                  {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                              ) : (
+                                <input value={value} disabled={busy}
+                                  inputMode={f.kind === "number" ? "decimal" : undefined}
+                                  placeholder={f.required ? "" : "Optional"}
+                                  onChange={e => setDetail(e.target.value)}
+                                  className={`${input} ${short ? "border-amber-300 bg-[var(--cmp-surface-warning)]" : ""}`} />
+                              )}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
                   </li>
                   );
                 })}
@@ -649,7 +704,7 @@ export default function InvestigationCapture(props: {
                           });
                           if (body) {
                             setCreating(false);
-                            setPending(p => [...p, { id: body.id, label: custom.canonicalName, reasonOverride: "", again: false }]);
+                            setPending(p => [...p, { id: body.id, label: custom.canonicalName, reasonOverride: "", again: false, details: {} }]);
                             setCustom({ canonicalName: "", shortName: "", category: "", aliases: "" });
                             setNotice({ kind: "ok", text: "Added to this practice's catalogue and to your selection." });
                             router.refresh();
@@ -680,10 +735,48 @@ export default function InvestigationCapture(props: {
                         </p>
                       </form>
                     ) : (
-                      <button type="button" className={`${QUIET} mt-2`}
-                        onClick={() => { setCreating(true); setCustom(c => ({ ...c, canonicalName: query })); }}>
-                        + Create a custom investigation
-                      </button>
+                      <div className="mt-2 flex flex-col gap-2">
+                        {/* ── CPR-INV-CAT-007 s12 (migration 301): TEACH THE SEARCH THIS WORD ────────
+                            The miss case IS the moment: somebody typed the word their practice uses
+                            and the catalogue did not answer. Teaching it beats creating a duplicate
+                            definition -- s5 and s14 are explicit that an alias resolves to the
+                            canonical item and never creates one -- so the teach control is offered
+                            FIRST and create-custom second. Local to this practice, invisible to every
+                            other tenant. */}
+                        {query.trim() && cat.selectable.length > 0 && (
+                          <form className="flex flex-wrap items-center gap-1.5"
+                            onSubmit={async ev => {
+                              ev.preventDefault();
+                              const body = await post({
+                                action: "addAlias", investigationId: teachTarget, alias: query.trim(),
+                              });
+                              if (body) {
+                                setTeachTarget("");
+                                setNotice({ kind: "ok", text: `"${query.trim()}" now finds it, for this practice only.` });
+                                router.refresh();
+                              }
+                            }}>
+                            <span className="text-[12px] text-gray-700">
+                              Teach the search: make <strong>&ldquo;{query.trim()}&rdquo;</strong> find
+                            </span>
+                            <select value={teachTarget} disabled={busy} aria-label="Which investigation this word means"
+                              onChange={e => setTeachTarget(e.target.value)}
+                              className={`${input} max-w-[260px]`}>
+                              <option value="">Choose an investigation...</option>
+                              {cat.selectable.map(it => (
+                                <option key={it.id} value={it.id}>{it.displayName}</option>
+                              ))}
+                            </select>
+                            <button type="submit" className={QUIET} disabled={busy || !teachTarget}>
+                              Teach it
+                            </button>
+                          </form>
+                        )}
+                        <button type="button" className={`${QUIET} self-start`}
+                          onClick={() => { setCreating(true); setCustom(c => ({ ...c, canonicalName: query })); }}>
+                          + Create a custom investigation
+                        </button>
+                      </div>
                     )
                   )}
                   {!props.canConfigure && (

@@ -3,7 +3,7 @@ import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import {
   addInvestigations, reviewInvestigations, cancelInvestigation,
   createCustomInvestigation, setInvestigationActivation, setInvestigationFavourite,
-  saveInvestigationSet, retireInvestigationSet, setCaptureSetting,
+  saveInvestigationSet, retireInvestigationSet, setCaptureSetting, addLocalAlias,
 } from "@/lib/practice/investigations";
 import { CAPTURE_SETTING_KEYS, type CaptureSettingKey } from "@/lib/practice/investigation-constants";
 
@@ -53,6 +53,11 @@ export async function POST(req: NextRequest) {
           investigationId: i?.investigationId ?? null,
           label: i?.label ?? null,
           reasonOverride: i?.reasonOverride ?? null,
+          // migration 301: answers to the definition's declared fields. Narrowed by the ENGINE against
+          // detail_fields, so undeclared keys never reach the table.
+          details: i?.details && typeof i.details === "object" && !Array.isArray(i.details)
+            ? Object.fromEntries(Object.entries(i.details).map(([k, v]) => [k, String(v ?? "")]))
+            : null,
         })),
         reasonShared: body.reasonShared ?? null,
         allowDuplicate: Array.isArray(body.allowDuplicate)
@@ -119,6 +124,17 @@ export async function POST(req: NextRequest) {
         ...actor,
       });
       return respond(result, caller.traceId);
+    }
+
+    case "addAlias": {
+      // s12's local vocabulary. Configuration, so it takes investigation.configure -- the engine
+      // enforces it; this case only shapes the arguments.
+      const result = await addLocalAlias(caller.admin, ctx, {
+        investigationId: String(body.investigationId ?? ""),
+        alias: String(body.alias ?? ""),
+        ...actor,
+      });
+      return respond(result, caller.traceId, 201);
     }
 
     case "saveSet": {
