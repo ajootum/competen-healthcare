@@ -224,6 +224,105 @@ export async function listActivities(admin: any, workspaceId: string, filter: Ac
   return (await listActivitiesResult(admin, workspaceId, filter)).items;
 }
 
+// ── THE UNIFIED ACTIVITY RECORD ── CPR-PCA-HFE-012 s2/s10/s13 ────────────────────────────────────────
+//
+// One chronological record from TWO sources: procedures PROJECTED from practice_procedure, and the
+// manually logged practice_clinical_activity rows. s13's duplicate protection is structural -- the
+// procedure rows are READ, never copied, so a procedure recorded in an encounter cannot exist twice
+// here and an edit to the encounter record is visible here on the next read. There is no procedure
+// row of this page's own to drift.
+//
+// ⚠ THE TWO SOURCES FAIL SEPARATELY. A broken procedure read must not blank the logged activities, and
+// vice versa -- and neither failure may render as "you did nothing" (this is a portfolio; "did nothing"
+// is a claim somebody submits to a regulator). Each source carries its own {unavailable, detail}.
+//
+// ⚠ ONLY PROCEDURES WITH A performed_at ARE IN THE RECORD. Since migration 294 a procedure can be
+// ORDERED or SCHEDULED -- future work, not work done -- and a portfolio of what somebody HAS DONE must
+// not count intentions. The status still renders honestly (Performed / Attempted / Abandoned).
+
+export type ActivityRecordFilter = {
+  performedBy?: string;
+  /** "procedure" narrows to the projected procedures; any ACTIVITY_KINDS code narrows to that kind. */
+  kind?: string; fromDay?: string; toDay?: string; limit?: number;
+};
+
+export async function activityRecord(admin: any, workspaceId: string, filter: ActivityRecordFilter = {}): Promise<{
+  items: any[]; truncated: boolean; limit: number;
+  procedures: { unavailable: boolean; detail: string | null };
+  activities: { unavailable: boolean; detail: string | null };
+}> {
+  const limit = Math.min(Math.max(filter.limit ?? 100, 1), 999);
+  const wantProcedures = !filter.kind || filter.kind === "procedure";
+  const wantActivities = filter.kind !== "procedure";
+
+  // The logged half rides the existing three-state read -- one query owner, not a second copy.
+  const acts = wantActivities
+    ? await listActivitiesResult(admin, workspaceId, {
+      performedBy: filter.performedBy, kind: filter.kind || undefined,
+      fromDay: filter.fromDay, toDay: filter.toDay, limit,
+    })
+    : { items: [] as any[], unavailable: false, detail: null, truncated: false, limit };
+
+  let procItems: any[] = [];
+  let procTruncated = false;
+  let procUnavailable = false;
+  let procDetail: string | null = null;
+  if (wantProcedures) {
+    let q = admin.from("practice_procedure")
+      .select("id, label, status, performed_at, encounter_id, patient_id, performed_by, cpd_minutes, portfolio")
+      .eq("workspace_id", workspaceId).not("performed_at", "is", null);
+    if (filter.performedBy) q = q.eq("performed_by", filter.performedBy);
+    if (filter.fromDay || filter.toDay) {
+      const { timezone } = await workspaceClock(admin, workspaceId);
+      if (filter.fromDay) q = q.gte("performed_at", zonedDayRange(filter.fromDay, timezone).startIso);
+      if (filter.toDay) q = q.lt("performed_at", zonedDayRange(filter.toDay, timezone).endIso);
+    }
+    const { data, error } = await q.order("performed_at", { ascending: false }).limit(limit + 1);
+    if (error) { procUnavailable = true; procDetail = error.message; }
+    else {
+      const all = (data ?? []) as any[];
+      procTruncated = all.length > limit;
+      procItems = procTruncated ? all.slice(0, limit) : all;
+    }
+
+    // s15: complication state comes from the procedure's own outcome records, nowhere else. Best-effort
+    // BUT NEVER SILENTLY WRONG -- if outcomes cannot be read, the rows say "not read" rather than
+    // rendering as complication-free, which would be an absence claim the read cannot support.
+    if (procItems.length > 0) {
+      const { data: outcomes, error: outErr } = await admin.from("practice_procedure_outcome")
+        .select("procedure_id, outcome_type").in("procedure_id", procItems.map(p => p.id));
+      const complicated = outErr
+        ? null
+        : new Set(((outcomes ?? []) as any[]).filter(o => o.outcome_type === "complication").map(o => o.procedure_id));
+      procItems = procItems.map(p => ({
+        ...p,
+        hasComplication: complicated ? complicated.has(p.id) : false,
+        complicationsUnread: !complicated,
+      }));
+    }
+  }
+
+  const merged = [
+    ...procItems.map(p => ({
+      recordKind: "procedure" as const,
+      id: p.id, kind: "procedure", kindLabel: "Procedure",
+      title: p.label, occurredAt: p.performed_at,
+      status: p.status, hasComplication: !!p.hasComplication, complicationsUnread: !!p.complicationsUnread,
+      encounterId: p.encounter_id, performed_by: p.performed_by,
+      cpd_minutes: p.cpd_minutes ?? null, portfolio: !!p.portfolio,
+    })),
+    ...acts.items.map(a => ({ ...a, recordKind: "activity" as const, occurredAt: a.occurred_at })),
+  ].sort((a, b) => String(b.occurredAt).localeCompare(String(a.occurredAt)));
+
+  return {
+    items: merged.length > limit ? merged.slice(0, limit) : merged,
+    truncated: procTruncated || acts.truncated || merged.length > limit,
+    limit,
+    procedures: { unavailable: procUnavailable, detail: procDetail },
+    activities: { unavailable: acts.unavailable, detail: acts.detail },
+  };
+}
+
 // ── PROCEDURE TEAM AND INSTRUMENTS ───────────────────────────────────────────────────────────────────
 
 async function procedureIn(admin: any, workspaceId: string, procedureId: string) {

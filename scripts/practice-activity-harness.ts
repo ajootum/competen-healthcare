@@ -28,9 +28,12 @@ import { registerPatient } from "../src/lib/practice/patients";
 import { launchEncounter } from "../src/lib/practice/encounters";
 import { recordProcedure, recordProcedureOutcome, listProcedures } from "../src/lib/practice/procedures";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   recordActivity, listActivities, addParticipant, addItem, procedureDetail, procedureItemTrace,
   createProcedureTemplate, applyProcedureTemplate, portfolioSummary, setPortfolio, ACTIVITY_KINDS,
+  activityRecord,
 } from "../src/lib/practice/clinical-activity";
 
 loadEnvConfig(process.cwd());
@@ -318,6 +321,118 @@ async function main() {
   });
   ok("and a procedure's portfolio entry is still its performer's own",
     !procNotMine.ok && procNotMine.code === "NOT_YOURS", procNotMine.ok ? "changed" : procNotMine.code);
+
+  // ══ CPR-PCA-HFE-012: THE UNIFIED ACTIVITY RECORD ══════════════════════════════════════════════
+  //
+  // Procedures PROJECT into the record; logged activities live in it; the two fail separately. The
+  // fixtures above are exactly right: the owner holds two performed procedures (one with a recorded
+  // complication) and one teaching session; the registrar holds one ward round and no procedures.
+  const rec = await activityRecord(admin, wsA, { performedBy: OWNER });
+  const recProcs = rec.items.filter((r: any) => r.recordKind === "procedure");
+  const recActs = rec.items.filter((r: any) => r.recordKind === "activity");
+  ok("012-1. ONE RECORD, TWO SOURCES: the owner's procedures and logged activities arrive together",
+    recProcs.length === 2 && recActs.length === 2
+      && !rec.procedures.unavailable && !rec.activities.unavailable,
+    JSON.stringify({ procs: recProcs.length, acts: recActs.length }));
+  const knee = recProcs.find((r: any) => r.title === "Knee arthroscopy");
+  ok("012-1b. a projected procedure carries its encounter, its status and its OWN complication state",
+    !!knee && knee.encounterId === enc.data.id && knee.status === "PERFORMED" && knee.hasComplication === true,
+    JSON.stringify({ enc: knee?.encounterId === enc.data.id, status: knee?.status, comp: knee?.hasComplication }));
+
+  // ⚠ s13 IS STRUCTURAL, AND THIS PROVES THE STRUCTURE: no activity row of kind "procedure" exists
+  // anywhere, so the procedures on the record can only be the projection -- there is no copy to drift
+  // and no duplicate to protect against.
+  const { data: copyRows } = await admin.from("practice_clinical_activity")
+    .select("id").eq("workspace_id", wsA).eq("kind", "procedure");
+  ok("012-2. THE PROJECTION IS A READ, NEVER A COPY -- no 'procedure' row exists in the activity table",
+    (copyRows ?? []).length === 0 && recProcs.length > 0,
+    `${(copyRows ?? []).length} copies; the projection half is non-vacuous (${recProcs.length} projected)`);
+
+  const onlyProcs = await activityRecord(admin, wsA, { performedBy: OWNER, kind: "procedure" });
+  const onlyTeaching = await activityRecord(admin, wsA, { performedBy: OWNER, kind: "teaching" });
+  ok("012-3. the kind filter narrows to ONE source: 'procedure' yields only projections, a kind only logs",
+    onlyProcs.items.every((r: any) => r.recordKind === "procedure") && onlyProcs.items.length === 2
+      && onlyTeaching.items.every((r: any) => r.kind === "teaching") && onlyTeaching.items.length === 1,
+    JSON.stringify({ procs: onlyProcs.items.length, teaching: onlyTeaching.items.length }));
+
+  const registrarRec = await activityRecord(admin, wsA, { performedBy: REGISTRAR });
+  ok("012-4. the record belongs to WHOEVER DID THE WORK: the registrar sees their ward round, no procedures",
+    registrarRec.items.length === 1 && registrarRec.items[0].kind === "ward_round",
+    JSON.stringify(registrarRec.items.map((r: any) => r.kind)));
+
+  ok("012-5. the merged record is chronological, most recent first",
+    rec.items.every((r: any, i: number) =>
+      i === 0 || String(rec.items[i - 1].occurredAt) >= String(r.occurredAt)),
+    JSON.stringify(rec.items.map((r: any) => String(r.occurredAt).slice(11, 19))));
+
+  // ⚠ THE TWO SOURCES FAIL SEPARATELY -- the reason activityRecord returns per-source states. The
+  // procedure store is unplugged with a stub client; the logged activities MUST still arrive, and the
+  // failure must be named rather than rendered as a clinician who performed nothing.
+  const failingBuilder: any = new Proxy({}, {
+    get: (_t, prop) => prop === "then"
+      ? (resolve: any) => Promise.resolve({ data: null, error: { message: "harness: procedure store unplugged" } }).then(resolve)
+      : () => failingBuilder,
+  });
+  const brokenProcedures: any = { from: (t: string) => t === "practice_procedure" ? failingBuilder : admin.from(t) };
+  const halfBroken = await activityRecord(brokenProcedures, wsA, { performedBy: OWNER });
+  ok("012-6. a broken procedure read DOES NOT BLANK the logged activities, and says which half failed",
+    halfBroken.procedures.unavailable === true
+      && /unplugged/.test(String(halfBroken.procedures.detail))
+      && halfBroken.activities.unavailable === false
+      && halfBroken.items.some((r: any) => r.recordKind === "activity")
+      && halfBroken.items.every((r: any) => r.recordKind !== "procedure"),
+    JSON.stringify({ pUn: halfBroken.procedures.unavailable, aUn: halfBroken.activities.unavailable, items: halfBroken.items.length }));
+
+  // ⚠ A PORTFOLIO COUNTS WORK DONE, NEVER WORK INTENDED. A SCHEDULED procedure has no performed_at
+  // and must not appear -- with the control that it genuinely exists in the procedure table.
+  const scheduled = await recordProcedure(admin, {
+    workspaceId: wsA, encounterId: enc.data.id, label: "Planned arthroscopy review",
+    status: "SCHEDULED", scheduledAt: new Date(Date.now() + 86400000).toISOString(),
+    consentStatus: "obtained", ...base,
+  });
+  ok("012-7a. PRECONDITION: the scheduled procedure records (7b is not vacuous)",
+    scheduled.ok, scheduled.ok ? "" : (scheduled as any).message);
+  if (scheduled.ok) {
+    // ⚠ NO performedBy FILTER, DELIBERATELY. A scheduled procedure has performed_by null (nobody has
+    // done it), so a performer-filtered query would exclude it through THAT column and this assertion
+    // would stay green with the performed_at rule deleted -- which is exactly what the break-test
+    // found on the first version of this block. Unfiltered, only the rule under test can exclude it.
+    const afterScheduled = await activityRecord(admin, wsA, { kind: "procedure" });
+    const { data: schedRow } = await admin.from("practice_procedure")
+      .select("id, performed_at").eq("id", scheduled.data.id).maybeSingle();
+    ok("012-7. INTENTIONS ARE NOT IN THE RECORD: the scheduled procedure exists in the table and not here",
+      !!schedRow && schedRow.performed_at === null
+        && !afterScheduled.items.some((r: any) => r.id === scheduled.data.id),
+      JSON.stringify({ exists: !!schedRow, performedAt: schedRow?.performed_at ?? "missing" }));
+  }
+
+  // ── The page and console, source-checked (s3, s17, s18) ──
+  const appDir = join(process.cwd(), "src", "app", "practice", "(shell)", "activity");
+  const pageSrc = readFileSync(join(appDir, "page.tsx"), "utf8");
+  const consoleSrc = readFileSync(join(appDir, "ActivityConsole.tsx"), "utf8");
+  ok("012-UI-1. s3: the page is titled 'Procedures & Clinical Activity' with the longitudinal subtitle",
+    pageSrc.includes("Procedures &amp; Clinical Activity")
+      && pageSrc.includes("Your longitudinal record of procedures performed and other professional clinical activities."));
+  ok("012-UI-1b. and the old activity-only subtitle -- the wording s3 forbids -- is gone",
+    !pageSrc.includes("What you did that was not a procedure"));
+  ok("012-UI-2. s18: the unbuilt-AI commentary is OFF the production page",
+    !consoleSrc.includes("AI assisted documentation") && !consoleSrc.includes("CPR-210"),
+    "roadmap references must not render as clinician-facing UI");
+  ok("012-UI-2b. CONTROL: this is still the file that renders the record (the needle searched the right haystack)",
+    consoleSrc.includes("ClinicalRecordTable") && consoleSrc.includes("Activity record"));
+  ok("012-UI-3. s17: 'Nothing logged yet' is gone -- it lied whenever procedures existed",
+    !consoleSrc.includes("Nothing logged yet"));
+  ok("012-UI-3b. and each area's empty state is local and specific",
+    consoleSrc.includes("No procedures recorded for this period.")
+      && consoleSrc.includes("No other professional activity recorded for this period."));
+  ok("012-UI-4. s12: rows wear their provenance -- Encounter for projections, You/name for logged work",
+    consoleSrc.includes('? "Encounter"') && consoleSrc.includes('? "You"'));
+  ok("012-UI-5. s11: five direct filters plus More, not a chip for every category",
+    consoleSrc.includes("DIRECT_FILTERS") && consoleSrc.includes("MORE_FILTERS")
+      && (consoleSrc.match(/\["procedure", "Procedures"\]/) !== null));
+  ok("012-UI-6. s5/s19: the footer explains automatic capture; Export / report is a header action",
+    consoleSrc.includes("captured automatically from encounter records")
+      && pageSrc.includes('href="/practice/portfolio"'));
 
   // ── 10. Isolation ────────────────────────────────────────────────────────
   const crossItem = await addItem(admin, {

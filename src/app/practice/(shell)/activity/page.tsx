@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
-import { listActivitiesResult, portfolioSummary } from "@/lib/practice/clinical-activity";
+import { activityRecord, portfolioSummary } from "@/lib/practice/clinical-activity";
 import { listLocations } from "@/lib/practice/configuration";
 import { workspaceClock } from "@/lib/practice/practice-time";
 import {
@@ -11,15 +12,16 @@ import {
 import ActivityConsole from "./ActivityConsole";
 import ActivityNavigator from "./ActivityNavigator";
 
-// /practice/activity -- CPR-150's CLINICAL ACTIVITY half.
+// /practice/activity -- CPR-PCA-HFE-012: the practitioner's LONGITUDINAL Procedures & Clinical Activity
+// portfolio. (Formerly CPR-150's activity-only half; the spec's s2 distinction is now drawn on the page
+// itself.)
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// THE MODULE IS CALLED "PROCEDURE AND CLINICAL ACTIVITY MANAGEMENT". ONLY THE PROCEDURE HALF EXISTED.
-//
-// Procedures are recorded inside a consultation, where the patient is -- that is right and unchanged. An
-// ACTIVITY has no patient: a ward round, a teaching session, a mortality meeting. It belongs to the
-// clinician, so it gets its own page rather than being wedged into a consultation it has nothing to do
-// with.
+// TWO WORKSPACES, TWO QUESTIONS. Encounter > Procedures answers "what was done for THIS patient in THIS
+// consultation" and stays where the patient is. THIS page answers "what have I done professionally over
+// time": encounter procedures are PROJECTED here automatically (read, never copied -- s13's duplicate
+// protection is structural), and everything that has no patient -- ward rounds, teaching, meetings --
+// is logged here directly.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 //
 // `activity`, NOT `activities` OR `procedures`: the public marketing section shares this URL space and a
@@ -52,8 +54,8 @@ export default async function ActivityPage({ searchParams }: {
   // from a clinician's portfolio the day this shipped, silently. See ActivityNavigator's header.
   const period = periodFromParams(one, clock.today, allDatesTarget(clock.today));
 
-  const [activityRead, portfolio, locations] = await Promise.all([
-    listActivitiesResult(admin, shell.ctx.workspaceId, {
+  const [record, portfolio, locations] = await Promise.all([
+    activityRecord(admin, shell.ctx.workspaceId, {
       performedBy: onlyMine ? shell.ctx.userId : undefined,
       kind: kind || undefined,
       // ⚠ THE READ IS BOUNDED BY THE RANGE AND NOT MERELY DESCRIBED BY IT. A navigator that moved the
@@ -79,36 +81,58 @@ export default async function ActivityPage({ searchParams }: {
 
   return (
     <div className="max-w-5xl">
-      <h1 className="text-xl font-bold text-gray-900">Clinical activity</h1>
-      <p className="mt-0.5 text-[13px] text-gray-500">
-        What you did that was not a procedure &mdash; ward rounds, teaching, meetings, training. Recorded
-        against you, not against a patient.
-      </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          {/* s3: the sidebar may say "Procedures"; the PAGE says what it holds. The old subtitle said
+              "what you did that was not a procedure", which is the exact wording s3 forbids now that
+              procedures are projected in. */}
+          <h1 className="text-xl font-bold text-gray-900">Procedures &amp; Clinical Activity</h1>
+          <p className="mt-0.5 text-[13px] text-gray-500">
+            Your longitudinal record of procedures performed and other professional clinical activities.
+          </p>
+        </div>
+        {/* s19: a SECONDARY header action, and it goes to the surface that already owns exporting --
+            the professional portfolio derives from these same rows, so a second export here would be a
+            second copy of that report. */}
+        <Link href="/practice/portfolio"
+          className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+          Export / report &rarr;
+        </Link>
+      </div>
 
       <div className="mt-3">
         <ActivityNavigator period={period} todayDate={clock.today} timezone={clock.timezone} keep={keep} />
       </div>
 
-      {/* ── THE THREE STATES, KEPT APART ON THE PAGE AS WELL AS IN THE LOADER ──────────────────────
-          has data / genuinely nothing in this period / could not be read. The third one used to be
-          indistinguishable from the second: the query's error was discarded and an outage rendered as an
-          empty log, which on a portfolio is a claim that somebody did no work. */}
-      {activityRead.unavailable ? (
+      {/* ── THE THREE STATES, PER SOURCE ──────────────────────────────────────────────────────────
+          has data / genuinely nothing in this period / could not be read -- for EACH of the two
+          sources. A broken procedure read must not blank the logged activities, and neither failure
+          may render as an empty period: on a portfolio, "did nothing" is a claim somebody submits to
+          a regulator. */}
+      {record.procedures.unavailable && (
         <p className="mt-3 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
-          <strong>The activity log could not be read.</strong> {activityRead.detail}{" "}
-          This is not an empty period &mdash; nothing below can be taken as a record of what you did.
+          <strong>The procedure record could not be read.</strong> {record.procedures.detail}{" "}
+          Procedures are missing from the record below; the logged activities shown are unaffected.
         </p>
-      ) : activityRead.items.length === 0 && period.bounded ? (
+      )}
+      {record.activities.unavailable && (
+        <p className="mt-3 rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-[12px] text-rose-800">
+          <strong>The activity log could not be read.</strong> {record.activities.detail}{" "}
+          Logged activities are missing from the record below; the procedures shown are unaffected.
+        </p>
+      )}
+      {!record.procedures.unavailable && !record.activities.unavailable
+        && record.items.length === 0 && period.bounded && (
         <p className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[12px] text-gray-600">
           Nothing is recorded in <strong>{periodLabel(period)}</strong>
           {periodSpanDays(period) !== null && <> ({period.fromDate} to {period.toDate})</>}. The read
           succeeded &mdash; this period is genuinely empty, not unreadable.
         </p>
-      ) : null}
+      )}
 
-      {activityRead.truncated && (
+      {record.truncated && (
         <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
-          <strong>This list stops at {activityRead.limit} entries and there are more.</strong> Narrow the
+          <strong>This list stops at {record.limit} entries and there are more.</strong> Narrow the
           period to see the rest &mdash; a list that quietly ended would look like a period with less work
           in it than there was.
         </p>
@@ -127,7 +151,7 @@ export default async function ActivityPage({ searchParams }: {
       )}
 
       <ActivityConsole
-        activities={activityRead.items}
+        records={record.items}
         portfolio={portfolio}
         locations={locations}
         onlyMine={onlyMine}

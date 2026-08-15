@@ -3,31 +3,52 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ACTIVITY_KINDS, PARTICIPATION } from "@/lib/practice/clinical-activity";
+import { ClinicalRecordTable, type RecordColumn } from "@/components/practice/ClinicalRecordTable";
 
-// CPR-150's clinical activity log and the portfolio built from it.
+// CPR-PCA-HFE-012 -- the Procedures & Clinical Activity portfolio console.
 //
-// THE COMP'S "COMPLICATION RATE 2.1%" AND "SUCCESS RATE 97.9%" ARE NOT HERE. Both are rates, and this
-// product does not compute rates: over the forty-eight procedures the comp imagines, 2.1% is arguably
-// meaningful; over the three a new practice will have, "33%" is a sentence that sounds like a measurement
-// and is not one. The counts and their denominators are what render, and the reader divides.
+// THE ACTIVITY RECORD IS THE PAGE (s5). Two quiet summary bands orient; the chronological record below
+// them is the dominant element; the footer explains where rows come from. The five equal KPI cards this
+// replaces gave "Competency links: --" the same visual weight as "Procedures: 3", which is a dashboard
+// about what the product lacks rather than a record of what the clinician did.
 //
-// "PORTFOLIO IMPACT 31.1%" IS ALSO ABSENT, and so is the competency link beside it. This product's
-// practice tenancy does not write into the platform's competency records -- that is a cross-tenancy
-// decision with its own specification -- and the panel says so rather than implying a link that is not
-// there.
+// THE COMP'S "COMPLICATION RATE 2.1%" AND "SUCCESS RATE 97.9%" ARE STILL NOT HERE. Rates over a new
+// practice's three procedures are sentences that sound like measurements and are not. Counts with
+// denominators, always.
+//
+// s16/s20: THERE IS NO COMPETENCY COLUMN AND NO COMPETENCY TILE. The practice tenancy does not read the
+// platform's competency records -- clinical-activity.ts declares this rather than implying it -- so the
+// one honest sentence lives in the low-salience footer, not in an empty card wearing a dashboard's
+// clothes.
 
 const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
-const card = "rounded-xl border border-gray-200 bg-white p-4";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export default function ActivityConsole({ activities, portfolio, locations, onlyMine, kind, me, periodQuery = "" }: {
-  activities: any[]; portfolio: any; locations: any[]; onlyMine: boolean; kind: string; me: string;
+// s11: frequently used categories are direct filters; the rest sit behind More. "procedure" is a
+// projection filter, not an ACTIVITY_KINDS code -- the engine treats it as "the other source".
+const DIRECT_FILTERS: [string, string][] = [
+  ["procedure", "Procedures"], ["ward_round", "Ward rounds"], ["teaching", "Teaching"],
+  ["training", "Training"], ["audit", "Audit / Governance"],
+];
+const MORE_FILTERS: [string, string][] = ACTIVITY_KINDS
+  .filter(([k]) => !DIRECT_FILTERS.some(([d]) => d === k))
+  .map(([k, l]) => [k, l]);
+
+const PROCEDURE_STATUS_LABEL: Record<string, string> = {
+  PERFORMED: "Performed", ATTEMPTED: "Attempted", ABANDONED: "Abandoned",
+  CANCELLED: "Cancelled", DECLINED: "Declined",
+};
+
+type Row = any;
+
+export default function ActivityConsole({ records, portfolio, locations, onlyMine, kind, me, periodQuery = "" }: {
+  records: Row[]; portfolio: any; locations: any[]; onlyMine: boolean; kind: string; me: string;
   /**
    * ⚠ THE PERIOD, AS QUERY TEXT, ON EVERY LINK THIS CONSOLE BUILDS.
    *
-   * These three links rebuild the URL from scratch. Without this, choosing a period and then pressing
-   * "Show everyone's" or a kind filter would silently widen the log back out to every date, under a
+   * These links rebuild the URL from scratch. Without this, choosing a period and then pressing
+   * "Show everyone's" or a filter would silently widen the record back out to every date, under a
    * period control still lit as though it were narrow. Content filters and the range are separate
    * controls, and separate means neither resets the other.
    */
@@ -36,6 +57,8 @@ export default function ActivityConsole({ activities, portfolio, locations, only
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [open, setOpen] = useState(false);
+  // The active filter may live behind More; it must not be invisible while lit.
+  const [showMore, setShowMore] = useState(MORE_FILTERS.some(([k]) => k === kind));
   const [form, setForm] = useState({
     kind: "ward_round", title: "", detail: "", participation: "participated",
     occurredAt: new Date().toISOString().slice(0, 16),
@@ -63,7 +86,7 @@ export default function ActivityConsole({ activities, portfolio, locations, only
     window.location.reload();
   }
 
-  async function togglePortfolio(a: any) {
+  async function togglePortfolio(a: Row) {
     setBusy(true);
     const res = await fetch("/api/v1/practice/activities", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
@@ -75,6 +98,70 @@ export default function ActivityConsole({ activities, portfolio, locations, only
   }
 
   const hours = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`);
+  const locationName = new Map((locations ?? []).map((l: any) => [l.id, l.name]));
+  const kindCount = (k: string) =>
+    portfolio.activities.byKind.find((b: any) => b.kind === k)?.total ?? 0;
+  const moreCount = MORE_FILTERS.reduce((n, [k]) => n + kindCount(k), 0);
+
+  const chip = (active: boolean) =>
+    `rounded-full border px-2.5 py-1 text-[11.5px] font-semibold ${active
+      ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
+      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"}`;
+  const filterHref = (k: string) =>
+    `/practice/activity?mine=${onlyMine ? "1" : "0"}${k ? `&kind=${k}` : ""}${periodQuery}`;
+
+  // ── s10's columns: Date/Time | Activity | Type | Context/Source | Outcome/Details | CPD ─────────
+  const COLUMNS: RecordColumn<Row>[] = [
+    { key: "when", label: "Date / Time", priority: "secondary",
+      render: r => (
+        <span className="text-[11.5px] text-gray-600 whitespace-nowrap">
+          {String(r.occurredAt).slice(0, 16).replace("T", " ")}
+        </span>
+      ) },
+    { key: "activity", label: "Activity", priority: "primary",
+      render: r => <span className="font-semibold text-gray-800">{r.title}</span> },
+    { key: "type", label: "Type", priority: "secondary",
+      render: r => (
+        // s20: the procedure chip carries the band's lavender so the two sources stay perceptually
+        // distinct in the one list; never colour alone -- the word is the signal, the tint is an aid.
+        <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${r.recordKind === "procedure"
+          ? "bg-indigo-50 text-indigo-700" : "bg-gray-100 text-gray-600"}`}>
+          {r.kindLabel}
+        </span>
+      ) },
+    { key: "source", label: "Context / Source", priority: "secondary",
+      render: r => (
+        // s12: where each row came from, so nobody has to remember what was auto-captured.
+        <span className="text-[11.5px] text-gray-600">
+          {r.recordKind === "procedure"
+            ? "Encounter"
+            : r.performed_by === me
+              ? "You"
+              : (r.performedByName ?? (r.performedByNameUnavailable ? "name could not be read" : "practitioner"))}
+          {r.recordKind === "activity" && r.location_id && locationName.has(r.location_id)
+            ? ` · ${locationName.get(r.location_id)}` : ""}
+        </span>
+      ) },
+    { key: "outcome", label: "Outcome / Details", priority: "secondary",
+      render: r => r.recordKind === "procedure" ? (
+        <span className="text-[11.5px] text-gray-700">
+          {PROCEDURE_STATUS_LABEL[r.status] ?? r.status}
+          {/* s15: visible without alarm-like presentation -- a word in amber, not a red row. And a
+              failed outcome read is NOT rendered as complication-free: absence of evidence is said. */}
+          {r.hasComplication && <span className="ml-1 font-semibold text-amber-700">· complication recorded</span>}
+          {r.complicationsUnread && <span className="ml-1 text-gray-400">· outcomes not read</span>}
+        </span>
+      ) : (
+        <span className="text-[11.5px] text-gray-700">
+          {r.participation}
+          {r.duration_minutes ? ` · ${hours(r.duration_minutes)}` : ""}
+        </span>
+      ) },
+    { key: "cpd", label: "CPD", priority: "secondary", align: "right",
+      render: r => r.cpd_minutes
+        ? <span className="text-[11.5px] text-gray-700">{hours(r.cpd_minutes)}</span>
+        : <span className="text-gray-300">&mdash;</span> },
+  ];
 
   return (
     <>
@@ -86,71 +173,81 @@ export default function ActivityConsole({ activities, portfolio, locations, only
         </p>
       )}
 
-      {/* ── Portfolio summary (comp: Procedure Summary + Portfolio Impact) ─────────────────────── */}
-      <div className="mt-4 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-        <div className={card}>
-          <p className="text-[11px] font-semibold text-gray-500">Procedures</p>
-          <p className="mt-1 text-2xl font-bold text-gray-900">{portfolio.procedures.performed}</p>
-          <p className="mt-0.5 text-[10px] text-gray-500">
-            performed{portfolio.procedures.abandoned > 0 ? `, ${portfolio.procedures.abandoned} abandoned` : ""}
+      {/* ══ s5/s7/s8: TWO SUMMARY BANDS, PERCEPTUALLY DISTINCT ══════════════════════════════════════
+          System-derived procedures wear the lavender; logged professional activity wears the pale
+          neutral. Both are ORIENTATION, not the point of the page -- the record below is. */}
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <section className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
+          <h2 className="text-[11px] font-bold uppercase tracking-wide text-indigo-700">Procedures</h2>
+          <p className="mt-0.5 text-[11px] text-gray-600">
+            Captured automatically from your encounter records.
           </p>
-        </div>
-        <div className={card}>
-          <p className="text-[11px] font-semibold text-gray-500">With a complication</p>
-          {/* A COUNT AND ITS DENOMINATOR. Never a rate -- see the header. */}
-          <p className="mt-1 text-2xl font-bold text-gray-900">{portfolio.procedures.withComplication}</p>
-          <p className="mt-0.5 text-[10px] text-gray-500">of {portfolio.procedures.complicationDenominator} performed</p>
-        </div>
-        <div className={card}>
-          <p className="text-[11px] font-semibold text-gray-500">Activities logged</p>
-          <p className="mt-1 text-2xl font-bold text-gray-900">{portfolio.activities.total}</p>
-          <p className="mt-0.5 text-[10px] text-gray-500">{portfolio.activities.byKind.length} kinds</p>
-        </div>
-        <div className={card}>
-          <p className="text-[11px] font-semibold text-gray-500">CPD claimed</p>
-          <p className="mt-1 text-2xl font-bold text-gray-900">{hours(portfolio.cpdMinutes)}</p>
-          <p className="mt-0.5 text-[10px] text-gray-500">across {portfolio.portfolioItems} portfolio entries</p>
-        </div>
-        <div className={`${card} border-dashed bg-gray-50/60`}>
-          <p className="text-[11px] font-semibold text-gray-500">Competency links</p>
-          <p className="mt-1 text-2xl font-bold text-gray-300">&mdash;</p>
-          <p className="mt-0.5 text-[10px] text-gray-500">{portfolio.competencyNote}</p>
-        </div>
+          {portfolio.procedures.performed === 0 ? (
+            <p className="mt-2 text-[12px] text-gray-600">No procedures recorded for this period.</p>
+          ) : (
+            <div className="mt-2 flex items-baseline gap-4 flex-wrap">
+              <span>
+                <span className="text-2xl font-bold text-gray-900">{portfolio.procedures.performed}</span>
+                <span className="ml-1 text-[11px] text-gray-600">
+                  performed{portfolio.procedures.abandoned > 0 ? `, ${portfolio.procedures.abandoned} abandoned` : ""}
+                </span>
+              </span>
+              {/* s7: quiet unless non-zero, and NEVER a celebratory zero-KPI. A count and its
+                  denominator; the reader divides. */}
+              <span className={`text-[11px] ${portfolio.procedures.withComplication > 0
+                ? "font-semibold text-amber-700" : "text-gray-600"}`}>
+                complications {portfolio.procedures.withComplication} of {portfolio.procedures.complicationDenominator}
+              </span>
+              <span className="text-[11px] text-gray-600">
+                CPD this period {hours(portfolio.cpdMinutes)}
+                <span className="text-gray-400"> (procedures and logged activity)</span>
+              </span>
+            </div>
+          )}
+          <Link href={filterHref("procedure")}
+            className="mt-2 inline-block text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+            View all procedures &rarr;
+          </Link>
+        </section>
+
+        <section className="rounded-xl border border-emerald-100 bg-emerald-50/30 p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h2 className="text-[11px] font-bold uppercase tracking-wide text-emerald-800">Other clinical activity</h2>
+              <p className="mt-0.5 text-[11px] text-gray-600">
+                Professional activity not recorded through patient encounters.
+              </p>
+            </div>
+            {/* s8's one primary action. s13: this is NOT how procedures are recorded, and the form
+                below offers no procedure kind -- the consultation is where those are written. */}
+            <button type="button" onClick={() => setOpen(o => !o)}
+              className="shrink-0 rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)]">
+              {open ? "Cancel" : "+ Log activity"}
+            </button>
+          </div>
+          {portfolio.activities.total === 0 ? (
+            <p className="mt-2 text-[12px] text-gray-600">
+              No other professional activity recorded for this period.
+            </p>
+          ) : (
+            <div className="mt-2 flex items-baseline gap-4 flex-wrap">
+              <span>
+                <span className="text-2xl font-bold text-gray-900">{portfolio.activities.total}</span>
+                <span className="ml-1 text-[11px] text-gray-600">activities logged</span>
+              </span>
+              <span className="text-[11px] text-gray-600">Ward rounds {kindCount("ward_round")}</span>
+              <span className="text-[11px] text-gray-600">Teaching {kindCount("teaching")}</span>
+              <span className="text-[11px] text-gray-600">Training {kindCount("training")}</span>
+              {moreCount > 0 && <span className="text-[11px] text-gray-600">More {moreCount}</span>}
+            </div>
+          )}
+        </section>
       </div>
 
-      {portfolio.activities.byKind.length > 0 && (
-        <section className={`${card} mt-4`}>
-          <h2 className="text-[13px] font-bold text-gray-900">Your activity, by kind</h2>
-          <ul className="mt-2 flex flex-col">
-            {portfolio.activities.byKind.map((k: any) => (
-              <li key={k.kind} className="flex items-baseline gap-2 border-b border-gray-100 py-1.5 last:border-0">
-                <span className="text-[12px] text-gray-800">{k.label}</span>
-                <span className="ml-auto text-[13px] font-bold text-gray-900">{k.total}</span>
-                <span className="w-24 text-right text-[11px] text-gray-500">{k.minutes > 0 ? hours(k.minutes) : ""}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* ── The log ────────────────────────────────────────────────────────────────────────────── */}
-      <section className={`${card} mt-4`}>
-        <div className="flex items-baseline justify-between gap-2 flex-wrap">
-          <h2 className="text-[13px] font-bold text-gray-900">Activity log</h2>
-          <span className="flex items-center gap-2">
-            <Link href={`/practice/activity?mine=${onlyMine ? "0" : "1"}${periodQuery}`}
-              className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
-              {onlyMine ? "Show everyone's" : "Show only mine"}
-            </Link>
-            <button type="button" onClick={() => setOpen(o => !o)}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
-              {open ? "Cancel" : "Log an activity"}
-            </button>
-          </span>
-        </div>
-
-        {open && (
-          <form className="mt-3 flex flex-col gap-2 border-b border-gray-100 pb-3"
+      {open && (
+        <section className="mt-3 rounded-xl border border-gray-200 bg-white p-4">
+          <h3 className="text-[13px] font-bold text-gray-900">Log a professional activity</h3>
+          <form className="mt-3 flex flex-col gap-2"
             onSubmit={e => { e.preventDefault(); submit(); }}>
             <div className="grid sm:grid-cols-2 gap-2">
               <label className="flex flex-col gap-1">
@@ -208,70 +305,87 @@ export default function ActivityConsole({ activities, portfolio, locations, only
               Log it
             </button>
           </form>
-        )}
+        </section>
+      )}
 
-        {/* The kind filter. Links rather than JavaScript, so the state is in the URL and a filtered log
-            is something somebody can bookmark or send. */}
-        <div className="mt-2 flex flex-wrap gap-1">
-          <Link href={`/practice/activity?mine=${onlyMine ? "1" : "0"}${periodQuery}`}
-            aria-current={kind === "" ? "page" : undefined}
-            className={`rounded px-2 py-0.5 text-[11px] font-semibold ${
-              kind === "" ? "bg-[var(--cp-primary-soft)] text-[var(--cp-primary-deep)]" : "text-gray-500 hover:text-gray-800"}`}>
+      {/* ══ s10: THE ACTIVITY RECORD -- THE DOMINANT ELEMENT ════════════════════════════════════════ */}
+      <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+        <div className="flex items-baseline justify-between gap-2 flex-wrap">
+          <h2 className="text-[13px] font-bold text-gray-900">Activity record</h2>
+          <Link href={`/practice/activity?mine=${onlyMine ? "0" : "1"}${kind ? `&kind=${kind}` : ""}${periodQuery}`}
+            className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+            {onlyMine ? "Show everyone's" : "Show only mine"}
+          </Link>
+        </div>
+
+        {/* s11: All + the frequent five; the rest behind More. Links, not JavaScript, so a filtered
+            record is something somebody can bookmark or send. */}
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          <Link href={filterHref("")} aria-current={kind === "" ? "page" : undefined} className={chip(kind === "")}>
             All
           </Link>
-          {ACTIVITY_KINDS.map(([k, l]) => (
-            <Link key={k} href={`/practice/activity?mine=${onlyMine ? "1" : "0"}&kind=${k}${periodQuery}`}
-              aria-current={kind === k ? "page" : undefined}
-              className={`rounded px-2 py-0.5 text-[11px] font-semibold ${
-                kind === k ? "bg-[var(--cp-primary-soft)] text-[var(--cp-primary-deep)]" : "text-gray-500 hover:text-gray-800"}`}>
+          {DIRECT_FILTERS.map(([k, l]) => (
+            <Link key={k} href={filterHref(k)} aria-current={kind === k ? "page" : undefined} className={chip(kind === k)}>
+              {l}
+            </Link>
+          ))}
+          {!showMore ? (
+            <button type="button" onClick={() => setShowMore(true)}
+              className="rounded-full px-2.5 py-1 text-[11.5px] font-semibold text-gray-500 hover:text-gray-800">
+              More &#9662;
+            </button>
+          ) : MORE_FILTERS.map(([k, l]) => (
+            <Link key={k} href={filterHref(k)} aria-current={kind === k ? "page" : undefined} className={chip(kind === k)}>
               {l}
             </Link>
           ))}
         </div>
 
-        {activities.length === 0 ? (
-          <p className="mt-2 text-[12px] text-gray-400">
-            {kind ? "Nothing of that kind logged." : "Nothing logged yet."}
-          </p>
-        ) : (
-          <ul className="mt-2 flex flex-col">
-            {activities.map((a: any) => (
-              <li key={a.id} className="flex items-baseline gap-2 border-b border-gray-100 py-1.5 last:border-0">
-                <span className="min-w-0">
-                  <span className="block text-[12px] font-semibold text-gray-800">{a.title}</span>
-                  <span className="block text-[10px] text-gray-500">
-                    {a.kindLabel} · {a.participation}
-                    {a.performedByName ? ` · ${a.performedByName}` : ""}
-                    {a.duration_minutes ? ` · ${hours(a.duration_minutes)}` : ""}
-                    {a.cpd_minutes ? ` · ${hours(a.cpd_minutes)} CPD` : ""}
-                  </span>
-                </span>
-                <span className="ml-auto shrink-0 text-right">
-                  <span className="block text-[11px] text-gray-600">
-                    {new Date(a.occurred_at).toLocaleDateString()}
-                  </span>
-                  {/* Only the person who did it may change their own portfolio, so the button is not
-                      offered to anyone else rather than offered-and-refused. */}
-                  {a.performed_by === me && (
-                    <button type="button" disabled={busy} onClick={() => togglePortfolio(a)}
-                      className="text-[10px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
-                      {a.portfolio ? "In portfolio" : "Add to portfolio"}
-                    </button>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="mt-2 overflow-x-auto">
+          <ClinicalRecordTable
+            label="Procedures and professional activities, most recent first"
+            columns={COLUMNS}
+            empty={
+              // s17: local and specific. The old empty line claimed nothing was logged even while
+              // procedures existed; the All view is only empty when BOTH sources are, and says both.
+              <p className="mt-2 text-[12px] text-gray-500">
+                {kind === "procedure"
+                  ? "No procedures recorded for this period."
+                  : kind
+                    ? `No ${(ACTIVITY_KINDS.find(([k]) => k === kind)?.[1] ?? kind).toLowerCase()} activity recorded for this period.`
+                    : "No procedures or professional activities recorded for this period. Procedures arrive here from encounter records; anything else can be logged above."}
+              </p>
+            }
+            records={records.map(r => ({
+              id: `${r.recordKind}-${r.id}`,
+              data: r,
+              secondaryText: r.recordKind === "activity" && r.detail ? r.detail : undefined,
+              actions: r.recordKind === "procedure" ? (
+                // s23: the portfolio row LINKS to the encounter; it does not re-publish it. The
+                // encounter page enforces its own permissions on arrival.
+                <Link href={`/practice/encounters/${r.encounterId}`}
+                  className="rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50">
+                  View
+                </Link>
+              ) : r.performed_by === me ? (
+                // Only the person who did it may change their own portfolio, so the button is not
+                // offered to anyone else rather than offered-and-refused.
+                <button type="button" disabled={busy} onClick={() => togglePortfolio(r)}
+                  className="rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                  {r.portfolio ? "In portfolio" : "Add to portfolio"}
+                </button>
+              ) : undefined,
+            }))}
+          />
+        </div>
       </section>
 
-      <section className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/60 p-4">
-        <h2 className="text-[13px] font-bold text-gray-500">AI assisted documentation</h2>
-        <p className="mt-1 text-[11px] text-gray-500">
-          Drafted procedure summaries, suggested coding and missing-field checks are specified in CPR-210
-          AI Clinical Assistant, which is not built.
-        </p>
-      </section>
+      {/* ══ s5's FOOTER: LOW-SALIENCE GUIDANCE, AND THE ONE HONEST COMPETENCY SENTENCE ═════════════ */}
+      <p className="mt-4 rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3 text-[11px] text-gray-500">
+        <strong className="text-gray-600">Procedures are captured automatically from encounter records</strong>
+        {" "}&mdash; record them in the consultation and they appear here without re-entry. Log other
+        professional activities to build your complete clinical portfolio. {portfolio.competencyNote}
+      </p>
     </>
   );
 }
