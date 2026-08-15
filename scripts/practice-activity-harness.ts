@@ -577,9 +577,27 @@ async function main() {
     buckets["2026-08-01"]?.activities === 1 && !buckets["2026-07-31"],
     JSON.stringify({ aug1: buckets["2026-08-01"], jul31: buckets["2026-07-31"] ?? null }));
 
+  // Needle repointed 2026-08-15 (second time same day): the page no longer mounts the shared chip
+  // collection at all -- s6 ordered it REPLACED with a menu, and the owner proved the point by asking
+  // for a custom range while standing on the old control's Custom chip.
   const navSrc = readFileSync(join(appDir, "ActivityNavigator.tsx"), "utf8");
-  ok("VIEW-4. s6/s20: the switcher offers exactly List and Month -- the label the comp uses, the view the grid earns",
-    navSrc.includes('views={["agenda", "month"]}') && navSrc.includes('viewLabels={{ agenda: "List" }}'));
+  const S6_MENU = ["Today", "This week", "This month", "Last month", "Last 90 days", "This year", "All dates", "Custom dates"];
+  // ⚠ The no-chips half pins the IMPORT, not the word -- the navigator's own header comment SAYS
+  // "PeriodNavigator" while explaining its absence, and a needle on the word matched that comment on
+  // this assertion's first run (instance 10+ of the needles-match-their-own-documentation class).
+  ok("VIEW-4. s6: ONE Period menu holding exactly the eight entries the spec names, chips gone",
+    S6_MENU.every(l => navSrc.includes(`"${l}"`))
+      && !navSrc.includes('from "@/components/practice/PeriodNavigator"'),
+    S6_MENU.filter(l => !navSrc.includes(`"${l}"`)).join(", ") || "the chip collection is imported again");
+  ok("VIEW-4b. the view group offers List and Month and nothing else",
+    navSrc.includes('aria-label="Record view"')
+      && navSrc.includes('seg(period.view !== "month")') && navSrc.includes('seg(period.view === "month")')
+      && !/seg\([^)]*"(day|week)"/.test(navSrc));
+  ok("VIEW-4c. Custom dates opens labelled From/To fields, refuses end-before-start, and applies as a calendar range",
+    navSrc.includes("The end is before the start.")
+      && navSrc.includes('view: "agenda", anchorDate: customFrom, from: customFrom, to: customTo'));
+  ok("VIEW-4d. s6: the RESOLVED range is printed beside the controls, so the menu's word is checkable",
+    navSrc.includes("period.fromDate} – ${period.toDate}"));
   ok("VIEW-5. the grid is REAL only for a calendar month -- rolling and unbounded ranges have no grid shape",
     pageSrc.includes('period.view === "month" && period.anchoring === "calendar" && period.bounded'));
   ok("VIEW-6. a cell drills to its own day as the SAME single-day period the List would build",

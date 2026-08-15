@@ -41,6 +41,20 @@ const PROCEDURE_STATUS_LABEL: Record<string, string> = {
 };
 const ROLE_LABEL = Object.fromEntries(PARTICIPANT_ROLES as readonly (readonly [string, string])[]);
 
+// s20: category tints for the Type chip. INFORMATION CODING, NOT DECORATION -- one hue per kind
+// family, the WORD always beside the tint, and none of them amber or red: those stay reserved for
+// states that need acting on, which a category never is.
+const KIND_TINT: Record<string, string> = {
+  procedure: "bg-indigo-50 text-indigo-700",
+  ward_round: "bg-emerald-50 text-emerald-700",
+  clinic_session: "bg-teal-50 text-teal-700",
+  supervision: "bg-teal-50 text-teal-700",
+  teaching: "bg-sky-50 text-sky-700",
+  training: "bg-sky-50 text-sky-700",
+  audit: "bg-slate-100 text-slate-600",
+};
+const KIND_TINT_FALLBACK = "bg-gray-100 text-gray-600";
+
 type Row = any;
 
 export default function ActivityConsole({ records, portfolio, locations, onlyMine, kind, me, periodQuery = "", monthGrid = null }: {
@@ -176,10 +190,8 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
       render: r => <span className="font-semibold text-gray-800">{r.title}</span> },
     { key: "type", label: "Type", priority: "secondary",
       render: r => (
-        // s20: the procedure chip carries the band's lavender so the two sources stay perceptually
-        // distinct in the one list; never colour alone -- the word is the signal, the tint is an aid.
-        <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${r.recordKind === "procedure"
-          ? "bg-indigo-50 text-indigo-700" : "bg-gray-100 text-gray-600"}`}>
+        // Never colour alone -- the word is the signal, the tint is an aid (KIND_TINT's header).
+        <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${KIND_TINT[r.kind] ?? KIND_TINT_FALLBACK}`}>
           {r.kindLabel}
         </span>
       ) },
@@ -207,6 +219,8 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
           </span>
         ) : (
           <span className="text-[11.5px] text-gray-700">
+            {/* s20's "quiet green icon/text where useful" -- a tick BESIDE the word, never instead. */}
+            {r.status === "PERFORMED" && <span aria-hidden="true" className="mr-0.5 text-emerald-600">&#10003;</span>}
             {PROCEDURE_STATUS_LABEL[r.status] ?? r.status}
             {/* s15: visible without alarm-like presentation -- a word in amber, not a red row. And a
                 failed outcome read is NOT rendered as complication-free: absence of evidence is said. */}
@@ -216,7 +230,8 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
         )
       ) : (
         <span className="text-[11.5px] text-gray-700">
-          {r.participation}
+          <span aria-hidden="true" className="mr-0.5 text-emerald-600">&#10003;</span>Completed
+          {` · ${r.participation}`}
           {r.duration_minutes ? ` · ${hours(r.duration_minutes)}` : ""}
         </span>
       ) },
@@ -453,7 +468,12 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
       {/* ══ s10: THE ACTIVITY RECORD -- THE DOMINANT ELEMENT ════════════════════════════════════════ */}
       <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex items-baseline justify-between gap-2 flex-wrap">
-          <h2 className="text-[13px] font-bold text-gray-900">Activity record</h2>
+          <div>
+            <h2 className="text-[11px] font-bold uppercase tracking-wide text-gray-700">Activity record</h2>
+            <p className="mt-0.5 text-[11px] text-gray-500">
+              A chronological record of your procedures and professional clinical activities.
+            </p>
+          </div>
           <Link href={`/practice/activity?mine=${onlyMine ? "0" : "1"}${kind ? `&kind=${kind}` : ""}${periodQuery}`}
             className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
             {onlyMine ? "Show everyone's" : "Show only mine"}
@@ -595,6 +615,18 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
               ) : undefined,
             }))}
           />
+          {records.length > 0 && (
+            // The comp's "Showing 1 to N" line, said the honest way: a COUNT of what is on screen.
+            // The page-level truncation banner already covers the case where there was more.
+            <p className="mt-2 flex items-baseline justify-between gap-2 text-[11px] text-gray-500">
+              <span>Showing {records.length} in this period.</span>
+              {kind !== "" && (
+                <Link href={filterHref("")} className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                  View all activity &rarr;
+                </Link>
+              )}
+            </p>
+          )}
         </div>
         )}
       </section>
