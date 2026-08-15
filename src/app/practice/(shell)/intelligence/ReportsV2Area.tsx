@@ -105,10 +105,20 @@ export default async function ReportsV2Area({ admin, ctx, suite, fromDay, toDay 
                           <span className="block text-[12px] font-semibold text-gray-800">{t.name}</span>
                           <span className="block text-[10px] leading-relaxed text-gray-500">{t.blurb}</span>
                         </span>
-                        <a href={genHref(t.id)}
-                          className="ml-auto shrink-0 rounded-lg border border-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-700 hover:bg-gray-50">
-                          CSV ↓
-                        </a>
+                        <span className="ml-auto flex shrink-0 gap-1">
+                          <a href={genHref(t.id)}
+                            className="rounded-lg border border-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-700 hover:bg-gray-50">
+                            CSV ↓
+                          </a>
+                          <a href={`${genHref(t.id)}&format=xlsx`}
+                            className="rounded-lg border border-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-700 hover:bg-gray-50">
+                            XLSX ↓
+                          </a>
+                          <Link href={`/practice/reports/view?template=${t.id}&from=${fromDay}&to=${toDay}`}
+                            className="rounded-lg border border-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-700 hover:bg-gray-50">
+                            Print
+                          </Link>
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -117,8 +127,8 @@ export default async function ReportsV2Area({ admin, ctx, suite, fromDay, toDay 
             })}
             <p className="mt-2 text-[10px] text-gray-400">
               Reports use the same metric definitions as the screens &mdash; each file lists the registry
-              entries behind its figures. PDF arrives as print views; XLSX is queued work, named rather
-              than promised.
+              entries behind its figures. CSV and XLSX render the same generated report; Print is the
+              PDF, through your browser, the same policy every print view in this product follows.
             </p>
           </section>
 

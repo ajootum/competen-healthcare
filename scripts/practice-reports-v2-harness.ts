@@ -29,6 +29,8 @@ import { recordInvestigation, recordReferral } from "../src/lib/practice/encount
 import { createFollowUp } from "../src/lib/practice/follow-ups";
 import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import { generateReport, reportCsv, investigationsOrdered } from "../src/lib/practice/report-engine";
+import { reportXlsx } from "../src/lib/practice/report-xlsx";
+import * as XLSX from "xlsx";
 import { diagnosisReport, resolvePeriod } from "../src/lib/practice/reports";
 import { REPORT_TEMPLATES, REPORT_CATEGORIES, reportTemplateById } from "../src/lib/practice/report-templates";
 import { metricById } from "../src/lib/practice/intelligence-registry";
@@ -226,6 +228,31 @@ async function main() {
   ok("7-2. a label containing a comma is quoted, not split",
     csv.includes('"Hypertension, essential",1,1,1'));
 
+  // ── 7b. The XLSX -- same GeneratedReport, round-tripped through the reader ─
+  const xbuf = reportXlsx(conditions.ok ? conditions.data : (null as never));
+  ok("7-3. the XLSX is a real workbook: PK magic, Definition sheet first, one sheet per section",
+    xbuf[0] === 0x50 && xbuf[1] === 0x4b
+      && (() => {
+        const wb = XLSX.read(xbuf, { type: "buffer" });
+        return wb.SheetNames[0] === "Definition"
+          && wb.SheetNames.length === 1 + (conditions.ok ? conditions.data.sections.length : 0);
+      })(),
+    JSON.stringify(XLSX.read(xbuf, { type: "buffer" }).SheetNames));
+  ok("7-4. ⚠ the XLSX carries the SAME figures: the comma-bearing label survives as one cell",
+    (() => {
+      const wb = XLSX.read(xbuf, { type: "buffer" });
+      const rows: any[][] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[1]], { header: 1 });
+      return rows.some(r => r[0] === "Hypertension, essential" && r[1] === 1 && r[2] === 1);
+    })(),
+    "the conditions row did not round-trip");
+  ok("7-5. the definition block leads the workbook too: period and registry version in sheet one",
+    (() => {
+      const wb = XLSX.read(xbuf, { type: "buffer" });
+      const flat = JSON.stringify(XLSX.utils.sheet_to_json(wb.Sheets.Definition, { header: 1 }));
+      return flat.includes(`${genArgs.fromDay} to ${genArgs.toDay}`) && flat.includes("pi.top_conditions_by_patients v1")
+        && flat.includes("Not anonymised");
+    })());
+
   // ── 8. Source pins ─────────────────────────────────────────────────────────
   const pageSrc = readFileSync(join(process.cwd(), "src", "app", "practice", "(shell)", "intelligence", "page.tsx"), "utf8");
   const askSrc = readFileSync(join(process.cwd(), "src", "lib", "practice", "ask-practice.ts"), "utf8");
@@ -237,6 +264,14 @@ async function main() {
   ok("8-3. the engine never runs its own SQL where a module owns the number",
     engineSrc.includes("referralIntelligence(") && engineSrc.includes("practiceIntelligenceWorkspace(")
       && engineSrc.includes("outcomePicture(") && engineSrc.includes("diagnosisReport("));
+  const routeSrc = readFileSync(join(process.cwd(), "src", "app", "api", "v1", "practice", "reports", "generate", "route.ts"), "utf8");
+  const printSrc = readFileSync(join(process.cwd(), "src", "app", "practice", "(shell)", "reports", "view", "page.tsx"), "utf8");
+  ok("8-4. an unknown format is refused by name, never silently defaulted",
+    routeSrc.includes('"UNKNOWN_FORMAT"') && routeSrc.includes('format !== "csv" && format !== "xlsx"'));
+  ok("8-5. the print view IS the PDF: it renders generateReport's own output, states the policy,"
+    + " and carries the regeneration honesty footer",
+    printSrc.includes("generateReport(") && printSrc.includes("browser&apos;s print for paper or PDF")
+      && printSrc.includes("printing this page again after more records exist will show different"));
 
   return report();
 }
