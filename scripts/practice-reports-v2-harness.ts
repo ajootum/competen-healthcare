@@ -30,6 +30,7 @@ import { createFollowUp } from "../src/lib/practice/follow-ups";
 import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import { generateReport, reportCsv, investigationsOrdered } from "../src/lib/practice/report-engine";
 import { reportXlsx } from "../src/lib/practice/report-xlsx";
+import { favouriteTemplates, setFavouriteTemplate } from "../src/lib/practice/report-favourites";
 import * as XLSX from "xlsx";
 import { diagnosisReport, resolvePeriod } from "../src/lib/practice/reports";
 import { REPORT_TEMPLATES, REPORT_CATEGORIES, reportTemplateById } from "../src/lib/practice/report-templates";
@@ -278,6 +279,27 @@ async function main() {
         && flat.includes("Not anonymised");
     })());
 
+  // ── 7c. Favourites (s12, migration 306) -- the caller's own starred templates ─
+  const favOn = await setFavouriteTemplate(admin, ctx, { templateId: "conditions", favourite: true });
+  const favList = await favouriteTemplates(admin, ctx);
+  ok("9-1. a template stars and lists for its owner",
+    favOn.ok && favList.join() === "conditions", JSON.stringify({ favOn, favList }));
+  const favUnknown = await setFavouriteTemplate(admin, ctx, { templateId: "quarterly_kpis", favourite: true });
+  ok("9-2. an unknown template cannot be starred", !favUnknown.ok && favUnknown.code === "UNKNOWN_TEMPLATE");
+  const noBillingFav = await setFavouriteTemplate(admin, noBilling as any, { templateId: "financial_summary", favourite: true });
+  ok("9-3. ⚠ a template whose capability the caller lacks cannot be starred -- a shortcut to a locked door is a broken promise",
+    !noBillingFav.ok && /billing\.view/.test(noBillingFav.message));
+  // Tamper: junk ids written around the engine are DROPPED on read (the cohort lesson again).
+  const pref = await admin.from("practice_user_preference").select("id")
+    .eq("workspace_id", ws).eq("user_id", OWNER).maybeSingle();
+  await admin.from("practice_user_preference")
+    .update({ favourite_report_templates: ["conditions", "deleted_template", 42] }).eq("id", pref.data!.id);
+  const favAfterTamper = await favouriteTemplates(admin, ctx);
+  ok("9-4. ⚠ tampered or stale ids are DROPPED on read",
+    favAfterTamper.join() === "conditions", JSON.stringify(favAfterTamper));
+  const favOff = await setFavouriteTemplate(admin, ctx, { templateId: "conditions", favourite: false });
+  ok("9-5. unstarring empties the list", favOff.ok && favOff.ok === true && (await favouriteTemplates(admin, ctx)).length === 0);
+
   // ── 8. Source pins ─────────────────────────────────────────────────────────
   const pageSrc = readFileSync(join(process.cwd(), "src", "app", "practice", "(shell)", "intelligence", "page.tsx"), "utf8");
   const askSrc = readFileSync(join(process.cwd(), "src", "lib", "practice", "ask-practice.ts"), "utf8");
@@ -303,6 +325,12 @@ async function main() {
     perfSrc.includes("Reflections, teaching and CPD this period")
       && perfSrc.includes("never estimated")
       && pageSrc.includes("template=professional_portfolio"));
+  const areaSrc2 = readFileSync(join(process.cwd(), "src", "app", "practice", "(shell)", "intelligence", "ReportsV2Area.tsx"), "utf8");
+  ok("8-7. s12 Favourites are real on the tab -- the star toggle in the catalogue, the favourites row,"
+    + " and the old honestly-not-built line retired WITH a replacement honesty line for Custom",
+    areaSrc2.includes("<FavouriteToggle") && areaSrc2.includes("Your favourites")
+      && !areaSrc2.includes("honestly not built")
+      && areaSrc2.includes("Custom templates."));
 
   return report();
 }

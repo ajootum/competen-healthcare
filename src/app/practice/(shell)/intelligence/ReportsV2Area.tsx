@@ -4,6 +4,8 @@ import {
   REPORT_CATEGORIES, REPORT_TEMPLATES, QUICK_ACCESS_TEMPLATES, reportTemplateById,
 } from "@/lib/practice/report-templates";
 import type { IntelligenceSuite } from "@/lib/practice/intelligence";
+import { favouriteTemplates } from "@/lib/practice/report-favourites";
+import FavouriteToggle from "./FavouriteToggle";
 import { CARD, PanelHead } from "./Ui";
 
 // CPR-PI-001 v2 s12 -- the Reports tab, rebuilt: quick access, the template catalogue, recent
@@ -30,6 +32,8 @@ export default async function ReportsV2Area({ admin, ctx, suite, fromDay, toDay 
   const visible = REPORT_TEMPLATES.filter(t => !t.capability || hasCapability(ctx, t.capability));
   const genHref = (id: string) =>
     `/api/v1/practice/reports/generate?template=${id}&from=${fromDay}&to=${toDay}`;
+  // s12 Favourites: the caller's own starred templates, validated against the catalogue on read.
+  const favourites = await favouriteTemplates(admin, ctx);
 
   // Recent generations, from the trail (s12 "Recent reports"): who, what, when, and whether names left.
   const { data: recentRows } = await admin.from("practice_audit_event")
@@ -55,6 +59,20 @@ export default async function ReportsV2Area({ admin, ctx, suite, fromDay, toDay 
         <PanelHead panel="recent_reports" title="Reports"
           note="Every report carries its practice, period, filters, generated time and the definitions of its figures -- the header travels with the file."
           action={{ href: "/practice/reports", label: "Generate a document" }} />
+        {favourites.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-baseline gap-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Your favourites</span>
+            {favourites.map(id => {
+              const t = reportTemplateById(id)!;
+              return (
+                <a key={id} href={genHref(id)}
+                  className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-900 hover:bg-amber-100">
+                  ★ {t.name} (CSV) ↓
+                </a>
+              );
+            })}
+          </div>
+        )}
         <div className="mt-2 flex flex-wrap gap-1.5">
           {QUICK_ACCESS_TEMPLATES.map(id => {
             const t = reportTemplateById(id)!;
@@ -101,6 +119,7 @@ export default async function ReportsV2Area({ admin, ctx, suite, fromDay, toDay 
                   <ul className="mt-1 flex flex-col">
                     {inCat.map(t => (
                       <li key={t.id} className="flex items-baseline gap-2 border-b border-gray-100 py-1.5 last:border-0">
+                        <FavouriteToggle templateId={t.id} isFavourite={favourites.includes(t.id)} />
                         <span className="min-w-0">
                           <span className="block text-[12px] font-semibold text-gray-800">{t.name}</span>
                           <span className="block text-[10px] leading-relaxed text-gray-500">{t.blurb}</span>
@@ -195,7 +214,8 @@ export default async function ReportsV2Area({ admin, ctx, suite, fromDay, toDay 
                 precondition does not exist yet. A schedule that could not deliver would be theatre.
               </li>
               <li className="text-[11px] leading-relaxed text-gray-600">
-                <b>Favourites.</b> Optional in the contract, and honestly not built.
+                <b>Custom templates.</b> The catalogue names a Custom category; authoring one does not
+                exist yet, and a menu entry that opens nothing would be worse than this sentence.
               </li>
             </ul>
           </section>
