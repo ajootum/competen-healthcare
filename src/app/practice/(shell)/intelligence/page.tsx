@@ -16,6 +16,8 @@ import RangePicker from "./RangePicker";
 import AskField from "./AskField";
 import PriorityStrip from "./PriorityStrip";
 import AssistantArea from "./AssistantArea";
+import AskPracticeArea from "./AskPracticeArea";
+import { askPractice } from "@/lib/practice/ask-practice";
 import { CARD } from "./Ui";
 import {
   BriefArea, ActivityPanel, TrendsPanel, PatientsArea, CohortsArea,
@@ -207,8 +209,23 @@ export default async function IntelligencePage({ searchParams }: {
             fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay,
           })} />
         )}
+        {/* v2 s13: the Ask field lands here. The GROUNDED stage answers first -- deterministic,
+            registry-tied, DERIVED-chipped (ask-practice.ts) -- and the model console keeps its own
+            consent gate below it, prefilled but never auto-sent. One entry point, two provenances. */}
         {tab === "assistant" && (
-          <AssistantArea admin={admin} ctx={shell.ctx} sessionId={sp.sessionId} question={sp.q} />
+          <div className="flex flex-col gap-4">
+            {sp.q && sp.q.trim().length >= 3 && (
+              <AskPracticeArea
+                carried={[...carried.entries()]}
+                answer={await askPractice(admin, shell.ctx, {
+                  question: sp.q, fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay,
+                  todayDate: suite.range.period.toDay, actorId: shell.ctx.userId,
+                  correlationId: crypto.randomUUID(),
+                })}
+              />
+            )}
+            <AssistantArea admin={admin} ctx={shell.ctx} sessionId={sp.sessionId} question={sp.q} />
+          </div>
         )}
       </div>
 

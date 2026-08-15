@@ -163,6 +163,23 @@ METRIC_REGISTRY.push(
     drillthrough: "/practice/encounters", releaseState: "required", owner: "CPR-PI-001 v2 s6/s10",
   },
   {
+    metricId: "pi.overdue_now", version: 1, displayName: "Follow-ups overdue now",
+    definition: "Follow-ups still OPEN or SCHEDULED whose due date is before the practice's today. A backlog as at the clock, across ALL periods -- an overdue promise does not expire with the period that made it. Same derivation followUpIntelligence states: OVERDUE is not a stored status.",
+    sourceDomains: ["follow_up"], timeField: "practice_follow_up.due_on vs the practice's today",
+    comparisonRule: "none",
+    nullHandling: "A failed count is unavailable and says so -- never rendered as zero overdue.",
+    drillthrough: "/practice/follow-ups?filter=overdue", releaseState: "required", owner: "CPR-PI-001 v2 s9/s13",
+  },
+  {
+    metricId: "ask.investigations_ordered", version: 1, displayName: "Investigations most requested",
+    definition: "Requests recorded in the period grouped by label as typed. Requested is a practitioner's note of asking, never an order that left this product, and never a result (migration 238 refuses a result column on purpose).",
+    sourceDomains: ["investigation"],
+    numerator: "requests carrying the label", denominator: "all investigation requests in period",
+    timeField: "practice_encounter_investigation.requested_at", comparisonRule: "none",
+    nullHandling: "A failed read is unavailable, never 'no investigations'.",
+    drillthrough: "/practice/encounters", releaseState: "required", owner: "CPR-PI-001 v2 s13",
+  },
+  {
     metricId: "pi.day_of_week", version: 1, displayName: "Consultations by weekday",
     definition: "Encounter counts per weekday in the practice's own calendar, derived from the one encounter trend every screen shares.",
     sourceDomains: ["encounter"],
