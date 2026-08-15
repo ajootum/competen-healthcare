@@ -519,19 +519,68 @@ export function PatternsV2Area({ suite }: { suite: Suite }) {
           </ul>
         </section>
       </div>
+      {/* v2 s10 "By location -- counts and proportions by configured practice location", consolidated
+          here from the deferral card (owner's command, 2026-08-15). The figures are the location
+          module's own: attributed through the located session each consultation ran inside, because
+          practice_encounter.location_id exists and NOTHING WRITES IT (see locationIntelligence). */}
       <section className={CARD}>
         <h3 className="text-[13px] font-bold text-gray-900">By location</h3>
-        {!loc.available ? <Unavailable module={loc} /> : (
-          <p className="mt-1 text-[12px] text-gray-700">
-            Location activity is in its own module below the fold of this rebuild; the figures live on{" "}
-            <Link href={tabLink("performance")} className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
-              Professional Portfolio &rarr;
-            </Link>{" "}
-            and the planner. Consolidating them into this screen is part of the remaining P0 work.
-          </p>
-        )}
+        {!loc.available ? <Unavailable module={loc} /> : (() => {
+          const e = (loc.data as any).encounters;
+          const appts = (loc.data as any).appointments;
+          const apptRows = ((appts?.locations ?? []) as any[]);
+          const apptTotal = apptRows.reduce((n, r) => n + (r.appointments ?? 0), 0);
+          if (e.status !== "ok") return <p className="mt-1 text-[12px] text-gray-600">{e.reason}</p>;
+          return (
+            <>
+              <p className="mt-0.5 text-[10px] text-gray-500">
+                Counted through the located session each consultation ran inside. A consultation outside
+                any located session has no site and is disclosed below &mdash; never dropped, never
+                redistributed across the sites.
+              </p>
+              {e.rows.length === 0 && e.unattributed === 0 ? (
+                <p className="mt-2 text-[12px] text-gray-500">No consultations in this period.</p>
+              ) : (
+                <ul className="mt-2 flex flex-col gap-1">
+                  {e.rows.map((r: any) => (
+                    <li key={r.locationId} className="flex items-baseline gap-2 text-[12px]">
+                      <span className="text-gray-800">{r.name}</span>
+                      <span className="ml-auto text-[11px] text-gray-500">{ofPct(r.total, e.of)}</span>
+                    </li>
+                  ))}
+                  {e.unattributed > 0 && (
+                    <li className="flex items-baseline gap-2 text-[12px]">
+                      <span className="italic text-gray-500">No location recorded</span>
+                      <span className="ml-auto text-[11px] text-gray-500">{ofPct(e.unattributed, e.of)}</span>
+                    </li>
+                  )}
+                </ul>
+              )}
+              <p className="mt-2 text-[11px] text-gray-600">
+                Active locations this period (v2 s15: configured, with qualifying activity):{" "}
+                <span className="font-bold text-gray-900">{e.rows.length}</span>
+                {apptRows.length > 0 && <> of {apptRows.length} configured</>}
+              </p>
+              {appts?.comparable && apptTotal > 0 && (
+                <div className="mt-2 border-t border-gray-100 pt-1.5">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                    Appointments by location (booked, a different universe from consultations held)
+                  </p>
+                  <ul className="mt-1 flex flex-col gap-0.5">
+                    {apptRows.map((r: any) => (
+                      <li key={r.id} className="flex items-baseline gap-2 text-[12px]">
+                        <span className="text-gray-800">{r.name}</span>
+                        <span className="ml-auto text-[11px] text-gray-500">{ofPct(r.appointments ?? 0, apptTotal)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          );
+        })()}
       </section>
-      <TrustFooter ids={["pi.day_of_week", "pi.consultations_trend"]} />
+      <TrustFooter ids={["pi.day_of_week", "pi.consultations_trend", "pi.encounters_by_location"]} />
     </div>
   );
 }

@@ -25,6 +25,7 @@ import { launchEncounter } from "../src/lib/practice/encounters";
 import { createFollowUp, closeFollowUp } from "../src/lib/practice/follow-ups";
 import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import { piV2Extras, medianOf } from "../src/lib/practice/pi-v2";
+import { intelRange, locationIntelligence } from "../src/lib/practice/intelligence";
 import { METRIC_REGISTRY, metricById } from "../src/lib/practice/intelligence-registry";
 import { INTELLIGENCE_TAB_STRIP, INTELLIGENCE_TABS, isIntelligenceTab } from "../src/lib/practice/intelligence-constants";
 import { practiceToday } from "../src/lib/practice/practice-time";
@@ -62,7 +63,8 @@ async function main() {
   const piIds = METRIC_REGISTRY.filter(m => m.metricId.startsWith("pi.")).map(m => m.metricId);
   ok("2-1. the P0 metric set is registered", piIds.length >= 7, piIds.join(", "));
   const rateBearing = ["pi.followup_completion", "pi.recency_last_visit", "pi.avg_visits_per_patient",
-    "pi.top_conditions_by_patients", "pi.top_conditions_by_encounters", "pi.day_of_week"];
+    "pi.top_conditions_by_patients", "pi.top_conditions_by_encounters", "pi.day_of_week",
+    "pi.encounters_by_location"];
   ok("2-2. ⚠ v2 s14: every percentage-capable metric declares BOTH numerator and denominator",
     rateBearing.every(id => !!metricById(id)?.numerator && !!metricById(id)?.denominator),
     rateBearing.filter(id => !metricById(id)?.numerator || !metricById(id)?.denominator).join(", "));
@@ -127,6 +129,16 @@ async function main() {
     extras.data.medianDaysToFollowUp.medianDays === 3 && extras.data.medianDaysToFollowUp.pairs === 3,
     JSON.stringify(extras.data.medianDaysToFollowUp));
 
+  // v2 s10's By location card (consolidated 2026-08-15): these encounters ran outside any located
+  // session, so every one must land in `unattributed` -- DISCLOSED, never dropped or redistributed.
+  const liRange = await intelRange(admin, ws, { fromDay: dayShift(-30), toDay: today });
+  const li = await locationIntelligence(admin, ctx, liRange);
+  const liEnc: any = li.available ? (li.data as any).encounters : null;
+  ok("3-5. locations: sessionless encounters are DISCLOSED as unattributed, and the denominator includes them",
+    li.available && liEnc.status === "ok" && liEnc.rows.length === 0
+      && liEnc.unattributed === 2 && liEnc.of === 2,
+    JSON.stringify(liEnc ?? li));
+
   // ── 4. THE FROZEN CONTENT (owner, 2026-08-15) ──────────────────────────────
   ok("4-1. ⚠ FROZEN: the strip is CPR-PI-001 v2 s3's order, verbatim -- a change arrives with a document",
     INTELLIGENCE_TAB_STRIP.join() ===
@@ -159,6 +171,11 @@ async function main() {
     pageSrc.includes("INTELLIGENCE_TAB_STRIP.map(k => INTELLIGENCE_TABS.find(t => t.key === k)!)"));
   ok("4-8. the falsified NO-RATES header is gone and the v2 doctrine stands in its place",
     !pageSrc.includes("NO RATES. All three comps") && pageSrc.includes("RATES ARE GOVERNED NOW"));
+  ok("4-9. s10: the By location card renders the module's own rows -- the deferral paragraph is gone,"
+    + " the unplaceable are a visible row, and the patterns footer names the registry entry",
+    !areasSrc.includes("Consolidating them into this screen is part of the remaining P0 work")
+      && areasSrc.includes("No location recorded")
+      && areasSrc.includes('"pi.encounters_by_location"'));
 
   return report();
 }

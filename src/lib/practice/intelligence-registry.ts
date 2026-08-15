@@ -163,6 +163,15 @@ METRIC_REGISTRY.push(
     drillthrough: "/practice/encounters", releaseState: "required", owner: "CPR-PI-001 v2 s6/s10",
   },
   {
+    metricId: "pi.encounters_by_location", version: 1, displayName: "Consultations by location",
+    definition: "Encounters started in the period grouped by the location of the practice_activity they ran inside. practice_encounter.location_id is deliberately NOT used -- nothing in this product writes it. Encounters that ran outside any located session are disclosed as unattributed, never dropped and never redistributed across the sites.",
+    sourceDomains: ["encounter", "activity", "location"],
+    numerator: "encounters placeable at the location", denominator: "all counted encounters in period (placeable plus unattributed)",
+    timeField: "practice_encounter.started_at", comparisonRule: "none",
+    nullHandling: "Not-permitted and unreadable states carry their reason; unattributed is its own visible row.",
+    drillthrough: "/practice/intelligence?tab=patterns", releaseState: "required", owner: "CPR-PI-001 v2 s10/s15",
+  },
+  {
     metricId: "pi.overdue_now", version: 1, displayName: "Follow-ups overdue now",
     definition: "Follow-ups still OPEN or SCHEDULED whose due date is before the practice's today. A backlog as at the clock, across ALL periods -- an overdue promise does not expire with the period that made it. Same derivation followUpIntelligence states: OVERDUE is not a stored status.",
     sourceDomains: ["follow_up"], timeField: "practice_follow_up.due_on vs the practice's today",
