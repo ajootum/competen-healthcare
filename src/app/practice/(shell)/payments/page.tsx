@@ -4,6 +4,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import {
   paymentsOverview, listInvoices, outstandingBalances, listFees, uninvoicedCharges,
+  facilityReceivables, listSettlements,
 } from "@/lib/practice/billing";
 import { listLocations } from "@/lib/practice/configuration";
 import { workspaceClock } from "@/lib/practice/practice-time";
@@ -12,11 +13,11 @@ import PaymentsConsole from "./PaymentsConsole";
 import PaymentsNavigator from "./PaymentsNavigator";
 
 // /practice/payments -- CPR-PAY-001 s11, the practitioner's money workspace, under HFE-001 v1.1's
-// PRACTICE section. Internal navigation: Overview | Transactions | Outstanding | Fees.
+// PRACTICE section. Internal navigation: Overview | Transactions | Outstanding | Settlements | Fees.
 //
-// ⚠ SETTLEMENTS IS NOT A TAB. PAY-001 s23 places facility settlements in Phase 2 and s20 of the HFE
-// standards forbids unbuilt UI. What Phase 1 DOES show, honestly, is the collector split -- money a
-// facility collected is visible and clearly not yet yours.
+// Settlements became a tab the day migration 304 was applied (Phase 2, 2026-08-15) -- it spent
+// Phase 1 deliberately absent rather than drawn-and-dead, and the money it moves is the money the
+// collector column has been keeping honest since 303.
 //
 // ⚠ NO PERCENTAGES. The comp prints "79% of invoiced" and a revenue donut; the standing honesty rule
 // (one owner-approved exception, which is attendance, not this) renders every figure here as a count
@@ -33,7 +34,7 @@ export default async function PaymentsPage({ searchParams }: {
 
   const sp = await searchParams;
   const one = (k: string) => { const v = sp[k]; return Array.isArray(v) ? v[0] : v; };
-  const tab = ["overview", "transactions", "outstanding", "fees"].includes(one("tab") ?? "")
+  const tab = ["overview", "transactions", "outstanding", "settlements", "fees"].includes(one("tab") ?? "")
     ? one("tab")! : "overview";
   const encounterId = one("encounter") ?? null;
   const patientId = one("patientId") ?? null;
@@ -45,13 +46,15 @@ export default async function PaymentsPage({ searchParams }: {
   const period = periodFromParams(one, clock.today, allDatesTarget(clock.today));
   const bounds = period.bounded ? { fromDay: period.fromDate, toDay: period.toDate } : {};
 
-  const [overview, invoices, outstanding, fees, locations, encounterCharges] = await Promise.all([
+  const [overview, invoices, outstanding, fees, locations, encounterCharges, receivables, settlements] = await Promise.all([
     paymentsOverview(admin, shell.ctx, bounds),
     listInvoices(admin, shell.ctx, { ...bounds, patientId: patientId ?? undefined }),
     outstandingBalances(admin, shell.ctx),
     listFees(admin, shell.ctx),
     listLocations(admin, shell.ctx.workspaceId),
     encounterId ? uninvoicedCharges(admin, shell.ctx, { encounterId }) : Promise.resolve(null),
+    facilityReceivables(admin, shell.ctx),
+    listSettlements(admin, shell.ctx),
   ]);
 
   return (
@@ -93,14 +96,16 @@ export default async function PaymentsPage({ searchParams }: {
         canIssue={hasCapability(shell.ctx, "invoice.issue")}
         canRecordPayment={hasCapability(shell.ctx, "payment.record")}
         canAdjust={hasCapability(shell.ctx, "billing.adjust")}
+        receivables={receivables}
+        settlements={settlements}
       />
 
       <p className="mt-4 rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3 text-[11px] text-gray-500">
         <strong className="text-gray-600">Collected is not received.</strong> Money a hospital or
-        clinic took on your behalf shows here as collected by them, and joins your received figure
-        only when a settlement is recorded &mdash; facility settlements arrive in Phase 2 and are not
-        offered before they exist. Every figure is a count or a sum in its own currency; nothing here
-        is a rate.
+        clinic took on your behalf shows as collected by them, and joins your received figure only
+        when a settlement is recorded under Settlements &mdash; where your share, what has arrived and
+        any difference are all visible. Every figure is a count or a sum in its own currency; nothing
+        here is a rate.
       </p>
     </div>
   );

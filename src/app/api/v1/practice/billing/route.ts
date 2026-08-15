@@ -4,6 +4,7 @@ import {
   listFees, saveFee, saveFeeOverride, createCharge, createDraftInvoice, issueInvoice,
   voidInvoice, recordPayment, recordAdjustment, paymentsOverview, listInvoices, getInvoice,
   outstandingBalances, patientFinancial, uninvoicedCharges,
+  saveFacilityEntitlement, facilityReceivables, recordSettlement, listSettlements,
 } from "@/lib/practice/billing";
 
 // GET  /api/v1/practice/billing?view=overview|invoices|outstanding|fees|uninvoiced|patient&...
@@ -55,6 +56,14 @@ export async function GET(req: NextRequest) {
     case "uninvoiced": {
       const charges = await uninvoicedCharges(caller.admin, ctx, { patientId: one("patientId"), encounterId: one("encounterId") });
       return NextResponse.json({ ...charges, correlationId: caller.traceId });
+    }
+    case "receivables": {
+      const receivables = await facilityReceivables(caller.admin, ctx);
+      return NextResponse.json({ ...receivables, correlationId: caller.traceId });
+    }
+    case "settlements": {
+      const settlements = await listSettlements(caller.admin, ctx, { locationId: one("locationId") });
+      return NextResponse.json({ ...settlements, correlationId: caller.traceId });
     }
     case "patient": {
       const financial = await patientFinancial(caller.admin, ctx, String(one("patientId") ?? ""));
@@ -137,6 +146,30 @@ export async function POST(req: NextRequest) {
         locationId: body.locationId ?? null, notes: body.notes ?? null,
         allocations: body.allocations.map((a: any) => ({
           invoiceId: a?.invoiceId ?? null, chargeId: a?.chargeId ?? null, amountMinor: Number(a?.amountMinor),
+        })),
+        ...actor,
+      });
+      return respond(result, caller.traceId, 201);
+    }
+    case "saveEntitlement": {
+      const result = await saveFacilityEntitlement(caller.admin, ctx, {
+        locationId: String(body.locationId ?? ""), kind: String(body.kind ?? ""),
+        percentBp: body.percentBp === undefined || body.percentBp === null ? null : Number(body.percentBp),
+        fixedMinor: body.fixedMinor === undefined || body.fixedMinor === null ? null : Number(body.fixedMinor),
+        currency: body.currency ?? null, note: body.note ?? null, ...actor,
+      });
+      return respond(result, caller.traceId, 201);
+    }
+    case "recordSettlement": {
+      if (!Array.isArray(body.items)) return bad("items must be an array");
+      const result = await recordSettlement(caller.admin, ctx, {
+        locationId: String(body.locationId ?? ""), periodFrom: String(body.periodFrom ?? ""),
+        periodTo: String(body.periodTo ?? ""), currency: String(body.currency ?? ""),
+        receivedMinor: Number(body.receivedMinor), receivedOn: body.receivedOn ?? null,
+        method: body.method ?? null, reference: body.reference ?? null, note: body.note ?? null,
+        items: body.items.map((i: any) => ({
+          paymentId: String(i?.paymentId ?? ""),
+          entitlementMinor: i?.entitlementMinor === undefined || i?.entitlementMinor === null ? null : Number(i.entitlementMinor),
         })),
         ...actor,
       });

@@ -87,9 +87,9 @@ export function formatMinor(amountMinor: number, currency: string): string {
   return `${negative ? "-" : ""}${currency} ${grouped}${frac}`;
 }
 
-/** CP-INV-YYYY-NNNNN / CP-RCT-YYYY-NNNNN. The allocator returns the number; THIS is the one formatter. */
-export function formatBillingNumber(kind: "invoice" | "receipt", year: number, sequence: number): string {
-  const prefix = kind === "invoice" ? "CP-INV" : "CP-RCT";
+/** CP-INV / CP-RCT / CP-SET -YYYY-NNNNN. The allocator returns the number; THIS is the one formatter. */
+export function formatBillingNumber(kind: "invoice" | "receipt" | "settlement", year: number, sequence: number): string {
+  const prefix = kind === "invoice" ? "CP-INV" : kind === "receipt" ? "CP-RCT" : "CP-SET";
   return `${prefix}-${year}-${String(sequence).padStart(5, "0")}`;
 }
 
@@ -118,6 +118,33 @@ export function deriveInvoiceStatus(args: {
   if (args.dueDate && args.today > args.dueDate) return "OVERDUE";
   return effective > 0 ? "PART_PAID" : "UNPAID";
 }
+
+export const ENTITLEMENT_KINDS = [
+  ["percent", "A share of each collection"],
+  ["fixed_per_payment", "A fixed amount per collection"],
+  ["manual", "Decided per settlement"],
+] as const;
+
+/**
+ * The practitioner's share of one collected payment, in minor units -- PAY-001 s10, migration 304.
+ *
+ * ⚠ FLOOR, DELIBERATELY. Integer division has to put the remainder somewhere, and rounding UP would
+ * overstate what the practitioner is owed -- on a receivable, the conservative error is the only
+ * honest one. A manual rule (or no rule) returns null: "needs a decision", never a guess.
+ */
+export function entitlementShareMinor(
+  rule: { kind: string; percent_bp?: number | null; fixed_minor?: number | null } | null | undefined,
+  collectedMinor: number,
+): number | null {
+  if (!rule || !Number.isSafeInteger(collectedMinor) || collectedMinor < 0) return null;
+  if (rule.kind === "percent" && Number.isInteger(rule.percent_bp))
+    return Math.floor(collectedMinor * (rule.percent_bp as number) / 10000);
+  if (rule.kind === "fixed_per_payment" && Number.isInteger(rule.fixed_minor))
+    return Math.min(rule.fixed_minor as number, collectedMinor);
+  return null;
+}
+
+export const SETTLEMENT_NUMBER_RE = /^CP-SET-[0-9]{4}-[0-9]{5,7}$/;
 
 /** s11.3's aging buckets: useful, few, and in days owed -- never a percentage of anything. */
 export function ageBucket(fromDay: string, today: string): "0-7" | "8-30" | "31-90" | "90+" {

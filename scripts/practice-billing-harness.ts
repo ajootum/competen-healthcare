@@ -29,10 +29,11 @@ import {
   listFees, saveFee, saveFeeOverride, createCharge, createDraftInvoice, issueInvoice, voidInvoice,
   recordPayment, recordAdjustment, paymentsOverview, listInvoices, getInvoice, outstandingBalances,
   patientFinancial, uninvoicedCharges,
+  saveFacilityEntitlement, facilityReceivables, recordSettlement, listSettlements,
 } from "../src/lib/practice/billing";
 import {
   BILLING_CAPABILITIES, formatMinor, formatBillingNumber, deriveInvoiceStatus, ageBucket,
-  INVOICE_NUMBER_RE, RECEIPT_NUMBER_RE,
+  INVOICE_NUMBER_RE, RECEIPT_NUMBER_RE, SETTLEMENT_NUMBER_RE, entitlementShareMinor,
 } from "../src/lib/practice/billing-constants";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
@@ -335,6 +336,115 @@ async function main() {
   ok("11-2. B's money picture is empty while A's is not (non-vacuous)",
     bOverview.byCurrency.length === 0 && overview2.byCurrency.length > 0);
 
+  // ══ PHASE 2: FACILITY SETTLEMENTS (migration 304) ═════════════════════════════════════════════
+  //
+  // The rule COMPLETES here: money a facility collected finally reaches "received" -- but only
+  // through a settlement row, never by assumption, and the difference between your share and what
+  // arrived stays visible.
+  ok("SET-P1. the share arithmetic FLOORS -- a receivable is never overstated by rounding",
+    entitlementShareMinor({ kind: "percent", percent_bp: 6000 }, 100001) === 60000
+      && entitlementShareMinor({ kind: "fixed_per_payment", fixed_minor: 70000 }, 50000) === 50000
+      && entitlementShareMinor({ kind: "manual" }, 100000) === null
+      && entitlementShareMinor(null, 100000) === null,
+    String(entitlementShareMinor({ kind: "percent", percent_bp: 6000 }, 100001)));
+
+  const ent = await saveFacilityEntitlement(admin, a.ctx, {
+    locationId: loc!.id, kind: "percent", percentBp: 6000, ...base,
+  });
+  ok("SET-1. a 60-of-every-100 share saves for the clinic", ent.ok, ent.ok ? "" : (ent as any).message);
+
+  // A fresh facility-collected payment AT that location, so the rule has something to apply to.
+  const setCharge = await createCharge(admin, a.ctx, {
+    source: "manual", patientId: pat.data.id, description: "Clinic procedure (facility billed)",
+    unitAmountMinor: 100000, currency: "UGX", locationId: loc!.id, ...base,
+  });
+  const setDraft = setCharge.ok ? await createDraftInvoice(admin, a.ctx, { chargeIds: [setCharge.data.id], ...base }) : null;
+  const setIssued = setDraft?.ok ? await issueInvoice(admin, a.ctx, { invoiceId: setDraft.data.id, ...base }) : null;
+  const facPay = setIssued?.ok ? await recordPayment(admin, a.ctx, {
+    patientId: pat.data.id, amountMinor: 100000, currency: "UGX", method: "cash", collector: "facility",
+    locationId: loc!.id, allocations: [{ invoiceId: (setDraft as any).data.id, amountMinor: 100000 }], ...base,
+  }) : null;
+  ok("SET-2-fixture. a facility-collected payment exists at the clinic", !!facPay && facPay.ok,
+    facPay && !facPay.ok ? (facPay as any).message : "");
+  if (!facPay?.ok) return report();
+  const { data: facPayRow } = await admin.from("practice_payment")
+    .select("id").eq("workspace_id", wsA).eq("collector", "facility").eq("location_id", loc!.id).single();
+
+  const recv = await facilityReceivables(admin, a.ctx);
+  const clinicGroup = recv.facilities.find((f: any) => f.locationId === loc!.id && f.currency === "UGX");
+  const nowhereGroup = recv.facilities.find((f: any) => f.locationId === null && f.currency === "UGX");
+  ok("SET-2. the receivable derives: 100,000 collected at the clinic, your share 60,000 under the rule",
+    clinicGroup?.collectedMinor === 100000 && clinicGroup?.entitlementMinor === 60000 && clinicGroup?.needsDecision === 0,
+    JSON.stringify({ c: clinicGroup?.collectedMinor, e: clinicGroup?.entitlementMinor }));
+  ok("SET-2b. ⚠ a collection with NO rule is COUNTED AS NEEDING A DECISION, never guessed into the sum",
+    nowhereGroup?.collectedMinor === 120000 && nowhereGroup?.entitlementMinor === 0 && nowhereGroup?.needsDecision === 1,
+    JSON.stringify({ c: nowhereGroup?.collectedMinor, n: nowhereGroup?.needsDecision }));
+
+  const notFacility = await recordSettlement(admin, a.ctx, {
+    locationId: loc!.id, periodFrom: "2026-08-01", periodTo: "2026-08-15", currency: "UGX",
+    receivedMinor: 10000, items: [{ paymentId: restByMe.ok ? restByMe.data.id : "" }], ...base,
+  });
+  ok("SET-3. a payment YOU collected cannot be settled -- there is nothing to transfer",
+    !notFacility.ok && notFacility.code === "NOT_FACILITY_COLLECTED",
+    notFacility.ok ? "settled" : String(notFacility.code));
+
+  const settled = await recordSettlement(admin, a.ctx, {
+    locationId: loc!.id, periodFrom: "2026-08-01", periodTo: "2026-08-15", currency: "UGX",
+    receivedMinor: 55000, reference: "MTN-4471", items: [{ paymentId: facPayRow!.id }], ...base,
+  });
+  ok("SET-4. the settlement records with a number in the pinned format",
+    settled.ok && SETTLEMENT_NUMBER_RE.test(settled.data.settlementNumber),
+    settled.ok ? settled.data.settlementNumber : (settled as any).message);
+  if (!settled.ok) return report();
+
+  const setList = await listSettlements(admin, a.ctx, {});
+  const setRow = setList.items.find((s: any) => s.id === settled.data.id);
+  ok("SET-5. ⚠ THE DISCREPANCY STAYS VISIBLE: share 60,000, received 55,000, difference -5,000 on the row",
+    setRow?.expectedMinor === 60000 && setRow?.received_minor === 55000 && setRow?.differenceMinor === -5000,
+    JSON.stringify({ e: setRow?.expectedMinor, r: setRow?.received_minor, d: setRow?.differenceMinor }));
+
+  const twiceSettled = await recordSettlement(admin, a.ctx, {
+    locationId: loc!.id, periodFrom: "2026-08-01", periodTo: "2026-08-15", currency: "UGX",
+    receivedMinor: 5000, items: [{ paymentId: facPayRow!.id }], ...base,
+  });
+  ok("SET-6. a payment settles ONCE -- the second claim is refused by name",
+    !twiceSettled.ok && twiceSettled.code === "ALREADY_SETTLED",
+    twiceSettled.ok ? "settled twice" : String(twiceSettled.code));
+
+  const overview3 = await paymentsOverview(admin, a.ctx);
+  const ugx3 = overview3.byCurrency.find((c: any) => c.currency === "UGX");
+  ok("SET-7. ⚠ THE RULE COMPLETES: received = 80,000 you collected + 55,000 settled, and NOTHING else",
+    !!ugx3 && ugx3.receivedByPractitionerMinor === 135000
+      && ugx3.collectedDirectlyMinor === 80000 && ugx3.settledToPractitionerMinor === 55000,
+    JSON.stringify({ r: ugx3?.receivedByPractitionerMinor, d: ugx3?.collectedDirectlyMinor, s: ugx3?.settledToPractitionerMinor }));
+  ok("SET-7b. the settled payment leaves the receivable; the no-rule collection still waits for its decision",
+    !!ugx3 && ugx3.outstandingSettlementMinor === 0 && ugx3.settlementNeedsDecision === 1,
+    JSON.stringify({ o: ugx3?.outstandingSettlementMinor, n: ugx3?.settlementNeedsDecision }));
+
+  const noDecision = await recordSettlement(admin, a.ctx, {
+    locationId: loc!.id, periodFrom: "2026-08-01", periodTo: "2026-08-15", currency: "UGX",
+    receivedMinor: 50000, items: [{ paymentId: partByFacility.data.id }], ...base,
+  });
+  ok("SET-8. a no-rule collection without an explicit share is refused -- a guess is not a settlement",
+    !noDecision.ok && noDecision.code === "ENTITLEMENT_NEEDS_DECISION",
+    noDecision.ok ? "settled" : String(noDecision.code));
+  const decided = await recordSettlement(admin, a.ctx, {
+    locationId: loc!.id, periodFrom: "2026-08-01", periodTo: "2026-08-15", currency: "UGX",
+    receivedMinor: 50000, items: [{ paymentId: partByFacility.data.id, entitlementMinor: 50000 }], ...base,
+  });
+  ok("SET-8b. CONTROL: the same settlement with the share said out loud records", decided.ok,
+    decided.ok ? "" : (decided as any).message);
+
+  const everything2 = JSON.stringify({
+    overview3, recv, setList: await listSettlements(admin, a.ctx, {}),
+  });
+  // The needle scans KEYS (quote-colon), not values -- its first two runs caught the legitimate
+  // percentBp config field and then the literal enum value "percent" (a configured KIND, not a rate).
+  // percent_bp / percentBp stay exempt: a share somebody agreed is an input, not a computed rate.
+  ok("SET-9. still NO percent-shaped KEY in any payload, settlements included",
+    !/\d+(\.\d+)?%/.test(everything2) && !/"(rate|share_?percent|percent(?!_?bp"\s*:)\w*)"\s*:/i.test(everything2),
+    (everything2.match(/\d+(\.\d+)?%|"(rate|share_?percent|percent(?!_?bp"\s*:)\w*)"\s*:/i) ?? ["no match?"])[0]);
+
   // ── 12. The surfaces, source-pinned ───────────────────────────────────────
   const navSrc = readFileSync(join(process.cwd(), "src", "lib", "practice", "navigation.ts"), "utf8");
   ok("12-1. Payments is a PRIMARY nav item in the PRACTICE section, gated on billing.view",
@@ -357,8 +467,13 @@ async function main() {
   const consoleSrc = readFileSync(join(process.cwd(), "src", "app", "practice", "(shell)", "payments", "PaymentsConsole.tsx"), "utf8");
   ok("12-6. the console renders NO percentage and names the collected-vs-received rule",
     !/\d+%|% of/.test(consoleSrc) && consoleSrc.includes("not yet yours"));
-  ok("12-7. Settlements is NOT offered as a tab -- Phase 2 is not dressed as built",
-    !consoleSrc.includes('"settlements"') && consoleSrc.includes("Phase 2"));
+  // Repointed 2026-08-15, same day: Phase 2 shipped (migration 304), so the assertion flips from
+  // pinning the tab's honest ABSENCE to pinning its honest PRESENCE -- and the old promise language
+  // must be gone from user-facing copy.
+  ok("12-7. Settlements IS a tab now, and the not-yet-built promise language is gone",
+    consoleSrc.includes('"settlements", "Settlements"')
+      && !consoleSrc.includes("arrive in Phase 2")
+      && consoleSrc.includes("never silently reconciled away"));
 
   return report();
 }

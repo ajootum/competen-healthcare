@@ -3,10 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  SERVICE_TYPES, PAYMENT_METHODS, COLLECTORS, PAYER_KINDS, formatMinor,
+  SERVICE_TYPES, PAYMENT_METHODS, COLLECTORS, PAYER_KINDS, ENTITLEMENT_KINDS, formatMinor,
 } from "@/lib/practice/billing-constants";
 
-// CPR-PAY-001 s11 -- the Payments console. Overview | Transactions | Outstanding | Fees.
+// CPR-PAY-001 s11 -- the Payments console. Overview | Transactions | Outstanding | Settlements | Fees.
 //
 // THE COMP'S RATES ARE NOT HERE. Its paid-share and outstanding-share figures and the revenue donut
 // are rates over denominators a young practice does not have; every figure below is a sum or a count
@@ -41,6 +41,7 @@ export default function PaymentsConsole(props: {
   encounterId: string | null; encounterCharges: any | null; patientId: string | null;
   canManageFees: boolean; canDraft: boolean; canIssue: boolean;
   canRecordPayment: boolean; canAdjust: boolean;
+  receivables: any; settlements: any;
 }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -61,7 +62,8 @@ export default function PaymentsConsole(props: {
   const tabHref = (t: string) =>
     `/practice/payments?tab=${t}${props.patientId ? `&patientId=${props.patientId}` : ""}`;
   const TABS: [string, string][] = [
-    ["overview", "Overview"], ["transactions", "Transactions"], ["outstanding", "Outstanding"], ["fees", "Fees"],
+    ["overview", "Overview"], ["transactions", "Transactions"], ["outstanding", "Outstanding"],
+    ["settlements", "Settlements"], ["fees", "Fees"],
   ];
 
   // ── Record payment state ──
@@ -123,6 +125,37 @@ export default function PaymentsConsole(props: {
 
   const [voidingId, setVoidingId] = useState<string | null>(null);
   const [voidReason, setVoidReason] = useState("");
+
+  // ── Settlements state (Phase 2, migration 304) ──
+  const [entForm, setEntForm] = useState({ locationId: "", kind: "percent", percentBp: "", fixedMinor: "" });
+  const [settleFacility, setSettleFacility] = useState<string | null>(null);
+  const [settleSel, setSettleSel] = useState<Record<string, boolean>>({});
+  const [settleManual, setSettleManual] = useState<Record<string, string>>({});
+  const [settleForm, setSettleForm] = useState({ receivedMinor: "", periodFrom: "", periodTo: "", reference: "" });
+
+  async function submitEntitlement() {
+    const body = await post({
+      action: "saveEntitlement", locationId: entForm.locationId, kind: entForm.kind,
+      percentBp: entForm.kind === "percent" ? Number(entForm.percentBp) : null,
+      fixedMinor: entForm.kind === "fixed_per_payment" ? Number(entForm.fixedMinor) : null,
+    });
+    if (body) { setNotice({ kind: "ok", text: "Share saved. It applies to future settlements; nothing already settled moves." }); reload(); }
+  }
+
+  async function submitSettlement(f: any) {
+    const chosen = f.payments.filter((p: any) => settleSel[p.id]);
+    if (chosen.length === 0) { setNotice({ kind: "err", text: "Tick the collected payments this transfer answers for." }); return; }
+    const body = await post({
+      action: "recordSettlement", locationId: f.locationId, currency: f.currency,
+      periodFrom: settleForm.periodFrom, periodTo: settleForm.periodTo,
+      receivedMinor: Number(settleForm.receivedMinor), reference: settleForm.reference || null,
+      items: chosen.map((p: any) => ({
+        paymentId: p.id,
+        entitlementMinor: p.entitlementMinor ?? (settleManual[p.id] ? Number(settleManual[p.id]) : null),
+      })),
+    });
+    if (body) { setNotice({ kind: "ok", text: `Recorded ${body.settlementNumber}. That money now counts as received.` }); reload(); }
+  }
 
   return (
     <>
@@ -281,7 +314,10 @@ export default function PaymentsConsole(props: {
                 <div>
                   <p className="text-[11px] font-semibold text-gray-500">Received by you</p>
                   <p className="mt-0.5 text-xl font-bold text-gray-900">{formatMinor(c.receivedByPractitionerMinor, c.currency)}</p>
-                  <p className="text-[10px] text-gray-500">collected by you directly</p>
+                  <p className="text-[10px] text-gray-500">
+                    {formatMinor(c.collectedDirectlyMinor, c.currency)} collected by you
+                    {c.settledToPractitionerMinor > 0 ? ` + ${formatMinor(c.settledToPractitionerMinor, c.currency)} settled to you` : ""}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[11px] font-semibold text-gray-500">Collected by others</p>
@@ -296,6 +332,19 @@ export default function PaymentsConsole(props: {
                   </p>
                 </div>
               </div>
+              {(c.outstandingSettlementMinor > 0 || c.settlementNeedsDecision > 0 || c.receivablesUnavailable) && (
+                <p className="mt-2 text-[11px] text-gray-600">
+                  {c.receivablesUnavailable
+                    ? "The facility receivable could not be read -- this is not a statement that facilities owe you nothing."
+                    : (<>
+                      Facilities still owe you <strong>{formatMinor(c.outstandingSettlementMinor, c.currency)}</strong> of
+                      unsettled collections{c.settlementNeedsDecision > 0 ? `, and ${c.settlementNeedsDecision} collection${c.settlementNeedsDecision === 1 ? " needs" : "s need"} a share decision` : ""}.{" "}
+                      <Link href={tabHref("settlements")} className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                        Settlements &rarr;
+                      </Link>
+                    </>)}
+                </p>
+              )}
             </section>
           ))}
 
@@ -399,8 +448,8 @@ export default function PaymentsConsole(props: {
         <section className={`${card} mt-3`}>
           <h2 className="text-[13px] font-bold text-gray-900">Outstanding balances</h2>
           <p className="mt-0.5 text-[11px] text-gray-500">
-            Issued invoices with money still owed, aged in days. Facility settlement receivables are a
-            Phase 2 surface and are not counted here.
+            Issued invoices with money still owed, aged in days. What facilities owe you lives under
+            Settlements and is not counted here.
           </p>
           {props.outstanding.unavailable ? (
             <p className="mt-2 text-[12px] text-rose-800">Could not be read: {props.outstanding.detail}</p>
@@ -419,6 +468,178 @@ export default function PaymentsConsole(props: {
             </ul>
           )}
         </section>
+      )}
+
+      {/* ══ SETTLEMENTS ══ Phase 2 (migration 304): the journey of facility-collected money into
+          your hands. Receivables are DERIVED; a settlement is a recorded fact; the difference between
+          your share and what arrived stays visible -- never silently reconciled away. */}
+      {props.tab === "settlements" && (
+        <>
+          <section className={`${card} mt-3`}>
+            <h2 className="text-[13px] font-bold text-gray-900">Owed to you by facilities</h2>
+            <p className="mt-0.5 text-[11px] text-gray-500">
+              Your share of what hospitals and clinics collected on your behalf and have not yet
+              settled. The share is the term you configured per facility, applied to each collection.
+            </p>
+            {props.receivables.unavailable ? (
+              <p className="mt-2 text-[12px] text-rose-800">
+                Could not be read: {props.receivables.detail}. This is not a statement that nothing is owed.
+              </p>
+            ) : props.receivables.facilities.length === 0 ? (
+              <p className="mt-2 text-[12px] text-gray-600">
+                No unsettled facility collections. The read succeeded &mdash; everything collected on
+                your behalf has been settled, or nothing has been collected that way.
+              </p>
+            ) : props.receivables.facilities.map((f: any) => (
+              <div key={`${f.locationId}-${f.currency}`} className="mt-3 rounded-lg border border-gray-100 p-3">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-[13px] font-semibold text-gray-900">{f.locationName ?? "No location recorded"}</span>
+                  <span className="text-[11px] text-gray-500">
+                    collected {formatMinor(f.collectedMinor, f.currency)} across {f.payments.length} payment{f.payments.length === 1 ? "" : "s"}
+                  </span>
+                  <span className="ml-auto text-[13px] font-bold text-gray-900">
+                    your share {formatMinor(f.entitlementMinor, f.currency)}
+                  </span>
+                </div>
+                {f.rule === null && (
+                  <p className="mt-1 text-[11px] text-[var(--cmp-text-warning)]">
+                    No share is configured for this facility, so every entitlement below needs a manual figure.
+                  </p>
+                )}
+                {f.needsDecision > 0 && f.rule !== null && (
+                  <p className="mt-1 text-[11px] text-[var(--cmp-text-warning)]">
+                    {f.needsDecision} collection{f.needsDecision === 1 ? " needs" : "s need"} a manual entitlement.
+                  </p>
+                )}
+                {settleFacility === `${f.locationId}-${f.currency}` ? (
+                  <form className="mt-2 flex flex-col gap-2 rounded-lg bg-gray-50 p-2"
+                    onSubmit={e => { e.preventDefault(); submitSettlement(f); }}>
+                    <ul className="flex flex-col gap-1">
+                      {f.payments.map((p: any) => (
+                        <li key={p.id} className="flex items-center gap-2 text-[12px]">
+                          <input type="checkbox" checked={!!settleSel[p.id]}
+                            onChange={e => setSettleSel(s => ({ ...s, [p.id]: e.target.checked }))} />
+                          <span className="text-gray-700">{String(p.paid_at).slice(0, 10)} · {p.method}</span>
+                          <span className="text-gray-500">collected {formatMinor(p.amount_minor, f.currency)}</span>
+                          <span className="ml-auto font-semibold text-gray-800">
+                            {p.entitlementMinor !== null ? `share ${formatMinor(p.entitlementMinor, f.currency)}` : (
+                              <input type="number" min={0} max={p.amount_minor} placeholder="share (minor units)"
+                                value={settleManual[p.id] ?? ""}
+                                onChange={e => setSettleManual(s => ({ ...s, [p.id]: e.target.value }))}
+                                className={`${input} w-40`} />
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="grid gap-2 sm:grid-cols-4">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[11px] font-semibold text-gray-600">Period from *</span>
+                        <input type="date" required value={settleForm.periodFrom}
+                          onChange={e => setSettleForm(s => ({ ...s, periodFrom: e.target.value }))} className={input} />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[11px] font-semibold text-gray-600">to *</span>
+                        <input type="date" required value={settleForm.periodTo}
+                          onChange={e => setSettleForm(s => ({ ...s, periodTo: e.target.value }))} className={input} />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[11px] font-semibold text-gray-600">Amount received (minor) *</span>
+                        <input type="number" min={1} required value={settleForm.receivedMinor}
+                          onChange={e => setSettleForm(s => ({ ...s, receivedMinor: e.target.value }))} className={input} />
+                        {/* The difference from your share is recorded and shown, never forced to zero. */}
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[11px] font-semibold text-gray-600">Reference</span>
+                        <input value={settleForm.reference} placeholder="transfer ref (optional)"
+                          onChange={e => setSettleForm(s => ({ ...s, reference: e.target.value }))} className={input} />
+                      </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button type="submit" className={BTN} disabled={busy || !props.canRecordPayment}>Record settlement</button>
+                      <button type="button" className={QUIET} onClick={() => setSettleFacility(null)}>Cancel</button>
+                    </div>
+                  </form>
+                ) : (
+                  <button type="button" className={`${QUIET} mt-2`} disabled={!props.canRecordPayment}
+                    onClick={() => { setSettleSel({}); setSettleManual({}); setSettleFacility(`${f.locationId}-${f.currency}`); }}>
+                    Record a settlement from this facility
+                  </button>
+                )}
+              </div>
+            ))}
+          </section>
+
+          <section className={`${card} mt-3`}>
+            <h2 className="text-[13px] font-bold text-gray-900">Settlements received</h2>
+            {props.settlements.unavailable ? (
+              <p className="mt-2 text-[12px] text-rose-800">Could not be read: {props.settlements.detail}</p>
+            ) : props.settlements.items.length === 0 ? (
+              <p className="mt-2 text-[12px] text-gray-600">None recorded yet. The read succeeded.</p>
+            ) : (
+              <ul className="mt-2 flex flex-col">
+                {props.settlements.items.map((s: any) => (
+                  <li key={s.id} className="flex items-baseline gap-2 border-b border-gray-100 py-1.5 text-[12px] last:border-0">
+                    <span className="font-mono text-[11px] text-gray-500">{s.settlement_number}</span>
+                    <span className="font-semibold text-gray-800">{s.locationName ?? "—"}</span>
+                    <span className="text-gray-500">{s.period_from} to {s.period_to} · {s.itemCount ?? "?"} item{s.itemCount === 1 ? "" : "s"}</span>
+                    {/* s10: the discrepancy stays visible, in words, without alarm colours. */}
+                    {typeof s.differenceMinor === "number" && s.differenceMinor !== 0 && (
+                      <span className="text-[11px] font-semibold text-amber-700">
+                        {s.differenceMinor < 0 ? formatMinor(-s.differenceMinor, s.currency) + " short of your share" : formatMinor(s.differenceMinor, s.currency) + " above your share"}
+                      </span>
+                    )}
+                    <span className="ml-auto font-semibold text-gray-900">{formatMinor(s.received_minor, s.currency)}</span>
+                    <span className="text-[11px] text-gray-500">{s.received_on}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {props.canManageFees && (
+            <section className={`${card} mt-3`}>
+              <h3 className="text-[13px] font-bold text-gray-900">Your share per facility</h3>
+              <p className="mt-0.5 text-[11px] text-gray-500">
+                The commercial term you agreed with each facility. Stored exactly (basis points, never a
+                float), photographed onto every settlement it touches, and never applied backwards.
+              </p>
+              <form className="mt-2 flex flex-wrap items-end gap-2"
+                onSubmit={e => { e.preventDefault(); submitEntitlement(); }}>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] font-semibold text-gray-600">Facility *</span>
+                  <select required value={entForm.locationId}
+                    onChange={e => setEntForm(f => ({ ...f, locationId: e.target.value }))} className={`${input} min-w-[200px]`}>
+                    <option value="">Choose a location</option>
+                    {props.locations.map((l: any) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11px] font-semibold text-gray-600">Kind</span>
+                  <select value={entForm.kind} onChange={e => setEntForm(f => ({ ...f, kind: e.target.value }))} className={input}>
+                    {ENTITLEMENT_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                  </select>
+                </label>
+                {entForm.kind === "percent" && (
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[11px] font-semibold text-gray-600">Share, in basis points *</span>
+                    <input type="number" min={0} max={10000} required value={entForm.percentBp}
+                      onChange={e => setEntForm(f => ({ ...f, percentBp: e.target.value }))} className={input} />
+                    <span className="text-[10px] text-gray-400">6000 means you keep 60 of every 100 collected.</span>
+                  </label>
+                )}
+                {entForm.kind === "fixed_per_payment" && (
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[11px] font-semibold text-gray-600">Fixed share (minor units) *</span>
+                    <input type="number" min={0} required value={entForm.fixedMinor}
+                      onChange={e => setEntForm(f => ({ ...f, fixedMinor: e.target.value }))} className={input} />
+                  </label>
+                )}
+                <button type="submit" className={BTN} disabled={busy || !entForm.locationId}>Save share</button>
+              </form>
+            </section>
+          )}
+        </>
       )}
 
       {/* ══ FEES ══ */}

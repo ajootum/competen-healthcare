@@ -4,8 +4,8 @@ import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { workspaceClock, zonedDayRange, practiceToday } from "@/lib/practice/practice-time";
 import { letterhead } from "@/lib/practice/document-generation";
 import {
-  SERVICE_TYPES, PAYMENT_METHODS, COLLECTORS, PAYER_KINDS, ADJUSTMENT_KINDS,
-  formatBillingNumber, deriveInvoiceStatus, ageBucket,
+  SERVICE_TYPES, PAYMENT_METHODS, COLLECTORS, PAYER_KINDS, ADJUSTMENT_KINDS, ENTITLEMENT_KINDS,
+  formatBillingNumber, deriveInvoiceStatus, ageBucket, entitlementShareMinor,
 } from "@/lib/practice/billing-constants";
 
 // CPR-PAY-001/002 Phase 1 -- the billing engine over migration 303.
@@ -661,7 +661,7 @@ export async function paymentsOverview(admin: any, ctx: WorkspaceContext, opts: 
     return out;
   };
 
-  const [chargesRes, paymentsRes, invoicesRes] = await Promise.all([
+  const [chargesRes, paymentsRes, invoicesRes, settlementsRes] = await Promise.all([
     dayRange("charged_on")(admin.from("practice_charge")
       .select("id, amount_minor, currency, charged_on, description, patient_id")
       .eq("workspace_id", ctx.workspaceId)).limit(1000),
@@ -671,11 +671,14 @@ export async function paymentsOverview(admin: any, ctx: WorkspaceContext, opts: 
     admin.from("practice_invoice")
       .select("id, total_minor, currency, status, due_date")
       .eq("workspace_id", ctx.workspaceId).eq("status", "ISSUED").limit(1000),
+    dayRange("received_on")(admin.from("practice_settlement")
+      .select("id, received_minor, currency, received_on")
+      .eq("workspace_id", ctx.workspaceId)).limit(1000),
   ]);
-  if (chargesRes.error || paymentsRes.error || invoicesRes.error) {
+  if (chargesRes.error || paymentsRes.error || invoicesRes.error || settlementsRes.error) {
     return {
       permitted: true as const, unavailable: true,
-      detail: [chargesRes.error?.message, paymentsRes.error?.message, invoicesRes.error?.message].filter(Boolean).join("; "),
+      detail: [chargesRes.error?.message, paymentsRes.error?.message, invoicesRes.error?.message, settlementsRes.error?.message].filter(Boolean).join("; "),
       byCurrency: [], recent: [],
     };
   }
@@ -683,28 +686,46 @@ export async function paymentsOverview(admin: any, ctx: WorkspaceContext, opts: 
   const charges = (chargesRes.data ?? []) as any[];
   const payments = (paymentsRes.data ?? []) as any[];
   const invoices = (invoicesRes.data ?? []) as any[];
+  const settlements = (settlementsRes.data ?? []) as any[];
   const allocated = await allocationsByInvoice(admin, ctx.workspaceId, invoices.map(i => i.id));
+  // The receivable is ALWAYS the full picture, like outstanding balances -- a period filter on what
+  // you are owed would hide the oldest debt first.
+  const receivables = await facilityReceivables(admin, ctx);
 
-  const currencies = [...new Set([...charges, ...payments, ...invoices].map(r => r.currency))].sort();
+  const currencies = [...new Set([
+    ...charges.map(r => r.currency), ...payments.map(r => r.currency),
+    ...invoices.map(r => r.currency), ...settlements.map(r => r.currency),
+  ])].sort();
   const byCurrency = currencies.map(cur => {
     const c = charges.filter(r => r.currency === cur);
     const p = payments.filter(r => r.currency === cur);
     const inv = invoices.filter(r => r.currency === cur);
     const collectedByPractitioner = p.filter(r => r.collector === "practitioner").reduce((n, r) => n + r.amount_minor, 0);
     const collectedByOthers = p.filter(r => r.collector !== "practitioner").reduce((n, r) => n + r.amount_minor, 0);
+    const settledMinor = settlements.filter(r => r.currency === cur).reduce((n, r) => n + r.received_minor, 0);
+    const facilitiesOfCur = (receivables.permitted && !receivables.unavailable ? receivables.facilities : [])
+      .filter((f: any) => f.currency === cur);
     return {
       currency: cur,
       chargedMinor: c.reduce((n, r) => n + r.amount_minor, 0),
       chargedCount: c.length,
       collectedMinor: collectedByPractitioner + collectedByOthers,
       collectedCount: p.length,
-      // ⚠ THE RULE, IN A FIELD NAME: received means the practitioner collected it themselves. What a
-      // facility collected sits beside it and is NOT yours until a Phase 2 settlement says so.
-      receivedByPractitionerMinor: collectedByPractitioner,
+      // ⚠ THE RULE, COMPLETED BY PHASE 2: received is what you collected yourself PLUS what a
+      // settlement actually transferred. A facility collection still never counts until its
+      // settlement row exists -- the two halves of this sum are also published separately below.
+      receivedByPractitionerMinor: collectedByPractitioner + settledMinor,
+      collectedDirectlyMinor: collectedByPractitioner,
+      settledToPractitionerMinor: settledMinor,
       collectedByOthersMinor: collectedByOthers,
       outstandingInvoicedMinor: inv.reduce((n, r) => n + Math.max(0, r.total_minor - (allocated.get(r.id) ?? 0)), 0),
       overdueCount: inv.filter(r =>
         deriveInvoiceStatus({ status: r.status, totalMinor: r.total_minor, allocatedMinor: allocated.get(r.id) ?? 0, dueDate: r.due_date, today }) === "OVERDUE").length,
+      // s10's outstanding settlement: your share of every UNSETTLED facility collection, plus how
+      // many collections still need a manual entitlement decision before that figure is complete.
+      outstandingSettlementMinor: facilitiesOfCur.reduce((n: number, f: any) => n + f.entitlementMinor, 0),
+      settlementNeedsDecision: facilitiesOfCur.reduce((n: number, f: any) => n + f.needsDecision, 0),
+      receivablesUnavailable: receivables.unavailable === true,
     };
   });
 
@@ -771,6 +792,223 @@ export async function patientFinancial(admin: any, ctx: WorkspaceContext, patien
     permitted: true as const, unavailable: false, detail: null,
     balances, charges: (chargesRes.data ?? []) as any[], invoices, payments: (paymentsRes.data ?? []) as any[],
   };
+}
+
+// ── FACILITY SETTLEMENTS ── PAY-001 s10 (migration 304, Phase 2) ────────────────────────────────────
+//
+// The journey of facility-collected money into the practitioner's hands. Nothing below CREATES money:
+// the entitlement rule is a configured commercial term, the receivable is DERIVED over unsettled
+// collections, and a settlement records a transfer that already happened in the world.
+
+const FACILITY_COLLECTORS = ["facility", "clinic"];
+
+export async function saveFacilityEntitlement(admin: any, ctx: WorkspaceContext, args: {
+  locationId: string; kind: string; percentBp?: number | null; fixedMinor?: number | null;
+  currency?: string | null; note?: string | null; actorId: string; correlationId: string;
+}): Promise<EngineResult<{ id: string }>> {
+  if (!hasCapability(ctx, "fee.manage"))
+    return fail(403, "FORBIDDEN", "configuring an entitlement needs fee.manage");
+  if (!ENTITLEMENT_KINDS.some(([k]) => k === args.kind))
+    return fail(400, "VALIDATION_ERROR", `kind must be one of: ${ENTITLEMENT_KINDS.map(([k]) => k).join(", ")}`);
+  if (args.kind === "percent" && (!Number.isInteger(args.percentBp) || args.percentBp! < 0 || args.percentBp! > 10000))
+    return fail(400, "VALIDATION_ERROR", "the share is whole basis points, 0 to 10000 (6000 means you keep 60 of every 100)");
+  if (args.kind === "fixed_per_payment" && (!Number.isInteger(args.fixedMinor) || args.fixedMinor! < 0))
+    return fail(400, "VALIDATION_ERROR", "the fixed share must be a whole non-negative amount in minor units");
+
+  const { data: loc } = await admin.from("practice_location")
+    .select("id").eq("id", args.locationId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (!loc) return fail(404, "NOT_FOUND", "that location does not exist in this practice");
+
+  const { data, error } = await admin.from("practice_facility_entitlement").upsert({
+    workspace_id: ctx.workspaceId, location_id: args.locationId, kind: args.kind,
+    percent_bp: args.kind === "percent" ? args.percentBp : null,
+    fixed_minor: args.kind === "fixed_per_payment" ? args.fixedMinor : null,
+    currency: args.currency ?? null, note: trim(args.note) || null, active: true,
+    updated_at: new Date().toISOString(), updated_by: args.actorId,
+  }, { onConflict: "workspace_id,location_id" }).select("id").single();
+  if (error) return fail(400, "VALIDATION_ERROR", error.message);
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: args.actorId, eventType: "practice.entitlement_saved",
+    payload: { locationId: args.locationId, kind: args.kind, percentBp: args.percentBp ?? null, fixedMinor: args.fixedMinor ?? null },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { id: data.id as string } };
+}
+
+/**
+ * s10's facility receivable, DERIVED: every facility-collected payment not yet reconciled into a
+ * settlement, with the practitioner's share under the CURRENT rule -- or "needs a decision" where the
+ * rule is manual or absent. Grouped by location and currency; nothing is stored.
+ */
+export async function facilityReceivables(admin: any, ctx: WorkspaceContext) {
+  if (!hasCapability(ctx, "billing.view"))
+    return { permitted: false as const, unavailable: false, detail: null, facilities: [] as any[] };
+  const [paysRes, settledRes, rulesRes, locsRes] = await Promise.all([
+    admin.from("practice_payment")
+      .select("id, amount_minor, currency, collector, paid_at, location_id, method")
+      .eq("workspace_id", ctx.workspaceId).in("collector", FACILITY_COLLECTORS).limit(1000),
+    admin.from("practice_settlement_item").select("payment_id").eq("workspace_id", ctx.workspaceId).limit(1000),
+    admin.from("practice_facility_entitlement")
+      .select("location_id, kind, percent_bp, fixed_minor").eq("workspace_id", ctx.workspaceId).eq("active", true),
+    admin.from("practice_location").select("id, name").eq("workspace_id", ctx.workspaceId),
+  ]);
+  if (paysRes.error || settledRes.error) {
+    return {
+      permitted: true as const, unavailable: true,
+      detail: [paysRes.error?.message, settledRes.error?.message].filter(Boolean).join("; "),
+      facilities: [] as any[],
+    };
+  }
+  const settled = new Set(((settledRes.data ?? []) as any[]).map(r => r.payment_id));
+  const ruleOf = new Map(((rulesRes.data ?? []) as any[]).map(r => [r.location_id, r]));
+  const nameOf = new Map(((locsRes.data ?? []) as any[]).map(l => [l.id, l.name]));
+
+  const open = ((paysRes.data ?? []) as any[]).filter(p => !settled.has(p.id));
+  const keys = [...new Set(open.map(p => `${p.location_id ?? "none"}|${p.currency}`))].sort();
+  const facilities = keys.map(k => {
+    const [locKey, currency] = k.split("|");
+    const locationId = locKey === "none" ? null : locKey;
+    const rule = locationId ? ruleOf.get(locationId) ?? null : null;
+    const payments = open.filter(p => (p.location_id ?? null) === locationId && p.currency === currency)
+      .map(p => ({ ...p, entitlementMinor: entitlementShareMinor(rule, p.amount_minor) }));
+    return {
+      locationId, locationName: locationId ? (nameOf.get(locationId) ?? null) : null, currency,
+      rule: rule ? { kind: rule.kind, percentBp: rule.percent_bp, fixedMinor: rule.fixed_minor } : null,
+      collectedMinor: payments.reduce((n, p) => n + p.amount_minor, 0),
+      // null entitlement rows are COUNTED, never guessed into the sum -- the screen says how many
+      // need a manual decision instead of quietly treating them as zero.
+      entitlementMinor: payments.reduce((n, p) => n + (p.entitlementMinor ?? 0), 0),
+      needsDecision: payments.filter(p => p.entitlementMinor === null).length,
+      payments,
+    };
+  });
+  return { permitted: true as const, unavailable: false, detail: null, facilities };
+}
+
+export async function recordSettlement(admin: any, ctx: WorkspaceContext, args: {
+  locationId: string; periodFrom: string; periodTo: string; currency: string;
+  receivedMinor: number; receivedOn?: string | null; method?: string | null;
+  reference?: string | null; note?: string | null;
+  items: { paymentId: string; entitlementMinor?: number | null }[];
+  actorId: string; correlationId: string;
+}): Promise<EngineResult<{ id: string; settlementNumber: string }>> {
+  if (!hasCapability(ctx, "payment.record"))
+    return fail(403, "FORBIDDEN", "recording a settlement needs payment.record");
+  if (!Number.isInteger(args.receivedMinor) || args.receivedMinor <= 0)
+    return fail(400, "VALIDATION_ERROR", "the received amount must be a whole positive figure in minor units");
+  if (!isCurrency(args.currency)) return fail(400, "VALIDATION_ERROR", "say the currency as a three-letter code");
+  if ((args.items ?? []).length === 0)
+    return fail(422, "VALIDATION_ERROR", "say which collected payments this settlement answers for -- an unreconciled transfer is a number with no story");
+
+  const { data: loc } = await admin.from("practice_location")
+    .select("id, name").eq("id", args.locationId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (!loc) return fail(404, "NOT_FOUND", "that location does not exist in this practice");
+  const { data: ruleRows } = await admin.from("practice_facility_entitlement")
+    .select("location_id, kind, percent_bp, fixed_minor").eq("workspace_id", ctx.workspaceId).eq("active", true);
+  const ruleOf = new Map(((ruleRows ?? []) as any[]).map(r => [r.location_id, r]));
+
+  // Validate every item BEFORE any write.
+  //
+  // ⚠ EACH ITEM'S SHARE FOLLOWS THE RULE OF THE FACILITY THAT COLLECTED IT -- the payment's own
+  // location -- never the settlement's. The first draft applied the settlement location's rule to
+  // every item, and the harness caught a location-less collection inheriting a 60-of-100 term nobody
+  // had agreed for it (SET-8). A payment whose location has no rule needs its share said out loud.
+  const resolved: { paymentId: string; collectedMinor: number; entitlementMinor: number }[] = [];
+  let anyRuleSnapshot: any = null;
+  for (const item of args.items) {
+    const { data: pay } = await admin.from("practice_payment")
+      .select("id, amount_minor, currency, collector, location_id").eq("id", item.paymentId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+    if (!pay) return fail(404, "NOT_FOUND", "one of those payments does not exist in this practice");
+    if (!FACILITY_COLLECTORS.includes(pay.collector))
+      return fail(422, "NOT_FACILITY_COLLECTED", "that payment was not collected by a facility; there is nothing to settle");
+    if (pay.currency !== args.currency)
+      return fail(422, "CURRENCY_MISMATCH", `that payment is in ${pay.currency} and this settlement is in ${args.currency}`);
+    const { data: prior } = await admin.from("practice_settlement_item")
+      .select("id").eq("payment_id", pay.id).maybeSingle();
+    if (prior) return fail(409, "ALREADY_SETTLED", "one of those payments is already reconciled into a settlement; a payment settles once");
+    const itemRule = pay.location_id ? (ruleOf.get(pay.location_id) ?? null) : null;
+    if (itemRule) anyRuleSnapshot = itemRule;
+    const share = item.entitlementMinor ?? entitlementShareMinor(itemRule, pay.amount_minor);
+    if (share === null)
+      return fail(422, "ENTITLEMENT_NEEDS_DECISION", "no share rule covers where this payment was collected; say the entitlement for it explicitly");
+    if (!Number.isInteger(share) || share < 0 || share > pay.amount_minor)
+      return fail(422, "VALIDATION_ERROR", "an entitlement is a whole amount between zero and what was collected");
+    resolved.push({ paymentId: pay.id, collectedMinor: pay.amount_minor, entitlementMinor: share });
+  }
+  const rule = anyRuleSnapshot;
+
+  const { today, timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const year = Number(today.slice(0, 4));
+  const { data: seq, error: seqErr } = await admin.rpc("practice_next_billing_number", {
+    p_workspace_id: ctx.workspaceId, p_doc_kind: "settlement", p_doc_year: year,
+  });
+  if (seqErr || typeof seq !== "number")
+    return fail(503, "NUMBERING_UNAVAILABLE", "no settlement number could be allocated, so nothing was recorded; try again");
+  const settlementNumber = formatBillingNumber("settlement", year, seq);
+
+  const expected = resolved.reduce((n, r) => n + r.entitlementMinor, 0);
+  const head = await letterhead(admin, ctx.workspaceId);
+  // s20's settlement acknowledgement, frozen at creation -- and the DISCREPANCY is in it, in words,
+  // because "do not silently force reconciliation" means the difference is part of the record.
+  const snapshot = {
+    settlementNumber, recordedOn: today, timezone, issuer: head,
+    location: { id: loc.id, name: loc.name },
+    period: { from: args.periodFrom, to: args.periodTo },
+    currency: args.currency,
+    items: resolved,
+    expectedEntitlementMinor: expected,
+    receivedMinor: args.receivedMinor,
+    differenceMinor: args.receivedMinor - expected,
+    reference: trim(args.reference) || null,
+  };
+
+  const { data: settlement, error } = await admin.from("practice_settlement").insert({
+    workspace_id: ctx.workspaceId, location_id: args.locationId, settlement_number: settlementNumber,
+    period_from: args.periodFrom, period_to: args.periodTo, currency: args.currency,
+    received_minor: args.receivedMinor, received_on: args.receivedOn ?? today,
+    method: args.method ?? null, reference: trim(args.reference) || null, note: trim(args.note) || null,
+    snapshot, created_by: args.actorId,
+  }).select("id").single();
+  if (error) return fail(400, "VALIDATION_ERROR", error.message);
+
+  const { error: itemErr } = await admin.from("practice_settlement_item").insert(resolved.map(r => ({
+    workspace_id: ctx.workspaceId, settlement_id: settlement.id, payment_id: r.paymentId,
+    collected_minor: r.collectedMinor, entitlement_minor: r.entitlementMinor,
+    entitlement_rule_snapshot: rule ?? null,
+  })));
+  if (itemErr) {
+    // A settlement with no reconciliation is the unreconciled transfer this engine refuses to create.
+    await admin.from("practice_settlement").delete().eq("id", settlement.id);
+    return fail(409, "RECONCILE_FAILED", `the reconciliation was refused, so nothing was recorded: ${itemErr.message}`);
+  }
+
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: args.actorId, eventType: "practice.settlement_recorded",
+    payload: { settlementId: settlement.id, settlementNumber, locationId: args.locationId, receivedMinor: args.receivedMinor, expectedMinor: expected, items: resolved.length },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { id: settlement.id as string, settlementNumber } };
+}
+
+export async function listSettlements(admin: any, ctx: WorkspaceContext, filter: { locationId?: string } = {}): Promise<Panel<any>> {
+  if (!hasCapability(ctx, "billing.view")) return denied();
+  let q = admin.from("practice_settlement")
+    .select("id, settlement_number, location_id, period_from, period_to, currency, received_minor, received_on, reference, note, snapshot, created_at")
+    .eq("workspace_id", ctx.workspaceId);
+  if (filter.locationId) q = q.eq("location_id", filter.locationId);
+  const { data, error } = await q.order("received_on", { ascending: false }).limit(200);
+  if (error) return failed(`the settlements could not be read: ${error.message}`);
+  const rows = (data ?? []) as any[];
+  const { data: locs } = await admin.from("practice_location").select("id, name").eq("workspace_id", ctx.workspaceId);
+  const nameOf = new Map(((locs ?? []) as any[]).map(l => [l.id, l.name]));
+  return loaded(rows.map(r => ({
+    ...r,
+    locationName: nameOf.get(r.location_id) ?? null,
+    expectedMinor: r.snapshot?.expectedEntitlementMinor ?? null,
+    differenceMinor: r.snapshot?.differenceMinor ?? null,
+    itemCount: Array.isArray(r.snapshot?.items) ? r.snapshot.items.length : null,
+  })));
 }
 
 /** Uninvoiced charges, for s11 step 3's picker and the encounter handoff. */
