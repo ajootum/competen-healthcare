@@ -579,12 +579,16 @@ async function main() {
   // ⚠ WRITTEN OUT IN FULL ON PURPOSE. A list assertion updated to match whatever the code now does is
   // not an assertion, it is a transcript. This is CPR-PAT-002 s2s recommended sidebar as the document
   // states it, so the next change has to come with a document too.
-  const V5_ORDER = ["/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
-    "/practice/encounters", "/practice/documents", "/practice/follow-ups",
-    "/practice/intelligence", "/practice/setup"];
+  // ⚠ REPOINTED 2026-08-15, WITH THE DOCUMENT THIS COMMENT DEMANDED. The old list was CPR-PAT-002's;
+  // CPR-HFE-001 s3 is the owner's unfreeze and the new master: Encounters leaves primary navigation,
+  // Reports returns as the formal-output workspace. Still written out in full -- the next change
+  // still has to arrive with a specification.
+  const HFE_ORDER = ["/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
+    "/practice/follow-ups", "/practice/documents",
+    "/practice/intelligence", "/practice/reports", "/practice/setup"];
   const rendered = primaryNav([...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[]);
-  ok("9b-order. and renders them in the order the specifications list",
-    rendered.map(i => i.href).join() === V5_ORDER.join(), rendered.map(i => i.href).join(" "));
+  ok("9b-order. and renders them in the order CPR-HFE-001 lists",
+    rendered.map(i => i.href).join() === HFE_ORDER.join(), rendered.map(i => i.href).join(" "));
 
   // A section that is not built must not render, and must not be used as a parent -- a module filed under
   // an unbuilt section is an orphan with extra steps.
@@ -619,10 +623,15 @@ async function main() {
   // The assertion follows the later specification rather than continuing to guard a rule that product
   // change control has since amended -- a test that outlives its own decision is how a freeze becomes
   // a thing people work around.
-  const REMOVED = ["/practice/tasks", "/practice/reports"];
-  ok("9g. Tasks and Patient Intelligence are not primary navigation",
+  // Repointed 2026-08-15: CPR-HFE-001 returned /practice/reports to primary as the formal-output
+  // workspace (the comp's item 7, and the home CPR-PAY-001 s16 files the financial reports in), so
+  // the not-primary half of this assertion now guards Tasks alone -- and a NEW half guards the return.
+  const REMOVED = ["/practice/tasks"];
+  ok("9g. Tasks is not primary navigation",
     REMOVED.every(h => !PRACTICE_NAV.find(i => i.href === h)?.primary),
     REMOVED.filter(h => PRACTICE_NAV.find(i => i.href === h)?.primary).join(", "));
+  ok("9g-reports. Reports IS primary again, by CPR-HFE-001 -- formal output is the day's last stage",
+    PRACTICE_NAV.find(i => i.href === "/practice/reports")?.primary === true);
   ok("9g-b. and each is still reachable from the section that owns it",
     REMOVED.every(h => {
       const parent = PRACTICE_NAV.find(i => i.href === h)?.parent;
@@ -661,11 +670,11 @@ async function main() {
     PRACTICE_NAV.filter(i => i.href.includes("?")).map(i => i.href).join(", "));
   // 9h. The sections themselves. V5-003 draws three groups, and the separation carries meaning:
   // everything in Workspace can change a record and Practice Intelligence cannot.
-  // ⚠ CPR-PAT-002 s2 COLLAPSED THE GROUPS: the comp draws one flat list with no headings. The meaning
-  // the headings carried (everything above Insights can change a record; Practice Intelligence cannot)
-  // is now unlabelled and survives only in the ORDER, which 9b-order pins.
-  ok("9h. the sidebar is one flat section (s2 simplify the global navigation)",
-    SIDEBAR_SECTIONS.length === 1 && SIDEBAR_SECTIONS[0].label === "",
+  // ⚠ REPOINTED 2026-08-15: CPR-HFE-001 s3 RESTORES labelled sections (the owner's unfreeze), so the
+  // flat list this pinned is superseded by the later document -- the exact mechanism the old comment
+  // said a change must arrive by. The labels are pinned verbatim so a sixth section needs a spec.
+  ok("9h. the sidebar is CPR-HFE-001's five labelled sections, verbatim",
+    SIDEBAR_SECTIONS.map(x => x.label).join() === "Today,Care,Insights,Report,Setup",
     SIDEBAR_SECTIONS.map(x => JSON.stringify(x.label)).join());
   ok("9h-b. and every primary section belongs to exactly one of them",
     PRACTICE_NAV.filter(i => i.primary).every(i =>
@@ -737,6 +746,12 @@ async function main() {
     // /practice/today and from the Synchronisation Centre. Both are asserted below.
     offline: "Outside the (shell) group so it renders with no connection. Linked from OfflineCacheWriter and the Synchronisation Centre.",
     medications: "CPR-MED-001 has no navigation section. Nine primary items, no submenus. Linked from the patient workspace and the encounter console.",
+    // ── CPR-HFE-001 s3 (2026-08-15): five removals, each with the spec's own sentence ──
+    encounters: "HFE-001 s3 verbatim: removed from primary navigation; reachable through patient, current-session, search and unfinished-work routes.",
+    assistant: "HFE-001 s3: Intelligence keeps no sidebar children. Linked from the Intelligence areas (Areas.tsx).",
+    cases: "HFE-001 s3: Intelligence keeps no sidebar children. Linked from the Intelligence areas.",
+    reflection: "HFE-001 s3: Intelligence keeps no sidebar children. Linked from the Intelligence areas.",
+    portfolio: "HFE-001 s3: Intelligence keeps no sidebar children. Linked from the Intelligence areas and from /practice/activity's Export/report action.",
   };
   // ⚠ BOTH TREES, AND THE SECOND ONE IS WHY THIS WAS EXTENDED ON 2026-08-11. This scanned only
   // src/app/practice/(shell). /practice/offline lives OUTSIDE that group on purpose -- it must render

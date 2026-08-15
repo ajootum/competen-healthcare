@@ -129,10 +129,13 @@ async function main() {
   // the specification, so moving one means editing this line and explaining why.
   const FROZEN_NINE = [
     "/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
-    "/practice/encounters", "/practice/documents", "/practice/follow-ups",
-    "/practice/intelligence", "/practice/setup",
+    "/practice/follow-ups", "/practice/documents",
+    "/practice/intelligence", "/practice/reports", "/practice/setup",
   ];
-  ok("1a. ⚠ PRIMARY_ORDER is still CPR-V5-002's nine, in order",
+  // Repointed 2026-08-15: the V5-002 freeze ended the way its own text said it would -- by
+  // practitioner usability findings, written up as CPR-HFE-001 and ordered by the owner. Still nine,
+  // still written out in full, so the NEXT change also has to arrive holding a document.
+  ok("1a. ⚠ PRIMARY_ORDER is CPR-HFE-001's nine, in order",
     PRIMARY_ORDER.join() === FROZEN_NINE.join(), PRIMARY_ORDER.join(" "));
 
   const allCaps = [...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[];

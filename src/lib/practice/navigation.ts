@@ -122,7 +122,9 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // each declares the section that owns it and appears under it: Tasks under Current Session,
   // Analytics and Patient Insights under the Command Centre they are surfaced from. orphanedNav()
   // fails the harness on any built module that loses its way in.
-  { href: "/practice/home", label: "Practice Command Centre", icon: "⌂", capability: "practice.home.view", group: "Practice", phase: 0, built: true, primary: true },
+  // CPR-HFE-001 s3: the sidebar LABEL is Today; the page heading may stay Practice Command Centre,
+  // and does -- the label answers "when", the heading answers "what this screen is".
+  { href: "/practice/home", label: "Today", icon: "⌂", capability: "practice.home.view", group: "Practice", phase: 0, built: true, primary: true },
   // Today's Work is now a VIEW INSIDE the command centre rather than a section beside it: V5-001 puts
   // the current activity, the queue and the day's work on the command centre itself, so a second screen
   // showing the same six panels would be two answers to one question.
@@ -151,7 +153,7 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // in its own workspace is one you have to REMEMBER TO VISIT, and the useful moment for it is always
   // inside some other screen. So it becomes an area within Practice Intelligence plus contextual
   // actions elsewhere -- and its route survives, because "removed from the sidebar" is not "deleted".
-  { href: "/practice/assistant", label: "Practice Assistant", icon: "✧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true, parent: "/practice/intelligence" },
+  // /practice/assistant: no nav entry -- see the Intelligence-children note below (CPR-HFE-001 s3).
   // The user-facing handbook. NO CAPABILITY: what the product will and will not do is not a permission,
   // and the one person who most needs it is a locum on their first morning holding the fewest of them.
   { href: "/practice/documentation", label: "Documentation", icon: "?", capability: null, group: "Setup", phase: 9, built: true, parent: "/practice/setup" },
@@ -173,7 +175,9 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // through bookmarks and links to buy a tidiness nobody is asking for.
   //
   // ⚠ THIS AMENDS THE CPR-V5-002 FREEZE, and CPR-V5-005 is the product change control s17 requires.
-  { href: "/practice/calendar", label: "Practice Planner", icon: "▦", capability: "practice.calendar.view", group: "Practice", phase: 1, built: true, primary: true },
+  // HFE-001's comp says simply Planner; the longer name was carrying the rename story, and that story
+  // lives in the comment above rather than in every sidebar glance.
+  { href: "/practice/calendar", label: "Planner", icon: "▦", capability: "practice.calendar.view", group: "Practice", phase: 1, built: true, primary: true },
   { href: "/practice/tasks", label: "Tasks", icon: "☑", capability: "task.view", group: "Practice", phase: 4, built: true, parent: "/practice/today" },
   // ⚠ NOT PRIMARY, AND THE FREEZE IS WHY. CPR-V5-002 is a design freeze on the nine primary sections and
   // this is not one of them -- so it is filed under the Planner, which is where somebody who reads a
@@ -182,13 +186,22 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/booking-requests", label: "Booking requests", icon: "✉", capability: "appointment.manage", group: "Practice", phase: 4, built: true, parent: "/practice/calendar" },
 
   // -- Patients: the people, and the record made about them -----------------------------------------
-  { href: "/practice/encounters", label: "Encounters", icon: "✎", capability: "encounter.list", group: "Clinical", phase: 3, built: true, primary: true },
-  // ⚠ NOT PRIMARY, AND THE FREEZE IS WHY -- the same reason booking-requests is not. CPR-V5-002 froze the
-  // nine primary sections and Close My Day is not one of them, so it is filed under Encounters, which is
-  // what it closes. CPR-ADOPT-001 s3 wants it entered from Current Activity, the Command Centre and the
-  // Planner as well, and those are links INTO this route rather than three more nav entries.
-  { href: "/practice/close-my-day", label: "Close My Day", icon: "☾", capability: "encounter.list", group: "Clinical", phase: 4, built: true, parent: "/practice/encounters" },
-  { href: "/practice/activity", label: "Procedures", icon: "◷", capability: "procedure.record", group: "Clinical", phase: 4, built: true, parent: "/practice/encounters" },
+  //
+  // ⚠ ENCOUNTERS HAS NO NAV ENTRY, BY SPECIFICATION AND ON PURPOSE. CPR-HFE-001 s3, verbatim: "Remove
+  // Encounters from primary global navigation. Encounters remain fully available through patient,
+  // current-session, search, unfinished-work and other contextual routes." The pages, the routes and
+  // every deep link are untouched -- what is gone is only the idea that a consultation is a place you
+  // GO rather than a thing you do about a patient. This entry's removal is the sentence the old
+  // comment demanded somebody write.
+  //
+  // Close My Day moves under Today: it is the day's closing ritual, and CPR-ADOPT-001 s3 always wanted
+  // it entered from the Command Centre.
+  { href: "/practice/close-my-day", label: "Close My Day", icon: "☾", capability: "encounter.list", group: "Clinical", phase: 4, built: true, parent: "/practice/home" },
+  // The longitudinal Procedures & Clinical Activity portfolio files under Reports: it is the record
+  // formal output is built FROM, its own header action already points at the exportable portfolio, and
+  // HFE-001 forbids it the two other candidate parents (Intelligence may hold no sidebar children, and
+  // Encounters no longer has a sidebar presence to hold it).
+  { href: "/practice/activity", label: "Procedures", icon: "◷", capability: "procedure.record", group: "Clinical", phase: 4, built: true, parent: "/practice/reports" },
   { href: "/practice/search", label: "Search", icon: "⌕", capability: "search.use", group: "Practice", phase: 5, built: true, parent: "/practice/patients" },
 
   // ⚠ THE PATIENTS SUBMENU IS GONE (CPR-PAT-002 s2, verbatim: "Replace the expandable Patients submenu
@@ -263,16 +276,17 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   { href: "/practice/intelligence", label: "Practice Intelligence", icon: "◫", capability: "report.view", group: "Intelligence", phase: 5, built: true, primary: true },
   // "Patient Insights" is CPR-V5-003's "Patient Intelligence" module. Kept at its own route until the
   // workspace's tabs exist, so the cohort counts stay reachable rather than disappearing into a promise.
-  { href: "/practice/reports", label: "Patient Intelligence", icon: "☷", capability: "report.view", group: "Patients", phase: 6, built: true, parent: "/practice/intelligence" },
+  // CPR-HFE-001 s3 + the comp's item 7: Reports is a PRIMARY workspace again -- formal output is the
+  // last stage of the harmonised day, and CPR-PAY-001 s16 is about to file the financial reports
+  // inside it. The "Patient Intelligence" label belonged to the era when this page was a child of
+  // Intelligence; the page heading keeps its own name.
+  { href: "/practice/reports", label: "Reports", icon: "☷", capability: "report.view", group: "Intelligence", phase: 6, built: true, primary: true },
 
-  // -- AI Assistant: thinking about the work --------------------------------------------------------
-  // CPR-220. NOT /practice/case-memory -- that slug is the public marketing page for this capability.
-  // encounter.list, not patient.view: learning from a case does not require knowing whose it was.
-  { href: "/practice/cases", label: "Case Memory", icon: "❧", capability: "encounter.list", group: "Intelligence", phase: 5, built: true, parent: "/practice/intelligence" },
-  // CPR-230/240. NO CAPABILITY on either: reflecting on your own practice, and keeping an account of
-  // your own work, are not permissions somebody grants you. Every query inside is scoped to the caller.
-  { href: "/practice/reflection", label: "Reflection", icon: "◍", capability: null, group: "Intelligence", phase: 5, built: true, parent: "/practice/intelligence" },
-  { href: "/practice/portfolio", label: "Portfolio", icon: "❑", capability: null, group: "Intelligence", phase: 5, built: true, parent: "/practice/intelligence" },
+  // ⚠ THE INTELLIGENCE CHILDREN HAVE NO NAV ENTRIES, BY SPECIFICATION. CPR-HFE-001 s3: "Remove
+  // expandable Practice Intelligence child destinations from the global sidebar; use the Intelligence
+  // module's internal navigation." Practice Assistant, Case Memory, Reflection and Portfolio all keep
+  // their routes and are linked from the Intelligence areas that own them (Areas.tsx frames the four
+  // as one family) -- removed from the sidebar is not deleted, same doctrine as Encounters above.
 
   // -- Practice Setup: configuring the practice, and your own preferences ---------------------------
   //
@@ -337,10 +351,28 @@ export function visibleNav(capabilities: string[]): PracticeNavItem[] {
 // a decision to remove it, and silently deleting something somebody asked for is the one edit that
 // should never be inferred. It stays reachable and out of the ten. If it should go entirely, that is a
 // sentence somebody has to write.
+// ══ CPR-HFE-001 (2026-08-15): THE FOURTH NAVIGATION, AND THE OWNER UNFROZE THE THIRD ═══════════════
+//
+// V5-002 froze the sidebar pending "practitioner usability testing" -- and that testing is exactly
+// what happened: weeks of the owner walking the product produced CPR-HFE-001, whose s3 IS the
+// harmonisation the freeze was waiting for. The owner's sentence, 2026-08-15: "We are unfreezing the
+// sidebar and updating it to this spec." So this is not churn against a freeze; it is the freeze's
+// own exit clause being exercised, and the next freeze is HFE-001 s14 step 8, after acceptance.
+//
+// WHAT s3 CHANGES: labelled sections return (TODAY / CARE / INSIGHTS / REPORT / SETUP -- CPR-PAY-001
+// s2 adds PRACTICE holding Payments when that workspace ships); "Practice Command Centre" is LABELLED
+// Today while its page heading stays; ENCOUNTERS LEAVES PRIMARY NAVIGATION and remains reachable
+// through patient, session, search and unfinished-work routes; Practice Intelligence keeps NO sidebar
+// children -- its internal areas own Assistant, Case Memory, Reflection and Portfolio.
+//
+// REPORT is in the section list on the COMP's authority: s3's table omits Reports, but the comp draws
+// it as item 7 ("Formal output") and CPR-PAY-001 s16 files the financial reports inside it -- a
+// workspace that is about to gain that weight does not lose its door the same week.
 export const PRIMARY_ORDER: string[] = [
-  "/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
-  "/practice/encounters", "/practice/documents", "/practice/follow-ups",
+  "/practice/home", "/practice/today", "/practice/calendar",
+  "/practice/patients", "/practice/follow-ups", "/practice/documents",
   "/practice/intelligence",
+  "/practice/reports",
   "/practice/setup",
 ];
 
@@ -368,8 +400,15 @@ export const PRIMARY_ORDER: string[] = [
 // ONE SECTION, and the array is kept rather than removed. Every reader (`SIDEBAR_SECTIONS`, the nav
 // harness, the shell) is written against it, and collapsing to a bare list would mean editing all three
 // to express something the shape already expresses.
+// CPR-HFE-001 s3 restores LABELLED sections -- CPR-PAT-002's flat list is superseded by the owner's
+// unfreeze (the supersession chain above). Each label is a stage of the harmonised workflow, so the
+// sidebar reads as the day reads: plan and run it, care for people, understand it, report it.
 export const SIDEBAR_SECTIONS: { label: string; hrefs: string[] }[] = [
-  { label: "", hrefs: PRIMARY_ORDER },
+  { label: "Today", hrefs: ["/practice/home", "/practice/today", "/practice/calendar"] },
+  { label: "Care", hrefs: ["/practice/patients", "/practice/follow-ups", "/practice/documents"] },
+  { label: "Insights", hrefs: ["/practice/intelligence"] },
+  { label: "Report", hrefs: ["/practice/reports"] },
+  { label: "Setup", hrefs: ["/practice/setup"] },
 ];
 
 /** The sidebar: CPR-V5-001 s8's eight, in its order, filtered the same two ways everything else is. */

@@ -111,8 +111,11 @@ function main() {
   }
   ok("7a. ⚠ Practice Guidance is filed under Documents and is now advertised from it",
     childrenOf("/practice/documents", ALL_CAPS).some(c => c.href === "/practice/knowledge-studio"));
-  ok("7b. ⚠ Close My Day likewise -- shipped two days ago and undiscoverable until now",
-    childrenOf("/practice/encounters", ALL_CAPS).some(c => c.href === "/practice/close-my-day"));
+  // Repointed 2026-08-15: CPR-HFE-001 s3 removed Encounters from primary navigation, so Close My Day
+  // moved under Today -- the day-close ritual under the day, which is where CPR-ADOPT-001 s3 wanted a
+  // door anyway. The assertion pins the NEW home; the discoverability rule it protects is unchanged.
+  ok("7b. ⚠ Close My Day is filed under Today and advertised from it",
+    childrenOf("/practice/home", ALL_CAPS).some(c => c.href === "/practice/close-my-day"));
   ok("7c. every parent that owns modules is in PRIMARY_ORDER, so the chevron is always visible",
     parentsWithChildren.every(h => PRIMARY_ORDER.includes(h)));
   ok("7d-control. and there are several such parents, not one",
