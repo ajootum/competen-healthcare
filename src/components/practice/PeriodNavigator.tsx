@@ -168,10 +168,17 @@ export default function PeriodNavigator({
 
       <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2">
         {QUICK_PERIODS.map(q => q.key === "custom" ? (
+          // ⚠ SOLID BORDER, LIKE ITS NEIGHBOURS. On 2026-08-15 the practice owner stood on this
+          // control and asked for a from-one-date-to-another feature -- the dashed border this chip
+          // wore for months is the estate's vocabulary for NOT BUILT (the AI tile, the competency
+          // tile), so the one chip that opens something read as the one chip that does nothing. The
+          // ellipsis is the affordance: this button opens fields where its neighbours ARE periods --
+          // appended at render, because the s3 label list is data a harness proves verbatim.
           <button key={q.key} type="button" onClick={() => setCustomOpen(o => !o)}
             aria-expanded={customOpen}
-            className="rounded-lg border border-dashed border-gray-300 px-2.5 py-1 text-[12px] font-semibold text-gray-600 hover:border-[var(--cp-primary)] hover:text-[var(--cp-primary-deep)]">
-            {q.label}
+            className={`${chip} ${customOpen
+              ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]" : ""}`}>
+            {q.label}&hellip;
           </button>
         ) : (
           <Control href={href} onChange={onChange} key={q.key} to={quick(q.key)} label={q.label} className={chip} />

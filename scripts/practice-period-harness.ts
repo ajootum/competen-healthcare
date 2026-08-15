@@ -704,9 +704,21 @@ async function main() {
   ok("6d-control. every adapter file was found",
     adapters.every(a => fs.existsSync(path.join(process.cwd(), a.path))),
     adapters.filter(a => !fs.existsSync(path.join(process.cwd(), a.path))).map(a => a.path).join(", "));
-  ok("6e. ⚠ every adapter is an ADAPTER over the ONE control, not a second control -- six screens with "
-    + "six period pickers is how 'last week' comes to mean six things",
-    adapters.every(a => /from\s+["']@\/components\/practice\/PeriodNavigator["']/.test(src(a.path))));
+  // ⚠ AMENDED 2026-08-15, AND THE EXCEPTION IS NAMED SO IT CANNOT SPREAD SILENTLY. CPR-PCA-HFE-012 s6
+  // ordered /practice/activity's chip collection REPLACED with a compact menu, so that one adapter no
+  // longer mounts the shared chrome. The rule this assertion protects is the ARITHMETIC, not the
+  // chrome: "last week" must mean one thing on every screen. So the exception is held to a stricter
+  // version of the same rule -- it must BUILD its menu from the shared period-range primitives and do
+  // no date arithmetic of its own (`new Date(` is the tell), and every other adapter still mounts the
+  // one control. A second screen wanting its own chrome must be added HERE, on purpose, with a spec.
+  const S6_MENU_ADAPTERS = ["ActivityNavigator"];
+  ok("6e. ⚠ every adapter is an ADAPTER over the ONE control -- except s6's named menu, which must "
+    + "compute with the ONE engine instead",
+    adapters.every(a => S6_MENU_ADAPTERS.includes(a.name)
+      ? (/quickPeriodTarget/.test(src(a.path)) && /resolveTarget/.test(src(a.path))
+        && /shiftPeriod/.test(src(a.path)) && !/new Date\(/.test(src(a.path)))
+      : /from\s+["']@\/components\/practice\/PeriodNavigator["']/.test(src(a.path))),
+    adapters.map(a => `${a.name}:${S6_MENU_ADAPTERS.includes(a.name) ? "menu" : "shared"}`).join(", "));
   ok("6f. ⚠ and no adapter imports a server engine. A 'use client' file that reached one would drag "
     + "next/headers into six bundles, which tsc and eslint both pass",
     adapters.every(a => [...src(a.path).matchAll(/from\s+["'](@\/lib\/practice\/[^"']+)["']/g)]
