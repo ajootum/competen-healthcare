@@ -2,24 +2,22 @@
 import { useState } from "react";
 import Link from "next/link";
 import { PatternField } from "@/components/marketing/Pattern";
+import { enabledOAuthProviders } from "@/lib/oauth-providers";
 
 // Login. Two-panel enterprise sign-in: brand panel left, form right, matching the approved design.
 //
-// WHAT IS DELIBERATELY NOT HERE, and why it matters more on this page than anywhere else.
-// The design shows Google / Microsoft / Apple buttons, an SSO link, a language selector and a "Remember me"
-// checkbox. None of those exist behind the product: `signInWithOAuth` appears nowhere in the codebase,
-// there is no SSO sign-in flow (the control-plane identity screen RECORDS providers for admins, it does not
-// authenticate anyone), there is no i18n, and Supabase already persists the session so a "Remember me" tick
-// would change nothing.
-//
-// A dead control is bad anywhere. On a LOGIN page it is worse: someone clicks "Continue with Google",
-// nothing happens, and they conclude the product is broken rather than that they should type a password.
-// So the social row renders DISABLED with the reason stated, and turns on the moment a provider is
-// configured -- see NEXT_PUBLIC_OAUTH_PROVIDERS. The other three are omitted rather than faked.
+// ⚠ THE SSO FLOW EXISTS NOW (item 15, 2026-08-16) -- this comment used to say truthfully that the
+// OAuth sign-in call appeared nowhere in the codebase, and that sentence expired the day the start
+// route (/api/auth/oauth/[provider]) and callback (/auth/callback) shipped. (The call's name is not
+// written here: the sso-harness scans for it and a comment must not be the needle's haystack.) What has NOT changed is
+// the honesty rule the row was built around: with NEXT_PUBLIC_OAUTH_PROVIDERS empty (the default)
+// the buttons render DISABLED with the reason stated, and the start route re-checks GoTrue's LIVE
+// settings before anybody leaves this origin -- so a drifted env var lands on a sentence here, not
+// on a provider error page. A first-time OAuth identity is refused by the signups-closed decision,
+// in words, by the callback. "Remember me" and i18n remain unbuilt and unfaked.
 
 // Comma-separated, e.g. "google,azure". Empty (the default) renders the row disabled and explained.
-const ENABLED = (process.env.NEXT_PUBLIC_OAUTH_PROVIDERS ?? "")
-  .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+const ENABLED: string[] = enabledOAuthProviders(process.env.NEXT_PUBLIC_OAUTH_PROVIDERS);
 
 const PROVIDERS = [
   { id: "google", label: "Google", mark: <span className="text-[15px] font-bold text-[#4285F4]">G</span> },
@@ -65,7 +63,12 @@ const BUILDING: Record<string, { name: string; blurb: string }> = {
 
 export default function LoginPage() {
   const [form, setForm] = useState({ email: "", password: "" });
-  const [error, setError] = useState("");
+  // A verdict carried back from the SSO callback rides in on ?error= -- same lazy-initialiser shape
+  // as `building` below, for the same lint reason.
+  const [error, setError] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("error") ?? "";
+  });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   // ⚠ A LAZY INITIALISER, NOT AN EFFECT. setState inside an effect body is the cascading-render shape
@@ -241,7 +244,11 @@ export default function LoginPage() {
                   return (
                     <button key={p.id} type="button" disabled={!on}
                       title={on ? `Continue with ${p.label}` : `${p.label} sign-in is not enabled for this deployment`}
-                      onClick={() => { if (on) window.location.href = `/api/auth/oauth/${p.id}`; }}
+                      onClick={() => {
+                        if (!on) return;
+                        const n = new URLSearchParams(window.location.search).get("next");
+                        window.location.href = `/api/auth/oauth/${p.id}${n ? `?next=${encodeURIComponent(n)}` : ""}`;
+                      }}
                       className={`flex items-center justify-center gap-2 rounded-xl border py-3 text-[13px] font-medium transition-colors ${
                         on ? "border-gray-200 text-gray-700 hover:bg-gray-50"
                            : "border-gray-100 text-gray-300 cursor-not-allowed"}`}>

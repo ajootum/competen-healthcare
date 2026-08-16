@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { enabledOAuthProviders, OAUTH_PROVIDER_LABELS } from "@/lib/oauth-providers";
 
 // The real Practice sign-in form. Renders ONLY when the practice_sign_in flag is on (the server page
 // decides) -- see the page component for why. Central Competen identity (IAM-ADR-01): this signs into
@@ -18,7 +19,8 @@ export default function SignInForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  // A verdict carried back from the SSO callback rides in on ?error= (lazy initialiser, never an effect).
+  const [error, setError] = useState(() => params.get("error") ?? "");
 
   const returnTo = (() => {
     const raw = params.get("return_to") ?? "";
@@ -56,6 +58,24 @@ export default function SignInForm() {
         className="mt-5 w-full rounded-xl bg-[var(--cp-primary)] py-2.5 text-sm font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
         {busy ? "Signing in…" : "Sign in"}
       </button>
+      {/* SSO (item 15): rendered ONLY when a provider is enabled for this deployment -- an empty env
+          renders nothing here at all, because unlike /login this form never promised social buttons
+          and a disabled row would be furniture. Same identity, same start route, same callback; what
+          makes it Practice is return_to, carried through the flow and validated at both ends. */}
+      {enabledOAuthProviders(process.env.NEXT_PUBLIC_OAUTH_PROVIDERS).length > 0 && (
+        <div className="mt-4">
+          <p className="text-center text-[11px] text-gray-400">or continue with</p>
+          <div className="mt-2 grid gap-2">
+            {enabledOAuthProviders(process.env.NEXT_PUBLIC_OAUTH_PROVIDERS).map(p => (
+              <button key={p} type="button" disabled={busy}
+                onClick={() => window.location.assign(`/api/auth/oauth/${p}?next=${encodeURIComponent(returnTo)}`)}
+                className="w-full rounded-xl border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                Continue with {OAUTH_PROVIDER_LABELS[p]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {/* IAM-001 s14 lists recovery among the routes that must be deployed before cutover. It is the
           PLATFORM's recovery, not a Practice-specific one -- same identity, same reset -- which is why
           this links out rather than duplicating a flow that would then drift from the original. */}
