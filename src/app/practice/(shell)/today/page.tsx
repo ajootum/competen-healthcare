@@ -11,6 +11,7 @@ import SessionControls from "./SessionControls";
 import SessionTiles from "./SessionTiles";
 import CurrentPatientCard from "./CurrentPatientCard";
 import QueueWithActions from "./QueueWithActions";
+import ExpectedCheckIn from "./ExpectedCheckIn";
 import LiveRefresh from "../LiveRefresh";
 import OfflineCacheWriter from "../OfflineCacheWriter";
 import { offlineCacheGate } from "@/lib/practice/offline-gate";
@@ -124,8 +125,8 @@ export default async function CurrentSessionPage() {
       note: "Search the register first; attach, never duplicate (s9).",
     } : null,
     canControl ? {
-      href: "/practice/calendar", label: "Mark arrivals",
-      note: "Check-in is appointment-book work -- it lives in the Planner.",
+      href: "/practice/calendar", label: "Open the appointment book",
+      note: "Expected patients check in right here, one click. The full day's book lives in the Planner.",
     } : null,
     hasCapability(shell.ctx, "task.view") ? {
       href: "/practice/tasks", label: "Create or check a task",
@@ -314,9 +315,20 @@ export default async function CurrentSessionPage() {
             })))}
           />
 
-          {/* s7's EXPECTED state, as a POINTER rather than queue rows: booked-but-not-arrived people
-              are not in the corridor, and their action (mark arrived) lives in the Planner. */}
-          {flow.expected !== null && flow.expected > 0 && (
+          {/* s7's EXPECTED state. Still never queue rows -- an expected person is not in the corridor.
+              But walkthrough 2026-08-16 request #4 moved their ONE action (check in) into the cockpit:
+              a reader with appointment.manage gets the strip with inline check-in, server-stamped by
+              the arrive transition; anybody else keeps the honest sentence and the Planner pointer. */}
+          {canControl && flow.expectedList !== null && flow.expectedList.length > 0 ? (
+            <ExpectedCheckIn
+              total={flow.expected}
+              people={flow.expectedList.map(a => ({
+                appointmentId: a.appointmentId,
+                name: a.name,
+                timeLabel: clock(a.scheduledAtIso, dash.timezone),
+              }))}
+            />
+          ) : flow.expected !== null && flow.expected > 0 ? (
             <p className="rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2 text-[12px] text-gray-600">
               {flow.expected === 1 ? "1 booked patient has" : `${flow.expected} booked patients have`}{" "}
               not arrived yet.{" "}
@@ -324,7 +336,7 @@ export default async function CurrentSessionPage() {
                 Mark arrivals in the Planner →
               </Link>
             </p>
-          )}
+          ) : null}
         </div>
 
         <div className="space-y-4">

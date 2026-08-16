@@ -441,10 +441,19 @@ export type SessionFlow = {
   inProgress: number | null;
   /**
    * EXPECTED (s7): booked but not recorded as arrived -- appointments in the session window still in
-   * REQUESTED or CONFIRMED. Their queue action (mark arrived) lives in the Planner, so the screen
-   * renders this as a pointer, never as queue rows that would corrupt "waiting".
+   * REQUESTED or CONFIRMED. Never merged into the queue rows, which would corrupt "waiting": an
+   * expected person is not in the corridor until the arrive transition stamps them in.
    */
   expected: number | null;
+  /**
+   * The expected appointments themselves, earliest booked time first, capped at EXPECTED_LIMIT.
+   * Walkthrough 2026-08-16 request #4: the one action an expected person has -- check in -- is
+   * offered in the cockpit, so the cockpit needs the rows and not just the count. `expected` above
+   * remains the full count even when this list is capped.
+   */
+  expectedList: {
+    appointmentId: string; name: string; scheduledAtIso: string; appointmentType: string | null;
+  }[] | null;
   /** Arrivals with no usable patient record attached (s11) -- countable here, listed in the queue. */
   unregisteredArrivals: number | null;
   /** Open encounters (ACTIVE or PAUSED) beyond the first -- s11's "encounter left unfinished". */
@@ -454,6 +463,9 @@ export type SessionFlow = {
 
 /** The queue states that mean somebody is physically in the flow right now. */
 const FLOW_QUEUE_STATUSES = ["WAITING", "READY", "IN_CONSULTATION"];
+
+/** Expected rows carried to the cockpit. A session window rarely holds more; the count says the rest. */
+const EXPECTED_LIMIT = 12;
 
 export async function sessionFlow(
   admin: any, ctx: WorkspaceContext,
@@ -485,16 +497,18 @@ export async function sessionFlow(
       .gte("entered_at", day.startIso).lt("entered_at", day.endIso),
     window
       ? admin.from("practice_appointment")
-        .select("id", { count: "exact", head: true })
+        .select("id, patient_name, scheduled_at, appointment_type", { count: "exact" })
         .eq("workspace_id", ctx.workspaceId)
         .gte("scheduled_at", window.fromIso).lt("scheduled_at", window.toIso)
         .in("status", ["REQUESTED", "CONFIRMED"])
-      : Promise.resolve({ count: null, error: null }),
+        .order("scheduled_at", { ascending: true })
+        .limit(EXPECTED_LIMIT)
+      : Promise.resolve({ data: null, count: null, error: null }),
   ]);
 
   if (queueRead.error && openRead.error)
     return { current: null, next: null, arrived: null, inProgress: null, expected: null,
-      unregisteredArrivals: null, openEncounters: null, unavailable: true };
+      expectedList: null, unregisteredArrivals: null, openEncounters: null, unavailable: true };
 
   const queueRows = (queueRead.data ?? []) as any[];
   const openRows = (openRead.data ?? []) as any[];
@@ -542,6 +556,13 @@ export async function sessionFlow(
     arrived: arrivedRead.error ? null : (arrivedRead.count ?? null),
     inProgress: openRead.error ? null : openRows.length,
     expected: expectedRead.error ? null : (expectedRead.count ?? null),
+    expectedList: expectedRead.error ? null
+      : ((expectedRead.data ?? []) as any[]).map(a => ({
+        appointmentId: String(a.id),
+        name: a.patient_name ?? "Unnamed patient",
+        scheduledAtIso: a.scheduled_at,
+        appointmentType: a.appointment_type ?? null,
+      })),
     unregisteredArrivals: queueRead.error ? null : queueRows.filter(q => !q.patient_id).length,
     openEncounters: openRead.error ? null : openRows.map(e => ({
       id: e.id,

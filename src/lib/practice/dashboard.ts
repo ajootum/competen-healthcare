@@ -205,7 +205,7 @@ export async function dashboardReadModel(
 
   const FLOW_FALLBACK: SessionFlow = {
     current: null, next: null, arrived: null, inProgress: null, expected: null,
-    unregisteredArrivals: null, openEncounters: null, unavailable: true,
+    expectedList: null, unregisteredArrivals: null, openEncounters: null, unavailable: true,
   };
 
   const [metrics, queue, timeline, followUps, alerts, drafts, home, flow] = await Promise.all([

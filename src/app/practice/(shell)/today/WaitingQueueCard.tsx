@@ -24,6 +24,19 @@ import { PANEL, QUEUE_SWATCH } from "@/lib/practice/palette";
 // wait, and "0 min" beside somebody who has been sitting there since eight is the worst available lie.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Walkthrough 2026-08-16's bonus defect: "waiting 9936 min" is a true figure nobody can read.
+ * Minutes stay minutes for the first two hours -- the range where minutes decide who is next --
+ * then the unit grows with the wait. "6d 21h" is legible AND alarming, which is the point: a wait
+ * that long is a stale queue row wearing a clock, and the label should make that impossible to miss.
+ */
+export function waitLabel(minutes: number): string {
+  if (minutes < 120) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  if (h < 24) return minutes % 60 > 0 ? `${h}h ${minutes % 60}m` : `${h}h`;
+  return `${Math.floor(h / 24)}d ${h % 24}h`;
+}
+
 /** The engine's own three groups. Anything else would need the engine to agree to it first. */
 export type QueueGroupKey = "booked" | "walk_ins" | "emergency";
 export type QueueTabKey = "all" | QueueGroupKey;
@@ -195,7 +208,7 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
                     ) : (
                       <span className="shrink-0 text-[11px] tabular-nums text-gray-500"
                         title={p.timeLabel ? `Arrived ${p.timeLabel}` : undefined}>
-                        {p.waitingMinutes} min
+                        {waitLabel(p.waitingMinutes)}
                       </span>
                     )}
                     {/* CPR-ADOPT-001 s2. Drawn only when this row HAS a patient to attach an encounter

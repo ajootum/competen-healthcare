@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { BUTTON, QUEUE_SWATCH } from "@/lib/practice/palette";
+import { waitLabel } from "./WaitingQueueCard";
 import { startEncounterFor } from "@/lib/practice/encounter-start";
 
 // CPR-CUR-001 s5.2 zone C -- THE CURRENT PATIENT, the dominant card of the running clinical session.
@@ -112,7 +113,7 @@ export default function CurrentPatientCard({ person, canStartEncounter, unavaila
     person.appointmentType && person.appointmentType !== "walk_in"
       ? person.appointmentType.replace(/_/g, " ") : null,
     person.arrivedTimeLabel ? `arrived ${person.arrivedTimeLabel}` : null,
-    person.waitingMinutes !== null ? `waiting ${person.waitingMinutes} min` : null,
+    person.waitingMinutes !== null ? `waiting ${waitLabel(person.waitingMinutes)}` : null,
   ].filter(Boolean).join(" · ");
 
   const stateLabel = person.encounterStatus
