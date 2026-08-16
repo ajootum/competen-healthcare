@@ -216,7 +216,7 @@ export default function Timeline({ timeline, canManage, onChanged }: {
                   <p className="truncate text-[12px] font-semibold text-gray-800">{l.name}</p>
                   <p className="truncate text-[10px] text-gray-400">
                     {l.type === "unassigned" ? "no place recorded"
-                      : l.facilityName ?? (l.type === "hospital" ? "no facility linked" : String(l.type).replace(/_/g, " "))}
+                      : l.facilityName ?? (l.type === "hospital" ? "no facility linked -- set it in Practice Settings" : String(l.type).replace(/_/g, " "))}
                   </p>
                 </div>
               ))}

@@ -236,7 +236,15 @@ export default function DayPlanner({
                 ? `Nothing here matches what you are showing -- ${shown.hidden} hidden by the filters.`
                 : day.dayOff
                   ? "No program and nothing planned on this date."
-                  : "Nothing is planned for this day."}
+                  /* Walkthrough 2026-08-17 #11: "Nothing is planned" under a four-patient clinic is a
+                     true sentence about ACTIVITIES that reads as a lie about the DAY. When the book
+                     holds bookings, the empty state says which register is empty and which is not. */
+                  : shown.appointments.length > 0
+                    ? `No activity is planned for this day -- the ${shown.appointments.length === 1
+                      ? "booking above runs" : `${shown.appointments.length} bookings above run`} from the
+                      appointment book either way. Add the clinic as an activity to run it as a session
+                      with the cockpit.`
+                    : "Nothing is planned for this day."}
             </p>
           ) : (
             ordered.map((a, i) => {

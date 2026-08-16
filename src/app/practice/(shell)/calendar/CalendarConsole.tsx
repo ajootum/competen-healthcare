@@ -261,7 +261,7 @@ export default function CalendarConsole({ date, timezone, canManage, initial, lo
                     <option value="">Where — not specified</option>
                     {locations.map(l => (
                       <option key={l.id} value={l.id}>
-                        {l.name}{l.type === "hospital" && !l.facility ? " (no facility linked)" : ""}
+                        {l.name}{l.type === "hospital" && !l.facility ? " (no facility linked -- set it in Practice Settings)" : ""}
                       </option>
                     ))}
                   </select>

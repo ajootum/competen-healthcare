@@ -59,7 +59,7 @@ export default function WhereYouAre({ route, timezone }: {
               </p>
               {/* The facility is what makes a patient's number at this place resolvable. */}
               {b.type === "hospital" && !b.facilityName && (
-                <p className="text-[10px] opacity-70">no facility linked</p>
+                <p className="text-[10px] opacity-70">no facility linked -- set it in Practice Settings</p>
               )}
             </div>
             {i < route.blocks.length - 1 && (
