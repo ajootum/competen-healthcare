@@ -26,6 +26,7 @@ import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import {
   createCharge, createDraftInvoice, issueInvoice, recordPayment, recordAdjustment, patientStatement,
 } from "../src/lib/practice/billing";
+import { workspaceClock } from "../src/lib/practice/practice-time";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
@@ -68,7 +69,11 @@ async function main() {
   if (!ctxRes.ok) { ok("context resolves", false); return report(); }
   const ctx = ctxRes.ctx;
   const base = { actorId: OWNER, correlationId: "harness-paydoc" };
-  const today = new Date().toISOString().slice(0, 10);
+  // ⚠ THE PRACTICE'S TODAY, NEVER UTC'S. createCharge stamps charged_on and issueInvoice stamps
+  // issue_date with the WORKSPACE's today (Kampala, UTC+3) -- so a statement window ending on UTC's
+  // date excludes everything this fixture just wrote between midnight and 03:00 local, and the
+  // harness could only pass twenty-one hours a day.
+  const { today } = await workspaceClock(admin, ws);
   const shift = (d: number) => new Date(Date.parse(today + "T00:00:00Z") + d * 86400000).toISOString().slice(0, 10);
 
   const p1 = await registerPatient(admin, { workspaceId: ws, displayName: "Statement Subject", sex: "female", birthDate: "1980-01-01", phone: "0772 000 051", ...base });

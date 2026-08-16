@@ -31,6 +31,7 @@ import { runProvisioning, type IndividualRequest } from "../src/lib/practice/pro
 import { registerPatient } from "../src/lib/practice/patients";
 import { launchEncounter, transitionEncounter } from "../src/lib/practice/encounters";
 import { createFollowUp } from "../src/lib/practice/follow-ups";
+import { workspaceClock } from "../src/lib/practice/practice-time";
 import { resolveWorkspaceContext } from "../src/lib/practice/access";
 import { planActivity, startActivity, endActivity, sessionSummary, sessionClinicalActivity } from "../src/lib/practice/activity";
 import { generateReport } from "../src/lib/practice/report-engine";
@@ -155,7 +156,11 @@ async function main() {
   if (!ctxRes.ok) { ok("context resolves", false); return report(); }
   const ctx = ctxRes.ctx;
   const base = { actorId: OWNER, correlationId: "harness-hfe" };
-  const todayDate = new Date().toISOString().slice(0, 10);
+  // ⚠ THE PRACTICE'S TODAY, NEVER UTC'S. new Date().toISOString() is UTC's date, and between
+  // midnight and 03:00 in Kampala the two disagree -- this fixture went red at 00:0x local with
+  // "that activity is not planned for today" (2026-08-17). The ENGINE was right; the fixture was
+  // reading the wrong clock, and could only pass twenty-one hours a day.
+  const { today: todayDate } = await workspaceClock(admin, ws);
 
   // A real session: planned, started, one encounter + follow-up inside it, ended.
   const planned = await planActivity(admin, ctx, {

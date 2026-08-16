@@ -95,7 +95,10 @@ async function cleanup() {
 }
 
 /** Today in Kampala, and a wall-clock Kampala time on it expressed as the UTC instant it is. */
-const kampalaToday = () => new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
+// ⚠ THE ENGINE'S OWN CLOCK, not a second hand-rolled one. This file already imports practiceToday
+// for its follow-up fixtures; a private +3h copy alongside it is how the two quietly stop matching
+// -- the same twenty-one-hours-a-day class that bit the hfe harness (UTC's date vs the practice's).
+const kampalaToday = () => practiceToday(TZ);
 const kampala = (day: string, hh: number, mm = 0) => {
   const utcMinutes = hh * 60 + mm - 180;
   const base = Date.parse(`${day}T00:00:00.000Z`);
@@ -121,7 +124,12 @@ async function main() {
   const unconfigurable = usedKeys.filter(k => !knownKeys.includes(k));
   ok("10a every widget the page renders is in DASHBOARD_WIDGETS",
     unconfigurable.length === 0, JSON.stringify(unconfigurable));
-  ok("10b CONTROL: the page really does use widget keys, so 10a is not vacuous", usedKeys.length >= 8,
+  // ⚠ FLOOR REPOINTED (2026-08-17). The CPR-HFE-001 s14 harmonisation ("pointers, not consoles")
+  // consolidated this page to SIX widget keys -- verified at fa8a3eca, before tonight's edits -- and
+  // the old floor of 8 was calibration to a page that no longer exists. The control's only job is to
+  // prove 10a scans a page that genuinely uses widget keys; five is comfortably non-vacuous, and a
+  // future consolidation below that should be looked at rather than waved through.
+  ok("10b CONTROL: the page really does use widget keys, so 10a is not vacuous", usedKeys.length >= 5,
     String(usedKeys.length));
 
   // ---- 1. The clinic window is configured, not assumed ---------------------------------------------
@@ -411,7 +419,10 @@ async function main() {
   const { data: anyPatient } = await admin.from("practice_patient")
     .select("id").eq("workspace_id", wsA).limit(1).maybeSingle();
   if (!anyPatient) throw new Error("fixture has no patient to hang a follow-up on");
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  // Anchored on the PRACTICE's today, not UTC's: "overdue" here must mean yesterday in Kampala.
+  // (UTC's yesterday happens to stay in the past for a zone ahead of UTC, but the follow-up buckets
+  // this row must land in are drawn against the workspace clock -- same anchor, no 00:00-03:00 skew.)
+  const yesterday = new Date(Date.parse(`${practiceToday(TZ)}T12:00:00Z`) - 86400000).toISOString().slice(0, 10);
   for (const [dueOn, reason] of [[yesterday, "overdue one"], [practiceToday(TZ), "due today"]]) {
     const made = await createFollowUp(admin, {
       workspaceId: wsA, patientId: anyPatient.id, reason, dueOn,

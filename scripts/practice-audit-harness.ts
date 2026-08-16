@@ -48,6 +48,7 @@ import { exportPatientRecord } from "../src/lib/practice/privacy";
 import { practiceReport, exportActivityCsv } from "../src/lib/practice/reports";
 import { runAssistant } from "../src/lib/practice/ai-assistant";
 import type { WorkspaceContext } from "../src/lib/practice/access";
+import { practiceToday } from "../src/lib/practice/practice-time";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
@@ -257,7 +258,10 @@ async function main() {
 
   // A caller without the write capability is refused, and the SAME call with it is allowed. One without
   // the other proves only that the function can return something.
-  const today = new Date(new Date().toLocaleString("en-CA", { timeZone: TZ }).slice(0, 10)).toISOString().slice(0, 10);
+  // ⚠ THE PRACTICE'S TODAY, from the engine's own clock. The toLocaleString round-trip this replaced
+  // computed the same Kampala date, but a private copy of a timezone calculation is how it quietly
+  // stops matching the engine's -- the twenty-one-hours-a-day class that bit the hfe harness.
+  const today = practiceToday(TZ);
   const noWrite = ctxFor(ws, DOCTOR, caps.filter(x => x !== "appointment.manage"));
   const refused = await planActivity(admin, noWrite, {
     activityType: "outpatient_clinic", title: "Refused Clinic", planDate: today,

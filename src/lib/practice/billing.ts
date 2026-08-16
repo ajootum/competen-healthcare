@@ -735,7 +735,10 @@ export async function paymentsOverview(admin: any, ctx: WorkspaceContext, opts: 
 
   const recent = [
     ...charges.map(c => ({ kind: "charge" as const, id: c.id, when: c.charged_on, amountMinor: c.amount_minor, currency: c.currency, label: c.description, patientId: c.patient_id })),
-    ...payments.map(p => ({ kind: "payment" as const, id: p.id, when: String(p.paid_at).slice(0, 10), amountMinor: p.amount_minor, currency: p.currency, label: `${p.method} · collected by ${p.collector}`, patientId: p.patient_id })),
+    // ⚠ THE PRACTICE'S DAY, NEVER UTC'S SLICE. paid_at is an instant; slicing it takes UTC's date,
+    // which between 00:00 and 03:00 Kampala is YESTERDAY -- a payment recorded then filed under the
+    // wrong day, beside charges stamped with the practice's own charged_on.
+    ...payments.map(p => ({ kind: "payment" as const, id: p.id, when: practiceToday(timezone, new Date(p.paid_at)), amountMinor: p.amount_minor, currency: p.currency, label: `${p.method} · collected by ${p.collector}`, patientId: p.patient_id })),
   ].sort((a, b) => String(b.when).localeCompare(String(a.when))).slice(0, 20);
 
   return { permitted: true as const, unavailable: false, detail: null, byCurrency, recent };
@@ -1205,6 +1208,12 @@ export async function patientStatement(admin: any, ctx: WorkspaceContext, args: 
     || a.practice_payment?.patient_id === args.patientId
     || a.practice_charge?.patient_id === args.patientId);
 
+  // ⚠ ONE CLOCK FOR EVERY LINE (walkthrough night, 2026-08-17 00:31). Invoice lines carry
+  // issue_date, stamped with the practice's own today -- but payment and adjustment lines were UTC
+  // day-slices of their instants. Between 00:00 and 03:00 Kampala the two clocks name different
+  // days, so a payment recorded then printed under the previous day and sorted BEFORE the invoice
+  // issued the same practice-day. Every line now dates itself in the workspace's timezone.
+  const { timezone } = await workspaceClock(admin, ws);
   type Raw = { date: string; kind: StatementLine["kind"]; ref: string | null; description: string; amountMinor: number; currency: string; adjustmentId: string | null };
   const raw: Raw[] = [
     ...((invRes.data ?? []) as any[]).map((i: any): Raw => ({
@@ -1212,12 +1221,12 @@ export async function patientStatement(admin: any, ctx: WorkspaceContext, args: 
       description: "Invoice issued", amountMinor: i.total_minor, currency: i.currency, adjustmentId: null,
     })),
     ...((payRes.data ?? []) as any[]).map((p: any): Raw => ({
-      date: String(p.paid_at).slice(0, 10), kind: "payment", ref: receiptOf.get(p.id) ?? null,
+      date: practiceToday(timezone, new Date(p.paid_at)), kind: "payment", ref: receiptOf.get(p.id) ?? null,
       description: `Payment received (${p.method}${p.collector && p.collector !== "practitioner" ? `, collected by ${p.collector}` : ""})`,
       amountMinor: -p.amount_minor, currency: p.currency, adjustmentId: null,
     })),
     ...adj.map((a: any): Raw => ({
-      date: String(a.created_at).slice(0, 10), kind: a.kind,
+      date: practiceToday(timezone, new Date(a.created_at)), kind: a.kind,
       ref: a.practice_invoice?.invoice_number ?? null,
       description: `${a.kind === "refund" ? "Refund" : a.kind === "waiver" ? "Waiver" : a.kind === "discount" ? "Discount" : "Correction"} -- ${String(a.reason).slice(0, 80)}`,
       amountMinor: a.kind === "refund" ? a.amount_minor : -a.amount_minor,
