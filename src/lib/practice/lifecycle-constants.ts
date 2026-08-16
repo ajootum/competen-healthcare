@@ -195,7 +195,9 @@ export const REASON_MAX = 1000;
 export type ClosureVerdict = "met" | "unmet" | "unreadable" | "no_store";
 
 export const CLOSURE_NO_STORE: Record<string, string> = {
-  invoices: "The billing store EXISTS now (migration 303: charges, invoices, payments, receipts) but the closure checklist has not yet been taught to read it -- so this line still cannot be checked by software and has to be checked by you, in the Payments workspace, before closing. Wiring closure to the billing tables is a named open gap, not an oversight.",
+  // ⚠ `invoices` LEFT this list on 2026-08-16: the closure checklist now reads the billing tables
+  // (outstandingBalances, the same derivation the Payments workspace shows), so that line is a real
+  // met/unmet verdict. Integrations remain the one check with no store behind it.
   integrations: "There is no integration store in this product. practice_integration does not exist, no calendar, messaging, payment or FHIR connection is recorded anywhere, so there is nothing to disconnect and nothing to report on.",
 };
 
@@ -235,9 +237,11 @@ export const LIFECYCLE_REFUSALS: Record<string, string> = {
     "s5 asks for PDF, CSV, JSON and ZIP. Only JSON is built. A format offered and not produced is worse "
     + "than one that is absent, because the practitioner finds out after they have relied on it.",
   export_billing:
-    "s5's export list names billing. There is no billing module in this product, so that section of the "
-    + "export is declared as unavailable rather than emitted empty -- an export that silently omits a "
-    + "named category is worse than one that says the category does not exist.",
+    "s5's export list names billing, and since 2026-08-16 the export carries it in full: charges, "
+    + "invoices and their line items, payments, allocations, receipts, adjustments, fees and overrides, "
+    + "facility entitlements, settlements and their items. One deliberate exclusion: the "
+    + "billing-number counter table is sequence bookkeeping, and every number it ever produced already "
+    + "appears on the documents that carry it.",
   restore_lockout:
     "A practice that is not ACTIVE is refused by the workspace guard every Practice page runs, so this "
     + "page is not reachable once the practice is archived or suspended. Restoring is therefore offered on "

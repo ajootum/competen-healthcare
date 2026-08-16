@@ -1,6 +1,7 @@
 import { audit } from "@/lib/practice/audit";
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { logAccess } from "@/lib/practice/privacy";
+import { outstandingBalances } from "@/lib/practice/billing";
 import {
   CAP_VIEW, CAP_ARCHIVE, CAP_SUSPEND, CAP_RESTORE, CAP_EXPORT,
   LIFECYCLE_ACTIONS, LIFECYCLE_REFUSALS, LIFECYCLE_STATUSES, PROVISIONING_STATUSES,
@@ -215,6 +216,12 @@ export async function practiceLifecycle(admin: any, ctx: WorkspaceContext): Prom
     admin.from("practice_clinical_document").select("*", { count: "exact", head: true }).eq("workspace_id", ctx.workspaceId),
   ]);
 
+  // The closure checklist's invoices line, taught to read billing on 2026-08-16 -- through the SAME
+  // derivation the Payments workspace shows (outstandingBalances), never a second arithmetic. A
+  // caller without billing.view gets "cannot be checked BY YOU", which is a different sentence from
+  // "checked and clear" on the one screen where that difference decides whether money is abandoned.
+  const outstandingP = await outstandingBalances(admin, ctx);
+
   const ws = wsQ.data as { name: string; status: string; created_at: string } | null;
   const status = wsQ.error || !ws ? null : (ws.status as string);
   const statusKind: "lifecycle" | "provisioning" | "unknown" =
@@ -313,7 +320,18 @@ export async function practiceLifecycle(admin: any, ctx: WorkspaceContext): Prom
     {
       key: "invoices", label: "Outstanding invoices reviewed",
       specLine: "Outstanding invoices reviewed.",
-      verdict: "no_store", count: null, detail: CLOSURE_NO_STORE.invoices, href: null,
+      verdict: !outstandingP.permitted || outstandingP.unavailable
+        ? "unreadable"
+        : outstandingP.items.length === 0 ? "met" : "unmet",
+      count: !outstandingP.permitted || outstandingP.unavailable ? null : outstandingP.items.length,
+      detail: !outstandingP.permitted
+        ? "you do not hold billing.view, so this line cannot be checked by you -- somebody who does has to look at Payments before closing"
+        : outstandingP.unavailable
+          ? "the invoices could not be read, so nothing here is a claim about your billing"
+          : outstandingP.items.length === 0
+            ? "No issued invoice carries a balance. What facilities owe you is its own line of sight under Payments and is not counted here."
+            : `${outstandingP.items.length} issued invoice${outstandingP.items.length === 1 ? " still carries" : "s still carry"} a balance. Money nobody collects before closure is money nobody collects.`,
+      href: "/practice/payments?tab=outstanding",
     },
     {
       key: "appointments", label: "Future appointments handled",
@@ -580,10 +598,11 @@ export async function applyTransition(admin: any, actor: LifecycleActor, input: 
  * ⚠ WHAT IS IN IT, DECLARED. Modelled on privacy.ts's exportPatientRecord -- same audit, same access-log
  * entry, same "this is a data export, not a clinical document" header -- but over the whole practice.
  *
- * s5 names patients, appointments, follow-ups, documents, billing, settings and configuration. SIX OF
- * THE SEVEN HAVE A STORE. Billing does not exist in this product at all, so it is declared unavailable
- * in the file rather than emitted as an empty array: an export that silently omits a named category is
- * worse than one that says the category does not exist.
+ * s5 names patients, appointments, follow-ups, documents, billing, settings and configuration. ALL
+ * SEVEN HAVE A STORE since migrations 303-304, and since 2026-08-16 the export carries billing in
+ * full -- the sentence that used to stand here ("billing does not exist in this product") was made
+ * false by the PAY arc, and a category the file declared unavailable while the tables filled up
+ * would have been the silent omission this list exists to prevent.
  *
  * ⚠ AND ONLY JSON. s5 asks for PDF, CSV, JSON and ZIP. A format offered and not produced is worse than
  * one that is absent, so `formats` in the file says which is which.
@@ -607,6 +626,23 @@ export const EXPORT_SECTIONS: { key: string; table: string; label: string }[] = 
   { key: "bookingRules", table: "practice_booking_rule", label: "Booking rules" },
   { key: "memberships", table: "practice_membership", label: "Team" },
   { key: "lifecycleTransitions", table: "practice_lifecycle_transition", label: "Lifecycle history" },
+  // ⚠ BILLING, taught to this list 2026-08-16 (migrations 303-304 shipped after it was written).
+  // s5 names billing; an export that silently omitted a practice's money records would hand a closing
+  // practitioner an archive with the invoices missing. Twelve tables; the one deliberate exclusion is
+  // practice_billing_number_counter -- sequence bookkeeping whose every product already appears on the
+  // documents that carry it.
+  { key: "serviceFees", table: "practice_service_fee", label: "Service fees" },
+  { key: "serviceFeeOverrides", table: "practice_service_fee_override", label: "Service fee overrides" },
+  { key: "charges", table: "practice_charge", label: "Charges" },
+  { key: "invoices", table: "practice_invoice", label: "Invoices" },
+  { key: "invoiceItems", table: "practice_invoice_item", label: "Invoice line items" },
+  { key: "payments", table: "practice_payment", label: "Payments" },
+  { key: "paymentAllocations", table: "practice_payment_allocation", label: "Payment allocations" },
+  { key: "receipts", table: "practice_receipt", label: "Receipts" },
+  { key: "billingAdjustments", table: "practice_billing_adjustment", label: "Billing adjustments" },
+  { key: "facilityEntitlements", table: "practice_facility_entitlement", label: "Facility entitlements" },
+  { key: "settlements", table: "practice_settlement", label: "Settlements" },
+  { key: "settlementItems", table: "practice_settlement_item", label: "Settlement items" },
   // ⚠ THE PORTFOLIO ENTRIES TYPED HERE, AND THE REASON THIS SECTION READS THE WAY IT DOES.
   //
   // CPR-IDENT-SURVEY-001 s1.2 found that this list omitted both portfolio tables, so a whole-practice
@@ -707,7 +743,7 @@ export async function exportPractice(admin: any, ctx: WorkspaceContext, opts: {
         note: "A data export, not a clinical document. It carries no signature and is a snapshot of the moment above.",
         // ⚠ THE LIMITS ARE FIELDS IN THE FILE, NOT SENTENCES ON A PAGE SOMEBODY SAW ONCE.
         formats: { produced: ["json"], notBuilt: ["pdf", "csv", "zip"], why: LIFECYCLE_REFUSALS.export_formats },
-        billing: { available: false, why: LIFECYCLE_REFUSALS.export_billing },
+        billing: { available: true, note: LIFECYCLE_REFUSALS.export_billing },
         files: {
           included: false,
           why: "Uploaded files and library documents are exported as METADATA ONLY -- title, name, type, size and path. The bytes themselves live in object storage and are not in this file.",

@@ -272,11 +272,19 @@ async function main() {
 
   const closure = active.closure.items;
   ok("3a six checks, one per line of s4", closure.length === 6, String(closure.length));
+  // Repointed 2026-08-16: the invoices line was taught to read billing (the gap the old assertion
+  // pinned was CLOSED, holding the CPR-PAY arc as its document). Integrations remain the one
+  // no-store line.
   const noStore = closure.filter(c => c.verdict === "no_store").map(c => c.key).sort();
-  ok("3b ⚠ exactly two lines have no store, and they are invoices and integrations",
-    noStore.join(",") === "integrations,invoices", noStore.join(","));
-  ok("3c neither of them is drawn as an unticked box -- verdict is never `unmet` and there is no count",
+  ok("3b ⚠ exactly ONE line has no store, and it is integrations -- invoices compute now",
+    noStore.join(",") === "integrations", noStore.join(","));
+  ok("3c the no-store line is not drawn as an unticked box -- no count, a reason instead",
     closure.filter(c => c.verdict === "no_store").every(c => c.count === null && c.detail.length > 40));
+  const invLine = closure.find(c => c.key === "invoices");
+  ok("3c2 the invoices line is MET on a practice with no issued balances, through the Payments derivation",
+    invLine?.verdict === "met" && invLine?.count === 0
+      && (invLine?.href ?? "").includes("/practice/payments"),
+    JSON.stringify(invLine));
 
   // A future appointment makes the appointments line UNMET, and removing it makes it MET. Arranged this
   // way round so a line that always said "met" would fail.
@@ -511,8 +519,16 @@ async function main() {
       file.export.formats.produced.join(",") === "json"
       && file.export.formats.notBuilt.sort().join(",") === "csv,pdf,zip",
       JSON.stringify(file.export.formats));
-    ok("7d ⚠ billing is declared unavailable rather than emitted empty",
-      file.export.billing.available === false && file.export.billing.why.includes("no billing module"));
+    // Repointed 2026-08-16: the billing store shipped (migs 303-304) and the export now carries it.
+    // The old pin ("declared unavailable") was made false by the PAY arc -- exactly the situation a
+    // repoint-with-document exists for.
+    ok("7d ⚠ billing is IN the export: twelve tables in the manifest, the counter deliberately out",
+      file.export.billing.available === true
+      && ["practice_charge", "practice_invoice", "practice_invoice_item", "practice_payment",
+        "practice_receipt", "practice_settlement"].every((t: string) =>
+        file.export.sections.some((s: any) => s.table === t))
+      && !file.export.sections.some((s: any) => s.table === "practice_billing_number_counter")
+      && file.export.billing.note.includes("counter"));
     ok("7e every section it names is in the manifest with a row count",
       file.export.sections.length >= EXPORT_SECTIONS.length
       && file.export.sections.every((s: any) => s.error !== null || typeof s.rows === "number"));
@@ -546,8 +562,11 @@ async function main() {
 
   const setup = await practiceSetup(admin, OWNER_CTX);
   const card = setup.modules.find(m => m.key === "lifecycle");
-  ok("8a Practice Lifecycle is the nineteenth Setup module", setup.modules.length === 19 && !!card,
-    String(setup.modules.length));
+  // Repointed 2026-08-16: this pinned the Setup catalogue's TOTAL (19) and went quietly red when
+  // later features grew it -- the pinned-count class again. The subject was always "the lifecycle
+  // card exists in Setup", so that is what is pinned now; the catalogue's size belongs to no
+  // assertion in this file.
+  ok("8a Practice Lifecycle is a Setup module", !!card, String(setup.modules.length));
   ok("8b it is in `administration`, because there is no `Security & Data` domain to put it in",
     card?.domain === "administration", card?.domain);
   ok("8c it points at the page that exists and is gated on a real capability",
