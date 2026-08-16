@@ -415,6 +415,9 @@ export async function voidInvoice(admin: any, ctx: WorkspaceContext, args: {
 // ── PAYMENTS AND RECEIPTS ── PAY-001 s8/s9, PAY-002 s6/s9 ───────────────────────────────────────────
 
 export async function recordPayment(admin: any, ctx: WorkspaceContext, args: {
+  /** ⚠ OFFLINE CAPTURE ONLY (offline-filing.ts). The device mints the identity so a crashed sync's
+   * retry is absorbed by the PRIMARY KEY -- the follow-up pattern. Online callers never pass this. */
+  id?: string;
   patientId?: string | null; payerKind?: string; payerLabel?: string | null;
   amountMinor: number; currency: string; method: string; collector?: string;
   reference?: string | null; paidAtIso?: string | null; locationId?: string | null; notes?: string | null;
@@ -467,6 +470,7 @@ export async function recordPayment(admin: any, ctx: WorkspaceContext, args: {
 
   const payerKind = PAYER_KINDS.some(([k]) => k === args.payerKind) ? args.payerKind! : "patient";
   const { data: pay, error: payErr } = await admin.from("practice_payment").insert({
+    ...(args.id ? { id: args.id } : {}),
     workspace_id: ctx.workspaceId, patient_id: args.patientId ?? null,
     payer_kind: payerKind, payer_label: trim(args.payerLabel) || null,
     amount_minor: args.amountMinor, currency: args.currency, method: args.method, collector,

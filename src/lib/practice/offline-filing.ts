@@ -1,8 +1,11 @@
 import { audit } from "@/lib/practice/audit";
 import { NOTE_TYPES } from "@/lib/practice/encounter-constants";
 import type { EngineResult } from "@/lib/practice/encounters";
+import type { WorkspaceContext } from "@/lib/practice/access";
 import { saveNoteSegment } from "@/lib/practice/documentation";
 import { createFollowUp } from "@/lib/practice/follow-ups";
+import { createCharge, recordPayment } from "@/lib/practice/billing";
+import { PAYMENT_METHODS } from "@/lib/practice/billing-constants";
 
 // ── FILING AN OFFLINE VISIT ── CP offline capture, entity two (owner: "Encounters then follow-up") ──
 //
@@ -244,4 +247,150 @@ export async function fileOfflineFollowUp(admin: any, args: {
   }
 
   return created;
+}
+
+// ── FILING A FIELD COLLECTION ── entity four (docs/CPR-PAY-PBI-SURVEY-001 D1, owner 2026-08-16) ─────
+//
+// Cash taken in the field becomes CHARGE + PAYMENT, through createCharge and recordPayment -- the
+// same engines every online caller uses, so the fee snapshot rules, the receipt snapshot, the audit
+// rows and the collected-versus-received doctrine all hold because they hold there. The survey's
+// finding is what makes this small: a payment allocates to an UNINVOICED CHARGE today, so field cash
+// needs no invoice and no credit ledger.
+//
+// ⚠ TWO WRITES, EACH IDEMPOTENT ITS OWN WAY, AND THE ORDER MATTERS:
+//   PAYMENT -- the device-minted entityId is the row id (the follow-up pattern); the replay check is
+//     an exact primary-key lookup and runs FIRST, because a payment that exists means the whole
+//     filing finished.
+//   CHARGE -- created with source_ref = the transaction id, which ux_practice_charge_source folds
+//     into its unique key. A retry after a crash between the two writes (or after recordPayment's
+//     own compensating delete -- numbering down at sync deletes the payment and throws) finds the
+//     charge by that ref and REUSES it. Without this, every numbering outage would double-charge
+//     the patient on the retry that follows it.
+//
+// ⚠ CAPABILITIES ARE CHECKED BEFORE THE FIRST WRITE, and that is orphan-avoidance, not decoration.
+// createCharge wants invoice.draft and recordPayment wants payment.record; letting the engines
+// refuse in their own order would create the charge and THEN refuse the payment, leaving an
+// uninvoiced, unpaid charge on the patient's account from a filing that reported failure. Checked
+// here, the refusal happens before anything exists. Terminal, with the honest sentence -- the money
+// fact stays on the device, and the recovery path is the outbox's own (export, or re-entry online
+// once the permission is granted).
+
+export async function fileOfflineCollection(admin: any, ctx: WorkspaceContext, args: {
+  patientId: string; description: string;
+  amountMinor: number; currency: string; method: string;
+  collectedAtIso: string; collectedOn?: string | null;
+  entityId: string; actorId: string; correlationId: string;
+}): Promise<EngineResult<{ id: string; receiptNumber: string | null; replayed: boolean }>> {
+  if (!ctx.capabilities.includes("payment.record") || !ctx.capabilities.includes("invoice.draft"))
+    return { ok: false, status: 403, code: "FORBIDDEN", message: "Recording money for this practice needs the billing permissions (payment.record and invoice.draft), which this account does not hold. Nothing was filed; the record stays on this device." };
+
+  const { data: patient } = await admin.from("practice_patient")
+    .select("id, status").eq("id", args.patientId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (!patient)
+    return { ok: false, status: 404, code: "BAD_PATIENT", message: "that patient is not in this practice, so the payment cannot be filed" };
+  if (patient.status === "merged")
+    return { ok: false, status: 422, code: "PATIENT_MERGED", message: "that patient record was merged into another. File this payment against the surviving record" };
+
+  const description = (args.description ?? "").trim();
+  if (description.length < 2)
+    return { ok: false, status: 422, code: "NO_DESCRIPTION", message: "This payment does not say what the money was for. The receipt has to answer that later, so it cannot be filed without it." };
+  if (!Number.isInteger(args.amountMinor) || args.amountMinor <= 0)
+    return { ok: false, status: 422, code: "NO_AMOUNT", message: "This payment does not say how much money was taken, so there is nothing to file." };
+  if (typeof args.currency !== "string" || !/^[A-Z]{3}$/.test(args.currency))
+    return { ok: false, status: 422, code: "BAD_CURRENCY", message: "This payment does not carry a readable currency, so the amount cannot mean anything. It has not been filed." };
+  if (!PAYMENT_METHODS.some(([m]) => m === args.method))
+    return { ok: false, status: 422, code: "BAD_METHOD", message: "This payment was recorded with a way of paying this practice does not recognise, so it cannot be filed as captured." };
+
+  // ⚠ Device time, required, never defaulted -- the doctrine every capture entity shares. Money taken
+  // on Monday and synced on Thursday is paid_at Monday; the arrival gap is created_at's story.
+  const collected = Date.parse(args.collectedAtIso ?? "");
+  if (Number.isNaN(collected))
+    return { ok: false, status: 422, code: "NO_TIME", message: "This payment does not say when the money was taken. Because it was recorded without a connection, the practice cannot work that out, and filing it under today would be wrong." };
+  if (collected > Date.now() + CLOCK_SKEW_MS)
+    return { ok: false, status: 422, code: "FUTURE_TIME", message: "This payment is dated in the future, which usually means the clock on the device that recorded it was wrong. It has not been filed." };
+  const collectedIso = new Date(collected).toISOString();
+  // The DATE the money changed hands, on the practitioner's own clock where the device said so --
+  // never the sync day, which is what createCharge would default to, three days late.
+  const chargedOn = args.collectedOn && /^\d{4}-\d{2}-\d{2}$/.test(args.collectedOn)
+    ? args.collectedOn : collectedIso.slice(0, 10);
+
+  // The replay check that means "the whole filing finished" -- see the header.
+  const { data: existingPay, error: payFindError } = await admin.from("practice_payment")
+    .select("id").eq("id", args.entityId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (payFindError)
+    return { ok: false, status: 500, code: "REPLAY_CHECK_FAILED", message: payFindError.message };
+  if (existingPay) {
+    const { data: rct } = await admin.from("practice_receipt")
+      .select("receipt_number").eq("payment_id", args.entityId).maybeSingle();
+    return { ok: true, data: { id: args.entityId, receiptNumber: (rct?.receipt_number as string) ?? null, replayed: true } };
+  }
+
+  // The charge half: find by the transaction ref first, create otherwise, and treat the unique
+  // index's refusal as the race it is.
+  let chargeId: string | null = null;
+  const { data: existingCharge, error: chargeFindError } = await admin.from("practice_charge")
+    .select("id").eq("workspace_id", ctx.workspaceId).eq("source", "manual").eq("source_ref", args.correlationId).maybeSingle();
+  if (chargeFindError)
+    return { ok: false, status: 500, code: "REPLAY_CHECK_FAILED", message: chargeFindError.message };
+  chargeId = (existingCharge?.id as string) ?? null;
+
+  if (!chargeId) {
+    const charged = await createCharge(admin, ctx, {
+      source: "manual", sourceRef: args.correlationId,
+      patientId: args.patientId, description,
+      unitAmountMinor: args.amountMinor, currency: args.currency,
+      chargedOn, performedBy: args.actorId,
+      actorId: args.actorId, correlationId: args.correlationId,
+    });
+    if (!charged.ok) {
+      if (charged.code === "CHARGE_EXISTS") {
+        const { data: raced } = await admin.from("practice_charge")
+          .select("id").eq("workspace_id", ctx.workspaceId).eq("source", "manual").eq("source_ref", args.correlationId).maybeSingle();
+        chargeId = (raced?.id as string) ?? null;
+      }
+      if (!chargeId) {
+        // Every payload fault was refused above, so a refusal here is the INSERT failing --
+        // infrastructure, retryable -- with the one exception already handled.
+        if (charged.code === "VALIDATION_ERROR")
+          return { ok: false, status: 500, code: "WRITE_FAILED", message: charged.message };
+        return charged;
+      }
+    } else {
+      chargeId = charged.data.id;
+    }
+  }
+
+  const paid = await recordPayment(admin, ctx, {
+    id: args.entityId,
+    patientId: args.patientId, payerKind: "patient",
+    amountMinor: args.amountMinor, currency: args.currency, method: args.method,
+    // ⚠ WELDED. A device cannot claim the facility collected -- the person holding the device took
+    // the money, and the whole collected-versus-received doctrine hangs on this column being true.
+    collector: "practitioner",
+    paidAtIso: collectedIso,
+    allocations: [{ chargeId, amountMinor: args.amountMinor }],
+    actorId: args.actorId, correlationId: args.correlationId,
+  });
+
+  if (paid.ok)
+    return { ok: true, data: { id: paid.data.id, receiptNumber: paid.data.receiptNumber, replayed: false } };
+
+  // The payment-id race: two retries both passed the check above; the primary key decided, and the
+  // row that won IS this capture.
+  if (paid.code === "VALIDATION_ERROR" && /duplicate|unique/i.test(paid.message)) {
+    const { data: raced } = await admin.from("practice_payment")
+      .select("id").eq("id", args.entityId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+    if (raced) {
+      const { data: rct } = await admin.from("practice_receipt")
+        .select("receipt_number").eq("payment_id", args.entityId).maybeSingle();
+      return { ok: true, data: { id: args.entityId, receiptNumber: (rct?.receipt_number as string) ?? null, replayed: true } };
+    }
+  }
+  // Any other late VALIDATION_ERROR is the insert itself -- see the follow-up's header for the trap.
+  // The 503s (NUMBERING_UNAVAILABLE, RECEIPT_FAILED) pass through >= 500 untouched: recordPayment
+  // has already deleted the payment, so the retry re-runs this function, finds the CHARGE by its
+  // ref, and only re-attempts the payment half.
+  if (paid.code === "VALIDATION_ERROR")
+    return { ok: false, status: 500, code: "WRITE_FAILED", message: paid.message };
+  return paid;
 }

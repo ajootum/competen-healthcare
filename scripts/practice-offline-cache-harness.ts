@@ -395,6 +395,7 @@ async function main() {
     { name: "CaptureReading", producer: "captureMeasurement(" },
     { name: "CaptureVisit", producer: "captureEncounter(" },
     { name: "CaptureFollowUp", producer: "captureFollowUp(" },
+    { name: "CaptureCollection", producer: "captureCollection(" },
   ];
   const slices = SANCTIONED.map(s => {
     const start = readerSrc.indexOf(`function ${s.name}(`);

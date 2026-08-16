@@ -8,6 +8,9 @@ import {
 import {
   FOLLOWUP_ENTITY_TYPE, followUpApplier,
 } from "@/lib/practice/sync-appliers/follow-up";
+import {
+  COLLECTION_ENTITY_TYPE, fieldCollectionApplier,
+} from "@/lib/practice/sync-appliers/field-collection";
 
 // CP-OFFLINE-SURVEY-001 s5 precondition 3 (IDEMPOTENT SERVER ACCEPTANCE) — the apply side, over
 // migration 284's practice_sync_transaction. COMP-SYNC-001 s4/s5/s9, CP-SYNC-001 s3/s6.
@@ -179,6 +182,9 @@ export const SYNC_APPLIERS: Record<string, SyncApplier> = {
   // Entity three, same day, same rule. Create-only NEW obligations; the device-minted entityId is
   // the row's primary key, so the crash-window replay is an exact lookup.
   [FOLLOWUP_ENTITY_TYPE]: followUpApplier,
+  // Entity four (docs/CPR-PAY-PBI-SURVEY-001 D1): field cash as charge + payment through the
+  // billing engines. Receipt numbered AT SYNC; collector welded to the practitioner.
+  [COLLECTION_ENTITY_TYPE]: fieldCollectionApplier,
 };
 
 export const SYNC_ENTITY_TYPES: string[] = Object.keys(SYNC_APPLIERS);

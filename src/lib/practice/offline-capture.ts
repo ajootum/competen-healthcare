@@ -4,7 +4,8 @@ import { outboxAccept } from "@/lib/practice/outbox-store";
 // ⚠ FROM entity-types.ts, NEVER FROM THE APPLIER. Importing the constant from parameter-measurement.ts
 // pulled parameters.ts -> access.ts -> next/headers into this client bundle and put /practice/offline on
 // a 500. tsc, eslint and every harness stayed green. See entity-types.ts for the rule.
-import { MEASUREMENT_ENTITY_TYPE, ENCOUNTER_ENTITY_TYPE, FOLLOWUP_ENTITY_TYPE } from "@/lib/practice/sync-appliers/entity-types";
+import { MEASUREMENT_ENTITY_TYPE, ENCOUNTER_ENTITY_TYPE, FOLLOWUP_ENTITY_TYPE, COLLECTION_ENTITY_TYPE } from "@/lib/practice/sync-appliers/entity-types";
+import { PAYMENT_METHODS } from "@/lib/practice/billing-constants";
 
 // CP-OFFLINE-SURVEY-001 s5 — THE PRODUCER. The first thing in this product that accepts a write it
 // cannot deliver today.
@@ -299,6 +300,101 @@ export async function captureFollowUp(input: FollowUpCapture): Promise<CaptureRe
       dueOn,
       kind: input.kind ?? null,
       priority: input.priority ?? null,
+    },
+    // Create-only entity: no prior version exists to have been based on.
+    baseVersion: null,
+    at,
+  });
+
+  if (!accepted.ok)
+    return { ok: false, code: "NOT_STORED", reason: accepted.reason };
+
+  return { ok: true, recordId: accepted.record.id, entityId };
+}
+
+// ── ENTITY FOUR: MONEY TAKEN IN THE FIELD ── (docs/CPR-PAY-PBI-SURVEY-001 D1, owner 2026-08-16) ─────
+//
+// ⚠ THE ONE FINANCE FACT A DEAD NETWORK CAN LOSE: cash changed hands. On sync it becomes charge +
+// payment through the practice's own billing engines; the numbered receipt is issued AT SYNC by the
+// practice's counter, never here -- nothing receipt-shaped may exist before its number does. The
+// entityId minted below becomes the PAYMENT row's primary key, the follow-up pattern.
+
+export const CAPTURE_COLLECTION_NO_AMOUNT =
+  "This payment does not say how much money was taken, so there is nothing to file.";
+export const CAPTURE_COLLECTION_NO_DESCRIPTION =
+  "This payment does not say what the money was for. The receipt has to answer that later, so it cannot be filed without it.";
+export const CAPTURE_COLLECTION_NO_TIME =
+  "This payment does not say when the money was taken. Because it was recorded without a connection, the practice cannot work that out, and filing it under today would be wrong.";
+export const CAPTURE_COLLECTION_FUTURE_TIME =
+  "This payment is dated in the future, which usually means the clock on this device is wrong. It has not been recorded.";
+export const CAPTURE_COLLECTION_BAD_METHOD =
+  "This payment was recorded with a way of paying this practice does not recognise, so it cannot be filed as captured.";
+export const CAPTURE_COLLECTION_BAD_CURRENCY =
+  "This payment does not carry a readable currency, so the amount cannot mean anything. It has not been filed.";
+
+export type CollectionCapture = {
+  workspaceId: string;
+  deviceId: string;
+  userId: string;
+  patientId: string;
+  /** What the money was for -- the future receipt's own words. */
+  description: string;
+  /** ⚠ MINOR UNITS, already converted by the screen with CURRENCY_EXPONENT. UGX has exponent 0. */
+  amountMinor: number;
+  currency: string;
+  method: string;
+  /** ⚠ REQUIRED. When the money actually changed hands, on the practitioner's clock. */
+  collectedAt: string;
+  at?: Date;
+};
+
+/**
+ * Record money taken on this device, for delivery later. Same contract as every capture: nothing
+ * may be described as recorded until this returns `ok: true`, CAPTURE_HELD_NOTE is the only
+ * sentence for success -- and nothing here may be called or drawn as a RECEIPT.
+ */
+export async function captureCollection(input: CollectionCapture): Promise<CaptureResult> {
+  const at = input.at ?? new Date();
+
+  if (!Number.isInteger(input.amountMinor) || input.amountMinor <= 0)
+    return { ok: false, code: "NO_AMOUNT", reason: CAPTURE_COLLECTION_NO_AMOUNT };
+  if ((input.description ?? "").trim().length < 2)
+    return { ok: false, code: "NO_DESCRIPTION", reason: CAPTURE_COLLECTION_NO_DESCRIPTION };
+  if (typeof input.currency !== "string" || !/^[A-Z]{3}$/.test(input.currency))
+    return { ok: false, code: "BAD_CURRENCY", reason: CAPTURE_COLLECTION_BAD_CURRENCY };
+  if (!PAYMENT_METHODS.some(([m]) => m === input.method))
+    return { ok: false, code: "BAD_METHOD", reason: CAPTURE_COLLECTION_BAD_METHOD };
+
+  const collected = Date.parse(input.collectedAt ?? "");
+  if (!input.collectedAt || Number.isNaN(collected))
+    return { ok: false, code: "NO_TIME", reason: CAPTURE_COLLECTION_NO_TIME };
+  if (collected > at.getTime() + CAPTURE_CLOCK_SKEW_MS)
+    return { ok: false, code: "FUTURE_TIME", reason: CAPTURE_COLLECTION_FUTURE_TIME };
+
+  // The local DATE the money changed hands, from the same instant -- the charge's chargedOn must be
+  // the practitioner's day, not the sync day and not the UTC fold of a late evening.
+  const local = new Date(collected);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const collectedOn = `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`;
+
+  // ⚠ The identity of the future PAYMENT ROW, not just of the retry.
+  const entityId = crypto.randomUUID();
+
+  const accepted = await outboxAccept({
+    workspaceId: input.workspaceId,
+    deviceId: input.deviceId,
+    userId: input.userId,
+    entityType: COLLECTION_ENTITY_TYPE,
+    entityId,
+    operation: "create",
+    payload: {
+      patientId: input.patientId,
+      description: input.description.trim(),
+      amountMinor: input.amountMinor,
+      currency: input.currency,
+      method: input.method,
+      collectedAtIso: new Date(collected).toISOString(),
+      collectedOn,
     },
     // Create-only entity: no prior version exists to have been based on.
     baseVersion: null,

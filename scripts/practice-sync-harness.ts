@@ -28,7 +28,8 @@ import { runProvisioning, type IndividualRequest } from "../src/lib/practice/pro
 import type { WorkspaceContext } from "../src/lib/practice/access";
 import { registerPatient } from "../src/lib/practice/patients";
 import { launchEncounter } from "../src/lib/practice/encounters";
-import { ENCOUNTER_ENTITY_TYPE, FOLLOWUP_ENTITY_TYPE } from "../src/lib/practice/sync-appliers/entity-types";
+import { createCharge } from "../src/lib/practice/billing";
+import { ENCOUNTER_ENTITY_TYPE, FOLLOWUP_ENTITY_TYPE, COLLECTION_ENTITY_TYPE } from "../src/lib/practice/sync-appliers/entity-types";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
@@ -47,7 +48,8 @@ const uuid = () => crypto.randomUUID();
 
 const ctxFor = (workspaceId: string): WorkspaceContext => ({
   userId: USER, workspaceId, workspaceName: "H", workspaceType: "individual_practice",
-  workspaceStatus: "active", roleCodes: ["owner"], capabilities: ["encounter.list", "encounter.record"],
+  workspaceStatus: "active", roleCodes: ["owner"],
+  capabilities: ["encounter.list", "encounter.record", "payment.record", "invoice.draft"],
   entitled: true, entitlementStatus: "trial", onboardingComplete: true, onboardingStep: null,
 });
 
@@ -587,6 +589,136 @@ async function main() {
     ok("11g. ⚠ the no-due sentence is one sentence, at the bedside and at sync",
       !!noDueSentence && fuApplierSrc.includes(noDueSentence),
       noDueSentence ? "the applier does not contain the capture sentence" : "the capture sentence was not found at all");
+
+    // ── 12. ⚠ THE FIELD-COLLECTION APPLIER, LIVE -- MONEY ──────────────────────────────────────────
+    //
+    // Entity four (docs/CPR-PAY-PBI-SURVEY-001 D1). Cash in the field becomes CHARGE + PAYMENT
+    // through the real billing engines. The properties money adds, each pinned by evidence:
+    //   - the RECEIPT is numbered at sync, by the practice's counter (12d);
+    //   - the collector is WELDED to the practitioner (12b) -- collected-vs-received hangs on it;
+    //   - TWO writes replay exactly: payment by primary key (12g), charge by source_ref (12h --
+    //     the numbering-outage retry, simulated by pre-seeding the charge half);
+    //   - capabilities are checked BEFORE the first write, so a refusal leaves NO orphan charge on
+    //     the patient's account (12j) -- the ctx shape that matters holds invoice.draft WITHOUT
+    //     payment.record, because that is the one that would orphan.
+    const colEntityId = uuid();
+    const colPayload = {
+      patientId, description: "Wound dressing, home visit",
+      amountMinor: 20000, currency: "UGX", method: "cash",
+      collectedAtIso: new Date("2026-08-13T10:00:00.000Z").toISOString(), collectedOn: "2026-08-13",
+    };
+    const ctx12 = tx({ entityType: COLLECTION_ENTITY_TYPE, entityId: colEntityId, payload: colPayload, clientSequence: 8 });
+    const cFirst = await applyTransaction(admin, ctx, ctx12, { actorId: USER });
+    ok("12a. money taken in the field is APPLIED through the real registry entry",
+      cFirst.status === "applied", cFirst.errorMessage ?? "");
+
+    const { data: payRow } = await admin.from("practice_payment")
+      .select("id, collector, method, amount_minor, currency, paid_at, patient_id, created_by")
+      .eq("id", colEntityId).eq("workspace_id", workspaceId).maybeSingle();
+    ok("12b. ⚠ the payment row id is the device-minted entity id, collector WELDED to the practitioner, device time kept",
+      !!payRow && payRow.collector === "practitioner" && payRow.method === "cash"
+      && payRow.amount_minor === 20000 && payRow.currency === "UGX"
+      && new Date(payRow.paid_at).toISOString() === colPayload.collectedAtIso
+      && payRow.patient_id === patientId && payRow.created_by === USER,
+      JSON.stringify(payRow ?? "no payment row"));
+
+    const { data: chargeRows } = await admin.from("practice_charge")
+      .select("id, source, source_ref, amount_minor, currency, charged_on, patient_id")
+      .eq("workspace_id", workspaceId).eq("source", "manual").eq("source_ref", ctx12.id);
+    const { data: allocRows } = await admin.from("practice_payment_allocation")
+      .select("charge_id, amount_minor").eq("workspace_id", workspaceId).eq("payment_id", colEntityId);
+    ok("12c. ⚠ the charge exists with the transaction as its ref, dated the FIELD day, and the payment allocates to it in full",
+      (chargeRows ?? []).length === 1 && chargeRows![0].amount_minor === 20000
+      && chargeRows![0].charged_on === "2026-08-13" && chargeRows![0].patient_id === patientId
+      && (allocRows ?? []).length === 1 && allocRows![0].charge_id === chargeRows![0].id
+      && allocRows![0].amount_minor === 20000,
+      `charges=${(chargeRows ?? []).length} allocs=${JSON.stringify(allocRows ?? [])}`);
+
+    const { data: rctRow } = await admin.from("practice_receipt")
+      .select("receipt_number").eq("workspace_id", workspaceId).eq("payment_id", colEntityId).maybeSingle();
+    ok("12d. ⚠ the numbered receipt was issued AT SYNC by the practice's counter -- never in the field",
+      !!rctRow && /^CP-RCT-\d{4}-\d{5}$/.test(rctRow.receipt_number as string),
+      String(rctRow?.receipt_number ?? "no receipt"));
+
+    const { data: colLedger } = await admin.from(SYNC_TABLE)
+      .select("applied_version").eq("workspace_id", workspaceId).eq("id", ctx12.id);
+    ok("12e. the ledger row exists with a real version -- the 284 check is satisfied",
+      (colLedger ?? []).length === 1 && (colLedger ?? [])[0]?.applied_version !== null);
+
+    const cReplay = await applyTransaction(admin, ctx, ctx12, { actorId: USER });
+    ok("12f. the SAME transaction retried is deduplicated by the ledger",
+      cReplay.duplicate === true && cReplay.status === "applied");
+    const cCrash = await applyTransaction(admin, ctx,
+      tx({ entityType: COLLECTION_ENTITY_TYPE, entityId: colEntityId, payload: colPayload, clientSequence: 9 }), { actorId: USER });
+    const { data: payTwins } = await admin.from("practice_payment")
+      .select("id").eq("workspace_id", workspaceId).eq("id", colEntityId);
+    ok("12g. ⚠⚠ a NEW transaction with the same device-minted id is absorbed by the payment's PRIMARY KEY",
+      cCrash.status === "applied" && (payTwins ?? []).length === 1,
+      `status=${cCrash.status} payments=${(payTwins ?? []).length}`);
+
+    // ⚠ THE NUMBERING-OUTAGE RETRY, SIMULATED. recordPayment deletes the payment and throws when the
+    // counter is down, leaving the CHARGE behind; the retry must REUSE it, or every outage becomes a
+    // double-charge. Pre-seeding the charge half IS that half-filed state.
+    const tx3 = tx({ entityType: COLLECTION_ENTITY_TYPE, entityId: uuid(), payload: colPayload, clientSequence: 10 });
+    const seeded = await createCharge(admin, ctx, {
+      source: "manual", sourceRef: tx3.id, patientId, description: colPayload.description,
+      unitAmountMinor: colPayload.amountMinor, currency: colPayload.currency,
+      chargedOn: "2026-08-13", performedBy: USER, actorId: USER, correlationId: tx3.id,
+    });
+    const cResume = await applyTransaction(admin, ctx, tx3, { actorId: USER });
+    const { data: seededCharges } = await admin.from("practice_charge")
+      .select("id").eq("workspace_id", workspaceId).eq("source", "manual").eq("source_ref", tx3.id);
+    const { data: resumeAlloc } = await admin.from("practice_payment_allocation")
+      .select("charge_id").eq("workspace_id", workspaceId).eq("payment_id", tx3.entityId);
+    ok("12h. ⚠⚠ a retry after a half-filed crash REUSES the charge by its ref -- one charge, allocated to",
+      seeded.ok && cResume.status === "applied" && (seededCharges ?? []).length === 1
+      && (resumeAlloc ?? []).length === 1 && resumeAlloc![0].charge_id === (seeded.ok ? seeded.data.id : ""),
+      `applied=${cResume.status} charges=${(seededCharges ?? []).length}`);
+
+    // The refusals, each terminal, each in the practitioner's words -- and none of them may have
+    // created a charge, because every one is decided before the first write.
+    const colRefusals: [string, Record<string, unknown>, string][] = [
+      ["NO_AMOUNT", { ...colPayload, amountMinor: 0 }, "how much money"],
+      ["NO_DESCRIPTION", { ...colPayload, description: " " }, "what the money was for"],
+      ["NO_TIME", { ...colPayload, collectedAtIso: "" }, "when the money was taken"],
+      ["FUTURE_TIME", { ...colPayload, collectedAtIso: new Date(Date.now() + 86_400_000).toISOString() }, "dated in the future"],
+      ["BAD_METHOD", { ...colPayload, method: "goats" }, "does not recognise"],
+      ["BAD_CURRENCY", { ...colPayload, currency: "shillings" }, "readable currency"],
+      ["BAD_PATIENT", { ...colPayload, patientId: uuid() }, "not in this practice"],
+    ];
+    for (const [code, payload, needle] of colRefusals) {
+      const verdict = await applyTransaction(admin, ctx,
+        tx({ entityType: COLLECTION_ENTITY_TYPE, payload, clientSequence: 11 }), { actorId: USER });
+      ok(`12i-${code}. refused terminally, in words a practitioner can act on`,
+        verdict.status === "refused" && verdict.retryable === false
+        && verdict.errorCode === code && new RegExp(needle, "i").test(verdict.errorMessage ?? ""),
+        `status=${verdict.status} code=${verdict.errorCode} msg=${verdict.errorMessage}`);
+    }
+
+    // ⚠ THE ORPHAN CONTROL. invoice.draft WITHOUT payment.record is the shape that would create a
+    // charge and then refuse the payment -- an uninvoiced, unpaid charge on a patient's account from
+    // a filing that reported failure. The pre-write capability check is what this pins.
+    const ctxNoPay: WorkspaceContext = { ...ctx, capabilities: ["invoice.draft"] };
+    const txOrphan = tx({ entityType: COLLECTION_ENTITY_TYPE, entityId: uuid(), payload: colPayload, clientSequence: 12 });
+    const orphanVerdict = await applyTransaction(admin, ctxNoPay, txOrphan, { actorId: USER });
+    const { data: orphanCharges } = await admin.from("practice_charge")
+      .select("id").eq("workspace_id", workspaceId).eq("source", "manual").eq("source_ref", txOrphan.id);
+    ok("12j. ⚠ missing payment.record is refused BEFORE any write -- terminal, in words, and NO orphan charge",
+      orphanVerdict.status === "refused" && orphanVerdict.retryable === false
+      && orphanVerdict.errorCode === "FORBIDDEN" && /billing permissions/i.test(orphanVerdict.errorMessage ?? "")
+      && (orphanCharges ?? []).length === 0,
+      `status=${orphanVerdict.status} code=${orphanVerdict.errorCode} orphans=${(orphanCharges ?? []).length}`);
+
+    // ⚠ The shared sentence pin, same shape as 10m/11g.
+    const captureSrc12 = readFileSync("src/lib/practice/offline-capture.ts", "utf8");
+    const colApplierSrc = readFileSync("src/lib/practice/sync-appliers/field-collection.ts", "utf8");
+    const colNoTime = captureSrc12.match(/CAPTURE_COLLECTION_NO_TIME =\s*\n?\s*"([^"]+)"/)?.[1];
+    ok("12k. ⚠ the no-time sentence is one sentence, at the bedside and at sync",
+      !!colNoTime && colApplierSrc.includes(colNoTime),
+      colNoTime ? "the applier does not contain the capture sentence" : "the capture sentence was not found at all");
+    ok("12l-control. exactly the two applied collections exist -- refusals and replays filed no money",
+      (await admin.from("practice_payment").select("id", { count: "exact", head: true })
+        .eq("workspace_id", workspaceId)).count === 2);
   } finally {
     delete SYNC_APPLIERS.harness_note;
   }

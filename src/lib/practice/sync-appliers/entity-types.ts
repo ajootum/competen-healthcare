@@ -46,3 +46,15 @@ export const ENCOUNTER_ENTITY_TYPE = "encounter_visit";
  * ledger retry exact: the replay check is a primary-key lookup, not a natural-key guess.
  */
 export const FOLLOWUP_ENTITY_TYPE = "follow_up";
+
+/**
+ * ⚠ ENTITY FOUR (owner: "build entity four", per docs/CPR-PAY-PBI-SURVEY-001 D1). Cash collected in
+ * the field: filed at sync as CHARGE + PAYMENT against that charge, through the same billing engines
+ * the online product uses -- no invoice needed, because charges establish what is due and invoices
+ * only communicate it (PAY-002). Create-only, like every entity before it. The device-minted
+ * entityId becomes the PAYMENT row id (the follow-up pattern); the charge half rides
+ * ux_practice_charge_source with source_ref = the transaction id, so BOTH writes replay exactly.
+ * ⚠ The receipt is numbered AT SYNC, never in the field -- nothing receipt-shaped may exist before
+ * its number does.
+ */
+export const COLLECTION_ENTITY_TYPE = "field_collection";

@@ -26,8 +26,9 @@ import {
 import {
   offlinePlausibility, type OfflineParametersReadResult,
 } from "@/lib/practice/offline-parameters";
-import { captureMeasurement, captureEncounter, captureFollowUp, CAPTURE_HELD_NOTE } from "@/lib/practice/offline-capture";
+import { captureMeasurement, captureEncounter, captureFollowUp, captureCollection, CAPTURE_HELD_NOTE } from "@/lib/practice/offline-capture";
 import { FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
+import { PAYMENT_METHODS, CURRENCY_EXPONENT, formatMinor } from "@/lib/practice/billing-constants";
 
 // CP-OFFLINE-SURVEY-001 s3.4 — the cached clinic day, and its age, on one screen.
 //
@@ -493,6 +494,9 @@ function PatientRow(
           <CaptureFollowUp
             workspaceId={workspaceId} patientId={detail.patientId} patientName={row.name}
           />
+          <CaptureCollection
+            workspaceId={workspaceId} patientId={detail.patientId} patientName={row.name}
+          />
         </div>
       )}
     </li>
@@ -942,6 +946,143 @@ function CaptureFollowUp(
         <button type="button" disabled={busy || reason.trim() === "" || !dueOn} onClick={submit}
           className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
           {/* ⚠ NOT "Save". Nothing is saved anywhere until this device reaches the practice. */}
+          {busy ? "Holding…" : "Hold on this device"}
+        </button>
+        <button type="button" onClick={() => { setOpen(false); setHeld(null); setProblem(null); }}
+          className="text-[11.5px] text-gray-500 hover:underline">Close</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ⚠ ENTITY FOUR OF OFFLINE CAPTURE: MONEY TAKEN IN THE FIELD (docs/CPR-PAY-PBI-SURVEY-001 D1).
+ *
+ * Everything CaptureReading's header says binds here too. On sync this becomes charge + payment
+ * through the practice's own billing engines, collector welded to the practitioner, and the
+ * NUMBERED RECEIPT IS ISSUED AT SYNC -- never here. Nothing on this screen may look like, be named
+ * as, or be printable as a receipt: a receipt number belongs to the practice's counter, and a
+ * receipt-shaped rendering without one is the fraud surface the survey ruled out.
+ *
+ * ⚠ AMOUNTS ARE ENTERED IN MAJOR UNITS and converted with CURRENCY_EXPONENT, the same arithmetic the
+ * online fees form uses -- UGX has exponent 0, so a shilling figure IS the minor figure. The preview
+ * line shows formatMinor of exactly what will be filed, so what the practitioner reads is what the
+ * books will say.
+ */
+function CaptureCollection(
+  { workspaceId, patientId, patientName }:
+  { workspaceId: string | null; patientId: string | null; patientName: string },
+) {
+  const [identity, setIdentity] = useState<DeviceIdentity | null>(null);
+  const [open, setOpen] = useState(false);
+  const [description, setDescription] = useState("");
+  const [amountMajor, setAmountMajor] = useState("");
+  const [currency, setCurrency] = useState("UGX");
+  const [method, setMethod] = useState("cash");
+  const [takenAt, setTakenAt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [held, setHeld] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    void cachedIdentity().then(setIdentity);
+  }, [open]);
+
+  function nowForInput(): string {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  }
+
+  // The one conversion, done where the preview can show its result. Math.round holds the "money is
+  // integers" rule against float entry; a figure that rounds to nothing is refused by the capture.
+  const exp = CURRENCY_EXPONENT[currency] ?? 2;
+  const amountMinor = amountMajor.trim() === "" ? 0 : Math.round(Number(amountMajor) * 10 ** exp);
+  const amountReadable = Number.isInteger(amountMinor) && amountMinor > 0 ? formatMinor(amountMinor, currency) : null;
+
+  async function submit() {
+    if (!workspaceId || !patientId || !identity) return;
+    setBusy(true); setProblem(null); setHeld(null);
+    const result = await captureCollection({
+      workspaceId, deviceId: identity.deviceId, userId: identity.userId,
+      patientId, description, amountMinor, currency, method,
+      collectedAt: takenAt ? new Date(takenAt).toISOString() : "",
+    });
+    setBusy(false);
+    if (!result.ok) { setProblem(result.reason); return; }
+    // ⚠ ONLY AFTER `ok: true`, and only ever CAPTURE_HELD_NOTE's sentence.
+    setHeld(CAPTURE_HELD_NOTE);
+    setDescription(""); setAmountMajor("");
+  }
+
+  if (!patientId) return null;
+
+  if (!open)
+    return (
+      <button type="button" onClick={() => { setTakenAt(nowForInput()); setOpen(true); }}
+        className="mt-2 ml-2 rounded-lg border border-[var(--cp-primary)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary)]">
+        Record money taken
+      </button>
+    );
+
+  if (!identity)
+    return <p className="mt-2 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">This device does not know who is signed in, so money recorded now could not say who took it. Open Practice once while online and it will remember.</p>;
+
+  return (
+    <div className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-2">
+      <p className="text-[11px] font-semibold text-gray-500">Record money taken from {patientName}</p>
+      <p className="mt-0.5 text-[10.5px] leading-snug text-gray-500">
+        This is not a receipt. The numbered receipt is issued by the practice when this device
+        syncs — the practice&apos;s books do not know about this money until then.
+      </p>
+
+      <label className="mt-1.5 block">
+        <span className="text-[11px] text-gray-600">What the money was for</span>
+        <input type="text" value={description} onChange={e => { setDescription(e.target.value); setHeld(null); }}
+          className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
+      </label>
+
+      <div className="mt-1.5 grid grid-cols-3 gap-2">
+        <label className="block">
+          <span className="text-[11px] text-gray-600">Amount</span>
+          <input type="number" min={0} inputMode="decimal" value={amountMajor}
+            onChange={e => { setAmountMajor(e.target.value); setHeld(null); }}
+            className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
+        </label>
+        <label className="block">
+          <span className="text-[11px] text-gray-600">Currency</span>
+          <select value={currency} onChange={e => { setCurrency(e.target.value); setHeld(null); }}
+            className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]">
+            {Object.keys(CURRENCY_EXPONENT).map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[11px] text-gray-600">How it was paid</span>
+          <select value={method} onChange={e => { setMethod(e.target.value); setHeld(null); }}
+            className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]">
+            {PAYMENT_METHODS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+          </select>
+        </label>
+      </div>
+      {/* What will actually be filed, in the one formatter the books use. */}
+      {amountReadable && <p className="mt-1 text-[11px] text-gray-700">Will be filed as <span className="font-semibold tabular-nums">{amountReadable}</span></p>}
+
+      <label className="mt-1.5 block">
+        <span className="text-[11px] text-gray-600">When it was taken</span>
+        <input type="datetime-local" value={takenAt} onChange={e => { setTakenAt(e.target.value); setHeld(null); }}
+          className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
+      </label>
+
+      {problem && <p className="mt-1.5 text-[11.5px] leading-relaxed text-rose-700">{problem}</p>}
+      {held && <p className="mt-1.5 rounded border border-gray-300 bg-gray-50 px-2 py-1 text-[11.5px] leading-relaxed text-gray-800">{held}</p>}
+
+      <div className="mt-2 flex items-center gap-2">
+        <button type="button"
+          disabled={busy || description.trim() === "" || !takenAt || !Number.isInteger(amountMinor) || amountMinor <= 0}
+          onClick={submit}
+          className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
+          {/* ⚠ NOT "Save", and NEVER "Issue receipt". Nothing is saved anywhere until sync. */}
           {busy ? "Holding…" : "Hold on this device"}
         </button>
         <button type="button" onClick={() => { setOpen(false); setHeld(null); setProblem(null); }}
