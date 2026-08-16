@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import PrintButton from "../../../PrintButton";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
@@ -66,6 +67,7 @@ export default async function PrintDocumentPage({ params }: { params: Promise<{ 
     <div className="mx-auto max-w-[190mm] bg-white p-8 print:p-0">
       {/* Screen-only chrome. Nothing here reaches the paper. */}
       <div className="mb-6 flex items-center gap-3 print:hidden">
+        <PrintButton />
         <a href={`/practice/documents/${doc.id}`} className="text-[12px] text-gray-500 hover:underline">
           &larr; Back to the document
         </a>

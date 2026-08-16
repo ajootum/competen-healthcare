@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PrintButton from "../../../../PrintButton";
 import { redirect, notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
@@ -67,6 +68,7 @@ export default async function AdjustmentNotePage({ params }: {
           className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
           &larr; Payments
         </Link>
+        <PrintButton />
         <span className="text-[11px] text-gray-500">Use your browser&apos;s print for paper or PDF.</span>
       </div>
 
