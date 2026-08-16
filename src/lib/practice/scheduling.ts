@@ -825,6 +825,55 @@ export async function checkInQueueEntry(admin: any, args: {
   return { ok: true, data: { enteredAtIso } };
 }
 
+/**
+ * Walkthrough 2026-08-16 #4c -- THE QUEUE ROW FOLLOWS THE CLINICAL ACT.
+ *
+ * Until this existed, a queue entry was born at check-in and NOTHING in the product ever moved it
+ * again: the engine had the transitions, the API had the door, and no screen called either -- so
+ * every patient ever checked in stayed "waiting" forever ("waiting 6d 23h" on four rows was how the
+ * owner found it). The corridor's truth was already being decided elsewhere -- a consultation
+ * opening, a consultation completing, a Seen tap -- and this function makes the queue REFLECT that
+ * decision instead of waiting for a desk action nobody's flow contains.
+ *
+ * ⚠ IT BYPASSES QUEUE_TRANSITIONS ON PURPOSE. That map governs DESK actions on one entry, where
+ * WAITING -> COMPLETED would be a claim with no consultation behind it. Here the clinical record IS
+ * the authority: a patient whose encounter completed was seen, whatever intermediate states the desk
+ * never clicked through.
+ *
+ * ⚠ BEST-EFFORT, NEVER THE CALLER'S FAILURE. The encounter write has already committed when this
+ * runs; refusing clinical documentation because queue bookkeeping failed would invert what matters.
+ * A missed reflection heals on the next act (the states it moves FROM are still there).
+ */
+export async function reflectClinicalActOnQueue(admin: any, args: {
+  workspaceId: string; patientId: string; act: "consultation_started" | "seen";
+  actorId: string; correlationId: string;
+}): Promise<void> {
+  const from = args.act === "consultation_started"
+    ? ["WAITING", "READY"]
+    : ["WAITING", "READY", "IN_CONSULTATION", "PAUSED"];
+  const to = args.act === "consultation_started" ? "IN_CONSULTATION" : "COMPLETED";
+
+  const { data: rows, error } = await admin.from("practice_queue_entry")
+    .select("id").eq("workspace_id", args.workspaceId).eq("patient_id", args.patientId).in("status", from);
+  if (error || !rows || rows.length === 0) return;
+
+  const nowIso = new Date().toISOString();
+  const patch: Record<string, unknown> = { status: to, updated_at: nowIso };
+  if (to === "IN_CONSULTATION") patch.started_at = nowIso;
+  if (to === "COMPLETED") patch.completed_at = nowIso;
+  const { error: writeErr } = await admin.from("practice_queue_entry")
+    .update(patch).eq("workspace_id", args.workspaceId).in("id", rows.map((r: any) => r.id));
+  if (writeErr) return;
+
+  for (const r of rows as any[]) {
+    await audit(admin, {
+      workspaceId: args.workspaceId, actorId: args.actorId,
+      eventType: `practice.queue_${to.toLowerCase()}`,
+      payload: { entryId: r.id, reflectedFrom: args.act }, correlationId: args.correlationId,
+    });
+  }
+}
+
 const QUEUE_LIVE_STATUSES = ["WAITING", "READY", "IN_CONSULTATION", "PAUSED"];
 
 /**

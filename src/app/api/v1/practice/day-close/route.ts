@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { openOrResumeSession, applyCloseAction, completeSession } from "@/lib/practice/day-close";
 import { markSeen, toCompleteQueue } from "@/lib/practice/capture-later";
+import { reflectClinicalActOnQueue } from "@/lib/practice/scheduling";
 
 // CPR-ADOPT-001 sections 2 and 3 - the write path for Capture Later and Close My Day.
 //
@@ -41,6 +42,15 @@ export async function POST(req: NextRequest) {
         appointmentId: body.appointmentId ?? null,
         locationId: body.locationId ?? null,
       });
+      // #4c: Seen closes the corridor row too. This lives HERE and not in markSeen because
+      // capture-later.ts is reached by scheduling.ts (via activation-hooks) -- importing scheduling
+      // back into it would be a cycle. Best-effort by design; the shell is already written.
+      if (r.ok) {
+        await reflectClinicalActOnQueue(caller.admin, {
+          workspaceId, patientId, act: "seen",
+          actorId: caller.userId, correlationId: caller.traceId,
+        });
+      }
       return r.ok
         ? NextResponse.json({ ok: true, ...r.data }, { status: r.data.created ? 201 : 200 })
         : bad(r.message, r.status);

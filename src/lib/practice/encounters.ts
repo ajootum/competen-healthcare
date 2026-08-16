@@ -1,5 +1,6 @@
 import { audit } from "@/lib/practice/audit";
 import { runningActivityId } from "@/lib/practice/activity";
+import { reflectClinicalActOnQueue } from "@/lib/practice/scheduling";
 import { ENCOUNTER_TRANSITIONS, LOCKED_STATUSES, LIVE_STATUSES } from "@/lib/practice/encounter-constants";
 import { emitEvents, type EventEnvelope, type EventSource, type PracticeEventType } from "@/lib/practice/events";
 
@@ -66,7 +67,13 @@ export async function launchEncounter(admin: any, input: LaunchInput): Promise<E
   // started, not a field that tracks where the practitioner currently is.
   const { data: live } = await admin.from("practice_encounter")
     .select("id, status").eq("workspace_id", input.workspaceId).eq("patient_id", input.patientId).in("status", LIVE_STATUSES).maybeSingle();
-  if (live) return { ok: true, data: { id: live.id, status: live.status, resumed: true } };
+  if (live) {
+    // #4c: the corridor follows the consultation -- resuming one still means this patient is with
+    // the practitioner, so any waiting row of theirs moves to IN_CONSULTATION (no-op when none).
+    await reflectClinicalActOnQueue(admin, { workspaceId: input.workspaceId, patientId: input.patientId,
+      act: "consultation_started", actorId: input.actorId, correlationId: input.correlationId });
+    return { ok: true, data: { id: live.id, status: live.status, resumed: true } };
+  }
 
   // A named appointment must belong to this workspace AND this patient -- an encounter filed against
   // someone else's appointment would corrupt both the diary and the clinical record.
@@ -116,7 +123,11 @@ export async function launchEncounter(admin: any, input: LaunchInput): Promise<E
     if (/duplicate|unique/i.test(error.message)) {
       const { data: raced } = await admin.from("practice_encounter")
         .select("id, status").eq("workspace_id", input.workspaceId).eq("patient_id", input.patientId).in("status", LIVE_STATUSES).maybeSingle();
-      if (raced) return { ok: true, data: { id: raced.id, status: raced.status, resumed: true } };
+      if (raced) {
+        await reflectClinicalActOnQueue(admin, { workspaceId: input.workspaceId, patientId: input.patientId,
+          act: "consultation_started", actorId: input.actorId, correlationId: input.correlationId });
+        return { ok: true, data: { id: raced.id, status: raced.status, resumed: true } };
+      }
     }
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
   }
@@ -126,6 +137,9 @@ export async function launchEncounter(admin: any, input: LaunchInput): Promise<E
     workspaceId: input.workspaceId, actorId: input.actorId, eventType: "practice.encounter_launched",
     payload: { encounterId: enc.id, patientId: input.patientId, pathway: input.pathway }, correlationId: input.correlationId,
   });
+  // #4c: the patient just left the corridor for the consultation room.
+  await reflectClinicalActOnQueue(admin, { workspaceId: input.workspaceId, patientId: input.patientId,
+    act: "consultation_started", actorId: input.actorId, correlationId: input.correlationId });
   return { ok: true, data: { id: enc.id as string, status: enc.status as string, resumed: false } };
 }
 
@@ -191,6 +205,17 @@ export async function transitionEncounter(admin: any, args: {
     eventType: `practice.encounter_${args.to.toLowerCase()}`, payload: { encounterId: enc.id },
     correlationId: args.correlationId,
   });
+
+  // #4c: the queue row follows the clinical act. Starting (or resuming) a consultation takes the
+  // patient out of the corridor; completing one means they were seen. PAUSED deliberately reflects
+  // nothing -- s6.2 keeps the interrupted session's queue as it stands.
+  if (enc.patient_id && (args.to === "ACTIVE" || args.to === "COMPLETED")) {
+    await reflectClinicalActOnQueue(admin, {
+      workspaceId: args.workspaceId, patientId: enc.patient_id,
+      act: args.to === "ACTIVE" ? "consultation_started" : "seen",
+      actorId: args.actorId, correlationId: args.correlationId,
+    });
+  }
 
   // ── s9's domain event, AFTER the write has committed ─────────────────────────────────────────
   //

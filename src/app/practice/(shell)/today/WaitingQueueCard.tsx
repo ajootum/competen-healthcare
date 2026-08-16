@@ -103,6 +103,11 @@ export type WaitingQueueCardProps = {
    * Drawn only where `staleArrival` is true AND a handler is given.
    */
   onCheckIn?: (entryId: string) => void;
+  /**
+   * Walkthrough #4c: records that this person left without being seen (queue LEFT -- kept, never
+   * deleted). Drawn only on WAITING/READY rows, the two states the engine allows to become LEFT.
+   */
+  onLeft?: (entryId: string) => void;
   /** The row currently mid-action, so one click cannot become three. */
   busyId: string | null;
   error: string | null;
@@ -125,7 +130,7 @@ const GROUP_DOT: Record<QueueGroupKey, string> = {
 };
 
 export default function WaitingQueueCard(props: WaitingQueueCardProps) {
-  const { people, unavailableReason, truncatedNotice, href, onStartEncounter, onMarkSeen, onCheckIn, busyId, error } = props;
+  const { people, unavailableReason, truncatedNotice, href, onStartEncounter, onMarkSeen, onCheckIn, onLeft, busyId, error } = props;
   const [tab, setTab] = useState<QueueTabKey>("all");
 
   const countFor = (k: QueueTabKey) => k === "all" ? people.length : people.filter(p => p.group === k).length;
@@ -251,6 +256,17 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
                         title="Open the consultation for this patient. An unfinished one is resumed, never duplicated."
                         className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
                         Start →
+                      </button>
+                    )}
+                    {/* #4c: the third way out of a corridor. LEFT is a recorded outcome, not a
+                        delete -- the row is kept with completed_at, and the engine only allows it
+                        from WAITING/READY, so it is only offered there. */}
+                    {onLeft && (p.status === "WAITING" || p.status === "READY") && (
+                      <button type="button" disabled={busyId === p.id}
+                        onClick={() => onLeft(p.id)}
+                        title="Record that this person left without being seen. The row is kept and marked, never deleted."
+                        className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] text-gray-400 hover:bg-gray-50 hover:text-gray-600 disabled:opacity-50">
+                        Didn&apos;t wait
                       </button>
                     )}
                   </li>

@@ -78,22 +78,22 @@ export default function QueueWithActions({ people, unavailableReason, truncatedN
     }
   }
 
-  async function checkIn(entryId: string) {
+  // check_in re-stamps a stale arrival; left records a departure. Same door, same refresh-not-mutate
+  // rule as markSeen: every figure this changes is computed on the server.
+  async function queueAction(entryId: string, action: "check_in" | "left") {
     setBusyId(entryId);
     setError(null);
     try {
       const res = await fetch(`/api/v1/practice/queue/${entryId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "check_in" }),
+        body: JSON.stringify({ action }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) { setError(body?.error?.message ?? "That check-in could not be recorded."); return; }
-      // Same refresh-not-mutate rule as markSeen: the new stamp, the wait figure and the Arrived
-      // count are all computed on the server, and a locally edited row would disagree with them.
+      if (!res.ok) { setError(body?.error?.message ?? "That could not be recorded."); return; }
       router.refresh();
     } catch {
-      setError("That check-in could not be recorded.");
+      setError("That could not be recorded.");
     } finally {
       setBusyId(null);
     }
@@ -109,7 +109,8 @@ export default function QueueWithActions({ people, unavailableReason, truncatedN
       error={error}
       onMarkSeen={canCapture ? markSeen : undefined}
       onStartEncounter={canStartEncounter ? startEncounter : undefined}
-      onCheckIn={canCheckIn ? checkIn : undefined}
+      onCheckIn={canCheckIn ? (id => queueAction(id, "check_in")) : undefined}
+      onLeft={canCheckIn ? (id => queueAction(id, "left")) : undefined}
     />
   );
 }
