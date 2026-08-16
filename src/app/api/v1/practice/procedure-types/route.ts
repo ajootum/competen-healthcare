@@ -49,7 +49,7 @@ export async function PATCH(req: NextRequest) {
   const auth = await requirePracticeContext("procedure.manage");
   if (isDenied(auth)) return auth;
 
-  let body: Record<string, any>;
+  let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
   if (!body.id) return NextResponse.json({ error: "id is required" }, { status: 400 });
 
@@ -58,7 +58,9 @@ export async function PATCH(req: NextRequest) {
   if (body.action === "configure") {
     const result = await configureProcedureType(auth.caller.admin, {
       workspaceId: auth.ctx.workspaceId, procedureTypeId: String(body.id),
-      siteRule: body.siteRule, lateralityRule: body.lateralityRule, consentRule: body.consentRule,
+      siteRule: typeof body.siteRule === "string" ? body.siteRule : undefined,
+      lateralityRule: typeof body.lateralityRule === "string" ? body.lateralityRule : undefined,
+      consentRule: typeof body.consentRule === "string" ? body.consentRule : undefined,
       allowedLateralities: Array.isArray(body.allowedLateralities) ? body.allowedLateralities.map(String) : undefined,
       allowedStatuses: Array.isArray(body.allowedStatuses) ? body.allowedStatuses.map(String) : undefined,
       defaultStatus: body.defaultStatus === undefined ? undefined : (body.defaultStatus === null ? null : String(body.defaultStatus)),
@@ -81,12 +83,13 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: true, correlationId: auth.caller.traceId });
   }
 
-  if (!["draft", "published", "retired"].includes(body.status ?? ""))
+  const status = typeof body.status === "string" ? body.status : "";
+  if (!["draft", "published", "retired"].includes(status))
     return NextResponse.json({ error: "status must be one of: draft, published, retired" }, { status: 400 });
 
   const result = await setProcedureTypeStatus(auth.caller.admin, {
-    workspaceId: auth.ctx.workspaceId, procedureTypeId: body.id,
-    status: body.status as "draft" | "published" | "retired",
+    workspaceId: auth.ctx.workspaceId, procedureTypeId: String(body.id),
+    status: status as "draft" | "published" | "retired",
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });

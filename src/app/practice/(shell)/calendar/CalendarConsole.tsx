@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 // The diary console (CPR-V2-003 V3): today's schedule, the waiting queue, availability blocks and quick
 // actions -- book, walk-in, check in, cancel, no-show, complete, and queue movement. Every action calls
@@ -204,13 +205,13 @@ export default function CalendarConsole({ date, timezone, canManage, canQueue, c
               marking an arrival is appointment-book work; what happens to the arrived patient is not. */}
           <section className="rounded-xl border border-gray-200 bg-white p-4">
             <h2 className="text-[13px] font-bold text-gray-900">Waiting</h2>
-            <a href="/practice/today"
+            <Link href="/practice/today"
               className="mt-2 flex items-baseline gap-2 rounded-lg border border-gray-100 px-3 py-2 text-[12px] hover:bg-gray-50">
               <span className="text-gray-800">
                 {day.queue.length === 0 ? "Nobody is waiting" : `${day.queue.length} waiting`}
               </span>
               <span className="ml-auto font-semibold text-[var(--cp-primary-deep)]">Manage in Current Session &rarr;</span>
-            </a>
+            </Link>
             <p className="mt-1.5 text-[10px] leading-relaxed text-gray-400">
               The planner plans. Starting, pausing and finishing consultations for people who have
               arrived happens in Current Session, so there is exactly one place a live queue is run.

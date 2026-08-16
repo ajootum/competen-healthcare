@@ -37,7 +37,7 @@ export default async function ProcedureSetupPage() {
         this practice offers at all.
       </p>
       <div className="mt-4">
-        <ProcedureConfigurationConsole types={types as any[]} canManage={canManage} />
+        <ProcedureConfigurationConsole types={types} canManage={canManage} />
       </div>
     </div>
   );

@@ -394,9 +394,9 @@ export default function InvestigationCapture(props: {
                     // is deliberately no per-document viewer, the same decision documents-workspace made.
                     <>
                       {" · report: "}
-                      <a href="/practice/inbox" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                      <Link href="/practice/inbox" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
                         {i.linkedDocumentTitle ?? "in the inbox"}
-                      </a>
+                      </Link>
                     </>
                   )}
                 </>
@@ -437,9 +437,9 @@ export default function InvestigationCapture(props: {
                   ) : inbox.items.length === 0 ? (
                     <p className="text-[11px] text-gray-600">
                       No inbox document is recorded for this patient. When the report arrives,{" "}
-                      <a href="/practice/inbox" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                      <Link href="/practice/inbox" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
                         record it in the inbox
-                      </a>{" "}
+                      </Link>{" "}
                       first, then link it here.
                     </p>
                   ) : (

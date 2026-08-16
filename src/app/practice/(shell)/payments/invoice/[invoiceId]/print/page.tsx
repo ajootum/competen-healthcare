@@ -1,4 +1,5 @@
 import { redirect, notFound } from "next/navigation";
+import Link from "next/link";
 import PrintButton from "../../../../PrintButton";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
@@ -54,9 +55,9 @@ export default async function InvoicePrintPage({ params }: { params: Promise<{ i
   return (
     <div className="mx-auto max-w-[190mm] bg-white p-8 print:p-0">
       <div className="no-print mb-4 flex items-center gap-2 print:hidden">
-        <a href="/practice/payments?tab=transactions" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+        <Link href="/practice/payments?tab=transactions" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
           &larr; Payments
-        </a>
+        </Link>
         <PrintButton />
         <span className="text-[11px] text-gray-500">Use your browser&apos;s print for paper or PDF.</span>
       </div>

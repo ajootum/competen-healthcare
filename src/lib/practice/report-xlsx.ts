@@ -16,7 +16,7 @@ import type { GeneratedReport } from "@/lib/practice/report-engine";
 
 /** Excel refuses sheet names over 31 chars or containing []:*?/\ -- sanitise, then dedupe. */
 function sheetName(title: string, used: Set<string>): string {
-  let base = title.replace(/[[\]:*?/\\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 28) || "Section";
+  const base = title.replace(/[[\]:*?/\\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 28) || "Section";
   let name = base;
   let n = 2;
   while (used.has(name.toLowerCase())) name = `${base.slice(0, 25)} ${n++}`;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 // The TOTP enrolment and step-up console, against GoTrue's own MFA API -- the ONE place in this
@@ -38,7 +39,8 @@ export default function TwoFactorConsole() {
     setFactors((f?.totp ?? []) as Factor[]);
     setAal(a ? { current: a.currentLevel ?? "aal1", next: a.nextLevel ?? "aal1" } : null);
   }
-  useEffect(() => { void refresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Kicked from a callback, not the effect body -- the PracticeSessionGuard pattern the lint rule wants.
+  useEffect(() => { const t = setTimeout(() => { void refresh(); }, 0); return () => clearTimeout(t); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function beginEnrol() {
     setBusy(true); setError(null); setNotice(null);
@@ -189,7 +191,7 @@ export default function TwoFactorConsole() {
       )}
 
       <p className="text-[11px] text-gray-500">
-        Done here? <a href="/practice/home" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Continue to your practice &rarr;</a>
+        Done here? <Link href="/practice/home" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Continue to your practice &rarr;</Link>
         {" "}A practice that requires two-factor opens once this session is verified.
       </p>
     </div>

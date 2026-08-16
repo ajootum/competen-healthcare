@@ -134,7 +134,13 @@ export default async function CurrentSessionPage() {
           <section className="rounded-2xl border border-gray-200 bg-white p-4">
             <h2 className="text-[13px] font-bold text-gray-900">No active session</h2>
             {(() => {
-              const next = plan.activities.find((a: any) => !a.startedAtIso && !a.endedAtIso) ?? null;
+              // ⚠ THIS PREDICATE USED TO READ `startedAtIso`/`endedAtIso` -- fields PlannedActivity has
+              // NEVER carried (they are startedAt/endedAt), behind an `(a: any)` that hid it. Both reads
+              // were always undefined, the predicate was always TRUE, and this card named the day's
+              // FIRST activity as "next planned" even when it was already running or finished. The
+              // IntelSlice phantom-field class again, found 2026-08-16 by removing the `any` for the CI
+              // lint gate. `state` is the engine's own derivation of exactly this question.
+              const next = plan.activities.find(a => a.state === "planned") ?? null;
               return next ? (
                 <div className="mt-2 rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Next planned</p>
