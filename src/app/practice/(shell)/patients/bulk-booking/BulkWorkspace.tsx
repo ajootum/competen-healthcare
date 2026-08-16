@@ -18,14 +18,55 @@ type Outcome = { clientRowId: string; ok: boolean; message?: string };
 type Hit = { patientId?: string; id?: string; displayName?: string; display_name?: string; patientNumber?: string };
 type Closed = { day: string; dayLabel: string; locationId: string | null; locationName: string | null; locationSlot: string | null; reason: string };
 type Slot = { startsAt: string; time: string; minutes: number };
-type Session = { day: string; dayLabel: string; locationId: string | null; locationName: string | null; slots: Slot[] };
+type Session = {
+  day: string; dayLabel: string; locationId: string | null; locationName: string | null; slots: Slot[];
+  /** #10: an open clinic with nothing free -- offered for the beyond-schedule row alone. */
+  fullyBooked?: boolean;
+  /** #10c: what the diary already holds for this day and place, read-only. */
+  booked: { time: string; patientName: string }[];
+};
 type Opt = { id: string; label: string; minutes?: number | null };
 type Row = {
+  /** Stable row identity. A slot row uses its startsAt; a beyond-schedule row mints its own. */
+  rowId: string;
   startsAt: string; time: string; minutes: number;
   patientId: string | null; patientLabel: string;
   visitTypeId: string; modeId: string; note: string;
+  /**
+   * Walkthrough 2026-08-17 #10 -- a row ADDED BEYOND THE SCHEDULE. The owner: "we have space for 4
+   * but imagining an emergency comes, need to be able to add". Its time is typed, not a slot, and
+   * it books through the SAME engine door as every other row -- checkPlacement still refuses a
+   * closed practice and still warns on the diary's terms. The 2026-08-12 decision stands: a staff
+   * booking outside the schedule is a practitioner saying they will see somebody then, and the
+   * product does not argue with the person who knows.
+   */
+  extra?: boolean;
   outcome?: { ok: boolean; message?: string };
 };
+
+/** The 24-hour clock, as text -- the owner's decision of record; no native time input. */
+const TIME_PATTERN = /^([01]?\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * The practice-zone instant for a typed day + time. Same technique as practice-time.ts server-side:
+ * take the naive UTC reading, measure the zone's offset at that instant, subtract. Kampala carries a
+ * fixed offset, and for DST zones the one-step correction is exact everywhere outside the changeover
+ * hour itself.
+ */
+function zoneOffsetMinutes(tz: string, at: Date): number {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  }).formatToParts(at).map(x => [x.type, x.value]));
+  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +(p.hour === "24" ? "0" : p.hour), +p.minute, +p.second);
+  return (asUTC - at.getTime()) / 60000;
+}
+function startsAtFor(day: string, time: string, tz: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  const [hh, mm] = time.split(":").map(Number);
+  const naive = new Date(Date.UTC(y, m - 1, d, hh, mm));
+  return new Date(naive.getTime() - zoneOffsetMinutes(tz, naive) * 60000).toISOString();
+}
 
 const PRESETS: { key: string; label: string }[] = [
   { key: "today", label: "Today" }, { key: "tomorrow", label: "Tomorrow" },
@@ -56,9 +97,23 @@ export default function BulkWorkspace(props: {
   const filled = rows.filter(r => r.patientId);
   const failed = rows.filter(r => r.outcome && !r.outcome.ok);
   const booked = rows.filter(r => r.outcome?.ok);
+  const extras = rows.filter(r => r.extra && r.patientId && !r.outcome?.ok);
+  // A beyond-schedule row is sendable only once its typed time parses -- an unparseable time is worn
+  // by the row (amber), never silently dropped at commit.
+  const sendable = rows.filter(r => r.patientId && !r.outcome?.ok && (!r.extra || TIME_PATTERN.test(r.time)));
+
+  const addExtraRow = () => {
+    setRows(p => [...p, {
+      rowId: `extra-${Date.now()}-${p.length}`,
+      startsAt: "", time: "", minutes: 0,
+      patientId: null, patientLabel: "",
+      visitTypeId: props.defaultVisitTypeId ?? "", modeId: props.defaultModeId ?? "", note: "",
+      extra: true,
+    }]);
+  };
 
   const commit = async () => {
-    const toSend = rows.filter(r => r.patientId && !r.outcome?.ok);
+    const toSend = sendable;
     if (!toSend.length) return;
     setBusy(true); setNotice(null);
     try {
@@ -66,7 +121,10 @@ export default function BulkWorkspace(props: {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({
           rows: toSend.map(r => ({
-            clientRowId: r.startsAt, patientId: r.patientId, startsAt: r.startsAt,
+            clientRowId: r.rowId, patientId: r.patientId,
+            // #10: a typed time becomes the practice-zone instant here; a slot row keeps the
+            // engine-issued one untouched.
+            startsAt: r.extra ? startsAtFor(selected?.day ?? "", r.time, props.timezone) : r.startsAt,
             visitTypeId: r.visitTypeId, consultationModeId: r.modeId,
             locationId: selected?.locationId ?? null, note: r.note || null,
           })),
@@ -80,7 +138,7 @@ export default function BulkWorkspace(props: {
       const outs = (json.outcomes ?? []) as Outcome[];
       const byRow = new Map<string, { ok: boolean; message?: string }>(
         outs.map(o => [o.clientRowId, { ok: o.ok, message: o.message }]));
-      setRows(prev => prev.map(r => byRow.has(r.startsAt) ? { ...r, outcome: byRow.get(r.startsAt) } : r));
+      setRows(prev => prev.map(r => byRow.has(r.rowId) ? { ...r, outcome: byRow.get(r.rowId) } : r));
       const okCount = outs.filter(o => o.ok).length;
       const badCount = outs.length - okCount;
       setNotice({
@@ -140,8 +198,14 @@ export default function BulkWorkspace(props: {
           Practice Planner to add a session.
           {props.closed.length > 0 && " Some clinics below exist but are not open to booking."}
         </p>
-      ) : (
-        <div className="mt-3 flex flex-wrap gap-2">
+      ) : null}
+
+      {/* ── One grid for EVERY card -- bookable, full, and closed (#12: "spread this out into 5
+          columns rather than 3 and 2"). Two stacked flex rows drew a week as two shelves; a single
+          grid draws it as one week. The closed cards keep their inert dashed style INSIDE the same
+          grid -- sharing a container adds no bookability. */}
+      {(props.sessions.length > 0 || props.closed.length > 0) && (
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
           {props.sessions.map(s => {
             const tone = locationTone(s.locationId, props.locations.find(l => l.id === s.locationId)?.colorSlot ?? null);
             const active = selected?.day === s.day && selected?.locationId === s.locationId;
@@ -153,14 +217,14 @@ export default function BulkWorkspace(props: {
                   <span aria-hidden="true" className={`h-2 w-2 rounded-full ${tone.dot}`} />
                   {s.locationName ?? "no location named"}
                 </div>
-                <div className="mt-0.5 text-[11px] text-gray-500">
-                  {s.slots.length} free {s.slots.length === 1 ? "slot" : "slots"}
+                <div className={`mt-0.5 text-[11px] ${s.fullyBooked ? "font-semibold text-amber-700" : "text-gray-500"}`}>
+                  {s.fullyBooked
+                    ? `Fully booked (${s.booked.length}) -- beyond-schedule only`
+                    : `${s.slots.length} free ${s.slots.length === 1 ? "slot" : "slots"}${s.booked.length ? ` · ${s.booked.length} booked` : ""}`}
                 </div>
               </button>
             );
           })}
-        </div>
-      )}
 
       {/* ── 2b. CLINICS THAT EXIST AND ARE NOT OPEN TO BOOKING ────────────────────────────────────
           The owner, 2026-08-12: Friday and Saturday at TMR were simply absent, which reads as "no clinic
@@ -171,8 +235,6 @@ export default function BulkWorkspace(props: {
           decision is unchanged and only the silence about it is. Making them selectable would put the
           screen back to offering times the control would then refuse -- which is the failure the
           availability engine's own header warns about. */}
-      {props.closed.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
           {props.closed.map(c => {
             const tone = locationTone(c.locationId, c.locationSlot);
             return (
@@ -187,11 +249,13 @@ export default function BulkWorkspace(props: {
               </div>
             );
           })}
-          <p className="w-full text-[11px] leading-relaxed text-gray-500">
-            These clinics are in the diary and closed to booking. Change that on the session itself in
-            the Practice Planner &mdash; nothing on this screen can book into them.
-          </p>
         </div>
+      )}
+      {props.closed.length > 0 && (
+        <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
+          These clinics are in the diary and closed to booking. Change that on the session itself in
+          the Practice Planner &mdash; nothing on this screen can book into them.
+        </p>
       )}
 
       {/* ── 3. The grid ───────────────────────────────────────────────────────────────────────── */}
@@ -201,10 +265,31 @@ export default function BulkWorkspace(props: {
             <div className="border-b border-gray-100 px-4 py-2.5">
               <h2 className="text-[13.5px] font-bold text-gray-900">{selected.dayLabel}</h2>
               <p className="text-[11.5px] text-gray-500">
-                {selected.locationName ?? "no location named"} &middot; {selected.slots.length} free slots
+                {selected.locationName ?? "no location named"} &middot;{" "}
+                {selected.fullyBooked ? "fully booked -- add beyond the schedule below" : `${selected.slots.length} free slots`}
               </p>
             </div>
-            <div className="overflow-x-auto">
+            {/* ── #10c: WHAT THE DIARY ALREADY HOLDS, read-only, above the input rows -- a
+                squeeze-in decision is made looking at the day, not beside it. */}
+            {selected.booked.length > 0 && (
+              <div className="border-b border-gray-100 bg-gray-50/60 px-4 py-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-gray-500">Already booked</p>
+                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5">
+                  {selected.booked.map((b, i) => (
+                    <span key={i} className="text-[11.5px] text-gray-600">
+                      <span className="font-semibold tabular-nums text-gray-800">{b.time}</span> {b.patientName}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {rows.length === 0 && (
+              <p className="px-4 py-3 text-[12.5px] text-gray-600">
+                Every scheduled time is taken. The day is not closed &mdash; add an emergency or a
+                squeeze-in beyond the schedule below.
+              </p>
+            )}
+            <div className={`overflow-x-auto ${rows.length === 0 ? "hidden" : ""}`}>
               <table className="w-full border-collapse">
                 <thead className="bg-gray-50/80">
                   <tr>
@@ -215,8 +300,18 @@ export default function BulkWorkspace(props: {
                 </thead>
                 <tbody>
                   {rows.map((r, i) => (
-                    <tr key={r.startsAt} className={`border-t border-gray-100 ${r.outcome?.ok ? "bg-emerald-50/50" : r.outcome ? "bg-rose-50/50" : ""}`}>
-                      <td className="whitespace-nowrap px-3 py-2 text-[13px] font-semibold tabular-nums text-gray-900">{r.time}</td>
+                    <tr key={r.rowId} className={`border-t border-gray-100 ${r.outcome?.ok ? "bg-emerald-50/50" : r.outcome ? "bg-rose-50/50" : r.extra ? "bg-amber-50/40" : ""}`}>
+                      <td className="whitespace-nowrap px-3 py-2 text-[13px] font-semibold tabular-nums text-gray-900">
+                        {r.extra ? (
+                          <>
+                            <input value={r.time} disabled={busy || r.outcome?.ok === true}
+                              aria-label="Time (24-hour)" placeholder="e.g. 13:15" inputMode="numeric"
+                              onChange={e => setRows(p => p.map((x, j) => j === i ? { ...x, time: e.target.value } : x))}
+                              className={`${input} w-20 ${TIME_PATTERN.test(r.time) ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
+                            <span className="mt-0.5 block text-[9.5px] font-normal uppercase tracking-wide text-amber-700">beyond schedule</span>
+                          </>
+                        ) : r.time}
+                      </td>
                       <td className="px-3 py-2">
                         <PatientPicker value={r.patientLabel} disabled={busy || r.outcome?.ok === true}
                           onPick={(id, label) => setRows(p => p.map((x, j) => j === i ? { ...x, patientId: id, patientLabel: label } : x))} />
@@ -243,18 +338,37 @@ export default function BulkWorkspace(props: {
                           className={`${input} w-full`} />
                       </td>
                       <td className="px-3 py-2 text-right">
-                        {r.patientId && !r.outcome?.ok && (
+                        {r.extra && !r.outcome?.ok ? (
+                          <button type="button" disabled={busy} title="Remove this beyond-schedule row"
+                            onClick={() => setRows(p => p.filter((_, j) => j !== i))}
+                            className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] text-gray-500 hover:bg-gray-50">
+                            Remove
+                          </button>
+                        ) : r.patientId && !r.outcome?.ok ? (
                           <button type="button" disabled={busy} title="Clear this row"
                             onClick={() => setRows(p => p.map((x, j) => j === i ? { ...x, patientId: null, patientLabel: "", outcome: undefined } : x))}
                             className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] text-gray-500 hover:bg-gray-50">
                             Clear
                           </button>
-                        )}
+                        ) : null}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+            {/* ── #10: THE DOOR BEYOND THE SCHEDULE ─────────────────────────────────────────────
+                Drawn on every selected session -- including a fully-booked one, which is the day
+                this exists for. The row it adds books through the same engine as every slot row:
+                nothing here bypasses checkPlacement, and a refusal lands on the row and says why. */}
+            <div className="border-t border-gray-100 px-4 py-2.5">
+              <button type="button" disabled={busy} onClick={addExtraRow}
+                className="rounded-lg border border-dashed border-amber-300 px-3 py-1.5 text-[12px] font-semibold text-amber-800 hover:bg-amber-50">
+                + Add beyond the schedule
+              </button>
+              <span className="ml-2 text-[11px] text-gray-500">
+                For an emergency or a squeeze-in: type the time yourself, outside or between the slots.
+              </span>
             </div>
           </section>
 
@@ -264,6 +378,9 @@ export default function BulkWorkspace(props: {
             <dl className="mt-2 space-y-1.5 text-[12.5px]">
               <Line label="Free slots" value={selected.slots.length} />
               <Line label="Patients added" value={filled.length} />
+              {/* #10: counted apart from the slots on purpose -- a squeeze-in must never make the
+                  free-slot arithmetic above claim capacity the schedule does not have. */}
+              {extras.length > 0 && <Line label="Beyond schedule" value={extras.length} tone="text-amber-700" />}
               <Line label="Booked" value={booked.length} tone="text-emerald-700" />
               <Line label="Need attention" value={failed.length} tone={failed.length ? "text-[var(--cmp-text-critical)]" : undefined} />
             </dl>
@@ -274,10 +391,15 @@ export default function BulkWorkspace(props: {
               </p>
             )}
             <button type="button" onClick={commit}
-              disabled={busy || filled.filter(r => !r.outcome?.ok).length === 0}
+              disabled={busy || sendable.length === 0}
               className="mt-3 w-full rounded-lg bg-[var(--cp-primary)] py-2 text-[12.5px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
-              {busy ? "Booking..." : `Review & book ${filled.filter(r => !r.outcome?.ok).length} patients`}
+              {busy ? "Booking..." : `Review & book ${sendable.length} ${sendable.length === 1 ? "patient" : "patients"}`}
             </button>
+            {filled.filter(r => !r.outcome?.ok).length > sendable.length && (
+              <p className="mt-1.5 text-[11px] font-semibold text-[var(--cmp-text-warning)]">
+                A beyond-schedule row needs its time (24-hour, e.g. 13:15) before it can book.
+              </p>
+            )}
             <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
               Each booking is its own appointment record. A slot taken by somebody else in the meantime
               fails that row alone and says so.
@@ -301,6 +423,7 @@ function Line({ label, value, tone }: { label: string; value: number; tone?: str
 function seed(s: Session | null, props: { defaultVisitTypeId: string | null; defaultModeId: string | null }): Row[] {
   if (!s) return [];
   return s.slots.map(slot => ({
+    rowId: slot.startsAt,
     startsAt: slot.startsAt, time: slot.time, minutes: slot.minutes,
     patientId: null, patientLabel: "",
     visitTypeId: props.defaultVisitTypeId ?? "", modeId: props.defaultModeId ?? "", note: "",

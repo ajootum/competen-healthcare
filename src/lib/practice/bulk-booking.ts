@@ -52,6 +52,19 @@ export type BulkSession = {
   locationId: string | null;
   locationName: string | null;
   slots: { startsAt: string; time: string; minutes: number }[];
+  /**
+   * Walkthrough 2026-08-17 #10: an OPEN clinic whose every slot is taken. It used to vanish from
+   * this screen entirely -- neither bookable nor closed -- which is exactly the day an emergency
+   * arrives and needs squeezing in. Carried so the screen can offer the beyond-schedule row and
+   * nothing else: slots stays empty, because none are free and pretending otherwise is the lie
+   * this module exists to avoid.
+   */
+  fullyBooked?: boolean;
+  /**
+   * #10c: what is ALREADY in the diary for this day and place (live statuses only), so the person
+   * squeezing an emergency in can see the day they are squeezing into. Read-only on screen.
+   */
+  booked: { time: string; patientName: string }[];
 };
 
 /** A clinic that EXISTS on this day and is not open to booking. Inert on screen -- see closedSessions. */
@@ -154,12 +167,35 @@ export async function bulkAvailability(admin: any, ctx: WorkspaceContext, opts: 
     if (!byKey.has(key))
       byKey.set(key, {
         day, dayLabel: dayLabel(s.startsAt),
-        locationId: s.locationId, locationName: s.locationName, slots: [],
+        locationId: s.locationId, locationName: s.locationName, slots: [], booked: [],
       });
     byKey.get(key)!.slots.push({
       startsAt: s.startsAt, time: hhmm(s.startsAt),
       minutes: visitType?.defaultDurationMinutes ?? s.minutes,
     });
+  }
+
+  // #10: open clinics with NO free slot left. bookableTimes only speaks in free slots, so a full
+  // clinic fell out of `sessions` and out of `closed` -- absent from the screen on exactly the day
+  // an emergency needs squeezing in. These cards carry no slots and exist for the beyond-schedule
+  // row alone.
+  for (const f of await fullSessions(admin, ctx, {
+    fromDate: range.from, toDate: range.to, locationId: opts.locationId ?? null,
+    dayLabel, dayKey, alreadyOffered: new Set(byKey.keys()),
+  })) byKey.set(`${f.day}|${f.locationId ?? "none"}`, f);
+
+  // #10c: the booked times, so a squeeze-in is made looking at the day rather than beside it.
+  // Live statuses only -- a cancelled booking is not in anybody's way.
+  const { data: liveAppts } = await admin.from("practice_appointment")
+    .select("scheduled_at, patient_name, location_id")
+    .eq("workspace_id", ctx.workspaceId)
+    .gte("scheduled_at", zonedDayRange(range.from, timezone).startIso)
+    .lt("scheduled_at", zonedDayRange(range.to, timezone).endIso)
+    .in("status", ["REQUESTED", "CONFIRMED", "ARRIVED"])
+    .order("scheduled_at");
+  for (const a of ((liveAppts ?? []) as any[])) {
+    const key = `${dayKey(a.scheduled_at)}|${a.location_id ?? "none"}`;
+    byKey.get(key)?.booked.push({ time: hhmm(a.scheduled_at), patientName: a.patient_name ?? "unnamed" });
   }
 
   const sessions = [...byKey.values()].sort((a, b) =>
@@ -169,6 +205,51 @@ export async function bulkAvailability(admin: any, ctx: WorkspaceContext, opts: 
     closed: await closedSessions(admin, ctx, { fromDate: range.from, toDate: range.to, locationId: opts.locationId ?? null, dayLabel, dayKey }),
     totalSlots: sessions.reduce((n, s) => n + s.slots.length, 0),
   };
+}
+
+/**
+ * Walkthrough 2026-08-17 #10 -- THE OPEN-BUT-FULL CLINICS. Same windows read as closedSessions and
+ * the INVERTED template predicate: active AND staff-bookable, minus the day-place keys the free-slot
+ * grouping already offered. What remains is a clinic that is open, real, and full -- the one kind of
+ * session this screen used to render as nothing at all.
+ */
+async function fullSessions(admin: any, ctx: WorkspaceContext, args: {
+  fromDate: string; toDate: string; locationId: string | null;
+  dayLabel: (iso: string) => string; dayKey: (iso: string) => string;
+  alreadyOffered: Set<string>;
+}): Promise<BulkSession[]> {
+  const { data: windows, error } = await admin.from("practice_availability_slot")
+    .select("starts_at, location_id, generated_from_template_id")
+    .eq("workspace_id", ctx.workspaceId)
+    .gte("generated_for_date", args.fromDate).lte("generated_for_date", args.toDate);
+  // Same posture as closedSessions: a failed read costs this addition, never the list it adds to.
+  if (error || !windows?.length) return [];
+
+  const templateIds = [...new Set((windows as any[]).map(w => w.generated_from_template_id).filter(Boolean))];
+  if (!templateIds.length) return [];
+  const { data: templates } = await admin.from("practice_availability_template")
+    .select("id, booking_mode, active").eq("workspace_id", ctx.workspaceId).in("id", templateIds);
+  const modeById = new Map(((templates ?? []) as any[]).map(t => [t.id, { mode: t.booking_mode as string | null, active: t.active !== false }]));
+  const { data: locs } = await admin.from("practice_location")
+    .select("id, name").eq("workspace_id", ctx.workspaceId);
+  const locById = new Map(((locs ?? []) as any[]).map(l => [l.id, l.name as string]));
+
+  const out = new Map<string, BulkSession>();
+  for (const w of windows as any[]) {
+    if (args.locationId && w.location_id !== args.locationId) continue;
+    const t = w.generated_from_template_id ? modeById.get(w.generated_from_template_id) : null;
+    if (!t || !t.active || !isStaffBookableMode(t.mode)) continue; // closed ones are closedSessions' story
+    const day = args.dayKey(w.starts_at);
+    const key = `${day}|${w.location_id ?? "none"}`;
+    if (args.alreadyOffered.has(key) || out.has(key)) continue;
+    out.set(key, {
+      day, dayLabel: args.dayLabel(w.starts_at),
+      locationId: w.location_id ?? null,
+      locationName: w.location_id ? (locById.get(w.location_id) ?? null) : null,
+      slots: [], fullyBooked: true, booked: [],
+    });
+  }
+  return [...out.values()];
 }
 
 /**
