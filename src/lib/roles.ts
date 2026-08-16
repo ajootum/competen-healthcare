@@ -179,6 +179,28 @@ export function highestRole(roles: string[]): AppRole | null {
   return ROLE_PRIORITY.find(r => roles.includes(r)) ?? null;
 }
 
+/**
+ * The ESTATE fold -- the third of the three, and the only one that was never centralised.
+ *
+ * COMP-SECURITY-SURVEY-001 s6.2: six role columns on `profiles`, and this exact expression --
+ * `(p.roles?.length ? p.roles : [p.role]).filter(Boolean)` -- inlined at ~350 call sites. Each of
+ * them is one typo away from a different identity answer, and one HAS already drifted
+ * (super-admin/users/page.tsx folds `roles ?? [role]`, which answers differently for a profile
+ * carrying `roles: []`). This is the one spelling, beside its two siblings above.
+ *
+ * ⚠⚠ DELIBERATELY UNVALIDATED, UNLIKE orgRolesOf AND platformRolesOf. The inline expression never
+ * filtered against the AppRole vocabulary -- it casts -- and s6.2's rule for this consolidation is
+ * READ-SIDE ONLY, NO BEHAVIOUR CHANGE: a profile carrying an out-of-vocabulary estate role answers
+ * today exactly what it answered yesterday. Adding validation here would silently drop such a role
+ * at every repointed site at once, which is the exact shape of lockout the survey warns about.
+ * The equivalence harness (scripts/identity-resolver-harness.ts) proves this fold against the
+ * inline expression for EVERY live profile before any site is repointed.
+ */
+export function estateRolesOf(p: { role?: string | null; roles?: string[] | null } | null | undefined): string[] {
+  if (!p) return [];
+  return ((p.roles?.length ? p.roles : [p.role]) as (string | null | undefined)[]).filter(Boolean) as string[];
+}
+
 /** Does this person stand on the estate at all? The complement of CP-SPLIT-001 s3 practice_only. */
 export function hasEstateRole(roles: string[]): boolean {
   return highestRole(roles) !== null;

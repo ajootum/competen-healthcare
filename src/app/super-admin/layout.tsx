@@ -7,7 +7,7 @@ import SidebarToggle from "@/components/SidebarToggle";
 import GlobalHeader from "@/components/platform/GlobalHeader";
 import { loadHeaderContext } from "@/lib/platform/header";
 import WorkspaceSidebar from "./_components/WorkspaceSidebar";
-import { highestRole, hasPlatformRole, type AppRole } from "@/lib/roles";
+import { estateRolesOf, highestRole, hasPlatformRole, type AppRole } from "@/lib/roles";
 import { admitToEstate, NO_MEMBERSHIP_DESTINATION } from "@/lib/platform-membership";
 import { resolveHqPositions } from "@/lib/hq/context";
 import SessionIdentityNotice, { RememberSessionIdentity } from "@/components/SessionIdentityNotice";
@@ -28,7 +28,9 @@ export default async function SuperAdminLayout({ children }: { children: React.R
     .eq("id", user.id)
     .single();
 
-  const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
+  // The FIRST repointed site of COMP-SECURITY-SURVEY-001 s6.2's consolidation (one at a time, after
+  // identity-resolver-harness proved this fold equals the inline expression for every live profile).
+  const userRoles: AppRole[] = estateRolesOf(profile) as AppRole[];
 
   // -- CP-SPLIT-002 stage 3 -- GATE 1: THE ESTATE ADMITS COMPETEN PLATFORM MEMBERS ------------------
   // COMP-ARCH-PSA-001 s7 and s14, the same call the other ten estate layouts make.
