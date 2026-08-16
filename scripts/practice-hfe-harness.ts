@@ -16,6 +16,10 @@
  *      Practice Report aggregates the caller's own day.
  *   6. REFREEZE: these source pins ARE the freeze -- the next change to this shell arrives holding a
  *      document, or this file goes red.
+ *   7. CPR-CUR-001 (2026-08-16) EXTENDED the Current Session pins (3-4..3-7): the document arrived,
+ *      the cockpit was built to it, and the new properties are pinned beside the old ones -- Current
+ *      Patient dominance, the non-clinical shell, deterministic Immediate Attention, the s12 Tasks
+ *      nav removal and the s13.2 pre-finish check.
  *
  *   npx --yes tsx scripts/practice-hfe-harness.ts
  */
@@ -96,6 +100,28 @@ async function main() {
     today.includes("Next planned") && today.includes("Start from the Command Centre"));
   ok("3-3. s5.3: the live performance summary is gone from Current Session",
     !today.includes("<SessionPerformance") && today.includes("belong to Session Complete"));
+
+  // ── 3b. CPR-CUR-001 (2026-08-16): the operational cockpit ──────────────────
+  // The newest document governing this screen. These pins extend the freeze rather than repointing
+  // it: nothing 3-1..3-3 guarded moved.
+  ok("3-4. CUR-001 s5.2/s15: Current Patient is the dominant zone, and patient-flow zones render only"
+    + " for activity types that involve patients",
+    today.includes("<CurrentPatientCard") && today.includes("PATIENT_FLOW_ACTIVITY_TYPES")
+      && today.includes("Non-clinical activity"));
+  ok("3-5. CUR-001 s11: Immediate Attention is deterministic and session-scoped -- the brief's"
+    + " sentences LEFT this page (it is not a second Today's Brief)",
+    today.includes("Immediate attention") && !today.includes("brief.items")
+      && !today.includes("<SessionSummaryCard"));
+  const nav = src("src/lib/practice/navigation.ts");
+  ok("3-6. ⚠ CUR-001 s12/s22: Tasks is no longer a Current Session sidebar child, and the contextual"
+    + " entry point survives on the page",
+    !/href: "\/practice\/tasks"[\s\S]{0,200}parent: "\/practice\/today"/.test(nav)
+      && today.includes('"/practice/tasks"'));
+  const ctl = src("src/app/practice/(shell)/today/SessionControls.tsx");
+  ok("3-7. CUR-001 s13.2: Finish performs a pre-finish check -- the acknowledgement branch exists and"
+    + " ending with nothing unresolved stays one act",
+    ctl.includes("End session anyway") && ctl.includes("Keep running")
+      && ctl.includes("sentences.length > 0 && !confirmingEnd"));
 
   // ── 4. s6: Session Complete ────────────────────────────────────────────────
   const complete = src("src/app/practice/(shell)/today/complete/page.tsx");

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import WaitingQueueCard, { type QueuePerson } from "./WaitingQueueCard";
+import { startEncounterFor } from "@/lib/practice/encounter-start";
 
 // CPR-ADOPT-001 s2 -- the client half of Capture Later.
 //
@@ -16,17 +17,38 @@ import WaitingQueueCard, { type QueuePerson } from "./WaitingQueueCard";
 // encounter.edit through requirePracticeContext. `canCapture` decides what is DRAWN; the route decides
 // what is ALLOWED.
 
-export default function QueueWithActions({ people, unavailableReason, truncatedNotice, href, canCapture }: {
+export default function QueueWithActions({ people, unavailableReason, truncatedNotice, href, canCapture, canStartEncounter }: {
   people: QueuePerson[];
   unavailableReason: string | null;
   /** Passed straight through: this wrapper adds handlers, it does not decide what the card may say. */
   truncatedNotice?: string | null;
   href: string | null;
   canCapture: boolean;
+  /**
+   * CPR-CUR-001 s5.2 zone D: "Start encounter" as a contextual queue action. Decides what is DRAWN;
+   * the encounters API gates on its own capability again, which is the actual control.
+   */
+  canStartEncounter: boolean;
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // s8's handoff through the ONE implementation of resume-before-create: an unfinished encounter for
+  // this patient is resumed, never duplicated, and the visit type is decided from the record.
+  async function startEncounter(patientId: string) {
+    const row = people.find(p => p.patientId === patientId);
+    setBusyId(row?.id ?? patientId);
+    setError(null);
+    try {
+      const r = await startEncounterFor(patientId);
+      if (!r.ok) { setError(r.message); setBusyId(null); return; }
+      window.location.assign(`/practice/encounters/${r.encounterId}`);
+    } catch {
+      setError("The consultation did not open. Nothing was created.");
+      setBusyId(null);
+    }
+  }
 
   async function markSeen(patientId: string) {
     const row = people.find(p => p.patientId === patientId);
@@ -60,6 +82,7 @@ export default function QueueWithActions({ people, unavailableReason, truncatedN
       busyId={busyId}
       error={error}
       onMarkSeen={canCapture ? markSeen : undefined}
+      onStartEncounter={canStartEncounter ? startEncounter : undefined}
     />
   );
 }

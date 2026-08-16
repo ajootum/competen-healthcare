@@ -39,6 +39,12 @@ export type QueuePerson = {
   waitingReason: string | null;
   /** Arrival time, already formatted by the caller in the practice's timezone. */
   timeLabel: string | null;
+  /**
+   * The BOOKED time, when this visit was an appointment. CPR-CUR-001 s7 asks for booked time VISIBLE
+   * beside the wait -- the wait decides who is next, the booked time is the promise it is measured
+   * against. Null for a walk-in, and nothing renders: a walk-in has no booked time to show.
+   */
+  bookedTimeLabel: string | null;
   href: string | null;
   /**
    * The PATIENT this row is about -- `id` above is the queue entry. Null for somebody in the corridor
@@ -61,8 +67,12 @@ export type WaitingQueueCardProps = {
   truncatedNotice?: string | null;
   /** "Full queue" destination, when the reader has one. */
   href: string | null;
-  /** Drawn per row only when a handler is given -- a button that cannot act is not drawn at all. */
-  onStartEncounter?: (id: string) => void;
+  /**
+   * CPR-CUR-001 s5.2 zone D: opens the canonical encounter for THIS PATIENT (the queue entry cannot be
+   * consulted, the person can). Drawn per row only when a handler is given AND the row has a patient --
+   * a button that cannot act is not drawn at all.
+   */
+  onStartEncounter?: (patientId: string) => void;
   /**
    * CPR-ADOPT-001 s2 Capture Later: one tap records that the patient was seen and creates an encounter
    * shell asserting nothing clinical. Same rule as above -- no handler, no button.
@@ -173,6 +183,13 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
                     <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold ${sw.chip}`}>
                       {p.status.replace(/_/g, " ").toLowerCase()}
                     </span>
+                    {/* s7: booked time VISIBLE beside the wait. Only for rows that have one -- drawing
+                        "—" for every walk-in would teach the column to be ignored. */}
+                    {p.bookedTimeLabel && (
+                      <span className="hidden shrink-0 text-[10px] tabular-nums text-gray-400 sm:inline">
+                        b. {p.bookedTimeLabel}
+                      </span>
+                    )}
                     {p.waitingMinutes === null ? (
                       <span className="shrink-0 text-[11px] text-gray-300" title={p.waitingReason ?? undefined}>—</span>
                     ) : (
@@ -191,9 +208,12 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
                         Seen ✓
                       </button>
                     )}
-                    {onStartEncounter && (
+                    {/* Same guard shape as Seen: a handler AND a patient, or nothing is drawn. Hidden
+                        for somebody already in consultation -- starting them twice is not an offer. */}
+                    {onStartEncounter && p.patientId && p.status !== "IN_CONSULTATION" && (
                       <button type="button" disabled={busyId === p.id}
-                        onClick={() => onStartEncounter(p.id)}
+                        onClick={() => onStartEncounter(p.patientId!)}
+                        title="Open the consultation for this patient. An unfinished one is resumed, never duplicated."
                         className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
                         Start →
                       </button>

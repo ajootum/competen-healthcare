@@ -6,33 +6,46 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { dashboardReadModel } from "@/lib/practice/dashboard";
 import { formatMinuteOfDay, formatDate } from "@/lib/datetime";
+import { PATIENT_FLOW_ACTIVITY_TYPES } from "@/lib/practice/activity-constants";
 import SessionControls from "./SessionControls";
 import SessionTiles from "./SessionTiles";
-import SessionSummaryCard from "./SessionSummaryCard";
+import CurrentPatientCard from "./CurrentPatientCard";
 import QueueWithActions from "./QueueWithActions";
 import LiveRefresh from "../LiveRefresh";
 import OfflineCacheWriter from "../OfflineCacheWriter";
 import { offlineCacheGate } from "@/lib/practice/offline-gate";
 import { BILLING_CAPTURE_CAPABILITIES } from "@/lib/practice/billing-constants";
 
-// /practice/today -- CPR-V5-004 "Current Session", the practitioner's live operational cockpit.
+// /practice/today -- CPR-CUR-001 "Current Session", the operational cockpit for work happening NOW.
+// (Supersedes CPR-V5-004's arrangement of this screen; the lifecycle and engines it built remain.)
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
+// COMMAND CENTRE = TODAY. CURRENT SESSION = NOW. PLANNER = FUTURE. (CPR-CUR-001 s2)
+//
 // IT ASSEMBLES NOTHING. Every figure arrives from `dashboardReadModel` -- the same payload
 // /api/v1/practice/dashboard serves and the same one the command centre renders -- so the two screens
 // cannot disagree about how many people are waiting. CORE-001 s16: "no widget independently calculates a
 // conflicting version of a shared metric." This page's whole job is choosing which of those figures the
-// session cockpit shows, and in what order.
+// session cockpit shows, and in what order. CPR-CUR-001 s20 restates the same rule.
 //
-// ⚠ EVERY NUMBER IS A PAIR OR A NULL, NEVER A PERCENTAGE. The comp prints "On-time Rate 62%",
-// "Utilisation 78%" and four "Goal:" lines. The cards below cannot render any of them: their props take
-// `value` and `of` separately, `unit` admits only "count" | "minutes", and no `goal` prop exists. 62% of
-// eight patients is not a rate, it is five people -- and a goal nothing stores is an invented standard
-// presented as the practice's own.
+// THE s6 HIERARCHY: compact header and progress strip on top; Current Patient then the queue in the
+// main column (about two thirds); Immediate Attention and Session Actions in the right rail (about one
+// third). No analytics, no historical trends, no planner calendar, no full patient summary -- each of
+// those has a canonical home and s6 names this workspace as not it.
 //
-// ⚠ TWO FIGURES FROM THE COMP ARE ABSENT ON PURPOSE. Utilisation has no denominator anywhere -- nothing
-// links an activity to a slot capacity -- and on-time has no metric and no stored lateness tolerance.
-// Inventing the tolerance would be authoring the very standard the figure claims to measure against.
+// ⚠ EVERY NUMBER IS A PAIR OR A COUNT, NEVER A PERCENTAGE. The comp prints "75% Session progress".
+// The cards below cannot render it: their props take `value` and `of` separately, `unit` admits only
+// "count" | "minutes", and no `goal` prop exists. 6 of 8 tells a practitioner both how the session is
+// going AND how much session there is; 75% hides the denominator, which is the actionable half.
+//
+// ⚠ TWO FIGURES FROM EARLIER COMPS STAY ABSENT ON PURPOSE. Utilisation has no denominator anywhere --
+// nothing links an activity to a slot capacity -- and on-time has no metric and no stored lateness
+// tolerance. Inventing the tolerance would be authoring the very standard the figure claims to measure
+// against. CPR-CUR-001 provides no storage design for either, so both remain out.
+//
+// ⚠ s11 IS NOT A SECOND TODAY'S BRIEF. The brief's sentences left this page with CPR-CUR-001: the
+// Command Centre owns day-level orientation, and the Immediate Attention rail below carries only
+// deterministic exceptions about THIS session, computed in session.ts.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export const dynamic = "force-dynamic";
@@ -40,6 +53,8 @@ export const dynamic = "force-dynamic";
 /** hh:mm in the practice's own zone. The session clock is the practitioner's, never the server's. */
 const clock = (iso: string, timeZone: string) =>
   new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone });
+
+const railCard = "rounded-xl border border-gray-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
 
 export default async function CurrentSessionPage() {
   const shell = await resolvePracticeShell();
@@ -55,12 +70,16 @@ export default async function CurrentSessionPage() {
     dashboardReadModel(admin, shell.ctx),
     offlineCacheGate(admin, shell.ctx, shell.ctx.userId),
   ]);
-  const { plan, session, queue, timeline, brief, metrics } = dash;
+  const { plan, session, queue, timeline, flow, attention, metrics } = dash;
   const canControl = hasCapability(shell.ctx, "appointment.manage");
 
   // The lifecycle state, derived from the two timestamps and the pause ledger -- never stored.
   const state: "NOT_STARTED" | "RUNNING" | "PAUSED" =
     !session ? "NOT_STARTED" : session.isPaused ? "PAUSED" : "RUNNING";
+
+  // CPR-CUR-001 s3/s15: patient-flow zones render ONLY for activity types that involve patients.
+  // A non-clinical session keeps the same shell and fabricates nothing.
+  const clinical = session ? PATIENT_FLOW_ACTIVITY_TYPES.has(session.activity.activityType) : false;
 
   const m = metrics?.metrics;
   /** A metric becomes a tile. `of` stays null unless the pair is genuinely known. */
@@ -76,10 +95,47 @@ export default async function CurrentSessionPage() {
       basis: x?.formula ?? null,
     };
   };
+  const flowReason = flow.unavailable ? "The patient flow could not be read just now." : null;
+
+  // The dominant card shows the patient you are WITH, or failing that the first person waiting.
+  const person = flow.current ?? flow.next;
+  const flowPerson = person ? {
+    role: (flow.current ? "current" : "next") as "current" | "next",
+    name: person.name,
+    patientId: person.patientId,
+    patientNumber: person.patientNumber,
+    birthDate: person.birthDate,
+    ageEstimateYears: person.ageEstimateYears,
+    sex: person.sex,
+    queueStatus: person.queueStatus,
+    waitingMinutes: person.waitingMinutes,
+    arrivedTimeLabel: person.arrivedAtIso ? clock(person.arrivedAtIso, dash.timezone) : null,
+    bookedTimeLabel: person.bookedAtIso ? clock(person.bookedAtIso, dash.timezone) : null,
+    appointmentType: person.appointmentType,
+    appointmentReason: person.appointmentReason,
+    encounterId: person.encounterId,
+    encounterStatus: person.encounterStatus,
+  } : null;
+
+  // Zone F, capability-filtered: a link is offered only to somebody its destination will not bounce.
+  const actions = [
+    hasCapability(shell.ctx, "patient.list") ? {
+      href: "/practice/patients", label: "Add walk-in / find patient",
+      note: "Search the register first; attach, never duplicate (s9).",
+    } : null,
+    canControl ? {
+      href: "/practice/calendar", label: "Mark arrivals",
+      note: "Check-in is appointment-book work -- it lives in the Planner.",
+    } : null,
+    hasCapability(shell.ctx, "task.view") ? {
+      href: "/practice/tasks", label: "Create or check a task",
+      note: "Tasks stay contextual here -- Current Session has no Tasks submenu (s12).",
+    } : null,
+  ].filter((a): a is NonNullable<typeof a> => a !== null);
 
   return (
     <div className="max-w-6xl">
-      {/* ── ZONE 1: THE SESSION HEADER AND ITS CONTROLS ────────────────────────────────────────── */}
+      {/* ── ZONE A: THE SESSION HEADER AND ITS CONTROLS ────────────────────────────────────────── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-xl font-bold text-gray-900">Current Session</h1>
@@ -125,15 +181,27 @@ export default async function CurrentSessionPage() {
               overrunMinutes: session.activity.overrunMinutes,
               canControl,
             }}
+            // CPR-CUR-001 s13.2's pre-finish check, from the same engines the rest of the screen reads.
+            // Null for non-clinical sessions: there is no patient flow to leave unresolved (s15).
+            unresolved={clinical ? {
+              waiting: m?.waiting.value ?? null,
+              openEncounters: flow.openEncounters ? flow.openEncounters.length : null,
+              unregisteredArrivals: flow.unregisteredArrivals,
+              expected: flow.expected,
+            } : null}
           />
         ) : (
-          /* ── CPR-HFE-001 v1.1 s5.2: THE NO-ACTIVE-SESSION STATE. No zero grids, no day-scoped
-                figures wearing session clothes -- a simple statement, the next planned activity where
-                one exists, and the two routes onward. Everything session-scoped below renders ONLY
-                when a session exists, because fabricating session metrics from whole-day activity is
-                exactly what s5.2 forbids. ─────────────────────────────────────────────────────── */
+          /* ── CPR-HFE-001 v1.1 s5.2 and CPR-CUR-001 s5.1: THE NO-ACTIVE-SESSION STATE. No zero
+                grids, no day-scoped figures wearing session clothes -- a simple statement, the next
+                planned activity where one exists, and the two routes onward. Everything
+                session-scoped below renders ONLY when a session exists, because "it must not contain
+                a large operational dashboard with zero values" (CUR-001 s5.1). ─────────────────── */
           <section className="rounded-2xl border border-gray-200 bg-white p-4">
             <h2 className="text-[13px] font-bold text-gray-900">No active session</h2>
+            <p className="mt-1 text-[12.5px] text-gray-600">
+              Nothing is running right now. This page becomes your cockpit the moment you start an
+              activity.
+            </p>
             {(() => {
               // ⚠ THIS PREDICATE USED TO READ `startedAtIso`/`endedAtIso` -- fields PlannedActivity has
               // NEVER carried (they are startedAt/endedAt), behind an `(a: any)` that hid it. Both reads
@@ -172,96 +240,153 @@ export default async function CurrentSessionPage() {
       </div>
 
 
-      {/* s5.1: everything below is the RUNNING session's cockpit, and renders only when one
-          exists -- the six tiles, the queue, the summary and the session activity log. */}
+      {/* s5: everything below is the RUNNING session's cockpit, and renders only when one exists. */}
       {session && (<>
-      {/* ── THE SIX TILES ─────────────────────────────────────────────────────────────────────── */}
+      {clinical ? (<>
+      {/* ── ZONE B: THE PROGRESS STRIP ────────────────────────────────────────────────────────────
+          s5.2's list, verbatim: booked, arrived, waiting, in progress, completed, and no-show or
+          cancelled "where relevant" -- rendered only when non-zero, because a red nought every morning
+          teaches the eye to skip the tile that will one day matter. Arrived and In progress belong to
+          the flow projection (session.ts); the rest are s8 metrics. One owner each, per s16/s20. */}
       <div className="mt-4">
         <SessionTiles
           scopeLabel={dash.scope.kind === "session" ? "This session" : "Today"}
-          unavailableReason={dash.feeders.glance === "unavailable"
+          unavailableReason={dash.feeders.glance === "unavailable" && flow.unavailable
             ? "Today's figures could not be read just now, so no number is shown rather than a nought." : null}
           tiles={[
             tile("booked", "Booked", "/practice/calendar"),
-            // Seen is a PAIR -- four of twelve, never "33%". The denominator is what makes it mean anything.
-            { ...tile("completed", "Seen", "/practice/encounters"), of: m?.booked.value ?? null },
-            tile("waiting", "Waiting", "/practice/calendar"),
-            tile("walk_in", "Walk-ins", "/practice/calendar"),
-            tile("emergency", "Emergency", "/practice/calendar"),
             {
-              key: "time_remaining", label: "Time remaining", href: null,
-              value: session?.minutesRemaining ?? null, of: null, unit: "minutes" as const,
-              reason: !session ? "No session is running."
-                : session.minutesRemaining === null ? "Past its planned end." : null,
+              key: "arrived", label: "Arrived", href: "/practice/calendar",
+              value: flow.arrived, of: null, unit: "count" as const,
+              reason: flow.arrived === null ? (flowReason ?? "Could not be read just now.") : null,
               observations: null,
-              basis: "The planned end, pushed out by any time the session was paused.",
+              basis: "Queue entries recorded today. An entry exists only when somebody actually presented.",
             },
+            tile("waiting", "Waiting", "/practice/calendar"),
+            {
+              key: "in_progress", label: "In progress", href: "/practice/encounters",
+              value: flow.inProgress, of: null, unit: "count" as const,
+              reason: flow.inProgress === null ? (flowReason ?? "Could not be read just now.") : null,
+              observations: null,
+              basis: "Encounters open right now (active or paused). A launched-but-unstarted draft is not a patient being seen.",
+            },
+            // Completed is a PAIR -- six of eight, never "75%". The denominator is what makes it mean
+            // anything, and it is the comp's "Session progress" figure rendered honestly.
+            { ...tile("completed", "Completed", "/practice/encounters"), of: m?.booked.value ?? null },
+            ...(m?.no_show.value ? [tile("no_show", "No-show", "/practice/calendar")] : []),
+            ...(m?.cancelled.value ? [tile("cancelled", "Cancelled", "/practice/calendar")] : []),
           ]}
         />
       </div>
 
-      {/* ── RUN YOUR CLINIC: the queue, and the session's own summary ─────────────────────────── */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        {/* CPR-ADOPT-001 s2. The client wrapper supplies the handlers a server component cannot --
-            see QueueWithActions for why the card's action props were never once drawn before this. */}
-        <QueueWithActions
-          href="/practice/calendar"
-          unavailableReason={queue.unavailable ? "The queue could not be read just now." : null}
-          truncatedNotice={queue.capped
-            ? `Showing the first ${queue.groups.reduce((n, g) => n + g.entries.length, 0)} of ${queue.total} waiting.`
-              + " The tab counts below are of what is shown here. This is not the whole queue."
-            : null}
-          canCapture={hasCapability(shell.ctx, "encounter.edit")}
-          people={queue.groups.flatMap(g => g.entries.map(e => ({
-            id: e.id,
-            name: e.name,
-            group: g.key as "booked" | "walk_ins" | "emergency",
-            status: e.status,
-            waitingMinutes: e.waitingMinutes,
-            waitingReason: null,
-            timeLabel: e.timeLabel,
-            href: null,
-            patientId: e.patientId,
-          })))}
-        />
+      {/* ── THE s6 GRID: current patient + queue dominate; attention + actions in the rail ──────── */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
+          {/* ZONE C: the dominant card. Who decided who is current lives in session.ts. */}
+          <CurrentPatientCard
+            person={flowPerson}
+            canStartEncounter={hasCapability(shell.ctx, "encounter.create")}
+            unavailableReason={flowReason}
+          />
 
-        <SessionSummaryCard
-          unavailableReason={metrics ? null : "The session's figures could not be read just now."}
-          // The brief's own sentences, unchanged. This page writes none of its own, which is how s7's
-          // "no unsupported prediction" is kept: there is nothing here capable of predicting.
-          notes={brief.items.slice(0, 4).map(i => ({
-            key: i.key, sentence: i.sentence, severity: i.severity, href: i.href,
-            count: i.count,
-            sourceLabel: i.sourceRefs.length > 0
-              ? `${i.sourceRefs.length} record${i.sourceRefs.length === 1 ? "" : "s"}` : null,
-          }))}
-          notesMethod={brief.method}
-          notesUnavailableReason={brief.unavailable
-            ? "The brief could not be read, so this is not a claim that nothing is waiting." : null}
-          figures={[
-            {
-              key: "patients_seen", label: "Patients seen", href: "/practice/encounters",
-              value: m?.patients_seen.value ?? null, of: m?.booked.value ?? null,
-              unit: "count" as const, reason: m?.patients_seen.reason ?? null,
-              observations: m?.patients_seen.observations ?? null,
-              excluded: m?.patients_seen.excluded ?? null,
-            },
-            {
-              key: "average_consult_time", label: "Average consult time", href: null,
-              value: m?.average_consult_time.value ?? null, of: null, unit: "minutes" as const,
-              reason: m?.average_consult_time.reason ?? null,
-              observations: m?.average_consult_time.observations ?? null,
-              excluded: m?.average_consult_time.excluded ?? null,
-            },
-            {
-              key: "paused", label: "Time paused", href: null,
-              value: session?.pausedMinutes ?? null, of: null, unit: "minutes" as const,
-              reason: !session ? "No session is running."
-                : session.pausedMinutes === null ? "The pause ledger could not be read." : null,
-              observations: null, excluded: null,
-            },
-          ]}
-        />
+          {/* ZONE D. CPR-ADOPT-001 s2's client wrapper supplies the handlers a server component
+              cannot -- and now also the Start-encounter handoff (CUR-001 s8). */}
+          <QueueWithActions
+            href="/practice/calendar"
+            unavailableReason={queue.unavailable ? "The queue could not be read just now." : null}
+            truncatedNotice={queue.capped
+              ? `Showing the first ${queue.groups.reduce((n, g) => n + g.entries.length, 0)} of ${queue.total} waiting.`
+                + " The tab counts below are of what is shown here. This is not the whole queue."
+              : null}
+            canCapture={hasCapability(shell.ctx, "encounter.edit")}
+            canStartEncounter={hasCapability(shell.ctx, "encounter.create")}
+            people={queue.groups.flatMap(g => g.entries.map(e => ({
+              id: e.id,
+              name: e.name,
+              group: g.key as "booked" | "walk_ins" | "emergency",
+              status: e.status,
+              waitingMinutes: e.waitingMinutes,
+              waitingReason: null,
+              timeLabel: e.timeLabel,
+              bookedTimeLabel: e.bookedTimeLabel,
+              href: null,
+              patientId: e.patientId,
+            })))}
+          />
+
+          {/* s7's EXPECTED state, as a POINTER rather than queue rows: booked-but-not-arrived people
+              are not in the corridor, and their action (mark arrived) lives in the Planner. */}
+          {flow.expected !== null && flow.expected > 0 && (
+            <p className="rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2 text-[12px] text-gray-600">
+              {flow.expected === 1 ? "1 booked patient has" : `${flow.expected} booked patients have`}{" "}
+              not arrived yet.{" "}
+              <Link href="/practice/calendar" className="font-semibold text-[var(--cp-primary)] hover:underline">
+                Mark arrivals in the Planner →
+              </Link>
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          {/* ── ZONE E: IMMEDIATE ATTENTION (s11) ──────────────────────────────────────────────────
+              Deliberately small, deterministic, session-scoped. The rules live in session.ts beside
+              the projection they read; two of s11's five are absent for recorded gate failures --
+              no stored wait threshold, and sync state is device-local (the offline status line below
+              is its honest surface). */}
+          <section className={railCard} aria-labelledby="attention-h">
+            <h2 id="attention-h" className="text-[13px] font-bold text-gray-900">Immediate attention</h2>
+            {attention.length === 0 ? (
+              <p className="mt-1 text-[12px] text-gray-500">
+                {dash.feeders.flow === "unavailable"
+                  ? "The flow behind this panel could not be fully read, so this is not a claim that nothing needs attention."
+                  : "Nothing in this session needs intervention right now."}
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-1.5">
+                {attention.map(a => (
+                  <li key={a.key}>
+                    <Link href={a.href} className={`block rounded-lg px-2.5 py-1.5 text-[12px] leading-snug hover:opacity-90 ${
+                      a.tone === "danger" ? "bg-[var(--cmp-surface-danger)] text-[var(--cmp-text-danger)]"
+                        : a.tone === "warning" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"
+                        : "bg-gray-50 text-gray-700"}`}>
+                      {/* s19: status never by colour alone -- the sentence carries the whole claim. */}
+                      {a.text}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {/* ── ZONE F: SESSION ACTIONS ─────────────────────────────────────────────────────────────
+              Pointers to the canonical home of each act -- walk-ins are attached through the Patients
+              register's established flow (s9), check-in stays in the Planner, tasks stay contextual
+              (s12). Pause/Resume/Finish live in the header above and are not duplicated here (s25:
+              duplication between workspaces is a defect, and within one screen no less so). */}
+          <section className={railCard} aria-labelledby="actions-h">
+            <h2 id="actions-h" className="text-[13px] font-bold text-gray-900">Session actions</h2>
+            {actions.length === 0 ? (
+              <p className="mt-1 text-[12px] text-gray-500">
+                No session actions are available to you here — each needs a permission you do not hold.
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-1.5">
+                {actions.map(a => (
+                  <li key={a.href}>
+                    <Link href={a.href}
+                      className="block rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-1.5 hover:bg-gray-50">
+                      <span className="block text-[12.5px] font-semibold text-gray-800">{a.label} →</span>
+                      <span className="block text-[10.5px] text-gray-500">{a.note}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-2 text-[10.5px] text-gray-400">
+              Pause, resume and finish are in the session header above.
+            </p>
+          </section>
+        </div>
       </div>
 
       {/* ── TODAY'S TIMELINE ──────────────────────────────────────────────────────────────────── */}
@@ -296,10 +421,38 @@ export default async function CurrentSessionPage() {
           </ol>
         )}
       </section>
+      </>) : (
+        /* ── CPR-CUR-001 s15: THE NON-CLINICAL SESSION SHELL ──────────────────────────────────────
+            Administration, Teaching, Meeting, Research, Leave, Travel and Custom Activity get the
+            header (with its clock and Pause/Resume/Finish) and pointers -- and NO patient queue, no
+            Current Patient, no encounter controls and no patient metrics. Rendering a zeroed queue
+            for a meeting would be fabricating a clinic that does not exist. */
+        <section className="mt-4 rounded-2xl border border-gray-200 bg-white p-4" aria-labelledby="nc-h">
+          <h2 id="nc-h" className="text-[13px] font-bold text-gray-900">Non-clinical activity</h2>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-gray-600">
+            {session.activity.label} time has no patient flow, so there is no queue, no current patient
+            and no patient figures here — that is the design, not a fault. The header above carries the
+            clock and the controls; finishing records this activity in the day&rsquo;s history.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {hasCapability(shell.ctx, "task.view") && (
+              <Link href="/practice/tasks"
+                className="rounded-lg border border-gray-200 px-3.5 py-2 text-[12.5px] font-semibold text-gray-700 hover:bg-gray-50">
+                Tasks
+              </Link>
+            )}
+            <Link href="/practice/calendar"
+              className="rounded-lg border border-gray-200 px-3.5 py-2 text-[12.5px] font-semibold text-gray-700 hover:bg-gray-50">
+              Open Planner
+            </Link>
+          </div>
+        </section>
+      )}
       </>)}
       {/* s5.3: the "How this session ran" performance summary left the LIVE state -- its
           figures belong to Session Complete and the governed reports, where the session is
-          finished enough to be summarised. */}
+          finished enough to be summarised. CPR-CUR-001 s14 confirms: the summary is closure,
+          rendered after Finish, not analytics rendered during. */}
 
       <p className="mt-4 text-[10.5px] text-gray-400">
         As of {clock(dash.asOf, dash.timezone)} · {dash.timezone}. Every figure above is the same one the

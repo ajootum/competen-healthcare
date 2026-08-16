@@ -3,7 +3,8 @@ import { zonedDayRange } from "@/lib/practice/practice-time";
 import { todaysPlan, type TodaysPlan } from "@/lib/practice/activity";
 import {
   sessionMetrics, withPatientFigures, waitingQueue, activeFollowUps, operationalAlerts, draftEncounters,
-  type SessionWithFigures, type FollowUpLens, type Alert, type QueueGroup,
+  sessionFlow, sessionAttention,
+  type SessionWithFigures, type FollowUpLens, type Alert, type QueueGroup, type SessionFlow,
 } from "@/lib/practice/session";
 import { sessionTimeline, type SessionTimeline } from "@/lib/practice/session-timeline";
 import { operationsHome } from "@/lib/practice/operations-home";
@@ -129,6 +130,17 @@ export type DashboardReadModel = {
   /** `total` is the database's own count of everybody waiting; `groups` may hold only the first
    *  QUEUE_LIMIT of them, and `capped` is how a reader tells. See waitingQueue in session.ts. */
   queue: { groups: QueueGroup[]; total: number | null; unavailable: boolean; capped: boolean };
+  /**
+   * CPR-CUR-001 s5.2 zones B/C: the current patient, the next patient, and the flow counters no other
+   * engine owns (arrived, in progress, expected). Derived in session.ts from the same canonical rows
+   * the queue and metrics read, so the cockpit cannot disagree with either.
+   */
+  flow: SessionFlow;
+  /**
+   * CPR-CUR-001 s11's Immediate Attention: deterministic operational exceptions about the RUNNING
+   * session only. Empty when nothing is running -- day-scoped worries belong to the Command Centre.
+   */
+  attention: Alert[];
   timeline: SessionTimeline;
   followUps: FollowUpLens[];
   alerts: { alerts: Alert[]; unavailable: boolean };
@@ -191,7 +203,12 @@ export async function dashboardReadModel(
     window: session ? { fromIso: scope.fromIso, toIso: scope.toIso } : null,
   });
 
-  const [metrics, queue, timeline, followUps, alerts, drafts, home] = await Promise.all([
+  const FLOW_FALLBACK: SessionFlow = {
+    current: null, next: null, arrived: null, inProgress: null, expected: null,
+    unregisteredArrivals: null, openEncounters: null, unavailable: true,
+  };
+
+  const [metrics, queue, timeline, followUps, alerts, drafts, home, flow] = await Promise.all([
     feed(null as PracticeMetrics | null,
       () => practiceMetrics(admin, ctx, mScope, at)),
     feed({ groups: [], total: null, unavailable: true, capped: false },
@@ -210,6 +227,12 @@ export async function dashboardReadModel(
     // would drift only under load, which is the worst time to find out.
     feed(null as Awaited<ReturnType<typeof operationsHome>> | null,
       () => operationsHome(admin, ctx)),
+    // CPR-CUR-001's flow projection. Fed the SESSION window when one is running so `expected` counts
+    // this session's bookings; the current/next/arrived reads are day-scoped inside the engine.
+    feed(FLOW_FALLBACK,
+      () => sessionFlow(admin, ctx,
+        session ? { fromIso: session.windowStartIso, toIso: session.windowEndIso } : null,
+        plan.date, plan.timezone, at)),
   ]);
 
   // A feeder is unavailable if it threw OR if it reported its own failure. Both are the same thing to a
@@ -257,6 +280,7 @@ export async function dashboardReadModel(
     // into, one feeder later.
     brief: home.state === "ok" && home.value !== null
       && (home.value.unreadable?.length ?? 0) === 0 ? "ok" : "unavailable",
+    flow: flow.state === "ok" && !flow.value.unavailable ? "ok" : "unavailable",
   };
 
   return {
@@ -268,6 +292,14 @@ export async function dashboardReadModel(
     glance: { tiles: glanceTiles, scope: scope.kind, unavailable: feeders.glance === "unavailable" },
     metrics: metrics.value,
     queue: queue.value,
+    flow: flow.value,
+    // The attention rules are PURE and run over figures their own engines computed: the flow
+    // projection, the session clock and s8's waiting count. Composition, not calculation.
+    attention: sessionAttention({
+      flow: flow.value,
+      session: sessionWithFigures,
+      waiting: m?.waiting.value ?? null,
+    }),
     timeline: timeline.value,
     followUps: followUps.value,
     alerts: alerts.value,

@@ -178,7 +178,13 @@ export const PRACTICE_NAV: PracticeNavItem[] = [
   // ⚠ THIS AMENDS THE CPR-V5-002 FREEZE, and CPR-V5-005 is the product change control s17 requires.
   // v1.1 s3 keeps the implemented product's name.
   { href: "/practice/calendar", label: "Practice Planner", icon: "▦", capability: "practice.calendar.view", group: "Practice", phase: 1, built: true, primary: true },
-  { href: "/practice/tasks", label: "Tasks", icon: "☑", capability: "task.view", group: "Practice", phase: 4, built: true, parent: "/practice/today" },
+  // ⚠ CPR-CUR-001 s12 (2026-08-16): "Remove the Tasks child navigation from Current Session" -- an
+  // acceptance criterion, not styling ("Tasks are removed as a Current Session sidebar child while
+  // contextual task capability remains", s22). The route SURVIVES -- removed from a section is not
+  // deleted, the same doctrine as Encounters above -- and it re-files under the Command Centre because
+  // s12's own sentence says "Today's due tasks may surface on Command Centre". Current Session keeps
+  // contextual entry points (the Session actions rail links here), which is the other half of s22.
+  { href: "/practice/tasks", label: "Tasks", icon: "☑", capability: "task.view", group: "Practice", phase: 4, built: true, parent: "/practice/home" },
   // ⚠ NOT PRIMARY, AND THE FREEZE IS WHY. CPR-V5-002 is a design freeze on the nine primary sections and
   // this is not one of them -- so it is filed under the Planner, which is where somebody who reads a
   // request goes next to act on it. It is here at all because the patient's own confirmation says the

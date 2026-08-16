@@ -29,6 +29,22 @@ export const ACTIVITY_TYPES = [
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 
+// ── CPR-CUR-001 s3/s15: WHICH ACTIVITIES INVOLVE PATIENTS ──────────────────────────────────────────
+//
+// "Patient-flow components are enabled only for activity types that involve patients. Non-clinical
+// activities use the same session shell but do not fabricate queues or encounter controls." (s3), and
+// s15 names the non-clinical seven: Administration, Teaching, Meeting, Research, Leave, Travel and
+// Custom Activity.
+//
+// ⚠ `custom` IS NON-CLINICAL BY THE SPEC'S OWN LIST, and the escape hatch beside it -- "unless the
+// configured activity explicitly supports patients" -- has NO STORAGE: no table records whether a
+// custom activity supports patients, so there is nothing to read and the safe branch is the shell
+// without patient controls. If that configuration ever exists, this set is where it plugs in.
+export const PATIENT_FLOW_ACTIVITY_TYPES: ReadonlySet<ActivityType> = new Set<ActivityType>([
+  "outpatient_clinic", "ward_round", "theatre", "emergency_consult",
+  "virtual_clinic", "telephone_review",
+]);
+
 export const ACTIVITY_LABEL: Record<ActivityType, string> = {
   outpatient_clinic: "Outpatient Clinic",
   ward_round: "Ward Round",
