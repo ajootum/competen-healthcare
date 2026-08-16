@@ -2,6 +2,9 @@ import type { WorkspaceContext } from "@/lib/practice/access";
 import {
   MEASUREMENT_ENTITY_TYPE, parameterMeasurementApplier,
 } from "@/lib/practice/sync-appliers/parameter-measurement";
+import {
+  ENCOUNTER_ENTITY_TYPE, encounterVisitApplier,
+} from "@/lib/practice/sync-appliers/encounter-visit";
 
 // CP-OFFLINE-SURVEY-001 s5 precondition 3 (IDEMPOTENT SERVER ACCEPTANCE) — the apply side, over
 // migration 284's practice_sync_transaction. COMP-SYNC-001 s4/s5/s9, CP-SYNC-001 s3/s6.
@@ -152,7 +155,7 @@ export type SyncApplier = (
 >;
 
 /**
- * ⚠ ONE ENTRY, AND IT ARRIVED WITH ITS CAPTURE SCREEN. The rule this file shipped with stands: adding an
+ * ⚠ EVERY ENTRY ARRIVES WITH ITS CAPTURE SCREEN. The rule this file shipped with stands: adding an
  * applier without a producer creates a write path into the patient record that nothing exercises. It was
  * empty from `af83915a` until all seven of CP-OFFLINE-SURVEY-001 s5's preconditions held -- the last of
  * them, durability, proved in a real browser by `practice-outbox-durability-harness.ts`.
@@ -167,6 +170,9 @@ export type SyncApplier = (
  */
 export const SYNC_APPLIERS: Record<string, SyncApplier> = {
   [MEASUREMENT_ENTITY_TYPE]: parameterMeasurementApplier,
+  // Entity two, 2026-08-16, arriving WITH its capture screen per the rule above. Create-only past
+  // COMPLETED visits -- the conflict surface stays structurally closed, same as measurements.
+  [ENCOUNTER_ENTITY_TYPE]: encounterVisitApplier,
 };
 
 export const SYNC_ENTITY_TYPES: string[] = Object.keys(SYNC_APPLIERS);
@@ -330,7 +336,7 @@ async function recordVerdict(
   v: { status: SyncStatus; appliedVersion: number | null; errorCode: string | null; errorMessage: string | null },
 ): Promise<void> {
   try {
-    await admin.from(SYNC_TABLE).insert({
+    const { error } = await admin.from(SYNC_TABLE).insert({
       id: tx.id, workspace_id: ctx.workspaceId, device_id: tx.deviceId, actor_id: actorId,
       entity_type: tx.entityType, entity_id: tx.entityId, operation: tx.operation,
       base_version: tx.operation === "create" ? null : tx.baseVersion ?? null,
@@ -339,8 +345,15 @@ async function recordVerdict(
       error_code: v.errorCode, error_message: v.errorMessage,
       payload_hash: tx.payloadHash ?? null,
     });
-  } catch {
-    // Deliberately silent. See the header.
+    // ⚠ SWALLOWED BY CONTRACT, BUT NEVER AGAIN UNSEEN. The supabase client RETURNS errors rather than
+    // throwing, so the catch below never fired and this failure was invisible -- which is how an
+    // applier returning `version: null` could violate 284's applied-needs-a-version check on EVERY
+    // applied create, write no ledger row ever, and leave replays duplicating clinical rows while all
+    // greens held. The verdict still stands (see the header), but the dropped row is now on record.
+    if (error)
+      console.error(`[practice] sync ledger row for ${tx.id} was NOT recorded: ${error.message}`);
+  } catch (e) {
+    console.error(`[practice] sync ledger row for ${tx.id} was NOT recorded: ${String((e as Error)?.message ?? e)}`);
   }
 }
 

@@ -387,24 +387,40 @@ async function main() {
   // most likely way this goes wrong, because that panel already renders allergies and somebody will want
   // to add one -- still fails, exactly as it did yesterday.
   // ════════════════════════════════════════════════════════════════════════════════════════════════
-  const captureStart = readerSrc.indexOf("function CaptureReading(");
-  const captureEnd = readerSrc.indexOf("\nfunction ", captureStart + 1);
-  const captureBody = readerSrc.slice(captureStart, captureEnd);
-  ok("6d-control. the capture component was located and is a bounded slice",
-    captureStart > 0 && captureEnd > captureStart && !captureBody.includes("\nfunction "),
-    `${captureBody.length} chars`);
-  ok("6d-control-b. ⚠ and it is genuinely a producer -- it enqueues what it accepts",
-    captureBody.includes("captureMeasurement("),
-    "the exemption below would be carved for a component that accepts input and delivers nothing");
+  // ⚠ A LIST NOW, NOT A SINGLE SLICE -- entity two ("Encounters then follow-up", 2026-08-16) added a
+  // second sanctioned component. The exemption stays exactly as narrow as it was: each entry must be
+  // FOUND, BOUNDED, and PROVEN A PRODUCER by naming the capture function it enqueues through. A third
+  // component added without extending this list fails 6d, which is the point.
+  const SANCTIONED = [
+    { name: "CaptureReading", producer: "captureMeasurement(" },
+    { name: "CaptureVisit", producer: "captureEncounter(" },
+  ];
+  const slices = SANCTIONED.map(s => {
+    const start = readerSrc.indexOf(`function ${s.name}(`);
+    const ends = ["\nfunction ", "\nconst "].map(m => readerSrc.indexOf(m, start + 1)).filter(i => i > start);
+    const end = Math.min(...ends);
+    return { ...s, start, end, body: readerSrc.slice(start, end) };
+  });
+  for (const s of slices) {
+    ok(`6d-control. the ${s.name} component was located and is a bounded slice`,
+      s.start > 0 && s.end > s.start && !s.body.includes("\nfunction "),
+      `${s.body.length} chars`);
+    ok(`6d-control-b. ⚠ and ${s.name} is genuinely a producer -- it enqueues what it accepts`,
+      s.body.includes(s.producer),
+      "the exemption below would be carved for a component that accepts input and delivers nothing");
+  }
 
-  // Everything on the screen EXCEPT that component.
-  const outsideCapture = readerSrc.slice(0, captureStart) + readerSrc.slice(captureEnd) + pageSrc + frameSrc;
-  ok("6d. ⚠ no form or input anywhere on the offline screen OUTSIDE the sanctioned capture component",
+  // Everything on the screen EXCEPT those components -- cut from the end so indexes stay valid.
+  let outsideCapture = readerSrc;
+  for (const s of [...slices].sort((a, b) => b.start - a.start))
+    outsideCapture = outsideCapture.slice(0, s.start) + outsideCapture.slice(s.end);
+  outsideCapture += pageSrc + frameSrc;
+  ok("6d. ⚠ no form or input anywhere on the offline screen OUTSIDE the sanctioned capture components",
     !/<form\b/i.test(outsideCapture) && !/<input\b/i.test(outsideCapture)
     && !/<textarea\b/i.test(outsideCapture) && !/<select\b/i.test(outsideCapture),
     "an input that does not enqueue is input accepted and lost");
-  ok("6d2. ⚠ and there is still NO <form> even inside it -- nothing here submits anywhere",
-    !/<form\b/i.test(captureBody),
+  ok("6d2. ⚠ and there is still NO <form> even inside them -- nothing here submits anywhere",
+    slices.every(s => !/<form\b/i.test(s.body)),
     "a form element implies a submit target, and there is none");
   ok("6e. it sends nothing: no fetch, no mutating method, no server action",
     !/\bfetch\s*\(/.test(offlineTree) && !/"(POST|PATCH|PUT|DELETE)"/.test(offlineTree)
@@ -414,8 +430,7 @@ async function main() {
   // ⚠ SAME REPOINTING AS 6d, AND THE SAME LIMIT ON IT. Outside the capture component every button must
   // still be disabled or a disclosure toggle -- that is what stops "Start a consultation" quietly
   // becoming clickable. Inside it, the buttons are the capture controls, which enqueue.
-  const outsideButtons = (readerSrc.slice(0, captureStart) + readerSrc.slice(captureEnd) + pageSrc + frameSrc)
-    .match(/<button[\s\S]*?>/g) ?? [];
+  const outsideButtons = outsideCapture.match(/<button[\s\S]*?>/g) ?? [];
   ok("6f-control-b. there are buttons OUTSIDE the capture component too",
     outsideButtons.length > 0, `${outsideButtons.length}`);
   ok("6g. ⚠ outside capture, every button is still disabled or the non-mutating disclosure toggle",

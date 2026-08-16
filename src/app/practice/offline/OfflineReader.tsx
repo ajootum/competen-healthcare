@@ -26,7 +26,7 @@ import {
 import {
   offlinePlausibility, type OfflineParametersReadResult,
 } from "@/lib/practice/offline-parameters";
-import { captureMeasurement, CAPTURE_HELD_NOTE } from "@/lib/practice/offline-capture";
+import { captureMeasurement, captureEncounter, CAPTURE_HELD_NOTE } from "@/lib/practice/offline-capture";
 
 // CP-OFFLINE-SURVEY-001 s3.4 — the cached clinic day, and its age, on one screen.
 //
@@ -480,9 +480,13 @@ function PatientRow(
               clinical fact, because it tells a practitioner not to bother looking. */}
           <ClinicalPanel pack={clinicalPack} patientId={detail.patientId} />
 
-          {/* ⚠ THE ONLY ENABLED WRITE ON THIS SCREEN, and it sits BELOW the clinical panel on purpose:
-              allergies and current medication are what a reading should be taken in the light of. */}
+          {/* ⚠ THE ONLY ENABLED WRITES ON THIS SCREEN, and they sit BELOW the clinical panel on purpose:
+              allergies and current medication are what a reading -- or a whole visit -- should be
+              recorded in the light of. */}
           <CaptureReading
+            workspaceId={workspaceId} patientId={detail.patientId} patientName={row.name}
+          />
+          <CaptureVisit
             workspaceId={workspaceId} patientId={detail.patientId} patientName={row.name}
           />
         </div>
@@ -663,6 +667,159 @@ function CaptureReading(
 
       <div className="mt-2 flex items-center gap-2">
         <button type="button" disabled={busy || !chosen || value.trim() === "" || !takenAt} onClick={submit}
+          className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
+          {/* ⚠ NOT "Save". Nothing is saved anywhere until this device reaches the practice. */}
+          {busy ? "Holding…" : "Hold on this device"}
+        </button>
+        <button type="button" onClick={() => { setOpen(false); setHeld(null); setProblem(null); }}
+          className="text-[11.5px] text-gray-500 hover:underline">Close</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ⚠ ENTITY TWO OF OFFLINE CAPTURE: A WHOLE VISIT (owner's order: "Encounters then follow-up").
+ *
+ * Everything CaptureReading's header says binds here too -- the seven preconditions, the sentences,
+ * the acceptance line. What is different is WHAT this becomes on the server: a PAST, COMPLETED
+ * encounter, filed by offline-filing.ts without ever touching the live lifecycle. It cannot resume,
+ * open or disturb a consultation somebody is running right now -- which is the property that makes
+ * capturing a whole visit offline safe at all, and the harness pins it.
+ *
+ * ⚠ THE TIMES ARE THE PRACTITIONER'S, BOTH OF THEM, AND BOTH REQUIRED. A visit synced three days
+ * late that was stamped with upload time would claim the patient was seen at the moment of the sync.
+ *
+ * ⚠ ONE NOTES BOX, FILED AS THE NARRATIVE SEGMENT. Offline capture is typing up a visit that already
+ * happened -- a narrative is what a practitioner writes on paper. The full SOAP editor stays online,
+ * where the encounter opens for review, and a captured narrative never blocks later structured notes.
+ */
+function CaptureVisit(
+  { workspaceId, patientId, patientName }:
+  { workspaceId: string | null; patientId: string | null; patientName: string },
+) {
+  const [identity, setIdentity] = useState<DeviceIdentity | null>(null);
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState("in_person");
+  const [pathway, setPathway] = useState("new_walk_in");
+  const [reason, setReason] = useState("");
+  const [startedAt, setStartedAt] = useState("");
+  const [endedAt, setEndedAt] = useState("");
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [held, setHeld] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    void cachedIdentity().then(setIdentity);
+  }, [open]);
+
+  function nowForInput(offsetMinutes = 0): string {
+    const now = new Date(Date.now() + offsetMinutes * 60_000);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  }
+
+  async function submit() {
+    if (!workspaceId || !patientId || !identity) return;
+    setBusy(true); setProblem(null); setHeld(null);
+    const result = await captureEncounter({
+      workspaceId, deviceId: identity.deviceId, userId: identity.userId,
+      patientId, pathway, encounterMode: mode,
+      reasonForVisit: reason.trim() || null,
+      // Absolute instants, same as the reading above -- a datetime-local carries no zone.
+      startedAt: startedAt ? new Date(startedAt).toISOString() : "",
+      endedAt: endedAt ? new Date(endedAt).toISOString() : "",
+      notes: { narrative: notes },
+    });
+    setBusy(false);
+    if (!result.ok) { setProblem(result.reason); return; }
+    // ⚠ ONLY AFTER `ok: true`, and only ever CAPTURE_HELD_NOTE's sentence.
+    setHeld(CAPTURE_HELD_NOTE);
+    setNotes(""); setReason("");
+  }
+
+  if (!patientId) return null;
+
+  if (!open)
+    return (
+      <button type="button"
+        onClick={() => { setStartedAt(nowForInput(-30)); setEndedAt(nowForInput()); setOpen(true); }}
+        className="mt-2 ml-2 rounded-lg border border-[var(--cp-primary)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary)]">
+        Record a visit
+      </button>
+    );
+
+  if (!identity)
+    return <p className="mt-2 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">This device does not know who is signed in, so a visit recorded now could not say who saw the patient. Open Practice once while online and it will remember.</p>;
+
+  return (
+    <div className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-2">
+      <p className="text-[11px] font-semibold text-gray-500">Record a visit with {patientName}</p>
+      <p className="mt-0.5 text-[10.5px] leading-snug text-gray-500">
+        For a consultation that has already happened. It is filed as a completed visit when this
+        device reaches the practice, where it can be reviewed and signed.
+      </p>
+
+      <div className="mt-1.5 grid grid-cols-2 gap-2">
+        <label className="block">
+          <span className="text-[11px] text-gray-600">Kind of visit</span>
+          {/* ⚠ FIXED PICKERS, NEVER FREE TEXT. These are the database's own vocabularies; anything
+              else would be refused at sync, days from now, when it can no longer be corrected. */}
+          <select value={mode} onChange={e => { setMode(e.target.value); setHeld(null); }}
+            className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]">
+            <option value="in_person">In person</option>
+            <option value="home_visit">Home visit</option>
+            <option value="outreach">Outreach</option>
+            <option value="teleconsultation">Teleconsultation</option>
+            <option value="hospital">Hospital</option>
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[11px] text-gray-600">How they came</span>
+          <select value={pathway} onChange={e => { setPathway(e.target.value); setHeld(null); }}
+            className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]">
+            <option value="new_walk_in">Walk-in</option>
+            <option value="booked">Booked</option>
+            <option value="walk_in_followup">Follow-up (walk-in)</option>
+            <option value="scheduled_followup">Follow-up (scheduled)</option>
+          </select>
+        </label>
+      </div>
+
+      <label className="mt-1.5 block">
+        <span className="text-[11px] text-gray-600">Reason for visit</span>
+        <input type="text" value={reason} onChange={e => { setReason(e.target.value); setHeld(null); }}
+          className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
+      </label>
+
+      <div className="mt-1.5 grid grid-cols-2 gap-2">
+        <label className="block">
+          {/* ⚠ REQUIRED AND EDITABLE, both of them -- the server refuses a visit with no times rather
+              than stamping it with the upload moment. See the reading's time field for the doctrine. */}
+          <span className="text-[11px] text-gray-600">Started</span>
+          <input type="datetime-local" value={startedAt} onChange={e => { setStartedAt(e.target.value); setHeld(null); }}
+            className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
+        </label>
+        <label className="block">
+          <span className="text-[11px] text-gray-600">Ended</span>
+          <input type="datetime-local" value={endedAt} onChange={e => { setEndedAt(e.target.value); setHeld(null); }}
+            className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
+        </label>
+      </div>
+
+      <label className="mt-1.5 block">
+        <span className="text-[11px] text-gray-600">What happened</span>
+        <textarea value={notes} onChange={e => { setNotes(e.target.value); setHeld(null); }} rows={4}
+          className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
+      </label>
+
+      {problem && <p className="mt-1.5 text-[11.5px] leading-relaxed text-rose-700">{problem}</p>}
+      {held && <p className="mt-1.5 rounded border border-gray-300 bg-gray-50 px-2 py-1 text-[11.5px] leading-relaxed text-gray-800">{held}</p>}
+
+      <div className="mt-2 flex items-center gap-2">
+        <button type="button" disabled={busy || notes.trim() === "" || !startedAt || !endedAt} onClick={submit}
           className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
           {/* ⚠ NOT "Save". Nothing is saved anywhere until this device reaches the practice. */}
           {busy ? "Holding…" : "Hold on this device"}

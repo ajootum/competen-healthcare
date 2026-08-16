@@ -28,3 +28,13 @@
  * impossible, so the deliberately-unbuilt auto-merge never engages.
  */
 export const MEASUREMENT_ENTITY_TYPE = "parameter_measurement";
+
+/**
+ * ⚠ A CAPTURED OFFLINE VISIT IS A PAST, COMPLETED ENCOUNTER -- the second entity (owner's order,
+ * 2026-08-16: "Encounters then follow-up"). It files through fileOfflineEncounter, which inserts
+ * COMPLETED directly and therefore CANNOT resume, create or disturb a live encounter -- the
+ * one-active-encounter invariant only spans live statuses, and the resume-before-create path is
+ * deliberately not taken: filing three-day-old notes into somebody's open consultation is the
+ * hazard this entity was designed around. Create-only, so the edit-conflict surface stays closed.
+ */
+export const ENCOUNTER_ENTITY_TYPE = "encounter_visit";

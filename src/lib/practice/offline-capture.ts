@@ -4,7 +4,7 @@ import { outboxAccept } from "@/lib/practice/outbox-store";
 // ⚠ FROM entity-types.ts, NEVER FROM THE APPLIER. Importing the constant from parameter-measurement.ts
 // pulled parameters.ts -> access.ts -> next/headers into this client bundle and put /practice/offline on
 // a 500. tsc, eslint and every harness stayed green. See entity-types.ts for the rule.
-import { MEASUREMENT_ENTITY_TYPE } from "@/lib/practice/sync-appliers/entity-types";
+import { MEASUREMENT_ENTITY_TYPE, ENCOUNTER_ENTITY_TYPE } from "@/lib/practice/sync-appliers/entity-types";
 
 // CP-OFFLINE-SURVEY-001 s5 — THE PRODUCER. The first thing in this product that accepts a write it
 // cannot deliver today.
@@ -141,3 +141,90 @@ export async function captureMeasurement(input: MeasurementCapture): Promise<Cap
 export const CAPTURE_HELD_NOTE =
   "Held on this device. It will be filed with the practice when there is a connection, and it stays here "
   + "until that is confirmed.";
+
+// ── ENTITY TWO: A WHOLE VISIT ── (owner's order 2026-08-16: "Encounters then follow-up") ────────────
+//
+// ⚠ A CAPTURED VISIT IS A PAST, COMPLETED CONSULTATION -- paper notes typed up where they were made.
+// The server files it as COMPLETED directly (offline-filing.ts) and can never resume or disturb a live
+// encounter, which is what makes this entity safe to capture at all. Same preconditions, same contract,
+// same refuse-at-the-bedside doctrine as the measurement above: everything the server would refuse for
+// is refused HERE FIRST, in the same words, while the visit is still fresh enough to correct.
+
+export const CAPTURE_VISIT_NO_TIME =
+  "This visit does not say when it started and ended. Because it was recorded without a connection, the practice cannot work that out, and filing it under today would be wrong.";
+export const CAPTURE_VISIT_END_BEFORE_START =
+  "This visit ends before it starts, which usually means one of the two times was mistyped. It has not been recorded.";
+export const CAPTURE_VISIT_FUTURE_TIME =
+  "This visit is dated in the future, which usually means the clock on this device is wrong. It has not been recorded.";
+export const CAPTURE_VISIT_NO_CONTENT =
+  "This visit carries no notes at all, so there is nothing to record.";
+
+export type EncounterCapture = {
+  workspaceId: string;
+  deviceId: string;
+  userId: string;
+  patientId: string;
+  /** The DB vocabularies, restated on the screen as fixed pickers -- never free text. */
+  pathway?: string | null;
+  encounterMode?: string | null;
+  reasonForVisit?: string | null;
+  /** ⚠ BOTH REQUIRED, from the practitioner, never defaulted -- see the applier. */
+  startedAt: string;
+  endedAt: string;
+  /** Keyed by note type (subjective/objective/assessment/plan/narrative). At least one non-empty. */
+  notes: Record<string, string>;
+  at?: Date;
+};
+
+/**
+ * Record one whole visit on this device, for delivery later. Same contract as captureMeasurement:
+ * nothing may be described as recorded until this returns `ok: true`, and nothing may ever be
+ * described as saved, sent or synced -- CAPTURE_HELD_NOTE is the only sentence for success.
+ */
+export async function captureEncounter(input: EncounterCapture): Promise<CaptureResult> {
+  const at = input.at ?? new Date();
+
+  const started = Date.parse(input.startedAt ?? "");
+  const ended = Date.parse(input.endedAt ?? "");
+  if (!input.startedAt || !input.endedAt || Number.isNaN(started) || Number.isNaN(ended))
+    return { ok: false, code: "NO_TIME", reason: CAPTURE_VISIT_NO_TIME };
+  if (ended < started)
+    return { ok: false, code: "END_BEFORE_START", reason: CAPTURE_VISIT_END_BEFORE_START };
+  if (ended > at.getTime() + CAPTURE_CLOCK_SKEW_MS)
+    return { ok: false, code: "FUTURE_TIME", reason: CAPTURE_VISIT_FUTURE_TIME };
+
+  const notes: Record<string, string> = {};
+  for (const [k, v] of Object.entries(input.notes ?? {})) {
+    if (typeof v === "string" && v.trim()) notes[k] = v.trim();
+  }
+  if (Object.keys(notes).length === 0)
+    return { ok: false, code: "NO_CONTENT", reason: CAPTURE_VISIT_NO_CONTENT };
+
+  const entityId = crypto.randomUUID();
+
+  const accepted = await outboxAccept({
+    workspaceId: input.workspaceId,
+    deviceId: input.deviceId,
+    userId: input.userId,
+    entityType: ENCOUNTER_ENTITY_TYPE,
+    entityId,
+    operation: "create",
+    payload: {
+      patientId: input.patientId,
+      pathway: input.pathway ?? null,
+      encounterMode: input.encounterMode ?? null,
+      reasonForVisit: input.reasonForVisit ?? null,
+      startedAtIso: new Date(started).toISOString(),
+      endedAtIso: new Date(ended).toISOString(),
+      notes,
+    },
+    // Create-only entity: no prior version exists to have been based on. Same as measurements.
+    baseVersion: null,
+    at,
+  });
+
+  if (!accepted.ok)
+    return { ok: false, code: "NOT_STORED", reason: accepted.reason };
+
+  return { ok: true, recordId: accepted.record.id, entityId };
+}

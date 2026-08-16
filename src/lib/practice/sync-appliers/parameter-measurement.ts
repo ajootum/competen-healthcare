@@ -131,10 +131,17 @@ export const parameterMeasurementApplier: SyncApplier = async (admin, ctx, tx: S
   });
 
   if (result.ok)
-    // ⚠ `version: null` IS CORRECT AND IS NOT A GAP. Version exists so an update can detect that somebody
-    // moved first. Nothing ever updates this table, so there is no later write for a version to protect
-    // and inventing one would imply an optimistic-concurrency check that does not apply.
-    return { ok: true, version: null };
+    // ⚠⚠ `version: 1`, AND THE FIRST SPELLING OF THIS LINE WAS `version: null` -- WHICH SILENTLY
+    // DESTROYED THE IDEMPOTENCY LEDGER. The null read as principled ("nothing ever updates this table,
+    // a version would imply an optimistic-concurrency check that does not apply") and it was wrong
+    // against the DEPLOYED database: migration 284 requires an applied create to carry a version
+    // (practice_sync_transaction_applied_version), the ledger insert violated that check, recordVerdict
+    // swallows ledger failures by contract -- so NO ROW WAS EVER WRITTEN for an applied measurement,
+    // and a replay of the same transaction re-ran this applier and APPENDED A SECOND READING. Found
+    // 2026-08-16 by the encounter applier's replay assertion, not by any of this entity's own greens.
+    // The 1 is true of the row -- it exists, at its first and only version -- and it is what keeps the
+    // dedup row alive. See the harness's 10f-control.
+    return { ok: true, version: 1 };
 
   // ⚠ THE MAPPING. See the header -- this is the line that decides whether a database blip loses work.
   if (result.status >= 500)
