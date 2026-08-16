@@ -718,6 +718,14 @@ async function main() {
     // put it in. Reachability here is the REDIRECT, and that is what the four WORKSPACE_REQUIRED call
     // sites pin -- not a nav row.
     "no-account": "Landing page for an account with no workspace; reached by redirect from WORKSPACE_REQUIRED, not from nav.",
+    // ⚠ DELIBERATELY OUTSIDE THE (shell), SO A SIDEBAR ENTRY IS STRUCTURALLY IMPOSSIBLE AND WOULD BE
+    // WRONG ANYWAY. The two-factor screen exists precisely for the person the shell REFUSES
+    // (MFA_REQUIRED) -- putting its entry in a sidebar only the admitted can see would hide it from
+    // its whole audience. Reachability is the routing: /practice/access-status's MFA sentences carry
+    // the link (both enrolled and not-enrolled variants), and the security console's require-2FA
+    // switch warning names it. COMP-AUTH-001 survey s7 item 9, built 2026-08-16 in the strict order
+    // (screen before fail-closed).
+    "two-factor": "MFA enrolment for the person the shell refuses; reached from access-status routing and the security console, never from a sidebar the locked-out cannot see.",
     inbox: "CPR-DOC-002 s3.1: sub-navigation lives inside the Documents workspace. Linked from WorkspaceHeader.",
     // ⚠ CPR-MED-001 CONTAINS NO NAVIGATION SECTION. Its s8 "Integrations" is a list of engines the
     // medication engine reads from and writes to -- six of the seven already exist -- and the word

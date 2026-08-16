@@ -328,6 +328,13 @@ async function main() {
     };
     return bookUnderRules(admin, patientCtx, {
       channel: "patient_self", patientName: "Amina Nabirye", appointmentType: "new_consultation",
+      // ⚠ THE INTAKE THE ENGINE NOW DEMANDS (2ae30's enforcement, migs 268/269, landed AFTER this
+      // fixture was written). Without these two always-required answers every patient-channel
+      // booking below is refused INTAKE_INCOMPLETE before the MODE -- the thing under test -- is
+      // ever consulted, and the harness cannot tell one refusal from the other. Supplied rather
+      // than switched off, per this file's own control discipline: every refusal is reached with
+      // everything ELSE satisfied.
+      intake: { given_name: "Amina", family_name: "Nabirye" },
       scheduledAt, locationId: locId, patientSessionToken: token, patientContact: phone,
       actorId: sessionId, correlationId: CORR, ...over,
     });
@@ -494,6 +501,7 @@ async function main() {
   const overrideIntoOpen = await bookUnderRules(admin, ctx, {
     channel: "patient_self", patientName: "Seen Sooner", appointmentType: "new_consultation",
     scheduledAt: T_OPEN_C, locationId: locId,
+    intake: { given_name: "Seen", family_name: "Sooner" },
     patientSessionToken: overridePair.token, patientContact: overridePair.phone,
     override: { reason: "clinically urgent, agreed by telephone" },
     actorId: OWNER, correlationId: CORR_OVERRIDE,
@@ -506,6 +514,7 @@ async function main() {
   const overrideIntoInternal = await bookUnderRules(admin, ctx, {
     channel: "patient_self", patientName: "Seen Sooner Still", appointmentType: "new_consultation",
     scheduledAt: T_INTERNAL_F, locationId: locId,
+    intake: { given_name: "Seen", family_name: "Sooner Still" },
     patientSessionToken: overridePair2.token, patientContact: overridePair2.phone,
     override: { reason: "clinically urgent, agreed by telephone" },
     actorId: OWNER, correlationId: CORR_OVERRIDE,
