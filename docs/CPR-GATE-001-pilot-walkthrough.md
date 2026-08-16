@@ -125,7 +125,7 @@ say something untrue, confusing, or missing?** A defect here is usually a SENTEN
 | 1 | **Planner** -> add an activity for today (a clinic block) | The compressed layout: one Day Inspector, not six stacked cards. The appointment book appears only in Day view. |
 | 2 | **Command Centre** -> start the day / start the activity | Current Activity in the sidebar goes Running. |
 | 3 | **Current Session** | The cockpit: tiles as pairs (no percentages), Current Patient empty state honest, queue empty but not a zero grid. |
-| 4 | Book an appointment for today (Planner, Day view), then Confirm and Check in | REQUESTED -> CONFIRMED -> ARRIVED; the person appears in the cockpit queue. |
+| 4 | Book an appointment for today (Planner, Day view), then Check in | Your booking is BORN CONFIRMED (staff bookings confirm themselves -- you should never be asked to confirm your own booking); Check in moves it to ARRIVED and the person appears in the cockpit queue. The REQUESTED state belongs to the patient-facing booking page only. |
 | 5 | **Add a walk-in** from the cockpit queue | Registration with duplicate screening; the `YY-NNNNNN` number mints. |
 | 6 | **Start the encounter from the queue row** | This action is NEW today -- it existed as code for months and was never wired. You land in the consultation. |
 | 7 | Document: SOAP segments, a diagnosis with a problem, a medication | Each save is versioned; no-op saves write no version. |

@@ -189,10 +189,17 @@ async function main() {
   ok("an appointment books against the registry", appt.ok, appt.ok ? "" : appt.message);
   if (!appt.ok) { await cleanup(); return report(); }
 
-  // PEN-001 requires CONFIRMED before ARRIVED -- you cannot check in someone whose appointment was
-  // never confirmed. The calendar only offers "Check in" on a CONFIRMED row for the same reason.
-  const confirmed = await transitionAppointment(admin, { workspaceId: ws, appointmentId: appt.data.id, to: "CONFIRMED", ...base });
-  ok("the appointment confirms", confirmed.ok, confirmed.ok ? "" : confirmed.message);
+  // ⚠ REPOINTED 2026-08-16: this used to TRANSITION to CONFIRMED and went red the day commit
+  // 2ee597ae made a staff booking confirm ITSELF -- "this path used to enter every non-walk-in as
+  // REQUESTED, which asked a human to confirm a booking a colleague just made". The property PEN-001
+  // actually needs -- CONFIRMED before ARRIVED -- still holds; what changed is WHO confirms: the
+  // staff channel at birth, the patient channel by a person. So the pin now asserts the deliberate
+  // birth status instead of replaying a transition the engine rightly refuses as CONFIRMED-to-
+  // CONFIRMED. The patient-channel REQUESTED path keeps its own coverage in the booking harnesses.
+  const { data: born } = await admin.from("practice_appointment")
+    .select("status").eq("id", appt.data.id).single();
+  ok("a staff booking is born CONFIRMED -- 2ee597ae's rule, which is what makes check-in immediately offerable",
+    born?.status === "CONFIRMED", `status=${born?.status}`);
   const arrived = await transitionAppointment(admin, { workspaceId: ws, appointmentId: appt.data.id, to: "ARRIVED", ...base });
   ok("check-in moves the appointment to ARRIVED and queues the patient", arrived.ok, arrived.ok ? "" : arrived.message);
   const { count: queued } = await admin.from("practice_queue_entry").select("*", { count: "exact", head: true }).eq("workspace_id", ws);
