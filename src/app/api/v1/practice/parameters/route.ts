@@ -268,6 +268,16 @@ export async function POST(req: NextRequest) {
       enteredInError: action === "retract",
       ...base,
     });
+    // Walkthrough #5: documenting is consulting -- a measurement recorded into a DRAFT encounter
+    // starts it. Best-effort, never the measurement response. Patient-level records (no encounter)
+    // start nothing.
+    if (r.ok && body.encounterId) {
+      const { ensureConsultationStarted } = await import("@/lib/practice/encounters");
+      await ensureConsultationStarted(admin, {
+        workspaceId: auth.ctx.workspaceId, encounterId: String(body.encounterId),
+        actorId: auth.ctx.userId, correlationId: auth.caller.traceId,
+      });
+    }
     return r.ok ? NextResponse.json(r.data, { status: 201 }) : fail(r);
   }
 

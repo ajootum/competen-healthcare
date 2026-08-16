@@ -265,6 +265,30 @@ const ENCOUNTER_EVENT: Record<string, PracticeEventType | undefined> = {
  * Returns the id or null, and the error SEPARATELY -- "nothing is active" and "the lookup failed" must
  * never collapse into the same answer, because the first permits a start and the second cannot.
  */
+/**
+ * Walkthrough 2026-08-16 #5 -- DOCUMENTING IS CONSULTING. The owner recorded a weight and the header
+ * still said "Start consultation": the DRAFT state was waiting for a button nobody's flow contains
+ * once their pen is already moving. Called by the clinical WRITE routes after a successful record
+ * write, this promotes a DRAFT encounter to ACTIVE -- the same transition the button performs, with
+ * everything that rides on it (transition record, audit, domain event, queue reflection).
+ *
+ * ⚠ BEST-EFFORT AND SILENT ON REFUSAL, deliberately. If another consultation is already ACTIVE the
+ * one-active rule refuses this (ANOTHER_ACTIVE) -- and the write that triggered it must not fail for
+ * that: the data is already committed, and the header keeps offering the button, which explains
+ * itself when pressed. Keystroke drafts never call this -- a draft kept is not a record written.
+ */
+export async function ensureConsultationStarted(admin: any, args: {
+  workspaceId: string; encounterId: string; actorId: string; correlationId: string;
+}): Promise<void> {
+  const { data: enc } = await admin.from("practice_encounter")
+    .select("id, status").eq("id", args.encounterId).eq("workspace_id", args.workspaceId).maybeSingle();
+  if (!enc || enc.status !== "DRAFT") return;
+  await transitionEncounter(admin, {
+    workspaceId: args.workspaceId, encounterId: args.encounterId, to: "ACTIVE",
+    actorId: args.actorId, correlationId: args.correlationId,
+  });
+}
+
 export async function activeEncounterId(
   admin: any, workspaceId: string, practitionerId: string, exceptId?: string,
 ): Promise<{ id: string | null; error: string | null }> {

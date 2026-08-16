@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { listProcedures, recordProcedure, procedureActivity } from "@/lib/practice/procedures";
+import { ensureConsultationStarted } from "@/lib/practice/encounters";
 
 // GET  /api/v1/practice/procedures?encounterId=&patientId=&activity=1 -- CPR-150.
 // POST /api/v1/practice/procedures                                    -- record what was done.
@@ -49,5 +50,10 @@ export async function POST(req: NextRequest) {
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
+  // Walkthrough #5: documenting is consulting -- a recorded procedure starts a DRAFT consultation.
+  await ensureConsultationStarted(auth.caller.admin, {
+    workspaceId: auth.ctx.workspaceId, encounterId: String(body.encounterId),
+    actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+  });
   return NextResponse.json({ procedure: result.data, correlationId: auth.caller.traceId }, { status: 201 });
 }

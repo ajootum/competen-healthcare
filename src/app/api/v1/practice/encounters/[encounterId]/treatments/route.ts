@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
-import { recordTreatment } from "@/lib/practice/encounters";
+import { recordTreatment, ensureConsultationStarted } from "@/lib/practice/encounters";
 
 // POST /api/v1/practice/encounters/{id}/treatments -- DM-001 s10. A medication row here is the
 // practitioner's INTENTION (dose/route/frequency/duration), not an administration record: ADR-01 keeps
@@ -34,5 +34,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ enc
   });
 
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
+  // Walkthrough #5: documenting is consulting -- a recorded treatment starts a DRAFT consultation.
+  await ensureConsultationStarted(auth.caller.admin, {
+    workspaceId: auth.ctx.workspaceId, encounterId,
+    actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+  });
   return NextResponse.json({ treatment: result.data, correlationId: auth.caller.traceId }, { status: 201 });
 }

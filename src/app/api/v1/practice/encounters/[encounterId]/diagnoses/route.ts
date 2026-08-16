@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
-import { recordDiagnosis } from "@/lib/practice/encounters";
+import { recordDiagnosis, ensureConsultationStarted } from "@/lib/practice/encounters";
 
 // POST /api/v1/practice/encounters/{id}/diagnoses -- DM-001 s9. `problemLabel` is optional and is what
 // promotes an encounter diagnosis into the patient's longitudinal problem list; omitting it records a
@@ -27,5 +27,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ enc
   });
 
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
+  // Walkthrough #5: documenting is consulting -- a recorded diagnosis starts a DRAFT consultation.
+  await ensureConsultationStarted(auth.caller.admin, {
+    workspaceId: auth.ctx.workspaceId, encounterId,
+    actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+  });
   return NextResponse.json({ diagnosis: result.data, correlationId: auth.caller.traceId }, { status: 201 });
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { recordInvestigation, reviewInvestigation } from "@/lib/practice/encounter-workspace";
+import { ensureConsultationStarted } from "@/lib/practice/encounters";
 
 // POST  /api/v1/practice/encounters/{id}/investigations  -- record that one was requested.
 // PATCH /api/v1/practice/encounters/{id}/investigations  -- record that it has been reviewed.
@@ -27,6 +28,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ enc
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
   if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
+  // Walkthrough #5: documenting is consulting -- a requested investigation starts a DRAFT consultation.
+  await ensureConsultationStarted(auth.caller.admin, {
+    workspaceId: auth.ctx.workspaceId, encounterId,
+    actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+  });
   return NextResponse.json({ investigation: result.data, correlationId: auth.caller.traceId }, { status: 201 });
 }
 

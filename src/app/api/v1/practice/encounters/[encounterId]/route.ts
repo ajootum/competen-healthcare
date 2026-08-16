@@ -39,6 +39,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ en
       actorId: auth.caller.userId, correlationId: auth.caller.traceId,
     });
     if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
+    // Walkthrough #5: documenting is consulting. A saved segment with content promotes a DRAFT
+    // encounter to ACTIVE -- best-effort, never the save's failure. Keystroke drafts (the drafts
+    // route) deliberately do not do this.
+    if (String(body.body ?? "").trim()) {
+      const { ensureConsultationStarted } = await import("@/lib/practice/encounters");
+      await ensureConsultationStarted(auth.caller.admin, {
+        workspaceId: auth.ctx.workspaceId, encounterId,
+        actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+      });
+    }
     return NextResponse.json({ saved: result.data, correlationId: auth.caller.traceId });
   }
 
