@@ -413,6 +413,14 @@ ok("C7", judge(site({ table: null, argText: "p.table", file: "src/lib/platform/m
   "…and passes only where a written justification exists, keyed to the file AND the expression — the same expression in another file is still refused");
 ok("C8", judge(site({ table: "practice_patient", select: "unresolved", unresolved: "computed select" })).code === "UNRESOLVED_SELECT",
   "an unresolvable select list FAILS on a known practice table");
+// The 2026-08-16 billing tiles: counts allowed, money NEVER. The allowed half is the tenancy column;
+// the refused half is the feared four-word widening on the two tables that now carry money.
+ok("C16", judge(site({ table: "practice_invoice", columns: ["workspace_id"] })).code === "ALLOWED"
+  && judge(site({ table: "practice_payment", columns: ["workspace_id"] })).code === "ALLOWED",
+  "the ops billing tiles' reads are on the register: tenancy column only, counted never listed");
+ok("C17", judge(site({ table: "practice_invoice", columns: ["workspace_id", "total_minor"] })).code === "COLUMN_NOT_ALLOWED"
+  && judge(site({ table: "practice_payment", columns: ["workspace_id", "amount_minor"] })).code === "COLUMN_NOT_ALLOWED",
+  "⚠ an AMOUNT column on either billing table is refused -- a named practitioner's revenue is business intelligence, permanently outside this plane");
 ok("C9", judge(site({ table: "practice_patient", select: "none", write: false, verbs: ["eq"] })).code === "NO_TERMINAL",
   "a chain this scanner cannot classify FAILS rather than being assumed inert");
 ok("C10", judge(site({ table: "practice_workspace", select: "star" })).code === "STAR_NOT_ALLOWED",

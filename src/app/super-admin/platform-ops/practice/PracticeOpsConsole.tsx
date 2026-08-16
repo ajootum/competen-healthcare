@@ -261,6 +261,8 @@ export default function PracticeOpsConsole({ callerId, callerName, initial }: {
                   <th className="py-1 pr-3">Status</th><th className="py-1 pr-3 text-right">Team</th>
                   <th className="py-1 pr-3 text-right">Appts</th><th className="py-1 pr-3 text-right">Patients</th>
                   <th className="py-1 pr-3 text-right">Encounters</th><th className="py-1 pr-3 text-right">Signed</th>
+                  {/* Banded counts, never amounts -- "is the money loop alive", not "how much". */}
+                  <th className="py-1 pr-3 text-right">Invoices</th><th className="py-1 pr-3 text-right">Payments</th>
                   <th className="py-1">Created</th>
                 </tr>
               </thead>
@@ -288,6 +290,8 @@ export default function PracticeOpsConsole({ callerId, callerName, initial }: {
                     <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.patients ?? "0"}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.encounters ?? "0"}</td>
                     <td className={`py-1.5 pr-3 text-right tabular-nums font-semibold ${(w.counts.signed ?? "0") !== "0" ? "text-[var(--cmp-text-success)]" : "text-gray-300"}`}>{w.counts.signed ?? "0"}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.invoices ?? "0"}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.payments ?? "0"}</td>
                     <td className="py-1.5 font-mono text-gray-400">{String(w.created_at).slice(0, 10)}</td>
                   </tr>
                 ))}

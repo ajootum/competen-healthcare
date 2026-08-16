@@ -254,6 +254,16 @@ capability of its own, no record of the read, and no consent from the practition
 honestly go today is *plan code + entitlement status + trial window*. Anything labelled revenue would be
 invented, which `docs/` and your `cpr-honesty-rules` note both forbid.
 
+> **CORRECTED 2026-08-16.** The paragraph above was true when surveyed and was falsified by the
+> CPR-PAY arc (migrations 303–306: practitioner-side charges, invoices, payments, receipts,
+> adjustments, settlements). What the platform plane now reads of it — decided under this survey's
+> own D2 — is **banded row counts of `practice_invoice` and `practice_payment`, tenancy column
+> only**, on the operations console beside the encounter counts, answering "is the money loop
+> alive" and nothing else. Amounts, currencies, payers, methods and collectors remain outside the
+> plane permanently; both tables are on the `PRACTICE_ALLOWLIST` register with that limit stated,
+> and the plane-boundary harness enforces it. "Revenue" remains a word no platform surface may use
+> about a practice.
+
 ---
 
 # 4. The machinery nobody wired to the platform side

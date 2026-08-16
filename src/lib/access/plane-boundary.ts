@@ -136,6 +136,25 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
       "gate, and a filter is not a select — see FILTERS below for what that does and does not cover.",
   },
   {
+    table: "practice_invoice",
+    columns: ["workspace_id"],
+    count: true,
+    why:
+      "⚠ TENANCY COLUMN ONLY, counted never listed (added 2026-08-16 with the ops billing tiles). " +
+      "The count answers \"is the money loop alive on this practice\", which is the same operational " +
+      "question the encounter count answers. `total_minor`, `currency`, `patient_id` and every other " +
+      "column are outside this plane permanently — a named practitioner's revenue is business " +
+      "intelligence about their book, exactly what D2's banding exists to prevent.",
+  },
+  {
+    table: "practice_payment",
+    columns: ["workspace_id"],
+    count: true,
+    why:
+      "⚠ TENANCY COLUMN ONLY, counted never listed. Amounts, methods and collectors stay on the " +
+      "practice plane; the platform sees only that payments are being recorded at all.",
+  },
+  {
     table: "practice_role_capabilities",
     columns: [],
     count: true,

@@ -113,6 +113,12 @@ export async function loadPracticeOps(admin: any) {
   const TABLES: Record<string, string> = {
     members: "practice_membership", appointments: "practice_appointment",
     patients: "practice_patient", encounters: "practice_encounter",
+    // The billing loop, wired 2026-08-16 (the PAY arc falsified the survey's "there is no billing
+    // to see"). COUNTS ONLY, banded like everything else -- never an amount, never a currency:
+    // "is the money loop alive" is operational telemetry, "how much does she bill" is business
+    // intelligence about a named clinician's book. Both tables are on the plane-boundary allowlist
+    // as tenancy-column-only, in the same commit as this read (the scan lesson, fifth application).
+    invoices: "practice_invoice", payments: "practice_payment",
   };
   // ⚠ THESE COUNTS USED TO STOP COUNTING AT 1,000 AND SAY NOTHING.
   //
