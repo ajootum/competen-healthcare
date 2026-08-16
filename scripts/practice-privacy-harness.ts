@@ -293,12 +293,19 @@ async function main() {
   const posture = await privacyPosture(admin, a.ctx);
   ok("the posture counts real entries", posture.accessEntries > 0 && posture.patients === 1,
     JSON.stringify({ e: posture.accessEntries, p: posture.patients }));
+  // ⚠ RETENTION MOVED SIDES ON 2026-08-16, and this pin moved with it. It used to require a
+  // retention line among the GAPS; the owner then codified the status quo as the policy, so the
+  // same subject is now pinned as a GUARANTEE -- and pinning it in both places would make one a lie.
   ok("it states what is NOT true as well as what is (the gaps are named, not implied)",
-    posture.notYetTrue.length >= 3 && posture.notYetTrue.some(s => /retention/i.test(s)),
+    posture.notYetTrue.length >= 3 && posture.notYetTrue.some(s => /database console/i.test(s)),
     `${posture.notYetTrue.length} gaps named`);
   ok("...and every guarantee is a property of the code rather than a promise about intent",
     posture.guarantees.length >= 5 && posture.guarantees.some(s => /append-only/i.test(s)),
     `${posture.guarantees.length} guarantees`);
+  ok("⚠ retention is a STATED POLICY now, on the guarantees side -- the owner's decision of record",
+    posture.guarantees.some(s => /decision of record/i.test(s) && /retained|kept|aged out/i.test(s))
+    && !posture.notYetTrue.some(s => /retention policy/i.test(s)),
+    "the retention decision is missing from guarantees, or still listed as a gap");
 
   // ── 7. Isolation + anon ───────────────────────────────────────────────────
   const bReview = await reviewAccess(admin, b.ctx, {});

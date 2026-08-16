@@ -315,14 +315,21 @@ export async function privacyPosture(admin: any, ctx: WorkspaceContext) {
       "Dictation uses your browser's own speech recognition; no audio reaches Competen or is stored anywhere.",
       "Signed encounters and issued documents cannot be edited, enforced by database triggers rather than by application code.",
       "Every table is deny-by-default at the row level; nothing is readable without going through the capability checks.",
+      // ── RETENTION, CODIFIED (owner decision, 2026-08-16). This used to sit in the gaps list as "a
+      // legal question this product has not been given an answer to". The answer was given: the
+      // status quo IS the policy, stated rather than left as an accident of nobody deciding.
+      "Clinical records are not aged out: nothing here deletes patient data on a timer, and a record is kept for as long as the practice's own record exists. That is a decision of record, not an accident -- closing a practice keeps its records readable and exportable rather than destroying them.",
+      "The access log is kept for the life of the practice, by the same decision: append-only and undeleted is the retention policy, not a gap waiting for one.",
+      "Deleting a Competen account is immediate and permanent. There is no soft-delete and no grace period.",
     ],
     // Named rather than implied. A practice deciding whether to trust this deserves the gaps too.
     notYetTrue: [
-      "There is no retention policy: nothing is deleted from the access log, because how long to keep it is a legal question this product has not been given an answer to.",
       "The access log records reads made through this application. It cannot see a database console.",
       "There is no patient-facing view -- a patient asking who opened their record is answered by a practitioner reading it to them.",
-      "Patients cannot book with you through this product. The one-time-code machinery that would protect it is built and tested; the intake behind it is not, and there is nothing configured to send a patient a code.",
-      "Export produces one patient at a time. A whole-practice export is not built.",
+      // ⚠ REWRITTEN 2026-08-16: this line used to say patients cannot book AT ALL, which became false
+      // when the published booking page shipped (/practice/book/[handle], migration 254's publish
+      // states). What is still true is narrower, and it is the delivery half.
+      "Booking confirmations and one-time codes cannot be SENT: no mail or SMS provider is configured for this deployment. Patients can reach a published booking page and ask; what cannot happen yet is this product messaging them back.",
     ],
   };
 }
