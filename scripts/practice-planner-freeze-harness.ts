@@ -26,7 +26,7 @@
  * Source pins and pure constants only: no database, no env. It must stay runnable on a bare checkout,
  * because the freeze is a statement about the CODE.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { PLANNER_VIEWS, DEFAULT_PLANNER_VIEW } from "../src/lib/practice/planner-constants";
 
@@ -222,6 +222,20 @@ async function main() {
     workspace.includes("/api/v1/practice/planner")
     && readFileSync(join(process.cwd(), "src", "lib", "practice", "navigation.ts"), "utf8")
       .includes('"/practice/calendar"'));
+
+  // ── THE 24-HOUR CLOCK (owner decision, first recorded in CalendarConsole and re-affirmed as
+  // walkthrough defect #1, 2026-08-16). A native type="time" input draws AM/PM columns on any
+  // machine whose OS locale says so -- the product must not leave its clock format to the
+  // visitor's operating system. Comment-stripped, because the replacement inputs carry comments
+  // that NAME the forbidden attribute (the needle-in-documentation lesson).
+  const timeInputFiles = readdirSync("src/app/practice/(shell)/calendar")
+    .filter(f => f.endsWith(".tsx"))
+    .filter(f => /type="time"|type="datetime-local"/.test(
+      stripComments(readFileSync(`src/app/practice/(shell)/calendar/${f}`, "utf8"))));
+  ok("planner time entry is the 24-hour text pattern -- no native time picker anywhere in the folder",
+    timeInputFiles.length === 0, timeInputFiles.join(", "));
+  ok("...and the 24-hour pattern is genuinely present where times are entered, so the pin is not scanning an empty folder",
+    /pattern="\^\(\[01\]\?/.test(readFileSync("src/app/practice/(shell)/calendar/AddActivityForm.tsx", "utf8")));
 
   report();
 }
