@@ -271,15 +271,16 @@ export default function SecurityConsole({
                   onChange={e => send({ mfaRequired: e.target.checked })} />
                 <span>
                   Require two-factor authentication
-                  {/* ⚠ THE LIMIT AND THE TRAP, NEXT TO THE SWITCH. "It does not enrol anybody" was true
-                      and much too quiet: there is no enrolment screen ANYWHERE in this product, so this
-                      switch can shut out every member who does not already hold a factor -- including
-                      whoever pressed it, on their next page load. */}
+                  {/* ⚠ THE TRAP, STILL NEXT TO THE SWITCH -- softened only by the truth changing.
+                      /practice/two-factor exists now (2026-08-16), so a member shut out by this switch
+                      has a door back in. The lockout warning stays, because "there is a door" and
+                      "everyone has walked through it" are different sentences. */}
                   <span className="block text-[10px] text-gray-500">
-                    Two-factor is set up on the Competen account, not here, and this product has no
-                    screen that sets one up. Turning this on means this practice will not open for
-                    anybody without a factor already on their account &mdash; including you, from your
-                    next page load. Only somebody who can still get in can turn it back off.
+                    Two-factor lives on the Competen account. Members set one up at
+                    Practice&nbsp;&rarr;&nbsp;Two-factor authentication (/practice/two-factor), which
+                    stays reachable even when this practice refuses them. Turning this on still shuts
+                    out everyone without a factor &mdash; including you, from your next page load &mdash;
+                    until they enrol there. Set yours up FIRST.
                   </span>
                 </span>
               </label>

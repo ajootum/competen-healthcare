@@ -14,7 +14,7 @@ import IdleReSignIn from "./IdleReSignIn";
 
 export const dynamic = "force-dynamic";
 
-const REASONS: Record<string, { title: string; body: string }> = {
+const REASONS: Record<string, { title: string; body: string; href?: string; hrefLabel?: string }> = {
   WORKSPACE_INACTIVE: {
     title: "This Practice is not currently available",
     body: "The workspace is suspended or being closed. Clinical data access is paused while that stands. If you believe this is wrong, contact support with your workspace name.",
@@ -52,13 +52,20 @@ const REASONS: Record<string, { title: string; body: string }> = {
   // AND IT SPLITS ON `enrolled`, because the two cases need different sentences and one wrong sentence
   // here is the whole problem. Somebody who HOLDS a factor is in a quite different position from somebody
   // who does not, and telling the first that their account has no second factor would be simply false.
+  // ⚠ REWRITTEN 2026-08-16, THE DAY THE SCREEN SHIPPED. These two sentences used to state -- truthfully
+  // -- that no page in this product could set up or complete a second factor, which left a locked-out
+  // person with nothing to act on but "contact somebody". /practice/two-factor exists now (COMP-AUTH-001
+  // survey s7 item 9, built in the strict order: the screen BEFORE any fail-closed behaviour), and it is
+  // deliberately outside the (shell) guard so exactly this person can reach it.
   MFA_REQUIRED: {
     title: "This Practice requires a second factor",
-    body: "Somebody in this practice has made two-factor authentication a requirement, and your Competen account does not have one. Two-factor lives on the Competen account rather than in Practice, and this product has no screen that sets one up — so if you cannot add an authenticator to your account elsewhere, somebody in the practice who can still get in has to turn the requirement off. Contact them, or support, with your workspace name.",
+    body: "Somebody in this practice has made two-factor authentication a requirement, and your Competen account does not have one yet. Two-factor lives on the Competen account rather than in Practice. Set one up at Practice > Two-factor authentication — it takes an authenticator app and about a minute — and this practice opens for you. If you cannot, somebody in the practice who can still get in can turn the requirement off.",
+    href: "/practice/two-factor", hrefLabel: "Set up two-factor",
   },
   MFA_REQUIRED_ENROLLED: {
     title: "This Practice requires a second factor",
-    body: "Somebody in this practice has made two-factor authentication a requirement. Your Competen account does have an authenticator, but this sign-in was not verified with it. Sign out and sign in again, completing the second-factor step. If that does not clear it, this product has no screen that can complete the step for you — somebody in the practice who can still get in has to turn the requirement off.",
+    body: "Somebody in this practice has made two-factor authentication a requirement. Your Competen account does have an authenticator, but this session was not verified with it. Verify with your authenticator code and this practice opens — no sign-out needed.",
+    href: "/practice/two-factor", hrefLabel: "Verify your second factor",
   },
   // The third state: not permitted, not refused — unanswered. It carries a retry rather than an
   // instruction, because there is nothing for the person to do differently.
@@ -120,6 +127,16 @@ export default async function Page() {
       <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center">
         <h1 className="text-lg font-bold text-gray-900">{reason.title}</h1>
         <p className="mt-3 text-sm leading-relaxed text-gray-600">{reason.body}</p>
+        {/* The control behind the sentence, where one exists -- the MFA states route to the two-factor
+            screen (2026-08-16), which is what turned their old "no screen exists" wording into a door. */}
+        {reason.href && (
+          <p className="mt-5">
+            <Link href={reason.href}
+              className="inline-block rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[13px] font-semibold text-white">
+              {reason.hrefLabel ?? "Continue"}
+            </Link>
+          </p>
+        )}
         {restorable && (
           <RestorePracticePanel workspaceId={restorable.workspaceId}
             workspaceName={restorable.workspaceName} status={restorable.status} />

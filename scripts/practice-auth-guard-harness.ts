@@ -661,6 +661,25 @@ async function main() {
       r.error ?? `returned ${JSON.stringify(r.data)} -- expected the boolean false`);
   }
 
+  // ── THE MFA ENROLMENT SCREEN (survey s7 item 9, 2026-08-16) -- strict-order source pins ────────
+  // The rule: the SCREEN ships before any fail-closed behaviour, and the locked-out person can
+  // reach it. These pins weld the three halves: the page outside the shell, the console on
+  // GoTrue's own API, and access-status routing to a door instead of an apology.
+  const tfPage = readFileSync(join(process.cwd(), "src", "app", "practice", "two-factor", "page.tsx"), "utf8");
+  const tfConsole = readFileSync(join(process.cwd(), "src", "app", "practice", "two-factor", "TwoFactorConsole.tsx"), "utf8");
+  const accessStatus = readFileSync(join(process.cwd(), "src", "app", "practice", "access-status", "page.tsx"), "utf8");
+  ok("the two-factor page lives OUTSIDE the (shell) guard and needs only a signed-in account",
+    !tfPage.includes("resolvePracticeShell") && tfPage.includes("supabase.auth.getUser"));
+  ok("the console enrols and verifies through GoTrue's own MFA API, and never swallows a failure",
+    tfConsole.includes("auth.mfa.enroll") && tfConsole.includes("challengeAndVerify")
+      && tfConsole.includes("setError(e.message)"));
+  ok("unenrolment is drawn only at aal2 -- a button that always fails is worse than the reason",
+    tfConsole.includes("atAal2 && (") && tfConsole.includes("Removing an authenticator needs a session"));
+  ok("access-status routes BOTH MFA states to the screen instead of apologising",
+    accessStatus.includes(String.raw`href: "/practice/two-factor", hrefLabel: "Set up two-factor"`)
+      && accessStatus.includes(String.raw`hrefLabel: "Verify your second factor"`)
+      && !accessStatus.includes("this product has no screen that sets one up"));
+
   console.log(`\n${fails.length ? "FAILED" : "PASSED"}  ${pass} assertion(s)${fails.length ? `, ${fails.length} failure(s):\n  - ${fails.join("\n  - ")}` : ""}\n`);
   process.exit(fails.length ? 1 : 0);
 }
