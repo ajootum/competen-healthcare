@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { estateRolesOf } from "@/lib/roles";
 
 // CSV export of the Evidence Validation queue (spec header Export action):
 // open entries with candidate, competency mapping, evidence counts, age and
@@ -16,7 +17,7 @@ export async function GET() {
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

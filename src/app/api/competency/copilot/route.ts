@@ -8,6 +8,7 @@ import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { fetchCmoSuite, daysLeft } from "@/lib/competency/cmo-suite";
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // CMO-017 AI Competency Intelligence — wired to the real AI Runtime Gateway (src/lib/ai/client.ts generate()).
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, full_name, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["super_admin", "hospital_admin", "educator"].includes(r))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const quota = await checkAiQuota(admin, user.id);

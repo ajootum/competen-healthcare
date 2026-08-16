@@ -1,3 +1,4 @@
+import { estateRolesOf } from "@/lib/roles";
 // People, Positions & Roles module (ENT-ORG-001 §5) loaders. Separates Person
 // (profiles) / Position (positions) / Role (profiles.roles[]) / Workspace access
 // (derived from roles). Live data; select("*") is drift-proof.
@@ -15,7 +16,7 @@ const WORKSPACE: Record<string, string> = {
   hospital_admin: "Organisation Admin", quality_reviewer: "Quality & Safety", program_director: "Executive",
   education_administrator: "Education Admin", super_admin: "Platform Control",
 };
-export const rolesOf = (p: any): string[] => (p.roles?.length ? p.roles : [p.role]).filter(Boolean);
+export const rolesOf = (p: any): string[] => estateRolesOf(p);
 export const workspacesFor = (roles: string[]): string[] => [...new Set(roles.map(r => WORKSPACE[r]).filter(Boolean))];
 
 export async function loadPeopleDirectory(admin: any) {

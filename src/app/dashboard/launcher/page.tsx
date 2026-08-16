@@ -2,7 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { ROLE_CONFIG, highestRole, type AppRole } from "@/lib/roles";
+import { estateRolesOf, ROLE_CONFIG, highestRole, type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
 import { cardClass } from "@/components/ui/primitives";
 
@@ -36,7 +36,7 @@ export default async function LauncherPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any; // eslint-disable-line @typescript-eslint/no-explicit-any
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id, avatar_url").eq("id", user.id).single();
-  const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
+  const userRoles: AppRole[] = estateRolesOf(profile) as AppRole[];
   const cookieStore = await cookies();
   // !! highestRole returns AppRole | null since CP-SPLIT-002, and `as AppRole` swallowed the null.
   // Carried, not replaced -- an identity with no estate role has no active portal, and the launcher

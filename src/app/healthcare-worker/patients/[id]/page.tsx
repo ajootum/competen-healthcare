@@ -6,6 +6,7 @@ import { cnciTone } from "@/lib/hww/cnci";
 import { card, label, titleCase, fmtTime, fmtWhen, AcuityChip, RiskChip, PrioChip, Chip, SectionCard, Empty, ewsColor } from "@/lib/hww/kit";
 import TransferRequest from "./TransferRequest";
 import { AddDevice, RemoveDevice } from "./DeviceActions";
+import { estateRolesOf } from "@/lib/roles";
 
 // Patient Workspace (HWW-ARCH-002 S7) — everything about ONE patient in one
 // place: clinical snapshot, CNCI with its drivers, scores + trend, next due,
@@ -27,7 +28,7 @@ export default async function PatientWorkspacePage({ params }: { params: Promise
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   const isStaffUser = roles.some(r => STAFF.includes(r));
 
   const d = await loadPatientOne(admin, user.id, id);

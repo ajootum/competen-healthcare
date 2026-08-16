@@ -8,6 +8,7 @@ import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 const NONE = "00000000-0000-0000-0000-000000000000";
 
 // GET — report AI readiness (so the UI can show config state without a call)
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   // Roles-array aware (matches getCaller/page gates): multi-role callers pass.
   const { data: profile } = await admin.from("profiles").select("role, roles, full_name, hospital_id").eq("id", user.id).single();
-  const callerRoles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const callerRoles: string[] = estateRolesOf(profile);
   if (!callerRoles.some(r => ["super_admin", "hospital_admin", "educator"].includes(r))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

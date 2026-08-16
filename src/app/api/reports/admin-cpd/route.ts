@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { OUTCOME_CONFIG, type DecisionOutcome } from "@/lib/ckcm";
+import { estateRolesOf } from "@/lib/roles";
 
 // CSV export of the admin dashboard's CPD & competency compliance table
 // (previously a dead "#" button and a mailto). Scope mirrors the dashboard:
@@ -18,7 +19,7 @@ export async function GET() {
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles")
     .select("role, roles, hospital_id, org_role, organisation_id").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

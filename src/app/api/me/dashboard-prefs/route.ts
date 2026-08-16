@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { resolveDashboardControls, DASHBOARD_CONFIG_PREFIX } from "@/lib/orchestration/dashboard-manifest";
 import { DEFAULT_DASHBOARD_MANIFEST } from "@/app/dashboard/dashboard-registry";
+import { estateRolesOf } from "@/lib/roles";
 
 // Ch.11 WS8 / PXP-AC-02, PXP-AC-08 — the user's own dashboard personalization, persisted as user-scope overrides
 // the manifest resolver already reads. POST { key, hidden } hides/shows an OPTIONAL widget; POST { updates:[{key,
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id, tenant_id, unit_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   const ctx = { tenantId: profile?.tenant_id ?? null, hospitalId: profile?.hospital_id ?? null, unitId: profile?.unit_id ?? null, roles, userId: user.id };
   const b = await req.json().catch(() => ({}));
 

@@ -3,6 +3,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { currentTraceId } from "@/lib/trace";
 import { admitToEstate } from "@/lib/platform-membership";
 import type { AppRole } from "@/lib/roles";
+import { estateRolesOf } from "@/lib/roles";
 
 // ── API authorization & tenant-scoping helpers ───────────────────────────────
 // Route handlers that use the service-role admin client BYPASS Supabase RLS, so
@@ -75,7 +76,7 @@ export async function getCaller(opts: { plane?: "estate" | "practice" | "enterpr
   // this caller" are two places for the answer to differ, and the divergence is invisible until
   // something is written.
   const { data: me } = await admin.from("profiles").select("role, roles, hospital_id, organisation_id, tenant_id").eq("id", user.id).single();
-  const roles = ((me?.roles?.length ? me.roles : [me?.role]) as (string | null)[]).filter(Boolean) as string[];
+  const roles = estateRolesOf(me) as string[];
 
   // ── GATE 1 AT THE API BOUNDARY (COMP-ARCH-PSA-001 s7/s14) ──────────────────────────────────────────
   // ⚠ THE ELEVEN ESTATE LAYOUTS ALREADY ASK THIS AND NO API ROUTE DID. Platform membership was enforced

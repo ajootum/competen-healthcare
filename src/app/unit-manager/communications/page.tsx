@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadUnitCommunications } from "@/lib/operations/unit-communications";
 import { cardClass, Section, Badge, Alert, Progress, PriorityPill, TableWrap, Th, EmptyState, type BadgeTone } from "@/components/ui/primitives";
 import { KpiRibbon, StackedBar } from "@/components/ui/charts";
+import { estateRolesOf } from "@/lib/roles";
 
 // Notifications, Communications & Collaboration (UMW-TLS-004) — migrations 161 + 163.
 //
@@ -32,7 +33,7 @@ export default async function UnitCommunicationsPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ALLOWED.includes(r))) redirect("/dashboard");
 
   const d: any = await loadUnitCommunications(admin, profile?.hospital_id ?? null, roles.includes("super_admin"), user.id);

@@ -1,3 +1,4 @@
+import { estateRolesOf } from "@/lib/roles";
 // Enterprise Administration overview loader (ENT-ORG-001). Aggregates the real
 // organisational hierarchy — enterprises → organisations → facilities →
 // departments → units, plus positions, services, templates and people — into
@@ -45,7 +46,7 @@ export async function loadEnterpriseAdmin(admin: any) {
   const auditReady = !auditRes.error;
   const audit = auditReady ? ((auditRes.data ?? []) as any[]) : [];
 
-  const rolesOf = (p: any): string[] => (p.roles?.length ? p.roles : [p.role]).filter(Boolean);
+  const rolesOf = (p: any): string[] => estateRolesOf(p);
   const orgStatus = (o: any): string => o.status ?? (o.is_active === false ? "draft" : "active");
 
   // ── KPI ribbon ────────────────────────────────────────────────────────────

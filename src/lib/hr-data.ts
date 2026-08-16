@@ -1,3 +1,4 @@
+import { estateRolesOf } from "@/lib/roles";
 // Human Resources Workspace data (HRM-001) — headcount, employment status,
 // establishment/vacancy (from the Workforce Assignment Engine), new starters,
 // competency compliance and mandatory-learning compliance. Tenant-scoped.
@@ -19,7 +20,7 @@ export async function loadHrDashboard(admin: any, hid: string | null, isSuper: b
     const rows = staff ?? [];
     headcount.total = rows.length;
     for (const p of rows) {
-      const rs: string[] = (p.roles?.length ? p.roles : [p.role]).filter(Boolean);
+      const rs: string[] = estateRolesOf(p);
       if (rs.includes("educator")) headcount.educator++;
       else if (rs.includes("assessor")) headcount.assessor++;
       else if (rs.includes("hospital_admin") || rs.includes("super_admin")) headcount.admin++;

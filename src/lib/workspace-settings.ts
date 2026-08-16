@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { estateRolesOf } from "@/lib/roles";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -130,7 +131,7 @@ export async function loadSettingsHub(admin: Admin, hospitalId: string): Promise
   ]);
   const profs = (profiles ?? []) as { role: string | null; roles: string[] | null }[];
   const roleSet = new Set<string>();
-  for (const p of profs) (p.roles?.length ? p.roles : [p.role]).filter(Boolean).forEach(r => roleSet.add(r as string));
+  for (const p of profs) estateRolesOf(p).forEach(r => roleSet.add(r as string));
   const auditRows = (audit ?? []) as AuditRow[];
   const latest = auditRows[0];
 
@@ -200,7 +201,7 @@ export async function loadSettingsModule(admin: Admin, hospitalId: string, userI
     const profs = (profiles ?? []) as ProfileRow[];
     users = profs.map(p => ({
       id: p.id, name: p.full_name ?? "—", email: p.email ?? "—",
-      roles: (p.roles?.length ? p.roles : [p.role]).filter(Boolean).map(r => titleCase(r as string)),
+      roles: estateRolesOf(p).map(r => titleCase(r as string)),
       department: p.department_id ? (deptMap.get(p.department_id) ?? "—") : "—",
       joined: p.created_at,
     }));

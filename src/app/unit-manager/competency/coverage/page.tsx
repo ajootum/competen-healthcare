@@ -4,6 +4,7 @@ import CompetencyTabs from "../CompetencyTabs";
 import { loadWorkforceReadiness } from "@/lib/operations/workforce-readiness";
 import { loadCoverageHeatmap } from "@/lib/operations/learning-analytics";
 import { cardClass } from "@/components/ui/primitives";
+import { estateRolesOf } from "@/lib/roles";
 
 // Competency Management → Coverage & Gaps (UMG-CM). Where the unit is competent, where it isn't, and where a
 // single person is the only cover. Real over competency_decisions (role coverage + maturity heatmap) — the
@@ -20,7 +21,7 @@ export default async function CoverageGapsPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
   const hid = profile?.hospital_id ?? null; const isSuper = roles.includes("super_admin");
 

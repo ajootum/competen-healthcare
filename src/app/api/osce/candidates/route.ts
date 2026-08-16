@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { estateRolesOf } from "@/lib/roles";
 
 // OSCE Centre — candidate attendance: check-in / mark absent / re-register.
 export async function PATCH(req: Request) {
@@ -9,7 +10,7 @@ export async function PATCH(req: Request) {
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     return NextResponse.json({ error: "Only assessor roles can manage candidates" }, { status: 403 });
   }

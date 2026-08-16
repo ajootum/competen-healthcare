@@ -9,6 +9,7 @@ import { checkAiQuota } from "@/lib/ai/quota";
 import { loadAnalytics, passRateOf, avgScoreOf, competencyProfile, riskBuckets } from "@/lib/analytics";
 
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 // AI & Intelligence — scoped narrative insights. The server computes REAL
 // figures from live records and hands only those to Claude for a narrative +
 // recommendations; the model is told not to invent numbers. Scopes power the
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
   const userId = user.id;
   const admin = createAdminClient();
   const { data: me0 } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", userId).single();
-  const roles: string[] = me0?.roles?.length ? me0.roles : [me0?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me0) as string[];
   if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

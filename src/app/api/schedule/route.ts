@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { notify } from "@/lib/notify";
 
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 // Assessment scheduling (Assessor Workspace redesign). Assessor roles create
 // sessions for nurses in their hospital; both sides are notified; the nurse
 // sees it via RLS. Completing/cancelling is restricted to the involved
@@ -18,7 +19,7 @@ async function requireAssessor() {
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("id, full_name, role, roles, hospital_id").eq("id", user.id).single();
   if (!me) return null;
-  const roles: string[] = me.roles?.length ? me.roles : [me.role].filter(Boolean);
+  const roles: string[] = estateRolesOf(me);
   if (!roles.some(r => ASSESSOR_ROLES.includes(r))) return { admin, me, denied: true as const };
   return { admin, me, denied: false as const };
 }

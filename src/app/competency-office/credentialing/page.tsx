@@ -5,6 +5,7 @@ import Link from "next/link";
 import { loadCredentialManagement } from "@/lib/credential-management";
 import CredentialTabs from "./CredentialTabs";
 import { KpiTile as Kpi } from "../_kit";
+import { estateRolesOf } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function CredentialDashboard() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["hospital_admin", "educator", "super_admin"].includes(r)) && !(await holdsOfficeAppointment(admin, "competency", profile?.hospital_id ?? null, roles.includes("super_admin"), user.id))) redirect("/dashboard");
 
   const d = await loadCredentialManagement(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));

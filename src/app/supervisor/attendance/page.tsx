@@ -5,6 +5,7 @@ import { loadShiftAttendance } from "@/lib/operations/shift-attendance";
 import { cardClass } from "@/components/ui/primitives";
 import { KpiTileBare as Kpi } from "../_kit";
 import { formatDateTime } from "@/lib/datetime";
+import { estateRolesOf } from "@/lib/roles";
 
 // Shift Attendance & Fatigue (SSW-WFM-001 / WFM-003) — the supervisor's lens
 // over attendance for the shift they are actually running.
@@ -51,7 +52,7 @@ export default async function ShiftAttendancePage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   const d: any = await loadShiftAttendance(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
 
   if (!d.provisioned) {

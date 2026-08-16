@@ -4,7 +4,7 @@ import {
   resolveActiveGovernance, HQ_CONTEXT_COOKIE, type GovernanceContext,
 } from "./governance-context";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { platformRolesOf, hasPlatformRole, type PlatformRole } from "@/lib/roles";
+import { estateRolesOf, platformRolesOf, hasPlatformRole, type PlatformRole } from "@/lib/roles";
 import { appointmentGrantsAccess } from "@/lib/ogs/lifecycle";
 import {
   decideHq, activeGrants, capabilityForRoute, isHqOfficeType,
@@ -226,7 +226,7 @@ export async function resolveHqContext(
     .eq("id", user.id).single();
   const me = (data ?? null) as ProfileRow | null;
 
-  const roles = ((me?.roles?.length ? me.roles : [me?.role]) as (string | null)[]).filter(Boolean) as string[];
+  const roles = estateRolesOf(me) as string[];
   const platformRoles = platformRolesOf(me);
   // ⚠ super_admin IS UNCHANGED BY THIS PROGRAMME. It is the RLS anchor and it becomes the break-glass
   // owner, held by one or two accounts. It is read here and nowhere altered.

@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { estateRolesOf } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ export default async function PsaSectionPage({ params }: { params: Promise<{ sec
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(profile) as string[];
   if (!roles.includes("super_admin")) redirect("/dashboard");
 
   const s = Object.hasOwn(SECTIONS, section) ? SECTIONS[section] : undefined;

@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { recordDeliveries } from "@/lib/notifications/dispatch";
 import { buildNotification, type NotifyInput } from "@/lib/notifications/framework";
+import { estateRolesOf } from "@/lib/roles";
 
 // In-app notification writes (§8). Failures are swallowed — a notification
 // must never break the action that triggered it (and before migration 029 is
@@ -46,7 +47,7 @@ export async function hospitalVerifierIds(hospitalId: string | null, excludeId?:
       .limit(50);
     return (data ?? [])
       .filter(p => {
-        const roles: string[] = p.roles?.length ? p.roles : [p.role].filter(Boolean);
+        const roles: string[] = estateRolesOf(p);
         return roles.some(r => ["assessor", "educator", "hospital_admin"].includes(r));
       })
       .map(p => p.id)

@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { OUTCOME_CONFIG, METHOD_LABELS, type AssessmentMethod, type DecisionOutcome } from "@/lib/ckcm";
+import { estateRolesOf } from "@/lib/roles";
 
 // Analytics & Reports Centre (assessor workspace). Hospital-scoped assessment
 // intelligence — every figure computed live from real records, 30-day deltas
@@ -27,7 +28,7 @@ export default async function ReportsCentrePage() {
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const myRoles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const myRoles: string[] = estateRolesOf(me) as string[];
   if (!myRoles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     redirect("/dashboard");
   }

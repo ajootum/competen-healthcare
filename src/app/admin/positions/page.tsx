@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import WorkforceConsole from "./WorkforceConsole";
+import { estateRolesOf } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export default async function PositionsPage() {
 
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id, organisation_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
   const hid = profile?.hospital_id ?? null;
 
@@ -48,7 +49,7 @@ export default async function PositionsPage() {
     admin.from("profiles").select("id, full_name, roles, role").eq("hospital_id", hid ?? "").order("full_name").limit(500),
   ]);
 
-  const assessorList = (assessors.data ?? []).filter((p: any) => (p.roles?.length ? p.roles : [p.role]).some((r: string) => r === "assessor"));
+  const assessorList = (assessors.data ?? []).filter((p: any) => estateRolesOf(p).some((r: string) => r === "assessor"));
 
   return (
     <WorkforceConsole

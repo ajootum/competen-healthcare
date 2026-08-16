@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadResourceOperations } from "@/lib/operations/resource-operations";
 import { cardClass, Section, Badge, Alert, NotProvisioned, EmptyState, TableWrap, Th, type BadgeTone } from "@/components/ui/primitives";
 import { KpiRibbon, StackedBar } from "@/components/ui/charts";
+import { estateRolesOf } from "@/lib/roles";
 
 // Resource Operations (UMW-RES-001) — migration 165 over the existing equipment and asset stores.
 //
@@ -34,7 +35,7 @@ export default async function ResourceOperationsPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ALLOWED.includes(r))) redirect("/dashboard");
 
   const d: any = await loadResourceOperations(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));

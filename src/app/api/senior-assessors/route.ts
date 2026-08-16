@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { notify } from "@/lib/notify";
 
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 // Senior-assessor assignment (Evidence Validation Centre escalation model).
 // Educators and admins grant/revoke the flag; every change is audit-logged
 // and the assessor is notified. Escalated evidence can only be decided by
@@ -17,7 +18,7 @@ async function requireManager() {
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("id, full_name, role, roles, hospital_id").eq("id", user.id).single();
   if (!me) return null;
-  const roles: string[] = me.roles?.length ? me.roles : [me.role].filter(Boolean);
+  const roles: string[] = estateRolesOf(me);
   return { admin, me, allowed: roles.some(r => MANAGER_ROLES.includes(r)), isSuper: roles.includes("super_admin") };
 }
 
@@ -31,7 +32,7 @@ export async function GET() {
     .eq("hospital_id", auth.me.hospital_id ?? "")
     .limit(200);
   const assessors = (data ?? []).filter(p => {
-    const roles: string[] = p.roles?.length ? p.roles : [p.role].filter(Boolean);
+    const roles: string[] = estateRolesOf(p);
     return roles.some(r => ["assessor", "educator"].includes(r));
   }).map(p => ({
     id: p.id, full_name: p.full_name, avatar_url: p.avatar_url,
@@ -55,7 +56,7 @@ export async function PATCH(req: Request) {
   if (!isSuper && target.hospital_id !== me.hospital_id) {
     return NextResponse.json({ error: "You can only manage assessors in your hospital" }, { status: 403 });
   }
-  const targetRoles: string[] = target.roles?.length ? target.roles : [target.role].filter(Boolean);
+  const targetRoles: string[] = estateRolesOf(target);
   if (!targetRoles.some(r => ["assessor", "educator"].includes(r))) {
     return NextResponse.json({ error: "Only assessors can be made senior assessors" }, { status: 400 });
   }

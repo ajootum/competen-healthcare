@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import NavLink from "@/components/NavLink";
 import SidebarToggle from "@/components/SidebarToggle";
-import { orgRolesOf, ORG_ROLE_CONFIG, type AppRole, type OrgRole } from "@/lib/roles";
+import { estateRolesOf, orgRolesOf, ORG_ROLE_CONFIG, type AppRole, type OrgRole } from "@/lib/roles";
 import { admitToEstate, NO_MEMBERSHIP_DESTINATION } from "@/lib/platform-membership";
 import GlobalHeader from "@/components/platform/GlobalHeader";
 import { loadHeaderContext } from "@/lib/platform/header";
@@ -65,7 +65,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // One resolver for every workspace, so the header cannot drift between them (PUI-002).
   const header = await loadHeaderContext(adminClient, user.id, { currentHref: "/admin/dashboard" });
 
-  const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
+  const userRoles: AppRole[] = estateRolesOf(profile) as AppRole[];
 
   // -- CP-SPLIT-002 stage 3 -- GATE 1: THE ESTATE ADMITS COMPETEN PLATFORM MEMBERS ------------------
   // COMP-ARCH-PSA-001 s7 and s14. An identity with no platform_membership row is a Competen Practice

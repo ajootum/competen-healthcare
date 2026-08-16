@@ -6,6 +6,7 @@ import { filterOpsByDept, loadUnitDepartments } from "@/lib/operations/unit-comm
 import UnitCommandTabs from "./UnitCommandTabs";
 import UnitFilters from "./UnitFilters";
 import { cardClass } from "@/components/ui/primitives";
+import { estateRolesOf } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,7 @@ export default async function UnitManagerDashboard({ searchParams }: { searchPar
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
   const isSuper = roles.includes("super_admin");

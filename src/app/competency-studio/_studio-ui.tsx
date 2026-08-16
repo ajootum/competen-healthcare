@@ -5,6 +5,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { estateRolesOf } from "@/lib/roles";
 
 export const STUDIO_ROLES = ["super_admin", "hospital_admin", "educator", "assessor"];
 
@@ -14,7 +15,7 @@ export async function studioGuard() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   const isSuper = roles.includes("super_admin");
   const hid = (profile?.hospital_id ?? null) as string | null;
   if (!roles.some(r => STUDIO_ROLES.includes(r))) redirect("/dashboard");

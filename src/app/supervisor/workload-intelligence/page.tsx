@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadWorkloadIntelligence } from "@/lib/operations/workload-intelligence";
 import { cardClass } from "@/components/ui/primitives";
 import { KpiTileBare as Kpi } from "../_kit";
+import { estateRolesOf } from "@/lib/roles";
 
 // Workforce Workload Intelligence (SSW-WFM-004) — the supervisor's view of the
 // instrument data the bedside produces. HWW records Ward PEWS / ICU CIAF acuity
@@ -34,7 +35,7 @@ export default async function WorkloadIntelligencePage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   const d: any = await loadWorkloadIntelligence(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
 
   if (!d.provisioned) {

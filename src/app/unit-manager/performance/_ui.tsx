@@ -9,6 +9,7 @@ import { PillTag as Pill } from "../../../components/ui/primitives";
 import { KitFoot as Foot } from "../../../components/ui/primitives";
 import { PanelCard as Card } from "../../../components/ui/primitives";
 import { DonutMid as Donut } from "../_kit";
+import { estateRolesOf } from "@/lib/roles";
 export { Donut };
 // Re-exported: this file is a KIT, and pages import these names from it. Lifting the
 // implementations into the library must not remove that surface.
@@ -20,7 +21,7 @@ export async function paGuard() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some((r: string) => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
   return { admin, isSuper: roles.includes("super_admin"), hid: (profile?.hospital_id ?? null) as string | null };
 }

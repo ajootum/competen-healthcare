@@ -1,3 +1,4 @@
+import { estateRolesOf } from "@/lib/roles";
 // Executive Command Centre loader (MC-004) — the platform-wide executive
 // situation room. Aggregates a heartbeat, executive-attention items, per-platform
 // health, a decision queue, cross-platform intelligence, growth over a time
@@ -61,7 +62,7 @@ export async function loadExecutiveCommand(admin: any, rangeDays: number) {
   const changeReqs = chgRes.error ? null : (chgRes.data ?? []) as any[];
   const cpus = cpuRes.error ? null : ((cpuRes.data ?? []) as any[]);
 
-  const rolesOf = (p: any) => (p.roles?.length ? p.roles : [p.role]).filter(Boolean);
+  const rolesOf = (p: any) => estateRolesOf(p);
   const orgStatus = (o: any) => o.status ?? (o.is_active === false ? "draft" : "active");
 
   // ── Executive attention ──────────────────────────────────────────────────

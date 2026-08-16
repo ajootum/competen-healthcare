@@ -6,6 +6,7 @@ import { loadConfigOverrides, resolveSettings } from "@/lib/config/workspace-con
 import { cardClass, Section, Badge, Alert, NotProvisioned, EmptyState, TableWrap, Th } from "@/components/ui/primitives";
 import { KpiRibbon } from "@/components/ui/charts";
 import PersonalisationForm from "./PersonalisationForm";
+import { estateRolesOf } from "@/lib/roles";
 
 // Personalisation, Preferences & Workspace Experience (UMW-TLS-005) — migration 164.
 //
@@ -25,7 +26,7 @@ export default async function PersonalisationPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id, full_name").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ALLOWED.includes(r))) redirect("/dashboard");
 
   const ctx = { hospitalId: profile?.hospital_id ?? null, roles };

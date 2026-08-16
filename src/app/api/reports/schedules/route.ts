@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { DATASET_COLUMNS } from "@/lib/report-datasets";
 
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 // Scheduled reports. Executed by the daily platform cron (/api/cron/reports);
 // delivery is an in-app notification per recipient. Email delivery would need
 // an email service — deliberately not part of this module yet.
@@ -22,7 +23,7 @@ async function requireStaff() {
   if (!user) return null;
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("id, full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) return null;
   return { admin, me: me!, userId: user.id, roles };
 }

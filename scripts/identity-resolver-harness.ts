@@ -30,7 +30,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { loadEnvConfig } from "@next/env";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { estateRolesOf, orgRolesOf, platformRolesOf, ORG_ROLES, PLATFORM_ROLES } from "../src/lib/roles";
 import { resolveIdentity } from "../src/lib/identity";
 
@@ -112,15 +112,31 @@ async function main() {
   ok("4b. a missing profile is readable:true, exists:false — a real fact, distinct from a failure",
     missing.readable === true && missing.exists === false);
 
-  // ── 5. THE YARDSTICK MATCHES THE TERRITORY ─────────────────────────────────────────────────────
+  // ── 5. THE YARDSTICK MATCHES THE TERRITORY -- INVERTED AFTER THE BULK REPOINT ──────────────────
   //
-  // ⚠ The needle-matches-itself lesson: assertion 1 compares estateRolesOf against inlineFold, so if
-  // inlineFold mis-spelled what the sites actually do, 1 would be green and meaningless. So the
-  // expression is checked against a real, load-bearing site's source.
-  const apiAuth = readFileSync("src/lib/api-auth.ts", "utf8");
-  ok("5. the yardstick expression is the one api-auth.ts actually uses",
-    apiAuth.includes("me?.roles?.length ? me.roles : [me?.role]"),
-    "api-auth.ts no longer spells the fold this harness proves against");
+  // ⚠ This assertion HAS A HISTORY. Before the repoint it pinned that api-auth.ts SPELLED the inline
+  // fold, so the yardstick could not drift from the territory. The owner then ordered the bulk
+  // repoint (352 substitutions, 336 files, four shapes, zero near-misses), so the territory moved:
+  // the historical spelling now lives ONLY in estateRolesOf's own body, and the pin inverts --
+  // any NEW inline spelling anywhere in src/ is drift by definition, reintroducing exactly the
+  // per-site variance that produced a management screen disagreeing with the gates about 35 of 47
+  // people. inlineFold above stays as the HISTORICAL yardstick: assertions 1-2 still prove the
+  // consolidated fold answers what the historical expression answered, for every live profile.
+  const foldCore = ".roles?.length ?";
+  const walk = (dir: string): string[] => {
+    const out: string[] = [];
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) { if (e.name !== "node_modules") out.push(...walk(`${dir}/${e.name}`)); }
+      else if (/\.(ts|tsx)$/.test(e.name)) out.push(`${dir}/${e.name}`);
+    }
+    return out;
+  };
+  const spellers = walk("src").filter(f => readFileSync(f, "utf8").includes(foldCore));
+  ok("5. ⚠ the inline fold is spelled NOWHERE in src/ except the fold's own body",
+    spellers.length === 1 && spellers[0] === "src/lib/roles.ts",
+    spellers.filter(f => f !== "src/lib/roles.ts").slice(0, 5).join(", ") || "roles.ts itself no longer spells it");
+  ok("5-control. and roles.ts DOES still spell it, so 5 is not scanning for a typo",
+    readFileSync("src/lib/roles.ts", "utf8").includes("p.roles?.length ? p.roles : [p.role]"));
 
   // ── MEASUREMENTS, REPORTED NEVER PINNED ────────────────────────────────────────────────────────
   const strayPlatform = rows.filter(r =>
@@ -130,10 +146,22 @@ async function main() {
     ((r.org_roles?.length ? r.org_roles : [r.org_role]) as (string | null)[])
       .filter(Boolean).some(v => !(ORG_ROLES as string[]).includes(v as string))).length;
   const drifted = rows.filter(r => !same(driftedFold(r), inlineFold(r))).length;
+  // The two families the bulk repoint absorbed: the fallback-only filter (filter bound to the
+  // fallback array, non-empty roles passing unfiltered) and the raw parenthesized fold (no filter,
+  // consumers filtering or guarding themselves). Each diverges from canonical only when a roles
+  // array carries a falsy entry -- measured here so the repoint's behaviour delta is a number.
+  const fallbackOnly = (p: Row): string[] =>
+    (p.roles?.length ? p.roles : ([p.role] as (string | null)[]).filter(Boolean)) as string[];
+  const rawFold = (p: Row): (string | null)[] => (p.roles?.length ? p.roles : [p.role]);
+  const fallbackDiverges = rows.filter(r => !same(fallbackOnly(r), inlineFold(r))).length;
+  const rawDiverges = rows.filter(r => !same(rawFold(r).filter(Boolean) as string[], inlineFold(r))
+    || rawFold(r).length !== inlineFold(r).length).length;
   console.log(`\n  measured (informational, counts drift as profiles change):`);
   console.log(`    profiles with out-of-vocab platform values (validated fold drops them): ${strayPlatform}`);
   console.log(`    profiles with out-of-vocab org values (validated fold drops them): ${strayOrg}`);
-  console.log(`    profiles where the drifted users-page fold answers differently TODAY: ${drifted}`);
+  console.log(`    profiles where the fixed users-page fold ('roles ?? [role]') diverged: ${drifted}`);
+  console.log(`    profiles where the fallback-only-filter family diverges from canonical: ${fallbackDiverges}`);
+  console.log(`    profiles where the raw (unfiltered) fold diverges from canonical: ${rawDiverges}`);
 
   console.log(`\n${failures.length ? "FAILED" : "PASSED"}  ${pass} passed, ${failures.length} failed`);
   failures.forEach(f => console.log(`  - ${f}`));

@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import NotificationsCentre, { type Notif, type ActivityItem } from "@/components/educator/NotificationsCentre";
+import { estateRolesOf } from "@/lib/roles";
 
 // Educator Notifications Centre (Notifications Developer Specification v2.0).
 // Server side gathers the live inputs: the user's notifications, today's
@@ -14,7 +15,7 @@ export default async function EducatorNotificationsPage() {
 
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(profile) as string[];
   if (!roles.includes("educator") && !["hospital_admin", "super_admin"].includes(profile?.role ?? "")) redirect("/dashboard");
 
   const { data: hospitalNurses } = await admin

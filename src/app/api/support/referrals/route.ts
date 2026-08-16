@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { notify } from "@/lib/notify";
 
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 // Referrals — escalate a learner to a named colleague or an external service.
 // Sensitive by design: only the reason travels; the learner is not notified,
 // and reads are limited to referrer + referee (see migration 036 RLS).
@@ -19,7 +20,7 @@ async function requireEducator() {
   if (!user) return null;
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("id, full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["educator", "hospital_admin", "super_admin"].includes(r))) return null;
   return { admin, me: me!, userId: user.id, roles };
 }

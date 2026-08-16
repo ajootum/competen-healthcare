@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadEstablishment } from "@/lib/operations/establishment";
 import PlanningEditor from "./PlanningEditor";
 import { KpiTile as Kpi } from "../../../components/ui/primitives";
+import { estateRolesOf } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ export default async function PlanningStudio() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some((r: string) => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
   const isSuper = roles.includes("super_admin");
   const hid = profile?.hospital_id ?? null;

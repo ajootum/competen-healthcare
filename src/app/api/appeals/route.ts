@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { notify, hospitalVerifierIds } from "@/lib/notify";
 
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 // Appeals against assessment outcomes. POST: the assessed learner raises an
 // appeal with a reason. PATCH: staff move it through
 // open → under_review → upheld / overturned (or withdrawn), with a resolution
@@ -68,7 +69,7 @@ export async function PATCH(req: Request) {
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     return NextResponse.json({ error: "Only assessor roles can review appeals" }, { status: 403 });
   }

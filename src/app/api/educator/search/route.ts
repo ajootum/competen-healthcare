@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { estateRolesOf } from "@/lib/roles";
 
 // Global educator search across live entities: hospital learners, framework
 // competencies, courses and question bank. Read-only, role-gated.
@@ -12,7 +13,7 @@ export async function GET(req: Request) {
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["educator", "hospital_admin", "super_admin"].includes(r))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

@@ -8,6 +8,7 @@ import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 // OSCE Centre — AI station designer. Real Claude generation, grounded in the
 // linked competency's governed criteria/checklists when one is provided.
 // Returns a suggested scenario brief + marking checklist for the assessor to
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role, roles, full_name").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

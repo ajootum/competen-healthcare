@@ -6,6 +6,7 @@ import AiCopilotPanel from "@/components/AiCopilotPanel";
 import AiTabs from "./AiTabs";
 import { cardClass } from "@/components/ui/primitives";
 import { formatDateTime } from "@/lib/datetime";
+import { estateRolesOf } from "@/lib/roles";
 
 // AI & Intelligence (UMG-AI) command centre — the unit's cross-domain intelligence hub. Consolidates the
 // rule-based AI signals every domain loader already computes into one prioritised view, adds a LIVE copilot
@@ -22,7 +23,7 @@ export default async function UnitAiPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
   const d = await loadUnitIntelligence(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));

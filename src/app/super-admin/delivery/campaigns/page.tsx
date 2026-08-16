@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadCampaigns } from "@/lib/delivery/campaigns";
 import CampaignManager from "./CampaignManager";
 import { requireHqCapability } from "@/lib/hq/context";
+import { estateRolesOf } from "@/lib/roles";
 
 // CDP-008 — Competency Assignment & Campaign Manager. Deadline-driven competency initiatives targeting a
 // cohort, with live compliance from competency decisions. Real over cdp_campaigns (144) + cmo_assignments +
@@ -27,7 +28,7 @@ export default async function CampaignsPage() {
   const competencies = (compsRes.data ?? []) as { id: string; name: string }[];
   const roleSet = new Set<string>();
   for (const p of (profsRes.data ?? []) as { role: string | null; roles: string[] | null }[]) {
-    (p.roles?.length ? p.roles : [p.role]).forEach(r => r && roleSet.add(r));
+    estateRolesOf(p).forEach(r => r && roleSet.add(r));
   }
   const roleList = [...roleSet].sort();
 

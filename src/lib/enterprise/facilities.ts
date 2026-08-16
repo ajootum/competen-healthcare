@@ -1,3 +1,4 @@
+import { estateRolesOf } from "@/lib/roles";
 // Facilities module (ENT-ORG-001 §3) loaders — directory + single-facility profile.
 // A facility is a hospital/clinic/campus (the `hospitals` table). Live data;
 // select("*") is drift-proof, fail-soft on 052 tables (divisions/services/audit).
@@ -7,7 +8,7 @@ export const FACILITY_TYPES = ["hospital", "clinic", "health_center", "nursing_h
 export const FACILITY_STATUSES = ["draft", "onboarding", "active", "suspended", "archived"] as const;
 
 const statusOf = (h: any): string => h.status ?? (h.admin_id ? "active" : "onboarding");
-const rolesOf = (p: any): string[] => (p.roles?.length ? p.roles : [p.role]).filter(Boolean);
+const rolesOf = (p: any): string[] => estateRolesOf(p);
 
 export async function loadFacilityDirectory(admin: any) {
   const [hospRes, orgRes, deptRes, profRes] = await Promise.all([

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { loadWellbeing } from "@/lib/workforce/wellbeing";
 import { cardClass, Section, Badge, Alert, Progress, NotProvisioned, TableWrap, Th, type BadgeTone } from "@/components/ui/primitives";
 import { KpiRibbon, BarChart, StackedBar, ChartCard } from "@/components/ui/charts";
+import { estateRolesOf } from "@/lib/roles";
 
 // Workforce Wellbeing & Fatigue Management (UMW-WFM-003) — migration 162.
 //
@@ -30,7 +31,7 @@ export default async function WellbeingPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ALLOWED.includes(r))) redirect("/dashboard");
 
   const d: any = await loadWellbeing(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));

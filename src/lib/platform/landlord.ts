@@ -1,5 +1,5 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { platformRolesOf, hasPlatformRole, type PlatformRole } from "@/lib/roles";
+import { estateRolesOf, platformRolesOf, hasPlatformRole, type PlatformRole } from "@/lib/roles";
 
 // Landlord-plane access resolution. The landlord axis is: the AppRole
 // `super_admin` (a permanent, full-authority platform super admin) PLUS the finer
@@ -25,7 +25,7 @@ export async function getLandlordCaller(): Promise<LandlordCaller | null> {
   if (!user) return null;
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("full_name, role, roles, platform_role, platform_roles").eq("id", user.id).single() as any;
-  const appRoles = ((me?.roles?.length ? me.roles : [me?.role]) as (string | null)[]).filter(Boolean) as string[];
+  const appRoles = estateRolesOf(me) as string[];
   const platformRoles = platformRolesOf(me);
   const isSuperAdmin = appRoles.includes("super_admin");
   // Landlord access = a platform super admin, or anyone holding a PlatformRole.

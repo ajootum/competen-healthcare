@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import SeniorToggle from "./SeniorToggle";
+import { estateRolesOf } from "@/lib/roles";
 
 // Senior Assessors (Evidence Validation Centre escalation model): educators
 // assign which assessors handle escalated evidence. Changes are audit-logged
@@ -13,7 +14,7 @@ export default async function SeniorAssessorsPage() {
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["educator", "hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
   const { data } = await admin.from("profiles")
@@ -21,7 +22,7 @@ export default async function SeniorAssessorsPage() {
     .eq("hospital_id", me?.hospital_id ?? "")
     .order("full_name").limit(200);
   const assessors = (data ?? []).filter(p => {
-    const r: string[] = p.roles?.length ? p.roles : [p.role].filter(Boolean);
+    const r: string[] = estateRolesOf(p);
     return r.some(x => ["assessor", "educator"].includes(x));
   });
   const seniors = assessors.filter(a => a.is_senior_assessor);
@@ -61,7 +62,7 @@ export default async function SeniorAssessorsPage() {
                   <p className="text-sm font-semibold text-gray-900 truncate">
                     {a.full_name}{a.is_senior_assessor && <span className="ml-2 text-[9px] font-bold bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] px-1.5 py-0.5 rounded align-middle">⭐ SENIOR</span>}
                   </p>
-                  <p className="text-[10px] text-gray-400 capitalize">{(a.roles?.length ? a.roles : [a.role]).join(", ").replace(/_/g, " ")}</p>
+                  <p className="text-[10px] text-gray-400 capitalize">{estateRolesOf(a).join(", ").replace(/_/g, " ")}</p>
                 </div>
                 <SeniorToggle userId={a.id} senior={!!a.is_senior_assessor} />
               </div>

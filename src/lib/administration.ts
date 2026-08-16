@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/server";
+import { estateRolesOf } from "@/lib/roles";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -62,7 +63,7 @@ const DAY = 864e5;
 const EDUCATOR_ROLES = new Set(["educator", "senior_educator", "clinical_educator", "curriculum_lead", "assessment_lead", "simulation_lead", "education_administrator", "program_director"]);
 const titleCase = (s: string) => s.split(/[_\s]+/).filter(Boolean).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
 const daysUntil = (iso: string | null) => iso ? Math.round((new Date(iso).getTime() - Date.now()) / DAY) : null;
-const rolesOf = (p: { role: string | null; roles: string[] | null }) => (p.roles?.length ? p.roles : [p.role]).filter(Boolean) as string[];
+const rolesOf = (p: { role: string | null; roles: string[] | null }) => estateRolesOf(p) as string[];
 const mapActivity = (rows: AuditRow[]): Activity[] => rows.map(a => ({ actor: a.actor_name ?? "Someone", action: a.action ? titleCase(a.action) : "updated", entity: a.entity_name, when: a.created_at }));
 const aiOn = () => import("@/lib/ai/config").then(m => m.aiStatus().configured).catch(() => false);
 

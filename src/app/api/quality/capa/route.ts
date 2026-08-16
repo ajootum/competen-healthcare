@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { notify } from "@/lib/notify";
 
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 // CAPA workflow (Quality & Governance). POST creates a corrective/preventive
 // action; PATCH advances its status (open → in_progress → completed →
 // verified → closed) and records evidence notes. Assessor roles only.
@@ -15,7 +16,7 @@ async function requireStaff() {
   if (!user) return null;
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("id, full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) return null;
   return { admin, me: me!, userId: user.id, roles };
 }

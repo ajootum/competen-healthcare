@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { loadPersonalisation, validateWrite, PREF_KEYS } from "@/lib/personalisation/preferences";
+import { estateRolesOf } from "@/lib/roles";
 
 // UMW-TLS-005 preference writes. A person writes their OWN preferences and nobody else's — user_id comes from
 // the session, never from the body, so there is no subject-vs-caller scoping hole to get wrong here.
@@ -17,7 +18,7 @@ export async function PUT(req: Request) {
 
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   const ctx = { hospitalId: profile?.hospital_id ?? null, roles };
 
   const body = await req.json().catch(() => ({}));
@@ -67,7 +68,7 @@ export async function DELETE(req: Request) {
   if (!PREF_KEYS.includes(key as any)) return NextResponse.json({ error: "Unknown preference." }, { status: 400 });
 
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   const ctx = { hospitalId: profile?.hospital_id ?? null, roles };
   const state = await loadPersonalisation(admin, user.id, ctx);
   if (!state.provisioned) return NextResponse.json({ error: "Preference storage is not provisioned (migration 164)." }, { status: 503 });

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadOrgAdminDashboard } from "@/lib/org-admin-data";
 import { cardClass } from "@/components/ui/primitives";
+import { estateRolesOf } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 const card = cardClass;
 const titleCase = (s: string) => s.split(/[_\s]+/).filter(Boolean).map(w => w[0].toUpperCase() + w.slice(1)).join(" ");
 const appRoleLabel = (p: any) => {
-  const rs: string[] = (p.roles?.length ? p.roles : [p.role]).filter(Boolean);
+  const rs: string[] = estateRolesOf(p);
   if (rs.includes("super_admin")) return "Super Admin";
   if (rs.includes("hospital_admin")) return "Admin";
   if (rs.includes("educator")) return "Educator";
@@ -27,7 +28,7 @@ export default async function UsersPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
   const d = await loadOrgAdminDashboard(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));

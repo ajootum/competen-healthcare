@@ -5,6 +5,7 @@ import { loadCmoDashboard } from "@/lib/cmo-dashboard";
 import { loadCmoGovernance } from "@/lib/competency/cmo-governance";
 import { officeForWorkspace, holdsOfficeAppointment } from "@/lib/ogs/office";
 import { GovernanceBanner } from "@/components/GovernanceBanner";
+import { estateRolesOf } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export default async function CompetencyDashboard() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   const isSuper = roles.includes("super_admin");
   // R001 appointment-based access (additive): a role holder OR an active Competency Office member may enter.
   const roleOk = roles.some(r => ["hospital_admin", "educator", "super_admin"].includes(r));

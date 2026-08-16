@@ -1,6 +1,7 @@
 import { requireAnalyticsAccess } from "@/lib/analytics";
 import { ModuleHeader } from "../ui";
 import ScheduledClient, { type ScheduleRow, type Option, type DefOption } from "./ScheduledClient";
+import { estateRolesOf } from "@/lib/roles";
 
 // Scheduled Reports module — recurring delivery of saved/built-in reports via
 // the daily platform cron, as in-app notifications with a link to live data.
@@ -25,7 +26,7 @@ export default async function ScheduledReportsPage() {
   ]);
 
   const staff: Option[] = (people ?? [])
-    .filter(p => (p.roles?.length ? p.roles : [p.role]).some((r: string) => ["assessor", "educator", "hospital_admin"].includes(r)))
+    .filter(p => estateRolesOf(p).some((r: string) => ["assessor", "educator", "hospital_admin"].includes(r)))
     .map(p => ({ id: p.id, name: p.full_name }));
 
   return (

@@ -1,3 +1,4 @@
+import { estateRolesOf } from "@/lib/roles";
 // Organisations module (ENT-ORG-001 §1) loaders — directory + single-organisation
 // profile. The organisation is the top tenant-level entity. All live data;
 // select("*") keeps it drift-proof, fail-soft on tables added by 052.
@@ -7,7 +8,7 @@ export const ORG_STATUSES = ["draft", "onboarding", "active", "suspended", "rest
 export const ORG_TYPES = ["government", "private", "ngo", "faith_based", "academic"] as const;
 
 const statusOf = (o: any): string => o.status ?? (o.is_active === false ? "draft" : "active");
-const rolesOf = (p: any): string[] => (p.roles?.length ? p.roles : [p.role]).filter(Boolean);
+const rolesOf = (p: any): string[] => estateRolesOf(p);
 
 export async function loadOrgDirectory(admin: any) {
   const [orgRes, hospRes, profRes, entRes] = await Promise.all([

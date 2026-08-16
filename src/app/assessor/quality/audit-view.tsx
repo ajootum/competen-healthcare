@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import AuditRunner, { type AuditTemplate } from "./AuditRunner";
+import { estateRolesOf } from "@/lib/roles";
 
 // Shared server view for the three audit types (concurrent / retrospective /
 // clinical). Templates are the competencies' own governed checklists —
@@ -34,7 +35,7 @@ export default async function AuditTypeView({ type, preselect }: {
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const myRoles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const myRoles: string[] = estateRolesOf(me) as string[];
   if (!myRoles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     redirect("/dashboard");
   }

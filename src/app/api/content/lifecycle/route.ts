@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { transitionFramework, type FrameworkAction } from "@/lib/competency/framework-lifecycle";
+import { estateRolesOf } from "@/lib/roles";
 
 // Framework lifecycle transitions. The governed state machine lives in framework-lifecycle.ts (shared with
 // the CAP-001 asset write-back so both go through the identical path); this route is auth + a thin wrapper.
@@ -13,7 +14,7 @@ export async function PATCH(req: Request) {
   const admin = createAdminClient();
   // Roles-array aware (matches getCaller/page gates): multi-role super admins pass.
   const { data: profile } = await admin.from("profiles").select("role, roles, full_name").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.includes("super_admin")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { frameworkId, action }: { frameworkId: string; action: FrameworkAction } = await req.json();

@@ -8,6 +8,7 @@ import { PillTag as Pill } from "../../components/ui/primitives";
 import { KitFoot as Foot } from "../../components/ui/primitives";
 import { PlainCard as Card } from "../../components/ui/primitives";
 import { ProgressBar as Progress } from "../../components/ui/primitives";
+import { estateRolesOf } from "@/lib/roles";
 // Re-exported because this file is itself a KIT: twenty pages import Card/Pill/Foot/Progress from
 // here, and lifting the implementations into the library must not remove that surface.
 export { Pill, Foot, Card, Progress };
@@ -18,7 +19,7 @@ export async function cmoGuard() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   const isSuper = roles.includes("super_admin");
   const hid = (profile?.hospital_id ?? null) as string | null;
   // R001 appointment-based access (additive): a role holder OR an active Competency Office member may enter.

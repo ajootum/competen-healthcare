@@ -9,13 +9,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import pkg from "../../../package.json";
+import { estateRolesOf } from "@/lib/roles";
 
 const WORKSPACE: Record<string, string> = {
   nurse: "Healthcare Worker", assessor: "Assessor", educator: "Educator", senior_educator: "Educator",
   clinical_educator: "Educator", hospital_admin: "Organisation Admin", quality_reviewer: "Quality & Safety",
   program_director: "Executive", education_administrator: "Education Admin", super_admin: "Platform Owner",
 };
-const rolesOf = (p: any): string[] => (p.roles?.length ? p.roles : [p.role]).filter(Boolean);
+const rolesOf = (p: any): string[] => estateRolesOf(p);
 
 export async function loadPlatformOps(admin: any) {
   const [tenRes, statusRes, planRes, subRes, prodRes, flagRes, profRes] = await Promise.all([

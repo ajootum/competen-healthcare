@@ -4,6 +4,7 @@ import { recomputeAll } from "@/lib/engines/scoring";
 import { notify } from "@/lib/notify";
 
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 // OSCE Management Centre — exam lifecycle. POST creates an exam with stations
 // and registered candidates; PATCH moves it through
 // draft → published → running → completed (or cancelled). Completing an exam
@@ -21,7 +22,7 @@ async function requireStaff() {
   if (!user) return null;
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("id, full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) return null;
   return { admin, me: me!, roles, userId: user.id };
 }

@@ -1,5 +1,6 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { estateRolesOf } from "@/lib/roles";
 
 // Auth + role gate shared by the Educator Validation Centre module pages.
 export async function requireEducatorAccess() {
@@ -8,7 +9,7 @@ export async function requireEducatorAccess() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role, roles, hospital_id, full_name").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["educator", "hospital_admin", "super_admin"].includes(r))) {
     redirect("/dashboard");
   }

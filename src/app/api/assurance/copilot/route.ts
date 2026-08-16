@@ -7,6 +7,7 @@ import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { loadAssuranceDashboard } from "@/lib/assurance/assurance-dashboard";
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // CAPA-010 — AI Assurance Intelligence copilot. Wired to the real AI Runtime Gateway (generate()), grounded in
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, full_name, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.includes("super_admin")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const quota = await checkAiQuota(admin, user.id);

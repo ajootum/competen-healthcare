@@ -3,6 +3,7 @@ import { holdsOfficeAppointment } from "@/lib/ogs/office";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import ValidationTabs from "../ValidationTabs";
+import { estateRolesOf } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export default async function ValidationSubPage({ params }: { params: Promise<{ 
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(profile) as string[];
   if (!roles.some(r => ["hospital_admin", "educator", "super_admin"].includes(r)) && !(await holdsOfficeAppointment(admin, "competency", profile?.hospital_id ?? null, roles.includes("super_admin"), user.id))) redirect("/dashboard");
 
   const s = Object.hasOwn(SUBS, sub) ? SUBS[sub] : undefined;

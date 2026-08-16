@@ -12,7 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { cookies } from "next/headers";
-import { ROLE_CONFIG, ORG_ROLE_CONFIG, type AppRole } from "@/lib/roles";
+import { estateRolesOf, ROLE_CONFIG, ORG_ROLE_CONFIG, type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
 import type { HeaderUser, HeaderWorkspace, HeaderUnit } from "@/components/platform/GlobalHeader";
 
@@ -51,8 +51,7 @@ export async function loadHeaderContext(
       .eq("id", userId).single(),
   );
 
-  const userRoles: AppRole[] = ((profile?.roles?.length ? profile.roles : [profile?.role]) as (AppRole | null)[])
-    .filter(Boolean) as AppRole[];
+  const userRoles: AppRole[] = estateRolesOf(profile) as AppRole[];
   const orgRole: string | null = profile?.org_roles?.[0] ?? profile?.org_role ?? null;
 
   const [wsLinks, orgRes, unitRes, notifRes, msgRes] = await Promise.all([

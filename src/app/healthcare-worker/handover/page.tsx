@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { titleCase, fmtWhen, StatCard, SectionCard, Empty, Chip, AcuityChip } from "@/lib/hww/kit";
 import SbarForm from "./SbarForm";
 import { AskClarification, AnswerClarification } from "./Clarify";
+import { estateRolesOf } from "@/lib/roles";
 
 // Handover / SBAR (HWW-WARD-001 S4.11 / HWW-HND-001) — the nurse-to-nurse
 // handover surface: per-patient SBAR builder against the tenant's open
@@ -25,7 +26,7 @@ export default async function HandoverPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("hospital_id, role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   const NONE = "00000000-0000-0000-0000-000000000000";
   const scope = (q: any) => (roles.includes("super_admin") ? q : q.eq("hospital_id", profile?.hospital_id ?? NONE));
 

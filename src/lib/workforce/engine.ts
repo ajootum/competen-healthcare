@@ -1,4 +1,5 @@
 import { notify } from "@/lib/notify";
+import { estateRolesOf } from "@/lib/roles";
 
 // ── Workforce Assignment Engine (CDN-001, Phase 1) ───────────────────────────
 // Orchestrates provisioning WHEN an employee is assigned to a Position; the
@@ -46,7 +47,7 @@ async function recomputeRoles(admin: Admin, employeeId: string): Promise<string[
   const managed = new Set((reg ?? []).map((r: any) => r.workspace_type));
   const active = (reg ?? []).filter((r: any) => r.status === "active").map((r: any) => r.workspace_type);
   const { data: p } = await admin.from("profiles").select("roles, role").eq("id", employeeId).single();
-  const current: string[] = (p?.roles?.length ? p.roles : [p?.role]).filter(Boolean);
+  const current: string[] = estateRolesOf(p);
   const manual = current.filter(r => !managed.has(r));         // roles WAE never provisioned
   const next = [...new Set([...manual, ...active])];
   const primary = active[0] ?? (next.includes("nurse") ? "nurse" : next[0] ?? "nurse");

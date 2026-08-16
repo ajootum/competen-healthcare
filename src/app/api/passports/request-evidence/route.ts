@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { notify } from "@/lib/notify";
 
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 // Passport Centre "Request Evidence" action: notifies the clinician to upload
 // supporting evidence to their logbook. Assessor roles only; audit-logged.
 export async function POST(req: Request) {
@@ -12,7 +13,7 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     return NextResponse.json({ error: "Only assessor roles can request evidence" }, { status: 403 });
   }

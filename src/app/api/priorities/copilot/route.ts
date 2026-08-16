@@ -7,6 +7,7 @@ import { aiStatus } from "@/lib/ai/config";
 import { checkAiQuota } from "@/lib/ai/quota";
 import { fetchFramework, effectiveWeight } from "@/lib/priorities/engine";
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // PPE-007 AI Priority Orchestrator — wired to the real AI Runtime Gateway (generate()), grounded in the live priority
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, full_name").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.includes("super_admin")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const quota = await checkAiQuota(admin, user.id);

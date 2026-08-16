@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import NavLink from "@/components/NavLink";
 import SidebarToggle from "@/components/SidebarToggle";
-import { type AppRole } from "@/lib/roles";
+import { estateRolesOf, type AppRole } from "@/lib/roles";
 import GlobalHeader from "@/components/platform/GlobalHeader";
 import { loadHeaderContext } from "@/lib/platform/header";
 
@@ -35,7 +35,7 @@ export default async function OfficeGovernanceLayout({ children }: { children: R
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles").eq("id", user.id).single();
   // One resolver for every workspace, so the header cannot drift between them (PUI-002).
   const header = await loadHeaderContext(admin, user.id, { currentHref: "/office-governance" });
-  const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
+  const userRoles: AppRole[] = estateRolesOf(profile) as AppRole[];
 
   if (!userRoles.some(r => ALLOWED.includes(r))) {
     return (

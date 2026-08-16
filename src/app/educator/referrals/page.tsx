@@ -3,6 +3,7 @@ import { loadAnalytics } from "@/lib/analytics";
 import { StatTiles } from "@/app/assessor/reports/ui";
 import { EduHeader } from "../ui";
 import ReferralsBoard, { type ReferralRow, type Person, type Learner } from "./ReferralsBoard";
+import { estateRolesOf } from "@/lib/roles";
 
 // Referrals — escalate learners to colleagues or external support services.
 // Sensitive by design: the learner is not notified and cannot read the row;
@@ -39,8 +40,8 @@ export default async function ReferralsPage({ searchParams }: { searchParams: Se
   }));
 
   const referees: Person[] = (staff ?? [])
-    .filter(p => (p.roles?.length ? p.roles : [p.role]).some((x: string) => ["assessor", "educator", "hospital_admin"].includes(x)))
-    .map(p => ({ id: p.id, name: p.full_name, role: ((p.roles?.length ? p.roles : [p.role])[0] ?? "staff").replace("_", " ") }));
+    .filter(p => estateRolesOf(p).some((x: string) => ["assessor", "educator", "hospital_admin"].includes(x)))
+    .map(p => ({ id: p.id, name: p.full_name, role: (estateRolesOf(p)[0] ?? "staff").replace("_", " ") }));
   const learners: Learner[] = ctx.nurses.map(n => ({ id: n.id, name: n.name, dept: n.dept }));
 
   const open = rows.filter(r => ["open", "accepted"].includes(r.status)).length;

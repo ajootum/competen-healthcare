@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { notify } from "@/lib/notify";
 
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 // One-way messaging over the notifications system (Conduct Assessment
 // "Communication" panel). Delivers a message notification to a specific user
 // in your hospital, or to all hospital educators. Full two-way threads are a
@@ -15,7 +16,7 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
 
   const { recipient_id, to_educators, text } = await req.json().catch(() => ({}));
   const body = typeof text === "string" ? text.trim() : "";

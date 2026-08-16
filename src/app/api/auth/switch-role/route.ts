@@ -1,7 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { ROLE_CONFIG, type AppRole } from "@/lib/roles";
+import { estateRolesOf, ROLE_CONFIG, type AppRole } from "@/lib/roles";
 
 import { currentTraceId } from "@/lib/trace";
 export async function POST(req: Request) {
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     .eq("id", user.id)
     .single();
 
-  const userRoles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as string[];
+  const userRoles: string[] = estateRolesOf(profile) as string[];
   if (!userRoles.includes(role)) {
     return NextResponse.json({ error: "You do not have this role" }, { status: 403 });
   }

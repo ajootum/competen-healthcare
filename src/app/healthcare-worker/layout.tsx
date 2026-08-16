@@ -4,7 +4,7 @@ import Link from "next/link";
 import NavLink from "@/components/NavLink";
 import NavGroup from "@/components/NavGroup";
 import SidebarToggle from "@/components/SidebarToggle";
-import { type AppRole } from "@/lib/roles";
+import { estateRolesOf, type AppRole } from "@/lib/roles";
 import GlobalHeader from "@/components/platform/GlobalHeader";
 import { loadHeaderContext } from "@/lib/platform/header";
 import { buildShiftCard, loadShiftWidget } from "@/lib/hww/my-shift";
@@ -34,7 +34,7 @@ export default async function HealthcareWorkerLayout({ children }: { children: R
 
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles, org_role, org_roles, hospital_id").eq("id", user.id).single();
-  const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
+  const userRoles: AppRole[] = estateRolesOf(profile) as AppRole[];
 
   if (!userRoles.some(r => ALLOWED.includes(r))) {
     return (

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadCompetencyCentre } from "@/lib/operations/competency-centre";
 import CompetencyTabs from "./CompetencyTabs";
 import { cardClass } from "@/components/ui/primitives";
+import { estateRolesOf } from "@/lib/roles";
 
 // Competency Management (UMG-CM) command centre — the Unit Manager's lens over the unit's competency posture:
 // coverage & deployability, credential expiries, pending validations and the competency assignments the CDP
@@ -22,7 +23,7 @@ export default async function CompetencyCommandPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
   const c = await loadCompetencyCentre(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));

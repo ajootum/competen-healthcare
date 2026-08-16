@@ -1,6 +1,7 @@
 import { requireAnalyticsAccess } from "@/lib/analytics";
 import { ModuleHeader } from "../ui";
 import BuilderClient, { type SavedDef, type Option } from "./BuilderClient";
+import { estateRolesOf } from "@/lib/roles";
 
 // Report Builder module — parameterised report creation over whitelisted
 // datasets (no arbitrary queries), with live preview, CSV export and saved
@@ -24,7 +25,7 @@ export default async function ReportBuilderPage({ searchParams }: { searchParams
       : Promise.resolve({ data: [] }),
   ]);
 
-  const rolesOf = (p: { role: string | null; roles: string[] | null }) => (p.roles?.length ? p.roles : [p.role]).filter(Boolean) as string[];
+  const rolesOf = (p: { role: string | null; roles: string[] | null }) => estateRolesOf(p) as string[];
   const assessors: Option[] = (people ?? [])
     .filter(p => rolesOf(p).some(r => ["assessor", "educator", "hospital_admin"].includes(r)))
     .map(p => ({ id: p.id, name: p.full_name }));

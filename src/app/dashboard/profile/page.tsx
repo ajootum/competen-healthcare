@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadProfileIdentity } from "@/lib/profile-identity";
 import type { AppRole } from "@/lib/roles";
 import { cardClass } from "@/components/ui/primitives";
+import { estateRolesOf } from "@/lib/roles";
 
 // PW-011 Profile & Professional Identity — the user's own professional profile over real profiles /
 // professional_credentials / competency_decisions. Summary cards, profile card, About Me, Professional Summary,
@@ -33,7 +34,7 @@ export default async function ProfilePage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any; // eslint-disable-line @typescript-eslint/no-explicit-any
   const { data: pr } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const userRoles: AppRole[] = (pr?.roles?.length ? pr.roles : [pr?.role]).filter(Boolean) as AppRole[];
+  const userRoles: AppRole[] = estateRolesOf(pr) as AppRole[];
 
   const d = await loadProfileIdentity(admin, user.id, user.email ?? null, userRoles);
   const p = d.profile;

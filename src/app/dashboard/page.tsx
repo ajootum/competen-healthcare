@@ -2,7 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
-import { type AppRole } from "@/lib/roles";
+import { estateRolesOf, type AppRole } from "@/lib/roles";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
 import { loadPersonalWorkspace } from "@/lib/personal-workspace";
 import { resolveDashboardManifest, resolveDashboardControls, inZone, type ManifestEntry } from "@/lib/orchestration/dashboard-manifest";
@@ -43,7 +43,7 @@ export default async function PersonalWorkspacePage() {
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("*").eq("id", user.id).single();
   if (!profile) redirect("/login");
-  const userRoles: AppRole[] = (profile.roles?.length ? profile.roles : [profile.role]).filter(Boolean) as AppRole[];
+  const userRoles: AppRole[] = estateRolesOf(profile) as AppRole[];
 
   const scopeCtx = { tenantId: profile.tenant_id ?? null, hospitalId: profile.hospital_id ?? null, unitId: profile.unit_id ?? null, roles: userRoles, userId: user.id };
   const [d, workspaces, manifest, controls] = await Promise.all([

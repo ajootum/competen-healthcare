@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import ScopeFilter from "@/components/ScopeFilter";
 import { holdsOfficeAppointment } from "@/lib/ogs/office";
+import { estateRolesOf } from "@/lib/roles";
 
 // Shared presentational + guard kit for the Quality & Accreditation Workspace (QAW-000..014).
 // Pure server-safe components (static SVG charts, cards, pills) so every module renders the same
@@ -21,7 +22,7 @@ export async function qaGuard() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   // R001 appointment-based access (additive): role holder OR active Quality Office appointee. Fail-soft.
   const roleOk = roles.some(r => ALLOWED.includes(r));
   const apptOk = roleOk ? false : await holdsOfficeAppointment(admin, "quality", profile?.hospital_id ?? null, roles.includes("super_admin"), user.id);

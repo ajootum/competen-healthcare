@@ -1,3 +1,4 @@
+import { estateRolesOf } from "@/lib/roles";
 // UMW Administration & Configuration shared data layer (UMW-ADM-001..009). One fail-soft read of the adm_* stores
 // (unit profile / rooms / services / operational rules / documents / assets / forms / config items / delegations /
 // change register / AI recommendations / automations) PLUS reused structure counts from op_beds / departments /
@@ -42,7 +43,7 @@ export async function fetchAdmin(admin: any, hid: string | null, isSuper: boolea
   const positionsRows = (posRes.data ?? []) as any[];
   const profileRows = (rolesRes.data ?? []) as any[];
   const roleDist: Record<string, number> = {};
-  profileRows.forEach((p) => { const rs = (p.roles?.length ? p.roles : [p.role]).filter(Boolean); (rs.length ? rs : ["unassigned"]).forEach((r: string) => { roleDist[r] = (roleDist[r] ?? 0) + 1; }); });
+  profileRows.forEach((p) => { const rs = estateRolesOf(p); (rs.length ? rs : ["unassigned"]).forEach((r: string) => { roleDist[r] = (roleDist[r] ?? 0) + 1; }); });
 
   return {
     provisioned: true as const,

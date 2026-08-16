@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import OperationsConsole from "@/app/admin/operations/OperationsConsole";
 import { loadOpsConsoleData } from "@/lib/operations/ops-console-data";
+import { estateRolesOf } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export default async function UnitManagerOperationsPage({ searchParams }: { sear
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
   const { ready, data, support } = await loadOpsConsoleData(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));

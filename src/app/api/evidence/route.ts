@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 // Evidence engine (§E): upload files linked to logbook entries, credentials or
 // competencies. Files live in the private "evidence" bucket — every download
 // goes through a short-lived signed URL issued here, after a permission check
@@ -26,14 +27,14 @@ async function requireUser() {
 }
 
 function isVerifier(me: { role: string | null; roles: string[] | null }) {
-  const roles = me.roles?.length ? me.roles : [me.role].filter(Boolean) as string[];
+  const roles = estateRolesOf(me) as string[];
   return roles.some(r => VERIFIER_ROLES.includes(r));
 }
 
 function canAccess(row: { owner_id: string; hospital_id: string | null }, me: { id: string; role: string | null; roles: string[] | null; hospital_id: string | null }) {
   if (row.owner_id === me.id) return true;
   if (!isVerifier(me)) return false;
-  const roles = me.roles?.length ? me.roles : [me.role].filter(Boolean) as string[];
+  const roles = estateRolesOf(me) as string[];
   if (roles.includes("super_admin")) return true;
   return !!row.hospital_id && row.hospital_id === me.hospital_id;
 }

@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { estateRolesOf } from "@/lib/roles";
 
 // Unit / Location context (PUI-002, HWW-UI-002).
 //
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = ((profile?.roles?.length ? profile.roles : [profile?.role]) as (string | null)[]).filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(profile) as string[];
 
   // The unit must exist AND belong to the caller's hospital — super_admin excepted, since they legitimately
   // operate across tenants. Scoping off the SUBJECT row, never off the request body.

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { loadConcernQueue, isOverdue } from "@/lib/hww/concerns";
 import QueueActions from "./QueueActions";
 import { cardClass } from "@/components/ui/primitives";
+import { estateRolesOf } from "@/lib/roles";
 
 // Nurse Concerns Queue (HWW-ADD-001 §SSW Integration) — the supervisor's review
 // surface: every active bedside concern on the tenant, priority-ranked with
@@ -67,7 +68,7 @@ export default async function SupervisorConcernsPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   const isSuperUser = roles.includes("super_admin");
 
   const data = await loadConcernQueue(admin, profile?.hospital_id ?? null, isSuperUser);

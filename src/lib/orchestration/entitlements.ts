@@ -3,7 +3,7 @@
 // what workspaces may this user ENTER, and at what SCOPE. Enforces PW-014's authorization rule — *visibility is
 // not authorization*: canEnterWorkspace() is the server-side re-auth primitive every landing/launch/deep-link
 // must call. Reads only identity/role columns; fail-soft. Acting roles (context_assignment) are stubbed for WS1+.
-import { orgRolesOf, highestRole, type AppRole, type OrgRole } from "@/lib/roles";
+import { estateRolesOf, orgRolesOf, highestRole, type AppRole, type OrgRole } from "@/lib/roles";
 import { WORKSPACE_REGISTRY, loadWorkspaceRegistry, type RegisteredWorkspace } from "@/lib/orchestration/registry";
 import { loadTenantLicensing, isWorkspaceLicensed } from "@/lib/orchestration/licensing";
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -46,7 +46,7 @@ export async function resolveEntitlements(admin: any, userId: string, activeRole
   } catch { /* fail-soft */ }
   if (!profile) return empty;
 
-  const roles: AppRole[] = (profile.roles?.length ? profile.roles : [profile.role]).filter(Boolean) as AppRole[];
+  const roles: AppRole[] = estateRolesOf(profile) as AppRole[];
   const orgRoles = orgRolesOf({ org_role: profile.org_role, org_roles: profile.org_roles });
   const isSuper = roles.includes("super_admin");
   // !! CP-SPLIT-002. highestRole returns AppRole | null, and the old `as AppRole` cast swallowed that

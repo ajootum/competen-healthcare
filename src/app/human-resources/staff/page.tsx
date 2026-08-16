@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { cardClass } from "@/components/ui/primitives";
+import { estateRolesOf } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export default async function StaffRecordsPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
   const isSuper = roles.includes("super_admin"); const hid = profile?.hospital_id ?? null;
   const scope = (q: any) => (isSuper ? q : q.eq("hospital_id", hid ?? NONE));
@@ -51,7 +52,7 @@ export default async function StaffRecordsPage() {
   } catch { /* ignore */ }
 
   const roleLabel = (p: any) => {
-    const rs: string[] = (p.roles?.length ? p.roles : [p.role]).filter(Boolean);
+    const rs: string[] = estateRolesOf(p);
     if (rs.includes("educator")) return "Educator";
     if (rs.includes("assessor")) return "Assessor";
     if (rs.includes("hospital_admin") || rs.includes("super_admin")) return "Admin";

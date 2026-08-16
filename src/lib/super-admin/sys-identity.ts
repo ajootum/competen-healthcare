@@ -1,3 +1,4 @@
+import { estateRolesOf } from "@/lib/roles";
 // Identity & Access Management (SYS-001.2) loader — the live identity
 // directory. Merges the Supabase Auth admin directory (REAL last_sign_in_at,
 // banned_until, created_at — auth is the source of truth, nothing stored
@@ -35,7 +36,7 @@ export async function loadIam(admin: any) {
       name: p?.full_name ?? (u.user_metadata?.full_name as string | undefined) ?? null,
       email: u.email ?? p?.email ?? null,
       role: p?.role ?? null,
-      roles: (p?.roles?.length ? p.roles : [p?.role]).filter(Boolean),
+      roles: estateRolesOf(p),
       accountStatus: p?.account_status ?? "active",
       banned: isBanned(u),
       lastSignIn: u.last_sign_in_at ?? null,
@@ -51,7 +52,7 @@ export async function loadIam(admin: any) {
 
   // Portal-role composition (from profiles — includes multi-role users).
   const roleCounts: Record<string, number> = {};
-  for (const p of profiles) for (const r of ((p.roles?.length ? p.roles : [p.role]) as string[]).filter(Boolean)) roleCounts[r] = (roleCounts[r] ?? 0) + 1;
+  for (const p of profiles) for (const r of estateRolesOf(p)) roleCounts[r] = (roleCounts[r] ?? 0) + 1;
   const statusCounts: Record<string, number> = {};
   for (const p of profiles) { const s = p.account_status ?? "active"; statusCounts[s] = (statusCounts[s] ?? 0) + 1; }
 

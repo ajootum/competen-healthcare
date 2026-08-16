@@ -4,6 +4,7 @@ import Link from "next/link";
 import { OUTCOME_CONFIG, type DecisionOutcome } from "@/lib/ckcm";
 import ConductCockpit, { type CockpitFramework, type CockpitLevel } from "./ConductCockpit";
 import { formatDateTime } from "@/lib/datetime";
+import { estateRolesOf } from "@/lib/roles";
 
 // Conduct Assessment workspace (assessor cockpit). One live session per
 // clinician + cycle: guided workflow, criterion checklists (real
@@ -25,7 +26,7 @@ export default async function AssessorAssessPage({ searchParams }: { searchParam
     .eq("id", user.id)
     .single();
 
-  const myRoles: string[] = assessor?.roles?.length ? assessor.roles : [assessor?.role].filter(Boolean) as string[];
+  const myRoles: string[] = estateRolesOf(assessor) as string[];
   if (!myRoles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     redirect("/dashboard");
   }

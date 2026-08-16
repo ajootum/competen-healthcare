@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { OUTCOME_CONFIG, type DecisionOutcome } from "@/lib/ckcm";
+import { estateRolesOf } from "@/lib/roles";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -11,7 +12,7 @@ export async function requireAnalyticsAccess() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     redirect("/dashboard");
   }
@@ -68,7 +69,7 @@ export async function loadAnalytics(admin: Admin, hospitalId: string | null): Pr
       : Promise.resolve({ data: [] }),
   ]);
 
-  const rolesOf = (p: { role: string | null; roles: string[] | null }) => (p.roles?.length ? p.roles : [p.role]).filter(Boolean) as string[];
+  const rolesOf = (p: { role: string | null; roles: string[] | null }) => estateRolesOf(p) as string[];
   const nurses: AnalyticsNurse[] = (people ?? [])
     .filter(p => rolesOf(p).includes("nurse"))
     .map(p => ({ id: p.id, name: p.full_name, dept: p.specialization ?? "General" }));

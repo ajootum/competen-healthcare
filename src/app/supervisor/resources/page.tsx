@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadResourceCapacity } from "@/lib/operations/resource-capacity";
 import { cardClass, Badge, Alert, Progress, type BadgeTone } from "@/components/ui/primitives";
 import { KpiRibbon } from "@/components/ui/charts";
+import { estateRolesOf } from "@/lib/roles";
 
 // Resource & Capacity Coordination (SSW-OPS-004) — beds, ICU, isolation,
 // equipment and shared resources in one place. op_equipment and op_resources
@@ -27,7 +28,7 @@ export default async function ResourceCapacityPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   const d: any = await loadResourceCapacity(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));
   const k = d.kpis;
 

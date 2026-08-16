@@ -9,6 +9,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import pkg from "../../../package.json";
+import { estateRolesOf } from "@/lib/roles";
 
 const DAY = 86400000;
 
@@ -65,7 +66,7 @@ export async function loadMissionControl(admin: any) {
   const depts = (deptsRes.data ?? []) as any[];
   const assessments = (assessRes.data ?? []) as any[];
 
-  const rolesOf = (p: any): string[] => (p.roles?.length ? p.roles : [p.role]).filter(Boolean);
+  const rolesOf = (p: any): string[] => estateRolesOf(p);
   const hasRole = (p: any, r: string) => rolesOf(p).includes(r);
 
   // ── Fail-soft / drift-risk tables ────────────────────────────────────────

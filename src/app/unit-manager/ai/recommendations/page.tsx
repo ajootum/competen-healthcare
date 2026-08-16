@@ -5,6 +5,7 @@ import { loadUnitIntelligence } from "@/lib/operations/ai-intelligence";
 import AiTabs from "../AiTabs";
 import { cardClass } from "@/components/ui/primitives";
 import { formatDateTime } from "@/lib/datetime";
+import { estateRolesOf } from "@/lib/roles";
 
 // AI & Intelligence → Executive Recommendations (UMG-AI). The full prioritised cross-domain recommendation
 // queue — the same consolidated signals as the command centre, grouped by domain, each routing to its
@@ -22,7 +23,7 @@ export default async function RecommendationsPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
   const d = await loadUnitIntelligence(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));

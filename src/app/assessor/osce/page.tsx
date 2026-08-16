@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import OsceCentre, { type ExamRow, type ExamDetail, type OsceKpis, type ActivityRow, type PickOption } from "./OsceCentre";
+import { estateRolesOf } from "@/lib/roles";
 
 // OSCE Management Centre (assessor). Everything rendered is live: exams,
 // stations, candidates and results come from the OSCE tables (migration 033);
@@ -46,7 +47,7 @@ export default async function OscePage({ searchParams }: { searchParams: SearchP
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role, roles, hospital_id, full_name").eq("id", user.id).single();
-  const myRoles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const myRoles: string[] = estateRolesOf(me) as string[];
   if (!myRoles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     redirect("/dashboard");
   }
@@ -82,10 +83,10 @@ export default async function OscePage({ searchParams }: { searchParams: SearchP
   const exams = (examsRaw ?? []) as unknown as ExamRecord[];
 
   const nurses: PickOption[] = (staff ?? [])
-    .filter(p => (p.roles?.length ? p.roles : [p.role]).includes("nurse"))
+    .filter(p => estateRolesOf(p).includes("nurse"))
     .map(p => ({ id: p.id, name: p.full_name }));
   const assessors: PickOption[] = (staff ?? [])
-    .filter(p => (p.roles?.length ? p.roles : [p.role]).some((r: string) => ["assessor", "educator", "hospital_admin"].includes(r)))
+    .filter(p => estateRolesOf(p).some((r: string) => ["assessor", "educator", "hospital_admin"].includes(r)))
     .map(p => ({ id: p.id, name: p.full_name }));
   const competencies: PickOption[] = (comps ?? []).map(c => ({ id: c.id, name: c.name }));
 

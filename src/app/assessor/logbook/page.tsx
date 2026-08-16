@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { buildEvidenceCentre } from "@/lib/evidence-centre";
 import EvidenceCentre from "./EvidenceCentre";
+import { estateRolesOf } from "@/lib/roles";
 
 // Evidence Validation Centre (Evidence Validation Centre spec): the assessor's
 // centralised review workflow — smart queue with filters, a split review panel
@@ -16,7 +17,7 @@ export default async function EvidenceValidationCentrePage() {
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
   const { entries, kpis, isSenior } = await buildEvidenceCentre(user.id);

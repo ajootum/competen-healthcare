@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { titleCase, fmtWhen, SectionCard, Empty, Chip } from "@/lib/hww/kit";
 import ChatPanel from "./ChatPanel";
 import AckBroadcast from "./AckBroadcast";
+import { estateRolesOf } from "@/lib/roles";
 
 // Communication (HWW-WARD-001 S4.10 / HWW-COM-001) — the nurse's team
 // communication surface: shared ward channels (op_messages), broadcasts with
@@ -20,7 +21,7 @@ export default async function CommunicationPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("hospital_id, role, roles").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   const NONE = "00000000-0000-0000-0000-000000000000";
   const scope = (q: any) => (roles.includes("super_admin") ? q : q.eq("hospital_id", profile?.hospital_id ?? NONE));
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadEscalations } from "@/lib/operations/escalations-workspace";
 import EscalationActions from "./EscalationActions";
 import { cardClass } from "@/components/ui/primitives";
+import { estateRolesOf } from "@/lib/roles";
 
 // Clinical Escalation Centre (SSW-CCR-003) — the supervisor's escalation
 // command surface. Until now the sidebar BADGED escalations in two groups and
@@ -53,7 +54,7 @@ export default async function EscalationCentrePage({ searchParams }: { searchPar
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   const isSuperUser = roles.includes("super_admin");
   const hid = profile?.hospital_id ?? null;
   const NONE = "00000000-0000-0000-0000-000000000000";

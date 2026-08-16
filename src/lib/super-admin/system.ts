@@ -12,6 +12,7 @@
 import { loadRuntimeStatus } from "@/lib/platform/runtime";
 import { loadMonitoring } from "@/lib/platform/monitoring";
 import { loadJobs } from "@/lib/platform/jobs";
+import { estateRolesOf } from "@/lib/roles";
 
 const num = (r: any) => (r?.error ? null : r?.count ?? 0);
 const DAY = 86400000;
@@ -50,7 +51,7 @@ export async function loadSystemPlatform(admin: any) {
 
   // ── Identity composition (profiles) ─────────────────────────────────────────
   const profiles = (profRows.error ? [] : profRows.data ?? []) as any[];
-  const rolesOf = (p: any) => ((p.roles?.length ? p.roles : [p.role]) as string[]).filter(Boolean);
+  const rolesOf = (p: any) => estateRolesOf(p);
   const roleCounts: Record<string, number> = {};
   for (const p of profiles) for (const r of rolesOf(p)) roleCounts[r] = (roleCounts[r] ?? 0) + 1;
   const statusCounts: Record<string, number> = {};

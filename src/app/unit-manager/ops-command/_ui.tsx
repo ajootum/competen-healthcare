@@ -5,6 +5,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import UnitFilters from "../UnitFilters";
+import { estateRolesOf } from "@/lib/roles";
 
 export const dcard = "bg-slate-800/60 border border-slate-700/70 rounded-xl";
 export const NONE = "00000000-0000-0000-0000-000000000000";
@@ -19,7 +20,7 @@ export async function opcGuard() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some((r: string) => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
   return { admin, roles, isSuper: roles.includes("super_admin"), hid: (profile?.hospital_id ?? null) as string | null };
 }

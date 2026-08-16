@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import type { EvidenceEntry, CentreKpis } from "@/app/assessor/logbook/EvidenceCentre";
+import { estateRolesOf } from "@/lib/roles";
 
 // Shared Evidence Validation Centre assembly — one implementation feeding both
 // the assessor shell (/assessor/logbook) and the educator shell
@@ -13,7 +14,7 @@ export async function buildEvidenceCentre(userId: string): Promise<{
 }> {
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role, roles, is_senior_assessor").eq("id", userId).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   const isSenior = !!me?.is_senior_assessor || roles.some(r => ["hospital_admin", "super_admin"].includes(r));
 
   const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);

@@ -5,6 +5,7 @@ import { loadMdt, MDT_SERVICES, MEETING_TYPES, DECISION_CATEGORIES } from "@/lib
 import { MeetingControls, AttendanceRow, ActionControls, ReferralControls, DecisionCapture } from "./MdtActions";
 import { cardClass } from "@/components/ui/primitives";
 import { KpiTileBare as Kpi } from "../_kit";
+import { estateRolesOf } from "@/lib/roles";
 
 // Multidisciplinary Team (MDT) Coordination (SSW-CCR-005, migration 160).
 //
@@ -129,7 +130,7 @@ export default async function MdtPage() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["assessor", "hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
 
   const d: any = await loadMdt(admin, profile?.hospital_id ?? null, roles.includes("super_admin"));

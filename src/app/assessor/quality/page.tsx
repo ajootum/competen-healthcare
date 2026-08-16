@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { OUTCOME_CONFIG, type DecisionOutcome } from "@/lib/ckcm";
+import { estateRolesOf } from "@/lib/roles";
 
 // Live Quality Monitor (Quality & Governance hub). Every figure is computed
 // from live records — decisions, assessments, audits, CAPA actions, logbook
@@ -17,7 +18,7 @@ export default async function QualityMonitorPage() {
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const myRoles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const myRoles: string[] = estateRolesOf(me) as string[];
   if (!myRoles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     redirect("/dashboard");
   }

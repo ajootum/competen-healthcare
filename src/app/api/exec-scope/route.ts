@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { estateRolesOf } from "@/lib/roles";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // Options for the header hospital-scope filter (QAW + HEX). super_admin may scope to any hospital or
@@ -12,7 +13,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ["hospital_admin", "super_admin"].includes(r))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const current = (await cookies()).get("active_hospital")?.value ?? null;

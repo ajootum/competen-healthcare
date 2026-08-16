@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { OUTCOME_CONFIG, METHOD_LABELS, type AssessmentMethod, type DecisionOutcome } from "@/lib/ckcm";
 import { DATASET_COLUMNS } from "@/lib/report-datasets";
+import { estateRolesOf } from "@/lib/roles";
 
 // Custom report engine (Report Builder). Datasets and columns are whitelisted
 // in @/lib/report-datasets — the builder can only parameterise these prebuilt,
@@ -23,7 +24,7 @@ export async function GET(req: Request) {
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

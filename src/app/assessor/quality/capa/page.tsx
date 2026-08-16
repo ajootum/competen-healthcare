@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import CapaBoard, { type CapaRow } from "./CapaBoard";
+import { estateRolesOf } from "@/lib/roles";
 
 // Improvement Actions (CAPA) tracker. Rows come straight from capa_actions —
 // auto-created by the Quality Engine from failed critical audit criteria, or
@@ -18,7 +19,7 @@ export default async function CapaPage({ searchParams }: { searchParams: SearchP
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const myRoles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const myRoles: string[] = estateRolesOf(me) as string[];
   if (!myRoles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     redirect("/dashboard");
   }
@@ -49,7 +50,7 @@ export default async function CapaPage({ searchParams }: { searchParams: SearchP
   }));
 
   const owners = (staff ?? [])
-    .filter(p => (p.roles?.length ? p.roles : [p.role]).some((r: string) => ["assessor", "educator", "hospital_admin", "nurse"].includes(r)))
+    .filter(p => estateRolesOf(p).some((r: string) => ["assessor", "educator", "hospital_admin", "nurse"].includes(r)))
     .map(p => ({ id: p.id, name: p.full_name }));
 
   return (

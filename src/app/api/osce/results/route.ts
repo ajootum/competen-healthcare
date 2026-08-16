@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 // OSCE Centre — record a station score for a candidate (0–6 Benner scale).
 // Upserts so an examiner can correct a score before the exam is completed.
 export async function POST(req: Request) {
@@ -11,7 +12,7 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => ["assessor", "educator", "hospital_admin", "super_admin"].includes(r))) {
     return NextResponse.json({ error: "Only assessor roles can record OSCE scores" }, { status: 403 });
   }

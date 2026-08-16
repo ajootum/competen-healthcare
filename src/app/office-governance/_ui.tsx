@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import { estateRolesOf } from "@/lib/roles";
 
 // Office Governance System (OGS-000..010) shared kit. OGS is a horizontal governance platform service
 // (offices, charters, appointments, delegations, meetings, decisions, analytics, audit). Reuses the shared
@@ -20,7 +21,7 @@ export async function ogsGuard() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("full_name, role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some(r => ALLOWED.includes(r))) redirect("/dashboard");
   const cookieStore = await cookies();
   const selected = cookieStore.get("active_hospital")?.value ?? null;

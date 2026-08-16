@@ -1,3 +1,4 @@
+import { estateRolesOf } from "@/lib/roles";
 // Platform Super Admin Workspace data (PSA-001) — platform-wide operational
 // control: tenant lifecycle, platform analytics, security/audit and AI ops.
 //
@@ -69,7 +70,7 @@ export async function loadPlatformAdmin(admin: any) {
   // ── Platform role distribution ─────────────────────────────────────────────
   const roleMap = new Map<string, number>();
   for (const p of profiles) {
-    const rs: string[] = (p.roles?.length ? p.roles : [p.role]).filter(Boolean);
+    const rs: string[] = estateRolesOf(p);
     const key = rs.includes("super_admin") ? "super_admin" : rs.includes("hospital_admin") ? "hospital_admin" : rs.includes("educator") ? "educator" : rs.includes("assessor") ? "assessor" : rs.includes("nurse") ? "nurse" : "other";
     roleMap.set(key, (roleMap.get(key) ?? 0) + 1);
   }

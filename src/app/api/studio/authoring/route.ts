@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { currentTraceId } from "@/lib/trace";
+import { estateRolesOf } from "@/lib/roles";
 // ── Educator framework authoring ────────────────────────────────────────────
 // Widens framework / domain / competency authoring to the educator role, but
 // ONLY on frameworks that belong to the educator's own hospital. The shared
@@ -37,7 +38,7 @@ async function context(): Promise<Ctx | null> {
   const admin = createAdminClient();
   const { data: me } = await admin
     .from("profiles").select("role, roles, hospital_id, full_name").eq("id", user.id).single();
-  const roles: string[] = me?.roles?.length ? me.roles : [me?.role].filter(Boolean) as string[];
+  const roles: string[] = estateRolesOf(me) as string[];
   if (!roles.some(r => AUTHOR_ROLES.includes(r))) return null;
   return {
     admin, userId: user.id, name: me?.full_name ?? "Educator",

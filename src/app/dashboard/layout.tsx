@@ -5,7 +5,7 @@ import Link from "next/link";
 import MobileSidebar from "./MobileSidebar";
 import NavLink from "@/components/NavLink";
 import SidebarToggle from "@/components/SidebarToggle";
-import { highestRole, ROLE_CONFIG, ROLE_PRIORITY, type AppRole } from "@/lib/roles";
+import { estateRolesOf, highestRole, ROLE_CONFIG, ROLE_PRIORITY, type AppRole } from "@/lib/roles";
 import { admitToEstate, NO_MEMBERSHIP_DESTINATION } from "@/lib/platform-membership";
 import ActiveContextBanner from "./ActiveContextBanner";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
@@ -32,7 +32,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // One resolver for every workspace, so the header cannot drift between them (PUI-002).
 
   const header = await loadHeaderContext(admin, user.id, { currentHref: "/dashboard" });
-  const userRoles: AppRole[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean) as AppRole[];
+  const userRoles: AppRole[] = estateRolesOf(profile) as AppRole[];
 
   // -- CP-SPLIT-002 stage 3 -- GATE 1: THE ESTATE ADMITS COMPETEN PLATFORM MEMBERS ------------------
   // COMP-ARCH-PSA-001 s7 and s14. An identity with no platform_membership row is a Competen Practice

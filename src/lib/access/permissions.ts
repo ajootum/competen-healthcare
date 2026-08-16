@@ -15,6 +15,7 @@
 
 import matrixFile from "./matrix.generated.json";
 import { summarise, findSodBreaches, roleReaches, type MatrixEntry, type SodRule } from "./scan";
+import { estateRolesOf } from "@/lib/roles";
 
 const NONE = "00000000-0000-0000-0000-000000000000";
 const DAY = 86400000;
@@ -50,7 +51,7 @@ export async function loadAccessGovernance(
 
   const people = ((peopleRes.data ?? []) as any[]).map(p => ({
     id: p.id, full_name: p.full_name,
-    roles: ((p.roles?.length ? p.roles : [p.role]) as (string | null)[]).filter(Boolean) as string[],
+    roles: estateRolesOf(p) as string[],
   }));
 
   // ── Role distribution, from the roles people actually hold ──

@@ -7,6 +7,7 @@ import UnitFilters from "../../UnitFilters";
 import WfmExcTabs from "./WfmExcTabs";
 import { KpiWithFoot as Kpi } from "../_kit";
 import UnavailableNotice from "@/components/UnavailableNotice";
+import { estateRolesOf } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export default async function ExceptionsApprovalsOverview() {
   if (!user) redirect("/login");
   const admin = createAdminClient() as any;
   const { data: profile } = await admin.from("profiles").select("role, roles, hospital_id").eq("id", user.id).single();
-  const roles: string[] = (profile?.roles?.length ? profile.roles : [profile?.role]).filter(Boolean);
+  const roles: string[] = estateRolesOf(profile);
   if (!roles.some((r: string) => ["hospital_admin", "super_admin"].includes(r))) redirect("/dashboard");
   const isSuper = roles.includes("super_admin");
 
