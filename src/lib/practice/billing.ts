@@ -1106,3 +1106,147 @@ export async function uninvoicedCharges(admin: any, ctx: WorkspaceContext, filte
   const taken = await chargesOnLiveInvoices(admin, ctx.workspaceId, rows.map(r => r.id));
   return loaded(rows.filter(r => !taken.has(r.id)));
 }
+
+// ── PATIENT STATEMENT ── PAY-002 s10 (the conditional-documents slice, 2026-08-16) ──────────────────
+//
+// A period summary DERIVED from the same rows everything else reads -- never an independent source
+// of truth (s1's own rule). Balance semantics are the invoice's: an ISSUED invoice raises what the
+// patient owes, any payment lowers it whoever collected it, discount/waiver/correction lower it,
+// a refund raises it back. Charges not yet invoiced are NOT in these balances and the statement
+// says so -- they become due at issue, not before.
+//
+// ⚠ A STATEMENT IS COMPLETE OR IT IS REFUSED. Balances computed over a truncated read would be
+// confidently wrong on a document a patient takes home, so an overflowing period refuses with
+// STATEMENT_TOO_LARGE and asks for a narrower one -- unlike a screen, which can honestly say
+// "first 50 of many".
+//
+// PRIVACY (s10): descriptions carry the charge/invoice wording only -- no diagnosis, no encounter
+// content. The patient's NAME renders only under patient.view, the same rule every list follows.
+
+export type StatementLine = {
+  date: string;
+  kind: "invoice" | "payment" | "discount" | "waiver" | "correction" | "refund";
+  ref: string | null;
+  description: string;
+  /** Signed minor units: positive raises what the patient owes, negative lowers it. */
+  amountMinor: number;
+  runningBalanceMinor: number;
+  /** For adjustment lines: the note document this line references (PAY-002 s10 document references). */
+  adjustmentId: string | null;
+};
+
+export async function patientStatement(admin: any, ctx: WorkspaceContext, args: {
+  patientId: string; fromDay: string; toDay: string;
+}): Promise<
+  | { ok: false; status: number; code: string; message: string }
+  | {
+    ok: true; data: {
+      patientName: string | null;
+      identified: boolean;
+      fromDay: string; toDay: string;
+      generatedAtIso: string;
+      /** One section per currency: mixing two currencies into one balance is how a statement lies. */
+      sections: {
+        currency: string;
+        openingBalanceMinor: number;
+        lines: StatementLine[];
+        closingBalanceMinor: number;
+      }[];
+      uninvoicedInPeriod: number;
+    };
+  }
+> {
+  if (!hasCapability(ctx, "billing.view"))
+    return { ok: false, status: 403, code: "FORBIDDEN", message: "a patient statement needs billing.view" };
+
+  const ws = ctx.workspaceId;
+  const CAP = 999;
+  const [invRes, payRes, adjRes, chgRes, receiptRes] = await Promise.all([
+    admin.from("practice_invoice")
+      .select("id, invoice_number, issue_date, currency, total_minor, status")
+      .eq("workspace_id", ws).eq("patient_id", args.patientId).eq("status", "ISSUED")
+      .order("issue_date").limit(CAP + 1),
+    admin.from("practice_payment")
+      .select("id, amount_minor, currency, method, collector, paid_at")
+      .eq("workspace_id", ws).eq("patient_id", args.patientId).order("paid_at").limit(CAP + 1),
+    admin.from("practice_billing_adjustment")
+      .select("id, kind, amount_minor, currency, reason, created_at, invoice_id, payment_id, charge_id, "
+        + "practice_invoice:invoice_id(patient_id, invoice_number), practice_payment:payment_id(patient_id), practice_charge:charge_id(patient_id)")
+      .eq("workspace_id", ws).order("created_at").limit(CAP + 1),
+    admin.from("practice_charge")
+      .select("id")
+      .eq("workspace_id", ws).eq("patient_id", args.patientId)
+      .gte("charged_on", args.fromDay).lte("charged_on", args.toDay).limit(CAP + 1),
+    admin.from("practice_receipt").select("payment_id, receipt_number")
+      .eq("workspace_id", ws).limit(CAP + 1),
+  ]);
+  const firstError = invRes.error ?? payRes.error ?? adjRes.error ?? chgRes.error ?? receiptRes.error;
+  if (firstError)
+    return { ok: false, status: 502, code: "STATEMENT_UNREADABLE", message: firstError.message };
+  if ([invRes, payRes, adjRes, receiptRes].some(r => ((r.data ?? []) as any[]).length > CAP))
+    return {
+      ok: false, status: 422, code: "STATEMENT_TOO_LARGE",
+      message: "this patient's financial history exceeds what one statement can carry completely -- balances over a truncated read would be wrong on a document, so narrow the period",
+    };
+
+  // Uninvoiced = a charge in the period sitting on NO live invoice -- the same derivation
+  // createDraftInvoice enforces (there is no stored charge status on purpose).
+  const periodChargeIds = ((chgRes.data ?? []) as any[]).map(c => c.id);
+  const taken = await chargesOnLiveInvoices(admin, ws, periodChargeIds);
+  const uninvoicedInPeriod = periodChargeIds.filter(id => !taken.has(id)).length;
+
+  const receiptOf = new Map(((receiptRes.data ?? []) as any[]).map(r => [r.payment_id, r.receipt_number]));
+  const adj = ((adjRes.data ?? []) as any[]).filter(a =>
+    a.practice_invoice?.patient_id === args.patientId
+    || a.practice_payment?.patient_id === args.patientId
+    || a.practice_charge?.patient_id === args.patientId);
+
+  type Raw = { date: string; kind: StatementLine["kind"]; ref: string | null; description: string; amountMinor: number; currency: string; adjustmentId: string | null };
+  const raw: Raw[] = [
+    ...((invRes.data ?? []) as any[]).map((i: any): Raw => ({
+      date: i.issue_date, kind: "invoice", ref: i.invoice_number,
+      description: "Invoice issued", amountMinor: i.total_minor, currency: i.currency, adjustmentId: null,
+    })),
+    ...((payRes.data ?? []) as any[]).map((p: any): Raw => ({
+      date: String(p.paid_at).slice(0, 10), kind: "payment", ref: receiptOf.get(p.id) ?? null,
+      description: `Payment received (${p.method}${p.collector && p.collector !== "practitioner" ? `, collected by ${p.collector}` : ""})`,
+      amountMinor: -p.amount_minor, currency: p.currency, adjustmentId: null,
+    })),
+    ...adj.map((a: any): Raw => ({
+      date: String(a.created_at).slice(0, 10), kind: a.kind,
+      ref: a.practice_invoice?.invoice_number ?? null,
+      description: `${a.kind === "refund" ? "Refund" : a.kind === "waiver" ? "Waiver" : a.kind === "discount" ? "Discount" : "Correction"} -- ${String(a.reason).slice(0, 80)}`,
+      amountMinor: a.kind === "refund" ? a.amount_minor : -a.amount_minor,
+      currency: a.currency, adjustmentId: a.id,
+    })),
+  ].sort((x, y) => x.date < y.date ? -1 : x.date > y.date ? 1 : 0);
+
+  const currencies = [...new Set(raw.map(r => r.currency))].sort();
+  const sections = currencies.map(cur => {
+    const mine = raw.filter(r => r.currency === cur);
+    const opening = mine.filter(r => r.date < args.fromDay).reduce((n, r) => n + r.amountMinor, 0);
+    let running = opening;
+    const lines = mine.filter(r => r.date >= args.fromDay && r.date <= args.toDay).map(r => {
+      running += r.amountMinor;
+      return { date: r.date, kind: r.kind, ref: r.ref, description: r.description, amountMinor: r.amountMinor, runningBalanceMinor: running, adjustmentId: r.adjustmentId };
+    });
+    return { currency: cur, openingBalanceMinor: opening, lines, closingBalanceMinor: running };
+  }).filter(s => s.lines.length > 0 || s.openingBalanceMinor !== 0);
+
+  const identified = hasCapability(ctx, "patient.view");
+  let patientName: string | null = null;
+  if (identified) {
+    const { data: p } = await admin.from("practice_patient")
+      .select("display_name").eq("id", args.patientId).eq("workspace_id", ws).maybeSingle();
+    patientName = p?.display_name ?? null;
+  }
+
+  return {
+    ok: true,
+    data: {
+      patientName, identified, fromDay: args.fromDay, toDay: args.toDay,
+      generatedAtIso: new Date().toISOString(),
+      sections, uninvoicedInPeriod,
+    },
+  };
+}

@@ -463,6 +463,13 @@ export default function PaymentsConsole(props: {
                   <span className="text-gray-600">{r.patientName ?? r.payer_label ?? r.payer_kind}</span>
                   <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">{r.age} days</span>
                   <span className="ml-auto font-semibold text-gray-900">{formatMinor(r.balanceMinor, r.currency)}</span>
+                  {/* PAY-002 s10: the period summary, printable. Only where the invoice knows its patient. */}
+                  {r.patient_id && (
+                    <a href={`/practice/payments/statement/${r.patient_id}/print`}
+                      className="shrink-0 text-[10px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                      Statement &rarr;
+                    </a>
+                  )}
                 </li>
               ))}
             </ul>
