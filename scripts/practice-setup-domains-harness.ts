@@ -149,9 +149,12 @@ async function main() {
   // domain that does not exist here, and inventing a fourth domain on the strength of a breadcrumb would
   // be a restructure of a frozen surface. An exact list is kept so a module cannot drift between domains
   // unnoticed, which is the whole point of 1b to 1e.
-  ok("1c s4's Practice Operations holds availability and the three it subsumes, plus registration, workflows, notifications and clinical parameters",
+  // Repointed 2026-08-16: investigations + treatment lists (275) and the procedure catalogue (297's
+  // settings screen) each arrived holding a document. The list stays exact so a module cannot drift
+  // between domains unnoticed.
+  ok("1c s4's Practice Operations holds its named modules plus investigations, treatments and procedures",
     dom(first, "operations").moduleKeys.slice().sort().join(",")
-    === "appointment_types,availability,booking_rules,clinical_parameters,notifications,registration,self_booking,workflows",
+    === "appointment_types,availability,booking_rules,clinical_parameters,investigations,notifications,procedures,registration,self_booking,treatment_lists,workflows",
     dom(first, "operations").moduleKeys.join(","));
   ok("1d s5's Practice Administration holds the six it names, plus practice lifecycle",
     dom(first, "administration").moduleKeys.slice().sort().join(",")
@@ -164,9 +167,9 @@ async function main() {
   ok("1f the domain catalogue and the computed domains agree key for key",
     SETUP_DOMAINS.map(d => d.key).join(",") === first.domains.map(d => d.key).join(","));
   // s4 makes availability the domain's PRIMARY module, so the three it subsumes are not drawn beside it.
-  ok("1g the operations domain draws five cards, not eight",
+  ok("1g the operations domain draws eight cards -- the three availability subsumptions stay folded",
     dom(first, "operations").cardKeys.slice().sort().join(",")
-    === "availability,clinical_parameters,notifications,registration,workflows",
+    === "availability,clinical_parameters,investigations,notifications,procedures,registration,treatment_lists,workflows",
     dom(first, "operations").cardKeys.join(","));
 
   // ══ 2. COUNTS, NEVER PERCENTAGES ══════════════════════════════════════════════════════════════
@@ -262,9 +265,9 @@ async function main() {
     JSON.stringify(dep(foundationDone, "self_booking_needs_access_notifications_registration").unmet));
 
   // ══ 6. THE AVAILABILITY MODULE'S PARTS ════════════════════════════════════════════════════════
-  ok("6a six parts, named",
+  ok("6a seven parts, named (booking_address joined with mig 254's arc)",
     foundationDone.availability.parts.map(p => p.key).join(",")
-    === "locations,sessions,appointment_types,capacity,booking_rules,booking_access",
+    === "locations,sessions,appointment_types,capacity,booking_rules,booking_address,booking_access",
     foundationDone.availability.parts.map(p => p.key).join(","));
   ok("6b exactly one of them is not built, and it is patient booking access",
     foundationDone.availability.parts.filter(p => p.notBuilt).map(p => p.key).join(",") === "booking_access",
@@ -273,7 +276,7 @@ async function main() {
     /Phase 4/.test(part(foundationDone, "booking_access").notBuilt ?? ""),
     part(foundationDone, "booking_access").notBuilt ?? "null");
   ok("6d THE DENOMINATOR EXCLUDES IT, so the fraction can actually close",
-    foundationDone.availability.progress.of === 5, String(foundationDone.availability.progress.of));
+    foundationDone.availability.progress.of === 6, String(foundationDone.availability.progress.of));
   ok("6e with a location but no session, one part of five is done",
     foundationDone.availability.progress.done === 1
     && part(foundationDone, "locations").done === true && part(foundationDone, "sessions").done === false,
@@ -294,8 +297,8 @@ async function main() {
     && part(withSession, "appointment_types").done === true
     && part(withSession, "capacity").done === true,
     JSON.stringify(withSession.availability.parts.map(p => [p.key, p.done])));
-  ok("6g so the parts figure goes from 1 to 4 of 5",
-    withSession.availability.progress.done === 4 && withSession.availability.progress.of === 5,
+  ok("6g so the parts figure goes from 1 to 4 of 6",
+    withSession.availability.progress.done === 4 && withSession.availability.progress.of === 6,
     JSON.stringify(withSession.availability.progress));
   ok("6h and the appointment-types part NAMES how many are offered, not how many exist",
     /1 of 7 offered/.test(part(withSession, "appointment_types").detail),

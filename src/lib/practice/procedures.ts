@@ -38,6 +38,9 @@ const nowIso = () => new Date().toISOString();
 /** Platform entries plus this workspace's own. Two queries, for the reason listTemplates gives. */
 export async function listProcedureTypes(admin: any, workspaceId: string, opts: {
   category?: string; includeUnpublished?: boolean;
+  /** The settings screen needs the DISABLED rows too -- hiding them there would make a hidden
+      procedure unrecoverable from the very screen that hides it. Capture surfaces never set this. */
+  includeDisabled?: boolean;
 } = {}) {
   const statuses = opts.includeUnpublished ? ["draft", "published"] : ["published"];
   const build = (q: any) => {
@@ -87,7 +90,7 @@ export async function listProcedureTypes(admin: any, workspaceId: string, opts: 
         activationUnavailable,
       };
     })
-    .filter(r => r.enabled)
+    .filter(r => opts.includeDisabled || r.enabled)
     .sort((a, b) => {
       if (a.sortOrder !== null && b.sortOrder !== null && a.sortOrder !== b.sortOrder)
         return a.sortOrder - b.sortOrder;
@@ -544,4 +547,132 @@ export async function getProcedure(admin: any, workspaceId: string, procedureId:
       : Promise.resolve({ data: null }),
   ]);
   return { procedure, outcomes: outcomes ?? [], patient, type: type ?? null };
+}
+
+// ── CONFIGURATION WRITERS -- the settings screen migration 297 shipped without (2026-08-16) ─────────
+//
+// 297's own memory line: "all the columns and both new tables are live and read by the engine, but a
+// practice configures them only by SQL today." These two writers close that. Both are gated at the
+// route on procedure.manage -- 197's own comment: the catalogue is practice configuration.
+
+const TRI_STATES = ["required", "optional", "not_applicable"] as const;
+
+/**
+ * Edit a WORKSPACE-OWNED procedure type's applicability rules. Platform rows refuse exactly the way
+ * setProcedureTypeStatus refuses -- supplied procedures are read-only, and what a practice controls
+ * about them is ACTIVATION (below), never the safety rules themselves.
+ *
+ * ⚠ THE LEGACY BOOLEANS ARE NOT TOUCHED. Enforcement is an OR (sided === true || laterality_rule ===
+ * "required") so a stale boolean can only ADD a refusal -- 297's own harness creates a deliberately
+ * disagreeing row to prove it, and an edit here that "tidied" them would put the wrong-site check one
+ * mis-set column from silence.
+ */
+export async function configureProcedureType(admin: any, args: {
+  workspaceId: string; procedureTypeId: string;
+  siteRule?: string; lateralityRule?: string; consentRule?: string;
+  allowedLateralities?: string[]; allowedStatuses?: string[];
+  defaultStatus?: string | null; outcomeRequired?: boolean;
+  detailFields?: unknown;
+  actorId: string; correlationId: string;
+}): Promise<EngineResult<{ id: string }>> {
+  const { data: t } = await admin.from("practice_procedure_type")
+    .select("id, workspace_id, allowed_statuses").eq("id", args.procedureTypeId).maybeSingle();
+  if (!t) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  if (t.workspace_id === null)
+    return { ok: false, status: 403, code: "PLATFORM_PROCEDURE", message: "supplied procedures are read-only; you can hide or rename one below, and copy it into your practice to change its rules" };
+  if (t.workspace_id !== args.workspaceId) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+
+  const patch: Record<string, unknown> = { updated_at: nowIso(), updated_by: args.actorId };
+  const tri = (key: string, col: string, v?: string): string | null => {
+    if (v === undefined) return null;
+    if (!TRI_STATES.includes(v as any)) return `${key} must be one of: ${TRI_STATES.join(", ")}`;
+    patch[col] = v;
+    return null;
+  };
+  for (const err of [
+    tri("siteRule", "site_rule", args.siteRule),
+    tri("lateralityRule", "laterality_rule", args.lateralityRule),
+    tri("consentRule", "consent_rule", args.consentRule),
+  ]) if (err) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: err };
+
+  if (args.allowedLateralities !== undefined) {
+    // ⚠ SIDED_LATERALITIES, not the capture vocabulary: the column CHECK admits left/right/bilateral
+    // only, and "not_applicable" belongs to the RULE, not to the allowed-values list.
+    const bad = args.allowedLateralities.filter(l => !SIDED_LATERALITIES.includes(l));
+    if (bad.length) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `unknown laterality: ${bad.join(", ")}` };
+    patch.allowed_lateralities = [...new Set(args.allowedLateralities)];
+  }
+  if (args.allowedStatuses !== undefined) {
+    const bad = args.allowedStatuses.filter(s => !PROCEDURE_STATUSES.some(([v]) => v === s));
+    if (bad.length) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `unknown status: ${bad.join(", ")}` };
+    patch.allowed_statuses = [...new Set(args.allowedStatuses)];
+  }
+  if (args.defaultStatus !== undefined) {
+    if (args.defaultStatus !== null) {
+      if (args.defaultStatus === "ABANDONED")
+        return { ok: false, status: 422, code: "VALIDATION_ERROR", message: "a procedure cannot DEFAULT to abandoned -- abandonment is recorded, never presumed" };
+      if (!PROCEDURE_STATUSES.some(([v]) => v === args.defaultStatus))
+        return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "unknown default status" };
+      const effectiveAllowed = (args.allowedStatuses ?? t.allowed_statuses ?? []) as string[];
+      if (effectiveAllowed.length > 0 && !effectiveAllowed.includes(args.defaultStatus))
+        return { ok: false, status: 422, code: "VALIDATION_ERROR", message: "the default status must be one of the allowed statuses" };
+    }
+    patch.default_status = args.defaultStatus;
+  }
+  if (args.outcomeRequired !== undefined) patch.outcome_required = args.outcomeRequired === true;
+  if (args.detailFields !== undefined) {
+    // Round-tripped through the ONE parser every reader uses -- what cannot parse is not stored.
+    patch.detail_fields = parseDetailFields(args.detailFields);
+  }
+
+  const { error } = await admin.from("practice_procedure_type").update(patch).eq("id", t.id);
+  if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
+
+  await audit(admin, {
+    workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.procedure_type_configured",
+    payload: { procedureTypeId: t.id, changed: Object.keys(patch).filter(k => !k.startsWith("updated_")) },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { id: t.id as string } };
+}
+
+/**
+ * The per-practice ACTIVATION departure: hide a supplied procedure, rename it locally, pin its sort.
+ * Works on platform AND workspace rows -- what it records is this practice's relationship to the
+ * entry, never the entry itself. Absence of a row = enabled (297's own semantics).
+ */
+export async function setProcedureActivation(admin: any, args: {
+  workspaceId: string; procedureTypeId: string;
+  enabled?: boolean; localDisplayName?: string | null; sortOrder?: number | null;
+  actorId: string; correlationId: string;
+}): Promise<EngineResult<{ enabled: boolean }>> {
+  const { data: t } = await admin.from("practice_procedure_type")
+    .select("id, workspace_id").eq("id", args.procedureTypeId).maybeSingle();
+  if (!t || (t.workspace_id !== null && t.workspace_id !== args.workspaceId))
+    return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+
+  const name = (args.localDisplayName ?? "").trim();
+  if (name.length > 200)
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a local name is at most 200 characters" };
+
+  // ux_practice_proc_type_activation is a FULL unique index, so onConflict is safe here -- this is
+  // NOT the partial-index upsert trap (that trap is why check-then-insert exists elsewhere).
+  const { data: row, error } = await admin.from("practice_procedure_type_activation").upsert({
+    workspace_id: args.workspaceId, procedure_type_id: args.procedureTypeId,
+    enabled: args.enabled !== false,
+    local_display_name: name || null,
+    sort_order: typeof args.sortOrder === "number" ? Math.round(args.sortOrder) : null,
+    updated_at: nowIso(), updated_by: args.actorId,
+  }, { onConflict: "workspace_id,procedure_type_id" }).select("enabled").single();
+  if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
+
+  await audit(admin, {
+    workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.procedure_activation_set",
+    payload: {
+      procedureTypeId: args.procedureTypeId, enabled: args.enabled !== false,
+      renamed: !!name, sorted: typeof args.sortOrder === "number",
+    },
+    correlationId: args.correlationId,
+  });
+  return { ok: true, data: { enabled: row.enabled as boolean } };
 }

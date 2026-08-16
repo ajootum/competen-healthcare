@@ -140,7 +140,9 @@ async function main() {
   // channel exists in the engine (migration 224) and NOTHING RENDERS IT, so the card said "needs
   // attention" about something nobody could act on and its link went to the settings root. An
   // unactionable nag is worse than an honest absence.
-  const UNBUILT = ["self_booking", "notifications", "workflows", "integrations", "billing"];
+  // Repointed 2026-08-16: "billing" left this list -- the CPR-PAY arc built it (migrations 303-306),
+  // and a pin that keeps calling a shipped feature unbuilt is the inverse of the honesty it guards.
+  const UNBUILT = ["self_booking", "notifications", "workflows", "integrations"];
   ok("3a exactly the unbuilt areas are shown as not built",
     notBuilt.length === UNBUILT.length && UNBUILT.every(k => notBuilt.some(m => m.key === k)),
     JSON.stringify(notBuilt.map(m => m.key)));
@@ -167,7 +169,10 @@ async function main() {
   // and module 19 Practice Lifecycle (CPR-LIFE-001 s8). The denominator is what a practice can actually
   // configure, not what one document knew about, and a module that exists and is not counted is the same
   // lie as one that is counted and does not.
-  ok("2f nineteen modules", first.modules.length === 19, String(first.modules.length));
+  // Repointed 2026-08-16 (was 19, then quietly 21): module 20 Investigations and 21 Treatment Lists
+  // (migration 275's configuration arc) and 22 Procedure Catalogue (migration 297's settings screen)
+  // each arrived holding a document.
+  ok("2f twenty-two modules", first.modules.length === 22, String(first.modules.length));
   ok("2c no percentage anywhere in the payload",
     !/percent|"\d+%"/i.test(JSON.stringify({ ...first, modules: [], checklist: first.checklist })),
     "found a percentage");

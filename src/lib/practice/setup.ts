@@ -269,6 +269,14 @@ const CATALOGUE: Entry[] = [
     capability: "treatment.configure", domain: "operations",
   },
   {
+    // Module 22 (2026-08-16): migration 297's settings screen. procedure.manage is 197's own
+    // catalogue-configuration capability -- no new capability was invented for this card.
+    n: 22, key: "procedures", title: "Procedure Catalogue",
+    description: "What each procedure requires before recording -- site, side, consent, outcomes -- and which supplied procedures this practice offers.",
+    icon: "⚕", hue: "var(--cp-area-8)", href: "/practice/setup/procedures",
+    capability: "procedure.manage", domain: "operations",
+  },
+  {
     // ⚠ A NINETEENTH MODULE, IN administration, AND THE BREADCRUMB REFLECTS REALITY.
     //
     // CPR-LIFE-001 s8 says "Location: Practice Setup -> Security & Data -> Practice Lifecycle", and that
@@ -336,7 +344,7 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
     wsQ, configQ, locationsQ, facilitiesQ,
     slotsQ, templatesQ, channelsQ, membersQ,
     bookingRulesQ, weekSessionsQ, sessionRowsQ, sessionTypesQ,
-    activityQ, parametersQ, identityQ,
+    activityQ, parametersQ, identityQ, procActivationQ, procOwnQ,
   ] = await Promise.all([
     // `status` joined the select for CPR-LIFE-001's module 19 -- the lifecycle card's detail IS the
     // practice's current state, so it is read from the same row the profile card already reads.
@@ -385,6 +393,12 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
     // workspace-scoped -- and `handle` is the one field this page needs from it.
     admin.from("practice_practitioner_identity")
       .select("handle").eq("user_id", ctx.userId).maybeSingle(),
+    // Module 22 (procedures, 2026-08-16): configured = the practice has TOUCHED the catalogue --
+    // either recorded an activation departure or added a procedure of its own.
+    admin.from("practice_procedure_type_activation").select("*", { count: "exact", head: true })
+      .eq("workspace_id", ctx.workspaceId),
+    admin.from("practice_procedure_type").select("*", { count: "exact", head: true })
+      .eq("workspace_id", ctx.workspaceId),
   ]);
 
   const ws = wsQ.data;
@@ -483,6 +497,17 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
           : "nothing is collected yet",
       },
     import_export: { done: true, detail: "export available · no import" },
+    procedures: procActivationQ.error || procOwnQ.error
+      ? unread("your procedure catalogue")
+      : {
+        // ⚠ DONE BY DEFAULT. Ten supplied procedures work with sensible rules out of the box, so an
+        // untouched catalogue is a WORKING one, not an unconfigured one -- the investigations card's
+        // needs_attention trap, avoided on purpose. The detail says whether it was ever tailored.
+        done: true,
+        detail: (procActivationQ.count ?? 0) > 0 || (procOwnQ.count ?? 0) > 0
+          ? `tailored: ${procOwnQ.count ?? 0} own, ${procActivationQ.count ?? 0} departure${(procActivationQ.count ?? 0) === 1 ? "" : "s"}`
+          : "supplied catalogue, untouched",
+      },
     // ⚠ THERE IS NOTHING TO CONFIGURE HERE, SO THE CARD IS GREEN AND ITS DETAIL IS THE STATE ITSELF.
     // CPR-LIFE-001 s9 lists six configurable settings -- grace period, retention, approvals, MFA, export
     // availability and legal warning text -- and every one of them belongs to a deletion pipeline this

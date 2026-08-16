@@ -34,6 +34,7 @@ import { procedureFieldPlan, procedureReadiness } from "../src/lib/practice/proc
 import {
   listProcedureTypes, createProcedureType, setProcedureTypeStatus,
   recordProcedure, recordProcedureOutcome, listProcedures, procedureActivity, getProcedure,
+  configureProcedureType, setProcedureActivation,
 } from "../src/lib/practice/procedures";
 
 loadEnvConfig(process.cwd());
@@ -555,6 +556,56 @@ async function main() {
   ok("the service role sees rows in every procedure table (the denial test is not vacuous)",
     svcRows === TABLES.length, `${svcRows}/${TABLES.length}`);
   ok("anon reads 0 rows from every procedure table", leaked === 0, `${leaked} table(s) leaked`);
+
+
+  // ══ 22. THE 297 SETTINGS WRITERS (2026-08-16) -- the screen the migration shipped without ═══════
+  const cfgType = await createProcedureType(admin, {
+    workspaceId: wsA, code: "harness_cfg", name: "Harness configurable", ...base,
+  });
+  if (!cfgType.ok) { ok("22-0 fixture type creates", false, (cfgType as any).message); return report(); }
+  const cfg = await configureProcedureType(admin, {
+    workspaceId: wsA, procedureTypeId: cfgType.data.id,
+    siteRule: "required", lateralityRule: "required", allowedLateralities: ["left", "right"],
+    outcomeRequired: true, ...base,
+  });
+  ok("22-1 a workspace-owned type takes the s20 rules", cfg.ok, JSON.stringify(cfg));
+  const cfgList = await listProcedureTypes(admin, wsA, { includeUnpublished: true });
+  const cfgRow = cfgList.find((t: any) => t.id === cfgType.data.id);
+  ok("22-2 and every reader sees them -- the same columns recordProcedure enforces",
+    cfgRow?.site_rule === "required" && cfgRow?.laterality_rule === "required"
+      && JSON.stringify(cfgRow?.allowed_lateralities) === '["left","right"]' && cfgRow?.outcome_required === true,
+    JSON.stringify(cfgRow ? { s: cfgRow.site_rule, l: cfgRow.laterality_rule, a: cfgRow.allowed_lateralities } : null));
+  const platformRow = cfgList.find((t: any) => t.scope === "platform");
+  const cfgPlatform = await configureProcedureType(admin, {
+    workspaceId: wsA, procedureTypeId: platformRow.id, siteRule: "required", ...base,
+  });
+  ok("22-3 ⚠ a SUPPLIED procedure's rules are read-only -- refused BY NAME",
+    !cfgPlatform.ok && cfgPlatform.code === "PLATFORM_PROCEDURE");
+  const badDefault = await configureProcedureType(admin, {
+    workspaceId: wsA, procedureTypeId: cfgType.data.id,
+    allowedStatuses: ["PERFORMED"], defaultStatus: "CANCELLED", ...base,
+  });
+  ok("22-4 a default outside the allowed list is refused",
+    !badDefault.ok && /allowed statuses/.test(badDefault.ok ? "" : badDefault.message));
+
+  const hide = await setProcedureActivation(admin, {
+    workspaceId: wsA, procedureTypeId: platformRow.id, enabled: false, localDisplayName: "Local name", ...base,
+  });
+  ok("22-5 a supplied procedure CAN be hidden and renamed -- the activation departure",
+    hide.ok && hide.data.enabled === false, JSON.stringify(hide));
+  const afterHide = await listProcedureTypes(admin, wsA);
+  const withDisabled = await listProcedureTypes(admin, wsA, { includeDisabled: true });
+  const hiddenRow = withDisabled.find((t: any) => t.id === platformRow.id);
+  ok("22-6 ⚠ capture surfaces stop offering it; the SETTINGS view still shows it (or hiding is a trap)",
+    !afterHide.some((t: any) => t.id === platformRow.id)
+      && hiddenRow?.enabled === false && hiddenRow?.name === "Local name"
+      && hiddenRow?.catalogueName === platformRow.catalogueName,
+    JSON.stringify({ offered: afterHide.length, hidden: hiddenRow ? hiddenRow.enabled : "missing" }));
+  const unhide = await setProcedureActivation(admin, {
+    workspaceId: wsA, procedureTypeId: platformRow.id, enabled: true, localDisplayName: null, ...base,
+  });
+  ok("22-7 offering it again restores the supplied name and the pickers",
+    unhide.ok && (await listProcedureTypes(admin, wsA)).some((t: any) => t.id === platformRow.id));
 
   return report();
 }

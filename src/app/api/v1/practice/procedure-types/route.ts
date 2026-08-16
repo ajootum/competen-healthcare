@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
-import { listProcedureTypes, createProcedureType, setProcedureTypeStatus } from "@/lib/practice/procedures";
+import {
+  listProcedureTypes, createProcedureType, setProcedureTypeStatus,
+  configureProcedureType, setProcedureActivation,
+} from "@/lib/practice/procedures";
 
 // GET   /api/v1/practice/procedure-types?category=&includeUnpublished=1 -- CPR-150's catalogue.
 // POST  /api/v1/practice/procedure-types                                -- add one to this practice.
@@ -46,9 +49,38 @@ export async function PATCH(req: NextRequest) {
   const auth = await requirePracticeContext("procedure.manage");
   if (isDenied(auth)) return auth;
 
-  let body: { id?: string; status?: string };
+  let body: Record<string, any>;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
   if (!body.id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+
+  // The 297 settings screen's two verbs (2026-08-16). Legacy callers send { id, status } with no
+  // action and keep their behaviour.
+  if (body.action === "configure") {
+    const result = await configureProcedureType(auth.caller.admin, {
+      workspaceId: auth.ctx.workspaceId, procedureTypeId: String(body.id),
+      siteRule: body.siteRule, lateralityRule: body.lateralityRule, consentRule: body.consentRule,
+      allowedLateralities: Array.isArray(body.allowedLateralities) ? body.allowedLateralities.map(String) : undefined,
+      allowedStatuses: Array.isArray(body.allowedStatuses) ? body.allowedStatuses.map(String) : undefined,
+      defaultStatus: body.defaultStatus === undefined ? undefined : (body.defaultStatus === null ? null : String(body.defaultStatus)),
+      outcomeRequired: typeof body.outcomeRequired === "boolean" ? body.outcomeRequired : undefined,
+      detailFields: body.detailFields,
+      actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+    });
+    if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
+    return NextResponse.json({ ok: true, correlationId: auth.caller.traceId });
+  }
+  if (body.action === "activation") {
+    const result = await setProcedureActivation(auth.caller.admin, {
+      workspaceId: auth.ctx.workspaceId, procedureTypeId: String(body.id),
+      enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
+      localDisplayName: body.localDisplayName === undefined ? undefined : (body.localDisplayName === null ? null : String(body.localDisplayName)),
+      sortOrder: typeof body.sortOrder === "number" ? body.sortOrder : null,
+      actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+    });
+    if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
+    return NextResponse.json({ ok: true, correlationId: auth.caller.traceId });
+  }
+
   if (!["draft", "published", "retired"].includes(body.status ?? ""))
     return NextResponse.json({ error: "status must be one of: draft, published, retired" }, { status: 400 });
 
