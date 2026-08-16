@@ -38,7 +38,7 @@ export default async function FollowUpsPage({ searchParams }: {
 
   const raw = await searchParams;
   const one = (k: string) => { const v = raw[k]; return Array.isArray(v) ? v[0] : v; };
-  const sp = { view: one("view"), q: one("q"), priority: one("priority"), source: one("source") };
+  const sp = { view: one("view"), q: one("q"), priority: one("priority"), source: one("source"), type: one("type") };
   const admin = createAdminClient();
   const clock = await workspaceClock(admin, shell.ctx.workspaceId);
 
@@ -52,6 +52,7 @@ export default async function FollowUpsPage({ searchParams }: {
       search: sp.q ?? null,
       priority: sp.priority ?? null,
       source: sp.source ?? null,
+      followUpType: sp.type ?? null,
       // ⚠ THE READ IS BOUNDED, NOT JUST THE URL. Every card below is counted from this same narrowed
       // read, so no figure can disagree with the list it opens.
       dueFrom: period.bounded ? period.fromDate : null,
@@ -75,7 +76,7 @@ export default async function FollowUpsPage({ searchParams }: {
           period={period} todayDate={clock.today} timezone={clock.timezone}
           keep={{
             view: sp.view ?? null, q: sp.q ?? null,
-            priority: sp.priority ?? null, source: sp.source ?? null,
+            priority: sp.priority ?? null, source: sp.source ?? null, type: sp.type ?? null,
           }}
         />
         {/* ⚠ THE THREE STATES. A narrowed queue that could not be read must not look like a period with
@@ -105,6 +106,7 @@ export default async function FollowUpsPage({ searchParams }: {
         initialSearch={sp.q ?? ""}
         initialPriority={sp.priority ?? ""}
         initialSource={sp.source ?? ""}
+        initialType={sp.type ?? ""}
         recall={<RecallQueue recall={recall} />}
       />
     </div>

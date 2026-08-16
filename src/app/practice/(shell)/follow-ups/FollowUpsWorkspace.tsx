@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   FOLLOW_UP_VIEWS, FOLLOW_UP_KINDS, FOLLOW_UP_SOURCES, FOLLOW_UP_PRIORITIES,
+  FOLLOW_UP_ACTION_TYPES, FOLLOW_UP_TYPE_LABELS,
   LIVE_FOLLOW_UP_STATUSES, DUE_WEEK_DAYS,
 } from "@/lib/practice/follow-up-constants";
 import type { FollowUpWorkspace as WorkspaceView } from "@/lib/practice/follow-ups";
@@ -83,7 +84,7 @@ const dueWord = (f: any) => {
 };
 
 export default function FollowUpsWorkspace({
-  workspace, canManage, initialView, initialSearch, initialPriority, initialSource, recall,
+  workspace, canManage, initialView, initialSearch, initialPriority, initialSource, initialType, recall,
 }: {
   workspace: WorkspaceView;
   canManage: boolean;
@@ -91,6 +92,7 @@ export default function FollowUpsWorkspace({
   initialSearch: string;
   initialPriority: string;
   initialSource: string;
+  initialType: string;
   recall: ReactNode;
 }) {
   const [view, setView] = useState(initialView);
@@ -132,6 +134,20 @@ export default function FollowUpsWorkspace({
                 className="rounded-lg border border-gray-200 px-2 py-1.5 text-[13px] outline-none focus:border-[var(--cp-primary)]">
                 <option value="">All priorities</option>
                 {FOLLOW_UP_PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </label>
+            {/* CPR-FUP-002 s12: the action-type filter. Options are the offered nine plus the
+                legacy codes still living on older rows -- a filter that could not select an
+                existing row would make that row unfindable. */}
+            <label className="flex flex-col gap-0.5">
+              <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">Type</span>
+              <select name="type" defaultValue={initialType}
+                className="rounded-lg border border-gray-200 px-2 py-1.5 text-[13px] outline-none focus:border-[var(--cp-primary)]">
+                <option value="">All types</option>
+                {FOLLOW_UP_ACTION_TYPES.map(([c, l]) => <option key={c} value={c}>{l}</option>)}
+                <option value="appointment">Appointment (legacy)</option>
+                <option value="review">Review (legacy)</option>
+                <option value="contact">Contact (legacy)</option>
               </select>
             </label>
             <label className="flex flex-col gap-0.5">
@@ -303,7 +319,7 @@ export default function FollowUpsWorkspace({
                           className="text-[13px] font-semibold text-gray-900 hover:underline">
                           {f.patient_name ?? "Unknown patient"}
                         </Link>
-                        <span className="mt-0.5 block text-[10.5px] text-gray-400">{KIND_LABEL[f.kind] ?? f.kind}</span>
+                        <span className="mt-0.5 block text-[10.5px] text-gray-400">{KIND_LABEL[f.kind] ?? f.kind}{f.follow_up_type ? ` · ${FOLLOW_UP_TYPE_LABELS[f.follow_up_type] ?? f.follow_up_type}` : ""}</span>
                       </td>
                       <td className="max-w-[280px] px-3 py-2.5 text-[12.5px] text-gray-700">
                         {f.reason}

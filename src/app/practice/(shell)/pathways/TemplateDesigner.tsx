@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { STAGE_COMPLETION_RULES } from "@/lib/practice/pathways-constants";
-import { FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
+import { FOLLOW_UP_CATEGORIES, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
 import { BUTTON } from "@/lib/practice/palette";
 
 // CPR-FUP-003 s5 -- authoring a template. `pathway.design`, which is a different capability from
@@ -136,7 +136,7 @@ export default function TemplateDesigner({ onClose }: { onClose: () => void }) {
                 <span className="text-[10.5px] font-semibold text-gray-600">Raises</span>
                 <select value={s.followUpKind} onChange={e => setStage(i, { followUpKind: e.target.value })} className={small}>
                   <option value="">Nothing</option>
-                  {FOLLOW_UP_KINDS.map(([c, l]) => <option key={c} value={c}>{l}</option>)}
+                  {FOLLOW_UP_CATEGORIES.map(([c, l]) => <option key={c} value={c}>{l}</option>)}
                 </select>
               </label>
               {s.followUpKind && (

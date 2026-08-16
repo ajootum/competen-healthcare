@@ -101,3 +101,64 @@ export async function locationFromRegularWeek(
     reason: "taken from the regular week for this weekday and time",
   };
 }
+
+/**
+ * Walkthrough 2026-08-16 #6 -- WHERE A FOLLOW-UP DAY HAPPENS, from the same regular week.
+ *
+ * The instant-based resolver above answers "where am I at 10:15 on Tuesday". A follow-up has only a
+ * DATE, so this answers the day-level question: which location does the regular week put the
+ * practitioner at on that day, at any time. One distinct location -> derived; several -> named but
+ * not chosen (two clinics that day is a real ambiguity, and picking one silently would put a
+ * follow-up at the wrong site); none -> said plainly. The sentence is ALWAYS printable -- the screen
+ * shows it whether or not anything could be prefilled.
+ */
+export type DayPlace = {
+  locationId: string | null;
+  locationName: string | null;
+  derived: boolean;
+  sentence: string;
+};
+
+export async function locationForDay(
+  admin: any, workspaceId: string, dateIso: string, timezone: string,
+): Promise<DayPlace> {
+  const ms = Date.parse(`${dateIso}T00:00:00Z`);
+  if (Number.isNaN(ms))
+    return { locationId: null, locationName: null, derived: false, sentence: "The date could not be read." };
+  const weekday = isoWeekdayOf(ms);
+  const dayName = new Date(ms).toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
+  void timezone; // A calendar date names its own weekday; no zone shift applies to a dateless day.
+
+  const { data, error } = await admin.from("practice_availability_template")
+    .select("id, location_id, effective_from, effective_to, recurrence_weeks")
+    .eq("workspace_id", workspaceId).eq("weekday", weekday)
+    .eq("status", "active").eq("active", true);
+  if (error)
+    return { locationId: null, locationName: null, derived: false,
+      sentence: "The regular week could not be read, so no place was suggested." };
+
+  const covering = ((data ?? []) as any[]).filter(t =>
+    (t.recurrence_weeks ?? 1) === 1
+    && (!t.effective_from || t.effective_from <= dateIso)
+    && (!t.effective_to || t.effective_to >= dateIso));
+  const places = [...new Set(covering.map(t => t.location_id).filter(Boolean))] as string[];
+
+  if (places.length === 0)
+    return { locationId: null, locationName: null, derived: false,
+      sentence: `Your regular week has no session on ${dayName}s.` };
+
+  const { data: locs } = await admin.from("practice_location")
+    .select("id, name").eq("workspace_id", workspaceId).in("id", places);
+  const names = ((locs ?? []) as any[]).map(l => l.name).filter(Boolean);
+
+  if (places.length > 1)
+    return { locationId: null, locationName: null, derived: false,
+      sentence: `Your regular week has more than one session on ${dayName}s${names.length ? ` (${names.join(", ")})` : ""} -- choose the place yourself.` };
+
+  return {
+    locationId: places[0], locationName: names[0] ?? null, derived: true,
+    sentence: names[0]
+      ? `Your regular week has you at ${names[0]} on ${dayName}s.`
+      : `Your regular week has one session on ${dayName}s, but its location has no name.`,
+  };
+}

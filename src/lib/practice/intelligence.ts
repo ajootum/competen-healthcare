@@ -1393,11 +1393,13 @@ export type FollowUpIntelligenceData = {
   byPriority: IntelDistribution;
 };
 
-/** practice_follow_up.kind -- migration 196's CHECK, in full. */
+/** practice_follow_up.kind -- migration 309's CHECK, in full (CPR-FUP-002 domains + the pre-split
+ *  codes that live on historical rows). A code missing here would fall out of the distribution. */
 const FOLLOW_UP_KINDS: [string, string][] = [
-  ["review", "Review"], ["investigation_result", "Investigation result"],
-  ["treatment_response", "Treatment response"], ["referral_outcome", "Referral outcome"],
-  ["monitoring", "Monitoring"], ["immunisation", "Immunisation"], ["other", "Other"],
+  ["clinical_condition", "Clinical condition"], ["investigation_result", "Investigation / result"],
+  ["treatment_response", "Treatment"], ["procedure_intervention", "Procedure / intervention"],
+  ["referral_outcome", "Referral"], ["administrative", "Administrative"], ["other", "Other"],
+  ["review", "Review"], ["monitoring", "Monitoring"], ["immunisation", "Immunisation"],
 ];
 
 /** practice_follow_up.priority -- migration 196's CHECK, in full. */

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
+import { FOLLOW_UP_KINDS, FOLLOW_UP_CATEGORIES, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 // FOLLOW-UP PLAN TEMPLATE AUTHORING -- THE SCREEN THAT WAS THE REAL BLOCKER ON PLANS.
@@ -259,7 +259,7 @@ export default function TemplateStudio(props: { templates: Template[]; canManage
                       <select id={`step-kind-${i}`} value={s.kind} disabled={busy}
                         onChange={e => setSteps(list => list.map((x, n) => n === i ? { ...x, kind: e.target.value } : x))}
                         className={`${input} mt-1`}>
-                        {FOLLOW_UP_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                        {FOLLOW_UP_CATEGORIES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                       </select>
                     </div>
                     <div>

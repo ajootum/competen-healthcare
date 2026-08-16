@@ -4,6 +4,7 @@ import type { EngineResult } from "@/lib/practice/encounters";
 import {
   FOLLOW_UP_TRANSITIONS, CLOSED_FOLLOW_UP_STATUSES, FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES,
   FOLLOW_UP_OUTCOMES, FOLLOW_UP_SOURCES, FOLLOW_UP_ORIGIN_WORKSPACES, FOLLOW_UP_VIEWS, FOLLOW_UP_TYPES,
+  FOLLOW_UP_TYPE_LABELS,
   DUE_WEEK_DAYS, type FollowUpDueState, type FollowUpView,
 } from "@/lib/practice/follow-up-constants";
 import { dueDateFrom, workspaceClock } from "@/lib/practice/practice-time";
@@ -796,6 +797,8 @@ const WORKSPACE_READ_LIMIT = 500;
 export async function followUpWorkspace(admin: any, workspaceId: string, options: {
   view?: string | null; patientId?: string | null; search?: string | null;
   priority?: string | null; source?: string | null;
+  /** CPR-FUP-002 s12: the action-type filter, over follow_up_type. */
+  followUpType?: string | null;
   /**
    * ⚠ THE PERIOD, ON due_on, AND ABSENT BY DEFAULT. See ListFilter. Every card and every tab is
    * computed from the SAME narrowed read, so a figure is still the length of the list it opens -- which
@@ -833,8 +836,9 @@ export async function followUpWorkspace(admin: any, workspaceId: string, options
   const filtered = all.items.filter(f => {
     if (options.priority && f.priority !== options.priority) return false;
     if (options.source && f.source !== options.source) return false;
+    if (options.followUpType && f.follow_up_type !== options.followUpType) return false;
     if (!needle) return true;
-    return `${f.patient_name ?? ""} ${f.reason ?? ""} ${f.kind ?? ""}`.toLowerCase().includes(needle);
+    return `${f.patient_name ?? ""} ${f.reason ?? ""} ${f.kind ?? ""} ${FOLLOW_UP_TYPE_LABELS[f.follow_up_type] ?? ""}`.toLowerCase().includes(needle);
   });
 
   const idsFor = (v: FollowUpView) => filtered.filter(f => v.match(f, ctx)).map(f => f.id as string);

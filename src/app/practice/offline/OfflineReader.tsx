@@ -27,7 +27,7 @@ import {
   offlinePlausibility, type OfflineParametersReadResult,
 } from "@/lib/practice/offline-parameters";
 import { captureMeasurement, captureEncounter, captureFollowUp, captureCollection, CAPTURE_HELD_NOTE } from "@/lib/practice/offline-capture";
-import { FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
+import { FOLLOW_UP_CATEGORIES, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
 import { PAYMENT_METHODS, CURRENCY_EXPONENT, formatMinor } from "@/lib/practice/billing-constants";
 
 // CP-OFFLINE-SURVEY-001 s3.4 — the cached clinic day, and its age, on one screen.
@@ -861,7 +861,7 @@ function CaptureFollowUp(
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [dueOn, setDueOn] = useState("");
-  const [kind, setKind] = useState("review");
+  const [kind, setKind] = useState("clinical_condition");
   const [priority, setPriority] = useState("routine");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -921,7 +921,7 @@ function CaptureFollowUp(
           {/* ⚠ FIXED PICKERS, NEVER FREE TEXT -- the database's own vocabularies. */}
           <select value={kind} onChange={e => { setKind(e.target.value); setHeld(null); }}
             className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]">
-            {FOLLOW_UP_KINDS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+            {FOLLOW_UP_CATEGORIES.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
           </select>
         </label>
         <label className="block">

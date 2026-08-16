@@ -7,7 +7,7 @@ import { DOC_TYPES } from "@/lib/practice/document-constants";
 import {
   FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES, FOLLOW_UP_STATUS_LABELS, FOLLOW_UP_TAB_FILTERS,
   FOLLOW_UP_PRIORITY_CHIP, FOLLOW_UP_PRIORITY_GLYPH, followUpSummary,
-  FOLLOW_UP_TYPES, FOLLOW_UP_TYPE_LABELS,
+  FOLLOW_UP_CATEGORIES, FOLLOW_UP_ACTION_TYPES, FOLLOW_UP_TYPE_LABELS,
 } from "@/lib/practice/follow-up-constants";
 // ⚠ THE PROCEDURE VOCABULARIES MOVED TO ProcedureWorkspace WITH THE FORM. Only what this file still
 // renders stays imported -- a vocabulary imported here and used nowhere is the next person's evidence
@@ -353,15 +353,59 @@ export default function EncounterConsole(props: {
   const [templateId, setTemplateId] = useState("");
   const [doc, setDoc] = useState({ title: "", docType: "consultation_summary", addressedTo: "", composeFrom: true });
   const [fu, setFu] = useState({
-    reason: "", kind: "review", intervalCode: "2w", priority: "routine",
+    // CPR-FUP-002 s5: kind is the DOMAIN. clinical_condition is the encounter context's ordinary
+    // answer and stays editable. followUpType is the ACTION and starts EMPTY on purpose -- s10 makes
+    // it required and s9 forbids auto-selecting Other, and a silent default here would file every
+    // uninspected follow-up under one action code.
+    reason: "", kind: "clinical_condition", intervalCode: "2w", priority: "routine",
     // CPR-FUP-HFE-008 s6/s11 (migration 299). `owner` is the screen's word for a choice the database
     // stores in two columns -- one owner, never both.
-    followUpType: "review", locationId: "", instructions: "", owner: "none", queue: "",
+    followUpType: "", locationId: "", instructions: "", owner: "none", queue: "",
     // s9: the target is an interval OR an exact date. "custom" in the select reveals the calendar.
     dueDate: "",
-    // s10's booking link, at raise time: filled only while the type is "appointment".
-    bookDate: "", bookTime: "09:00",
+    // CPR-FUP-002 s11: booking is an EXPLICIT choice beside the obligation, never implied by the
+    // action type. bookVisit reveals the visit fields and nothing else sets them.
+    bookVisit: false, bookDate: "", bookTime: "09:00",
+    // #6: true once the practitioner has chosen a place BY HAND -- the regular-week suggestion may
+    // prefill an untouched select and must never overwrite a human choice.
+    locationTouched: false,
   });
+  // #6: what the regular week says about the currently-resolved target day. The sentence renders
+  // whether or not a facility could be prefilled from it.
+  const [fuPlace, setFuPlace] = useState<{ sentence: string; facilityId: string | null } | null>(null);
+
+  // The resolved target day drives the place suggestion. Recomputed exactly the way the booking
+  // prefill computes it: the interval's arithmetic date, or the calendar-chosen one.
+  const fuTargetDate = (() => {
+    if (fu.intervalCode === "custom") return fu.dueDate || null;
+    const days = props.intervals.find(i => i.code === fu.intervalCode)?.days;
+    if (days === undefined) return null;
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  useEffect(() => {
+    let live = true;
+    // Every state change happens INSIDE the timer callback, never in the effect body -- the same
+    // rule (and reason) as the patient-search debounce in AddFollowUp.
+    const timer = setTimeout(() => {
+      if (!live) return;
+      if (!fuTargetDate) { setFuPlace(null); return; }
+      fetch(`/api/v1/practice/follow-ups/place-for-day?date=${fuTargetDate}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (!live || !d) return;
+          setFuPlace({ sentence: String(d.sentence ?? ""), facilityId: d.facilityId ?? null });
+          // Prefill ONLY an untouched, empty select -- a suggestion, never an override.
+          if (d.facilityId) {
+            setFu(p => (p.locationTouched || p.locationId) ? p : { ...p, locationId: String(d.facilityId) });
+          }
+        })
+        .catch(() => { if (live) setFuPlace(null); });
+    }, 300);
+    return () => { live = false; clearTimeout(timer); };
+  }, [fuTargetDate]);
   const [closingFu, setClosingFu] = useState<string | null>(null);
   const [fuOutcome, setFuOutcome] = useState("");
   /** CPR-FUP-HFE-008 s12's filter, by key from FOLLOW_UP_TAB_FILTERS. "all" is the resting state. */
@@ -528,7 +572,7 @@ export default function EncounterConsole(props: {
         return;
       }
 
-      const wantsBooking = fu.followUpType === "appointment" && fu.bookDate;
+      const wantsBooking = fu.bookVisit && fu.bookDate;
       if (!wantsBooking) { window.location.reload(); return; }
 
       const booked = await fetch("/api/v1/practice/appointments", {
@@ -1476,9 +1520,11 @@ export default function EncounterConsole(props: {
                       </div>
                       <div>
                         <label className={FU_LABEL} htmlFor="fu-kind">Category *</label>
-                        <select id="fu-kind" aria-label="Kind of follow-up" value={fu.kind}
+                        {/* CPR-FUP-002 s5: the DOMAIN, never the action -- the offered list is the
+                            spec's seven subjects. The action lives in Follow-up type below. */}
+                        <select id="fu-kind" aria-label="Category of follow-up" value={fu.kind}
                           onChange={e => setFu(p => ({ ...p, kind: e.target.value }))} className={`${input} mt-1`}>
-                          {FOLLOW_UP_KINDS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                          {FOLLOW_UP_CATEGORIES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                         </select>
                       </div>
                       <div>
@@ -1488,10 +1534,14 @@ export default function EncounterConsole(props: {
                             only ever offered the intervals. "On a date..." reveals the calendar; the
                             intervals stay, because "in two weeks" is how follow-up is actually spoken
                             in a consultation and a date-only control would make the common case type. */}
+                        {/* ⚠ "On a date..." is FIRST, not last. It lived below eight intervals and the
+                            owner reported the calendar as LOST -- the bottom of a long native select
+                            is below the fold, and an option nobody can see is an option that does not
+                            exist (walkthrough 2026-08-16 #6). */}
                         <select id="fu-when" aria-label="When" value={fu.intervalCode}
                           onChange={e => setFu(p => ({ ...p, intervalCode: e.target.value }))} className={`${input} mt-1`}>
-                          {props.intervals.map(i => <option key={i.code} value={i.code}>{i.label}</option>)}
                           <option value="custom">On a date…</option>
+                          {props.intervals.map(i => <option key={i.code} value={i.code}>{i.label}</option>)}
                         </select>
                         {fu.intervalCode === "custom" ? (
                           <input type="date" aria-label="Follow-up date" value={fu.dueDate}
@@ -1522,57 +1572,43 @@ export default function EncounterConsole(props: {
                           ))}
                         </select>
                       </div>
-                      {/* ── s6's REMAINING FIELDS, REAL FROM MIGRATION 299 ─────────────────────────
-                          ⚠ TYPE IS AN INTENTION, NOT A BOOKING. s10 is explicit that follow-up type
-                          "does not prove fulfillment has been scheduled", and s22 makes it an
-                          acceptance criterion -- so choosing Appointment here books nothing, and the
-                          only thing that says a visit exists is the Link-a-visit action on the row. */}
+                      {/* ── CPR-FUP-002 s3: THE ACTION, from the nine-value controlled list ─────────
+                          ⚠ STARTS EMPTY AND IS REQUIRED. s10 gates Raise on it, and s9 forbids
+                          auto-selecting Other -- a silent default would file every uninspected
+                          follow-up under one action code. Booking is no longer a "type": s11 makes
+                          the visit an explicit separate choice, below. */}
                       <div>
-                        <label className={FU_LABEL} htmlFor="fu-type">Follow-up type</label>
+                        <label className={FU_LABEL} htmlFor="fu-type">Follow-up type *</label>
                         <select id="fu-type" value={fu.followUpType}
-                          onChange={e => {
-                            const followUpType = e.target.value;
-                            // ⚠ THE BOOKING DATE PREFILLS FROM THE TIMEFRAME ALREADY CHOSEN, so the
-                            // ordinary path is reason -> type -> Raise: the date is the due date the
-                            // interval resolves to, editable, never invented silently -- it is on
-                            // screen before the press. The TIME is a default somebody can read.
-                            setFu(p => {
-                              const days = props.intervals.find(i => i.code === p.intervalCode)?.days;
-                              const d = new Date();
-                              if (days !== undefined) d.setDate(d.getDate() + days);
-                              // A calendar-chosen due date IS the visit date somebody had in mind.
-                              const fromDue = p.intervalCode === "custom" && p.dueDate
-                                ? p.dueDate : d.toISOString().slice(0, 10);
-                              return {
-                                ...p, followUpType,
-                                bookDate: followUpType === "appointment" && !p.bookDate ? fromDue : p.bookDate,
-                              };
-                            });
-                          }}
-                          className={`${input} mt-1`}>
-                          {FOLLOW_UP_TYPES.map(t => (
-                            <option key={t} value={t}>{FOLLOW_UP_TYPE_LABELS[t] ?? t}</option>
+                          onChange={e => setFu(p => ({ ...p, followUpType: e.target.value }))}
+                          className={`${input} mt-1 ${fu.followUpType ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`}>
+                          <option value="">Choose the action…</option>
+                          {FOLLOW_UP_ACTION_TYPES.map(([t, l]) => (
+                            <option key={t} value={t}>{l}</option>
                           ))}
                         </select>
-                        {fu.followUpType === "appointment" && (
-                          <p className="mt-1 text-[11px] text-gray-600">
-                            Set a date and time below and the visit is booked in the same press.
-                          </p>
-                        )}
                       </div>
-                      {/* s6: "Location -- shown when relevant". A practice with one site has nothing to
-                          choose between, so the control is not drawn for it. */}
-                      {props.facilities.length > 1 && (
+                      {/* WHERE the obligation is expected to be discharged. This used to hide for a
+                          one-site practice ("nothing to choose between") and the owner asked for it
+                          by name (walkthrough 2026-08-16): even with one site, site-vs-not-specified
+                          is a real choice, so it draws whenever any facility exists. */}
+                      {props.facilities.length >= 1 && (
                         <div>
                           <label className={FU_LABEL} htmlFor="fu-location">Location</label>
                           <select id="fu-location" value={fu.locationId}
-                            onChange={e => setFu(p => ({ ...p, locationId: e.target.value }))}
+                            onChange={e => setFu(p => ({ ...p, locationId: e.target.value, locationTouched: true }))}
                             className={`${input} mt-1`}>
                             <option value="">Not specified</option>
                             {props.facilities.map((x: any) => (
                               <option key={x.id} value={x.id}>{x.name}</option>
                             ))}
                           </select>
+                          {/* #6: what the calendar says about the target day -- printed even when no
+                              facility row matches the location's name, because knowing WHERE you are
+                              that day is the useful part. */}
+                          {fuPlace?.sentence && (
+                            <p className="mt-1 text-[11px] text-gray-500">{fuPlace.sentence}</p>
+                          )}
                         </div>
                       )}
                       {/* ⚠ s11's OWNER, AND THE VOCABULARY IS HONEST ABOUT WHAT THIS PRODUCT KNOWS.
@@ -1596,7 +1632,31 @@ export default function EncounterConsole(props: {
                             className={`${input} mt-1 ${fu.queue.trim() ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
                         )}
                       </div>
-                      {fu.followUpType === "appointment" && (
+                      {/* ── CPR-FUP-002 s11: BOOKING IS ITS OWN EXPLICIT CHOICE ────────────────────
+                          Raising never books; this checkbox is the one-press Raise-and-book the owner
+                          asked for, kept as an EXPLICIT act beside the obligation instead of a value
+                          smuggled into the action taxonomy. The date prefills from the timeframe
+                          already chosen -- on screen before the press, editable, never invented. */}
+                      <div className="col-span-2">
+                        <label className="flex items-center gap-2">
+                          <input type="checkbox" checked={fu.bookVisit}
+                            onChange={e => {
+                              const bookVisit = e.target.checked;
+                              setFu(p => {
+                                const days = props.intervals.find(i => i.code === p.intervalCode)?.days;
+                                const d = new Date();
+                                if (days !== undefined) d.setDate(d.getDate() + days);
+                                const fromDue = p.intervalCode === "custom" && p.dueDate
+                                  ? p.dueDate : d.toISOString().slice(0, 10);
+                                return { ...p, bookVisit, bookDate: bookVisit && !p.bookDate ? fromDue : p.bookDate };
+                              });
+                            }} />
+                          <span className="text-[12px] text-gray-700">
+                            Also book the visit in the same press. Booking never settles the obligation.
+                          </span>
+                        </label>
+                      </div>
+                      {fu.bookVisit && (
                         <>
                           <div>
                             <label className={FU_LABEL} htmlFor="fu-book-date">Visit date *</label>
@@ -1613,7 +1673,7 @@ export default function EncounterConsole(props: {
                         </>
                       )}
                       <div className="col-span-2">
-                        <label className={FU_LABEL} htmlFor="fu-instructions">Clinical instructions</label>
+                        <label className={FU_LABEL} htmlFor="fu-instructions">Instructions / context (optional)</label>
                         {/* Separate from the reason, which migration 196 caps at 400 characters -- one
                             field for both is how a cap starts truncating clinical detail. */}
                         <input id="fu-instructions" value={fu.instructions}
@@ -1621,6 +1681,24 @@ export default function EncounterConsole(props: {
                           placeholder="Optional. Anything the person doing this needs to know."
                           className={`${input} mt-1`} />
                       </div>
+                      {/* ── CPR-FUP-002 s10: DUPLICATE AWARENESS -- WARN, NEVER BLOCK ──────────────
+                          A materially similar open obligation is one with the same action type. The
+                          sentence names it and the button stays enabled: two real obligations of one
+                          type is a legitimate state, and the practitioner is the one who knows. */}
+                      {(() => {
+                        const dup = fu.followUpType
+                          ? (props.followUps as any[]).find(f =>
+                            (f.status === "OPEN" || f.status === "SCHEDULED")
+                              && f.follow_up_type === fu.followUpType)
+                          : null;
+                        return dup ? (
+                          <p className="col-span-2 rounded-lg bg-[var(--cmp-surface-warning)] px-2.5 py-1.5 text-[11.5px] text-[var(--cmp-text-warning)]">
+                            An open {FOLLOW_UP_TYPE_LABELS[fu.followUpType]?.toLowerCase() ?? fu.followUpType}{" "}
+                            already exists for this patient (&ldquo;{dup.reason}&rdquo;, due {dup.due_on}).
+                            Raise this one only if it is a separate obligation.
+                          </p>
+                        ) : null;
+                      })()}
                       <div className="col-span-2 flex flex-wrap items-center justify-end gap-2">
                         {/* ⚠ A DISABLED BUTTON THAT CANNOT SAY WHY READS AS A BROKEN PRODUCT -- the
                             owner pressed exactly this one with the reason empty, got silence, and
@@ -1629,23 +1707,25 @@ export default function EncounterConsole(props: {
                             same day the rule was being applied two tabs away. The sentence names the
                             first missing thing, in order, because two amber warnings at once read as
                             noise. */}
-                        {(!fu.reason.trim() || (fu.owner === "queue" && !fu.queue.trim())
+                        {(!fu.reason.trim() || !fu.followUpType || (fu.owner === "queue" && !fu.queue.trim())
                           || (fu.intervalCode === "custom" && !fu.dueDate)
-                          || (fu.followUpType === "appointment" && !fu.bookDate)) && (
+                          || (fu.bookVisit && !fu.bookDate)) && (
                           <span className="text-[11.5px] text-[var(--cmp-text-warning)]">
                             {!fu.reason.trim() ? "Say what needs to happen first."
-                              : fu.intervalCode === "custom" && !fu.dueDate ? "Pick the follow-up date."
-                                : fu.owner === "queue" && !fu.queue.trim() ? "Name the queue, or assign it differently."
-                                  : "Pick the visit date, or change the follow-up type."}
+                              : !fu.followUpType ? "Choose the follow-up action."
+                                : fu.intervalCode === "custom" && !fu.dueDate ? "Pick the follow-up date."
+                                  : fu.owner === "queue" && !fu.queue.trim() ? "Name the queue, or assign it differently."
+                                    : "Pick the visit date, or untick the booking."}
                           </span>
                         )}
                         <button type="submit"
-                          disabled={busy || !fu.reason.trim() || (fu.owner === "queue" && !fu.queue.trim())
+                          disabled={busy || !fu.reason.trim() || !fu.followUpType
+                            || (fu.owner === "queue" && !fu.queue.trim())
                             || (fu.intervalCode === "custom" && !fu.dueDate)
-                            || (fu.followUpType === "appointment" && !fu.bookDate)}
+                            || (fu.bookVisit && !fu.bookDate)}
                           className="rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cp-primary)] focus-visible:ring-offset-2 disabled:opacity-50">
                           {busy ? "Raising..."
-                            : fu.followUpType === "appointment" ? "Raise & book visit" : "Raise follow-up"}
+                            : fu.bookVisit ? "Raise & book visit" : "Raise follow-up"}
                         </button>
                       </div>
                     </div>

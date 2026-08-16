@@ -87,14 +87,32 @@ export const DUE_WEEK_DAYS = 7;
 /** Closed = no longer owed. Stamps closed_at / closed_by. */
 export const CLOSED_FOLLOW_UP_STATUSES = ["COMPLETED", "MISSED", "CANCELLED"];
 
+/**
+ * CPR-FUP-002 s5/s6: Category answers WHAT DOMAIN the obligation belongs to -- never what action
+ * must happen, which is follow_up_type's question (s3). Two lists on purpose:
+ *
+ *   FOLLOW_UP_CATEGORIES is what forms OFFER -- the spec's seven domains.
+ *   FOLLOW_UP_KINDS is what the product ACCEPTS AND CAN LABEL -- the offered seven plus the codes
+ *   that predate the split ('review', 'monitoring', 'immunisation'). s14: historical records retain
+ *   their original code, and offline devices may hold in-flight captures carrying the old codes, so
+ *   the accepted set only ever widens. Labels here may change; codes never do.
+ */
+export const FOLLOW_UP_CATEGORIES = [
+  ["clinical_condition", "Clinical condition"],
+  ["investigation_result", "Investigation / result"],
+  ["treatment_response", "Treatment"],
+  ["procedure_intervention", "Procedure / intervention"],
+  ["referral_outcome", "Referral"],
+  ["administrative", "Administrative"],
+  ["other", "Other"],
+] as const;
+
 export const FOLLOW_UP_KINDS = [
+  ...FOLLOW_UP_CATEGORIES,
+  // Pre-CPR-FUP-002 codes: valid on historical rows and in-flight offline captures, offered nowhere.
   ["review", "Clinical review"],
-  ["investigation_result", "Investigation result"],
-  ["treatment_response", "Response to treatment"],
-  ["referral_outcome", "Referral outcome"],
   ["monitoring", "Ongoing monitoring"],
   ["immunisation", "Immunisation"],
-  ["other", "Other"],
 ] as const;
 
 export const FOLLOW_UP_PRIORITIES = ["routine", "soon", "urgent"] as const;
@@ -109,10 +127,40 @@ export const FOLLOW_UP_PRIORITIES = ["routine", "soon", "urgent"] as const;
  * that appointment dies. A screen that read `appointment` as `booked` would be claiming a visit exists
  * because somebody chose a word in a dropdown.
  */
-export const FOLLOW_UP_TYPES = ["appointment", "review", "contact", "other"] as const;
+/**
+ * CPR-FUP-002 s3: the controlled ACTION taxonomy -- what must happen next. These nine are what forms
+ * OFFER. medication_review is deliberately absent from the offer (s4: configuration-ready, enabled
+ * later by practice or specialty) but present in the accepted set, so enabling it is a UI decision
+ * and not a migration. Do not auto-select 'other' anywhere (s9).
+ */
+export const FOLLOW_UP_ACTION_TYPES = [
+  ["clinical_review", "Clinical review"],
+  ["results_review", "Results review"],
+  ["treatment_review", "Treatment review"],
+  ["post_procedure", "Post-procedure review"],
+  ["repeat_investigation", "Repeat investigation"],
+  ["referral_followup", "Referral follow-up"],
+  ["contact_patient", "Contact patient"],
+  ["administrative", "Administrative"],
+  ["other", "Other"],
+] as const;
+
+/** The ACCEPTED set: offered nine + config-ready medication_review + the pre-FUP-002 codes that live
+ *  on historical rows and in-flight offline captures. Only ever widens (s14). */
+export const FOLLOW_UP_TYPES = [
+  "clinical_review", "results_review", "treatment_review", "post_procedure",
+  "repeat_investigation", "referral_followup", "contact_patient", "administrative", "other",
+  "medication_review",
+  "appointment", "review", "contact",
+] as const;
 
 export const FOLLOW_UP_TYPE_LABELS: Record<string, string> = {
-  appointment: "Appointment", review: "Review", contact: "Contact", other: "Other",
+  clinical_review: "Clinical review", results_review: "Results review",
+  treatment_review: "Treatment review", post_procedure: "Post-procedure review",
+  repeat_investigation: "Repeat investigation", referral_followup: "Referral follow-up",
+  contact_patient: "Contact patient", administrative: "Administrative", other: "Other",
+  medication_review: "Medication review",
+  appointment: "Appointment", review: "Review", contact: "Contact",
 };
 
 /**

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
+import { FOLLOW_UP_CATEGORIES, FOLLOW_UP_ACTION_TYPES, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
 import { BUTTON } from "@/lib/practice/palette";
 
 // CPR-FUP-001 s6/s7 -- "Optional source: Manual follow-up for non-encounter commitments", with
@@ -32,7 +32,10 @@ export default function AddFollowUp({ onClose }: { onClose: () => void }) {
   const [patientName, setPatientName] = useState("");
   const [reason, setReason] = useState("");
   const [dueOn, setDueOn] = useState("");
-  const [kind, setKind] = useState("review");
+  // CPR-FUP-002 s5: kind is the DOMAIN (category). The ACTION starts empty and is required -- s10
+  // gates the button on it, and s9 forbids auto-selecting Other.
+  const [kind, setKind] = useState("clinical_condition");
+  const [followUpType, setFollowUpType] = useState("");
   const [priority, setPriority] = useState("routine");
   const [asDraft, setAsDraft] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -71,7 +74,7 @@ export default function AddFollowUp({ onClose }: { onClose: () => void }) {
     const res = await fetch("/api/v1/practice/follow-ups", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        patientId, reason, dueOn, kind, priority,
+        patientId, reason, dueOn, kind, priority, followUpType,
         source: "manual", originWorkspace: "follow_ups",
         status: asDraft ? "DRAFT" : undefined,
       }),
@@ -148,10 +151,19 @@ export default function AddFollowUp({ onClose }: { onClose: () => void }) {
           <span className="text-[11px] font-semibold text-gray-600">Due date</span>
           <input required type="date" value={dueOn} onChange={e => setDueOn(e.target.value)} className={field} />
         </label>
+        {/* CPR-FUP-002 s5: Category is the SUBJECT, Follow-up type is the ACTION -- two questions,
+            two selects, and the action is required with no silent default. */}
         <label className="flex flex-col gap-0.5">
-          <span className="text-[11px] font-semibold text-gray-600">Type</span>
+          <span className="text-[11px] font-semibold text-gray-600">Category</span>
           <select value={kind} onChange={e => setKind(e.target.value)} className={field}>
-            {FOLLOW_UP_KINDS.map(([c, l]) => <option key={c} value={c}>{l}</option>)}
+            {FOLLOW_UP_CATEGORIES.map(([c, l]) => <option key={c} value={c}>{l}</option>)}
+          </select>
+        </label>
+        <label className="flex flex-col gap-0.5">
+          <span className="text-[11px] font-semibold text-gray-600">Follow-up type *</span>
+          <select value={followUpType} onChange={e => setFollowUpType(e.target.value)} className={field}>
+            <option value="">Choose the action&hellip;</option>
+            {FOLLOW_UP_ACTION_TYPES.map(([c, l]) => <option key={c} value={c}>{l}</option>)}
           </select>
         </label>
         <label className="flex flex-col gap-0.5">
@@ -173,10 +185,15 @@ export default function AddFollowUp({ onClose }: { onClose: () => void }) {
       {error && <p className="mt-2 text-[12px] text-[var(--cmp-text-critical)]">{error}</p>}
 
       <div className="mt-3 flex gap-2">
-        <button type="submit" disabled={busy || !patientId}
+        <button type="submit" disabled={busy || !patientId || !followUpType}
           className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold ${BUTTON.primary}`}>
           {asDraft ? "Save draft" : "Add follow-up"}
         </button>
+        {patientId && !followUpType && (
+          <span className="self-center text-[11.5px] text-[var(--cmp-text-warning)]">
+            Choose the follow-up action.
+          </span>
+        )}
         <button type="button" onClick={onClose}
           className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold ${BUTTON.quiet}`}>
           Cancel
