@@ -159,6 +159,10 @@ export default function TreatmentCapture(props: {
   const [draft, setDraft] = useState<PendingTreatment>(() =>
     blankDraft(cap.options.byField.treatment_type?.[0]?.code ?? "medication"));
   const [customFrequency, setCustomFrequency] = useState("");
+  // Walkthrough 2026-08-16 #8 -- "allow to write our own duration". Same doctrine as frequency:
+  // Other opens a compact field and the practitioner's exact wording is preserved in the record.
+  const [durationOther, setDurationOther] = useState(false);
+  const [customDuration, setCustomDuration] = useState("");
   const [medQuery, setMedQuery] = useState("");
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [templateName, setTemplateName] = useState("");
@@ -448,12 +452,14 @@ export default function TreatmentCapture(props: {
       // and the engine leaves frequency_code NULL so a reader can tell it was typed rather than tapped.
       frequencyText: custom ? customFrequency.trim() : (draft.frequencyText ?? null),
       frequencyPerDay: custom ? null : draft.frequencyPerDay,
+      // #8: same rule for duration -- Other keeps the typed wording, never the literal "Other duration".
+      duration: durationOther ? (customDuration.trim() || null) : (draft.duration ?? null),
     };
   };
 
   const clearDraft = () => {
     setDraft(blankDraft(draft.treatmentType));
-    setCustomFrequency(""); setMedQuery(""); setDose(null); setCalcOpen(false);
+    setCustomFrequency(""); setCustomDuration(""); setDurationOther(false); setMedQuery(""); setDose(null); setCalcOpen(false);
   };
 
   const commitDraft = () => {
@@ -1205,7 +1211,19 @@ export default function TreatmentCapture(props: {
                     frequencyPerDay: o?.numericValue ?? null,
                   }))} />
                 <PickSelect label="Duration" options={opts("duration")} value={draft.duration}
-                  step="duration" onPick={o => setDraft(d => ({ ...d, duration: o?.label ?? null }))} />
+                  step="duration" onPick={o => {
+                    setDurationOther(!!o && o.code === OTHER_OPTION_CODE);
+                    setDraft(d => ({ ...d, duration: o?.label ?? null }));
+                  }} />
+              </div>
+            )}
+            {!shape.prescribing && shape.needsSchedule && durationOther && (
+              <div className="mt-2">
+                <input autoFocus className={input} value={customDuration}
+                  aria-label="Duration in your own words"
+                  onChange={e => setCustomDuration(e.target.value)}
+                  placeholder="In your own words — for example: 21 days, until the wound closes" />
+                <p className="mt-0.5 text-[10px] text-gray-500">{CUSTOM_WORDING_PRESERVED}</p>
               </div>
             )}
             {!shape.prescribing && shape.needsSchedule && draft.frequencyCode === OTHER_OPTION_CODE && (
@@ -1258,7 +1276,10 @@ export default function TreatmentCapture(props: {
                     frequencyPerDay: o?.numericValue ?? null,
                   }))} />
                 <PickSelect label="Duration" options={opts("duration")} value={draft.duration}
-                  step="duration" onPick={o => setDraft(d => ({ ...d, duration: o?.label ?? null }))} />
+                  step="duration" onPick={o => {
+                    setDurationOther(!!o && o.code === OTHER_OPTION_CODE);
+                    setDraft(d => ({ ...d, duration: o?.label ?? null }));
+                  }} />
                 <PickSelect label="Route" options={opts("route")} value={draft.route}
                   step="route" onPick={o => setDraft(d => ({ ...d, route: o?.label ?? null }))} />
               </div>
@@ -1271,6 +1292,16 @@ export default function TreatmentCapture(props: {
                 <input autoFocus className={input} value={customFrequency}
                   onChange={e => setCustomFrequency(e.target.value)}
                   placeholder="In your own words — for example: every other day, in the morning" />
+                <p className="mt-0.5 text-[10px] text-gray-500">{CUSTOM_WORDING_PRESERVED}</p>
+              </div>
+            )}
+            {/* #8: the same courtesy for duration -- Other opens the field, the typed words are kept. */}
+            {shape.prescribing && durationOther && (
+              <div className="mt-2">
+                <input autoFocus className={input} value={customDuration}
+                  aria-label="Duration in your own words"
+                  onChange={e => setCustomDuration(e.target.value)}
+                  placeholder="In your own words — for example: 21 days, until the course is finished" />
                 <p className="mt-0.5 text-[10px] text-gray-500">{CUSTOM_WORDING_PRESERVED}</p>
               </div>
             )}
