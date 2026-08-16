@@ -206,6 +206,34 @@ export function hasEstateRole(roles: string[]): boolean {
   return highestRole(roles) !== null;
 }
 
+/**
+ * THE ONE DERIVATION from org roles to the four profile role columns -- extracted verbatim from the
+ * super-admin users route (COMP-IDENTITY-001 item 14), because organisation join-request approval
+ * needs to grant EXACTLY what the role editor grants, and two spellings of this arithmetic would be
+ * the estate-fold drift all over again, one storey up.
+ *
+ * Primary org role = highest seniority (lowest tier). The portal roles are the union of what the org
+ * roles imply plus any direct extras. Returns null when no valid org role survives filtering -- the
+ * caller refuses, because a grant of nothing is not a grant.
+ */
+export function profileUpdateForOrgRoles(orgRoles: string[], extraPortalRoles: string[] = []): {
+  org_roles: OrgRole[]; org_role: OrgRole; role: AppRole; roles: AppRole[];
+} | null {
+  const validRoles = (orgRoles ?? []).filter(r => ORG_ROLE_CONFIG[r as OrgRole]) as OrgRole[];
+  if (validRoles.length === 0) return null;
+  const sorted = [...validRoles].sort((a, b) => ORG_ROLE_CONFIG[a].tier - ORG_ROLE_CONFIG[b].tier);
+  const primaryOrgRole = sorted[0];
+  const validExtras = (extraPortalRoles ?? []).filter(r =>
+    (ROLE_PRIORITY as string[]).includes(r)) as AppRole[];
+  const allPortalRoles = [...new Set([...validRoles.map(r => ORG_ROLE_CONFIG[r].portalRole), ...validExtras])];
+  return {
+    org_roles: validRoles,
+    org_role: primaryOrgRole,
+    role: ORG_ROLE_CONFIG[primaryOrgRole].portalRole,
+    roles: allPortalRoles,
+  };
+}
+
 // Keep SubRole as an alias so any lingering imports don't break immediately
 export type SubRole = OrgRole;
 /** @deprecated Use ORG_ROLE_CONFIG instead */

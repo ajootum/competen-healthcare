@@ -5,6 +5,7 @@ import { loadProfileIdentity } from "@/lib/profile-identity";
 import type { AppRole } from "@/lib/roles";
 import { cardClass } from "@/components/ui/primitives";
 import { estateRolesOf } from "@/lib/roles";
+import JoinOrganisationPanel from "./JoinOrganisationPanel";
 
 // PW-011 Profile & Professional Identity — the user's own professional profile over real profiles /
 // professional_credentials / competency_decisions. Summary cards, profile card, About Me, Professional Summary,
@@ -33,7 +34,7 @@ export default async function ProfilePage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   const admin = createAdminClient() as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-  const { data: pr } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
+  const { data: pr } = await admin.from("profiles").select("role, roles, organisation_id").eq("id", user.id).single();
   const userRoles: AppRole[] = estateRolesOf(pr) as AppRole[];
 
   const d = await loadProfileIdentity(admin, user.id, user.email ?? null, userRoles);
@@ -51,6 +52,10 @@ export default async function ProfilePage() {
         </div>
         <Link href="/dashboard/billing" className="text-sm font-medium text-white bg-[var(--cmp-color-information)] rounded-lg px-3 py-2 hover:bg-[var(--cmp-color-information)]">Edit Profile</Link>
       </div>
+
+      {/* Organisation membership -- ask to join, or the history of asking (COMP-IDENTITY-001). The
+          panel renders nothing for a homed member with no request history. */}
+      <JoinOrganisationPanel homed={!!pr?.organisation_id} />
 
       {/* KPI ribbon */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">

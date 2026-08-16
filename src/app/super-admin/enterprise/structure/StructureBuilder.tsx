@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/interactive";
 
@@ -85,6 +85,8 @@ export default function StructureBuilder({ data }: { data: any }) {
             ? <button onClick={() => setArchive(e, sel, "restore")} disabled={busy} className="text-xs font-medium rounded-lg border border-[var(--cmp-color-success)] text-[var(--cmp-text-success)] hover:bg-[var(--cmp-surface-success)] px-3 py-1.5">Restore</button>
             : <button onClick={() => setArchive(e, sel, "archive")} disabled={busy} className="text-xs font-medium rounded-lg border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] hover:bg-[var(--cmp-surface-error)] px-3 py-1.5">Archive</button>}
         </div>
+        {/* Membership made expressible (migration 308): who is ON the team, not only who leads it. */}
+        {e === "team" && <TeamMembers key={sel.id} teamId={sel.id} />}
       </div>
     );
   })();
@@ -218,5 +220,71 @@ function EntityModal({ modal, staff, busy, err, onClose, onSave }: any) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * The team's people (COMP-IDENTITY-001, migration 308). Add by email because this is an
+ * administrator surface with the directory a tab away -- the API resolves the address to an
+ * account and refuses plainly when nobody holds it.
+ */
+function TeamMembers({ teamId }: { teamId: string }) {
+  const [members, setMembers] = useState<any[] | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
+  const [working, setWorking] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/enterprise/teams?teamId=${teamId}`);
+      const b = await r.json();
+      if (!r.ok) { setDetail(b.error ?? "could not be read"); return; }
+      setMembers(b.members?.items ?? []);
+      setDetail(b.members?.unavailable ? (b.members.detail ?? "could not be read") : null);
+    } catch { setDetail("The member list could not be read just now."); }
+  }, [teamId]);
+  useEffect(() => { const t = setTimeout(() => { void refresh(); }, 0); return () => clearTimeout(t); }, [refresh]);
+
+  async function act(body: Record<string, unknown>, okNote: string) {
+    setWorking(true); setNote(null);
+    const r = await fetch("/api/enterprise/teams", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const b = await r.json().catch(() => ({}));
+    setWorking(false);
+    if (!r.ok) { setNote(b.error ?? "That did not work."); return; }
+    setNote(okNote); setEmail("");
+    await refresh();
+  }
+
+  return (
+    <div className="mt-4 border-t border-gray-100 pt-3">
+      <h4 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Members</h4>
+      {detail && <p className="mt-1 text-[11.5px] rounded bg-amber-50 border border-amber-200 px-2 py-1 text-amber-900">{detail}</p>}
+      {members === null && !detail && <p className="mt-1 text-[11.5px] text-gray-400">Reading&hellip;</p>}
+      {members !== null && members.length === 0 && !detail && (
+        <p className="mt-1 text-[11.5px] text-gray-400">Nobody is on this team yet.</p>
+      )}
+      <ul className="mt-1 space-y-1">
+        {(members ?? []).map(m => (
+          <li key={m.id} className="flex items-center gap-2 text-[12px]">
+            <span className="text-gray-800">{m.profiles?.full_name ?? m.user_id}</span>
+            <span className="text-[10.5px] text-gray-400">{m.profiles?.email}</span>
+            <button disabled={working} onClick={() => act({ action: "remove", teamId, userId: m.user_id }, "Removed.")}
+              className="ml-auto text-[10.5px] text-rose-600 hover:underline">remove</button>
+          </li>
+        ))}
+      </ul>
+      <div className="mt-2 flex items-center gap-1.5">
+        <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="account email"
+          className="flex-1 rounded-lg border border-gray-200 px-2 py-1 text-[12px]" />
+        <button disabled={working || !email.trim()} onClick={() => act({ action: "add", teamId, email: email.trim() }, "Added.")}
+          className="text-[11px] font-semibold rounded-lg bg-teal-600 text-white px-2.5 py-1 disabled:opacity-40">
+          {working ? "…" : "Add"}
+        </button>
+      </div>
+      {note && <p className="mt-1 text-[11px] text-gray-600">{note}</p>}
+    </div>
   );
 }

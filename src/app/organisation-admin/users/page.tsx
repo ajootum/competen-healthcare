@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadOrgAdminDashboard } from "@/lib/org-admin-data";
 import { cardClass } from "@/components/ui/primitives";
 import { estateRolesOf } from "@/lib/roles";
+import JoinRequestsPanel from "./JoinRequestsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,9 @@ export default async function UsersPage() {
         </div>
         <Link href="/admin/invite" className="shrink-0 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-4 py-2">Invite users →</Link>
       </div>
+
+      {/* People asking to join this organisation -- renders nothing when the inbox is empty. */}
+      <JoinRequestsPanel />
 
       <div className={card}>
         <div className="overflow-x-auto">
