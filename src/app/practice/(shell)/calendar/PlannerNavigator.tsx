@@ -45,6 +45,9 @@ export default function PlannerNavigator({ period, todayDate, timezone, urlState
       timezone={timezone}
       href={toHref}
       onChange={next => router.push(toHref(next))}
+      // CPR-PLN-002 s5.1: on smaller widths the secondary ranges live behind a More control. The
+      // planner asks for it; every other screen that mounts this control is unchanged.
+      secondaryRangesInMore
     />
   );
 }

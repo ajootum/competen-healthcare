@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
@@ -23,26 +24,30 @@ import CalendarFooter from "./CalendarFooter";
 import WhereYouAre from "./WhereYouAre";
 import Timeline from "./Timeline";
 
-// /practice/calendar -- CPR-V5-005, THE PRACTICE PLANNER.
+// /practice/calendar -- CPR-V5-005, THE PRACTICE PLANNER, compressed by CPR-PLN-002.
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // WHAT CHANGED, AND WHAT DELIBERATELY DID NOT.
 //
-// s1: "Replace the traditional appointment calendar with a Practice Planner. Activities -- not
-// appointments -- are the primary planning object." So the seven-day planner is now the top of this
-// route and the first thing on it.
+// CPR-PLN-002 s6: THE APPOINTMENT BOOK BELONGS TO DAY MODE, AND NOTHING IT DOES WAS DROPPED. The book
+// -- compact clinic summary, availability ribbon, route, drag timeline, booking console, footer -- used
+// to be stacked under EVERY view, which made the Week screen several screens concatenated vertically
+// (s3). It is now read and mounted ONLY when the view is `day`, handed into the workspace as
+// `dayOperations` so Day mode can put it before the activity canvas (s6's primary content). Week, Month
+// and Agenda no longer read or render any of it.
 //
-// ⚠ THE APPOINTMENT BOOK IS KEPT, MOUNTED BELOW THE PLANNER, AND NOTHING IT DOES WAS DROPPED. The
-// console beneath books appointments, checks patients in, moves them through the queue and STARTS
-// ENCOUNTERS; the timeline drags an appointment to a new time or a different hospital; the ribbon shows
-// the day's slots and the footer its totals. All of that is real, is used, and has no equivalent in the
-// planner -- an activity is a BLOCK OF THE PRACTITIONER'S TIME, and a patient's 08:20 appointment is a
-// different object with a different lifecycle. "Appointments are no longer the primary planning object"
-// is a statement about hierarchy, not a licence to delete the half of this screen that sees patients.
+// The console still books appointments, checks patients in and moves them through appointment states;
+// the timeline still drags an appointment to a new time or a different hospital. An activity is a BLOCK
+// OF THE PRACTITIONER'S TIME, and a patient's 08:20 appointment is a different object with a different
+// lifecycle -- "appointments are no longer the primary planning object" is a statement about hierarchy,
+// not a licence to delete the half of this screen that sees patients.
+//
+// WHAT THE PLANNER NO LONGER DOES AT ALL: start consultations. CPR-PLN-002 s8 -- start, pause and
+// finish belong to Current Session, and the console now points there instead of creating encounters.
 //
 // BOTH HALVES READ THE SAME ?date=. The planner selects its day through the URL rather than through
-// client state precisely so that the book below always shows the day the planner is showing. Two ideas
-// of "the day I am looking at" on one screen is how somebody edits Thursday while reading Wednesday.
+// client state precisely so that the book always shows the day the planner is showing. Two ideas of
+// "the day I am looking at" on one screen is how somebody edits Thursday while reading Wednesday.
 //
 // THE WEEK ANCHOR IS THE SAME PARAMETER: plannerWeek() takes any date inside the week it should return,
 // so choosing a day in another week moves the week with no second parameter to keep in step.
@@ -93,7 +98,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         : range.days[0].date;
   const selectedDay = range.days.find(d => d.date === selectedDate) ?? range.days[0];
   // A selection that is not on the day being shown is not a selection. Silently keeping it would leave
-  // the contextual panel describing a session on a date nobody is looking at.
+  // the inspector describing a session on a date nobody is looking at.
   const selectedSessionId = params.sel && selectedDay.sessions.some(s => s.id === params.sel)
     ? params.sel : null;
 
@@ -127,31 +132,21 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     ? `Your schedule could not be searched just now, so this is NOT a statement that nothing matches. ${searchResult.detail ?? ""}`.trim()
     : null;
 
-  // The appointment book's own day. calendarDay() is on the practice's clock, like everything here.
-  const c = await calendarDay(admin, shell.ctx, selectedDate);
-  const initial = await loadDay(admin, shell.ctx.workspaceId, c.day);
+  // Every view needs the practice's locations -- the filters and the add form offer them.
+  const locations = await bookingLocations(admin, shell.ctx);
 
-  const dayRange = zonedDayRange(c.day, c.timezone);
-  const [locations, route, timeline] = await Promise.all([
-    bookingLocations(admin, shell.ctx),
-    locationDay(admin, shell.ctx, dayRange.startIso, dayRange.endIso),
-    timelineDay(admin, shell.ctx, c.day, c.timezone),
-  ]);
-
-  // s3's Upcoming Follow-ups. Gated on the capability that actually guards them, and ABSENT rather than
-  // empty when the caller does not hold it -- "no follow-ups" and "you cannot see follow-ups" are
-  // different sentences.
+  // The Day Inspector's Follow-ups tab. Gated on the capability that actually guards them, and ABSENT
+  // rather than empty when the caller does not hold it -- "no follow-ups" and "you cannot see
+  // follow-ups" are different sentences.
   //
-  // listFollowUps now REPORTS a failed read instead of returning an empty list for it, so this panel can
-  // finally tell "nothing open or scheduled" apart from "could not find out" -- the distinction the
-  // comment here used to describe as a limitation it had to live with.
+  // listFollowUps REPORTS a failed read instead of returning an empty list for it, so the tab can tell
+  // "nothing open or scheduled" apart from "could not find out".
   const canSeeFollowUps = hasCapability(shell.ctx, "followup.view");
   const followUpResult = canSeeFollowUps
     ? await listFollowUps(admin, shell.ctx.workspaceId, { status: ["OPEN", "SCHEDULED"], limit: 50 })
     : { items: [], unavailable: false, detail: null };
   // THREE ANSWERS, NOT TWO. "You are not permitted to see this", "it could not be read" and "there is
-  // nothing" are different things, and the panel below renders the third only when the first two are
-  // ruled out. This is the whole reason listFollowUps changed shape.
+  // nothing" are different things, and the tab renders the third only when the first two are ruled out.
   const followUpsUnavailable = !canSeeFollowUps
     ? "You do not hold followup.view, so this panel is not showing you anything."
     : followUpResult.unavailable
@@ -164,6 +159,56 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     kind: (f.kind as string | null) ?? null,
     overdue: Boolean(f.overdue),
   }));
+
+  // ---- CPR-PLN-002 s6/s7: THE APPOINTMENT BOOK, READ AND BUILT FOR DAY MODE ONLY ----
+  //
+  // ⚠ NOT A HIDDEN STACK. Week, Month and Agenda do not merely stop rendering these panels -- the four
+  // reads behind them do not run at all outside Day mode, so no other view pays for a book it must not
+  // show. The section keeps its id: the inspector's "Book a patient" points at #appointment-book from
+  // any view by routing to the Day view first.
+  let dayOperations: ReactNode = null;
+  if (view === "day") {
+    const c = await calendarDay(admin, shell.ctx, selectedDate);
+    const dayRange = zonedDayRange(c.day, c.timezone);
+    const [initial, route, timeline] = await Promise.all([
+      loadDay(admin, shell.ctx.workspaceId, c.day),
+      locationDay(admin, shell.ctx, dayRange.startIso, dayRange.endIso),
+      timelineDay(admin, shell.ctx, c.day, c.timezone),
+    ]);
+
+    dayOperations = (
+      <div className="flex flex-col gap-5">
+        <section id="appointment-book" className="rounded-2xl border border-gray-200 bg-white p-4">
+          <h2 className="text-[15px] font-bold text-gray-900">Appointment book</h2>
+          <p className="text-[12px] text-gray-500">
+            {c.day} — the patients booked into this day, their arrival and the availability around them.
+            Activities are what you plan; appointments are who is coming.
+          </p>
+        </section>
+
+        <AvailabilityRibbon c={{ ...c, kinds: SLOT_KINDS }} />
+        <WhereYouAre route={JSON.parse(JSON.stringify(route))} timezone={c.timezone} />
+
+        <Timeline
+          timeline={JSON.parse(JSON.stringify(timeline))}
+          canManage={canManage}
+        />
+
+        <CalendarConsole
+          date={c.day}
+          timezone={c.timezone}
+          canManage={canManage}
+          initial={JSON.parse(JSON.stringify(initial))}
+          locations={locations.map(l => ({ id: l.id, name: l.name, type: l.type, facility: l.facility }))}
+        />
+
+        {/* s7: today's clinic summary and time booked, as Day mode's COMPACT summary -- after the
+            working surfaces, because s10 puts primary content before summaries. */}
+        <OperationsHeader c={c} />
+        <CalendarFooter c={c} />
+      </div>
+    );
+  }
 
   return (
     <div className="-m-5 min-h-full bg-[var(--cp-canvas)] p-5">
@@ -179,45 +224,17 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           locations={locations.map(l => ({ id: l.id, name: l.name, facility: l.facility?.name ?? null }))}
           followUps={followUps}
           followUpsUnavailable={followUpsUnavailable}
-          // ⚠ PLAIN DATA ONLY ACROSS THIS BOUNDARY. A function on a payload handed to a client component
-          // compiles, passes tsc and kills the page at render. Every field below is a string, a number,
-          // a boolean or an array of those.
+          // ⚠ PLAIN DATA ONLY ACROSS THIS BOUNDARY -- except `dayOperations`, which is server-rendered
+          // JSX handed through as a slot, the one shape React allows across it. Every DATA field below
+          // is a string, a number, a boolean or an array of those: a function on a payload handed to a
+          // client component compiles, passes tsc and kills the page at render.
           search={searchResult && !searchResult.unavailable
             ? { query: searchResult.query, hits: searchResult.hits }
             : null}
           searchUnavailable={searchUnavailable}
           searchTruncated={searchResult?.truncated ?? false}
+          dayOperations={dayOperations}
         />
-
-        {/* ── THE APPOINTMENT BOOK. Still here, still doing everything it did. ─────────────────── */}
-        <section id="appointment-book" className="rounded-2xl border border-gray-200 bg-white p-4">
-          <h2 className="text-[15px] font-bold text-gray-900">Appointment book</h2>
-          <p className="text-[12px] text-gray-500">
-            {c.day} — the patients booked into this day, their arrival and the encounters started from it.
-            Activities are what you plan; appointments are who is coming.
-          </p>
-        </section>
-
-        <OperationsHeader c={c} />
-        <AvailabilityRibbon c={{ ...c, kinds: SLOT_KINDS }} />
-        <WhereYouAre route={JSON.parse(JSON.stringify(route))} timezone={c.timezone} />
-
-        <Timeline
-          timeline={JSON.parse(JSON.stringify(timeline))}
-          canManage={canManage}
-        />
-
-        <CalendarConsole
-          date={c.day}
-          timezone={c.timezone}
-          canManage={canManage}
-          canQueue={hasCapability(shell.ctx, "queue.manage")}
-          canStartEncounter={hasCapability(shell.ctx, "encounter.create")}
-          initial={JSON.parse(JSON.stringify(initial))}
-          locations={locations.map(l => ({ id: l.id, name: l.name, type: l.type, facility: l.facility }))}
-        />
-
-        <CalendarFooter c={c} />
       </div>
     </div>
   );

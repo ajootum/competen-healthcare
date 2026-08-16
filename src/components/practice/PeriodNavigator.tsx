@@ -53,6 +53,7 @@ export type PeriodChange = {
 export default function PeriodNavigator({
   period, todayDate, onChange, href, timezone, trailing, views = PERIOD_VIEWS.map(v => v.key),
   viewLabels, showLongPeriods = true, showRollingPeriods = false, showAllDates = false, note,
+  secondaryRangesInMore = false,
 }: {
   period: PeriodRange;
   todayDate: string;
@@ -82,8 +83,15 @@ export default function PeriodNavigator({
   showAllDates?: boolean;
   /** Optional: one line under the controls, for a screen that must say what its period does NOT cover. */
   note?: ReactNode;
+  /**
+   * ⚠ OFF BY DEFAULT, like the two flags above and for the same reason. CPR-PLN-002 s5.1 asks the
+   * PLANNER to move its secondary ranges into a More menu on smaller widths; a screen that wants the
+   * same asks for it. Desktop is untouched either way -- the chips collapse below md only.
+   */
+  secondaryRangesInMore?: boolean;
 }) {
   const [goTo, setGoTo] = useState("");
+  const [moreOpen, setMoreOpen] = useState(false);
   const [customFrom, setCustomFrom] = useState(period.fromDate);
   const [customTo, setCustomTo] = useState(period.toDate);
   const [customOpen, setCustomOpen] = useState(false);
@@ -186,10 +194,22 @@ export default function PeriodNavigator({
 
         {/* The longer periods the practice owner asked for -- "any day of the week or month OR YEAR".
             A separate list because s3 names six and only six, and a list that quietly grows is as much
-            a drift as one that quietly shrinks. */}
-        {showLongPeriods && LONG_PERIODS.map(q => (
-          <Control href={href} onChange={onChange} key={q.key} to={quick(q.key)} label={q.label} className={chip} />
-        ))}
+            a drift as one that quietly shrinks. When the host asked for it, these collapse behind a
+            More control below md -- the SAME controls, disclosed rather than removed. */}
+        {showLongPeriods && secondaryRangesInMore && (
+          <button type="button" onClick={() => setMoreOpen(o => !o)} aria-expanded={moreOpen}
+            className={`${chip} md:hidden ${moreOpen
+              ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]" : ""}`}>
+            More&hellip;
+          </button>
+        )}
+        {showLongPeriods && (
+          <div className={!secondaryRangesInMore || moreOpen ? "contents" : "hidden md:contents"}>
+            {LONG_PERIODS.map(q => (
+              <Control href={href} onChange={onChange} key={q.key} to={quick(q.key)} label={q.label} className={chip} />
+            ))}
+          </div>
+        )}
 
         {/* ── THE ROLLING WINDOWS. A DIFFERENT KIND OF PERIOD, DRAWN DIFFERENTLY ON PURPOSE. ─────────
             "Last 30 days" and "This month" are not two spellings of one thing, and a reader who cannot

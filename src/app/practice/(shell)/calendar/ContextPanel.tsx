@@ -11,11 +11,13 @@ import {
 } from "./planner-ui";
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// CP-PLAN-002 s7 -- THE RIGHT-SIDE CONTEXTUAL PANEL.
+// CP-PLAN-002 s7 -- THE DAY/SESSION CONTEXT, which CPR-PLN-002 s5.3 now mounts INSIDE the Day
+// Inspector's Overview tab rather than as a card of its own.
 //
 // "When a day/session is selected, show a contextual panel RATHER THAN FORCING NAVIGATION AWAY", with a
 // day/session header, a capacity summary, a compact time-ordered patient list, quick actions and a
-// conflict state.
+// conflict state. The outer chrome belongs to DayInspector; this component renders content only, so the
+// inspector stays ONE bounded panel and not a stack of nested cards.
 //
 // ⚠ THE CAPACITY FIGURES ARE THE PRACTITIONER'S OWN DIARY AND THE PANEL SAYS SO. CAPACITY_BASIS_NOTE is
 // rendered under them every time, for the same reason TRAVEL_BASIS_NOTE is rendered under the travel
@@ -42,7 +44,7 @@ export default function ContextPanel({ day, session, canManage, urlState, onBook
   const dayCapacity = day.capacity;
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-4">
+    <div className="border-t border-gray-100 pt-3">
       {/* ── HEADER: date, location, session, time ─────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-baseline gap-2">
         <h2 className="text-[14px] font-bold text-gray-900">
@@ -249,13 +251,15 @@ export default function ContextPanel({ day, session, canManage, urlState, onBook
               className="rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
               Open the day
             </Link>
-            {/* ⚠ BOOKING A PATIENT IS THE APPOINTMENT BOOK'S JOB AND IT IS ON THIS SAME ROUTE. This is a
-                jump to it, not a second booking form -- s8 forbids a second surface over one store, and
-                a duplicate form is exactly that. */}
-            <a href="#appointment-book"
+            {/* ⚠ BOOKING A PATIENT IS THE APPOINTMENT BOOK'S JOB, AND CPR-PLN-002 s7 PUTS THE BOOK FORM
+                IN DAY MODE. This is a jump to it -- to the Day view when another view is open, to the
+                anchor when the Day view already is -- not a second booking form: s8 forbids a second
+                surface over one store, and a duplicate form is exactly that. */}
+            <Link scroll={false}
+              href={`${plannerHref({ ...urlState, view: "day", date: day.date, from: null, to: null })}#appointment-book`}
               className="rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
               Book a patient
-            </a>
+            </Link>
           </div>
           <p className="mt-1 text-[11px] text-gray-400">
             Blocking time and changing the regular week are done in Practice Setup. This panel does not
@@ -263,7 +267,7 @@ export default function ContextPanel({ day, session, canManage, urlState, onBook
           </p>
         </>
       )}
-    </section>
+    </div>
   );
 }
 

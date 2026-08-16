@@ -1,15 +1,21 @@
-import Link from "next/link";
 import { APPOINTMENT_KINDS } from "@/lib/practice/calendar";
 
-// CPR-CAL-001 s12 -- the summary cards, the load, the follow-up overview and the briefing.
+// CPR-CAL-001 s12, cut down to CPR-PLN-002 s7's "Day mode compact summary".
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// THE DONUT IS THE ONLY THING HERE THAT GOES, AND IT IS REPLACED RATHER THAN DELETED.
+// TWO CARDS REMAIN OF FOUR, AND THE OTHER TWO WERE ROUTED, NOT DROPPED.
 //
-// On the registration screen "82% utilised" was refused because capacity was recorded nowhere. Here it
-// IS: an availability slot has a start and an end. So the numbers behind the donut are real -- and the
-// honest rendering of them is "7h 23m of 10h 00m", which says everything 82% says AND says what it is a
-// percentage of. That last part is the whole difference on a morning when only two hours were available.
+//   Follow-ups        the Day Inspector's Follow-ups tab, and the board reachable from it. A second
+//                     overview card here was the duplicated day-orientation s3 complains of.
+//   Before you start  day orientation, which s2 gives to the Command Centre. The one deterministic
+//                     planning warning it carried -- bookings by name only, with no record attached --
+//                     lives on in the Day Inspector's Checks tab, where s7 says such warnings belong.
+//
+// THE DONUT STAYS REPLACED RATHER THAN RESTORED. On the registration screen "82% utilised" was refused
+// because capacity was recorded nowhere. Here it IS: an availability slot has a start and an end. So
+// the numbers behind the comp's donut are real -- and the honest rendering of them is "7h 23m of
+// 10h 00m", which says everything 82% says AND says what it is a percentage of. That last part is the
+// whole difference on a morning when only two hours were available.
 //
 // On a day with no availability defined, the panel says so rather than dividing by an assumption.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -22,7 +28,7 @@ export default function OperationsHeader({ c }: { c: any }) {
   const s = c.summary;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-4">
+    <div className="grid gap-4 lg:grid-cols-2">
       {/* ── Today's clinic (comp: five figures in a row) ────────────────────────────────────────── */}
       <section className={card}>
         <h2 className="text-[14px] font-bold text-gray-900">
@@ -31,7 +37,7 @@ export default function OperationsHeader({ c }: { c: any }) {
         <p className="mt-0.5 text-[12px] text-gray-500">{c.day}</p>
         {/* EACH FIGURE IN ITS OWN TYPE'S COLOUR, taken from APPOINTMENT_KINDS rather than chosen here --
             so the "3 New" in this row is the same indigo as every new-patient block on the timeline
-            below it, and a hue can never mean one thing in the header and another in the grid. */}
+            above it, and a hue can never mean one thing in the summary and another in the grid. */}
         <div className="mt-3 grid grid-cols-5 gap-1">
           {[
             ["Booked", s.booked, "var(--cp-slate-700)"],
@@ -76,57 +82,6 @@ export default function OperationsHeader({ c }: { c: any }) {
             </p>
           </>
         )}
-      </section>
-
-      {/* ── Follow-up overview ─────────────────────────────────────────────────────────────────── */}
-      <section className={card}>
-        <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-[14px] font-bold text-gray-900">Follow-ups</h2>
-          <Link href="/practice/follow-ups" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
-            Board
-          </Link>
-        </div>
-        <ul className="mt-2 flex flex-col">
-          {[
-            ["Due today", c.followUps.dueToday, "var(--cp-info)"],
-            ["Overdue", c.followUps.overdue, "var(--cp-error)"],
-            ["Booked in", c.followUps.booked, "var(--cp-success)"],
-            ["Still to book", c.followUps.needBooking, "var(--cp-warning)"],
-          ].map(([k, v, colour]) => (
-            // THE FIGURE CARRIES THE COLOUR, NOT ONLY THE DOT. A 1.5px dot beside a black number is a
-            // legend; the comp colours the number itself, so "3 overdue" is red at a glance. Overdue and
-            // still-to-book take their hue ONLY when non-zero -- a red nought teaches people to stop
-            // seeing red, which is the one colour on this screen that has to keep working.
-            <li key={String(k)} className="flex items-baseline gap-2 border-b border-gray-100 py-1 last:border-0">
-              <span className="h-2 w-2 rounded-full"
-                style={{ background: (v as number) > 0 ? colour as string : "var(--cp-slate-300)" }} />
-              <span className="text-[13px] text-gray-700">{k as string}</span>
-              <span className="ml-auto text-[15px] font-bold"
-                style={{ color: (v as number) > 0 ? colour as string : "var(--cp-slate-300)" }}>
-                {v as number}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      {/* ── The briefing (comp: an AI panel) ───────────────────────────────────────────────────── */}
-      <section className={card}>
-        <h2 className="text-[14px] font-bold text-gray-900">Before you start</h2>
-        {c.briefing.length === 0 ? (
-          <p className="mt-2 text-[13px] text-gray-400">Nothing booked.</p>
-        ) : (
-          <ul className="mt-2 flex flex-col gap-1">
-            {c.briefing.map((b: string, i: number) => (
-              <li key={i} className="text-[13px] text-gray-700">{b}</li>
-            ))}
-          </ul>
-        )}
-        <p className="mt-2 text-[11px] text-gray-500">
-          Counted from the diary. The design calls this an AI briefing and adds &ldquo;3 MRI results
-          likely require discussion&rdquo; &mdash; that is a clinical judgement, and not one this product
-          will make for you.
-        </p>
       </section>
     </div>
   );

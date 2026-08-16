@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { PlannerRange } from "@/lib/practice/planner";
 import {
-  TRAVEL_BASIS_LABEL, activityLabel,
+  PLANNER_QUICK_ACTIONS, PLANNER_STATE_LABEL, TRAVEL_BASIS_LABEL, activityLabel,
   type PlannerFilters as Filters, type PlannerPeriod,
 } from "@/lib/practice/planner-constants";
 import {
-  hoursMinutes, longDate, hhmm, type LocationOption, type Notice, type PlannerUrlState,
+  hhmm, hoursMinutes, longDate, toneFor, LEGEND_TYPES, STATE_CHIP,
+  type LocationOption, type Notice, type PlannerUrlState,
 } from "./planner-ui";
 import PlannerNavigator from "./PlannerNavigator";
 import PlannerFilters, { type SearchHit } from "./PlannerFilters";
@@ -16,30 +17,46 @@ import WeekPanel from "./WeekPanel";
 import MonthGrid from "./MonthGrid";
 import AgendaList from "./AgendaList";
 import DayPlanner from "./DayPlanner";
-import RightRail from "./RightRail";
+import DayInspector from "./DayInspector";
 import AddActivityForm, { type AddDraft } from "./AddActivityForm";
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// THE PRACTICE PLANNER -- CPR-V5-005's three columns, now CP-PLAN-002's four views over one payload.
+// THE PRACTICE PLANNER -- CP-PLAN-002's four views over one payload, compressed by CPR-PLN-002.
+//
+// ⚠ CPR-PLN-002 s6: CHANGING THE MODE CHANGES THE COMPOSITION, not a label over the same long page.
+//
+//   week    My Week rail + selected-day canvas + ONE Day Inspector. Nothing else. The appointment
+//           book, the timeline and the calendar grid are NOT stacked underneath it any more.
+//   day     the appointment book -- compact clinic summary, availability, route, timeline, booking
+//           console -- then the activity canvas and the inspector. That stack mounts HERE AND ONLY
+//           HERE: page.tsx builds it only for this view and hands it in as `dayOperations`.
+//   month   the calendar grid + the inspector for whichever date is selected. The grid lives in this
+//           mode and is not appended below Week -- one calendar, not two.
+//   agenda  the chronological list, respecting the filters and search. No inspector column: s6 gives
+//           Agenda the list and the filters, and a permanent side card is the vertical length s3 is
+//           correcting.
+//
+// s5.3's REPLACEMENTS for the old six-card right rail: the AI Planner statement and the Legend are
+// compact disclosures on this header (no permanent card while the capability does not exist), and the
+// Quick Actions are + Add Activity's type menu (one control, type preselected).
 //
 // ⚠ TYPES ONLY FROM planner.ts. `import type` is erased before the browser bundle is built; a VALUE
 // imported from planner.ts here would drag activity.ts -> metrics.ts -> access.ts -> `next/headers` into
 // the client and break `next build` on pages nobody touched, with tsc and eslint both passing. Every
 // constant this tree renders comes from planner-constants.ts or activity-constants.ts.
 //
-// ⚠ ONE PAYLOAD, FOUR LAYOUTS. `range` is the SAME PlannerDay[] in every branch below. Day draws one of
-// them in detail, Week draws seven in a rail plus one in detail, Month draws the grid and Agenda draws
-// the list -- and every count any of them shows is arithmetic over the same rows, which is why clicking
-// a month cell's "8 booked" can open those eight.
+// ⚠ ONE PAYLOAD, FOUR LAYOUTS. `range` is the SAME PlannerDay[] in every branch below, and every count
+// any view shows is arithmetic over the same rows -- which is why clicking a month cell's "8 booked"
+// can open those eight.
 //
 // THE STATE IS THE URL. The selected day, the selected session, the view, the period and every filter
-// are query parameters, so the appointment book below this planner reads the same `?date=`, every
-// control is linkable, and a practitioner cannot end up editing Thursday while reading Wednesday.
+// are query parameters, so the appointment book in Day mode reads the same `?date=`, every control is
+// linkable, and a practitioner cannot end up editing Thursday while reading Wednesday.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export default function PlannerWorkspace({
   range, period, selectedDate, selectedSessionId, filters, urlState, canManage, locations,
-  followUps, followUpsUnavailable, search, searchUnavailable, searchTruncated,
+  followUps, followUpsUnavailable, search, searchUnavailable, searchTruncated, dayOperations,
 }: {
   range: PlannerRange;
   period: PlannerPeriod;
@@ -54,11 +71,16 @@ export default function PlannerWorkspace({
   search: { query: string; hits: SearchHit[] } | null;
   searchUnavailable: string | null;
   searchTruncated: boolean;
+  /** Day mode's appointment book, built by page.tsx ONLY when the view is `day`. Null otherwise. */
+  dayOperations?: ReactNode;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [draft, setDraft] = useState<AddDraft | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(false);
+  const [typeMenuOpen, setTypeMenuOpen] = useState(false);
 
   const day = range.days.find(d => d.date === selectedDate) ?? range.days[0];
   const session = selectedSessionId
@@ -114,6 +136,7 @@ export default function PlannerWorkspace({
 
   const openAdd = (d: Partial<AddDraft> = {}) => {
     setNotice(null);
+    setTypeMenuOpen(false);
     setDraft({
       activityType: d.activityType ?? "outpatient_clinic",
       title: d.title ?? "",
@@ -124,45 +147,32 @@ export default function PlannerWorkspace({
     });
   };
 
+  const onBook = (date: string, startMinute: number | null) => openAdd({
+    planDate: date,
+    start: startMinute === null ? "09:00" : hhmm(startMinute),
+    end: startMinute === null ? "12:00" : hhmm(Math.min(1440, startMinute + 180)),
+  });
+
   const w = range.workload;
   const detail = (
-    <div className="flex min-w-0 flex-col gap-4">
-      {draft && canManage && (
-        <AddActivityForm
-          draft={draft} setDraft={setDraft} locations={locations}
-          busy={busy === "add"} notice={notice?.subject === "add" ? notice : null}
-          onSubmit={async body => { const ok = await run("plan", body, "add"); if (ok) setDraft(null); }}
-          onCancel={() => setDraft(null)}
-        />
-      )}
-      <DayPlanner
-        day={day} week={range} canManage={canManage} locations={locations}
-        busy={busy} notice={notice} run={run}
-        onAdd={() => openAdd({ planDate: day.date })}
-        filters={filters} urlState={urlState} selectedSessionId={selectedSessionId}
-      />
-    </div>
+    <DayPlanner
+      day={day} week={range} canManage={canManage} locations={locations}
+      busy={busy} notice={notice} run={run}
+      onAdd={() => openAdd({ planDate: day.date })}
+      filters={filters} urlState={urlState} selectedSessionId={selectedSessionId}
+    />
   );
 
-  const rail = (
-    <RightRail
-      day={day} week={range} canManage={canManage}
-      followUps={followUps} followUpsUnavailable={followUpsUnavailable}
-      // The title is prefilled with the type's own name so a quick action is ONE interaction plus a
-      // confirmation, not a form with an empty required field.
-      onQuickAdd={activityType => openAdd({ activityType, title: activityLabel(activityType) })}
-      session={session} urlState={urlState}
-      onBook={(date, startMinute) => openAdd({
-        planDate: date,
-        start: startMinute === null ? "09:00" : hhmm(startMinute),
-        end: startMinute === null ? "12:00" : hhmm(Math.min(1440, startMinute + 180)),
-      })}
+  const inspector = (
+    <DayInspector
+      day={day} week={range} session={session} canManage={canManage} urlState={urlState}
+      onBook={onBook} followUps={followUps} followUpsUnavailable={followUpsUnavailable}
     />
   );
 
   return (
     <div className="flex flex-col gap-4">
-      {/* ── HEADER: what this screen is, and the week's totals when a week is what is on show ──── */}
+      {/* ── HEADER: what this screen is, the entry points, and the period's totals ──────────────── */}
       <header className="rounded-2xl border border-gray-200 bg-white p-4">
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-0">
@@ -174,22 +184,97 @@ export default function PlannerWorkspace({
           </div>
 
           <div className="ml-auto flex flex-wrap items-center gap-1.5">
-            {/* s3 asks for AI Planner in the header. It is a jump to the panel, which says honestly what
-                it can and cannot do -- it is not a second, different claim about the same thing. */}
-            <a href="#planner-ai"
-              className="rounded-lg border border-[var(--cp-primary-border)] bg-[var(--cp-primary)]/5 px-3 py-1.5 text-[13px] font-semibold text-[var(--cp-primary-deep)] hover:bg-[var(--cp-primary)]/10">
+            {/* s5.1's AI Planner entry point. A DISCLOSURE, not a card: s5.3 says that while the
+                capability is unavailable it must not hold a large persistent card, and the panel it
+                opens says honestly what does and does not exist. */}
+            <button type="button" onClick={() => { setAiOpen(o => !o); setLegendOpen(false); }}
+              aria-expanded={aiOpen}
+              className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold ${aiOpen
+                ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
+                : "border-[var(--cp-primary-border)] bg-[var(--cp-primary)]/5 text-[var(--cp-primary-deep)] hover:bg-[var(--cp-primary)]/10"}`}>
               AI Planner
-            </a>
+            </button>
+            {/* s5.3: the Legend is a compact popover opened from a control, not a permanent tall card. */}
+            <button type="button" onClick={() => { setLegendOpen(o => !o); setAiOpen(false); }}
+              aria-expanded={legendOpen}
+              className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold ${legendOpen
+                ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
+                : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
+              Legend
+            </button>
             {canManage && (
-              <button type="button" onClick={() => openAdd()}
-                className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)]">
-                + Add Activity
-              </button>
+              <div className="relative flex">
+                <button type="button" onClick={() => openAdd()}
+                  className="rounded-l-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)]">
+                  + Add Activity
+                </button>
+                {/* s5.3: Quick Actions are consolidated here -- the same add flow with the type
+                    preselected, one control instead of a permanent card of eight buttons. */}
+                <button type="button" onClick={() => setTypeMenuOpen(o => !o)}
+                  aria-expanded={typeMenuOpen} aria-label="Add an activity of a specific type"
+                  className="rounded-r-lg border-l border-white/30 bg-[var(--cp-primary)] px-2 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)]">
+                  ⌄
+                </button>
+                {typeMenuOpen && (
+                  <div className="absolute right-0 top-full z-20 mt-1 w-60 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg">
+                    {PLANNER_QUICK_ACTIONS.map(q => (
+                      <button key={String(q.key)} type="button"
+                        onClick={() => openAdd({ activityType: String(q.key), title: activityLabel(String(q.key)) })}
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${toneFor(String(q.key)).dot}`} aria-hidden />
+                        <span className="min-w-0 truncate">{q.label}</span>
+                      </button>
+                    ))}
+                    <p className="px-2.5 py-1 text-[11px] text-gray-400">
+                      Each opens the add form with the type filled in. Nothing is written until you add it.
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
 
-        {/* ── PERIOD SUMMARY. COUNTS ONLY -- no percentage, no target. ──────────────────────────── */}
+        {aiOpen && (
+          <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <p className="text-[12px] text-gray-700">
+              <span className="font-bold">AI Planner -- not yet available.</span>{" "}
+              This planner does not suggest slots, rearrange your week or judge whether a day is well
+              arranged. That is a future capability and nothing behind this control does it yet.
+            </p>
+            <p className="mt-1 text-[12px] text-gray-500">
+              What is checked today is arithmetic, not advice: overlaps, and the travel allowance you
+              typed against each location. Those checks live in the Day Inspector&apos;s Checks tab, and
+              the engine refuses a conflicting move when you attempt one.
+            </p>
+          </div>
+        )}
+
+        {legendOpen && (
+          <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <ul className="grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-4">
+              {LEGEND_TYPES.map(t => (
+                <li key={t} className="flex items-center gap-1.5 text-[11px] text-gray-600">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${toneFor(t).dot}`} aria-hidden />
+                  <span className="min-w-0 truncate">{activityLabel(t)}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-2 flex flex-wrap gap-1.5 border-t border-gray-200 pt-2">
+              {Object.entries(PLANNER_STATE_LABEL).map(([state, label]) => (
+                <span key={state} className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${STATE_CHIP[state] ?? STATE_CHIP.planned}`}>
+                  {label}
+                </span>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-gray-400">
+              Colour only makes the week scannable. Every block also says its type in words.
+            </p>
+          </div>
+        )}
+
+        {/* ── PERIOD SUMMARY. COUNTS ONLY -- no percentage, no target. On small widths a zero that
+            says nothing steps aside (s5.1); every figure is back the moment it is non-zero. ───────── */}
         <div className="mt-3 flex flex-wrap items-stretch gap-x-6 gap-y-3 border-t border-gray-100 pt-3">
           <Figure label="Showing" value={`${longDate(range.fromDate)} - ${longDate(range.toDate)}`} wide />
           {w === null ? (
@@ -198,22 +283,28 @@ export default function PlannerWorkspace({
             </p>
           ) : (
             <>
-              <Figure label="Activities" value={String(w.activityCount)} />
+              <Figure label="Activities" value={String(w.activityCount)}
+                quietOnSmall={w.activityCount === 0} />
               <Figure label="Appointments" value={String(w.appointmentCount)}
+                quietOnSmall={w.appointmentCount === 0}
                 note={w.voidAppointmentCount > 0 ? `${w.voidAppointmentCount} cancelled or missed` : undefined} />
               <Figure label="Sessions" value={String(w.sessionCount)}
+                quietOnSmall={w.sessionCount === 0}
                 note={w.sessionsNotGenerated > 0 ? `${w.sessionsNotGenerated} with no generated times` : undefined} />
               {/* ⚠ A DASH, NOT A NOUGHT, when nothing in the period could be counted. */}
               <Figure label="Free" value={w.availableCount === null ? "-" : String(w.availableCount)}
                 note={w.availableCount === null ? "not calculable" : "in your own diary"} />
               <Figure label="Days used" value={String(w.daysWithActivities)}
                 note={`of ${range.days.length} days`} />
-              <Figure label="Locations" value={String(w.locationCount)} />
+              <Figure label="Locations" value={String(w.locationCount)}
+                quietOnSmall={w.locationCount === 0} />
               <Figure label="Conflicts" value={String(w.conflictCount)}
+                quietOnSmall={w.conflictCount === 0}
                 tone={w.conflictCount > 0 ? "bad" : undefined} />
               {/* ⚠ NEVER "Travel Time". This is the sum of the buffers the practitioner typed against
-                  each location. See TRAVEL_BASIS_LABEL and the AI Planner panel's note. */}
-              <Figure label={TRAVEL_BASIS_LABEL} value={hoursMinutes(w.travelBufferMinutes)} note="not measured" />
+                  each location. See TRAVEL_BASIS_LABEL and the AI Planner disclosure's note. */}
+              <Figure label={TRAVEL_BASIS_LABEL} value={hoursMinutes(w.travelBufferMinutes)} note="not measured"
+                quietOnSmall={w.travelBufferMinutes === 0} />
             </>
           )}
         </div>
@@ -252,40 +343,58 @@ export default function PlannerWorkspace({
         </p>
       )}
 
-      {/* ── THE FOUR VIEWS ─────────────────────────────────────────────────────────────────────── */}
+      {/* THE ADD FLOW, above whichever view is open, so pressing + Add Activity never opens a form
+          somewhere below the fold. One form for every entry point -- header, type menu, day cards,
+          canvas and inspector all call the same openAdd. */}
+      {draft && canManage && (
+        <AddActivityForm
+          draft={draft} setDraft={setDraft} locations={locations}
+          busy={busy === "add"} notice={notice?.subject === "add" ? notice : null}
+          onSubmit={async body => { const ok = await run("plan", body, "add"); if (ok) setDraft(null); }}
+          onCancel={() => setDraft(null)}
+        />
+      )}
+
+      {/* ── THE FOUR COMPOSITIONS (s6) ─────────────────────────────────────────────────────────── */}
       {period.view === "week" ? (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)_330px]">
           <WeekPanel week={range} selectedDate={day.date} canManage={canManage}
             onAdd={date => openAdd({ planDate: date })} urlState={urlState} />
           {detail}
-          {rail}
+          {inspector}
         </div>
       ) : period.view === "day" ? (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
-          {detail}
-          {rail}
+        <div className="flex flex-col gap-4">
+          {/* s6: Day mode's primary content is the timeline, the appointments, the availability and
+              the booking controls; the activity canvas and the inspector follow as context. */}
+          {dayOperations}
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
+            {detail}
+            {inspector}
+          </div>
         </div>
       ) : period.view === "month" ? (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
           <MonthGrid range={range} period={period} filters={filters} urlState={urlState}
             selectedDate={day.date} />
-          {rail}
+          {inspector}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
-          <AgendaList range={range} period={period} filters={filters} urlState={urlState} />
-          {rail}
-        </div>
+        // AGENDA: the chronological list and nothing beside it. The filters and search above are its
+        // controls; a permanent side panel here is exactly the vertical furniture s3 removes.
+        <AgendaList range={range} period={period} filters={filters} urlState={urlState} />
       )}
     </div>
   );
 }
 
-function Figure({ label, value, note, tone, wide }: {
+function Figure({ label, value, note, tone, wide, quietOnSmall }: {
   label: string; value: string; note?: string; tone?: "bad"; wide?: boolean;
+  /** s5.1: a zero that does not help scanning is hidden on small widths only. Never on desktop. */
+  quietOnSmall?: boolean;
 }) {
   return (
-    <div className={wide ? "min-w-[220px]" : ""}>
+    <div className={`${wide ? "min-w-[220px]" : ""} ${quietOnSmall ? "max-md:hidden" : ""}`}>
       <p className={`text-[15px] font-bold ${tone === "bad" ? "text-rose-700" : "text-gray-900"}`}>{value}</p>
       <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{label}</p>
       {note && <p className="text-[11px] text-gray-400">{note}</p>}

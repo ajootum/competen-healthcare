@@ -3,10 +3,22 @@
 import { useState } from "react";
 import Link from "next/link";
 
-// The diary console (CPR-V2-003 V3): today's schedule, the waiting queue, availability blocks and quick
-// actions -- book, walk-in, check in, cancel, no-show, complete, and queue movement. Every action calls
+// The diary console (CPR-V2-003 V3), Day mode only since CPR-PLN-002: the day's schedule, availability
+// blocks and the booking form -- book, walk-in, check in, cancel, no-show, complete. Every action calls
 // the engine through the API and re-fetches the day, so what renders is always what the database holds;
 // nothing is optimistically invented client-side on a clinical diary.
+//
+// ⚠ TWO THINGS THIS CONSOLE POINTS AT AND NO LONGER DOES (CPR-PLN-002 s8):
+//   the live queue        Current Session's, since HFE-001 s7.2. The Waiting card below is a count that
+//                         routes there, never a second queue console.
+//   starting a consult    Current Session's too. This console used to create encounters from an arrived
+//                         booking; start, pause and finish are Current Session's verbs, so an arrived
+//                         patient's row now points there instead. Check-in stays HERE, because marking
+//                         an arrival is appointment-book work; what happens to the arrived patient is not.
+//
+// ⚠ AND ONE CONTROL IT NO LONGER DUPLICATES: its own date strip. The planner's navigator above this
+// console owns "which day am I looking at" (CPR-PLN-002 s5.1), and a second date strip here pointed at
+// URLs that dropped the view -- two date controls on one screen is two ideas of the day being edited.
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -33,11 +45,11 @@ const STATUS_TONE: Record<string, string> = {
 
 const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 
-export default function CalendarConsole({ date, timezone, canManage, canQueue, canStartEncounter, initial, locations = [] }: {
+export default function CalendarConsole({ date, timezone, canManage, initial, locations = [] }: {
   date: string;
   /** The practice's own timezone -- every time on this console renders in it, never in UTC slices. */
   timezone: string;
-  canManage: boolean; canQueue: boolean; canStartEncounter: boolean; initial: Day;
+  canManage: boolean; initial: Day;
   /** Where this practice works. Empty when none has been set up, and the picker then hides itself. */
   locations?: { id: string; name: string; type: string; facility: { name: string } | null }[];
 }) {
@@ -84,28 +96,9 @@ export default function CalendarConsole({ date, timezone, canManage, canQueue, c
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }),
     }), label);
 
-  // The queueMove handler left with the queue card (HFE-001 s7.2): queue transitions are Current
-  // Session's verbs now, through the same /api/v1/practice/queue route that page calls.
-
-  // FLOW-001 pathway 1: booked patient arrives -> open the encounter. Resume-before-create lives in the
-  // engine, so clicking this twice lands on the same encounter rather than forking the visit.
-  async function startEncounter(appointmentId: string, patientId: string, appointmentType: string) {
-    setBusy(true); setNotice(null);
-    const res = await fetch("/api/v1/practice/encounters", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        patientId, appointmentId,
-        pathway: appointmentType === "walk_in" ? "new_walk_in" : appointmentType === "scheduled_followup" ? "scheduled_followup" : "booked",
-        encounterMode: appointmentType === "teleconsultation" ? "teleconsultation" : appointmentType === "home_visit" ? "home_visit" : "in_person",
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setNotice({ kind: "err", text: data?.error?.message ?? data?.error ?? "That did not work." });
-      setBusy(false); return;
-    }
-    window.location.assign(`/practice/encounters/${data.encounter.id}`);
-  }
+  // The queueMove handler left with the queue card (HFE-001 s7.2), and startEncounter left with
+  // CPR-PLN-002 s8: queue transitions AND starting a consultation are Current Session's verbs now.
+  // What remains here is the appointment lifecycle -- which is the book's.
 
   // ⚠ IN THE PRACTICE TIMEZONE, not a UTC slice. The old `.toISOString().slice(11, 16)` rendered a
   // correctly-stored Kampala 09:30 as 06:30 on this one console while every other screen said 09:30.
@@ -114,25 +107,9 @@ export default function CalendarConsole({ date, timezone, canManage, canQueue, c
 
   return (
     <div className="max-w-6xl">
-      <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Calendar</h1>
-          {/* The label used to say UTC while fmt() rendered practice time -- a lie in small print. */}
-          <p className="text-[13px] text-gray-500">{date} &middot; times in the practice&apos;s timezone</p>
-        </div>
-        <div className="flex gap-1.5">
-          {[-1, 0, 1].map(off => {
-            const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + off);
-            const iso = d.toISOString().slice(0, 10);
-            return (
-              <a key={off} href={`/practice/calendar?date=${iso}`}
-                className={`rounded-lg px-3 py-1.5 text-[12px] font-medium ${off === 0 ? "bg-[var(--cp-primary)] text-white" : "border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                {off === -1 ? "‹ Prev" : off === 0 ? date : "Next ›"}
-              </a>
-            );
-          })}
-        </div>
-      </div>
+      {/* The label used to say UTC while fmt() rendered practice time -- a lie in small print. The
+          date strip that sat beside it is gone: the planner's navigator owns the day. */}
+      <p className="text-[13px] text-gray-500">{date} &middot; times in the practice&apos;s timezone</p>
 
       {notice && (
         <p className={`mt-3 rounded-lg px-3 py-2 text-[12px] ${notice.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>
@@ -156,13 +133,16 @@ export default function CalendarConsole({ date, timezone, canManage, canQueue, c
                     <span className="text-[11px] text-gray-400">{a.appointment_type.replace(/_/g, " ")} · {a.duration_minutes}m</span>
                     <span className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold ${STATUS_TONE[a.status] ?? "bg-gray-100 text-gray-500"}`}>{a.status}</span>
                   </div>
-                  {canStartEncounter && a.status === "ARRIVED" && (
+                  {a.status === "ARRIVED" && (
                     <div className="mt-1.5">
                       {a.patient_id ? (
-                        <button disabled={busy} onClick={() => startEncounter(a.id, a.patient_id, a.appointment_type)}
-                          className="rounded bg-[var(--cp-primary)] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
-                          Open encounter
-                        </button>
+                        // ⚠ A POINTER, NOT A CONSOLE (CPR-PLN-002 s8). This patient is checked in and
+                        // queued; starting, pausing and finishing the consultation is Current Session's
+                        // work, and there is exactly one place that does it.
+                        <Link href="/practice/today"
+                          className="rounded border border-[var(--cp-primary-border)] bg-[var(--cp-primary)]/5 px-2.5 py-1 text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:bg-[var(--cp-primary)]/10">
+                          Start the consultation in Current Session &rarr;
+                        </Link>
                       ) : (
                         <p className="text-[10px] text-gray-400">
                           Diary entry only — register this person in Patients to open a clinical record.
