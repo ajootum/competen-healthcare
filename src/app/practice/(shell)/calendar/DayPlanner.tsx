@@ -64,7 +64,8 @@ export default function DayPlanner({
             ? day.locations.map(l => l.name).join(" → ")
             : "no location on this day"}
         </span>
-        <span className="text-[12px] text-gray-400">· {week.timezone}</span>
+        {/* The timezone is on the navigator's chip once for the whole screen -- CPR-PLAN-002 s3 asks
+            for it in the shell and NOT repeated in every card. */}
         {w && w.firstStartMinute !== null && w.lastEndMinute !== null && (
           <span className="ml-auto text-[12px] font-semibold text-gray-600 tabular-nums">
             {hhmm(w.firstStartMinute)} - {hhmm(w.lastEndMinute)}
@@ -280,10 +281,17 @@ function ActivityBlock({ activity: a, conflicted, canManage, locations, week, bu
   const tone = toneFor(a.activityType);
   const cancelled = a.state === "cancelled";
 
+  // CPR-PLAN-002 s5.2: the CURRENT activity outranks historical ones. Read off the recorded state --
+  // started and not ended -- never off the browser's clock, which the server render does not share.
+  // A finished block steps back to grey; a running one carries the ring.
+  const stateEmphasis = a.state === "running"
+    ? `border-emerald-300 ring-1 ring-emerald-200 ${tone.soft}`
+    : a.state === "done" ? "border-gray-200 bg-gray-50/70" : `border-gray-200 ${tone.soft}`;
+
   return (
     <article className={`flex gap-3 rounded-xl border px-3 py-2.5 ${conflicted
       ? "border-rose-300 bg-rose-50/40"
-      : cancelled ? "border-gray-200 bg-gray-50" : `border-gray-200 ${tone.soft}`}`}>
+      : cancelled ? "border-gray-200 bg-gray-50" : stateEmphasis}`}>
       <div className="w-12 shrink-0 pt-0.5 text-right">
         <p className={`text-[12px] font-bold tabular-nums ${cancelled ? "text-gray-400 line-through" : "text-gray-800"}`}>
           {hhmm(a.plannedStartMinute)}

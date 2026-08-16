@@ -1,12 +1,14 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { plannerForPeriod, scheduleSearch } from "@/lib/practice/planner";
 import {
-  plannerPeriod, isPlannerView, isPlannerDate, isPlannerShow,
+  plannerPeriod, isPlannerView, isPlannerDate, isPlannerShow, addDaysIso,
   DEFAULT_PLANNER_VIEW, NO_PLANNER_FILTERS, APPOINTMENT_TYPE_LABEL, APPOINTMENT_STATUS_LABEL,
+  AGENDA_DEFAULT_AHEAD_DAYS,
   type PlannerFilters,
 } from "@/lib/practice/planner-constants";
 import { ACTIVITY_TYPES } from "@/lib/practice/activity-constants";
@@ -85,7 +87,18 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   // fortnight from the one underneath it.
   const view = isPlannerView(params.view) ? params.view : DEFAULT_PLANNER_VIEW;
   const anchor = isPlannerDate(params.date) ? params.date : today;
-  const period = plannerPeriod(view, anchor, { from: params.from ?? null, to: params.to ?? null });
+  // ⚠ CPR-PLAN-002 s8.1: AN AGENDA NOBODY GAVE A PERIOD IS TODAY PLUS THE NEXT SEVEN DAYS, not the
+  // anchor's whole month. The old default was a 28-42 day dump, which is exactly the "long chronological
+  // dump" s1 names. A URL that DOES carry from/to -- a bookmark, the navigator's view switch, the
+  // Custom period control -- is honoured unchanged; only the bare default moved. Past days load on
+  // request through the list's own "Show earlier days", so the horizon starts at the day being looked
+  // at (s9: the agenda positions today OR the currently selected date), and HFE-04's bounded default
+  // holds without hiding anything anybody asked for.
+  const period = view === "agenda" && !params.from && !params.to
+    ? plannerPeriod(view, anchor, {
+      from: anchor, to: addDaysIso(anchor, AGENDA_DEFAULT_AHEAD_DAYS),
+    })
+    : plannerPeriod(view, anchor, { from: params.from ?? null, to: params.to ?? null });
 
   // A failed read comes back as every day flagged unavailable, with the database's own words in
   // `detail` -- never as a confident empty period. The screen renders that state rather than smoothing
@@ -176,23 +189,54 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       timelineDay(admin, shell.ctx, c.day, c.timezone),
     ]);
 
+    // ⚠ CPR-PLAN-002 s5.2 (2026-08-16): a day with nothing booked and no availability must not open on
+    // five empty full-width cards -- "empty states should collapse into a single concise inline state
+    // with the next useful action". The RIBBON, ROUTE, TIMELINE and the two SUMMARY cards say nothing
+    // on such a day and step aside; the BOOKING CONSOLE is the next useful action itself (it books the
+    // first patient), so it stays whatever the day holds. On any day with a booking or a slot, the full
+    // book renders exactly as CPR-PLN-002 froze it.
+    const bookEmpty = c.appointments.length === 0 && c.ribbon.length === 0;
+
     dayOperations = (
       <div className="flex flex-col gap-5">
         <section id="appointment-book" className="rounded-2xl border border-gray-200 bg-white p-4">
           <h2 className="text-[15px] font-bold text-gray-900">Appointment book</h2>
-          <p className="text-[12px] text-gray-500">
-            {c.day} — the patients booked into this day, their arrival and the availability around them.
-            Activities are what you plan; appointments are who is coming.
-          </p>
+          {bookEmpty ? (
+            <>
+              <p className="text-[12px] text-gray-600">
+                {c.day} has no patient booked into it and no availability generated for it. Both halves
+                were read; this is an empty day, not a failed one.
+              </p>
+              <p className="mt-1 text-[12px] text-gray-500">
+                Book the first patient in the console below, or{" "}
+                {canManage ? (
+                  <Link href="/practice/setup/availability" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                    set up availability in Practice Setup
+                  </Link>
+                ) : (
+                  <>have availability set up in Practice Setup</>
+                )}{" "}
+                so this day has bookable times. The availability ribbon, the route and the day&apos;s
+                summaries return the moment there is anything for them to say.
+              </p>
+            </>
+          ) : (
+            <p className="text-[12px] text-gray-500">
+              {c.day} — the patients booked into this day, their arrival and the availability around them.
+              Activities are what you plan; appointments are who is coming.
+            </p>
+          )}
         </section>
 
-        <AvailabilityRibbon c={{ ...c, kinds: SLOT_KINDS }} />
-        <WhereYouAre route={JSON.parse(JSON.stringify(route))} timezone={c.timezone} />
+        {!bookEmpty && <AvailabilityRibbon c={{ ...c, kinds: SLOT_KINDS }} />}
+        {!bookEmpty && <WhereYouAre route={JSON.parse(JSON.stringify(route))} timezone={c.timezone} />}
 
-        <Timeline
-          timeline={JSON.parse(JSON.stringify(timeline))}
-          canManage={canManage}
-        />
+        {!bookEmpty && (
+          <Timeline
+            timeline={JSON.parse(JSON.stringify(timeline))}
+            canManage={canManage}
+          />
+        )}
 
         <CalendarConsole
           date={c.day}
@@ -204,8 +248,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
 
         {/* s7: today's clinic summary and time booked, as Day mode's COMPACT summary -- after the
             working surfaces, because s10 puts primary content before summaries. */}
-        <OperationsHeader c={c} />
-        <CalendarFooter c={c} />
+        {!bookEmpty && <OperationsHeader c={c} />}
+        {!bookEmpty && <CalendarFooter c={c} />}
       </div>
     );
   }

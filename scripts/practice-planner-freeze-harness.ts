@@ -5,6 +5,21 @@
  * These pins ARE the freeze: the next change to the planner's information architecture arrives holding
  * a defect or a genuinely new requirement, or this file goes red.
  *
+ * ⚠ AND ONE ARRIVED. CPR-PLAN-002 "Practice Planner Views" (2026-08-16 -- PLAN, not PLN; a different
+ * document) is the newer specification and governs the four views. Where its text moves a frozen
+ * property the pin is REPOINTED below with the section that moved it; where it is silent, PLN-002's
+ * freeze stands untouched. What it moved, and what it did not:
+ *
+ *   REPOINTED  1h  Agenda gains s8.3's ITEM PREVIEW -- selection-gated, never permanent. The
+ *                  PLN-002 half ("no PERMANENT side panel, no Day Inspector, no day canvas under
+ *                  Agenda") still holds and is still asserted.
+ *   NEW (s6)       the CPR-PLAN-002 pins -- the PAST/TODAY/UPCOMING agenda, one-line session rows
+ *                  with names behind the chevron, the bounded Next-7 default, the Day view's
+ *                  empty-book collapse, week/month overflow bounds, the compact filter control.
+ *   UNMOVED        the Day-gated appointment book, one Day Inspector, no queue, no encounter
+ *                  creation, one date control, the 24-hour clock, every honesty sentence, and the
+ *                  Week default. CPR-PLAN-002 says nothing against any of them.
+ *
  * WHAT IT PINS -- PROPERTIES, NEVER TALLIES. This repo's recorded lesson is that a pinned count goes
  * red against correct work; every assertion below is about structure (which mode mounts what),
  * sentences (the honesty language that must keep rendering), or control inventory (what exists, what
@@ -28,7 +43,10 @@
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { PLANNER_VIEWS, DEFAULT_PLANNER_VIEW } from "../src/lib/practice/planner-constants";
+import {
+  PLANNER_VIEWS, DEFAULT_PLANNER_VIEW,
+  AGENDA_BANDS, AGENDA_QUICK_RANGES, AGENDA_DEFAULT_AHEAD_DAYS,
+} from "../src/lib/practice/planner-constants";
 
 let pass = 0;
 const fails: string[] = [];
@@ -59,6 +77,11 @@ async function main() {
   const opsHeader = src("OperationsHeader.tsx");
   const ribbon = src("AvailabilityRibbon.tsx");
   const context = src("ContextPanel.tsx");
+  const agenda = src("AgendaList.tsx");
+  const weekPanel = src("WeekPanel.tsx");
+  const monthGrid = src("MonthGrid.tsx");
+  const filtersBar = src("PlannerFilters.tsx");
+  const actions = src("ActivityActions.tsx");
   // Comment-free variants, for every pin about something being ABSENT.
   const pageC = stripComments(page);
   const workspaceC = stripComments(workspace);
@@ -67,14 +90,17 @@ async function main() {
   const opsHeaderC = stripComments(opsHeader);
   const ribbonC = stripComments(ribbon);
   const contextC = stripComments(context);
+  const agendaC = stripComments(agenda);
   ok("0b. control -- stripping comments removed something, so the absence pins are not scanning raw text",
-    pageC.length < page.length && consoleC.length < console_.length);
+    pageC.length < page.length && consoleC.length < console_.length && agendaC.length < agenda.length);
 
   // ⚠ THE SCAN'S OWN CONTROL, FIRST. Every pin below is a needle in one of these haystacks; a haystack
   // that failed to load would let an absence-pin pass on an empty string.
   ok("0. control -- every scanned file was read and is not trivially empty",
-    [page, workspace, inspector, console_, opsHeader, ribbon, context].every(s => s.length > 800),
-    [page, workspace, inspector, console_, opsHeader, ribbon, context].map(s => s.length).join(","));
+    [page, workspace, inspector, console_, opsHeader, ribbon, context, agenda, weekPanel, monthGrid,
+      filtersBar, actions].every(s => s.length > 800),
+    [page, workspace, inspector, console_, opsHeader, ribbon, context, agenda, weekPanel, monthGrid,
+      filtersBar, actions].map(s => s.length).join(","));
 
   // ══ 1. s6/s13: FOUR MODES, FOUR COMPOSITIONS ═════════════════════════════════════════════════════
 
@@ -123,10 +149,19 @@ async function main() {
     workspace.split("<MonthGrid").length === 2);
 
   // Agenda: the list, the filters above it, and NO permanent side panel.
+  //
+  // ⚠ REPOINTED 2026-08-16 FOR CPR-PLAN-002 s8.3: "Selecting an item populates the Item Preview panel;
+  // it should not force navigation away." So Agenda now carries a preview column -- and BOTH halves are
+  // pinned: the preview EXISTS and is GATED ON A SELECTION (never permanent, which is the PLN-002
+  // property that still stands), and the Day Inspector and day canvas still never mount under Agenda.
   const agendaBranch = workspace.slice(workspace.indexOf("// AGENDA"));
-  ok("1h. ⚠ Agenda mode is the chronological list with no inspector column",
+  ok("1h. ⚠ Agenda mode is the chronological list -- no Day Inspector column, no day canvas",
     agendaBranch.includes("<AgendaList") && !agendaBranch.includes("{inspector}")
     && !agendaBranch.includes("{detail}"));
+  ok("1h2. ⚠ CPR-PLAN-002 s8.3: the Item Preview mounts ONLY while a session is selected, and it is "
+    + "the same ContextPanel the Day Inspector renders -- one vocabulary, two surfaces (HFE-07)",
+    agendaBranch.includes("{session && (") && agendaBranch.includes("Item preview")
+    && agendaBranch.includes("<ContextPanel"));
   ok("1h-control. the agenda marker exists, so 1h sliced a real branch and not the whole file",
     workspace.includes("// AGENDA: the chronological list"));
 
@@ -223,7 +258,81 @@ async function main() {
     && readFileSync(join(process.cwd(), "src", "lib", "practice", "navigation.ts"), "utf8")
       .includes('"/practice/calendar"'));
 
-  // ── THE 24-HOUR CLOCK (owner decision, first recorded in CalendarConsole and re-affirmed as
+  // ══ 6. CPR-PLAN-002 "PRACTICE PLANNER VIEWS" (2026-08-16) -- THE NEWER DOCUMENT'S OWN PINS ═════════
+  //
+  // Everything below is a property CPR-PLAN-002's TEXT requires. The comps beside it show three figures
+  // this build refuses -- "not seen" (folds a recorded DNA and a booking nobody wrote anything about
+  // into one number), an Agenda-settings card (no preference store holds any of it), and "Free time
+  // (est.)" where the real subtraction already exists unlabelled as an estimate -- and pin 6e is the
+  // refusal that must not quietly unhappen.
+
+  // ---- s8.1: the agenda is PAST / TODAY / UPCOMING, rendered from the one band list ----
+  ok("6a. ⚠ AGENDA_BANDS is exactly past/today/upcoming and the list renders FROM it",
+    AGENDA_BANDS.map(b => b.key).join(",") === "past,today,upcoming"
+    && agenda.includes("AGENDA_BANDS.map"),
+    AGENDA_BANDS.map(b => b.key).join(","));
+
+  // ---- s3: contextual quick ranges -- the Agenda's own three; Custom stays the navigator's ----
+  ok("6b. the Agenda's quick ranges are Today / Next 7 days / Next 30 days, rendered from the constant",
+    AGENDA_QUICK_RANGES.map(r => r.label).join("|") === "Today|Next 7 days|Next 30 days"
+    && agenda.includes("AGENDA_QUICK_RANGES.map"),
+    AGENDA_QUICK_RANGES.map(r => r.label).join("|"));
+  ok("6c. ⚠ s8.1: a BARE agenda URL defaults to the bounded Next-7 horizon, not the anchor's whole month",
+    AGENDA_DEFAULT_AHEAD_DAYS === 7 && pageC.includes("AGENDA_DEFAULT_AHEAD_DAYS"),
+    String(AGENDA_DEFAULT_AHEAD_DAYS));
+  ok("6d. s8.3: history and future EXTEND on request, one step at a time, through the URL",
+    agenda.includes("earlier days") && agenda.includes("more days")
+    && agenda.includes("AGENDA_EXTEND_STEP_DAYS"));
+
+  // ---- s8.2/s8.3: one-line rows, names behind the chevron, and the honest outcome words ----
+  ok("6e. ⚠ a past session row uses the engine's outcome vocabulary -- NEVER the comp's 'not seen', "
+    + "which would fold a recorded DNA and an unrecorded outcome into one accusation",
+    !agendaC.includes("not seen") && agendaC.includes("not recorded")
+    && agendaC.includes('n("did_not_attend")'));
+  ok("6e-control. and the needle finds the refused phrase when it is there",
+    "4 booked · 1 not seen".includes("not seen"));
+  ok("6f. ⚠ patient rows inside a session render BEHIND its expansion -- collapsed rows carry counts, "
+    + "not names (s8.3)",
+    agendaC.indexOf("{open && (") !== -1
+    && agendaC.indexOf("{inside.map(a => <AppointmentRow") > agendaC.indexOf("{open && (")
+    && agenda.includes('aria-expanded={open}'));
+  ok("6g. s8.2: 'No bookings in this session' is no longer a standing full-width row of the agenda",
+    !agendaC.includes("No bookings in this session"));
+  ok("6g-control. the sentence still exists where the DAY view legitimately says it, so 6g is not "
+    + "passing on a phrase that never existed",
+    stripComments(src("DayPlanner.tsx")).includes("No bookings in this session."));
+
+  // ---- s5.2: the Day view's empty-book collapse -- one inline state, and the console stays ----
+  ok("6h. ⚠ on a day with nothing booked and no availability, the quiet panels step aside behind ONE "
+    + "inline state",
+    pageC.includes("const bookEmpty") && pageC.includes("{!bookEmpty && <AvailabilityRibbon")
+    && /\{!bookEmpty &&\s*\(\s*<Timeline/.test(pageC)
+    && pageC.includes("{!bookEmpty && <OperationsHeader") && pageC.includes("{!bookEmpty && <CalendarFooter")
+    && pageC.includes("{!bookEmpty && <WhereYouAre"));
+  ok("6h-control. ⚠ and the BOOKING CONSOLE is never behind that gate -- an empty day still books its "
+    + "first patient",
+    !pageC.includes("bookEmpty && <CalendarConsole") && pageC.includes("<CalendarConsole"));
+  ok("6i. the inline empty state says both halves were read and points at the next useful action",
+    page.includes("an empty day, not a failed one") && page.includes("/practice/setup/availability"));
+
+  // ---- s6/s7: bounded week cards and month cells, overflow named rather than silent ----
+  ok("6j. week day cards are BOUNDED: sessions and activities cap out with a named '+N more'",
+    weekPanel.includes("WEEK_SESSION_MAX") && weekPanel.includes("WEEK_ACTIVITY_MAX")
+    && weekPanel.includes("more session") && weekPanel.includes("more on this day"));
+  ok("6j2. and the week's compact session line carries the null-aware booked/free counts",
+    weekPanel.includes("capacityPhrase(s.capacity)"));
+  ok("6k. ⚠ a month cell's THIRD activity is a named overflow, not a silent drop",
+    monthGrid.includes("more activit"));
+
+  // ---- s3/s5.2: the compact filter control, and actions behind a disclosure ----
+  ok("6l. filters fold behind one control that carries the ACTIVE count on constrained widths",
+    filtersBar.includes("Filters ({activeCount})") && filtersBar.includes("aria-expanded={filtersOpen}"));
+  ok("6m. a block's eight actions sit behind one Actions disclosure until asked for (s5.2)",
+    actions.includes("setActionsOpen") && actions.includes("Actions ⌄"));
+
+  // ---- HFE-10: one action from Week or Agenda to the corresponding Day ----
+  ok("6n. the week card and the agenda day heading both reach the Day view in one action",
+    weekPanel.includes("Open Day view") && agenda.includes("Open day"));
   // walkthrough defect #1, 2026-08-16). A native type="time" input draws AM/PM columns on any
   // machine whose OS locale says so -- the product must not leave its clock format to the
   // visitor's operating system. Comment-stripped, because the replacement inputs carry comments

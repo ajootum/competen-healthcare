@@ -284,6 +284,42 @@ export const CAPACITY_BASIS_LABEL = "Free in your diary";
 export const DAY_OFF_LABEL = "No program";
 export const DAY_UNREADABLE_LABEL = "Could not be read";
 
+// ── CPR-PLAN-002 s8 -- THE AGENDA'S OWN SHAPE (2026-08-16, supersedes CP-PLAN-002 s5's flat list) ────
+//
+// ⚠ A THIRD QUICK-RANGE LIST, for the same reason LONG_PERIODS is a second one: QUICK_PERIODS is
+// asserted to be EXACTLY CP-PLAN-002 s3's six, and CPR-PLAN-002 s3 makes quick ranges CONTEXTUAL --
+// "Agenda uses Today / Next 7 / Next 30 / Custom". These three are the Agenda's own chips; Custom is
+// the shared navigator's existing Custom period control and is deliberately not duplicated here.
+//
+// ⚠ `aheadDays` IS AN OFFSET FROM TODAY, the same convention period-range.ts records for `backDays`:
+// "Next 7 days" is today .. today+7 -- today plus the seven days after it -- and the header prints both
+// real dates beside whatever the chip is called, so the loose name cannot mislead anybody.
+export const AGENDA_QUICK_RANGES = [
+  { key: "today", label: "Today", aheadDays: 0 },
+  { key: "next7", label: "Next 7 days", aheadDays: 7 },
+  { key: "next30", label: "Next 30 days", aheadDays: 30 },
+] as const;
+
+export type AgendaQuickRangeKey = (typeof AGENDA_QUICK_RANGES)[number]["key"];
+
+/** s8.1's default future horizon: Next 7 days. Used by the route when the URL names no period. */
+export const AGENDA_DEFAULT_AHEAD_DAYS = 7;
+
+/** How much more history or future one press of "Show earlier/more days" asks for. s8.3's increment. */
+export const AGENDA_EXTEND_STEP_DAYS = 7;
+
+/**
+ * s8.1's three bands, as data so the screen renders them from one list and a harness can prove all
+ * three exist. The order is the band order: what happened, what is on now, what is coming.
+ */
+export const AGENDA_BANDS = [
+  { key: "past", label: "Past" },
+  { key: "today", label: "Today" },
+  { key: "upcoming", label: "Upcoming" },
+] as const;
+
+export type AgendaBandKey = (typeof AGENDA_BANDS)[number]["key"];
+
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 // ⚠ "WHAT HAPPENED ON THAT DAY" -- WHAT THIS PRODUCT CAN ACTUALLY ANSWER, AND WHAT IT CANNOT.
 //

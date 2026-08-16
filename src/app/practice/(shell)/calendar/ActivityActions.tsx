@@ -36,15 +36,41 @@ export default function ActivityActions({ activity: a, locations, week, busy, no
   run: RunAction;
 }) {
   const [open, setOpen] = useState<string | null>(null);
+  // CPR-PLAN-002 s5.2 (2026-08-16): the eight controls sit BEHIND one disclosure per block until the
+  // block is the thing being worked on. Eight buttons under every block was a fifth of the day's
+  // vertical height saying nothing; one "Actions" control says the same thing in one line. A refusal
+  // or a result KEEPS the row open -- collapsing an error would eat the engine's answer.
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const showActions = actionsOpen || notice !== null;
 
   const offered = PLANNER_ACTIONS.filter(x => x.implemented && HANDLED[x.key]);
   const declaredElsewhere = PLANNER_ACTIONS.filter(x => !HANDLED[x.key]);
 
   const go = (action: string, body: Record<string, unknown>) => run(action, { id: a.id, ...body }, a.id);
 
+  if (!showActions) {
+    return (
+      <div className="mt-2 border-t border-gray-200/70 pt-2">
+        <button type="button" aria-expanded={false} disabled={busy}
+          onClick={() => setActionsOpen(true)}
+          className={BTN}>
+          Actions ⌄
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-2 border-t border-gray-200/70 pt-2">
       <div className="flex flex-wrap gap-1.5">
+        {/* Collapsing is refused, with the reason on the control, while an answer is showing -- folding
+            the row would eat the engine's own words about what just happened. */}
+        <button type="button" aria-expanded disabled={busy || notice !== null}
+          title={notice !== null ? "The answer below stays visible until you act on this block again" : undefined}
+          onClick={() => { setActionsOpen(false); setOpen(null); }}
+          className={`${BTN} border-[var(--cp-primary)] text-[var(--cp-primary-deep)]`}>
+          Actions ⌃
+        </button>
         {offered.map(x => (
           <button key={x.key} type="button" disabled={busy}
             aria-expanded={open === x.key}

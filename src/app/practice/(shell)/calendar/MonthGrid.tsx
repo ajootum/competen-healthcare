@@ -193,6 +193,15 @@ function MonthCell({ day, period, filters, urlState, selected, locationColors }:
               </span>
             </Link>
           ))}
+          {/* ⚠ CPR-PLAN-002 s7's overflow rule, and an honesty fix with it: a third activity used to
+              be dropped WITHOUT A TRACE, which made a three-activity day indistinguishable from a
+              two-activity one. The cell stays bounded (HFE-03); the remainder is named and one press
+              away. */}
+          {shown.activities.length > 2 && (
+            <Link href={dayHref} scroll={false} className="text-[10px] font-semibold text-gray-500 hover:underline">
+              +{shown.activities.length - 2} more activit{shown.activities.length - 2 === 1 ? "y" : "ies"}
+            </Link>
+          )}
 
           {shown.empty && (
             <p className="text-[10px] text-gray-400">

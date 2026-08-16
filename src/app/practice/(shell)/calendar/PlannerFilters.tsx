@@ -48,13 +48,29 @@ export default function PlannerFilters({
 }) {
   const router = useRouter();
   const [q, setQ] = useState(filters.query);
+  // CPR-PLAN-002 s3 (2026-08-16): on constrained widths the filter row folds behind ONE control that
+  // carries the ACTIVE-FILTER COUNT -- so a phone screen is not five select boxes tall, and a hidden
+  // filter can never be a silent one: the number on the button says something is narrowing the view.
+  // Desktop keeps the full row exactly as CPR-PLN-002 left it.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const activeCount = [
+    filters.show !== "all", !!filters.locationId, !!filters.activityType,
+    !!filters.appointmentType, !!filters.status, filters.query.trim().length > 0,
+  ].filter(Boolean).length;
 
   const at = (s: PlannerUrlState) => plannerHref({ ...urlState, ...s });
   const go = (s: PlannerUrlState) => router.push(at(s));
 
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-3">
-      <div className="flex flex-wrap items-end gap-2">
+      <button type="button" onClick={() => setFiltersOpen(o => !o)}
+        aria-expanded={filtersOpen}
+        className={`rounded-lg border px-2.5 py-1.5 text-[12px] font-semibold md:hidden ${activeCount > 0
+          ? "border-[var(--cp-primary-border)] bg-[var(--cp-primary)]/5 text-[var(--cp-primary-deep)]"
+          : "border-gray-200 text-gray-700"}`}>
+        Filters ({activeCount}) {filtersOpen ? "⌃" : "⌄"}
+      </button>
+      <div className={`${filtersOpen ? "mt-2 flex" : "hidden md:flex"} flex-wrap items-end gap-2`}>
         <Select label="Show" value={filters.show} onChange={v => go({ show: v })}
           options={PLANNER_SHOW_OPTIONS.map(o => [o.key, o.label])} />
 

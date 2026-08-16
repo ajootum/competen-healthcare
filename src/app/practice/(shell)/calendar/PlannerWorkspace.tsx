@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { PlannerRange } from "@/lib/practice/planner";
 import {
@@ -8,7 +9,7 @@ import {
   type PlannerFilters as Filters, type PlannerPeriod,
 } from "@/lib/practice/planner-constants";
 import {
-  hhmm, hoursMinutes, longDate, toneFor, LEGEND_TYPES, STATE_CHIP,
+  hhmm, hoursMinutes, longDate, plannerHref, toneFor, LEGEND_TYPES, STATE_CHIP,
   type LocationOption, type Notice, type PlannerUrlState,
 } from "./planner-ui";
 import PlannerNavigator from "./PlannerNavigator";
@@ -18,6 +19,7 @@ import MonthGrid from "./MonthGrid";
 import AgendaList from "./AgendaList";
 import DayPlanner from "./DayPlanner";
 import DayInspector from "./DayInspector";
+import ContextPanel from "./ContextPanel";
 import AddActivityForm, { type AddDraft } from "./AddActivityForm";
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -276,7 +278,13 @@ export default function PlannerWorkspace({
         {/* ── PERIOD SUMMARY. COUNTS ONLY -- no percentage, no target. On small widths a zero that
             says nothing steps aside (s5.1); every figure is back the moment it is non-zero. ───────── */}
         <div className="mt-3 flex flex-wrap items-stretch gap-x-6 gap-y-3 border-t border-gray-100 pt-3">
-          <Figure label="Showing" value={`${longDate(range.fromDate)} - ${longDate(range.toDate)}`} wide />
+          {/* One day is one date. "16 Aug 2026 - 16 Aug 2026" is the same fact printed as noise, and
+              CPR-PLAN-002 s5 opens Day mode with a COMPACT header. */}
+          <Figure label="Showing"
+            value={range.fromDate === range.toDate
+              ? longDate(range.fromDate)
+              : `${longDate(range.fromDate)} - ${longDate(range.toDate)}`}
+            wide />
           {w === null ? (
             <p className="text-[13px] font-semibold text-rose-700">
               The totals for this period could not be worked out{range.detail ? `: ${range.detail}` : "."}
@@ -380,9 +388,32 @@ export default function PlannerWorkspace({
           {inspector}
         </div>
       ) : (
-        // AGENDA: the chronological list and nothing beside it. The filters and search above are its
-        // controls; a permanent side panel here is exactly the vertical furniture s3 removes.
-        <AgendaList range={range} period={period} filters={filters} urlState={urlState} />
+        // AGENDA: the chronological list, with CPR-PLAN-002 s8.3's ITEM PREVIEW beside it -- but ONLY
+        // while a session is actually selected. CPR-PLN-002 froze Agenda against a PERMANENT side
+        // panel, and that half of the freeze stands: nothing is mounted here until the practitioner
+        // selects an item, and closing the selection returns the list to full width. The preview is
+        // the same ContextPanel the Day Inspector's Overview renders, so the counts, the outcomes and
+        // the honesty sentences cannot diverge between the two surfaces (HFE-07, s14).
+        <div className={session
+          ? "grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px]"
+          : "grid grid-cols-1 gap-4"}>
+          <AgendaList range={range} period={period} filters={filters} urlState={urlState} />
+          {session && (
+            <aside className="self-start rounded-2xl border border-gray-200 bg-white">
+              <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3">
+                <h2 className="text-[14px] font-bold text-gray-900">Item preview</h2>
+                <Link scroll={false} href={plannerHref({ ...urlState, sel: null })}
+                  className="ml-auto rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50">
+                  Close
+                </Link>
+              </div>
+              <div className="p-4">
+                <ContextPanel day={day} session={session} canManage={canManage}
+                  urlState={urlState} onBook={onBook} />
+              </div>
+            </aside>
+          )}
+        </div>
       )}
     </div>
   );

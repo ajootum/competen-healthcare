@@ -4,7 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import type { PlannerDay, PlannerWeek } from "@/lib/practice/planner";
 import { TRAVEL_BASIS_LABEL } from "@/lib/practice/planner-constants";
-import { hhmm, hoursMinutes, locationTone, shortDate, toneFor, plannerHref, type PlannerUrlState } from "./planner-ui";
+import { capacityPhrase, hhmm, hoursMinutes, locationTone, shortDate, toneFor, plannerHref, type PlannerUrlState } from "./planner-ui";
+
+// CPR-PLAN-002 s6 (2026-08-16): rows have BOUNDED heights. A day card names this many of each and says
+// "+N more" for the rest -- the rest are one press away on the day itself, and a week that stretches to
+// hold its busiest day is the endless page s6's height-control row forbids.
+const WEEK_SESSION_MAX = 3;
+const WEEK_ACTIVITY_MAX = 5;
 
 // s4 THE WEEKLY PLANNER -- Monday to Sunday, ALL SEVEN, ALWAYS.
 //
@@ -142,8 +148,38 @@ function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState, lo
             <p className="text-[12px] text-gray-400">Nothing planned.</p>
           )}
 
+          {/* CPR-PLAN-002 s6's compact session blocks: time + place + kind + booked/free, each one a
+              line, from the same payload the month cell counts. The counts stay null-aware --
+              capacityPhrase never rounds "not calculable" down to nought free. */}
+          {day.sessions.length > 0 && (
+            <ul className="mb-1 flex flex-col gap-0.5">
+              {day.sessions.slice(0, WEEK_SESSION_MAX).map(s => (
+                <li key={s.id} className="flex items-baseline gap-1.5 text-[11px]">
+                  <span aria-hidden className={`h-1.5 w-1.5 shrink-0 self-center rounded-full ${s.capacity.blocked
+                    ? "bg-gray-300" : locationTone(s.locationId, s.locationId ? locationColors[s.locationId] : null).dot}`} />
+                  <span className="shrink-0 tabular-nums text-gray-600">{hhmm(s.startMinute)}-{hhmm(s.endMinute)}</span>
+                  <span className="min-w-0 truncate text-gray-600">{s.locationName ?? s.slotKindLabel}</span>
+                  <Link scroll={false}
+                    href={plannerHref({ ...urlState, view: "day", date: day.date, from: null, to: null, sel: s.id })}
+                    className="ml-auto shrink-0 font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                    {s.capacity.blocked ? "blocked" : capacityPhrase(s.capacity)}
+                  </Link>
+                </li>
+              ))}
+              {day.sessions.length > WEEK_SESSION_MAX && (
+                <li>
+                  <Link scroll={false}
+                    href={plannerHref({ ...urlState, view: "day", date: day.date, from: null, to: null, sel: null })}
+                    className="text-[11px] font-semibold text-gray-500 hover:underline">
+                    +{day.sessions.length - WEEK_SESSION_MAX} more session{day.sessions.length - WEEK_SESSION_MAX === 1 ? "" : "s"}
+                  </Link>
+                </li>
+              )}
+            </ul>
+          )}
+
           <ul className="flex flex-col gap-1">
-            {day.activities.map(a => (
+            {day.activities.slice(0, WEEK_ACTIVITY_MAX).map(a => (
               <li key={a.id} className="flex items-center gap-2">
                 <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${toneFor(a.activityType).dot}`} aria-hidden />
                 <span className={`min-w-0 flex-1 truncate text-[12px] ${a.state === "cancelled"
@@ -155,6 +191,15 @@ function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState, lo
                 </span>
               </li>
             ))}
+            {day.activities.length > WEEK_ACTIVITY_MAX && (
+              <li>
+                <Link scroll={false}
+                  href={plannerHref({ ...urlState, view: "day", date: day.date, from: null, to: null, sel: null })}
+                  className="text-[11px] font-semibold text-gray-500 hover:underline">
+                  +{day.activities.length - WEEK_ACTIVITY_MAX} more on this day
+                </Link>
+              </li>
+            )}
           </ul>
 
           {/* WORKLOAD SUMMARY (s4). Counts and durations. No rate, no target. */}
@@ -178,6 +223,14 @@ function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState, lo
             </p>
           )}
 
+          {/* CPR-PLAN-002 HFE-10: the DAY VIEW is one action away. The Review link above drives the
+              canvas WITHIN Week mode; this one changes mode, and says so. */}
+          <Link scroll={false}
+            href={plannerHref({ ...urlState, view: "day", date: day.date, from: null, to: null, sel: null })}
+            className="mt-2 inline-block text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+            Open Day view →
+          </Link>
+
           {canManage && (
             <button type="button" onClick={onAdd}
               className="mt-2 w-full rounded-lg border border-dashed border-gray-300 px-2 py-1.5 text-[12px] font-semibold text-gray-600 hover:border-[var(--cp-primary)] hover:text-[var(--cp-primary-deep)]">
@@ -186,12 +239,14 @@ function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState, lo
           )}
         </div>
       ) : (
-        // COLLAPSED: still shows activities counted, location and workload, which is what s4 asks each
-        // day to display. Collapsing hides the list, not the facts.
+        // COLLAPSED: still shows activities counted, bookings, location and workload, which is what s4
+        // asks each day to display and s6 keeps as "counts first". Collapsing hides the list, not the
+        // facts -- and the booked figure only renders where a session actually carries one.
         <p className="px-3 pb-2.5 text-[11px] text-gray-500">
           {w
             ? `${w.activityCount} activit${w.activityCount === 1 ? "y" : "ies"} · ${hoursMinutes(w.committedMinutes)}`
             : "no summary"}
+          {day.capacity ? ` · ${day.capacity.booked} booked` : ""}
           {day.locations.length > 0 ? ` · ${day.locations.map(l => l.name).join(", ")}` : ""}
           {day.travel.bufferMinutes > 0 ? ` · ${hoursMinutes(day.travel.bufferMinutes)} travel allowance` : ""}
         </p>

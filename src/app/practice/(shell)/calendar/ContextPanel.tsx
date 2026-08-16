@@ -133,7 +133,18 @@ export default function ContextPanel({ day, session, canManage, urlState, onBook
                   <p className="mt-1 text-[11px] font-semibold text-amber-700">
                     {dayCapacity.sessionsNotGenerated} session
                     {dayCapacity.sessionsNotGenerated === 1 ? " has" : "s have"} no generated times, so
-                    their free time is not counted above.
+                    their free time is not counted above.{" "}
+                    {/* CPR-PLAN-002's comp writes "Not configured -- Set up" here, and the state is
+                        real, so the pointer ships -- for someone who can act on it. For anyone else
+                        the sentence names where it lives instead of offering a door that refuses. */}
+                    {canManage ? (
+                      <Link href="/practice/setup/availability"
+                        className="font-bold text-[var(--cp-primary-deep)] hover:underline">
+                        Generate them in Practice Setup
+                      </Link>
+                    ) : (
+                      <span className="font-normal">Times are generated in Practice Setup.</span>
+                    )}
                   </p>
                 )}
                 <p className="mt-1 text-[11px] text-gray-400">{CAPACITY_BASIS_NOTE}</p>
@@ -141,7 +152,15 @@ export default function ContextPanel({ day, session, canManage, urlState, onBook
             ) : (
               // ⚠ NO SESSION AT ALL IS NOT NOUGHT CAPACITY. Nothing about this day has been measured.
               <p className="mt-1 text-[12px] text-gray-500">
-                {DAY_OFF_LABEL} on this date, so there is no capacity to summarise.
+                {DAY_OFF_LABEL} on this date, so there is no capacity to summarise.{" "}
+                {canManage ? (
+                  <Link href="/practice/setup/availability"
+                    className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                    Set up availability
+                  </Link>
+                ) : (
+                  <span>Availability is set up in Practice Setup.</span>
+                )}
               </p>
             )}
           </div>
