@@ -185,7 +185,10 @@ export default async function PracticeCommandCentre() {
             <StartYourDay plan={plan} metrics={metrics} canPlan={canPlan} />
 
             {/* ── TODAY AT A GLANCE (s3) ──────────────────────────────────────────────────────── */}
-            <div className={card}>
+            {/* flex-col so the tile grid can GROW: this card stands beside taller siblings and used
+                to hold eight cramped tiles above a void (walkthrough 2026-08-16 #7 -- "space this to
+                fill the widget"). The grid takes the spare height and the rows share it. */}
+            <div className={`${card} flex flex-col`}>
               <div className="mb-3 flex items-center gap-2">
                 <h2 className={panelTitle}>Today at a glance</h2>
                 {/* THE WINDOW IS ON THE CARD, not assumed. The same eight tiles mean "this clinic"
@@ -195,7 +198,10 @@ export default async function PracticeCommandCentre() {
                   {glance.scope === "session" ? "This session" : "Today"}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {/* Two columns, not four: in a one-third-width card, four columns truncated half the
+                  labels ("Compl...", "No Sh..."), and a label nobody can read is a tile that answers
+                  nothing. auto-rows-fr spreads the four rows over whatever height the card has. */}
+              <div className="grid flex-1 auto-rows-fr grid-cols-2 gap-2">
                 {glance.tiles.map(t => {
                   // The comp gives every tile a tinted icon badge and a coloured figure, and the colour
                   // MEANS something -- see GLANCE_SWATCH. Drawn grey, all eight read at identical weight
@@ -208,7 +214,7 @@ export default async function PracticeCommandCentre() {
                   return (
                     <Link key={t.key} href={t.href}
                       title={why ?? `${t.formula} Source: ${t.sources.join(", ")}.`}
-                      className={`rounded-lg border px-2.5 py-2 transition-shadow hover:shadow-sm ${s.box}`}>
+                      className={`flex flex-col justify-center rounded-lg border px-2.5 py-2 transition-shadow hover:shadow-sm ${s.box}`}>
                       <span className="flex items-center justify-between gap-1">
                         {/* A NULL COUNT RENDERS AN EM DASH. "Could not read" and "none" are different
                             answers and a zero is the more dangerous of the two to guess. */}
@@ -219,7 +225,7 @@ export default async function PracticeCommandCentre() {
                           {s.icon}
                         </span>
                       </span>
-                      <span className="mt-1 block truncate text-[10.5px] text-gray-600">{t.label}</span>
+                      <span className="mt-1 block text-[10.5px] leading-tight text-gray-600">{t.label}</span>
                       {why && (
                         <span className="mt-0.5 block truncate text-[9.5px] leading-tight text-gray-500">{why}</span>
                       )}
