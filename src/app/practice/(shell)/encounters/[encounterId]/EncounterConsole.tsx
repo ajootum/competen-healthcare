@@ -7,7 +7,7 @@ import { DOC_TYPES } from "@/lib/practice/document-constants";
 import {
   FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES, FOLLOW_UP_STATUS_LABELS, FOLLOW_UP_TAB_FILTERS,
   FOLLOW_UP_PRIORITY_CHIP, FOLLOW_UP_PRIORITY_GLYPH, followUpSummary,
-  FOLLOW_UP_CATEGORIES, FOLLOW_UP_ACTION_TYPES, FOLLOW_UP_TYPE_LABELS,
+  FOLLOW_UP_CATEGORIES, FOLLOW_UP_ACTION_TYPES, FOLLOW_UP_TYPE_LABELS, FOLLOW_UP_ACTION_CATEGORY,
 } from "@/lib/practice/follow-up-constants";
 // ⚠ THE PROCEDURE VOCABULARIES MOVED TO ProcedureWorkspace WITH THE FORM. Only what this file still
 // renders stays imported -- a vocabulary imported here and used nowhere is the next person's evidence
@@ -353,14 +353,18 @@ export default function EncounterConsole(props: {
   const [templateId, setTemplateId] = useState("");
   const [doc, setDoc] = useState({ title: "", docType: "consultation_summary", addressedTo: "", composeFrom: true });
   const [fu, setFu] = useState({
-    // CPR-FUP-002 s5: kind is the DOMAIN. clinical_condition is the encounter context's ordinary
-    // answer and stays editable. followUpType is the ACTION and starts EMPTY on purpose -- s10 makes
-    // it required and s9 forbids auto-selecting Other, and a silent default here would file every
-    // uninspected follow-up under one action code.
-    reason: "", kind: "clinical_condition", intervalCode: "2w", priority: "routine",
+    // CPR-FUP-002 HFE s3's frozen sequence. `reason` carries the SUBJECT ("Follow-up for") -- the
+    // short thing this obligation is about, never a composed sentence; it is already the line the
+    // board leads with, which is exactly what s10 wants subject to be. kind is the CATEGORY,
+    // inferred from the action (s7) until categoryTouched says a human chose. followUpType is the
+    // ACTION and starts EMPTY on purpose -- s10 makes it required and s9 forbids auto-selecting
+    // Other, and a silent default would file every uninspected follow-up under one action code.
+    reason: "", kind: "clinical_condition", categoryTouched: false,
+    intervalCode: "2w", priority: "routine",
     // CPR-FUP-HFE-008 s6/s11 (migration 299). `owner` is the screen's word for a choice the database
-    // stores in two columns -- one owner, never both.
-    followUpType: "", locationId: "", instructions: "", owner: "none", queue: "",
+    // stores in two columns -- one owner, never both. HFE s4 makes assignment REQUIRED and defaults
+    // it to Me for an individual practice, so Unassigned is no longer offered here.
+    followUpType: "", locationId: "", instructions: "", owner: "me", queue: "",
     // s9: the target is an interval OR an exact date. "custom" in the select reveals the calendar.
     dueDate: "",
     // CPR-FUP-002 s11: booking is an EXPLICIT choice beside the obligation, never implied by the
@@ -373,6 +377,8 @@ export default function EncounterConsole(props: {
   // #6: what the regular week says about the currently-resolved target day. The sentence renders
   // whether or not a facility could be prefilled from it.
   const [fuPlace, setFuPlace] = useState<{ sentence: string; facilityId: string | null } | null>(null);
+  // HFE s7: Category lives under More details -- inferred, auditable, out of the primary sequence.
+  const [fuMore, setFuMore] = useState(false);
 
   // The resolved target day drives the place suggestion. Recomputed exactly the way the booking
   // prefill computes it: the interval's arithmetic date, or the calendar-chosen one.
@@ -1183,8 +1189,14 @@ export default function EncounterConsole(props: {
                           {props.followUps.map(f => (
                             <li key={f.id} className="text-[12px] text-gray-800">
                               {f.reason}
+                              {/* HFE s11's compact summary: subject leads, then action - due -
+                                  priority as supporting metadata, never a replay of the form. */}
                               <span className={`ml-1.5 text-[11px] ${f.overdue ? "font-bold text-[var(--cmp-text-critical)]" : "text-gray-500"}`}>
-                                {f.overdue ? `${Math.abs(f.dueInDays)} days overdue` : `due ${f.due_on}`}
+                                {[
+                                  FOLLOW_UP_TYPE_LABELS[f.follow_up_type] ?? null,
+                                  f.overdue ? `${Math.abs(f.dueInDays)} days overdue` : `due ${f.due_on}`,
+                                  f.priority !== "routine" ? f.priority : null,
+                                ].filter(Boolean).join(" · ")}
                               </span>
                             </li>
                           ))}
@@ -1507,28 +1519,24 @@ export default function EncounterConsole(props: {
                           selects carried an aria-label and nothing a sighted user could read, so the
                           only cue for what a dropdown meant was the value it happened to be showing. */}
                       <div className="col-span-2">
-                        <label className={FU_LABEL} htmlFor="fu-reason">What needs to happen, and why *</label>
+                        {/* HFE s5: the SUBJECT, not an instruction sentence -- "identifies the
+                            subject/object of the obligation". The old "What needs to happen, and
+                            why?" label invited composing prose that duplicated every structured
+                            field below it (HFE s2), and its removal is acceptance criterion one. */}
+                        <label className={FU_LABEL} htmlFor="fu-reason">Follow-up for *</label>
                         {/* ⚠ AMBER WHILE EMPTY, exactly as every other required field on this
                             encounter. The owner pressed Raise twice with this blank and read the
                             silence as the product being broken -- the sentence by the button was not
                             enough, because the eye is ON THE FORM, not on the footer. The blocker has
                             to be worn by the field that is the blocker. */}
-                        <input id="fu-reason" required placeholder="e.g. Review the swab result"
+                        <input id="fu-reason" required
+                          placeholder="e.g. Treatment response, Histology result, Post-operative wound"
                           value={fu.reason}
                           onChange={e => setFu(p => ({ ...p, reason: e.target.value }))}
                           className={`${input} mt-1 ${fu.reason.trim() ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
                       </div>
                       <div>
-                        <label className={FU_LABEL} htmlFor="fu-kind">Category *</label>
-                        {/* CPR-FUP-002 s5: the DOMAIN, never the action -- the offered list is the
-                            spec's seven subjects. The action lives in Follow-up type below. */}
-                        <select id="fu-kind" aria-label="Category of follow-up" value={fu.kind}
-                          onChange={e => setFu(p => ({ ...p, kind: e.target.value }))} className={`${input} mt-1`}>
-                          {FOLLOW_UP_CATEGORIES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={FU_LABEL} htmlFor="fu-when">Target timeframe *</label>
+                        <label className={FU_LABEL} htmlFor="fu-when">Due *</label>
                         {/* ⚠ THE OWNER ASKED FOR A CALENDAR IN AS MANY WORDS. s9 always allowed both --
                             "support relative intervals and configured exact dates" -- and the composer
                             only ever offered the intervals. "On a date..." reveals the calendar; the
@@ -1572,15 +1580,24 @@ export default function EncounterConsole(props: {
                           ))}
                         </select>
                       </div>
-                      {/* ── CPR-FUP-002 s3: THE ACTION, from the nine-value controlled list ─────────
+                      {/* ── THE ACTION, from the nine-value controlled list (taxonomy s3, HFE s4) ────
                           ⚠ STARTS EMPTY AND IS REQUIRED. s10 gates Raise on it, and s9 forbids
                           auto-selecting Other -- a silent default would file every uninspected
                           follow-up under one action code. Booking is no longer a "type": s11 makes
-                          the visit an explicit separate choice, below. */}
+                          the visit an explicit separate choice, below. Choosing an action also FILES
+                          THE CATEGORY (HFE s7's deterministic inference) unless a human already
+                          chose one under More details. */}
                       <div>
-                        <label className={FU_LABEL} htmlFor="fu-type">Follow-up type *</label>
+                        <label className={FU_LABEL} htmlFor="fu-type">Action *</label>
                         <select id="fu-type" value={fu.followUpType}
-                          onChange={e => setFu(p => ({ ...p, followUpType: e.target.value }))}
+                          onChange={e => {
+                            const followUpType = e.target.value;
+                            setFu(p => ({
+                              ...p, followUpType,
+                              kind: p.categoryTouched ? p.kind
+                                : (FOLLOW_UP_ACTION_CATEGORY[followUpType] ?? p.kind),
+                            }));
+                          }}
                           className={`${input} mt-1 ${fu.followUpType ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`}>
                           <option value="">Choose the action…</option>
                           {FOLLOW_UP_ACTION_TYPES.map(([t, l]) => (
@@ -1617,11 +1634,13 @@ export default function EncounterConsole(props: {
                           What IS offerable is the viewer themselves, or a named queue, and the database
                           refuses both at once because "whose is this" needs one answer. */}
                       <div>
-                        <label className={FU_LABEL} htmlFor="fu-owner">Assigned to</label>
+                        <label className={FU_LABEL} htmlFor="fu-owner">Assigned to *</label>
+                        {/* HFE s4/s9: assignment is REQUIRED and defaults to Me -- an obligation
+                            nobody owns is the board's oldest failure mode. Unassigned left this
+                            select; the queue path still needs a name before Raise enables. */}
                         <select id="fu-owner" value={fu.owner}
                           onChange={e => setFu(p => ({ ...p, owner: e.target.value }))}
                           className={`${input} mt-1`}>
-                          <option value="none">Unassigned</option>
                           <option value="me">Me</option>
                           <option value="queue">A team or queue</option>
                         </select>
@@ -1672,13 +1691,44 @@ export default function EncounterConsole(props: {
                           </div>
                         </>
                       )}
+                      {/* ── HFE s7: CATEGORY, DEMOTED AND INFERRED ─────────────────────────────────
+                          Filed automatically from the action, shown as a sentence, editable behind
+                          one click. It is metadata for filtering and reports -- making it a second
+                          prominent question was the duplication HFE s2 names. Stored independently
+                          of the action either way (taxonomy s7). */}
+                      <div className="col-span-2 text-[11px] text-gray-500">
+                        {!fuMore ? (
+                          <>
+                            Category: <span className="font-semibold text-gray-600">
+                              {(FOLLOW_UP_CATEGORIES.find(([k]) => k === fu.kind)?.[1]) ?? fu.kind}
+                            </span>{fu.categoryTouched ? "" : " (from the action)"}{" "}
+                            <button type="button" onClick={() => setFuMore(true)}
+                              className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                              More details
+                            </button>
+                          </>
+                        ) : (
+                          <div className="max-w-xs">
+                            <label className={FU_LABEL} htmlFor="fu-kind">Category</label>
+                            <select id="fu-kind" aria-label="Category of follow-up" value={fu.kind}
+                              onChange={e => setFu(p => ({ ...p, kind: e.target.value, categoryTouched: true }))}
+                              className={`${input} mt-1`}>
+                              {FOLLOW_UP_CATEGORIES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                            </select>
+                            <p className="mt-0.5 text-[10px] text-gray-500">
+                              Used for filtering and reports. Never decides urgency.
+                            </p>
+                          </div>
+                        )}
+                      </div>
                       <div className="col-span-2">
-                        <label className={FU_LABEL} htmlFor="fu-instructions">Instructions / context (optional)</label>
+                        <label className={FU_LABEL} htmlFor="fu-instructions">Instructions (optional)</label>
                         {/* Separate from the reason, which migration 196 caps at 400 characters -- one
-                            field for both is how a cap starts truncating clinical detail. */}
+                            field for both is how a cap starts truncating clinical detail. HFE s4:
+                            only information needed to COMPLETE the follow-up belongs here. */}
                         <input id="fu-instructions" value={fu.instructions}
                           onChange={e => setFu(p => ({ ...p, instructions: e.target.value }))}
-                          placeholder="Optional. Anything the person doing this needs to know."
+                          placeholder="e.g. Check BP and ankle swelling."
                           className={`${input} mt-1`} />
                       </div>
                       {/* ── CPR-FUP-002 s10: DUPLICATE AWARENESS -- WARN, NEVER BLOCK ──────────────
@@ -1711,8 +1761,8 @@ export default function EncounterConsole(props: {
                           || (fu.intervalCode === "custom" && !fu.dueDate)
                           || (fu.bookVisit && !fu.bookDate)) && (
                           <span className="text-[11.5px] text-[var(--cmp-text-warning)]">
-                            {!fu.reason.trim() ? "Say what needs to happen first."
-                              : !fu.followUpType ? "Choose the follow-up action."
+                            {!fu.reason.trim() ? "Say what this follow-up is for."
+                              : !fu.followUpType ? "Choose the action."
                                 : fu.intervalCode === "custom" && !fu.dueDate ? "Pick the follow-up date."
                                   : fu.owner === "queue" && !fu.queue.trim() ? "Name the queue, or assign it differently."
                                     : "Pick the visit date, or untick the booking."}

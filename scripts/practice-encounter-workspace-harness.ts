@@ -785,10 +785,11 @@ async function main() {
     // decisions + outcome
     "e.g. Continue levetiracetam 750mg BD", "Required for an outcome of Other",
     // follow-up
-    // ⚠ REPOINTED FOR CPR-FUP-002 (2026-08-16): the select stopped being "kind of" anything -- the
-    // taxonomy split made it the CATEGORY (domain) beside a required action-type select, and the
-    // aria-label moved with the meaning. The field is the same control in the same form.
-    "What needs to happen, and why", 'aria-label="Category of follow-up"', 'aria-label="When"',
+    // ⚠ REPOINTED TWICE FOR CPR-FUP-002 (2026-08-16), both halves. The taxonomy doc split the
+    // category (domain) from a required action select and the aria-label moved with the meaning;
+    // the HFE doc then REMOVED "What needs to happen, and why" by name (acceptance criterion one)
+    // -- the field survives as the subject, labelled "Follow-up for". Same control, same form.
+    "Follow-up for", 'aria-label="Category of follow-up"', 'aria-label="When"',
     'aria-label="Priority"', "this encounter is recorded as the closer",
     // documents
     'placeholder="Title"', 'aria-label="Document type"', "Addressed to (optional)",

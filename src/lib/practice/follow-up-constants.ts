@@ -145,6 +145,28 @@ export const FOLLOW_UP_ACTION_TYPES = [
   ["other", "Other"],
 ] as const;
 
+/**
+ * CPR-FUP-002 HFE s7: the deterministic action-to-category inferences. Category is metadata for
+ * filtering and reporting -- it must not be a second question in the primary capture flow, so the
+ * form derives it from the chosen action and files it silently, editable under More details. Every
+ * offered action maps somewhere ON PURPOSE: an action with no entry would leave the previous
+ * inference standing, which is a category from a different answer. contact_patient maps to the
+ * clinical domain because a contact about anything else would be filed under its own action
+ * (administrative has one). Urgency is NEVER inferred from category (s7).
+ */
+export const FOLLOW_UP_ACTION_CATEGORY: Record<string, string> = {
+  clinical_review: "clinical_condition",
+  results_review: "investigation_result",
+  repeat_investigation: "investigation_result",
+  treatment_review: "treatment_response",
+  medication_review: "treatment_response",
+  post_procedure: "procedure_intervention",
+  referral_followup: "referral_outcome",
+  contact_patient: "clinical_condition",
+  administrative: "administrative",
+  other: "other",
+};
+
 /** The ACCEPTED set: offered nine + config-ready medication_review + the pre-FUP-002 codes that live
  *  on historical rows and in-flight offline captures. Only ever widens (s14). */
 export const FOLLOW_UP_TYPES = [
