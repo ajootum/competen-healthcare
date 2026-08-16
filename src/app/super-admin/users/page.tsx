@@ -1,6 +1,7 @@
 import { requireHqCapability } from "@/lib/hq/context";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { estateRolesOf } from "@/lib/roles";
 import UsersWorkspace, { type UserRow, type AuditEntry } from "./UsersWorkspace";
 
 // Landlord Portal — User Management (Design System spec §6).
@@ -100,7 +101,13 @@ export default async function AllUsersPage() {
       : "active";
     return {
       id: p.id, name: p.full_name ?? "—", email: p.email, phone: p.phone ?? null,
-      role: p.role, roles: p.roles ?? [p.role],
+      // ⚠ THE DRIFTED FOLD THIS LINE USED TO CARRY: `p.roles ?? [p.role]`, which answers [] for a
+      // profile holding roles: [] beside a real role -- and 35 of 47 live profiles are exactly that
+      // shape (identity-resolver-harness measurement, 2026-08-16). Those people rendered with no
+      // role chips, matched no role filter, joined no portal group and exported blank, while every
+      // GATE in the product admitted them by the canonical fold. Repointing to estateRolesOf is a
+      // deliberate behaviour change AT THIS SITE: the screen now answers what the gates answer.
+      role: p.role, roles: estateRolesOf(p),
       orgRole: p.org_role ?? null, orgRoles: p.org_roles ?? null,
       platformRole: p.platform_role ?? null,
       organisationId: p.organisation_id ?? null,
