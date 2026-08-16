@@ -1,0 +1,17 @@
+{
+  "comment": "Advisories the dependency gate tolerates, each with its reason and date. An entry here is a RECORDED DEVIATION, not a silence -- scripts/audit-gate.ts prints every tolerated advisory on every run so the list cannot rot unseen. Remove an entry the moment its reason stops being true.",
+  "allow": [
+    {
+      "id": "GHSA-4r6h-8v6p-xvw6",
+      "package": "xlsx",
+      "reason": "Prototype pollution in SheetJS. No fixed version exists on the npm registry at any version -- the fixed releases are distributed only from SheetJS's own CDN. xlsx is used for operator-triggered report exports, never to parse files from untrusted sources.",
+      "dated": "2026-08-16"
+    },
+    {
+      "id": "GHSA-5pgg-2g8v-p4x9",
+      "package": "xlsx",
+      "reason": "ReDoS in SheetJS. Same situation as above: no npm fix exists; export-only usage on operator-supplied data.",
+      "dated": "2026-08-16"
+    }
+  ]
+}

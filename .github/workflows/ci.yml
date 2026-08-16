@@ -1,0 +1,94 @@
+# CI (COMP-SEC-001 "Developer Security Standards" -- the smallest real increment, per the
+# conformance map). Three jobs, each a distinct red light.
+#
+# ⚠ NO SECRETS, BY DESIGN. The database harnesses authenticate with the service-role key, and that
+# key does not belong in GitHub. They run locally against the live database, as they always have;
+# this pipeline runs everything that needs none of that. Handing CI a staging project + secrets is
+# a deliberate later step, not a default.
+#
+# ⚠ THE DEPENDENCY GATE IS OURS (scripts/audit-gate.ts + security/audit-allowlist.json), not a
+# third-party parser -- the first candidate crashed against npm's report shape, and a gate that can
+# crash can be green by accident. Every tolerated advisory prints on every run.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Typecheck + lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # --ignore-scripts: nothing here builds or runs the app, so native postinstalls (sharp) are
+      # pure attack surface with no benefit in this job.
+      - run: npm ci --ignore-scripts
+      - name: Typecheck
+        run: npx tsc --noEmit
+      # eslint's default exit is non-zero on ERRORS only -- warnings inform, errors gate. The ten
+      # pre-existing errors were fixed the day this pipeline landed so it was not born red.
+      - name: Lint
+        run: npx eslint src
+
+  security:
+    name: Dependency + secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # ⚠ THE SECRET SCAN RUNS BEFORE npm ci, ON PURPOSE. After install the tree holds node_modules,
+      # which is thousands of files that are not ours and an hour of scanning for nothing -- the
+      # local dry run proved it. A clean checkout IS the set of files a leaked secret could ship in.
+      # Known fixture values carry inline `gitleaks:allow` annotations at their own lines.
+      - name: Secret scan (gitleaks, clean checkout)
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks detect --source . --no-git --redact
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Dependency gate (high/critical, allowlist with reasons)
+        run: npx tsx scripts/audit-gate.ts
+
+  migrations:
+    name: Migration house rules (changed files)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # Only migrations CHANGED in this push/PR -- history is already applied by hand and re-linting
+      # it is noise. A first push or force-push (zero SHA) skips with a note rather than guessing.
+      - name: House rules on changed migrations
+        run: |
+          BASE="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "no usable base commit for a diff -- skipping (first push or force-push)"
+            exit 0
+          fi
+          CHANGED=$(git diff --name-only "$BASE" "${{ github.sha }}" -- 'supabase/migrations/*.sql' || true)
+          if [ -z "$CHANGED" ]; then
+            echo "no migrations changed"
+            exit 0
+          fi
+          for f in $CHANGED; do
+            echo "── $f"
+            npx tsx scripts/migration-house-rules.ts "$f"
+          done

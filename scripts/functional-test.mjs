@@ -296,16 +296,16 @@ record("workflow:account", "role cannot be self-escalated", prof?.role === "nurs
   record("workflow:account", "avatar upload sets public image URL", avatarOk && publicOk, `status ${r.status}, url fetch ${publicOk}`);
 }
 
-r = await send("POST", "/api/account/password", nurse.cookies, { current_password: "wrong-password", new_password: "NewPass-12345" });
+r = await send("POST", "/api/account/password", nurse.cookies, { current_password: "wrong-password", new_password: "NewPass-12345" }); // gitleaks:allow -- fixture password for a throwaway harness account, not a credential
 record("workflow:account", "password change rejects wrong current password", r.status === 403, `status ${r.status}`);
-r = await send("POST", "/api/account/password", nurse.cookies, { current_password: created.nurse.password, new_password: "NewPass-12345" });
+r = await send("POST", "/api/account/password", nurse.cookies, { current_password: created.nurse.password, new_password: "NewPass-12345" }); // gitleaks:allow
 record("workflow:account", "password change succeeds with correct current", r.status === 200, `status ${r.status}`);
 {
   const oldLogin = await login(created.nurse.email, created.nurse.password);
-  const newLogin = await login(created.nurse.email, "NewPass-12345");
+  const newLogin = await login(created.nurse.email, "NewPass-12345"); // gitleaks:allow
   record("workflow:account", "old password no longer works, new one does",
     oldLogin.status === 400 && newLogin.status === 200, `old ${oldLogin.status}, new ${newLogin.status}`);
-  if (newLogin.status === 200) { nurse.cookies = newLogin.cookies; created.nurse.password = "NewPass-12345"; }
+  if (newLogin.status === 200) { nurse.cookies = newLogin.cookies; created.nurse.password = "NewPass-12345"; } // gitleaks:allow
 }
 
 // 3c-iv. Notifications (§8): events landed, unread count works, mark-all-read works
