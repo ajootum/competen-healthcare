@@ -26,7 +26,8 @@ import {
 import {
   offlinePlausibility, type OfflineParametersReadResult,
 } from "@/lib/practice/offline-parameters";
-import { captureMeasurement, captureEncounter, CAPTURE_HELD_NOTE } from "@/lib/practice/offline-capture";
+import { captureMeasurement, captureEncounter, captureFollowUp, CAPTURE_HELD_NOTE } from "@/lib/practice/offline-capture";
+import { FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
 
 // CP-OFFLINE-SURVEY-001 s3.4 — the cached clinic day, and its age, on one screen.
 //
@@ -489,6 +490,9 @@ function PatientRow(
           <CaptureVisit
             workspaceId={workspaceId} patientId={detail.patientId} patientName={row.name}
           />
+          <CaptureFollowUp
+            workspaceId={workspaceId} patientId={detail.patientId} patientName={row.name}
+          />
         </div>
       )}
     </li>
@@ -820,6 +824,122 @@ function CaptureVisit(
 
       <div className="mt-2 flex items-center gap-2">
         <button type="button" disabled={busy || notes.trim() === "" || !startedAt || !endedAt} onClick={submit}
+          className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
+          {/* ⚠ NOT "Save". Nothing is saved anywhere until this device reaches the practice. */}
+          {busy ? "Holding…" : "Hold on this device"}
+        </button>
+        <button type="button" onClick={() => { setOpen(false); setHeld(null); setProblem(null); }}
+          className="text-[11.5px] text-gray-500 hover:underline">Close</button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * ⚠ ENTITY THREE OF OFFLINE CAPTURE: A FOLLOW-UP (owner's order: "Encounters then follow-up").
+ *
+ * Everything CaptureReading's header says binds here too. This one RAISES an obligation and can never
+ * close, reschedule or defer one -- create-only keeps the conflict surface structurally closed. On
+ * sync it goes through createFollowUp, the same engine the online board is built from.
+ *
+ * ⚠ A PAST DUE DATE IS ALLOWED ON PURPOSE. "Should have been seen last week" is a legitimate
+ * obligation that arrives overdue; refusing it at the bedside would lose it.
+ *
+ * ⚠ AND ONE TRUTH THIS ENTITY OWNS: until this device syncs, the obligation is on NO board and can
+ * remind NOBODY. The sentence under the date says so, because a practitioner who writes "review in
+ * two days" onto a device that may not connect for four needs to know which of those wins.
+ */
+function CaptureFollowUp(
+  { workspaceId, patientId, patientName }:
+  { workspaceId: string | null; patientId: string | null; patientName: string },
+) {
+  const [identity, setIdentity] = useState<DeviceIdentity | null>(null);
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [dueOn, setDueOn] = useState("");
+  const [kind, setKind] = useState("review");
+  const [priority, setPriority] = useState("routine");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [held, setHeld] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    void cachedIdentity().then(setIdentity);
+  }, [open]);
+
+  async function submit() {
+    if (!workspaceId || !patientId || !identity) return;
+    setBusy(true); setProblem(null); setHeld(null);
+    const result = await captureFollowUp({
+      workspaceId, deviceId: identity.deviceId, userId: identity.userId,
+      patientId, reason, dueOn, kind, priority,
+    });
+    setBusy(false);
+    if (!result.ok) { setProblem(result.reason); return; }
+    // ⚠ ONLY AFTER `ok: true`, and only ever CAPTURE_HELD_NOTE's sentence.
+    setHeld(CAPTURE_HELD_NOTE);
+    setReason("");
+  }
+
+  if (!patientId) return null;
+
+  if (!open)
+    return (
+      <button type="button" onClick={() => setOpen(true)}
+        className="mt-2 ml-2 rounded-lg border border-[var(--cp-primary)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary)]">
+        Record a follow-up
+      </button>
+    );
+
+  if (!identity)
+    return <p className="mt-2 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">This device does not know who is signed in, so a follow-up recorded now could not say who committed to it. Open Practice once while online and it will remember.</p>;
+
+  return (
+    <div className="mt-2 rounded-lg border border-gray-300 bg-white px-3 py-2">
+      <p className="text-[11px] font-semibold text-gray-500">Record a follow-up for {patientName}</p>
+
+      <label className="mt-1.5 block">
+        <span className="text-[11px] text-gray-600">What it is for</span>
+        <input type="text" value={reason} maxLength={400}
+          onChange={e => { setReason(e.target.value); setHeld(null); }}
+          className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
+      </label>
+
+      <div className="mt-1.5 grid grid-cols-3 gap-2">
+        <label className="block">
+          <span className="text-[11px] text-gray-600">Due on</span>
+          <input type="date" value={dueOn} onChange={e => { setDueOn(e.target.value); setHeld(null); }}
+            className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
+        </label>
+        <label className="block">
+          <span className="text-[11px] text-gray-600">Kind</span>
+          {/* ⚠ FIXED PICKERS, NEVER FREE TEXT -- the database's own vocabularies. */}
+          <select value={kind} onChange={e => { setKind(e.target.value); setHeld(null); }}
+            className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]">
+            {FOLLOW_UP_KINDS.map(([code, label]) => <option key={code} value={code}>{label}</option>)}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-[11px] text-gray-600">Priority</span>
+          <select value={priority} onChange={e => { setPriority(e.target.value); setHeld(null); }}
+            className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]">
+            {FOLLOW_UP_PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </label>
+      </div>
+
+      {/* The truth this entity owns -- see the component header. */}
+      <p className="mt-1 text-[10.5px] leading-snug text-gray-500">
+        Until this device syncs, this follow-up is held here and is on no practice board, so no
+        reminder can fire. If it is due very soon, plan for that.
+      </p>
+
+      {problem && <p className="mt-1.5 text-[11.5px] leading-relaxed text-rose-700">{problem}</p>}
+      {held && <p className="mt-1.5 rounded border border-gray-300 bg-gray-50 px-2 py-1 text-[11.5px] leading-relaxed text-gray-800">{held}</p>}
+
+      <div className="mt-2 flex items-center gap-2">
+        <button type="button" disabled={busy || reason.trim() === "" || !dueOn} onClick={submit}
           className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
           {/* ⚠ NOT "Save". Nothing is saved anywhere until this device reaches the practice. */}
           {busy ? "Holding…" : "Hold on this device"}

@@ -4,7 +4,7 @@ import { outboxAccept } from "@/lib/practice/outbox-store";
 // ⚠ FROM entity-types.ts, NEVER FROM THE APPLIER. Importing the constant from parameter-measurement.ts
 // pulled parameters.ts -> access.ts -> next/headers into this client bundle and put /practice/offline on
 // a 500. tsc, eslint and every harness stayed green. See entity-types.ts for the rule.
-import { MEASUREMENT_ENTITY_TYPE, ENCOUNTER_ENTITY_TYPE } from "@/lib/practice/sync-appliers/entity-types";
+import { MEASUREMENT_ENTITY_TYPE, ENCOUNTER_ENTITY_TYPE, FOLLOWUP_ENTITY_TYPE } from "@/lib/practice/sync-appliers/entity-types";
 
 // CP-OFFLINE-SURVEY-001 s5 — THE PRODUCER. The first thing in this product that accepts a write it
 // cannot deliver today.
@@ -219,6 +219,88 @@ export async function captureEncounter(input: EncounterCapture): Promise<Capture
       notes,
     },
     // Create-only entity: no prior version exists to have been based on. Same as measurements.
+    baseVersion: null,
+    at,
+  });
+
+  if (!accepted.ok)
+    return { ok: false, code: "NOT_STORED", reason: accepted.reason };
+
+  return { ok: true, recordId: accepted.record.id, entityId };
+}
+
+// ── ENTITY THREE: A FOLLOW-UP ── (owner's order 2026-08-16: "Encounters then follow-up") ────────────
+//
+// ⚠ RAISING an obligation, never closing, rescheduling or deferring one -- create-only keeps the
+// conflict surface structurally closed, same as the two entities before it. On the server it goes
+// through createFollowUp, the same engine the online product uses, so it lands on the board with the
+// event row and audit every other follow-up gets.
+//
+// ⚠ THE ENTITY ID MINTED HERE BECOMES THE ROW'S PRIMARY KEY. The other entities mint it for the
+// ledger; this one takes the doctrine to its conclusion, so a crashed sync's retry is absorbed by an
+// exact id lookup rather than a natural-key reconstruction.
+
+export const CAPTURE_FOLLOWUP_NO_REASON =
+  "This follow-up does not say what it is for, so there is nothing to file.";
+export const CAPTURE_FOLLOWUP_REASON_TOO_LONG =
+  "The reason on this follow-up is longer than the record can hold (400 characters). Shorten it and it can be filed.";
+export const CAPTURE_FOLLOWUP_NO_DUE =
+  "This follow-up does not say when it is due. An obligation without a due date is one nobody will ever be reminded of, so it cannot be filed.";
+export const CAPTURE_FOLLOWUP_BAD_DUE =
+  "The due date on this follow-up could not be read, so it cannot be filed.";
+
+export type FollowUpCapture = {
+  workspaceId: string;
+  deviceId: string;
+  userId: string;
+  patientId: string;
+  /** What the obligation is for. Required -- the board is useless without it. */
+  reason: string;
+  /** YYYY-MM-DD, the practitioner's chosen date. ⚠ A PAST date is allowed -- "should have been seen
+   * last week" is a legitimate obligation that arrives overdue, and refusing it would lose it. */
+  dueOn: string;
+  kind?: string | null;
+  priority?: string | null;
+  at?: Date;
+};
+
+/**
+ * Raise one follow-up on this device, for delivery later. Same contract as the other captures:
+ * nothing may be described as recorded until this returns `ok: true`, and CAPTURE_HELD_NOTE is the
+ * only sentence for success.
+ */
+export async function captureFollowUp(input: FollowUpCapture): Promise<CaptureResult> {
+  const at = input.at ?? new Date();
+
+  const reason = (input.reason ?? "").trim();
+  if (!reason)
+    return { ok: false, code: "NO_REASON", reason: CAPTURE_FOLLOWUP_NO_REASON };
+  if (reason.length > 400)
+    return { ok: false, code: "REASON_TOO_LONG", reason: CAPTURE_FOLLOWUP_REASON_TOO_LONG };
+  const dueOn = (input.dueOn ?? "").trim();
+  if (!dueOn)
+    return { ok: false, code: "NO_DUE", reason: CAPTURE_FOLLOWUP_NO_DUE };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueOn) || Number.isNaN(Date.parse(dueOn)))
+    return { ok: false, code: "BAD_DUE", reason: CAPTURE_FOLLOWUP_BAD_DUE };
+
+  // ⚠ The identity of the future ROW, not just of the retry -- see the header.
+  const entityId = crypto.randomUUID();
+
+  const accepted = await outboxAccept({
+    workspaceId: input.workspaceId,
+    deviceId: input.deviceId,
+    userId: input.userId,
+    entityType: FOLLOWUP_ENTITY_TYPE,
+    entityId,
+    operation: "create",
+    payload: {
+      patientId: input.patientId,
+      reason,
+      dueOn,
+      kind: input.kind ?? null,
+      priority: input.priority ?? null,
+    },
+    // Create-only entity: no prior version exists to have been based on.
     baseVersion: null,
     at,
   });

@@ -5,6 +5,9 @@ import {
 import {
   ENCOUNTER_ENTITY_TYPE, encounterVisitApplier,
 } from "@/lib/practice/sync-appliers/encounter-visit";
+import {
+  FOLLOWUP_ENTITY_TYPE, followUpApplier,
+} from "@/lib/practice/sync-appliers/follow-up";
 
 // CP-OFFLINE-SURVEY-001 s5 precondition 3 (IDEMPOTENT SERVER ACCEPTANCE) — the apply side, over
 // migration 284's practice_sync_transaction. COMP-SYNC-001 s4/s5/s9, CP-SYNC-001 s3/s6.
@@ -173,6 +176,9 @@ export const SYNC_APPLIERS: Record<string, SyncApplier> = {
   // Entity two, 2026-08-16, arriving WITH its capture screen per the rule above. Create-only past
   // COMPLETED visits -- the conflict surface stays structurally closed, same as measurements.
   [ENCOUNTER_ENTITY_TYPE]: encounterVisitApplier,
+  // Entity three, same day, same rule. Create-only NEW obligations; the device-minted entityId is
+  // the row's primary key, so the crash-window replay is an exact lookup.
+  [FOLLOWUP_ENTITY_TYPE]: followUpApplier,
 };
 
 export const SYNC_ENTITY_TYPES: string[] = Object.keys(SYNC_APPLIERS);

@@ -28,7 +28,7 @@ import { runProvisioning, type IndividualRequest } from "../src/lib/practice/pro
 import type { WorkspaceContext } from "../src/lib/practice/access";
 import { registerPatient } from "../src/lib/practice/patients";
 import { launchEncounter } from "../src/lib/practice/encounters";
-import { ENCOUNTER_ENTITY_TYPE } from "../src/lib/practice/sync-appliers/entity-types";
+import { ENCOUNTER_ENTITY_TYPE, FOLLOWUP_ENTITY_TYPE } from "../src/lib/practice/sync-appliers/entity-types";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
@@ -512,6 +512,81 @@ async function main() {
     ok("10m. ⚠ the no-time sentence is one sentence, at the bedside and at sync",
       !!noTimeSentence && applierSrc.includes(noTimeSentence),
       noTimeSentence ? "the applier does not contain the capture sentence" : "the capture sentence was not found at all");
+
+    // ── 11. ⚠ THE FOLLOW-UP APPLIER, LIVE ──────────────────────────────────────────────────────────
+    //
+    // Entity three. Create-only again, but with a stronger replay mechanism than the encounter's
+    // natural key: THE DEVICE-MINTED entityId IS THE ROW'S PRIMARY KEY, so the crash-window retry is
+    // an exact lookup. 11d is the assertion that pins that -- a new transaction, same entityId, one
+    // row -- and 11b pins that the obligation went through createFollowUp (the event row and audit
+    // exist), not through some lenient parallel insert.
+    const fuEntityId = uuid();
+    const fuPayload = {
+      patientId, reason: "Review wound healing", dueOn: "2026-08-30",
+      kind: "review", priority: "soon",
+    };
+    const ftx = tx({ entityType: FOLLOWUP_ENTITY_TYPE, entityId: fuEntityId, payload: fuPayload, clientSequence: 5 });
+    const fFirst = await applyTransaction(admin, ctx, ftx, { actorId: USER });
+    ok("11a. a captured follow-up is APPLIED through the real registry entry",
+      fFirst.status === "applied", fFirst.errorMessage ?? "");
+
+    const { data: fuRow } = await admin.from("practice_follow_up")
+      .select("id, reason, due_on, status, source, kind, priority, created_by")
+      .eq("id", fuEntityId).eq("workspace_id", workspaceId).maybeSingle();
+    ok("11b. ⚠ THE ROW ID IS THE DEVICE-MINTED ENTITY ID, open on the board, source manual, actor welded",
+      !!fuRow && fuRow.status === "OPEN" && fuRow.source === "manual" && fuRow.due_on === "2026-08-30"
+      && fuRow.kind === "review" && fuRow.priority === "soon" && fuRow.created_by === USER,
+      JSON.stringify(fuRow ?? "no row"));
+    const { data: fuEvents } = await admin.from("practice_follow_up_event")
+      .select("id, to_status").eq("follow_up_id", fuEntityId);
+    const { data: fuAudit } = await admin.from("practice_audit_event")
+      .select("id").eq("workspace_id", workspaceId)
+      .eq("event_type", "practice.followup_raised").eq("correlation_id", ftx.id);
+    ok("11c. ⚠ it went through createFollowUp -- the event row and the audit exist, so this is not a lenient path",
+      (fuEvents ?? []).length === 1 && (fuAudit ?? []).length === 1,
+      `events=${(fuEvents ?? []).length} audits=${(fuAudit ?? []).length}`);
+
+    const fReplay = await applyTransaction(admin, ctx, ftx, { actorId: USER });
+    ok("11d-ledger. the SAME transaction retried is deduplicated by the ledger",
+      fReplay.duplicate === true && fReplay.status === "applied");
+    const fCrash = await applyTransaction(admin, ctx,
+      tx({ entityType: FOLLOWUP_ENTITY_TYPE, entityId: fuEntityId, payload: fuPayload, clientSequence: 6 }), { actorId: USER });
+    const { data: fuTwins } = await admin.from("practice_follow_up")
+      .select("id").eq("workspace_id", workspaceId).eq("patient_id", patientId).eq("reason", "Review wound healing");
+    ok("11d. ⚠⚠ a NEW transaction with the same device-minted id is absorbed by the PRIMARY KEY -- the crash window",
+      fCrash.status === "applied" && (fuTwins ?? []).length === 1,
+      `status=${fCrash.status} rows=${(fuTwins ?? []).length}`);
+    const { data: fuAuditAfter } = await admin.from("practice_audit_event")
+      .select("id").eq("workspace_id", workspaceId).eq("event_type", "practice.followup_raised");
+    ok("11e. one raising, one audit row -- an absorbed replay is not a second event",
+      (fuAuditAfter ?? []).length === 1, `${(fuAuditAfter ?? []).length} audit rows`);
+
+    // The refusals, each terminal, each in the practitioner's words.
+    const fuRefusals: [string, Record<string, unknown>, string][] = [
+      ["NO_REASON", { ...fuPayload, reason: "   " }, "does not say what it is for"],
+      ["NO_DUE", { ...fuPayload, dueOn: "" }, "nobody will ever be reminded"],
+      ["BAD_DUE", { ...fuPayload, dueOn: "soonish" }, "could not be read"],
+      ["BAD_PATIENT", { ...fuPayload, patientId: uuid() }, "not in this practice"],
+    ];
+    for (const [code, payload, needle] of fuRefusals) {
+      const verdict = await applyTransaction(admin, ctx,
+        tx({ entityType: FOLLOWUP_ENTITY_TYPE, payload, clientSequence: 7 }), { actorId: USER });
+      ok(`11f-${code}. refused terminally, in words a practitioner can act on`,
+        verdict.status === "refused" && verdict.retryable === false
+        && verdict.errorCode === code && new RegExp(needle, "i").test(verdict.errorMessage ?? ""),
+        `status=${verdict.status} code=${verdict.errorCode} msg=${verdict.errorMessage}`);
+    }
+    const { data: allFu } = await admin.from("practice_follow_up")
+      .select("id").eq("workspace_id", workspaceId).eq("patient_id", patientId);
+    ok("11f-control. the refused follow-ups filed nothing -- exactly one obligation exists",
+      (allFu ?? []).length === 1, `${(allFu ?? []).length} rows`);
+
+    // ⚠ The shared sentence pin, same shape as 10m.
+    const fuApplierSrc = readFileSync("src/lib/practice/sync-appliers/follow-up.ts", "utf8");
+    const noDueSentence = captureSrc.match(/CAPTURE_FOLLOWUP_NO_DUE =\s*\n?\s*"([^"]+)"/)?.[1];
+    ok("11g. ⚠ the no-due sentence is one sentence, at the bedside and at sync",
+      !!noDueSentence && fuApplierSrc.includes(noDueSentence),
+      noDueSentence ? "the applier does not contain the capture sentence" : "the capture sentence was not found at all");
   } finally {
     delete SYNC_APPLIERS.harness_note;
   }

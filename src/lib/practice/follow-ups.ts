@@ -117,6 +117,10 @@ export async function listIntervals(admin: any) {
 export async function createFollowUp(admin: any, args: {
   workspaceId: string; patientId: string; originEncounterId?: string | null;
   problemId?: string | null; diagnosisId?: string | null;
+  /** ⚠ OFFLINE CAPTURE ONLY (offline-filing.ts). The device mints the identity so a crashed sync's
+   * retry is absorbed by the PRIMARY KEY instead of guessed at by a natural key. Online callers never
+   * pass this -- the database default mints server-side identities exactly as before. */
+  id?: string;
   kind?: string; reason: string; dueOn?: string; intervalCode?: string; priority?: string;
   // ── CPR-FUP-002 s5: EVERY FOLLOW-UP STORES WHERE IT CAME FROM ────────────────────────────────────
   // Until migration 239 the only trace was origin_encounter_id being null or not, which cannot tell a
@@ -234,6 +238,7 @@ export async function createFollowUp(admin: any, args: {
     };
 
   const { data: f, error } = await admin.from("practice_follow_up").insert({
+    ...(args.id ? { id: args.id } : {}),
     workspace_id: args.workspaceId, patient_id: args.patientId, origin_encounter_id: originEncounterId,
     problem_id: args.problemId ?? null, diagnosis_id: args.diagnosisId ?? null,
     kind, reason: args.reason.trim(), due_on: dueOn, priority, status,

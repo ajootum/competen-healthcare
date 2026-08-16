@@ -38,3 +38,11 @@ export const MEASUREMENT_ENTITY_TYPE = "parameter_measurement";
  * hazard this entity was designed around. Create-only, so the edit-conflict surface stays closed.
  */
 export const ENCOUNTER_ENTITY_TYPE = "encounter_visit";
+
+/**
+ * ⚠ ENTITY THREE (owner's order: "Encounters then follow-up"). A follow-up captured offline is a NEW
+ * obligation -- create-only like the other two, so the conflict surface stays structurally closed.
+ * ⚠ THE DEVICE-MINTED entityId BECOMES THE ROW ID, which is what makes the crash-between-apply-and-
+ * ledger retry exact: the replay check is a primary-key lookup, not a natural-key guess.
+ */
+export const FOLLOWUP_ENTITY_TYPE = "follow_up";

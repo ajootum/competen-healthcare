@@ -2,6 +2,7 @@ import { audit } from "@/lib/practice/audit";
 import { NOTE_TYPES } from "@/lib/practice/encounter-constants";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { saveNoteSegment } from "@/lib/practice/documentation";
+import { createFollowUp } from "@/lib/practice/follow-ups";
 
 // ── FILING AN OFFLINE VISIT ── CP offline capture, entity two (owner: "Encounters then follow-up") ──
 //
@@ -163,4 +164,84 @@ export async function fileOfflineEncounter(admin: any, args: {
   }
 
   return { ok: true, data: { id: encounterId, replayed } };
+}
+
+// ── FILING AN OFFLINE FOLLOW-UP ── entity three (owner's order: "Encounters then follow-up") ────────
+//
+// ⚠ IT WRAPS createFollowUp -- the same function every online caller uses -- so validation, the event
+// row, the audit, the domain event and the activation hook all happen because they happen there. What
+// this wrapper adds is exactly the offline concerns:
+//
+//   THE ROW ID IS THE DEVICE-MINTED ENTITY ID. offline-capture.ts already mints an entityId per
+//   capture "because that is what makes the retry safe" -- this entity takes that doctrine to its
+//   conclusion and makes it the PRIMARY KEY. The crash-between-apply-and-ledger replay check is then
+//   an exact id lookup, not the natural-key reconstruction the encounter needs.
+//
+//   ⚠ A LATE VALIDATION_ERROR IS RE-MAPPED TO 500, AND THIS IS LOAD-BEARING. createFollowUp answers
+//   400 VALIDATION_ERROR for a failed INSERT -- for an online caller a tolerable conflation, but the
+//   applier maps < 500 to a TERMINAL refusal, so a transient database fault during the insert would
+//   read as "the practice refused this obligation" and the capture would be abandoned. Every payload
+//   fault is refused BEFORE the call (same sentences as the bedside), so a VALIDATION_ERROR that
+//   comes back from the engine can only be the insert itself -- infrastructure, retryable -- except
+//   the duplicate-key shape, which is the replay race and returns the row that won.
+
+const DUE_ON_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export async function fileOfflineFollowUp(admin: any, args: {
+  workspaceId: string; patientId: string;
+  reason: string; dueOn: string; kind?: string | null; priority?: string | null;
+  /** The device-minted capture identity -- becomes the row id. */
+  entityId: string;
+  actorId: string; correlationId: string;
+}): Promise<EngineResult<{ id: string; replayed: boolean }>> {
+  const reason = (args.reason ?? "").trim();
+  if (!reason)
+    return { ok: false, status: 422, code: "NO_REASON", message: "This follow-up does not say what it is for, so there is nothing to file." };
+  if (reason.length > 400)
+    return { ok: false, status: 422, code: "REASON_TOO_LONG", message: "The reason on this follow-up is longer than the record can hold (400 characters). Shorten it and it can be filed." };
+  const dueOn = (args.dueOn ?? "").trim();
+  if (!dueOn)
+    return { ok: false, status: 422, code: "NO_DUE", message: "This follow-up does not say when it is due. An obligation without a due date is one nobody will ever be reminded of, so it cannot be filed." };
+  if (!DUE_ON_RE.test(dueOn) || Number.isNaN(Date.parse(dueOn)))
+    return { ok: false, status: 422, code: "BAD_DUE", message: "The due date on this follow-up could not be read, so it cannot be filed." };
+
+  // The replay check -- an exact primary-key lookup, because the device minted the identity.
+  const { data: existing, error: findError } = await admin.from("practice_follow_up")
+    .select("id").eq("id", args.entityId).eq("workspace_id", args.workspaceId).maybeSingle();
+  if (findError)
+    return { ok: false, status: 500, code: "REPLAY_CHECK_FAILED", message: findError.message };
+  if (existing) return { ok: true, data: { id: existing.id as string, replayed: true } };
+
+  const created = await createFollowUp(admin, {
+    workspaceId: args.workspaceId, patientId: args.patientId,
+    id: args.entityId,
+    reason, dueOn,
+    kind: args.kind ?? undefined, priority: args.priority ?? undefined,
+    // ⚠ WELDED. A device cannot claim its obligation was raised by a document, an investigation or an
+    // encounter row it cannot name -- "manual" is the one source that is true of a bedside capture,
+    // and createFollowUp refuses the others without their origin anyway.
+    source: "manual",
+    actorId: args.actorId, correlationId: args.correlationId,
+  });
+
+  if (created.ok) return { ok: true, data: { id: created.data.id, replayed: false } };
+
+  // NOT_FOUND is the engine's generic word for a missing patient. On a sync screen days later it has
+  // to say whose record is missing, so it is renamed here rather than passed through.
+  if (created.code === "NOT_FOUND")
+    return { ok: false, status: 404, code: "BAD_PATIENT", message: "that patient is not in this practice, so the follow-up cannot be filed" };
+
+  if (created.code === "VALIDATION_ERROR") {
+    // The replay race: two retries both passed the check above and the primary key decided. The row
+    // that won IS this capture -- same device-minted id -- so this is a success, not a failure.
+    if (/duplicate|unique/i.test(created.message)) {
+      const { data: raced } = await admin.from("practice_follow_up")
+        .select("id").eq("id", args.entityId).eq("workspace_id", args.workspaceId).maybeSingle();
+      if (raced) return { ok: true, data: { id: raced.id as string, replayed: true } };
+    }
+    // Anything else labelled VALIDATION_ERROR at this point is the INSERT failing -- see the header.
+    return { ok: false, status: 500, code: "WRITE_FAILED", message: created.message };
+  }
+
+  return created;
 }
