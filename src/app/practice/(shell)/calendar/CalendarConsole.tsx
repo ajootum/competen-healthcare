@@ -63,7 +63,7 @@ export default function CalendarConsole({ date, timezone, canManage, initial, lo
     if (r.ok) { const d = await r.json(); setDay({ appointments: d.appointments, queue: d.queue, blocks: d.blocks }); }
   }
 
-  async function act(fn: () => Promise<Response>, okText: string) {
+  async function act(fn: () => Promise<Response>, okText: string, onOk?: () => void) {
     setBusy(true); setNotice(null);
     const res = await fn();
     if (!res.ok) {
@@ -71,10 +71,21 @@ export default function CalendarConsole({ date, timezone, canManage, initial, lo
       setNotice({ kind: "err", text: e?.error?.message ?? e?.error ?? "That did not work." });
     } else {
       setNotice({ kind: "ok", text: okText });
+      // ⚠ ONLY on success, and AFTER the notice is set -- a form that cleared on failure would eat
+      // the very details the person needs to correct (walkthrough defect #3's other half).
+      onOk?.();
       await refresh();
     }
     setBusy(false);
   }
+
+  /** "09:00" + 45 -> "09:45". Wall-clock arithmetic only; the server owns the real instant. */
+  const addMinutes = (hhmm: string, minutes: number): string | null => {
+    const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(hhmm);
+    if (!m || !Number.isFinite(minutes)) return null;
+    const total = (Number(m[1]) * 60 + Number(m[2]) + minutes) % (24 * 60);
+    return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  };
 
   // ⚠ A SCHEDULED BOOKING SENDS WALL-CLOCK date+time; the server composes the instant in the practice
   // timezone. This used to send `${date}T${form.time}:00.000Z` -- declaring the practice's 09:00 to be
@@ -89,7 +100,16 @@ export default function CalendarConsole({ date, timezone, canManage, initial, lo
       reason: form.reason || undefined,
       locationId: form.locationId || undefined,
     }),
-  }), walkIn ? "Walk-in registered." : "Appointment booked.");
+  }), walkIn ? "Walk-in registered." : "Appointment booked.",
+  // ⚠ WALKTHROUGH DEFECT #3 (owner, 2026-08-16): the form used to keep the previous patient's
+  // details after a successful booking -- inviting a double-book and a field-by-field retype. On
+  // success the PER-PATIENT fields clear; the type and location stay (the next booking in the same
+  // sitting almost always shares them); and the TIME ADVANCES to the end of the slot just booked,
+  // so booking a clinic back-to-back is enter-name, press, enter-name, press.
+  () => setForm(p => ({
+    ...p, patientName: "", patientPhone: "", reason: "",
+    time: walkIn ? p.time : (addMinutes(p.time, Number(p.durationMinutes) || 20) ?? p.time),
+  })));
 
   const transition = (id: string, action: string, label: string) =>
     act(() => fetch(`/api/v1/practice/appointments/${id}`, {
@@ -205,14 +225,29 @@ export default function CalendarConsole({ date, timezone, canManage, initial, lo
               <form className="mt-2 flex flex-col gap-2" onSubmit={e => { e.preventDefault(); book(false); }}>
                 <input required placeholder="Patient name" value={form.patientName} onChange={e => setForm(p => ({ ...p, patientName: e.target.value }))} className={input} />
                 <input placeholder="Phone (optional)" value={form.patientPhone} onChange={e => setForm(p => ({ ...p, patientPhone: e.target.value }))} className={input} />
+                {/* ⚠ WALKTHROUGH DEFECT #2 (owner, 2026-08-16): these two fields relied on tooltips,
+                    and a bare "20" explains nothing. Visible labels, and the DERIVED end time below
+                    the row -- the end is what the two numbers actually mean together, and showing it
+                    confirms the booking's span before the button is pressed. */}
                 <div className="grid grid-cols-2 gap-2">
-                  {/* 24-hour text input, not type="time" -- the native picker renders 12-hour on many
-                      machines and the owner asked for the 24-hour clock. */}
-                  <input required value={form.time} onChange={e => setForm(p => ({ ...p, time: e.target.value }))}
-                    pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="09:00" inputMode="numeric"
-                    title="24-hour clock, HH:MM — for example 09:00 or 14:30" className={input} />
-                  <input type="number" min={5} max={480} value={form.durationMinutes} onChange={e => setForm(p => ({ ...p, durationMinutes: e.target.value }))} className={input} title="Duration in minutes" />
+                  <label className="block">
+                    <span className="text-[11px] text-gray-600">Time (24-hour)</span>
+                    {/* 24-hour text input, not type="time" -- the native picker renders 12-hour on many
+                        machines and the owner asked for the 24-hour clock. */}
+                    <input required value={form.time} onChange={e => setForm(p => ({ ...p, time: e.target.value }))}
+                      pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="09:00" inputMode="numeric"
+                      title="24-hour clock, HH:MM — for example 09:00 or 14:30" className={`mt-0.5 ${input}`} />
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] text-gray-600">Length (minutes)</span>
+                    <input type="number" min={5} max={480} value={form.durationMinutes} onChange={e => setForm(p => ({ ...p, durationMinutes: e.target.value }))} className={`mt-0.5 ${input}`} title="Duration in minutes" />
+                  </label>
                 </div>
+                {addMinutes(form.time, Number(form.durationMinutes) || 0) && Number(form.durationMinutes) > 0 && (
+                  <p className="text-[11px] text-gray-500">
+                    Ends {addMinutes(form.time, Number(form.durationMinutes))}
+                  </p>
+                )}
                 <select value={form.appointmentType} onChange={e => setForm(p => ({ ...p, appointmentType: e.target.value }))} className={input}>
                   {TYPES.filter(([k]) => k !== "walk_in").map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                 </select>
