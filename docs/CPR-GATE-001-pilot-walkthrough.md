@@ -100,3 +100,50 @@ Named honestly, because a checklist that implies more coverage than it has is wo
   and visible in the step ledger, but there is no self-service retry in the product.
 - **Email delivery.** Verification and reset emails ride the platform's identity configuration; this
   document assumes it already works, because it is not Practice-specific.
+
+---
+
+## Part A-2026-08-16 — the refreshed route (start HERE if your practice already exists)
+
+Part A above was written when the product was phases 0-3 and provisioning was the first hurdle. Your
+practice exists and is ACTIVE, so steps 1-6 are already true of you; and the product has grown a
+finance arc, offline capture, follow-ups, the Session cockpit and the compressed planner since. Two
+details of Part A have also aged: new registrations mint a `YY-NNNNNN` patient number (the
+`P-XXXXXX` id is a legacy identifier, still searchable), and the sidebar is the eleven-item
+harmonised navigation, not the four items step 6 names.
+
+**A free day is a good walkthrough day.** The walk-in path is the whole clinical spine and needs no
+bookings; booking one appointment for today un-frees the day in two clicks anyway; and the empty
+states themselves are test subjects -- every one of them is supposed to say something true rather
+than render a zero grid.
+
+The route, in the order a real day runs. At every step the question is the same: **does the screen
+say something untrue, confusing, or missing?** A defect here is usually a SENTENCE, not a crash.
+
+| # | Do this | Watch for |
+|---|---|---|
+| 1 | **Planner** -> add an activity for today (a clinic block) | The compressed layout: one Day Inspector, not six stacked cards. The appointment book appears only in Day view. |
+| 2 | **Command Centre** -> start the day / start the activity | Current Activity in the sidebar goes Running. |
+| 3 | **Current Session** | The cockpit: tiles as pairs (no percentages), Current Patient empty state honest, queue empty but not a zero grid. |
+| 4 | Book an appointment for today (Planner, Day view), then Confirm and Check in | REQUESTED -> CONFIRMED -> ARRIVED; the person appears in the cockpit queue. |
+| 5 | **Add a walk-in** from the cockpit queue | Registration with duplicate screening; the `YY-NNNNNN` number mints. |
+| 6 | **Start the encounter from the queue row** | This action is NEW today -- it existed as code for months and was never wired. You land in the consultation. |
+| 7 | Document: SOAP segments, a diagnosis with a problem, a medication | Each save is versioned; no-op saves write no version. |
+| 8 | Record a **measurement** and a **procedure** on the encounter | Plausibility warns, never blocks. |
+| 9 | Raise a **follow-up** from the encounter ("review in 2 weeks") | It lands on the Follow-ups board with the encounter as origin. |
+| 10 | **Charges and payment** door on the encounter -> charge the consultation -> record a cash payment | The receipt gets a CP-RCT number; collected-vs-received language holds. |
+| 11 | Back in the cockpit: **Finish the session** | The two-step acknowledgement lists anything unresolved (it acknowledges, never blocks). Session Complete renders the summary. |
+| 12 | **Sign** the encounter, then try to edit it | Refused by the engine, and by the database trigger underneath. |
+| 13 | **Payments** workspace: Overview / Transactions / Outstanding | The day's money is there; print an invoice and the patient statement (print view IS the pdf). |
+| 14 | **Patients** -> the patient record | Timeline shows encounter, diagnosis, measurement, procedure, follow-up, charges. |
+| 15 | **Practice Intelligence** | Real denominators, the ONE approved percentage (attendance) and nothing else percent-shaped. |
+| 16 | **/practice/offline** (open it once online first, set the PIN when offered) | The offline reader with its four capture forms: reading, visit, follow-up, money -- each says "held on this device", never "saved". |
+| 17 | Airplane-mode one capture if you are feeling thorough, then reconnect | It files at sync; the receipt for money is numbered AT sync. |
+| 18 | **Privacy -> Security** | The posture states the retention POLICY (a decision of record, not a gap); the session panel shows your 30-minute idle rule live. |
+| 19 | Walk away 30 minutes (or use the console's preview) | The 60-second warning, then the cover; your password brings everything back. |
+| 20 | Anything that read wrong at any step | Write the sentence down verbatim. That sentence is the defect report. |
+
+Steps 1-15 exercise everything CPR-BUILD-000 through the PAY arc shipped; 16-17 the offline arc;
+18-19 the security enforcement you switched on today. The walkthrough is DONE when you have either
+a list of sentences that need fixing, or the honest verdict that a stranger could run a day on this
+product without being lied to once.
