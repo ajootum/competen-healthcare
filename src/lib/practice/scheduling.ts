@@ -780,6 +780,51 @@ export async function transitionQueueEntry(admin: any, args: {
   return { ok: true, data: { status: args.to } };
 }
 
+/**
+ * Walkthrough 2026-08-16 request #4b -- checking in somebody who is already a queue row.
+ *
+ * A queue entry IS the arrival record and entered_at its stamp. Two very different cases share this
+ * door and must be told apart BY THE ENGINE, not the screen:
+ *
+ *   - A row whose stamp is from a PREVIOUS practice day is a stale record wearing a clock ("waiting
+ *     6d 23h"). The patient standing here now was not stamped; re-stamping to the server's now is
+ *     the CORRECTION of a wrong record, and the audit row keeps the old value.
+ *   - A row already stamped TODAY holds the truth. Re-stamping it would falsify an arrival record,
+ *     so it is refused with the time it already holds -- the caller is told the record is right.
+ *
+ * The boundary is the PRACTICE's day, read from the workspace clock -- never the server's UTC day,
+ * which flips at a different hour than the waiting room does.
+ */
+export async function checkInQueueEntry(admin: any, args: {
+  workspaceId: string; entryId: string; actorId: string; correlationId: string;
+}): Promise<EngineResult<{ enteredAtIso: string }>> {
+  const { data: entry } = await admin.from("practice_queue_entry")
+    .select("id, status, entered_at").eq("id", args.entryId).eq("workspace_id", args.workspaceId).maybeSingle();
+  if (!entry) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+
+  if (entry.status !== "WAITING" && entry.status !== "READY")
+    return { ok: false, status: 422, code: "ILLEGAL_TRANSITION",
+      message: `this entry is ${String(entry.status)}, and only somebody still waiting can be checked in.` };
+
+  const { timezone } = await workspaceClock(admin, args.workspaceId);
+  const day = zonedDayRange(practiceToday(timezone), timezone);
+  const enteredMs = Date.parse(String(entry.entered_at));
+  if (enteredMs >= Date.parse(day.startIso) && enteredMs < Date.parse(day.endIso))
+    return { ok: false, status: 409, code: "ALREADY_CHECKED_IN",
+      message: "this arrival was already stamped today -- the record is right as it stands." };
+
+  const enteredAtIso = new Date().toISOString();
+  await admin.from("practice_queue_entry")
+    .update({ entered_at: enteredAtIso, updated_at: enteredAtIso })
+    .eq("workspace_id", args.workspaceId).eq("id", entry.id);
+
+  await audit(admin, {
+    workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.queue_checked_in",
+    payload: { entryId: entry.id, previousEnteredAt: entry.entered_at }, correlationId: args.correlationId,
+  });
+  return { ok: true, data: { enteredAtIso } };
+}
+
 const QUEUE_LIVE_STATUSES = ["WAITING", "READY", "IN_CONSULTATION", "PAUSED"];
 
 /**

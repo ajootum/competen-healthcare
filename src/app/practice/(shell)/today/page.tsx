@@ -6,6 +6,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { dashboardReadModel } from "@/lib/practice/dashboard";
 import { formatMinuteOfDay, formatDate } from "@/lib/datetime";
+import { zonedDayRange } from "@/lib/practice/practice-time";
 import { PATIENT_FLOW_ACTIVITY_TYPES } from "@/lib/practice/activity-constants";
 import SessionControls from "./SessionControls";
 import SessionTiles from "./SessionTiles";
@@ -73,6 +74,8 @@ export default async function CurrentSessionPage() {
   ]);
   const { plan, session, queue, timeline, flow, attention, metrics } = dash;
   const canControl = hasCapability(shell.ctx, "appointment.manage");
+  // The practice day's start, for telling a carried-over arrival stamp from today's truth (#4b).
+  const dayStartMs = Date.parse(zonedDayRange(plan.date, dash.timezone).startIso);
 
   // The lifecycle state, derived from the two timestamps and the pause ledger -- never stored.
   const state: "NOT_STARTED" | "RUNNING" | "PAUSED" =
@@ -301,6 +304,7 @@ export default async function CurrentSessionPage() {
               : null}
             canCapture={hasCapability(shell.ctx, "encounter.edit")}
             canStartEncounter={hasCapability(shell.ctx, "encounter.create")}
+            canCheckIn={hasCapability(shell.ctx, "queue.manage")}
             people={queue.groups.flatMap(g => g.entries.map(e => ({
               id: e.id,
               name: e.name,
@@ -308,10 +312,13 @@ export default async function CurrentSessionPage() {
               status: e.status,
               waitingMinutes: e.waitingMinutes,
               waitingReason: null,
-              timeLabel: e.timeLabel,
-              bookedTimeLabel: e.bookedTimeLabel,
+              // The PRACTICE's clock, not UTC slices -- "b. 15:36" under a card saying "Booked 18:36"
+              // was the same instant rendered in two clocks (walkthrough 2026-08-16).
+              timeLabel: clock(e.enteredAtIso, dash.timezone),
+              bookedTimeLabel: e.bookedAtIso ? clock(e.bookedAtIso, dash.timezone) : null,
               href: null,
               patientId: e.patientId,
+              staleArrival: Date.parse(e.enteredAtIso) < dayStartMs,
             })))}
           />
 
@@ -321,11 +328,12 @@ export default async function CurrentSessionPage() {
               the arrive transition; anybody else keeps the honest sentence and the Planner pointer. */}
           {canControl && flow.expectedList !== null && flow.expectedList.length > 0 ? (
             <ExpectedCheckIn
-              total={flow.expected}
+              total={flow.expectedListTotal}
               people={flow.expectedList.map(a => ({
                 appointmentId: a.appointmentId,
                 name: a.name,
                 timeLabel: clock(a.scheduledAtIso, dash.timezone),
+                status: a.status,
               }))}
             />
           ) : flow.expected !== null && flow.expected > 0 ? (

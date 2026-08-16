@@ -21,7 +21,7 @@ import { useRouter } from "next/navigation";
 // a person in two places at once while every figure on the screen still disagreed.
 
 export default function ExpectedCheckIn({ people, total }: {
-  people: { appointmentId: string; name: string; timeLabel: string | null }[];
+  people: { appointmentId: string; name: string; timeLabel: string | null; status: string }[];
   /** The full expected count -- may exceed the rows shown when the engine capped the list. */
   total: number | null;
 }) {
@@ -29,23 +29,26 @@ export default function ExpectedCheckIn({ people, total }: {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function checkIn(appointmentId: string) {
+  // ⚠ REQUESTED cannot legally become ARRIVED -- the state machine requires CONFIRMED first, so a
+  // REQUESTED row (a patient-facing booking request) offers Confirm, never a check-in that would 422.
+  // Staff bookings are born CONFIRMED, so the owner's own bookings always show Check in directly.
+  async function act(appointmentId: string, action: "arrive" | "confirm") {
     setBusyId(appointmentId);
     setError(null);
     try {
       const res = await fetch(`/api/v1/practice/appointments/${appointmentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "arrive" }),
+        body: JSON.stringify({ action }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(body?.error?.message ?? body?.error ?? "That check-in could not be recorded.");
+        setError(body?.error?.message ?? body?.error ?? "That could not be recorded.");
         return;
       }
       router.refresh();
     } catch {
-      setError("That check-in could not be recorded.");
+      setError("That could not be recorded.");
     } finally {
       setBusyId(null);
     }
@@ -65,11 +68,20 @@ export default function ExpectedCheckIn({ people, total }: {
             {p.timeLabel && (
               <span className="shrink-0 text-[10px] tabular-nums text-gray-400">b. {p.timeLabel}</span>
             )}
-            <button type="button" disabled={busyId !== null}
-              onClick={() => checkIn(p.appointmentId)}
-              className="shrink-0 rounded border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-              {busyId === p.appointmentId ? "Checking in..." : "Check in"}
-            </button>
+            {p.status === "CONFIRMED" ? (
+              <button type="button" disabled={busyId !== null}
+                onClick={() => act(p.appointmentId, "arrive")}
+                className="shrink-0 rounded border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                {busyId === p.appointmentId ? "Checking in..." : "Check in"}
+              </button>
+            ) : (
+              <button type="button" disabled={busyId !== null}
+                onClick={() => act(p.appointmentId, "confirm")}
+                title="This is a booking request from the patient side. Confirm it first; Check in appears next."
+                className="shrink-0 rounded border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                {busyId === p.appointmentId ? "Confirming..." : "Confirm"}
+              </button>
+            )}
           </li>
         ))}
       </ul>

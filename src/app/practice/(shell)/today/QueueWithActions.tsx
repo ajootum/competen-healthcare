@@ -17,7 +17,7 @@ import { startEncounterFor } from "@/lib/practice/encounter-start";
 // encounter.edit through requirePracticeContext. `canCapture` decides what is DRAWN; the route decides
 // what is ALLOWED.
 
-export default function QueueWithActions({ people, unavailableReason, truncatedNotice, href, canCapture, canStartEncounter }: {
+export default function QueueWithActions({ people, unavailableReason, truncatedNotice, href, canCapture, canStartEncounter, canCheckIn }: {
   people: QueuePerson[];
   unavailableReason: string | null;
   /** Passed straight through: this wrapper adds handlers, it does not decide what the card may say. */
@@ -29,6 +29,11 @@ export default function QueueWithActions({ people, unavailableReason, truncatedN
    * the encounters API gates on its own capability again, which is the actual control.
    */
   canStartEncounter: boolean;
+  /**
+   * Walkthrough 2026-08-16 #4b: re-stamp a stale carried-over arrival to now. queue.manage decides
+   * what is DRAWN; the queue API gates on it again, and the engine refuses today's stamps regardless.
+   */
+  canCheckIn: boolean;
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -73,6 +78,27 @@ export default function QueueWithActions({ people, unavailableReason, truncatedN
     }
   }
 
+  async function checkIn(entryId: string) {
+    setBusyId(entryId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/v1/practice/queue/${entryId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "check_in" }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(body?.error?.message ?? "That check-in could not be recorded."); return; }
+      // Same refresh-not-mutate rule as markSeen: the new stamp, the wait figure and the Arrived
+      // count are all computed on the server, and a locally edited row would disagree with them.
+      router.refresh();
+    } catch {
+      setError("That check-in could not be recorded.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <WaitingQueueCard
       people={people}
@@ -83,6 +109,7 @@ export default function QueueWithActions({ people, unavailableReason, truncatedN
       error={error}
       onMarkSeen={canCapture ? markSeen : undefined}
       onStartEncounter={canStartEncounter ? startEncounter : undefined}
+      onCheckIn={canCheckIn ? checkIn : undefined}
     />
   );
 }

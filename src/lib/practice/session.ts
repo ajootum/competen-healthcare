@@ -219,6 +219,14 @@ export type QueueGroup = { key: string; label: string; entries: QueueRow[] };
 export type QueueRow = {
   id: string; name: string; timeLabel: string; waitingMinutes: number; status: string;
   /**
+   * The raw stamps behind the labels. timeLabel/bookedTimeLabel above are UTC hh:mm slices and the
+   * cockpit renders in the PRACTICE's clock -- the screen formats these with the workspace timezone
+   * instead ("b. 15:36" under a card saying "Booked 18:36" was the same instant in two clocks).
+   * enteredAtIso also decides whether an arrival stamp is from a previous day and may be corrected.
+   */
+  enteredAtIso: string;
+  bookedAtIso: string | null;
+  /**
    * The BOOKED time (hh:mm), for an entry whose visit was an appointment. Null for a walk-in, who has
    * no booked time to show -- CPR-CUR-001 s5.2 zone D asks for "booked time, arrival time/wait
    * duration" side by side, and the queue used to carry only the arrival.
@@ -272,6 +280,8 @@ export async function waitingQueue(
     bookedTimeLabel: q.practice_appointment?.scheduled_at
       ? new Date(q.practice_appointment.scheduled_at).toISOString().slice(11, 16)
       : null,
+    enteredAtIso: q.entered_at,
+    bookedAtIso: q.practice_appointment?.scheduled_at ?? null,
   });
 
   const isEmergency = (q: any) => q.practice_appointment?.appointment_type === "emergency";
@@ -448,12 +458,20 @@ export type SessionFlow = {
   /**
    * The expected appointments themselves, earliest booked time first, capped at EXPECTED_LIMIT.
    * Walkthrough 2026-08-16 request #4: the one action an expected person has -- check in -- is
-   * offered in the cockpit, so the cockpit needs the rows and not just the count. `expected` above
-   * remains the full count even when this list is capped.
+   * offered in the cockpit, so the cockpit needs the rows and not just the count.
+   *
+   * ⚠ DAY-SCOPED, deliberately wider than `expected` above. A patient booked for 10:00 who walks in
+   * at 18:00 still needs checking in, and a booking made mid-session for later tonight must appear
+   * the moment it exists -- the planned activity window is a planning artifact, and patients do not
+   * arrive by it. `status` rides along because REQUESTED cannot legally become ARRIVED (the state
+   * machine requires CONFIRMED first), so the strip must offer Confirm, not a check-in that 422s.
    */
   expectedList: {
     appointmentId: string; name: string; scheduledAtIso: string; appointmentType: string | null;
+    status: string;
   }[] | null;
+  /** The full day count behind `expectedList`, exact even when the list is capped. */
+  expectedListTotal: number | null;
   /** Arrivals with no usable patient record attached (s11) -- countable here, listed in the queue. */
   unregisteredArrivals: number | null;
   /** Open encounters (ACTIVE or PAUSED) beyond the first -- s11's "encounter left unfinished". */
@@ -474,7 +492,7 @@ export async function sessionFlow(
 ): Promise<SessionFlow> {
   const day = zonedDayRange(date, timezone);
 
-  const [queueRead, openRead, arrivedRead, expectedRead] = await Promise.all([
+  const [queueRead, openRead, arrivedRead, expectedRead, expectedDayRead] = await Promise.all([
     admin.from("practice_queue_entry")
       .select("id, patient_id, patient_name, status, entered_at, appointment_id,"
         + " practice_appointment:appointment_id(appointment_type, scheduled_at, reason),"
@@ -497,18 +515,24 @@ export async function sessionFlow(
       .gte("entered_at", day.startIso).lt("entered_at", day.endIso),
     window
       ? admin.from("practice_appointment")
-        .select("id, patient_name, scheduled_at, appointment_type", { count: "exact" })
+        .select("id", { count: "exact", head: true })
         .eq("workspace_id", ctx.workspaceId)
         .gte("scheduled_at", window.fromIso).lt("scheduled_at", window.toIso)
         .in("status", ["REQUESTED", "CONFIRMED"])
-        .order("scheduled_at", { ascending: true })
-        .limit(EXPECTED_LIMIT)
-      : Promise.resolve({ data: null, count: null, error: null }),
+      : Promise.resolve({ count: null, error: null }),
+    admin.from("practice_appointment")
+      .select("id, patient_name, scheduled_at, appointment_type, status", { count: "exact" })
+      .eq("workspace_id", ctx.workspaceId)
+      .gte("scheduled_at", day.startIso).lt("scheduled_at", day.endIso)
+      .in("status", ["REQUESTED", "CONFIRMED"])
+      .order("scheduled_at", { ascending: true })
+      .limit(EXPECTED_LIMIT),
   ]);
 
   if (queueRead.error && openRead.error)
     return { current: null, next: null, arrived: null, inProgress: null, expected: null,
-      expectedList: null, unregisteredArrivals: null, openEncounters: null, unavailable: true };
+      expectedList: null, expectedListTotal: null, unregisteredArrivals: null,
+      openEncounters: null, unavailable: true };
 
   const queueRows = (queueRead.data ?? []) as any[];
   const openRows = (openRead.data ?? []) as any[];
@@ -556,13 +580,15 @@ export async function sessionFlow(
     arrived: arrivedRead.error ? null : (arrivedRead.count ?? null),
     inProgress: openRead.error ? null : openRows.length,
     expected: expectedRead.error ? null : (expectedRead.count ?? null),
-    expectedList: expectedRead.error ? null
-      : ((expectedRead.data ?? []) as any[]).map(a => ({
+    expectedList: expectedDayRead.error ? null
+      : ((expectedDayRead.data ?? []) as any[]).map(a => ({
         appointmentId: String(a.id),
         name: a.patient_name ?? "Unnamed patient",
         scheduledAtIso: a.scheduled_at,
         appointmentType: a.appointment_type ?? null,
+        status: String(a.status),
       })),
+    expectedListTotal: expectedDayRead.error ? null : (expectedDayRead.count ?? null),
     unregisteredArrivals: queueRead.error ? null : queueRows.filter(q => !q.patient_id).length,
     openEncounters: openRead.error ? null : openRows.map(e => ({
       id: e.id,

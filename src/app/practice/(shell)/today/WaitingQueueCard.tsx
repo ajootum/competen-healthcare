@@ -64,6 +64,13 @@ export type QueuePerson = {
    * who is not registered yet, and a row with no patient cannot be marked Seen, so no button is drawn.
    */
   patientId: string | null;
+  /**
+   * Walkthrough 2026-08-16 #4b: true when this row's arrival stamp is from a PREVIOUS practice day --
+   * a carried-over record whose wait figure is a stale clock, not today's truth. Only these rows may
+   * offer Check in; a row stamped today already holds a true arrival and re-stamping it would lie.
+   * The engine enforces the same boundary again server-side.
+   */
+  staleArrival?: boolean;
 };
 
 export type WaitingQueueCardProps = {
@@ -91,6 +98,11 @@ export type WaitingQueueCardProps = {
    * shell asserting nothing clinical. Same rule as above -- no handler, no button.
    */
   onMarkSeen?: (patientId: string) => void;
+  /**
+   * Re-stamps a stale arrival to now (the queue entry id, not the patient -- the record is the row).
+   * Drawn only where `staleArrival` is true AND a handler is given.
+   */
+  onCheckIn?: (entryId: string) => void;
   /** The row currently mid-action, so one click cannot become three. */
   busyId: string | null;
   error: string | null;
@@ -113,7 +125,7 @@ const GROUP_DOT: Record<QueueGroupKey, string> = {
 };
 
 export default function WaitingQueueCard(props: WaitingQueueCardProps) {
-  const { people, unavailableReason, truncatedNotice, href, onStartEncounter, onMarkSeen, busyId, error } = props;
+  const { people, unavailableReason, truncatedNotice, href, onStartEncounter, onMarkSeen, onCheckIn, busyId, error } = props;
   const [tab, setTab] = useState<QueueTabKey>("all");
 
   const countFor = (k: QueueTabKey) => k === "all" ? people.length : people.filter(p => p.group === k).length;
@@ -219,6 +231,16 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
                         title="Record that you saw this patient. Complete the details later."
                         className="shrink-0 rounded-md border border-[var(--cp-primary)]/30 px-1.5 py-0.5 text-[11px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
                         Seen ✓
+                      </button>
+                    )}
+                    {/* A stale carried-over row gets the correction first: stamp the person as here
+                        NOW. Today's rows never see this button -- their stamp is already the truth. */}
+                    {onCheckIn && p.staleArrival && (
+                      <button type="button" disabled={busyId === p.id}
+                        onClick={() => onCheckIn(p.id)}
+                        title="This arrival was stamped on a previous day. Check the patient in as arriving now -- the server stamps the moment."
+                        className="shrink-0 rounded-md border border-[var(--cp-primary)]/30 px-1.5 py-0.5 text-[11px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
+                        Check in ✓
                       </button>
                     )}
                     {/* Same guard shape as Seen: a handler AND a patient, or nothing is drawn. Hidden
