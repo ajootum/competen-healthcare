@@ -87,14 +87,14 @@ export default function AddActivityForm({ draft, setDraft, locations, busy, noti
               AM/PM on many machines; the owner asked for the 24-hour clock (CalendarConsole records
               the decision). The value shape is identical (HH:MM), so nothing downstream changes. */}
           <input required className={FIELD} value={draft.start} onChange={e => set({ start: e.target.value })}
-            pattern="^([01]?d|2[0-3]):[0-5]d$" placeholder="09:00" inputMode="numeric"
+            pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="09:00" inputMode="numeric"
             title="24-hour clock, HH:MM -- for example 09:00 or 14:30" />
         </label>
 
         <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
           To
           <input required className={FIELD} value={draft.end} onChange={e => set({ end: e.target.value })}
-            pattern="^([01]?d|2[0-3]):[0-5]d$" placeholder="17:00" inputMode="numeric"
+            pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="17:00" inputMode="numeric"
             title="24-hour clock, HH:MM -- for example 09:00 or 14:30" />
         </label>
 

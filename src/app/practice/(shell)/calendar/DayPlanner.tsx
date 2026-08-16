@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { startEncounterFor } from "@/lib/practice/encounter-start";
 import type { PlannerActivity, PlannerDay, PlannerWeek } from "@/lib/practice/planner";
 import { PLANNER_STATE_LABEL, type PlannerFilters } from "@/lib/practice/planner-constants";
 import {
@@ -45,6 +48,47 @@ export default function DayPlanner({
   urlState: PlannerUrlState;
   selectedSessionId: string | null;
 }) {
+  // ── Walkthrough 2026-08-17 #13: "Can I have check-in in this screen and be able to start the
+  // encounter?" -- the owner, looking at today's booking rows. Check-in was always this register's
+  // verb ("marking an arrival is appointment-book work"); the compressed Day view simply never
+  // carried the button over. Start was Current Session's verb by CPR-HFE-001 s7.2, and the owner's
+  // request supersedes that FOR THESE ROWS -- honestly, because both halves of that rule's reason
+  // survive: startEncounterFor below is the ONE implementation of resume-before-create (no second
+  // engine), and the planner still runs no queue -- the action acts on one booking's patient and
+  // LEAVES into the encounter. Today only: a check-in on a future day is not an arrival.
+  const router = useRouter();
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<{ id: string; text: string } | null>(null);
+
+  const checkIn = async (appointmentId: string) => {
+    setRowBusy(appointmentId); setRowError(null);
+    try {
+      const res = await fetch(`/api/v1/practice/appointments/${appointmentId}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "arrive" }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { setRowError({ id: appointmentId, text: body?.error?.message ?? "That check-in could not be recorded." }); return; }
+      // Refresh-not-mutate: the ARRIVED chip, the arrival time and the cockpit queue are all
+      // computed on the server, and a locally edited row would disagree with every one of them.
+      router.refresh();
+    } catch {
+      setRowError({ id: appointmentId, text: "That check-in could not be recorded." });
+    } finally { setRowBusy(null); }
+  };
+
+  const startFor = async (appointmentId: string, patientId: string) => {
+    setRowBusy(appointmentId); setRowError(null);
+    try {
+      const r = await startEncounterFor(patientId);
+      if (!r.ok) { setRowError({ id: appointmentId, text: r.message }); setRowBusy(null); return; }
+      window.location.assign(`/practice/encounters/${r.encounterId}`);
+    } catch {
+      setRowError({ id: appointmentId, text: "The consultation did not open. Nothing was created." });
+      setRowBusy(null);
+    }
+  };
+
   const shown = filterDay(day, filters);
   const ordered = [...shown.activities].sort((a, b) =>
     a.plannedStartMinute - b.plannedStartMinute || a.plannedEndMinute - b.plannedEndMinute);
@@ -191,6 +235,30 @@ export default function DayPlanner({
                             {a.arrivedMinute !== null && (
                               <span className="shrink-0 text-[10px] text-gray-500">
                                 arrived {hhmm(a.arrivedMinute)}
+                              </span>
+                            )}
+                            {/* #13's two verbs, today only, drawn only when the state can accept
+                                them. canManage gates drawing; the API gates again regardless. */}
+                            {day.isToday && canManage && !a.voided && a.status === "CONFIRMED" && (
+                              <button type="button" disabled={rowBusy === a.id}
+                                onClick={() => checkIn(a.id)}
+                                title="Record this patient as arrived now. The server stamps the moment; they join the cockpit queue."
+                                className="shrink-0 rounded-md border border-[var(--cp-primary)]/30 px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
+                                {rowBusy === a.id ? "…" : "Check in ✓"}
+                              </button>
+                            )}
+                            {day.isToday && canManage && !a.voided && a.status === "ARRIVED"
+                              && a.patientId && !a.encounterHref && (
+                              <button type="button" disabled={rowBusy === a.id}
+                                onClick={() => startFor(a.id, a.patientId!)}
+                                title="Open the consultation for this patient. An unfinished one is resumed, never duplicated."
+                                className="shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
+                                {rowBusy === a.id ? "…" : "Start →"}
+                              </button>
+                            )}
+                            {rowError?.id === a.id && (
+                              <span className="w-full text-[10.5px] font-semibold text-[var(--cmp-text-critical)]">
+                                {rowError.text}
                               </span>
                             )}
                             {a.encounterHref && (

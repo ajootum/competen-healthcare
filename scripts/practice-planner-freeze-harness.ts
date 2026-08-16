@@ -345,6 +345,21 @@ async function main() {
     timeInputFiles.length === 0, timeInputFiles.join(", "));
   ok("...and the 24-hour pattern is genuinely present where times are entered, so the pin is not scanning an empty folder",
     /pattern="\^\(\[01\]\?/.test(readFileSync("src/app/practice/(shell)/calendar/AddActivityForm.tsx", "utf8")));
+  // ⚠ PRESENCE WAS NOT VALIDITY (walkthrough #14, 2026-08-17). Four inputs carried the pattern with
+  // its backslashes EATEN -- `[01]?d` demanding a literal letter d -- so "09:00" could never match
+  // and the popup refused every value it asked for. The pin above stayed green throughout, because
+  // it checked that a pattern existed, not that the pattern could accept a time. This one runs the
+  // real HTML-pattern semantics (anchored RegExp) against the value its own placeholder promises.
+  const brokenPatternFiles = readdirSync("src/app/practice/(shell)/calendar")
+    .filter(f => f.endsWith(".tsx"))
+    .filter(f => {
+      const src = readFileSync(`src/app/practice/(shell)/calendar/${f}`, "utf8");
+      return [...src.matchAll(/pattern="([^"]+)"/g)].some(m => {
+        try { return !new RegExp(m[1]).test("09:00"); } catch { return true; }
+      });
+    });
+  ok("...and every time pattern in the folder actually ACCEPTS a time -- no pattern with eaten backslashes",
+    brokenPatternFiles.length === 0, brokenPatternFiles.join(", "));
 
   report();
 }

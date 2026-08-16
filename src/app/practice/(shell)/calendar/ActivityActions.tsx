@@ -139,7 +139,7 @@ function MoveForm({ a, busy, go }: { a: PlannerActivity; busy: boolean; go: (act
       <input type="date" value={date} onChange={e => setDate(e.target.value)} className={FIELD} aria-label="New date" />
       {/* 24-hour text entry -- the owner's clock decision; see CalendarConsole. */}
       <input value={start} onChange={e => setStart(e.target.value)} className={FIELD} aria-label="New start time"
-        pattern="^([01]?d|2[0-3]):[0-5]d$" placeholder="09:00" inputMode="numeric"
+        pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="09:00" inputMode="numeric"
         title="24-hour clock, HH:MM -- for example 09:00 or 14:30" />
       <button type="button" disabled={busy || minute === null} className={PRIMARY}
         onClick={() => go("move", { planDate: date, plannedStartMinute: minute })}>
@@ -188,7 +188,7 @@ function SplitForm({ a, busy, go }: { a: PlannerActivity; busy: boolean; go: (ac
   return (
     <Row label="Split at">
       <input value={at} onChange={e => setAt(e.target.value)} className={FIELD} aria-label="Split time"
-        pattern="^([01]?d|2[0-3]):[0-5]d$" placeholder="12:00" inputMode="numeric"
+        pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="12:00" inputMode="numeric"
         title="24-hour clock, HH:MM -- for example 09:00 or 14:30" />
       <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="title of the second half"
         className={`${FIELD} min-w-[180px]`} aria-label="Title of the second half" />
