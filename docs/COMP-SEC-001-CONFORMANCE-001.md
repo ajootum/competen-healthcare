@@ -23,15 +23,15 @@ honest form of conformance is an attestation pointer, and claiming it as ours wo
 | MFA — email OTP | **PARTIAL** | The OTP engine exists and was hardened against four live vulnerabilities (mig 224, commit fc2de9a2), but no mail provider is configured, so no code can be delivered. Blocked on the Resend/DNS task, not on code. |
 | MFA — SMS | **NOT SATISFIED** | No SMS sender is registered (Africa's Talking sender-ID has telco lead time). Engine paths exist, delivery does not. |
 | Passwordless (passkeys/WebAuthn) | **NOT SATISFIED** | Roadmap item in the spec's own words; nothing built, and the lock screen says so to its users ("Why is there no PIN or fingerprint?"). |
-| SSO (OAuth2/OIDC/SAML) | **NOT SATISFIED** | The survey names it the largest single item across all three documents — Phase 3 item 15, deliberately last. |
+| SSO (OAuth2/OIDC) | **SATISFIED, dormant by design (2026-08-16)** | Start route with three checks incl. GoTrue live settings; callback speaks the signups-closed refusal in words; open-redirect guard break-tested; sso-harness 18/0. Turning on = provider in dashboard + NEXT_PUBLIC_OAUTH_PROVIDERS. SAML: stated absent -- a per-IdP enterprise-plan Supabase configuration, not a repo build. |
 
 ## Authorization
 
 | Spec line | Verdict | Evidence / gap |
 |---|---|---|
-| Role-Based Access Control | **SATISFIED** (two planes, two models — by design) | Estate/platform: the six role columns, now consolidating read-side (`estateRolesOf`/`orgRolesOf`/`platformRolesOf` + `resolveIdentity`, equivalence proven for all 47 live profiles before repointing). Practice: `practice_membership` + `practice_role_capabilities` (43+ codes) — never `profiles.role` (COMP-ARCH-PSA-001's two-gate split). HQ: capability model enforced on all 205 pages (hq-scan). ⚠ Open: the s14 role-check-ban question over ~217 API routes. |
+| Role-Based Access Control | **SATISFIED** (two planes, two models — by design) | Estate/platform: the six role columns, now consolidating read-side (`estateRolesOf`/`orgRolesOf`/`platformRolesOf` + `resolveIdentity`, equivalence proven for all 47 live profiles before repointing). Practice: `practice_membership` + `practice_role_capabilities` (43+ codes) — never `profiles.role` (COMP-ARCH-PSA-001's two-gate split). HQ: capability model enforced on all 205 pages (hq-scan). s14 role-check ban ANSWERED (owner, 2026-08-16): scoped now (HQ + new products are capability-based, estate keeps hasRole), strict migration is the end-state folded into the Enterprise rebuild. |
 | Permission-based feature access | **SATISFIED** | Practice capabilities gate every module; HQ `requireHqCapability`. ⚠ The capability-backfill class is the known failure mode (twice shipped, healed by migs 192/307; the same-file backfill rule stands). |
-| Custom roles per organization | **NOT SATISFIED** | Phase 3 item 14, unbuilt. |
+| Custom roles per organization | **DECIDED-AGAINST for now (owner, 2026-08-16)** | Not until an organisation asks -- the closed role catalogues are load-bearing (capability mappings, portal derivation). |
 | Break-glass access with mandatory audit | **PARTIAL** | `super_admin` is kept explicitly as break-glass (PLAT-ARCH decision) and HQ actions audit; the immutable access log (mig 202) records practice reads. What does NOT exist: a distinct break-glass ceremony (reason-required elevation, time-boxed) — super_admin is standing power, not summoned power. |
 
 ## Data Protection
@@ -58,7 +58,7 @@ honest form of conformance is an attestation pointer, and claiming it as ours wo
 | Spec line | Verdict | Evidence / gap |
 |---|---|---|
 | Network segmentation · Firewalls/WAF · Patch management · DDoS protection | **PLATFORM-ATTESTED** | Supabase/Vercel controls. The deployment attestation the survey asked for should name them; this repo cannot. |
-| Automated vulnerability scanning | **NOT SATISFIED** | No CI pipeline exists at all — see Developer Standards. |
+| Automated vulnerability scanning | **PARTIAL** | Dependency-level: SATISFIED 2026-08-16 -- scripts/audit-gate.ts gates every push/PR on high/critical advisories, with recorded-deviation allowlist (security/audit-allowlist.json, xlsx only). Infrastructure-level scanning remains the host attestation's. |
 
 ## Audit & Monitoring
 
@@ -94,7 +94,9 @@ honest form of conformance is an attestation pointer, and claiming it as ours wo
 |---|---|---|
 | Secure coding guidelines | **PARTIAL** | Strong working doctrine exists and is enforced by harness (fail-closed reads, refusal-with-reason, break-tests, same-write-path) — but as practice and memory, not as a written standard a second developer could be held to. |
 | Mandatory code review | **NOT SATISFIED** | Solo development, direct commits to main. Honest, and structural until there is a second reviewer. |
-| Dependency scanning · Secret scanning · SAST/DAST | **NOT SATISFIED** | No CI pipeline. The survey's instruction stands: open tickets; a minimal GitHub Actions pass (audit + secret scan + tsc + selected harnesses) is the smallest real increment. |
+| Dependency scanning | **SATISFIED (2026-08-16)** | CI job on every push/PR: scripts/audit-gate.ts (in-repo, break-tested) fails on any unexplained high/critical; the two SheetJS advisories are recorded deviations with reasons and dates. |
+| Secret scanning | **SATISFIED (2026-08-16)** | CI job: gitleaks v8.21.2 over the clean checkout, before npm ci; fixture values carry inline gitleaks:allow annotations at their own lines. |
+| SAST / DAST | **PARTIAL** | tsc + eslint gate every push (static checks, honest label -- not a dedicated SAST engine); DAST absent. Database harnesses stay local by design: the service-role key does not belong in GitHub. |
 
 ## The spec's acceptance criteria, answered
 
