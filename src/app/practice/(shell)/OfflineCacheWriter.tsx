@@ -5,7 +5,7 @@ import {
   cacheNav, cacheOfflineClinical, cacheOfflineDay, cacheOfflineGuidance, purgeOfflineWorkspace,
   type CachedNavItem,
 } from "@/lib/practice/offline-store";
-import { cacheOfflineParameters, deviceIdentity } from "@/lib/practice/offline-store";
+import { cacheOfflineParameters, deviceIdentity, rememberBillingCapture } from "@/lib/practice/offline-store";
 import type { OfflineClinicalPack } from "@/lib/practice/offline-clinical";
 import type { OfflineParameterSet } from "@/lib/practice/offline-parameters";
 import { loadLock } from "@/lib/practice/offline-lock-store";
@@ -60,12 +60,15 @@ type Outcome =
   | { kind: "locked" };
 
 export default function OfflineCacheWriter(
-  { workspaceId, userId, gate, nav, showStatus = false }:
+  { workspaceId, userId, gate, nav, showStatus = false, billingCaptureAllowed }:
   {
     workspaceId: string;
     /** ⚠ Written to the device so the offline page, which has no session, can attribute a capture. */
     userId?: string;
     gate: OfflineWriterGate; nav?: CachedNavItem[]; showStatus?: boolean;
+    /** D6: the shell's own verdict on BILLING_CAPTURE_CAPABILITIES, cached for the bedside warning.
+     * Optional so older call sites change nothing; absent means the warning stays unavailable. */
+    billingCaptureAllowed?: boolean;
   },
 ) {
   const [outcome, setOutcome] = useState<Outcome>({ kind: "idle" });
@@ -121,6 +124,9 @@ export default function OfflineCacheWriter(
       // say who took it. Before the lock check, like the nav and the measurements, because a locked
       // device must still be able to record.
       if (userId) { try { await deviceIdentity(userId); } catch { /* reported through capture, not here */ } }
+      // D6: the billing-capture verdict, remembered whenever the shell states one. A warning source
+      // only -- see the store's own header.
+      if (typeof billingCaptureAllowed === "boolean") await rememberBillingCapture(billingCaptureAllowed);
 
       // ── 2b. THE RECORDABLE MEASUREMENTS ───────────────────────────────────────────────────────
       // ⚠ BEFORE THE LOCK CHECK, AND FOR A REASON THAT IS THE OWNER'S RULE RATHER THAN CONVENIENCE.
@@ -264,7 +270,7 @@ export default function OfflineCacheWriter(
     // therefore re-fetch and re-write the cache, on every single render. The key is derived from the
     // hrefs, so it changes exactly when the practitioner's sections change and not otherwise.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId, gate.state, gate.purge, gate.reason, attempt, navKey]);
+  }, [workspaceId, gate.state, gate.purge, gate.reason, attempt, navKey, billingCaptureAllowed, userId]);
 
   if (!showStatus) return null;
 

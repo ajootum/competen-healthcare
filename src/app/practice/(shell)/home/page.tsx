@@ -11,6 +11,7 @@ import StartYourDay from "./StartYourDay";
 import LiveRefresh from "../LiveRefresh";
 import OfflineCacheWriter from "../OfflineCacheWriter";
 import { offlineCacheGate } from "@/lib/practice/offline-gate";
+import { BILLING_CAPTURE_CAPABILITIES } from "@/lib/practice/billing-constants";
 import { primaryNav } from "@/lib/practice/navigation";
 import { PANEL, GLANCE_SWATCH, QUICK_SWATCH, QUICK_ICON, SEVERITY } from "@/lib/practice/palette";
 
@@ -522,6 +523,7 @@ export default async function PracticeCommandCentre() {
           userId={ctx.userId}
           gate={{ state: offline.state, reason: offline.reason, purge: offline.purge }}
           nav={primaryNav(ctx.capabilities).map(i => ({ href: i.href, label: i.label, icon: i.icon }))}
+          billingCaptureAllowed={BILLING_CAPTURE_CAPABILITIES.every(c => ctx.capabilities.includes(c))}
         />
       </div>
     </div>

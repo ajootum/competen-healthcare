@@ -424,6 +424,30 @@ async function main() {
   ok("6d2. ⚠ and there is still NO <form> even inside them -- nothing here submits anywhere",
     slices.every(s => !/<form\b/i.test(s.body)),
     "a form element implies a submit target, and there is none");
+
+  // ── D6 (owner decision 2026-08-16): the bedside billing warning is a WARNING, never a gate ──────
+  const collectionSlice = slices.find(s => s.name === "CaptureCollection");
+  ok("6j. the money capture reads the CACHED billing verdict and warns in the practitioner's words",
+    !!collectionSlice && collectionSlice.body.includes("cachedBillingCapture")
+    && /refuse to file it at sync/.test(collectionSlice.body)
+    && /You can still record money taken/.test(collectionSlice.body),
+    "the warning or its source is missing from CaptureCollection");
+  // The submit button's disabled expression may reference busy/description/time/amount and NOTHING
+  // about billing -- a warning that quietly became a gate would be a permission enforced by a cache.
+  const collectionSubmit = collectionSlice?.body.match(/disabled=\{busy \|\|[^}]+\}/)?.[0] ?? "";
+  ok("6j2. ⚠ the warning never gates: the submit's disabled expression carries no billing reference",
+    collectionSubmit.length > 0 && !/billing/i.test(collectionSubmit),
+    collectionSubmit || "the submit button's disabled expression was not found");
+  // ONE spelling of the capability pair, shared by the engine's refusal and the shell's cached
+  // verdict -- two spellings is how the warning and the refusal drift apart.
+  const filingSrc = readFileSync("src/lib/practice/offline-filing.ts", "utf8");
+  const pairSpellers = ["src/app/practice/(shell)/home/page.tsx", "src/app/practice/(shell)/today/page.tsx"]
+    .map(f => readFileSync(f, "utf8"));
+  ok("6j3. ⚠ engine refusal and cached verdict stand on the ONE capability pair (BILLING_CAPTURE_CAPABILITIES)",
+    filingSrc.includes("BILLING_CAPTURE_CAPABILITIES.every")
+    && pairSpellers.every(s => s.includes("BILLING_CAPTURE_CAPABILITIES.every"))
+    && !filingSrc.includes("\"payment.record\") || !ctx.capabilities.includes(\"invoice.draft\""),
+    "a second spelling of the pair exists, or a reader stopped using the shared constant");
   ok("6e. it sends nothing: no fetch, no mutating method, no server action",
     !/\bfetch\s*\(/.test(offlineTree) && !/"(POST|PATCH|PUT|DELETE)"/.test(offlineTree)
     && !/use server/.test(offlineTree));

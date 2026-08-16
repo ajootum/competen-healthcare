@@ -20,7 +20,7 @@ import type { SafetyLine } from "@/lib/practice/longitudinal-constants";
 import { guidanceType } from "@/lib/practice/knowledge-constants";
 import { OFFLINE_ENCRYPTION_NOTE } from "@/lib/practice/offline-crypto";
 import {
-  cachedIdentity, cachedOfflineParameters, lastCachedWorkspace, loadOfflineClinical, loadOfflineDay,
+  cachedBillingCapture, cachedIdentity, cachedOfflineParameters, lastCachedWorkspace, loadOfflineClinical, loadOfflineDay,
   loadOfflineGuidance, type DeviceIdentity,
 } from "@/lib/practice/offline-store";
 import {
@@ -983,10 +983,16 @@ function CaptureCollection(
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [held, setHeld] = useState<string | null>(null);
+  // D6 (owner decision 2026-08-16): the shell's last-known verdict on the billing capabilities.
+  // ⚠ A WARNING, NEVER A GATE. It changes one sentence on this screen and nothing else -- the
+  // capture still holds, the sync still decides, and an absent verdict says nothing rather than
+  // guessing. The harness pins that the submit button's disabled expression never references it.
+  const [billingVerdict, setBillingVerdict] = useState<{ allowed: boolean; cachedAt: string } | null>(null);
 
   useEffect(() => {
     if (!open) return;
     void cachedIdentity().then(setIdentity);
+    void cachedBillingCapture().then(setBillingVerdict);
   }, [open]);
 
   function nowForInput(): string {
@@ -1036,6 +1042,17 @@ function CaptureCollection(
         This is not a receipt. The numbered receipt is issued by the practice when this device
         syncs — the practice&apos;s books do not know about this money until then.
       </p>
+      {/* D6: the bedside warning that would otherwise arrive DAYS LATER as a sync refusal about
+          money a patient already handed over. Rendered only when the cached verdict says the
+          permission was missing; an absent verdict says nothing, because a guess is worse. */}
+      {billingVerdict !== null && !billingVerdict.allowed && (
+        <p className="mt-1.5 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">
+          When this device was last connected, this account did not hold the billing permission for
+          this practice. You can still record money taken &mdash; nothing here blocks a capture &mdash;
+          but the practice will refuse to file it at sync until somebody grants the permission. If
+          that has changed since, this note is stale.
+        </p>
+      )}
 
       <label className="mt-1.5 block">
         <span className="text-[11px] text-gray-600">What the money was for</span>

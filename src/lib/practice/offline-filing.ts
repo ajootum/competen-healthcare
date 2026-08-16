@@ -5,7 +5,7 @@ import type { WorkspaceContext } from "@/lib/practice/access";
 import { saveNoteSegment } from "@/lib/practice/documentation";
 import { createFollowUp } from "@/lib/practice/follow-ups";
 import { createCharge, recordPayment } from "@/lib/practice/billing";
-import { PAYMENT_METHODS } from "@/lib/practice/billing-constants";
+import { PAYMENT_METHODS, BILLING_CAPTURE_CAPABILITIES } from "@/lib/practice/billing-constants";
 
 // ── FILING AN OFFLINE VISIT ── CP offline capture, entity two (owner: "Encounters then follow-up") ──
 //
@@ -281,7 +281,7 @@ export async function fileOfflineCollection(admin: any, ctx: WorkspaceContext, a
   collectedAtIso: string; collectedOn?: string | null;
   entityId: string; actorId: string; correlationId: string;
 }): Promise<EngineResult<{ id: string; receiptNumber: string | null; replayed: boolean }>> {
-  if (!ctx.capabilities.includes("payment.record") || !ctx.capabilities.includes("invoice.draft"))
+  if (!BILLING_CAPTURE_CAPABILITIES.every(c => ctx.capabilities.includes(c)))
     return { ok: false, status: 403, code: "FORBIDDEN", message: "Recording money for this practice needs the billing permissions (payment.record and invoice.draft), which this account does not hold. Nothing was filed; the record stays on this device." };
 
   const { data: patient } = await admin.from("practice_patient")

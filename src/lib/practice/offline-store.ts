@@ -764,3 +764,36 @@ export async function purgeAllOffline(): Promise<{ ok: boolean; reason: string }
     }
   });
 }
+
+// ── THE BILLING-CAPTURE VERDICT, CACHED FOR THE BEDSIDE WARNING (offline decision D6) ────────────────
+//
+// ⚠ A WARNING SOURCE, NEVER AN AUTHORIZATION SOURCE. The shell computes ONE boolean from
+// BILLING_CAPTURE_CAPABILITIES -- the same pair the filing engine refuses on -- and this store
+// remembers it so the capture screen can say, AT THE BEDSIDE, that money recorded now will be
+// refused at sync. It grants nothing, blocks nothing, and is deliberately too small to become a
+// second permission system: one purpose-named boolean and the moment it was true.
+
+const META_BILLING_CAPTURE = "billingCapture";
+
+export type BillingCaptureVerdict = { allowed: boolean; cachedAt: string };
+
+export async function rememberBillingCapture(allowed: boolean): Promise<void> {
+  try {
+    const db = await openDb();
+    const verdict: BillingCaptureVerdict = { allowed, cachedAt: new Date().toISOString() };
+    await tx(db, STORE_META, "readwrite", s => s.put(verdict, META_BILLING_CAPTURE));
+    db.close();
+  } catch { /* the warning simply stays unavailable -- absence is honest, a guess is not */ }
+}
+
+/** Null when the shell has never written the verdict on this device -- say nothing, never guess. */
+export async function cachedBillingCapture(): Promise<BillingCaptureVerdict | null> {
+  try {
+    const db = await openDb();
+    const held = await tx<BillingCaptureVerdict | undefined>(db, STORE_META, "readonly", s => s.get(META_BILLING_CAPTURE));
+    db.close();
+    return held ?? null;
+  } catch {
+    return null;
+  }
+}

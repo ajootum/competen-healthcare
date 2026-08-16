@@ -5,7 +5,7 @@
 // added on one side only fails on every write, forever, in a swallowed error, so the two are kept in
 // sight of each other by the billing harness.
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 
 /**
  * ⚠ EXPORTED FOR THE CAPABILITY AUDIT HARNESS. practice-audit-harness scans for capability literals in
@@ -154,3 +154,13 @@ export function ageBucket(fromDay: string, today: string): "0-7" | "8-30" | "31-
   if (days <= 90) return "31-90";
   return "90+";
 }
+
+/**
+ * ⚠ THE PAIR OF CAPABILITIES OFFLINE MONEY CAPTURE STANDS ON, IN ONE PLACE. The filing engine
+ * refuses a field collection BEFORE its first write unless the caller holds BOTH (the orphan-charge
+ * guard, harness 12j), and the shell caches the same verdict on the device so the capture screen can
+ * WARN at the bedside instead of days later at sync (offline decision D6, owner 2026-08-16).
+ * Two spellings of this pair would let the warning and the refusal drift apart -- one list, two
+ * readers, same answer.
+ */
+export const BILLING_CAPTURE_CAPABILITIES = ["payment.record", "invoice.draft"] as const;

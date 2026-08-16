@@ -13,6 +13,7 @@ import QueueWithActions from "./QueueWithActions";
 import LiveRefresh from "../LiveRefresh";
 import OfflineCacheWriter from "../OfflineCacheWriter";
 import { offlineCacheGate } from "@/lib/practice/offline-gate";
+import { BILLING_CAPTURE_CAPABILITIES } from "@/lib/practice/billing-constants";
 
 // /practice/today -- CPR-V5-004 "Current Session", the practitioner's live operational cockpit.
 //
@@ -312,6 +313,7 @@ export default async function CurrentSessionPage() {
         userId={shell.ctx.userId}
         gate={{ state: offline.state, reason: offline.reason, purge: offline.purge }}
         nav={primaryNav(shell.ctx.capabilities).map(i => ({ href: i.href, label: i.label, icon: i.icon }))}
+        billingCaptureAllowed={BILLING_CAPTURE_CAPABILITIES.every(c => shell.ctx.capabilities.includes(c))}
         showStatus
       />
     </div>
