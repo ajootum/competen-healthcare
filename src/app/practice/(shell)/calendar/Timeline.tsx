@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { tintedCard } from "@/lib/practice/palette";
 
@@ -52,8 +52,30 @@ type Drag = {
   duration: number;
 };
 
-export default function Timeline({ timeline, canManage, onChanged }: {
-  timeline: any; canManage: boolean; onChanged?: () => void;
+/**
+ * Walkthrough 2026-08-17 #20 -- "Can we do a red line to show the current time across the screen".
+ * THE PRACTICE'S CLOCK, NEVER THE LAPTOP'S (this file's header records why): the minute is read
+ * through Intl in the diary's own timezone and re-read each minute. Null when the zone cannot be
+ * read -- no line beats a line in the wrong place.
+ */
+function practiceNowMinute(tz: string): number | null {
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: tz, hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(new Date());
+    const h = Number(parts.find(p => p.type === "hour")?.value);
+    const m = Number(parts.find(p => p.type === "minute")?.value);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+    return (h === 24 ? 0 : h) * 60 + m;
+  } catch { return null; }
+}
+
+export default function Timeline({ timeline, canManage, isToday, onChanged }: {
+  timeline: any; canManage: boolean;
+  /** #20: the now-line draws ONLY when the day on screen is the practice's today -- a now-line on
+   *  yesterday's diary is a lie with a ruler. The SERVER decides (selectedDate === workspace today). */
+  isToday?: boolean;
+  onChanged?: () => void;
 }) {
   const router = useRouter();
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -64,6 +86,16 @@ export default function Timeline({ timeline, canManage, onChanged }: {
   const { fromMinute, toMinute, snapMinutes, lanes, blocks, shading } = timeline;
   const height = (toMinute - fromMinute) * PX_PER_MINUTE;
   const top = (minute: number) => (minute - fromMinute) * PX_PER_MINUTE;
+
+  // #20: the current-time line's minute, re-read each minute while the tab lives. Lazy initialiser
+  // (not an effect body setState) and interval-callback updates only -- the lint rule's shape.
+  const [nowMinute, setNowMinute] = useState<number | null>(() =>
+    isToday ? practiceNowMinute(timeline.timezone) : null);
+  useEffect(() => {
+    if (!isToday) return;
+    const tick = setInterval(() => setNowMinute(practiceNowMinute(timeline.timezone)), 60_000);
+    return () => clearInterval(tick);
+  }, [isToday, timeline.timezone]);
 
   const hourMarks: number[] = [];
   for (let m = Math.ceil(fromMinute / 60) * 60; m <= toMinute; m += 60) hourMarks.push(m);
@@ -234,6 +266,19 @@ export default function Timeline({ timeline, canManage, onChanged }: {
             <div ref={laneStripRef} className="relative flex gap-1.5 select-none" style={{ height }}
               onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
               {/* Hour rules, drawn once behind every lane. */}
+              {/* ── #20: NOW, as a line the whole width of the day ──────────────────────────────
+                  Today only, practice clock only, and never colour alone: the chip carries the
+                  time in words. pointer-events-none so it can never intercept a drag. */}
+              {isToday && nowMinute !== null && nowMinute >= fromMinute && nowMinute <= toMinute && (
+                <div aria-hidden className="pointer-events-none absolute inset-x-0 z-20"
+                  style={{ top: top(nowMinute) }}>
+                  <div className="relative border-t-2 border-rose-500">
+                    <span className="absolute -top-2 left-1 rounded bg-rose-500 px-1 py-px text-[9px] font-bold tabular-nums leading-tight text-white">
+                      {hhmm(nowMinute)}
+                    </span>
+                  </div>
+                </div>
+              )}
               {hourMarks.map(m => (
                 <div key={m} className="pointer-events-none absolute inset-x-0 border-t border-gray-100"
                   style={{ top: top(m) }} />

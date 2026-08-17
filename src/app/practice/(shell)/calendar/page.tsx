@@ -237,6 +237,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           <Timeline
             timeline={JSON.parse(JSON.stringify(timeline))}
             canManage={canManage}
+            // #20: the server decides todayness from the workspace clock -- the client never
+            // compares dates across timezones it does not own.
+            isToday={selectedDate === today}
           />
         )}
 
