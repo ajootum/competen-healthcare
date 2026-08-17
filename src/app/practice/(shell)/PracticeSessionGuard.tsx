@@ -269,7 +269,7 @@ export default function PracticeSessionGuard({ limits }: { limits: SessionLimits
       <button
         type="button" onClick={pause}
         title="Cover this screen. Nothing is saved, discarded or signed out; a password brings it back."
-        className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50"
+        className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 pointer-coarse:min-h-[var(--cp-touch)]"
       >
         Pause
       </button>

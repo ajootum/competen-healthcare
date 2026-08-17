@@ -66,9 +66,13 @@ export default function AttachRecordInline({ entryId, prefillName }: {
     return (
       // CPR-MOB-001 s4: thumb-sized below md (max-md:* no-ops); the desktop row keeps its compact
       // affordance untouched.
+      // ⚠ PHASE 8 ADDS THE TABLET HALF. max-md: stops at 768, and the two tablet targets in s20's
+      // matrix are touch devices ABOVE it -- so between 768 and 1199 this sat back at about 21px with
+      // no bottom nav to fall back on. pointer-coarse asks what is pointing instead of how wide the
+      // window is, which is the only question that separates an iPad from a small desktop window.
       <button type="button"
         onClick={() => { setOpen(true); if (prefillName.trim().length >= 2) void search(prefillName); }}
-        className="shrink-0 rounded-md border border-amber-300 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-50 max-md:min-h-[var(--cp-touch)] max-md:rounded-lg max-md:px-3 max-md:text-[12px]">
+        className="shrink-0 rounded-md border border-amber-300 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-50 max-md:min-h-[var(--cp-touch)] max-md:rounded-lg max-md:px-3 max-md:text-[12px] pointer-coarse:min-h-[var(--cp-touch)]">
         Attach record
       </button>
     );

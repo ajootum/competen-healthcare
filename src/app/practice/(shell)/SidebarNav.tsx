@@ -77,8 +77,22 @@ export default function SidebarNav({ sections }: { sections: NavRenderSection[] 
     .filter(i => pathname === i.href || pathname.startsWith(`${i.href}/`))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href ?? null;
 
+  /**
+   * ⚠ CPR-MOB-001 PHASE 8 (TABLET): THIS SIDEBAR IS THE NAVIGATION AT 768-1199, AND IT WAS MOUSE-SIZED.
+   *
+   * Below md the bottom nav takes over and this is `hidden`, so its target sizes never mattered on a
+   * phone. Between 768 and 1199 NOTHING replaces it -- the bottom bar is md:hidden -- so on a tablet
+   * these rows were the only way to move around the product at roughly 35px each, against s4's 44px
+   * floor. The chevron that opens a section's children was the worst of them at about 14px.
+   *
+   * ⚠ THE VARIANT IS pointer-coarse, NOT A WIDTH. Sizing by breakpoint would grow the rows on a
+   * 1000px-wide desktop WINDOW, where a mouse is pointing and 35px is correct and deliberate; and it
+   * would still miss an iPad held at 1200+, which is a finger on a wide screen. The question s4 is
+   * really asking is what is doing the pointing, and `(pointer: coarse)` is the only thing that
+   * answers it. A mouse-driven desktop therefore matches none of these and stays pixel-identical.
+   */
   const rowClass = (active: boolean) =>
-    `mb-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors ${
+    `mb-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] transition-colors pointer-coarse:min-h-[var(--cp-touch)] ${
       active ? "bg-[var(--cp-primary)] font-semibold text-white" : "text-blue-100/75 hover:bg-white/8 hover:text-white"}`;
 
   const badge = (n?: number | null) =>
@@ -137,7 +151,12 @@ export default function SidebarNav({ sections }: { sections: NavRenderSection[] 
                       /* ⚠ The accessible name says what is inside, not "toggle". A screen-reader user
                          hearing "expand" learns nothing about whether it is worth expanding. */
                       aria-label={`${expanded ? "Hide" : "Show"} what is filed under ${item.label}: ${children.map(c => c.label).join(", ")}`}
-                      className={`ml-1 shrink-0 rounded p-0.5 text-[10px] leading-none transition-transform hover:bg-white/15 ${
+                      /* ⚠ 14px, AND IT IS THE CONTROL THAT REVEALS THE SIXTEEN CONTEXTUAL CHILDREN.
+                         On a touch tablet this was the smallest target in the product guarding the
+                         largest amount of hidden navigation -- miss it and the section simply appears
+                         to have nothing under it. Squared off to the 44px floor on coarse pointers
+                         only; the glyph is centred so the rotate reads identically at either size. */
+                      className={`ml-1 flex shrink-0 items-center justify-center rounded p-0.5 text-[10px] leading-none transition-transform hover:bg-white/15 pointer-coarse:min-h-[var(--cp-touch)] pointer-coarse:min-w-[var(--cp-touch)] ${
                         active ? "text-white/80" : "text-blue-200/60"} ${expanded ? "rotate-90" : ""}`}
                     >
                       <span aria-hidden>▸</span>
@@ -151,7 +170,7 @@ export default function SidebarNav({ sections }: { sections: NavRenderSection[] 
                       const cActive = c.href === activeHref;
                       return (
                         <Link key={c.href} href={c.href} aria-current={cActive ? "page" : undefined}
-                          className={`mb-0.5 flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] transition-colors ${
+                          className={`mb-0.5 flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] transition-colors pointer-coarse:min-h-[var(--cp-touch)] ${
                             cActive ? "bg-white/12 font-semibold text-white" : "text-blue-100/60 hover:bg-white/8 hover:text-white"}`}>
                           <span aria-hidden className={`w-3.5 text-center text-[11px] ${cActive ? "text-[var(--cp-accent)]" : "text-blue-200/45"}`}>
                             {c.icon}

@@ -316,11 +316,26 @@ export default function Timeline({ timeline, canManage, isToday, onChanged }: {
                           // what this screen previously spent on a 2px dot. A day then reads as a
                           // pattern before any text is read: amber blocks are hospital work, cyan is
                           // telemedicine, red is an emergency slot.
+                          //
+                          // ⚠ CPR-MOB-001 PHASE 8 (TABLET): `touch-none` IS WHAT MAKES THIS DRAG EXIST
+                          // ON A TABLET AT ALL, and nothing here had ever declared it. beginDrag calls
+                          // e.preventDefault() on pointerdown, which does NOT stop a browser scrolling
+                          // -- only touch-action does. So on the ONE band this panel is designed for by
+                          // touch (max-md:hidden keeps it off phones; s2's tablet is 768-1199), the
+                          // browser claimed each finger-drag as a scroll and fired pointercancel, and
+                          // the capability the md:hidden face below promises in words -- "moving one to
+                          // a new time or a different hospital is done by drag on a tablet or desktop"
+                          // -- could not be performed on a tablet.
+                          //
+                          // SCOPED TO WHAT MAY ACTUALLY MOVE. An immovable block, the lanes and the
+                          // strip keep normal touch-action, so the day still scrolls under a finger
+                          // everywhere except the card being dragged. touch-action is inert for a
+                          // mouse, so the desktop face and behaviour above 1200 are unchanged.
                           className={`absolute inset-x-0.5 overflow-hidden rounded-md border px-1.5 py-1 shadow-sm
                             ${STATUS_STYLE[b.status] ?? "border-l-4"}
                             ${dragging ? "z-20 opacity-90 shadow-lg ring-2 ring-[var(--cp-primary)]" : "z-10"}
                             ${busyId === b.id ? "opacity-50" : ""}
-                            ${canManage && b.movable ? "cursor-grab active:cursor-grabbing" : "cursor-default"}`}
+                            ${canManage && b.movable ? "cursor-grab touch-none active:cursor-grabbing" : "cursor-default"}`}
                           style={{
                             top: top(minute), height: Math.max(18, duration * PX_PER_MINUTE - 2),
                             ...tintedCard(b.colour),
@@ -341,7 +356,9 @@ export default function Timeline({ timeline, canManage, isToday, onChanged }: {
                           {/* Resize handle -- the bottom edge, where a calendar user expects it. */}
                           {canManage && b.movable && duration * PX_PER_MINUTE > 26 && (
                             <div onPointerDown={e => { e.stopPropagation(); beginDrag(e, b, laneIndex, "resize"); }}
-                              className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize"
+                              // touch-none for the same reason as the card: without it the browser
+                              // takes the vertical drag as a page scroll and the length never changes.
+                              className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize touch-none"
                               aria-label={`Change the length of ${b.patientName}'s appointment`} />
                           )}
                         </div>

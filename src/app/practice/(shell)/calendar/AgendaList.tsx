@@ -265,8 +265,17 @@ function AgendaDay({ day, shown, urlState, today, rowOpen, toggleRow, defaultOpe
           className="group text-[13px] font-bold text-gray-900 hover:underline max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center">
           {day.weekdayShort} {shortDate(day.date)}
           {/* CPR-MOB-001 s4: hover exists nowhere on a phone, so the cue that this date IS the way
-              into the day stays visible below md instead of waiting for a hover that never comes. */}
-          <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 opacity-0 group-hover:opacity-100 max-md:opacity-100">
+              into the day stays visible below md instead of waiting for a hover that never comes.
+
+              ⚠ PHASE 8: "nowhere on a phone" WAS THE WRONG BOUNDARY, and max-md drew it at 768.
+              s4's rule has no width in it -- "do not use hover-only information or controls" -- and
+              s20 puts two touch devices ABOVE 768 in the QA matrix (768x1024 portrait, 1024x768
+              landscape). Between those widths the cue went back to waiting for a hover the glass
+              cannot produce, which is the same defect this line was added to fix, one breakpoint up.
+              pointer-coarse asks the honest question (is the pointer a finger?) rather than guessing
+              it from a width, so it also covers a touchscreen laptop at 1400px; a mouse-driven
+              desktop matches neither variant and keeps the frozen hover-reveal exactly. */}
+          <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 opacity-0 group-hover:opacity-100 max-md:opacity-100 pointer-coarse:opacity-100">
             Open day →
           </span>
         </Link>

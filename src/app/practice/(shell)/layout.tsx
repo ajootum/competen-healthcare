@@ -174,8 +174,10 @@ export default async function PracticeShellLayout({ children }: { children: Reac
             {ctx.workspaceType === "individual_practice" ? "Individual practice" : "Managed practice"}
             {" · "}{ctx.entitlementStatus === "trial" ? "Trial" : "Licensed"}
           </p>
+          {/* pointer-coarse floor, the same one SidebarNav's rows now carry and for the same reason:
+              between 768 and 1199 this aside IS the navigation, because the bottom bar is md:hidden. */}
           <Link href="/practice/select-workspace"
-            className="mt-2 flex items-center gap-2 border-t border-white/10 pt-2 text-[11.5px] text-blue-300 hover:text-blue-200">
+            className="mt-2 flex items-center gap-2 border-t border-white/10 pt-2 text-[11.5px] text-blue-300 hover:text-blue-200 pointer-coarse:min-h-[var(--cp-touch)]">
             <span aria-hidden>⇄</span> Switch practice
           </Link>
         </div>

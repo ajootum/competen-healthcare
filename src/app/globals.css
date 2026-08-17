@@ -302,6 +302,15 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
   --cp-slate-900: #0F172A;
   --cp-slate-700: #334155;
   --cp-slate-500: #64748B;
+  /* Second strike of the same class as --cp-slate-50 below, and a worse one (2026-08-17, found by
+     practice-responsive-harness pin 1c). Five sites already wrote var(--cp-slate-400) -- palette.ts's
+     ACTIVITY_HUE_UNSET, SessionCard's suspended label, WeekBoard's unknown-place hue, setup/page's
+     muted module -- against a rung of the ramp that was never cut. The 50 case carried a fallback, so
+     it merely never used the token; these carry NONE, and an undefined custom property makes the
+     declaration invalid at computed-value time, which for `color` means inherit. So a SUSPENDED
+     session rendered in exactly the colour of an active one, and an activity with no type took its
+     container's colour instead of being greyed -- the greying was the whole signal. */
+  --cp-slate-400: #94A3B8;
   --cp-slate-300: #CBD5E1;
   --cp-slate-100: #F1F5F9;
   /* Completes the scale downwards. SessionWorkspace already wrote var(--cp-slate-50, #f8fafc) -- a

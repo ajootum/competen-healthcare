@@ -20,7 +20,7 @@ export default function PracticeSignOut() {
         await createClient().auth.signOut();
         window.location.assign("/practice");
       }}
-      className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-medium text-gray-600 hover:bg-gray-50"
+      className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-medium text-gray-600 hover:bg-gray-50 pointer-coarse:min-h-[var(--cp-touch)]"
     >
       Sign out
     </button>

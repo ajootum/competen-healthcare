@@ -104,18 +104,50 @@ function main() {
   // the check that exists to stop exactly that. The exemption is this file's palette and nothing else.
   const ACCENT_PALETTE = join(process.cwd(), "src", "lib", "practice", "preference-constants.ts");
 
+  /**
+   * ⚠ COMMENTS ARE BLANKED BEFORE THE SCAN, AND THE LINE NUMBERS SURVIVE IT (2026-08-17).
+   *
+   * The two genuine offenders below were fixed by pointing them at their tokens -- and the fix turned
+   * this assertion red again, because the comment EXPLAINING each fix quoted the hex it had removed.
+   * That is the needle matching its own documentation: a check that reads prose cannot be explained
+   * without breaking it, so the explanations get deleted instead, which is the worst of both.
+   *
+   * Blanking replaces each comment's characters with spaces rather than removing them, because this
+   * scan reports `file:line` and a stripper that collapsed lines would report the wrong ones.
+   */
+  const blankComments = (s: string) => s
+    .replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, " "))
+    .replace(/(^|[^:"'`\\])\/\/[^\n]*/g, (m, p: string) => p + " ".repeat(m.length - p.length));
+
   const offenders: string[] = [];
   for (const f of files) {
     if (!existsSync(f)) continue;
     if (f === ACCENT_PALETTE) continue;
-    for (const [i, line] of readFileSync(f, "utf8").split("\n").entries()) {
-      for (const hex of line.match(/#[0-9A-Fa-f]{6}\b/g) ?? []) {
+    for (const [i, line] of blankComments(readFileSync(f, "utf8")).split("\n").entries()) {
+      // ⚠ NOT PRECEDED BY & -- A NUMERIC CHARACTER REFERENCE IS NOT A COLOUR (2026-08-17).
+      // This scan reported eleven "raw hex colours" that were emoji: &#128197; is a calendar, &#128205;
+      // a pin, &#128100; a person. The old needle consumed neither the & nor the ; and \b is satisfied
+      // by the semicolon, so six decimal digits inside an entity were indistinguishable from #128197
+      // the colour. The cost was not the noise: it was that this assertion sat permanently red, and a
+      // harness known to be red is one nobody reads the day it goes red for a real reason.
+      for (const hex of line.match(/(?<!&)#[0-9A-Fa-f]{6}\b/g) ?? []) {
         if (!ALLOWED.has(hex)) offenders.push(`${f.replace(process.cwd() + "\\", "")}:${i + 1} ${hex}`);
       }
     }
   }
   ok("3. no raw hex colour in the Practice surface", offenders.length === 0,
     offenders.slice(0, 8).join(" | ") + (offenders.length > 8 ? ` (+${offenders.length - 8} more)` : ""));
+
+  // CONTROL for the blanker, because a stripper that ate too much would make assertion 3 pass by
+  // reading nothing. It must remove a hex written in a comment, keep one written in code, and return
+  // the file at exactly its original length in lines so `file:line` above still points at the truth.
+  {
+    const probe = "const a = \"#AABBCC\";\n// a comment mentioning #DDEEFF\n/* and #112233 */\nconst b = 1;\n";
+    const out = blankComments(probe);
+    ok("3-blank-control comments are blanked, code is not, and line numbering is preserved",
+      /#AABBCC/.test(out) && !/#DDEEFF/.test(out) && !/#112233/.test(out)
+      && out.split("\n").length === probe.split("\n").length);
+  }
 
   // CONTROL: the scan must actually be reading files. Without this, a bad path glob reports a clean
   // sweep of nothing -- the confident zero this project keeps meeting.

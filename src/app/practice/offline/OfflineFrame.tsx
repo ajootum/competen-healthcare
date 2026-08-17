@@ -47,8 +47,12 @@ export default function OfflineFrame({ children }: { children: React.ReactNode }
   const [nav, setNav] = useState<CachedNavItem[]>([]);
   useEffect(() => { void cachedNav().then(setNav); }, []);
 
+  // ⚠ NO FALLBACK VALUE ON --cp-canvas BELOW. It is defined on :root, so it is in scope wherever
+  // globals.css is -- and if globals.css were missing, every Tailwind class on this page would be
+  // missing with it, so the fallback protected nothing. What it did do is hold a SECOND copy of the
+  // value, and that copy had already drifted from the token it was standing in for.
   return (
-    <div className="flex min-h-screen bg-[var(--cp-canvas,#f7f8fa)]">
+    <div className="flex min-h-screen bg-[var(--cp-canvas)]">
       {/* The frame, matching the shell's aside: same width, same surface, same mark. */}
       <aside className="hidden md:flex w-60 shrink-0 flex-col bg-[var(--cp-shell)] text-white">
         <div className="flex h-14 items-center gap-2.5 border-b border-white/10 px-4">

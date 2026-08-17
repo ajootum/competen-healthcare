@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import MoreSheet, { type MoreSection } from "./MoreSheet";
@@ -51,6 +51,30 @@ export default function MobileBottomNav({ tabs, moreSections, sessionActive }: {
     setPrevPath(pathname);
     setMoreOpen(false);
   }
+
+  // ── CPR-MOB-001 PHASE 8 (TABLET): REACHING md CLOSES THE SHEET ──────────────────────────────────
+  //
+  // ⚠ THE PANEL IS md:hidden; ITS SCROLL LOCK AND ITS FOCUS TRAP ARE NOT. Both are STATE, and state
+  // does not read a media query. Cross 768 with the sheet open and the sheet disappears from the
+  // screen while MoreSheet's useBodyScrollLock and useModalFocus keep running against it: a
+  // tablet-width page that cannot be scrolled, with nothing on screen to explain why, and Tab cycling
+  // inside a dialog nobody can see.
+  //
+  // ⚠ AND IT IS ONE WRIST MOVEMENT AWAY, not a contrived resize. Rotating a 390x844 phone gives an
+  // 844px viewport -- s2's tablet band -- so opening More in portrait and turning the device sideways
+  // is the whole reproduction. s4 requires state to survive an orientation change; surviving means the
+  // sheet closes with the bar that owns it, not that an invisible copy keeps holding the page down.
+  //
+  // The same lesson PlannerFilters and use-below-md.ts already record from the other side: what must
+  // BEHAVE differently by width has to ASK about the width. Only the display can be left to CSS.
+  useEffect(() => {
+    if (!moreOpen) return;
+    const query = window.matchMedia("(min-width: 768px)");
+    const closeAtMd = () => { if (query.matches) setMoreOpen(false); };
+    closeAtMd();
+    query.addEventListener("change", closeAtMd);
+    return () => query.removeEventListener("change", closeAtMd);
+  }, [moreOpen]);
 
   // Longest-prefix, the same rule SidebarNav uses and for the same reason: /practice/today/complete
   // must light Session, and /practice/patients/<id> must light Patients rather than nothing. Computed

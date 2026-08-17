@@ -105,10 +105,20 @@ function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState, lo
           )}
           {/* The state, in words. The ring around the card said which day was selected only to somebody who
               already knew the ring meant that -- and said nothing at all about the other six being openable. */}
+          {/* ⚠ CPR-MOB-001 PHASE 8, s4: AND ON GLASS THE FIX ABOVE NEVER FIRED. The whole point of
+              "Review →" is that it tells somebody the other six days are openable at all -- the
+              defect recorded in this file's own header, where a practitioner asked whether reviewing
+              another day was possible. It was published as a HOVER reveal, so on every touch device
+              -- s20's 768x1024 and 1024x768 tablets, and the phones below them -- the day cards went
+              back to being bold headings that happen to be clickable. AgendaList's equivalent cue was
+              given max-md:opacity-100 in the mobile phase; this one was missed entirely, so it was
+              hover-only at EVERY width, not merely above 768. pointer-coarse asks whether the pointer
+              is a finger instead of guessing from a width, and leaves the mouse-driven desktop's
+              frozen hover-reveal untouched. */}
           <span className="ml-auto shrink-0 pl-2 text-[10px] font-semibold uppercase tracking-wide">
             {selected
               ? <span className="text-[var(--cp-primary-deep)]">Reviewing</span>
-              : <span className="text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">Review →</span>}
+              : <span className="text-gray-400 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 pointer-coarse:opacity-100">Review →</span>}
           </span>
         </Link>
         <button type="button" onClick={onToggle}

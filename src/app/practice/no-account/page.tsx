@@ -38,7 +38,12 @@ export default async function PracticeNoAccountPage() {
           <p className="mt-1 text-[12.5px] text-gray-600">
             Everything your account does hold is one place away.
           </p>
-          <Link href="/dashboard" className="mt-2 inline-block rounded-lg bg-[#4F46E5] px-4 py-2 text-[13px] font-semibold text-white hover:opacity-90">
+          {/* ⚠ THE TOKEN, NOT ITS DEFAULT VALUE. This read bg-[#4F46E5], which is exactly what
+              --cp-primary happens to equal on a practice that never chose an accent -- so it looked
+              correct on every screen anyone checked. A practice on the emerald, rose or slate accent
+              got an indigo button on this one page, because a copied value cannot follow the six
+              [data-practice-accent] themes that redefine the token. */}
+          <Link href="/dashboard" className="mt-2 inline-block rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[13px] font-semibold text-white hover:opacity-90">
             Go to My Competen →
           </Link>
         </div>

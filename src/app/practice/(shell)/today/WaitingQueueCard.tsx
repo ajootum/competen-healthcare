@@ -250,13 +250,20 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
                     {canAttach && !p.patientId && (
                       <AttachRecordInline entryId={p.id} prefillName={p.name} />
                     )}
+                    {/* ⚠ CPR-MOB-001 PHASE 8 (TABLET): pointer-coarse ON EVERY ACTION IN THIS DENSE ROW.
+                        The card face below has carried min-h-[var(--cp-touch)] since the mobile phase,
+                        but this row is the face a TABLET gets -- it is max-md:hidden, and s20 lists two
+                        tablet targets (768x1024 and 1024x768) that are touch devices. At about 21px
+                        these were the smallest targets in the product on a screen with no mouse, sitting
+                        beside each other, where the wrong one records that a waiting patient left.
+                        Sized by what is pointing rather than by width, so a mouse sees no change. */}
                     {/* CPR-ADOPT-001 s2. Drawn only when this row HAS a patient to attach an encounter
                         to -- a queue entry for somebody not yet registered has nothing to mark. */}
                     {onMarkSeen && p.patientId && (
                       <button type="button" disabled={busyId === p.id}
                         onClick={() => onMarkSeen(p.patientId!)}
                         title="Record that you saw this patient. Complete the details later."
-                        className="shrink-0 rounded-md border border-[var(--cp-primary)]/30 px-1.5 py-0.5 text-[11px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
+                        className="shrink-0 rounded-md border border-[var(--cp-primary)]/30 px-1.5 py-0.5 text-[11px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50 pointer-coarse:min-h-[var(--cp-touch)]">
                         Seen ✓
                       </button>
                     )}
@@ -266,7 +273,7 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
                       <button type="button" disabled={busyId === p.id}
                         onClick={() => onCheckIn(p.id)}
                         title="This arrival was stamped on a previous day. Check the patient in as arriving now -- the server stamps the moment."
-                        className="shrink-0 rounded-md border border-[var(--cp-primary)]/30 px-1.5 py-0.5 text-[11px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
+                        className="shrink-0 rounded-md border border-[var(--cp-primary)]/30 px-1.5 py-0.5 text-[11px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50 pointer-coarse:min-h-[var(--cp-touch)]">
                         Check in ✓
                       </button>
                     )}
@@ -276,7 +283,7 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
                       <button type="button" disabled={busyId === p.id}
                         onClick={() => onStartEncounter(p.patientId!)}
                         title="Open the consultation for this patient. An unfinished one is resumed, never duplicated."
-                        className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
+                        className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50 pointer-coarse:min-h-[var(--cp-touch)]">
                         Start →
                       </button>
                     )}
@@ -287,7 +294,7 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
                       <button type="button" disabled={busyId === p.id}
                         onClick={() => onLeft(p.id)}
                         title="Record that this person left without being seen. The row is kept and marked, never deleted."
-                        className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] text-gray-400 hover:bg-gray-50 hover:text-gray-600 disabled:opacity-50">
+                        className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] text-gray-400 hover:bg-gray-50 hover:text-gray-600 disabled:opacity-50 pointer-coarse:min-h-[var(--cp-touch)]">
                         Didn&apos;t wait
                       </button>
                     )}
