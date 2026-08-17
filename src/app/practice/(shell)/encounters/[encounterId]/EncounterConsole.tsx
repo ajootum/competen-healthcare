@@ -187,6 +187,15 @@ import ProcedureWorkspace from "./ProcedureWorkspace";
 const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 const CARD = "rounded-xl border border-gray-200 bg-white p-4";
 const FU_LABEL = "text-[10.5px] font-semibold uppercase tracking-wide text-gray-600";
+
+/**
+ * Walkthrough 2026-08-17 #19 -- "make all the required fields obvious beyond the asterisk".
+ * The asterisk STAYS and the colour REINFORCES it (the product's never-colour-alone rule): a red
+ * mark beside the label, plus the amber empty-field wash that already answers "which one is
+ * blocking me". aria-hidden because screen readers get `required` from the controls themselves --
+ * hearing "star" after every label is noise, not access.
+ */
+const REQ = <span aria-hidden className="font-bold text-[var(--cmp-text-critical)]"> *</span>;
 const QUIET_BTN = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50";
 
 /**
@@ -1528,7 +1537,7 @@ export default function EncounterConsole(props: {
                             subject/object of the obligation". The old "What needs to happen, and
                             why?" label invited composing prose that duplicated every structured
                             field below it (HFE s2), and its removal is acceptance criterion one. */}
-                        <label className={FU_LABEL} htmlFor="fu-reason">Follow-up for *</label>
+                        <label className={FU_LABEL} htmlFor="fu-reason">Follow-up for{REQ}</label>
                         {/* ⚠ AMBER WHILE EMPTY, exactly as every other required field on this
                             encounter. The owner pressed Raise twice with this blank and read the
                             silence as the product being broken -- the sentence by the button was not
@@ -1541,7 +1550,7 @@ export default function EncounterConsole(props: {
                           className={`${input} mt-1 ${fu.reason.trim() ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
                       </div>
                       <div>
-                        <label className={FU_LABEL} htmlFor="fu-when">Due *</label>
+                        <label className={FU_LABEL} htmlFor="fu-when">Due{REQ}</label>
                         {/* ⚠ THE OWNER ASKED FOR A CALENDAR IN AS MANY WORDS. s9 always allowed both --
                             "support relative intervals and configured exact dates" -- and the composer
                             only ever offered the intervals. "On a date..." reveals the calendar; the
@@ -1573,7 +1582,7 @@ export default function EncounterConsole(props: {
                         })()}
                       </div>
                       <div>
-                        <label className={FU_LABEL} htmlFor="fu-priority">Priority *</label>
+                        <label className={FU_LABEL} htmlFor="fu-priority">Priority{REQ}</label>
                         {/* ⚠ THE OPTIONS USED TO RENDER RAW CODES -- "routine", "soon", "urgent" in
                             lower case, straight out of the constant, unlike every other select on this
                             screen. s8 gives priority a visual treatment and a meaning; the least it can
@@ -1593,7 +1602,7 @@ export default function EncounterConsole(props: {
                           THE CATEGORY (HFE s7's deterministic inference) unless a human already
                           chose one under More details. */}
                       <div>
-                        <label className={FU_LABEL} htmlFor="fu-type">Action *</label>
+                        <label className={FU_LABEL} htmlFor="fu-type">Action{REQ}</label>
                         <select id="fu-type" value={fu.followUpType}
                           onChange={e => {
                             const followUpType = e.target.value;
@@ -1639,7 +1648,7 @@ export default function EncounterConsole(props: {
                           What IS offerable is the viewer themselves, or a named queue, and the database
                           refuses both at once because "whose is this" needs one answer. */}
                       <div>
-                        <label className={FU_LABEL} htmlFor="fu-owner">Assigned to *</label>
+                        <label className={FU_LABEL} htmlFor="fu-owner">Assigned to{REQ}</label>
                         {/* HFE s4/s9: assignment is REQUIRED and defaults to Me -- an obligation
                             nobody owns is the board's oldest failure mode. Unassigned left this
                             select; the queue path still needs a name before Raise enables. */}
@@ -1683,16 +1692,22 @@ export default function EncounterConsole(props: {
                       {fu.bookVisit && (
                         <>
                           <div>
-                            <label className={FU_LABEL} htmlFor="fu-book-date">Visit date *</label>
+                            <label className={FU_LABEL} htmlFor="fu-book-date">Visit date{REQ}</label>
                             <input id="fu-book-date" type="date" value={fu.bookDate}
                               onChange={e => setFu(p => ({ ...p, bookDate: e.target.value }))}
                               className={`${input} mt-1 ${fu.bookDate ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
                           </div>
                           <div>
-                            <label className={FU_LABEL} htmlFor="fu-book-time">Visit time *</label>
-                            <input id="fu-book-time" type="time" value={fu.bookTime}
+                            <label className={FU_LABEL} htmlFor="fu-book-time">Visit time{REQ}</label>
+                            {/* ⚠ TEXT, NOT type="time" -- the native picker follows the OS locale and
+                                drew "11:00 AM" on this very panel (walkthrough #19's screenshot). The
+                                owner's 24-hour decision is product-wide; the planner sweep (#1) missed
+                                this input because the freeze pin only scans the calendar folder. */}
+                            <input id="fu-book-time" value={fu.bookTime}
+                              required pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="14:30" inputMode="numeric"
+                              title="24-hour clock, HH:MM -- for example 09:00 or 14:30"
                               onChange={e => setFu(p => ({ ...p, bookTime: e.target.value }))}
-                              className={`${input} mt-1`} />
+                              className={`${input} mt-1 ${/^([01]?\d|2[0-3]):[0-5]\d$/.test(fu.bookTime) ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
                           </div>
                           {/* #15: WHERE the visit happens, on every booking surface. The empty choice
                               keeps the regular-week derivation; choosing covers the outside-hours
@@ -1780,20 +1795,21 @@ export default function EncounterConsole(props: {
                             noise. */}
                         {(!fu.reason.trim() || !fu.followUpType || (fu.owner === "queue" && !fu.queue.trim())
                           || (fu.intervalCode === "custom" && !fu.dueDate)
-                          || (fu.bookVisit && !fu.bookDate)) && (
+                          || (fu.bookVisit && (!fu.bookDate || !/^([01]?\d|2[0-3]):[0-5]\d$/.test(fu.bookTime)))) && (
                           <span className="text-[11.5px] text-[var(--cmp-text-warning)]">
                             {!fu.reason.trim() ? "Say what this follow-up is for."
                               : !fu.followUpType ? "Choose the action."
                                 : fu.intervalCode === "custom" && !fu.dueDate ? "Pick the follow-up date."
                                   : fu.owner === "queue" && !fu.queue.trim() ? "Name the queue, or assign it differently."
-                                    : "Pick the visit date, or untick the booking."}
+                                    : fu.bookVisit && !fu.bookDate ? "Pick the visit date, or untick the booking."
+                                      : "Give the visit time as 24-hour HH:MM -- for example 14:30."}
                           </span>
                         )}
                         <button type="submit"
                           disabled={busy || !fu.reason.trim() || !fu.followUpType
                             || (fu.owner === "queue" && !fu.queue.trim())
                             || (fu.intervalCode === "custom" && !fu.dueDate)
-                            || (fu.bookVisit && !fu.bookDate)}
+                            || (fu.bookVisit && (!fu.bookDate || !/^([01]?\d|2[0-3]):[0-5]\d$/.test(fu.bookTime)))}
                           className="rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[12.5px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cp-primary)] focus-visible:ring-offset-2 disabled:opacity-50">
                           {busy ? "Raising..."
                             : fu.bookVisit ? "Raise & book visit" : "Raise follow-up"}
