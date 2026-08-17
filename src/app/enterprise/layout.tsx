@@ -15,6 +15,41 @@ import { ENTERPRISE_BUILT_SUBPRODUCTS, ENTERPRISE_NOT_BUILT_REASON } from "@/lib
 
 export const dynamic = "force-dynamic";
 
+/**
+ * ⚠ A NO-ACCESS STATE IS A SENTENCE WITH AN EXIT (2026-08-17, the owner reading this very screen).
+ *
+ * Both of these states used to render a heading and a paragraph in the middle of an empty page: no
+ * header, no way back to Competen, and no route to the product the account DOES hold. The staff door
+ * settled this rule for the estate -- "who you are signed in as, what is true of this account, and
+ * where to go" -- and COMP-ID-ROUTE-001 s7 states it again for the no-product state: a heading, the
+ * message, an approved support path, and Return to Competen. A dead end is not honesty, it is honesty
+ * that stops halfway.
+ *
+ * ⚠ THE WORKSPACE LINK IS /dashboard, NOT /practice. This layout does not know which products the
+ * account holds, and offering Practice to somebody who does not hold it would be a wrong door with a
+ * confident label. The Personal Workspace is the one destination every authenticated account has
+ * (PW-014's universal landing), and it aggregates whatever they actually hold.
+ */
+function NoAccess({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mx-auto max-w-lg p-10">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Competen</p>
+      <h1 className="mt-1 text-xl font-bold text-gray-900">Competen Enterprise</h1>
+      <p className="mt-3 text-[13.5px] leading-relaxed text-gray-700">{children}</p>
+      <div className="mt-5 flex flex-col gap-2 text-[13px]">
+        <Link href="/dashboard" className="font-semibold text-blue-700 hover:underline">
+          Go to your Competen workspace &rarr;
+        </Link>
+        <a href="mailto:gabriel@semacast.com?subject=Competen%20Enterprise%20enquiry"
+          className="font-semibold text-gray-700 hover:underline">
+          Talk to us about Competen Enterprise
+        </a>
+        <Link href="/" className="text-gray-600 hover:underline">Return to Competen</Link>
+      </div>
+    </div>
+  );
+}
+
 export default async function EnterpriseLayout({ children }: { children: React.ReactNode }) {
   const shell = await resolveEnterpriseShell();
 
@@ -34,23 +69,15 @@ export default async function EnterpriseLayout({ children }: { children: React.R
 
   if (shell.state === "NO_TENANT")
     return (
-      <div className="mx-auto max-w-lg p-10">
-        <h1 className="text-xl font-bold text-gray-900">Competen Enterprise</h1>
-        <p className="mt-3 text-[13.5px] leading-relaxed text-gray-700">
-          This account is not attached to an organisation on Competen Enterprise, so there is nothing to
-          show here. If your organisation uses Competen Enterprise, an administrator there can attach
-          your account.
-        </p>
-      </div>
+      <NoAccess>
+        This account is not attached to an organisation on Competen Enterprise, so there is nothing to
+        show here. If your organisation uses Competen Enterprise, an administrator there can attach
+        your account.
+      </NoAccess>
     );
 
   if (shell.state === "REFUSED")
-    return (
-      <div className="mx-auto max-w-lg p-10">
-        <h1 className="text-xl font-bold text-gray-900">Competen Enterprise</h1>
-        <p className="mt-3 text-[13.5px] leading-relaxed text-gray-700">{shell.sentence}</p>
-      </div>
-    );
+    return <NoAccess>{shell.sentence}</NoAccess>;
 
   return (
     <div className="flex min-h-screen bg-[#f7f8fa]">
