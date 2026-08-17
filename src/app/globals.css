@@ -550,3 +550,28 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
 [data-practice-noise="reduced"] .practice-scale .bg-gray-50\/60 { background-color: transparent; }
 
 /* Respects the platform-wide reduced-motion rule already set by PUI-005 rather than restating it. */
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════
+   CPR-MOB-001 Phase 1 — the responsive foundation: touch targets, the device safe area, and the
+   bottom navigation's geometry.
+
+   NO BREAKPOINT TOKENS, DELIBERATELY. s2's three modes land on Tailwind's standard scale — md (768px)
+   is the mobile/tablet boundary and everything below it is the phone presentation — and components say
+   `md:` in their own class lists. A parallel breakpoint system declared here would be a second answer
+   to "where does mobile end", and the two answers would drift.
+
+   THE BAR HEIGHT IS A TOKEN because two parties must agree on it EXACTLY: the bar that occupies the
+   space, and every surface that must not be hidden underneath it — the shell's content padding and
+   StickyPrimaryAction's offset. s17: "Bottom navigation and sticky action bars must not obscure
+   content." One variable is how that agreement cannot rot in two places.
+   ══════════════════════════════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* s4: minimum interactive target 44px; 48px preferred for primary actions. */
+  --cp-touch: 44px;
+  --cp-touch-primary: 48px;
+  /* The hardware inset above a phone's home indicator. The 0px fallback keeps every calc() consumer
+     valid on browsers without env() support, where the inset is genuinely nothing. */
+  --cp-safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* The bottom navigation bar's content height, EXCLUDING the safe-area inset it pads beneath itself. */
+  --cp-bottomnav-h: 60px;
+}

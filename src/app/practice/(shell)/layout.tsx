@@ -8,6 +8,7 @@ import CurrentActivityHeader from "./CurrentActivityHeader";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePreferences } from "@/lib/practice/preferences";
 import SidebarNav from "./SidebarNav";
+import MobileBottomNav from "./MobileBottomNav";
 import PracticeSignOut from "./PracticeSignOut";
 import PracticeAppearance from "./PracticeAppearance";
 import PracticeShortcuts from "./PracticeShortcuts";
@@ -108,6 +109,40 @@ export default async function PracticeShellLayout({ children }: { children: Reac
     }))
     .filter(sec => sec.items.length > 0);
 
+  // ── CPR-MOB-001 s3: THE BOTTOM NAVIGATION, FED FROM THE SAME FILTERED LIST ────────────────────────
+  //
+  // The five positions are the specification's; the SHORT labels are its words (Today, Session,
+  // Patients, Follow-ups) rather than the sidebar's long ones, because a 10px label under an icon is a
+  // different medium from a 240px sidebar row. The HREFS are identical to the sidebar's — same
+  // destinations, different presentation, which is the whole of s1's "same data, permissions and
+  // workflows".
+  //
+  // ⚠ FILTERED THROUGH `visible`, NEVER HARD-CODED. A caller without patient.list has no Patients row
+  // in the sidebar, and must not get a Patients tab whose page redirects them. Fewer than five tabs is
+  // the honest rendering for that caller.
+  const MOBILE_TABS: ReadonlyArray<readonly [href: string, short: string]> = [
+    ["/practice/home", "Today"],
+    ["/practice/today", "Session"],
+    ["/practice/patients", "Patients"],
+    ["/practice/follow-ups", "Follow-ups"],
+  ];
+  const mobileTabs = MOBILE_TABS.flatMap(([href, short]) => {
+    const item = visible.find(v => v.href === href);
+    return item ? [{ href, label: short, icon: item.icon }] : [];
+  });
+  // The More sheet: every remaining primary destination, under the sidebar's own section headings and
+  // in its order. Built by SUBTRACTION from the frozen eleven rather than by a second list, so a
+  // sidebar change cannot leave the sheet promising a stale set.
+  const inTabs = new Set(mobileTabs.map(t => t.href));
+  const moreSections = SIDEBAR_SECTIONS
+    .map(sec => ({
+      label: sec.label,
+      items: visible
+        .filter(i => sec.hrefs.includes(i.href) && !inTabs.has(i.href))
+        .map(i => ({ href: i.href, label: i.label, icon: i.icon })),
+    }))
+    .filter(sec => sec.items.length > 0);
+
   return (
     <div
       className="cp-surface min-h-screen bg-gray-50 flex"
@@ -174,9 +209,25 @@ export default async function PracticeShellLayout({ children }: { children: Reac
 
         {/* `practice-scale` is what size and density are applied to -- the content, not the chrome. A
             zoomed sidebar would push the page off the screen at the setting that exists to make things
-            easier to see. */}
-        <main className="practice-scale flex-1 min-w-0 p-5">{children}</main>
+            easier to see.
+
+            Below md the bottom padding grows by the bottom bar's height plus the device safe area:
+            s17 says the bottom navigation "must not obscure content", and the last row of every page
+            is exactly what it would obscure. At md and up the bar does not exist, so pb-5 restores
+            p-5's own value and desktop renders byte-for-byte what it did before CPR-MOB-001. */}
+        <main className="practice-scale flex-1 min-w-0 p-5 pb-[calc(var(--cp-bottomnav-h)_+_var(--cp-safe-bottom)_+_1.25rem)] md:pb-5">{children}</main>
       </div>
+
+      {/* CPR-MOB-001 s3: the mobile bottom navigation, mounted HERE for the same reason the sidebar is
+          -- global navigation belongs to the layout, once, for every route in the group. It renders
+          nothing at md and up. `sessionActive` is the plan the layout ALREADY read for
+          CurrentActivityHeader, so the bar and the header cannot disagree about whether a session is
+          running -- and a plan that could not be read emphasises nothing rather than guessing. */}
+      <MobileBottomNav
+        tabs={mobileTabs}
+        moreSections={moreSections}
+        sessionActive={plan.current !== null}
+      />
 
       {/* The two client behaviours that cannot be server-rendered: resolving "match my device", and
           listening for a keypress. Both are inert when the preference is off. */}
