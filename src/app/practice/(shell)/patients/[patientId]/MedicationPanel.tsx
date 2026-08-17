@@ -73,7 +73,7 @@ export default function MedicationPanel({ record, canRecord, canVerify }: {
   // patient who takes nothing.
   if (!record.permitted) {
     return (
-      <section className={CARD}>
+      <section id="record-medications" className={`scroll-mt-4 ${CARD}`}>
         <h2 className="text-[13px] font-bold text-gray-900">Medications</h2>
         <p className="mt-2 text-[12px] text-gray-500">
           You do not have permission to see this patient&rsquo;s medication record. This is not the same as
@@ -84,7 +84,7 @@ export default function MedicationPanel({ record, canRecord, canVerify }: {
   }
 
   return (
-    <section className={CARD}>
+    <section id="record-medications" className={`scroll-mt-4 ${CARD}`}>
       <div className="flex items-baseline gap-2 flex-wrap">
         <h2 className="text-[13px] font-bold text-gray-900">Medications</h2>
         <span className="text-[11px] text-gray-500">

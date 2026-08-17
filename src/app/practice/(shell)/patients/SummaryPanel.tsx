@@ -146,10 +146,13 @@ export default function SummaryPanel({ summary, summaryError, family, capabiliti
           </p>
         )}
 
-        <div className="mt-2 flex flex-wrap gap-2">
+        {/* max-md:[&_button] reaches the StartEncounterAction the row mounts -- a shared control whose
+            classes this panel may not restyle from props -- so every act in the row meets the 44px
+            floor below md while desktop keeps its shipped sizes. */}
+        <div className="mt-2 flex flex-wrap gap-2 max-md:[&_button]:min-h-[var(--cp-touch)]">
           <Link
             href={`/practice/patients/${p.id}`}
-            className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)]"
+            className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center"
           >
             Open full record
           </Link>

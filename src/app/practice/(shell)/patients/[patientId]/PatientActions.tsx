@@ -17,7 +17,9 @@ import StartEncounterAction from "../../encounters/StartEncounterAction";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+// max-md:min-h is CPR-MOB-001 s4's 44px floor, a no-op at md and up. The TIME field stays the
+// text-pattern 24-hour idiom regardless of size -- never type="time".
+const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)]";
 
 export default function PatientActions(props: {
   patientId: string; displayName: string; sex: string; birthDate: string | null;
@@ -142,7 +144,7 @@ export default function PatientActions(props: {
   }
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-4">
+    <section id="record-actions" className="scroll-mt-4 rounded-xl border border-gray-200 bg-white p-4">
       {notice && (
         <p className={`mb-3 rounded-lg px-3 py-2 text-[12px] ${notice.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{notice.text}</p>
       )}
@@ -151,8 +153,11 @@ export default function PatientActions(props: {
           startEncounterFor(). This panel USED to decide the pathway from a `hasPriorEncounter` prop the
           server computed at page load -- correct, and stale by however long the tab had been open. The
           shared control reads the history at the moment somebody presses it. */}
+      {/* max-md:hidden: below md the record page mounts this SAME shared control at thumb size
+          directly under the patient's identity (CPR-MOB-001 s9's consistently-positioned primary
+          action), and one viewport must not carry the act twice (s4). Desktop keeps this copy. */}
       {props.canStartEncounter && (
-        <div className="mb-4">
+        <div className="mb-4 max-md:hidden">
           <StartEncounterAction
             patientId={props.patientId}
             note="Opens the consultation record now. If one is already open for this patient it is resumed, never duplicated."
@@ -218,7 +223,7 @@ export default function PatientActions(props: {
               </label>
             )}
             <button type="submit" disabled={busy}
-              className="col-span-2 rounded-lg bg-[var(--cp-primary)] py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
+              className="col-span-2 rounded-lg bg-[var(--cp-primary)] py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50 max-md:min-h-[var(--cp-touch)]">
               Book appointment
             </button>
           </form>
@@ -237,7 +242,7 @@ export default function PatientActions(props: {
               <input type="date" value={edit.birthDate} onChange={e => setEdit(p => ({ ...p, birthDate: e.target.value }))} className={input} />
             </div>
             <button type="submit" disabled={busy || !edit.displayName.trim()}
-              className="rounded-lg border border-gray-200 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              className="rounded-lg border border-gray-200 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 max-md:min-h-[var(--cp-touch)]">
               Save changes
             </button>
           </form>
@@ -255,7 +260,7 @@ export default function PatientActions(props: {
           <div className="mt-2 flex gap-2">
             <input placeholder="26-000184 or P-XXXXXX" value={mergeTarget} onChange={e => setMergeTarget(e.target.value)} className={input} />
             <button type="button" disabled={busy || !mergeTarget.trim()} onClick={doMerge}
-              className="shrink-0 rounded-lg border border-[var(--cmp-color-warning)] px-3 py-2 text-[12px] font-semibold text-[var(--cmp-text-warning)] hover:bg-[var(--cmp-surface-warning)] disabled:opacity-50">
+              className="shrink-0 rounded-lg border border-[var(--cmp-color-warning)] px-3 py-2 text-[12px] font-semibold text-[var(--cmp-text-warning)] hover:bg-[var(--cmp-surface-warning)] disabled:opacity-50 max-md:min-h-[var(--cp-touch)]">
               Merge
             </button>
           </div>

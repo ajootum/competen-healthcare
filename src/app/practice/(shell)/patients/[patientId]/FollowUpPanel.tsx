@@ -65,7 +65,7 @@ export default function FollowUpPanel({ view, patientId, tab }: {
   const rows: any[] = (view as any)[active] ?? [];
 
   return (
-    <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+    <section id="record-followups" className="scroll-mt-4 mt-4 rounded-xl border border-gray-200 bg-white p-4">
       <div className="flex items-baseline justify-between gap-2 flex-wrap">
         <h2 className="text-[13px] font-bold text-gray-900">Follow-up</h2>
         <Link href="/practice/follow-ups" className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
@@ -143,14 +143,18 @@ export default function FollowUpPanel({ view, patientId, tab }: {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="mt-3 flex flex-wrap gap-1 border-b border-gray-100 pb-1">
+      {/* Tabs. CPR-MOB-001 s9: below md this becomes the SCROLLABLE SHORT TAB BAR -- nowrap in its own
+          overflow box (s4 forbids horizontal scroll for the workflow, not inside a tab strip) with
+          44px targets. The tabs stay URL-driven links on every width: SectionTabs was judged and
+          rejected here because it holds tab STATE in the client, and this panel's whole design is
+          tabs-without-JavaScript -- bookmarkable, server-rendered, state in the URL. */}
+      <div className="mt-3 flex flex-wrap gap-1 border-b border-gray-100 pb-1 max-md:flex-nowrap max-md:overflow-x-auto">
         {TABS.map(([k, label]) => {
           const n = k === "outcomes" ? view.outcomes.total : ((view as any)[k]?.length ?? 0);
           return (
             <Link key={k} href={`/practice/patients/${patientId}?followUp=${k}`} scroll={false}
               aria-current={active === k ? "page" : undefined}
-              className={`rounded-t px-2 py-1 text-[11px] font-semibold ${
+              className={`rounded-t px-2 py-1 text-[11px] font-semibold max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:shrink-0 max-md:items-center max-md:gap-1 max-md:whitespace-nowrap max-md:px-3 ${
                 active === k ? "border-b-2 border-[var(--cp-primary)] text-[var(--cp-primary-deep)]" : "text-gray-500 hover:text-gray-800"}`}>
               {label} {n > 0 && <span className="text-gray-400">({n})</span>}
             </Link>

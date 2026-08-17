@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { IDENTIFIER_LABELS } from "@/lib/practice/patient-workspace-constants";
 import { MIN_PICKER_QUERY } from "@/lib/practice/encounter-start";
@@ -125,23 +126,32 @@ export default function UniversalSearch({
 
   return (
     <section className={`${CARD} p-4`}>
+      {/* s16 wants a VISIBLE label on mobile, where the long placeholder scrolls out of the box the
+          moment typing starts. not-sr-only below md is a no-op at md and up: desktop keeps the
+          screen-reader-only label it shipped with, and an sr-only element renders no pixels wherever
+          it sits, so hoisting it above the form changes nothing at md+. */}
+      <label
+        className="sr-only max-md:not-sr-only max-md:mb-1 max-md:block max-md:text-[11px] max-md:font-semibold max-md:text-gray-600"
+        htmlFor="patient-universal-search"
+      >
+        Search patients
+      </label>
       <form
         className="flex gap-2"
         onSubmit={e => { e.preventDefault(); if (timer.current) clearTimeout(timer.current); onSubmitQuery(q.trim()); void run(q); }}
       >
-        <label className="sr-only" htmlFor="patient-universal-search">Search patients</label>
         <input
           id="patient-universal-search"
           value={q}
           onChange={e => onType(e.target.value)}
           autoComplete="off"
           placeholder="Name, Practice ID, hospital number, national ID, passport, phone, email — or a parent's phone"
-          className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-[14px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10"
+          className="w-full rounded-lg border border-gray-200 px-3 py-2.5 text-[14px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)]"
         />
         <button
           type="submit"
           disabled={q.trim().length < MIN_QUERY}
-          className="shrink-0 rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[14px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-40"
+          className="shrink-0 rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[14px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-40 max-md:min-h-[var(--cp-touch)]"
         >
           {busy ? "Searching…" : "Search"}
         </button>
@@ -154,7 +164,7 @@ export default function UniversalSearch({
             type="button"
             onClick={() => setLens(l.key)}
             aria-pressed={lens === l.key}
-            className={`rounded-lg border px-2.5 py-1 text-[12px] font-semibold ${lens === l.key
+            className={`rounded-lg border px-2.5 py-1 text-[12px] font-semibold max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:px-3.5 ${lens === l.key
               ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/5 text-[var(--cp-primary-deep)]"
               : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
           >
@@ -216,16 +226,14 @@ export default function UniversalSearch({
 
           {shown.length > 0 && (
             <ul className="mt-1.5 flex flex-col gap-1.5">
-              {shown.map(m => (
-                <li key={m.patientId}>
-                  <button
-                    type="button"
-                    onClick={() => onSelect(m.patientId)}
-                    aria-current={selectedPatientId === m.patientId}
-                    className={`flex w-full flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg border px-3 py-2 text-left transition ${selectedPatientId === m.patientId
-                      ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/5"
-                      : "border-gray-100 hover:border-[var(--cp-primary)]"}`}
-                  >
+              {shown.map(m => {
+                // ONE BODY, TWO FACES (CPR-MOB-001 s9). The desktop face selects the patient into the
+                // summary panel beside the register; below md that panel lives far below the fold, so
+                // a tap that "selected" would look like a tap that did nothing -- the disabled-button
+                // class of defect. The mobile face is a plain link to the record, which is s9's own
+                // flow. Same data, same markup, rendered once into both.
+                const rowBody = (
+                  <>
                     <span className="text-[14px] font-semibold text-gray-900">{m.displayName}</span>
                     {(m.patientNumber ?? m.practiceId) && <span className="font-mono text-[12px] text-gray-500">{m.patientNumber ?? m.practiceId}</span>}
                     {/* HOSPITAL NUMBERS BESIDE THE NAME, not hidden in demographics -- s1's own words. */}
@@ -250,9 +258,27 @@ export default function UniversalSearch({
                         the number belongs to them, not to this patient.
                       </span>
                     )}
-                  </button>
-                </li>
-              ))}
+                  </>
+                );
+                const rowClass = `w-full flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg border px-3 text-left transition ${selectedPatientId === m.patientId
+                  ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/5"
+                  : "border-gray-100 hover:border-[var(--cp-primary)]"}`;
+                return (
+                  <li key={m.patientId}>
+                    <button
+                      type="button"
+                      onClick={() => onSelect(m.patientId)}
+                      aria-current={selectedPatientId === m.patientId}
+                      className={`${rowClass} flex py-2 max-md:hidden`}
+                    >
+                      {rowBody}
+                    </button>
+                    <Link href={`/practice/patients/${m.patientId}`} className={`${rowClass} py-3 max-md:flex md:hidden`}>
+                      {rowBody}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
 
@@ -260,7 +286,7 @@ export default function UniversalSearch({
             <button
               type="button"
               onClick={onRegister}
-              className="mt-2 rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)]"
+              className="mt-2 rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center"
             >
               Register {q.trim() ? `“${q.trim()}”` : "a new patient"}
             </button>

@@ -15,6 +15,7 @@ import FollowUpPanel from "./FollowUpPanel";
 import { listContacts } from "@/lib/practice/communication";
 import { logAccess, patientAccessHistory } from "@/lib/practice/privacy";
 import PatientActions from "./PatientActions";
+import StartEncounterAction from "../../encounters/StartEncounterAction";
 import { loadTaxonomy } from "@/lib/practice/taxonomy";
 import ContactLog from "./ContactLog";
 import { monitoringPlan } from "@/lib/practice/parameters";
@@ -211,7 +212,7 @@ export default async function PatientPage({ params, searchParams }: {
               )}
             </span>
           )}
-          <Link href="/practice/patients" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">← Registry</Link>
+          <Link href="/practice/patients" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center">← Registry</Link>
         </div>
       </div>
 
@@ -240,8 +241,58 @@ export default async function PatientPage({ params, searchParams }: {
         </div>
       )}
 
+      {/* ══ CPR-MOB-001 s9 rows 3 + 5 -- two md:hidden blocks; neither renders at md+. ══════════════════
+          THE PRIMARY PATIENT ACTION, POSITIONED CONSISTENTLY: Start consultation, directly under the
+          patient's identity on every record. It is the SAME shared control the desktop card mounts --
+          StartEncounterAction over startEncounterFor(), resume-before-create and all -- behind the SAME
+          capability gate; the desktop card's own copy is max-md:hidden so no viewport carries two
+          dominant primary actions (s4). A pinned bar was rejected: StickyPrimaryAction cannot host this
+          control without re-implementing its guarded fetch, and a fixed bar stacked on the bottom nav
+          is the s17 obscuring the primitive itself warns about. */}
+      {hasCapability(shell.ctx, "encounter.create") && (
+        <div className="mt-3 md:hidden [&_button]:min-h-[var(--cp-touch-primary)] [&_button]:w-full [&_button]:text-[14px]">
+          <StartEncounterAction
+            patientId={patient.id}
+            label="Start consultation"
+            note="Opens the consultation record now. If one is already open for this patient it is resumed, never duplicated."
+          />
+        </div>
+      )}
+
+      {/* s9 row 3: INTERNAL SECTION NAVIGATION for the single-column record. Anchors, not tabs -- the
+          page is server-rendered and every section is already on it, so a jump is honest where a tab
+          bar would imply panels that swap. Only sections that actually render get a chip. The strip
+          scrolls in its own box (s4 forbids horizontal scroll for the WORKFLOW, not inside a tab
+          strip -- SectionTabs' own reading, adopted; the primitive itself is not, because it drives
+          client tab STATE and these are same-page anchors with none). */}
+      <nav aria-label="Sections of this record" className="mt-3 md:hidden">
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          {[
+            { id: "record-identifiers", label: "Identifiers" },
+            { id: "record-actions", label: "Actions & booking" },
+            ...(financial && financial.permitted ? [{ id: "record-money", label: "Money" }] : []),
+            { id: "record-monitoring", label: "Monitoring" },
+            { id: "record-medications", label: "Medications" },
+            ...(followUpView && followUpView.all.length > 0 ? [{ id: "record-followups", label: "Follow-up" }] : []),
+            ...(correspondence && correspondence.entries.length > 0 ? [{ id: "record-correspondence", label: "Correspondence" }] : []),
+            { id: "record-contactlog", label: "Contact log" },
+            ...(accessHistory && accessHistory.entries.length > 0 ? [{ id: "record-access", label: "Access" }] : []),
+            { id: "record-appointments", label: "Appointments" },
+            ...(hasCapability(shell.ctx, "encounter.list") ? [{ id: "record-timeline", label: "Clinical timeline" }] : []),
+          ].map(s => (
+            <a
+              key={s.id}
+              href={`#${s.id}`}
+              className="inline-flex min-h-[var(--cp-touch)] shrink-0 items-center whitespace-nowrap rounded-full border border-gray-200 bg-white px-3.5 text-[12px] font-semibold text-gray-700"
+            >
+              {s.label}
+            </a>
+          ))}
+        </div>
+      </nav>
+
       <div className="mt-4 grid lg:grid-cols-2 gap-4">
-        <section className="rounded-xl border border-gray-200 bg-white p-4">
+        <section id="record-identifiers" className="scroll-mt-4 rounded-xl border border-gray-200 bg-white p-4">
           <h2 className="text-[13px] font-bold text-gray-900">Identifiers</h2>
           <ul className="mt-2 flex flex-col gap-1">
             {(identifiers as any[]).map(i => (
@@ -302,7 +353,7 @@ export default async function PatientPage({ params, searchParams }: {
           workspace inside the clinical record. Rendered only for holders of billing.view, because
           s18 keeps financial data outside clinical permission grants. */}
       {financial && financial.permitted && (
-        <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+        <section id="record-money" className="scroll-mt-4 mt-4 rounded-xl border border-gray-200 bg-white p-4">
           <div className="flex items-baseline justify-between gap-2 flex-wrap">
             <h2 className="text-[13px] font-bold text-gray-900">Money</h2>
             <a href={`/practice/payments?tab=transactions&patientId=${patientId}`}
@@ -341,7 +392,7 @@ export default async function PatientPage({ params, searchParams }: {
       )}
 
       {correspondence && correspondence.entries.length > 0 && (
-        <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+        <section id="record-correspondence" className="scroll-mt-4 mt-4 rounded-xl border border-gray-200 bg-white p-4">
           <div className="flex items-baseline gap-2 flex-wrap">
             <h2 className="text-[13px] font-bold text-gray-900">Correspondence</h2>
             <span className="text-[11px] text-gray-500">
@@ -388,7 +439,7 @@ export default async function PatientPage({ params, searchParams }: {
       {/* CPR-370. Who has opened this record. The question a patient is most entitled to ask, and the
           one this product could not answer before the access log existed. */}
       {accessHistory && accessHistory.entries.length > 0 && (
-        <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+        <section id="record-access" className="scroll-mt-4 mt-4 rounded-xl border border-gray-200 bg-white p-4">
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-[13px] font-bold text-gray-900">Who has opened this record</h2>
             <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-600">
@@ -400,7 +451,7 @@ export default async function PatientPage({ params, searchParams }: {
           </div>
           <ul className="mt-2 flex flex-col gap-1">
             {accessHistory.entries.map((e: any) => (
-              <li key={e.id} className="flex items-baseline gap-2 text-[11px]">
+              <li key={e.id} className="flex items-baseline gap-2 text-[11px] max-md:flex-wrap">
                 <span className="font-mono text-gray-400">{String(e.occurred_at).slice(0, 16).replace("T", " ")}</span>
                 <span className="font-semibold text-gray-700">{e.actor_name ?? "Unnamed member"}</span>
                 <span className="text-gray-500">{e.action === "export" ? "exported" : "opened"} the {e.subject_kind.replace(/_/g, " ")}</span>
@@ -414,7 +465,7 @@ export default async function PatientPage({ params, searchParams }: {
         </section>
       )}
 
-      <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+      <section id="record-appointments" className="scroll-mt-4 mt-4 rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-[13px] font-bold text-gray-900">Appointment history</h2>
         {(appointments as any[]).length === 0 ? (
           <p className="mt-2 text-[12px] text-gray-400">
@@ -425,8 +476,10 @@ export default async function PatientPage({ params, searchParams }: {
           <ul className="mt-2 flex flex-col gap-1">
             {/* ⚠ THE PRACTICE CLOCK, NOT A UTC SLICE. The old `.slice(0, 16)` printed a correctly
                 stored Kampala 09:00 as 06:00 -- the same display bug CalendarConsole carried. */}
+            {/* max-md:flex-wrap: a mono timestamp, a type and a status do not share 320px on one
+                line, and a row that cannot wrap is the horizontal scroll s4 forbids. */}
             {(appointments as any[]).map(a => (
-              <li key={a.id} className="flex items-center gap-2 text-[12px]">
+              <li key={a.id} className="flex items-center gap-2 text-[12px] max-md:flex-wrap">
                 <span className="font-mono text-gray-500">{fmtWhen(a.scheduled_at)}</span>
                 <span className="text-gray-700">{String(a.appointment_type).replace(/_/g, " ")}</span>
                 <span className="ml-auto text-gray-500">{a.status}</span>
@@ -437,7 +490,7 @@ export default async function PatientPage({ params, searchParams }: {
       </section>
 
       {hasCapability(shell.ctx, "encounter.list") && (
-        <section className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+        <section id="record-timeline" className="scroll-mt-4 mt-4 rounded-xl border border-gray-200 bg-white p-4">
           <h2 className="text-[13px] font-bold text-gray-900">Clinical timeline</h2>
           {/* ⚠ "NO ENCOUNTERS RECORDED" IS A CLINICAL CLAIM, and until this it was also what a failed
               read looked like. A clinician reading an empty timeline concludes the patient has no

@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useTransition } from "react";
-import { Refusals } from "./Honesty";
+import { Absence, Count, Refusals, whenLabel } from "./Honesty";
+import CardList from "../_responsive/CardList";
 import { SCREEN_REFUSES } from "./refusals";
 import UniversalSearch from "./UniversalSearch";
 import WorklistTiles from "./WorklistTiles";
@@ -155,11 +157,11 @@ export default function PatientsScreen(props: {
         </div>
 
         {props.capabilities.mayCreate && (
-          <div className="flex shrink-0 flex-wrap gap-2">
+          <div className="flex shrink-0 flex-wrap gap-2 max-md:w-full">
             <button
               type="button"
               onClick={() => go({ register: true, intent: null })}
-              className={`rounded-lg px-4 py-2.5 text-[13.5px] font-semibold ${BUTTON.primary}`}
+              className={`rounded-lg px-4 py-2.5 text-[13.5px] font-semibold max-md:inline-flex max-md:min-h-[var(--cp-touch-primary)] max-md:flex-1 max-md:items-center max-md:justify-center ${BUTTON.primary}`}
             >
               + New patient
             </button>
@@ -169,7 +171,7 @@ export default function PatientsScreen(props: {
             <button
               type="button"
               onClick={() => go({ register: true, intent: "walkin" })}
-              className={`rounded-lg px-4 py-2.5 text-[13.5px] font-semibold ${BUTTON.secondaryAction}`}
+              className={`rounded-lg px-4 py-2.5 text-[13.5px] font-semibold max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:flex-1 max-md:items-center max-md:justify-center ${BUTTON.secondaryAction}`}
             >
               Quick walk-in
             </button>
@@ -185,12 +187,129 @@ export default function PatientsScreen(props: {
         </p>
       )}
 
+      {/* ══ CPR-MOB-001 s9 row 1 (below md): search first -- it is, above -- THEN recent patients,
+          THEN the useful filters. Both modules are consts over the SAME lists payload the desktop
+          cards read; no second fetch, no second count (s19). DOM order = visual order = focus order
+          (s17), which is why they sit here in source, between the search and the register. ══════════ */}
+      <div className="flex flex-col gap-4 md:hidden">
+        {(() => {
+          // The one producer "recent patients" has: the recentPatients worklist -- the same figure,
+          // rows and honesty the desktop "Recently seen" card renders.
+          const recent = props.lists.worklists.find(w => w.key === "recentPatients") ?? null;
+          if (!recent) return null;
+          return (
+            <section className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="flex items-baseline gap-2">
+                <h2 className="text-[13.5px] font-bold text-gray-900">Recent patients</h2>
+                {!recent.unavailable && (
+                  <Count
+                    count={recent.count}
+                    atLeast={recent.atLeast}
+                    reason={recent.reason}
+                    className="text-[12px] font-bold text-[var(--cp-primary-deep)]"
+                  />
+                )}
+              </div>
+              {/* The engine's own boundary sentence for this list, not a restatement of it. */}
+              <p className="mt-0.5 text-[11px] text-gray-500">{recent.note}</p>
+              <div className="mt-2">
+                {recent.unavailable ? (
+                  <Absence reason={recent.reason} error={recent.error} nothing="" />
+                ) : (
+                  <CardList
+                    items={recent.rows.slice(0, 5)}
+                    getKey={r => r.id}
+                    title={r => r.patientName ?? <span className="font-normal italic text-gray-400">name withheld</span>}
+                    fields={r => [
+                      { label: "Started", value: r.when ? whenLabel(r.when, props.lists.today) : "—" },
+                      { label: "Consultation", value: r.note },
+                    ]}
+                    action={r => (r.patientId ? { label: "Open record", href: `/practice/patients/${r.patientId}` } : null)}
+                    empty="No consultation in the window this list reads."
+                  />
+                )}
+                {!recent.unavailable && recent.rows.length > 5 && (
+                  <button
+                    type="button"
+                    onClick={() => go({ list: "recentPatients" })}
+                    className="mt-2 flex min-h-[var(--cp-touch)] w-full items-center justify-center rounded-lg border border-gray-200 px-3 text-[12.5px] font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    All recent patients in the register below &rarr;
+                  </button>
+                )}
+              </div>
+            </section>
+          );
+        })()}
+
+        {/* s9 row 1 asks for "useful saved filters". This product has NO user-saved-filter store --
+            nothing to render, nothing faked (reported with the build). What a real producer DOES
+            supply is the operational worklists, each already a one-tap filter over the register via
+            ?list=; they are that row, rendered as chips over the same payload. The three CPR-PAT-002
+            cards with no engine behind them are not here because they cannot filter anything -- their
+            absence from a filter row is not a hidden fact, and the desktop cards remain the record
+            of why they have no figure. */}
+        <section className="rounded-xl border border-gray-200 bg-white p-4">
+          <h2 className="text-[13.5px] font-bold text-gray-900">Filter the register</h2>
+          <p className="mt-0.5 text-[11px] text-gray-500">
+            Tap a list to narrow the register below; tap it again to clear. An em dash is a list that
+            could not be counted, never an empty one.
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-1.5">
+            {props.lists.worklists.map(w => {
+              const active = selectedList === w.key;
+              return (
+                <li key={w.key}>
+                  <button
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => go({ list: active ? null : w.key })}
+                    className={`inline-flex min-h-[var(--cp-touch)] items-center gap-1.5 rounded-full border px-3.5 text-[12.5px] font-semibold ${active
+                      ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/5 text-[var(--cp-primary-deep)]"
+                      : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+                  >
+                    {w.title}
+                    <Count
+                      count={w.count}
+                      atLeast={w.atLeast}
+                      reason={w.reason}
+                      className={`text-[11.5px] font-bold ${w.count === null ? "text-slate-400" : active ? "text-[var(--cp-primary-deep)]" : "text-gray-500"}`}
+                    />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {/* The blind spots, said HERE because the desktop card row that says them is max-md:hidden.
+              A list that could not be answered must never read as an empty one. */}
+          {props.lists.blindSpots.length > 0 && (
+            <p className="mt-2 rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-[12px] text-[var(--cmp-text-warning)]">
+              <span className="font-semibold">
+                {props.lists.blindSpots.length === 1 ? "One list" : `${props.lists.blindSpots.length} lists`} could not be answered:
+              </span>{" "}
+              {props.lists.blindSpots.map(b => `${b.title} (${b.reason === "capability" ? "not permitted" : b.error ?? "read failed"})`).join("; ")}.
+              Treat those as unknown rather than empty.
+            </p>
+          )}
+          <Link
+            href="/practice/patients/lists"
+            className="mt-1.5 inline-flex min-h-[var(--cp-touch)] items-center text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline"
+          >
+            Booked &amp; seen lists &rarr;
+          </Link>
+        </section>
+      </div>
+
       {/* ── s3 MIDDLE: Today's Care, then Continuing Care ─────────────────────────────────────────── */}
-      <WorklistTiles
-        lists={props.lists}
-        selected={selectedList}
-        onSelect={key => go({ list: key })}
-      />
+      {/* max-md:hidden: below md the nine-card grid is the shrunken dashboard s9 replaces with the
+          filter chips above -- same worklists, same counts, one payload. Desktop is untouched. */}
+      <div className="max-md:hidden">
+        <WorklistTiles
+          lists={props.lists}
+          selected={selectedList}
+          onSelect={key => go({ list: key })}
+        />
+      </div>
 
       {/* ── s3 BOTTOM: the longitudinal register, with the comp's right rail beside it ────────────── */}
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_336px]">
@@ -211,7 +330,11 @@ export default function PatientsScreen(props: {
             pending={pending}
             periodFilter={props.periodFilter}
           />
-          <p className="rounded-xl border border-[var(--cp-primary)]/20 bg-[var(--cp-primary)]/[0.04] px-4 py-2.5 text-[12px] leading-relaxed text-gray-600">
+          {/* max-md:hidden: this sentence describes the DESKTOP acts -- a summary "beside the
+              register" and the row's "Open timeline" link -- and below md neither exists; the card
+              rows carry their own "Open record" action instead. A tip pointing at controls a phone
+              does not show would read as a broken product. */}
+          <p className="rounded-xl border border-[var(--cp-primary)]/20 bg-[var(--cp-primary)]/[0.04] px-4 py-2.5 text-[12px] leading-relaxed text-gray-600 max-md:hidden">
             <span className="font-semibold text-[var(--cp-primary-deep)]">Tip:</span> select a patient to
             open their summary beside the register, or follow &ldquo;Open timeline&rdquo; for the whole
             record &mdash; encounters, documents, treatments and follow-ups on one page.
@@ -227,13 +350,21 @@ export default function PatientsScreen(props: {
               capabilities={props.capabilities}
             />
           )}
-          <QuickActions
-            capabilities={props.capabilities}
-            selectedPatientId={patientId}
-            onNewPatient={() => go({ register: true, intent: null })}
-            onWalkIn={() => go({ register: true, intent: "walkin" })}
-          />
-          <InsightsPanel lists={props.lists} cohort={props.cohort} />
+          {/* max-md:hidden, contents at md+ so the aside's flex gap is untouched on desktop. Below md
+              these two rail panels would be the multi-panel dashboard s5 folds away: the eight quick
+              actions repeat the top buttons or point at bottom-nav homes, and three of them block on
+              "select a patient in the register" -- an act the mobile face does not offer (cards open
+              the record instead). The insight figures are the SAME counts the filter chips above
+              already show from the same payload. Nothing here exists only in this rail. */}
+          <div className="contents max-md:hidden">
+            <QuickActions
+              capabilities={props.capabilities}
+              selectedPatientId={patientId}
+              onNewPatient={() => go({ register: true, intent: null })}
+              onWalkIn={() => go({ register: true, intent: "walkin" })}
+            />
+            <InsightsPanel lists={props.lists} cohort={props.cohort} />
+          </div>
         </aside>
       </div>
 

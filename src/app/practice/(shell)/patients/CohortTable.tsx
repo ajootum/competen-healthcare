@@ -118,6 +118,40 @@ function NotReturned() {
   return <span className="text-[13px] text-slate-300" title="Not returned by the engine for a page of patients">&mdash;</span>;
 }
 
+/**
+ * The identity chip row -- patient number (or legacy Practice ID, or the honest absence), every
+ * hospital number, and a non-active record status.
+ *
+ * EXTRACTED BECAUSE THE REGISTER NOW HAS TWO FACES (CPR-MOB-001 s9): the desktop table row and the
+ * below-md card render this identical block, and the patientNumber ?? practiceId ?? "none yet" ladder
+ * is a guard that must not be restated twice -- two copies is how one face starts printing a legacy ID
+ * as the headline identity. The markup is byte-for-byte what the desktop cell held.
+ */
+function IdentityChips({ row }: { row: CohortRowView }) {
+  return (
+    <span className="mt-1 flex flex-wrap items-center gap-1">
+      {/* CPR-PID-001: the CP Patient Number leads; the retired P-XXXXXX shows
+          only on a record that predates the numbering and its backfill. */}
+      {row.patientNumber
+        ? <span className="rounded-md bg-[var(--cp-primary)]/10 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-[var(--cp-primary-deep)]">{row.patientNumber}</span>
+        : row.practiceId
+          ? <span className="rounded-md bg-[var(--cp-primary)]/10 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-[var(--cp-primary-deep)]">{row.practiceId}</span>
+          : <span className="text-[10.5px] text-gray-400">no patient number yet</span>}
+      {/* HOSPITAL NUMBERS BESIDE THE NAME, not hidden in demographics. */}
+      {row.hospitalNumbers.map(h => (
+        <span key={h.id} className="rounded-md bg-emerald-50 px-1.5 py-0.5 font-mono text-[10.5px] text-emerald-800">
+          {h.value}{h.facilityName ? ` · ${h.facilityName}` : ""}
+        </span>
+      ))}
+      {row.recordStatus !== "active" && (
+        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+          {row.recordStatus}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export default function CohortTable({
   cohort, worklist, selectedPatientId, onSelect, onScope, onSort, onPage, pending, periodFilter,
 }: {
@@ -194,7 +228,7 @@ export default function CohortTable({
             <span className="flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
               registered {periodFilter.fromDate} to {periodFilter.toDate}
               <Link href={periodFilter.clearHref} scroll={false}
-                className="underline decoration-amber-400 underline-offset-2 hover:text-amber-900">
+                className="underline decoration-amber-400 underline-offset-2 hover:text-amber-900 max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center">
                 show all
               </Link>
             </span>
@@ -210,7 +244,7 @@ export default function CohortTable({
                   type="button"
                   onClick={() => onScope(k)}
                   aria-pressed={cohort?.scope === k}
-                  className={`px-2.5 py-1 text-[12px] font-semibold ${cohort?.scope === k
+                  className={`px-2.5 py-1 text-[12px] font-semibold max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:px-3.5 ${cohort?.scope === k
                     ? "bg-[var(--cp-primary)] text-white"
                     : "bg-white text-gray-600 hover:bg-gray-50"}`}
                 >
@@ -224,7 +258,7 @@ export default function CohortTable({
             <select
               value={cohort?.sort ?? "registered"}
               onChange={e => onSort(e.target.value as CohortSortView)}
-              className="rounded-lg border border-gray-200 px-2 py-1 text-[12px] text-gray-700"
+              className="rounded-lg border border-gray-200 px-2 py-1 text-[12px] text-gray-700 max-md:min-h-[var(--cp-touch)]"
             >
               {(cohort?.sortOptions ?? []).map(o => (
                 <option key={o.key} value={o.key} disabled={!o.available}>
@@ -312,10 +346,13 @@ export default function CohortTable({
           )}
         </div>
       ) : (
-        // s8: the header stays visible while a long register scrolls. `position: sticky` needs an
-        // ancestor that actually scrolls, which is what the height cap on TABLE_SCROLL provides -- it did
-        // nothing against the plain overflow-x-auto box that used to be here.
-        <div className={TABLE_SCROLL}>
+        <>
+        {/* s8: the header stays visible while a long register scrolls. `position: sticky` needs an
+            ancestor that actually scrolls, which is what the height cap on TABLE_SCROLL provides -- it did
+            nothing against the plain overflow-x-auto box that used to be here.
+            max-md:hidden: below md this 1080px table is the horizontal scroll s4 forbids; the card list
+            after it is the same rows' second face (CPR-MOB-001 s9). */}
+        <div className={`${TABLE_SCROLL} max-md:hidden`}>
           <table className="w-full min-w-[1080px] border-collapse">
             <thead className={THEAD}>
               <tr>
@@ -373,26 +410,7 @@ export default function CohortTable({
                               You may see that this record exists, not who it is.
                             </span>
                           )}
-                          <span className="mt-1 flex flex-wrap items-center gap-1">
-                            {/* CPR-PID-001: the CP Patient Number leads; the retired P-XXXXXX shows
-                                only on a record that predates the numbering and its backfill. */}
-                            {r.patientNumber
-                              ? <span className="rounded-md bg-[var(--cp-primary)]/10 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-[var(--cp-primary-deep)]">{r.patientNumber}</span>
-                              : r.practiceId
-                                ? <span className="rounded-md bg-[var(--cp-primary)]/10 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-[var(--cp-primary-deep)]">{r.practiceId}</span>
-                                : <span className="text-[10.5px] text-gray-400">no patient number yet</span>}
-                            {/* HOSPITAL NUMBERS BESIDE THE NAME, not hidden in demographics. */}
-                            {r.hospitalNumbers.map(h => (
-                              <span key={h.id} className="rounded-md bg-emerald-50 px-1.5 py-0.5 font-mono text-[10.5px] text-emerald-800">
-                                {h.value}{h.facilityName ? ` · ${h.facilityName}` : ""}
-                              </span>
-                            ))}
-                            {r.recordStatus !== "active" && (
-                              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
-                                {r.recordStatus}
-                              </span>
-                            )}
-                          </span>
+                          <IdentityChips row={r} />
                           <Link
                             href={`/practice/patients/${r.patientId}`}
                             className="mt-1 inline-block text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline"
@@ -433,6 +451,91 @@ export default function CohortTable({
             </tbody>
           </table>
         </div>
+
+        {/* ══ CPR-MOB-001 s9 rows 2 + 6: THE SAME REGISTER AS CARD ROWS (below md) ═══════════════════
+            The desktop table is max-md:hidden above; these cards render the SAME cohort.rows through
+            the SAME three-state cells -- LastSeen, NextAppointment, NextReview, IdentityChips -- so
+            the two faces cannot drift on the one thing that matters: "not known" never collapsing
+            into "never". The empty/failed states above are SHARED by both faces, which is why this
+            list renders only when rows exist.
+
+            ONE ACTION PER CARD (s4): Open record. Selecting-in-place is the desktop's act -- on a
+            phone the summary panel lives below the fold, so the card goes to the record itself,
+            which is s9's own flow (list -> single-column record).
+
+            ⚠ s9 ASKS THESE ROWS FOR "KEY DEMOGRAPHICS", AND THE PAYLOAD CARRIES NONE. CohortRowView
+            has no age, sex or birth date, so none are shown and none are invented -- the gap is
+            reported with the build, not faked here. The three columns the desktop table keeps as
+            honest dashes (active problems, treatments decided, journey snapshot) are not in s9's
+            card contract and carry no data by definition; the desktop disclosure below stays the
+            record of why. */}
+        <ul className="flex flex-col gap-2.5 p-3 md:hidden">
+          {cohort.rows.map((r, i) => {
+            const why = reasonOnList.get(r.patientId);
+            return (
+              <li key={r.patientId} className="rounded-xl border border-gray-200 bg-white p-3.5">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="flex min-w-0 flex-1 items-start gap-2.5">
+                    <span
+                      aria-hidden
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-bold ${COHORT_RING[i % COHORT_RING.length]}`}
+                    >
+                      {initials(r.name)}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[14px] font-semibold leading-snug text-gray-900">
+                        {r.name ?? <span className="font-normal italic text-gray-400">name withheld</span>}
+                      </span>
+                      {r.deIdentified && (
+                        <span className="block text-[11px] text-gray-400">
+                          You may see that this record exists, not who it is.
+                        </span>
+                      )}
+                      <IdentityChips row={r} />
+                    </span>
+                  </span>
+                  {/* Status in words, never a colour alone (s4). */}
+                  <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold ${PATIENT_STATUS_SWATCH[r.currentStatus.code] ?? "bg-slate-100 text-slate-600 ring-1 ring-slate-200"}`}>
+                    {r.currentStatus.label}
+                  </span>
+                </div>
+
+                <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-2">
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Last seen</dt>
+                    <dd className="text-[12.5px] text-gray-800"><LastSeen row={r} /></dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Next appointment</dt>
+                    <dd className="text-[12.5px] text-gray-800"><NextAppointment row={r} /></dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Next review</dt>
+                    <dd className="text-[12.5px] text-gray-800"><NextReview row={r} /></dd>
+                  </div>
+                  {worklist && (
+                    <div className="min-w-0">
+                      <dt className="text-[10px] font-bold uppercase tracking-wide text-gray-400">On this list because</dt>
+                      <dd className="text-[12.5px] text-gray-800">
+                        {why
+                          ? <>{why.note}{why.when && <span className="block text-[11px] text-gray-500">{day(why.when)}</span>}</>
+                          : <span className="text-gray-400">&mdash;</span>}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+
+                <Link
+                  href={`/practice/patients/${r.patientId}`}
+                  className="mt-2.5 flex min-h-[var(--cp-touch)] w-full items-center justify-center rounded-lg border border-gray-200 px-3 text-[13px] font-semibold text-[var(--cp-primary-deep)] hover:bg-gray-50"
+                >
+                  Open record &rarr;
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+        </>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 p-3">
@@ -472,7 +575,7 @@ export default function CohortTable({
               type="button"
               disabled={cohort.page === 0 || pending}
               onClick={() => onPage(cohort.page - 1)}
-              className="rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+              className="rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:px-4"
             >
               Previous
             </button>
@@ -480,7 +583,7 @@ export default function CohortTable({
               type="button"
               disabled={!cohort.hasMore || pending}
               onClick={() => onPage(cohort.page + 1)}
-              className="rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+              className="rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:px-4"
             >
               Next
             </button>
@@ -490,7 +593,10 @@ export default function CohortTable({
 
       {/* ── What the three empty columns need, and why the fourth cell has no chip ─────────────────── */}
       <div className="border-t border-gray-100 bg-gray-50/60 px-4 py-2.5">
-        <details className="group">
+        {/* max-md:hidden: this disclosure explains three COLUMNS of the desktop table, and below md
+            those columns do not render -- the card face carries only s9's fields. The PLACE_BOUNDARY
+            sentence below stays on both faces, because "Last seen" is on both. */}
+        <details className="group max-md:hidden">
           <summary className="cursor-pointer list-none text-[11.5px] font-semibold text-gray-600 hover:text-gray-900">
             <span className="mr-1 inline-block text-gray-400 transition-transform group-open:rotate-90">&rsaquo;</span>
             Three of these columns are empty on purpose, and the Journey Snapshot has no trajectory chip

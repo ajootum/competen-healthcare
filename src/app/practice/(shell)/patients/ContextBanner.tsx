@@ -71,7 +71,7 @@ export default function ContextBanner({ banner, onClose }: {
         <button
           type="button"
           onClick={onClose}
-          className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-semibold text-gray-600 hover:bg-gray-50"
+          className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-semibold text-gray-600 hover:bg-gray-50 max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:px-3.5"
         >
           Clear selection
         </button>

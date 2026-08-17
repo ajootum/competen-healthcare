@@ -71,7 +71,7 @@ export default function MonitoringPlanPanel({ plan, patientId }: { plan: Monitor
   // ⚠ THREE STATES. `permitted: false` is not an empty plan and `unavailable` is not an empty plan.
   if (!plan.permitted) {
     return (
-      <section className={`mt-4 ${CARD}`}>
+      <section id="record-monitoring" className={`scroll-mt-4 mt-4 ${CARD}`}>
         <h2 className="text-[13px] font-bold text-gray-900">Monitoring plan</h2>
         <p className="mt-1 text-[12px] text-gray-600">
           You do not have the <code className="rounded bg-gray-100 px-1">parameter.view</code> capability,
@@ -84,7 +84,7 @@ export default function MonitoringPlanPanel({ plan, patientId }: { plan: Monitor
 
   if (plan.all.unavailable) {
     return (
-      <section className="mt-4 rounded-xl border border-rose-300 bg-rose-50 p-4">
+      <section id="record-monitoring" className="scroll-mt-4 mt-4 rounded-xl border border-rose-300 bg-rose-50 p-4">
         <h2 className="text-[13px] font-bold text-rose-900">This patient&rsquo;s monitoring plan could not be read</h2>
         <p className="mt-1 text-[12px] leading-relaxed text-rose-800">
           This is <strong>not</strong> the same as having no monitoring plan. Do not treat this patient as
@@ -105,7 +105,7 @@ export default function MonitoringPlanPanel({ plan, patientId }: { plan: Monitor
   const hiddenButRequired = plan.safetyRequired.filter(e => e.resurfacedForSafety);
 
   return (
-    <section className="mt-4 flex flex-col gap-3">
+    <section id="record-monitoring" className="scroll-mt-4 mt-4 flex flex-col gap-3">
       <div className={CARD}>
         <div className="flex flex-wrap items-center gap-2">
           <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-lg text-[13px]"

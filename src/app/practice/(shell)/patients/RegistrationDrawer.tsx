@@ -77,7 +77,7 @@ export default function RegistrationDrawer({ open, intent, onClose, children }: 
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50"
+            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center"
           >
             Close
           </button>
