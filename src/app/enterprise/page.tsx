@@ -1,8 +1,15 @@
 import Link from "next/link";
 import { resolveEnterpriseShell } from "@/lib/enterprise-shell";
 import { ENTERPRISE_BUILT_SUBPRODUCTS, ENTERPRISE_NOT_BUILT_REASON } from "@/lib/enterprise-constants";
+import { pageMetadata } from "@/lib/marketing/site";
+import EnterpriseGateway from "./EnterpriseGateway";
 
 // Enterprise Home -- the catalogue as cards. ENT-DEC-001 D5.
+//
+// ⚠ SINCE COMP-ENT-UX-001 (2026-08-17) THIS PAGE IS ALSO THE PUBLIC ENTERPRISE GATEWAY: a signed-out
+// visitor renders EnterpriseGateway.tsx here (the layout's AUTH_REQUIRED branch delegates to its
+// children now). The two audiences never see each other's surface -- the gateway is AUTH_REQUIRED
+// only, the catalogue READY only, and the gateway names no tenant, organisation or workspace (s7).
 //
 // ⚠ OWN GATE, NOT ONLY THE LAYOUT'S. Next's own documentation: a layout "will not prevent nested route
 // segments and Server Actions from being accessed", and the access matrix distinguishes own from
@@ -14,13 +21,25 @@ import { ENTERPRISE_BUILT_SUBPRODUCTS, ENTERPRISE_NOT_BUILT_REASON } from "@/lib
 
 export const dynamic = "force-dynamic";
 
+// The gateway is a public marketing surface, so it carries its own canonical/OG metadata like every
+// other public page (pageMetadata's two-trap rationale). The copy is the spec's approved hero (s4.1);
+// none of WEB-STRAT-001's forbidden vocabulary appears in it.
+export const metadata = pageMetadata({
+  title: "Competen Enterprise — Build a workforce you can trust.",
+  description: "Workforce capability, assessment, learning and quality assurance for healthcare organisations.",
+  path: "/enterprise",
+});
+
 export default async function EnterpriseHome() {
   const shell = await resolveEnterpriseShell();
+  // COMP-ENT-UX-001: the signed-out visitor is a PROSPECT following a product card, and this is the
+  // gateway that orients them. Rendered, not redirected -- /enterprise IS the public route (spec s7).
+  if (shell.state === "AUTH_REQUIRED") return <EnterpriseGateway />;
   // ⚠ NULL, NOT redirect(). A page executes even when its layout declines to render children -- the
   // layout gets children as a prop it may ignore, but the page has already run, and a redirect THROWN
   // here beats the layout's output. The first version redirected to /enterprise, which from under
-  // /enterprise is an infinite loop for every non-member. The layout's refusal sentence is the answer;
-  // this page's only job in a non-READY state is to contribute nothing.
+  // /enterprise is an infinite loop for every non-member. The layout's refusal sentence is the answer
+  // for NO_TENANT and REFUSED; this page's only job in those states is to contribute nothing.
   if (shell.state !== "READY") return null;
 
   return (

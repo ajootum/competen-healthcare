@@ -18,34 +18,19 @@ export const dynamic = "force-dynamic";
 export default async function EnterpriseLayout({ children }: { children: React.ReactNode }) {
   const shell = await resolveEnterpriseShell();
 
-  // ⚠ A PUBLIC GATE PAGE, NOT A BOUNCE -- WEB-HOME-001 s15, adopted 2026-08-11: an unauthenticated
-  // visitor to /enterprise is a PROSPECT following a product card, and throwing them at a login form
-  // answers a question they did not ask. The sign-in CTA carries the destination, so authentication
-  // still lands them back here rather than on /dashboard.
-  // ⚠ It says nothing about sub-products: s10 keeps those behind the door until Enterprise is chosen
-  // AND the visitor is a member -- the catalogue renders only in the authenticated shell below.
-  if (shell.state === "AUTH_REQUIRED")
-    return (
-      <div className="mx-auto max-w-lg p-10">
-        <h1 className="text-2xl font-bold text-gray-900">Competen Enterprise</h1>
-        <p className="mt-3 text-[14px] leading-relaxed text-gray-700">
-          Manage workforce, assess, train, and assure quality and performance across your organisation.
-        </p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Link href="/login?next=/enterprise"
-            className="rounded-xl bg-[#4F46E5] px-5 py-2.5 text-[14px] font-semibold text-white hover:opacity-90">
-            Sign in
-          </Link>
-          <a href={"mailto:gabriel@semacast.com?subject=" + encodeURIComponent("Competen Enterprise enquiry")}
-            className="rounded-xl border border-gray-300 px-5 py-2.5 text-[14px] font-semibold text-gray-700 hover:bg-gray-50">
-            Talk to us
-          </a>
-        </div>
-        <p className="mt-4 text-[12px] text-gray-500">
-          Your organisation not on Competen Enterprise yet? Talk to us and we will walk you through it.
-        </p>
-      </div>
-    );
+  // ⚠ THE SIGNED-OUT VISITOR BELONGS TO THE CHILDREN NOW -- COMP-ENT-UX-001 (2026-08-17) superseded
+  // the small gate card this branch used to render (the WEB-HOME-001 s15 shape). Each public segment
+  // answers a signed-out visitor itself: /enterprise renders the full Enterprise Gateway (page.tsx +
+  // EnterpriseGateway.tsx), /enterprise/sign-in's thrown redirect now actually reaches the browser --
+  // so the door genuinely funnels to /login?next=/enterprise, making its registry truth string
+  // (src/lib/access-doors.ts) literally true where before this layout swallowed it -- and
+  // /enterprise/workforce sends the visitor to the gateway via its own nested layout.
+  // ⚠ Rendering any gate HERE would sit that gate at EVERY child path, including the sign-in door
+  // itself -- whose "Sign in to Enterprise" CTA would then loop onto its own page.
+  // What WEB-HOME-001 s15 decided still holds, one level down: a prospect is oriented, never thrown
+  // at a bare login form, and s10 still keeps sub-product surfaces behind membership -- the gateway
+  // names the four pillars (the UX spec's product family) and no tenant, workspace or catalogue row.
+  if (shell.state === "AUTH_REQUIRED") return <>{children}</>;
 
   if (shell.state === "NO_TENANT")
     return (
