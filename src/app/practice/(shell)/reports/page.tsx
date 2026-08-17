@@ -7,8 +7,11 @@ import { reportsDashboard } from "@/lib/practice/document-generation";
 import { TEMPLATE_KINDS } from "@/lib/practice/document-constants";
 import { workspaceClock } from "@/lib/practice/practice-time";
 import { periodFromParams, type PeriodTarget } from "@/lib/practice/period-range";
+import { REPORT_TEMPLATES, REPORT_CATEGORIES } from "@/lib/practice/report-templates";
 import ReportsNavigator from "./ReportsNavigator";
 import GenerateConsole from "./GenerateConsole";
+import MobileReportsLanding, { type MobileReportTemplate } from "./MobileReportsLanding";
+import { recentReports } from "./recent-reports";
 
 // /practice/reports -- CPR-330 REPORTS, DOCUMENTS & CORRESPONDENCE.
 //
@@ -24,6 +27,46 @@ import GenerateConsole from "./GenerateConsole";
 export const dynamic = "force-dynamic";
 
 const KIND_LABEL = Object.fromEntries(TEMPLATE_KINDS.map(([k, l]) => [k, l])) as Record<string, string>;
+
+const CATEGORY_LABEL = Object.fromEntries(REPORT_CATEGORIES.map(c => [c.key, c.label])) as Record<string, string>;
+
+// ── CPR-MOB-001 s14 ROW 1: THE QUICK REPORTS, IN THE SPECIFICATION'S ORDER ────────────────────────
+//
+// ⚠ TWO OF s14's SIX NAMES ARE CATEGORY PHRASING, NOT TEMPLATE NAMES. s14 writes "Patient Population"
+// and "Clinical Activity"; the catalogue (report-templates.ts, which carries s12's names verbatim)
+// calls those templates "Patient Demographics" and "Consultation Types", and the definition block
+// printed on the generated file carries the catalogue's name. The tile therefore shows the name the
+// file will show -- a tile promising "Patient Population" that yields a sheet headed "Patient
+// Demographics" is a small lie, and the catalogue is the source of truth for what a report is called.
+//
+// s14 does NOT list the Financial Summary among the quick six even though s12's quick-access set
+// includes it; it stays in the catalogue below, where its billing.view gate is already honoured.
+const S14_QUICK_IDS = [
+  "practice_summary",       // s14 "Practice Summary"
+  "patient_demographics",   // s14 "Patient Population"
+  "consultation_types",     // s14 "Clinical Activity"
+  "followup_completion",    // s14 "Follow-up & Outcomes"
+  "session_report",         // s14 "Session Report"
+  "daily_practice_report",  // s14 "Daily Practice Report"
+];
+
+const asMobileTemplate = (t: (typeof REPORT_TEMPLATES)[number]): MobileReportTemplate => ({
+  id: t.id, name: t.name, blurb: t.blurb, category: t.category,
+  categoryLabel: CATEGORY_LABEL[t.category] ?? t.category,
+  metricCount: t.registryIds.length,
+  // HFE-001 s8: the engine refuses this one by name without an activity id, and Session Complete is
+  // the only screen that has one. A date form could not satisfy it, so it is never offered one.
+  needsSession: t.id === "session_report",
+  // "Your completed activity across ONE day" -- its form opens on today, not on the page's window.
+  singleDay: t.id === "daily_practice_report",
+});
+
+// The three header doors, one class. The max-md:* half is CPR-MOB-001 s4: three chips of this width
+// cannot sit on one 360px row without the horizontal scroll s4 forbids, and a 29px-high chip is under
+// the 44px minimum. At md and up the class is character-for-character what each of them carried.
+const HEADER_LINK =
+  "rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 "
+  + "max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center";
 
 const STATUS_TONE: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-600",
@@ -65,11 +108,35 @@ export default async function ReportsPage({ searchParams }: {
     };
   const period = periodFromParams(one, clock.today, legacy);
 
-  const board = await reportsDashboard(admin, shell.ctx, {
-    // The read is bounded by the RESOLVED range, so the address bar and the query cannot disagree.
-    fromDay: period.fromDate, toDay: period.toDate,
-  });
+  // s14 row 3's list is the audit trail, so it is read here beside the dashboard rather than after
+  // it -- one round trip, not two (s18: do not make a phone wait serially for secondary content).
+  const [board, mobileRecent] = await Promise.all([
+    reportsDashboard(admin, shell.ctx, {
+      // The read is bounded by the RESOLVED range, so the address bar and the query cannot disagree.
+      fromDay: period.fromDate, toDay: period.toDate,
+    }),
+    recentReports(admin, shell.ctx),
+  ]);
   const canAuthor = hasCapability(shell.ctx, "document.author");
+
+  // ── CPR-MOB-001 s14: THE MOBILE FACES, FROM THE SAME CAPABILITY-SCOPED SOURCE ───────────────────
+  //
+  // Filtered on the SERVER, once: a phone must never be offered a report the desktop would refuse
+  // (s19 server/API parity), and the client component that renders them holds no capability logic of
+  // its own -- which is the client-mirror drift class this codebase has been bitten by before.
+  const permittedTemplates = REPORT_TEMPLATES.filter(
+    t => !t.capability || hasCapability(shell.ctx, t.capability),
+  );
+  const mobileCatalogue = permittedTemplates.map(asMobileTemplate);
+  const mobileQuick = S14_QUICK_IDS
+    .map(id => permittedTemplates.find(t => t.id === id))
+    .filter((t): t is (typeof REPORT_TEMPLATES)[number] => t !== undefined)
+    .map(asMobileTemplate);
+  // Only the categories that actually have a template this caller may open -- a filter chip that
+  // resolves to an empty list is a dead control.
+  const mobileCategories = REPORT_CATEGORIES
+    .filter(c => mobileCatalogue.some(t => t.category === c.key))
+    .map(c => ({ key: c.key as string, label: c.label }));
   // ?template=<id> -- the Templates tab's "Use template" door. Passed through raw: the console decides
   // whether it names a usable template, because the usable list lives there and a second copy of that
   // rule here would be the client-mirror drift class.
@@ -84,20 +151,18 @@ export default async function ReportsPage({ searchParams }: {
             Letters, certificates and summaries, generated from what is already in the record. {board.period.label}.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href="/practice/reports/analytics"
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+        <div className="flex items-center gap-2 max-md:flex-wrap">
+          <Link href="/practice/reports/analytics" className={HEADER_LINK}>
             Practice activity
           </Link>
-          <Link href="/practice/documents/templates"
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+          <Link href="/practice/documents/templates" className={HEADER_LINK}>
             Templates
           </Link>
           {/* PI v2 s12: Financial appears ONLY because a governed financial module exists (303/304),
               and only to holders of the money permission -- report.view alone does not see money. */}
           {hasCapability(shell.ctx, "billing.export") && (
             <a href={`/api/v1/practice/billing/export${period.bounded ? `?from=${period.fromDate}&to=${period.toDate}` : ""}`}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+              className={HEADER_LINK}>
               Financial report (CSV)
             </a>
           )}
@@ -106,6 +171,36 @@ export default async function ReportsPage({ searchParams }: {
 
       <div className="mt-3">
         <ReportsNavigator period={period} todayDate={clock.today} timezone={clock.timezone} />
+      </div>
+
+      {/* ══ CPR-MOB-001 s14: BELOW md, REPORTS LEADS WITH QUICK REPORTS ═══════════════════════════
+          s14 row 1 is emphatic that the landing opens on the quick reports, so this block sits in the
+          DOM between the period control and the KPI strip. At md and up it is display:none, so the
+          desktop dashboard below is pixel-identical and nothing needed a CSS order utility; below md
+          it is simply the first thing after the period, which makes DOM order, visual order and focus
+          order the same order (s17).
+
+          NOTHING IS HIDDEN BELOW md TO MAKE ROOM. The KPI strip that follows already collapses to two
+          columns, and its two deliberately-empty tiles keep their em dash and their reason at every
+          width -- an honesty sentence is not secondary content. The desktop panels after it (report
+          categories, most used, recently generated documents, quick create, scheduled reports, the
+          not-built AI slot and the export panel) all stay, in that order, which is what puts s14's
+          "scheduled reports are secondary" into effect by position rather than by concealment.
+
+          ⚠ THIS BLOCK ADDS NO SECOND SOURCE OF TRUTH. The templates are report-templates.ts, the
+          recent rows are the audit trail, generation is the same API and preview the same print view
+          the desktop catalogue uses. It is a presentation, and the only thing it computes is which
+          chips to show. */}
+      <div className="mt-4 md:hidden">
+        <MobileReportsLanding
+          quick={mobileQuick}
+          catalogue={mobileCatalogue}
+          categories={mobileCategories}
+          recent={mobileRecent}
+          fromDay={period.fromDate}
+          toDay={period.toDate}
+          todayDate={clock.today}
+        />
       </div>
 
       {/* ── KPI strip: six tiles, comp order, two of them deliberately empty ── */}
@@ -218,7 +313,16 @@ export default async function ReportsPage({ searchParams }: {
           <section className="rounded-xl border border-gray-200 bg-white p-4">
             <h2 className="text-[13px] font-bold text-gray-900">Scheduled reports</h2>
             {/* THE ONE SENTENCE THIS SECTION MUST NOT LOSE. A schedule that looks automatic and is not
-                is worse than no schedule, because nobody checks. */}
+                is worse than no schedule, because nobody checks.
+
+                ⚠ CPR-MOB-001 s14 row 6 SAYS "SECONDARY; MANAGEMENT MAY REMAIN UNDER MORE/ADVANCED
+                SETTINGS" -- AND THIS SECTION DELIBERATELY STAYS WHERE IT IS. Below md it already sits
+                far down the single column, behind the quick reports, the catalogue, the recent list,
+                the KPI tiles and the recently-generated documents, which is what "secondary" buys.
+                Folding it into a collapsed disclosure would have bought nothing more and cost the one
+                thing that matters here: the sentence below is only useful if it is READ, and a
+                <details> nobody opens is how a not-built feature starts looking built. s14 says "may",
+                not "must". */}
             <p className="mt-0.5 text-[11px] text-[var(--cmp-text-critical)]">
               Definitions only. Nothing runs these on its own yet &mdash; each one is a note to yourself
               with a Run now button.
@@ -229,8 +333,12 @@ export default async function ReportsPage({ searchParams }: {
               <ul className="mt-2 flex flex-col">
                 {board.schedules.map(s => (
                   <li key={s.id} className="flex items-baseline gap-2 border-b border-gray-100 py-1.5 last:border-0">
-                    <span className="text-[12px] text-gray-800">{s.name}</span>
-                    <span className="ml-auto text-[10px] text-gray-500">{s.cadence}</span>
+                    {/* max-md:* ONLY. A long definition name plus the cadence plus the fixed w-28
+                        column is wider than a 360px phone, and s4 forbids the scroll that produces --
+                        but at desktop width the name has room, and truncating it there would be a
+                        change to the frozen screen rather than a responsive one. */}
+                    <span className="text-[12px] text-gray-800 max-md:min-w-0 max-md:truncate">{s.name}</span>
+                    <span className="ml-auto text-[10px] text-gray-500 max-md:shrink-0">{s.cadence}</span>
                     <span className="w-28 text-right text-[10px] text-gray-400">
                       {s.last_run_at ? `last run ${new Date(s.last_run_at).toLocaleDateString()}` : "never run"}
                     </span>
@@ -246,9 +354,10 @@ export default async function ReportsPage({ searchParams }: {
               <ul className="mt-2 flex flex-col">
                 {board.batches.map(b => (
                   <li key={b.id} className="flex items-baseline gap-2 border-b border-gray-100 py-1.5 last:border-0">
-                    <span className="text-[12px] text-gray-800">{b.title_pattern}</span>
-                    <span className="ml-auto text-[11px] font-bold text-gray-900">{b.generated}</span>
-                    <span className="text-[10px] text-gray-500">of {b.requested}</span>
+                    {/* Same reason, and the same max-md:* scoping: the pattern is free text of any length. */}
+                    <span className="text-[12px] text-gray-800 max-md:min-w-0 max-md:truncate">{b.title_pattern}</span>
+                    <span className="ml-auto text-[11px] font-bold text-gray-900 max-md:shrink-0">{b.generated}</span>
+                    <span className="text-[10px] text-gray-500 max-md:shrink-0">of {b.requested}</span>
                     {/* A failure count is never rounded away: "40 generated" when 2 failed is the kind
                         of claim somebody relies on without checking. */}
                     {b.failed > 0 && (

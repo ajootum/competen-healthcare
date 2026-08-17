@@ -40,10 +40,13 @@ export default async function ReportPrintPage({ searchParams }: {
 
   if (!result.ok) {
     return (
-      <div className="mx-auto max-w-[190mm] bg-white p-8">
+      <div className="mx-auto max-w-[190mm] bg-white p-4 md:p-8">
+        {/* THE REFUSAL KEEPS ITS SENTENCE AT EVERY WIDTH. result.message is the engine's own reason --
+            "a Session Report is about one session", "needs billing.view" -- and s14 does not get to
+            shorten it for a phone. Only the padding and the tap target move. */}
         <p className="text-[13px] font-semibold text-gray-900">This report cannot be generated.</p>
         <p className="mt-1 text-[12px] text-gray-600">{result.message}</p>
-        <Link href="/practice/intelligence?tab=reports" className="mt-3 inline-block text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+        <Link href="/practice/intelligence?tab=reports" className="mt-3 inline-block text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center">
           &larr; Back to reports
         </Link>
       </div>
@@ -54,14 +57,44 @@ export default async function ReportPrintPage({ searchParams }: {
   const d = r.definition;
 
   return (
-    <div className="mx-auto max-w-[190mm] bg-white p-8 print:p-0">
-      <div className="no-print mb-4 flex items-center gap-2 print:hidden">
+    <div className="mx-auto max-w-[190mm] bg-white p-4 md:p-8 print:p-0">
+      <div className="no-print mb-4 flex items-center gap-2 max-md:flex-wrap print:hidden">
         <Link href="/practice/intelligence?tab=reports"
-          className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50">
+          className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:px-3">
           &larr; Reports
         </Link>
         <PrintButton />
         <span className="text-[11px] text-gray-500">Use your browser&apos;s print for paper or PDF.</span>
+      </div>
+
+      {/* ══ CPR-MOB-001 s14 row 5: THE FORMATS, BELOW md ═══════════════════════════════════════════
+          "Mobile-friendly preview; user may download PDF/XLSX/CSV where permitted." Two of those three
+          are downloads and the third is not: the API refuses format=pdf by name because THE PRINT VIEW
+          IS THE PDF -- this page, through the browser -- and there is no PDF generator behind it. So
+          the row offers the two real files and says where the third comes from, rather than a PDF
+          button that would 400.
+
+          md:hidden, and only that: at md and up the template catalogue already sits CSV/XLSX/Print
+          side by side, so the desktop preview is unchanged. A phone arrives here from Session Complete
+          or from a quick report and has no catalogue on screen to go back to.
+
+          The hrefs are built from the DEFINITION the engine returned, not from the raw query string --
+          the period it actually resolved is the period the file must carry. */}
+      <div className="no-print mb-4 md:hidden print:hidden">
+        <div className="flex gap-2">
+          <a href={`/api/v1/practice/reports/generate?template=${d.templateId}&from=${d.fromDay}&to=${d.toDay}${sp.activity ? `&activity=${sp.activity}` : ""}`}
+            className="flex min-h-[var(--cp-touch)] flex-1 items-center justify-center rounded-lg border border-gray-200 text-[13px] font-semibold text-[var(--cp-primary-deep)]">
+            CSV &darr;
+          </a>
+          <a href={`/api/v1/practice/reports/generate?template=${d.templateId}&from=${d.fromDay}&to=${d.toDay}${sp.activity ? `&activity=${sp.activity}` : ""}&format=xlsx`}
+            className="flex min-h-[var(--cp-touch)] flex-1 items-center justify-center rounded-lg border border-gray-200 text-[13px] font-semibold text-[var(--cp-primary-deep)]">
+            XLSX &darr;
+          </a>
+        </div>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
+          Both files carry the same figures as this page. There is no PDF download &mdash; this page
+          printed from your browser is the PDF, which is why a reprint is stamped afresh.
+        </p>
       </div>
 
       {/* ── s12 REPORT DEFINITION -- the header travels with the page ─────────────────────────── */}
@@ -102,7 +135,11 @@ export default async function ReportPrintPage({ searchParams }: {
                 {s.rows.map((row, j) => (
                   <tr key={j}>
                     {row.map((cell, k) => (
-                      <td key={k} className={`border-b border-gray-100 py-1 pr-3 text-gray-800 ${k === 0 ? "text-left" : "text-right tabular-nums"}`}>{cell}</td>
+                      // max-md:* only -- s4 forbids horizontal scrolling in a core workflow, and a
+                      // report label long enough to be one unbroken token would push this table wider
+                      // than a 360px phone. Top-aligned once a first column wraps to two lines so the
+                      // figure still reads against the row it belongs to. Desktop is untouched.
+                      <td key={k} className={`border-b border-gray-100 py-1 pr-3 text-gray-800 max-md:break-words max-md:align-top ${k === 0 ? "text-left" : "text-right tabular-nums"}`}>{cell}</td>
                     ))}
                   </tr>
                 ))}
