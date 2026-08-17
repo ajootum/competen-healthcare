@@ -10,6 +10,7 @@ import WorkspaceSidebar from "./_components/WorkspaceSidebar";
 import { estateRolesOf, highestRole, hasPlatformRole, type AppRole } from "@/lib/roles";
 import { admitToEstate, NO_MEMBERSHIP_DESTINATION } from "@/lib/platform-membership";
 import { resolveHqPositions } from "@/lib/hq/context";
+import { rememberStaffWorkspace } from "@/lib/staff/workspace-preference";
 import SessionIdentityNotice, { RememberSessionIdentity } from "@/components/SessionIdentityNotice";
 
 // Sidebar IA aligned to the Mission Control model (MC-001). The nav config and
@@ -68,6 +69,15 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   // rather than shown the HQ refusal panel, which would tell them nothing they can act on.
   if (!(await admitToEstate(admin, user.id, userRoles, { breakGlass: hasPlatformRole(profile, "platform_owner") })).admitted)
     redirect(NO_MEMBERSHIP_DESTINATION);
+
+  // ⚠ AFTER THE GATE, NEVER BEFORE IT (COMP-HQ-ACCESS-001 s7, migration 310). Recording an arrival
+  // the gate would have refused would teach the resolver to send somebody back to a door that then
+  // turns them away -- so this line sits below the admission, where the visit is a fact.
+  //
+  // Only useful to staff holding SEVERAL destinations; for everyone else the resolver already lands
+  // them directly and never reads this. It never throws and never blocks the render: a failed write
+  // costs a convenience, and costing somebody their workspace instead would be the wrong trade.
+  await rememberStaffWorkspace(admin, user.id, "/super-admin");
 
   const cookieStore = await cookies();
   // !! THE NULL IS REAL NOW, AND THE CAST USED TO SWALLOW IT. highestRole returns AppRole | null since

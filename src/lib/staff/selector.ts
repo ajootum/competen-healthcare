@@ -45,6 +45,16 @@ export type StaffSnapshot = {
   governanceContexts: StaffGovernanceContext[];
   /** The status of EVERY ogs_office_appointments row this person has, live or not, any office. */
   appointmentStatuses: (string | null)[];
+  /**
+   * COMP-HQ-ACCESS-001 s7's two remembered facts (migration 310), for people holding SEVERAL
+   * destinations. Absent for everyone else, and absent is the ordinary case.
+   *
+   * ⚠ HINTS, VALIDATED HERE AGAINST WHAT IS HELD. A remembered href that is no longer among the
+   * workspaces this account opens is DISCARDED, not followed -- s10's rule for products, and the
+   * reason the check lives in this pure function rather than in the reader: one place decides.
+   */
+  lastWorkspaceHref?: string | null;
+  primaryWorkspaceHref?: string | null;
 };
 
 export type StaffGatewayDecision =
@@ -111,6 +121,24 @@ export function decideStaffGateway(s: StaffSnapshot): StaffGatewayDecision {
   // the loop check that had to be done before this line could exist.
   if (workspaces.length === 1)
     return { state: "DIRECT", destination: workspaces[0], governanceContexts: s.governanceContexts };
+  // ── SEVERAL DESTINATIONS: s7's returning-staff rules, in the spec's own order ──────────────────
+  //
+  //   "Returning + multiple assignments -> Last valid workspace; else primary/My HQ"
+  //   "First login + multiple assignments -> Primary assignment if configured; otherwise My HQ"
+  //
+  // Observed before administered, because the last workspace IS the returning case and a primary
+  // assignment is what answers when there is nothing observed yet. Both are checked against the
+  // held list first: a remembered workspace that has since been withdrawn is discarded, never
+  // reopened. My HQ does not exist, so the honest fallback for both misses is the selector -- the
+  // person is ASKED rather than sent somewhere nobody chose.
+  if (workspaces.length > 1) {
+    const held = (href: string | null | undefined) =>
+      href ? workspaces.find(w => w.href === href) ?? null : null;
+    const remembered = held(s.lastWorkspaceHref) ?? held(s.primaryWorkspaceHref);
+    if (remembered)
+      return { state: "DIRECT", destination: remembered, governanceContexts: s.governanceContexts };
+  }
+
   if (workspaces.length > 0)
     return { state: "SELECT", workspaces, governanceContexts: s.governanceContexts };
 

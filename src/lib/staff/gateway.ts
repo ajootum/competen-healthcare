@@ -18,6 +18,7 @@ import { admitToEstate } from "@/lib/platform-membership";
 import { listGovernanceContexts } from "@/lib/hq/governance-context";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
 import { decideStaffGateway, type StaffGatewayDecision, type StaffGovernanceContext } from "./selector";
+import { readStaffWorkspacePreference } from "./workspace-preference";
 
 export type StaffGatewayResolution =
   | { state: "AUTH_REQUIRED" }
@@ -82,6 +83,12 @@ export async function resolveStaffGateway(): Promise<StaffGatewayResolution> {
     // Pre-migration estate or transient failure -- the decision falls to the honest ground state.
   }
 
+  // s7's remembered facts, read ONLY when there is a choice to shortcut -- a single-destination
+  // identity already resolves DIRECT, so the read would be work nobody uses.
+  const preference = workspaces.length > 1
+    ? await readStaffWorkspacePreference(admin, user.id)
+    : { lastWorkspaceHref: null, primaryWorkspaceHref: null };
+
   return {
     state: "RESOLVED",
     fullName: profile?.full_name ?? null,
@@ -91,6 +98,8 @@ export async function resolveStaffGateway(): Promise<StaffGatewayResolution> {
       workspaces,
       governanceContexts,
       appointmentStatuses,
+      lastWorkspaceHref: preference.lastWorkspaceHref,
+      primaryWorkspaceHref: preference.primaryWorkspaceHref,
     }),
   };
 }

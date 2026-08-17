@@ -172,6 +172,29 @@ async function main() {
     "only a plain relative /super-admin path may be honoured");
   const signInForm = readFileSync("src/app/staff/StaffSignInForm.tsx", "utf8");
   const staffDoorPage = readFileSync("src/app/staff/page.tsx", "utf8");
+  // ── 4o-4r. s7's RETURNING-STAFF RULES for people holding SEVERAL destinations (migration 310) ──
+  const dLast = decideStaffGateway(identity({ workspaces: two, lastWorkspaceHref: two[1].href }));
+  ok("4o. ⚠ several destinations + a remembered last workspace lands there, not on a chooser",
+    dLast.state === "DIRECT" && dLast.destination.href === two[1].href);
+  const dPrimary = decideStaffGateway(identity({ workspaces: two, primaryWorkspaceHref: two[1].href }));
+  ok("4p. with nothing observed yet, the administered primary answers instead",
+    dPrimary.state === "DIRECT" && dPrimary.destination.href === two[1].href);
+  ok("4q. ⚠ observed BEATS administered -- the returning case is what 'last' means",
+    (() => {
+      const d = decideStaffGateway(identity({
+        workspaces: two, lastWorkspaceHref: two[0].href, primaryWorkspaceHref: two[1].href,
+      }));
+      return d.state === "DIRECT" && d.destination.href === two[0].href;
+    })());
+  // ⚠ THE LOAD-BEARING ONE: a hint is not an authority. A workspace withdrawn since the last visit
+  // must NOT be reopened by a remembered href -- the account is asked instead.
+  const dStale = decideStaffGateway(identity({
+    workspaces: two, lastWorkspaceHref: "/a-workspace-no-longer-held",
+  }));
+  ok("4r. ⚠ a remembered workspace NO LONGER HELD is discarded, and the person is asked",
+    dStale.state === "SELECT" && dStale.workspaces.length === 2,
+    "a stale hint must never reopen a withdrawn workspace");
+
   ok("4n. the staff door returns somebody to where they were sent from, refusing protocol-relative",
     signInForm.includes('startsWith("/")') && signInForm.includes('!asked.startsWith("//")')
     && staffDoorPage.includes('!asked.startsWith("//")'));
