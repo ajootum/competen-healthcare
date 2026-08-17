@@ -118,7 +118,7 @@ export type MetricStatus =
 
 export type MetricKey =
   | "booked" | "waiting" | "completed" | "walk_in" | "cancelled" | "emergency"
-  | "follow_ups_due" | "no_show" | "patients_seen"
+  | "follow_ups_due" | "no_show" | "patients_seen" | "remaining"
   | "average_consult_time" | "average_wait_time" | "clinic_delay";
 
 export type Metric = {
@@ -216,6 +216,7 @@ const WAITING_STATUSES = ["WAITING", "READY"];
 const LABELS: Record<MetricKey, string> = {
   booked: "Booked", waiting: "Waiting", completed: "Completed", walk_in: "Walk-in",
   cancelled: "Cancelled", emergency: "Emergency", follow_ups_due: "Follow-ups Due", no_show: "No Show",
+  remaining: "Remaining",
   patients_seen: "Patients Seen", average_consult_time: "Average Consult Time",
   average_wait_time: "Average Wait Time", clinic_delay: "Clinic Delay",
 };
@@ -453,6 +454,53 @@ export async function waitingPatients(admin: any, ctx: WorkspaceContext, scope: 
  *     and counting ROWS rather than transitions is what makes a re-completed encounter count once.
  *     Counting practice_encounter_status_history entries instead would double-count every reopen.
  */
+/**
+ * CPR-MOB-001 s7 asked the session strip for "remaining", and the figure had no producer -- the
+ * strip shipped without it rather than doing page-side arithmetic (CORE-08 forbids exactly that).
+ * The owner asked for it by name (2026-08-17), so it lives here: one owner, one formula.
+ *
+ *   remaining = still waiting (the Waiting metric's OWN population, composed not re-derived)
+ *             + appointments in the scope window still REQUESTED or CONFIRMED (booked, not arrived)
+ *
+ * ⚠ IN_CONSULTATION is deliberately NOT counted. The strip shows In progress beside this figure,
+ * and a "remaining" that included the person already in the room would double-speak against it.
+ * ⚠ COMPOSES waitingPatients rather than re-deriving its rows: two implementations of "who is
+ * waiting" is how two screens come to disagree -- the lesson the follow-up lenses already paid for.
+ * A waiting figure that is not ok propagates as this metric's own status, reason and all: half a
+ * sum is not a smaller sum, it is no sum.
+ */
+export async function remainingPatients(admin: any, ctx: WorkspaceContext, scope: MetricScope): Promise<Metric> {
+  const b: Build = {
+    key: "remaining", unit: "count", scope,
+    formula: "patients still waiting (the Waiting metric's population) plus appointments scheduled"
+      + " within the scope window whose status is still REQUESTED or CONFIRMED",
+    sources: [
+      "practice_queue_entry.status", "practice_queue_entry.entered_at",
+      "practice_appointment.status", "practice_appointment.scheduled_at",
+    ],
+  };
+  if (!hasCapability(ctx, CAP_DIARY)) return notPermitted(b, CAP_DIARY);
+  if (!hasCapability(ctx, CAP_ENCOUNTERS)) return notPermitted(b, CAP_ENCOUNTERS);
+
+  const waiting = await waitingPatients(admin, ctx, scope);
+  if (waiting.status !== "ok" || waiting.value === null)
+    return {
+      ...waiting, key: "remaining", label: LABELS.remaining,
+      formula: b.formula, sources: b.sources,
+      reason: waiting.reason ?? "the waiting half of this figure could not be computed",
+    };
+
+  const expected = await countRows(admin.from("practice_appointment")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", ctx.workspaceId)
+    .in("status", ["REQUESTED", "CONFIRMED"])
+    .gte("scheduled_at", scope.fromIso).lt("scheduled_at", scope.toIso));
+  if (expected.error) return unreadable(b, expected.error);
+  if (expected.count === null) return unreadable(b, "the expected-appointments count was not computed");
+
+  return ok(b, waiting.value + expected.count, (waiting.observations ?? 0) + expected.count, waiting.excluded);
+}
+
 export async function completedEncounters(admin: any, ctx: WorkspaceContext, scope: MetricScope): Promise<Metric> {
   const b: Build = {
     key: "completed", unit: "count", scope,
@@ -1061,7 +1109,7 @@ export async function practiceMetrics(
 ): Promise<PracticeMetrics> {
   const [
     booked, waiting, completed, walkIn, cancelled, emergency,
-    followUps, noShow, seen, consult, wait, delay,
+    followUps, noShow, seen, remaining, consult, wait, delay,
   ] = await Promise.all([
     bookedAppointments(admin, ctx, scope),
     waitingPatients(admin, ctx, scope),
@@ -1072,6 +1120,7 @@ export async function practiceMetrics(
     followUpsDue(admin, ctx, scope),
     noShows(admin, ctx, scope),
     patientsSeen(admin, ctx, scope),
+    remainingPatients(admin, ctx, scope),
     averageConsultMinutes(admin, ctx, scope),
     averageWaitMinutes(admin, ctx, scope),
     clinicDelayMinutes(admin, ctx, scope),
@@ -1079,7 +1128,7 @@ export async function practiceMetrics(
 
   const metrics: Record<MetricKey, Metric> = {
     booked, waiting, completed, walk_in: walkIn, cancelled, emergency,
-    follow_ups_due: followUps, no_show: noShow, patients_seen: seen,
+    follow_ups_due: followUps, no_show: noShow, patients_seen: seen, remaining,
     average_consult_time: consult, average_wait_time: wait, clinic_delay: delay,
   };
 

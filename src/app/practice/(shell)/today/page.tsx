@@ -173,6 +173,11 @@ export default async function CurrentSessionPage() {
       reason: flow.inProgress === null ? (flowReason ?? "Could not be read just now.") : null,
       observations: null, basis: null,
     },
+    // s7's "remaining", from its own producer at last (metrics.ts remainingPatients, owner-requested
+    // 2026-08-17): still waiting plus booked-not-yet-arrived, composed in the ENGINE -- the figure
+    // this strip shipped without rather than doing page-side arithmetic. In-consultation people are
+    // deliberately outside it; In progress stands beside it.
+    tile("remaining", "Remaining", null),
     ...(m?.walk_in.value ? [tile("walk_in", "Walk-ins", null)] : []),
     ...(m?.emergency.value ? [tile("emergency", "Emergency", null)] : []),
   ];
