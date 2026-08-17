@@ -26,6 +26,12 @@ import { formatMinuteOfDay } from "@/lib/datetime";
 // The empty state is why this posts a plan-and-start pair rather than only a start. A dashboard that can
 // only start what somebody planned yesterday cannot open a clinic on a morning nobody planned -- and an
 // emergency consult is never planned.
+//
+// CPR-MOB-001 s6 (2026-08-17): below md this card plays TWO roles in the mobile story. The running
+// state is row 1's current-session card, whose one mobile action is Open Session; the idle state is
+// row 3's What's Next -- one next activity, one Start. Same component, same payload, same posts; only
+// the hierarchy changes by breakpoint, which is s19's single-component-model rule. At md and up every
+// mobile element is hidden and the desktop render is untouched.
 
 export default function StartYourDay({ plan, metrics, canPlan }: {
   plan: TodaysPlan;
@@ -92,7 +98,9 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
     );
     return (
       <section className="rounded-2xl border border-gray-200 bg-white p-4" aria-labelledby="zone1">
-        <div className="flex items-center gap-2">
+        {/* Hidden below md: the tinted card announces itself ("Current Activity" + ACTIVE), and the
+            desktop zone chrome would only push it further down a phone screen. */}
+        <div className="flex items-center gap-2 max-md:hidden">
           <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--cp-primary)] text-[10px] font-bold text-white">1</span>
           <h2 id="zone1" className="text-[11px] font-bold uppercase tracking-[0.12em] text-gray-500">Start your day</h2>
         </div>
@@ -124,7 +132,7 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
               ? null : `${metrics.averageMinutesPerPatient} min`)}
           </div>
 
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 hidden gap-2 md:flex">
             <button type="button" disabled={!canPlan || busy !== null}
               onClick={() => post({ action: "end", id: a.id }, "end")}
               className="flex-1 rounded-lg border border-[var(--cp-primary-border)] bg-white px-3 py-2 text-[12.5px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50">
@@ -135,6 +143,14 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
               View Session
             </Link>
           </div>
+          {/* CPR-MOB-001 s6 row 1: the card's ONE mobile action is Open Session, into the cockpit --
+              where the queue, the controls and End all live. End is deliberately not a one-tap control
+              on a phone dashboard (s4 caps a viewport at one dominant action, and a mis-tap here would
+              close a live clinic); it waits one screen away, behind a confirm, in Current Session. */}
+          <Link href="/practice/today"
+            className="mt-3 flex min-h-[var(--cp-touch-primary)] w-full items-center justify-center rounded-xl bg-[var(--cp-primary)] px-4 text-[15px] font-semibold text-white hover:opacity-90 md:hidden">
+            Open Session
+          </Link>
           {error && <p role="alert" className="mt-2 text-[12px] text-[var(--cmp-text-danger)]">{error}</p>}
         </div>
       </section>
@@ -143,12 +159,33 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
 
   // ── NOTHING RUNNING ────────────────────────────────────────────────────────────────────────────
   const planned = plan.activities.filter(x => x.state === "planned");
+  // s6 row 3's data, from the engine that already computed it: plan.next is "the next thing that has
+  // not started, by planned start" (activity.ts). NOT re-derived from `planned` here -- a second
+  // definition of "next" would be one sort away from disagreeing with the first.
+  const next = plan.next;
+  const morePlanned = next ? planned.filter(a => a.id !== next.id).length : 0;
+  // The one-tap unplanned grid at thumb size (s4's 44px floor). Built once because it renders in two
+  // mobile places: as the whole module when nothing is planned, behind a disclosure when something is.
+  const typeGrid = (
+    <div className="mt-2 grid grid-cols-2 gap-1.5">
+      {ACTIVITY_TYPES.map(t => (
+        <button key={t} type="button" disabled={busy !== null} onClick={() => startNow(t)}
+          className="min-h-[var(--cp-touch)] rounded-lg border border-gray-200 px-2 text-[12.5px] font-semibold text-gray-700 hover:border-[var(--cp-primary-border)] hover:bg-[var(--cp-primary-soft)] hover:text-[var(--cp-primary-deep)] disabled:opacity-50">
+          {busy === t ? "Starting…" : ACTIVITY_LABEL[t]}
+        </button>
+      ))}
+    </div>
+  );
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-4" aria-labelledby="zone1">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 max-md:hidden">
         <span aria-hidden className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--cp-primary)] text-[10px] font-bold text-white">1</span>
         <h2 id="zone1" className="text-[11px] font-bold uppercase tracking-[0.12em] text-gray-500">Start your day</h2>
       </div>
+      {/* The phone's heading for the same section: below md this card is the story's What's Next
+          module (s6 row 3), and "Start your day" would be the wrong sentence over a card whose day
+          may simply have a next clinic in it. */}
+      <h2 className="text-[13px] font-bold text-gray-900 md:hidden">What&apos;s next</h2>
 
       {plan.unavailable ? (
         <p className="mt-3 text-[13px] text-gray-500">
@@ -156,13 +193,13 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
         </p>
       ) : (
         <>
-          <p className="mt-2.5 text-[13px] text-gray-600">
+          <p className="mt-2.5 text-[13px] text-gray-600 max-md:hidden">
             Nothing is running. Everything else on this page counts your whole day until you start
             something — then it counts the session.
           </p>
 
           {planned.length > 0 && (
-            <div className="mt-3 space-y-1.5">
+            <div className="mt-3 space-y-1.5 max-md:hidden">
               <p className="text-[10.5px] font-bold uppercase tracking-wide text-gray-500">Planned for today</p>
               {planned.map(a => (
                 <div key={a.id} className="flex items-center gap-2 rounded-lg border border-gray-200 px-2.5 py-2">
@@ -184,7 +221,7 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
           )}
 
           {canPlan && (
-            <div className="mt-3 border-t border-gray-100 pt-3">
+            <div className="mt-3 border-t border-gray-100 pt-3 max-md:hidden">
               <p className="text-[10.5px] font-bold uppercase tracking-wide text-gray-500">
                 {planned.length > 0 ? "Or start something unplanned" : "Start now"}
               </p>
@@ -198,6 +235,64 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
               </div>
             </div>
           )}
+
+          {/* ── BELOW md THIS CARD IS THE STORY'S WHAT'S NEXT (CPR-MOB-001 s6 row 3) ────────────────
+              ONE next activity and ONE primary Start -- not the desktop's full planned list, which is
+              day orientation for a wide screen. The rest of the plan is a COUNT THAT ROUTES to the
+              Planner (s6: summary counts deep-link to their canonical workspace). Starting unplanned
+              stays one tap away behind a disclosure -- an emergency consult is never planned, and a
+              phone is exactly where that morning happens -- without competing as a second dominant
+              action (s4). When there is no next, no plan-write capability and nothing running, the
+              page hides this whole section below md (empty modules do not occupy space). */}
+          <div className="md:hidden">
+            {next ? (
+              <>
+                <div className="mt-2.5 rounded-xl border border-gray-200 p-3">
+                  <p className="text-[14px] font-semibold leading-snug text-gray-900">{next.title}</p>
+                  <p className="mt-0.5 text-[12px] text-gray-600">
+                    {formatMinuteOfDay(next.plannedStartMinute)} – {formatMinuteOfDay(next.plannedEndMinute)}
+                    {" · "}{[next.label, next.facilityName].filter(Boolean).join(" · ")}
+                  </p>
+                  {/* s6 row 3 promises a Start OR Open action. A caller without the plan-write
+                      capability cannot start, so their action is the Open -- the same unconditional
+                      planner door the desktop handoff card already offers everyone. */}
+                  {canPlan ? (
+                    <button type="button" disabled={busy !== null}
+                      onClick={() => post({ action: "start", id: next.id }, next.id)}
+                      className="mt-2.5 flex min-h-[var(--cp-touch-primary)] w-full items-center justify-center rounded-xl bg-[var(--cp-primary)] px-4 text-[15px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
+                      {busy === next.id ? "Starting…" : "Start"}
+                    </button>
+                  ) : (
+                    <Link href="/practice/calendar"
+                      className="mt-2.5 flex min-h-[var(--cp-touch)] w-full items-center justify-center rounded-lg border border-gray-200 text-[13px] font-semibold text-[var(--cp-primary-deep)]">
+                      Open in Planner →
+                    </Link>
+                  )}
+                  {morePlanned > 0 && (
+                    <Link href="/practice/calendar"
+                      className="mt-1.5 flex min-h-[var(--cp-touch)] items-center text-[12.5px] font-semibold text-[var(--cp-primary-deep)]">
+                      and {morePlanned} more planned today — open the Planner →
+                    </Link>
+                  )}
+                </div>
+                {canPlan && (
+                  <details className="mt-2">
+                    <summary className="flex min-h-[var(--cp-touch)] cursor-pointer list-none items-center text-[12.5px] font-semibold text-gray-600">
+                      <span aria-hidden className="mr-1 text-gray-400">›</span> Start something unplanned
+                    </summary>
+                    {typeGrid}
+                  </details>
+                )}
+              </>
+            ) : canPlan ? (
+              <>
+                <p className="mt-2.5 text-[13px] text-gray-600">
+                  Nothing is planned for today. Starting a session scopes the workspace to it.
+                </p>
+                {typeGrid}
+              </>
+            ) : null}
+          </div>
         </>
       )}
       {error && <p role="alert" className="mt-2 text-[12px] text-[var(--cmp-text-danger)]">{error}</p>}

@@ -32,6 +32,11 @@ import { PANEL, GLANCE_SWATCH, QUICK_SWATCH, QUICK_ICON, SEVERITY } from "@/lib/
 // console -- s10's summary-pointer rule, stated on each card. Empty Tasks/Messages cards are HIDDEN
 // (s4.2): they render only as actionable exceptions, because a standing "nothing new" card trains
 // the eye to skip the one day it says something else.
+//
+// BELOW md (CPR-MOB-001 s6, 2026-08-17) the same server data tells ONE VERTICAL STORY -- current
+// activity, needs attention, what's next, today's plan, two links -- and the desktop grids are simply
+// hidden. The full mobile doctrine sits with the story modules, just before the return. At md and up
+// nothing about this page changed: the additions are max-md:* and md:hidden only.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -124,6 +129,136 @@ export default async function PracticeCommandCentre() {
     .filter(([, state]) => state === "unavailable")
     .map(([key]) => FEEDER_LABEL[key] ?? key);
 
+  // ══ CPR-MOB-001 s6: BELOW md, TODAY IS ONE VERTICAL STORY ═══════════════════════════════════════
+  //
+  // Current activity -> needs attention -> what's next -> today's plan -> secondary links, and nothing
+  // else. The desktop grids do not shrink into it: they are hidden below md (max-md:hidden) and these
+  // modules are hidden above it (md:hidden), rendered from the SAME payload the page already assembled
+  // -- a second presentation, never a second source of truth and never a second fetch (s19).
+  //
+  // WHY A CONDITIONAL SPLIT RATHER THAN CSS order: the s6 sequence interleaves cards that live in
+  // DIFFERENT desktop grid containers, and CSS order cannot reorder across containers -- while
+  // flattening the containers would have restructured the desktop DOM the owner hand-tuned
+  // (walkthrough 2026-08-16 #7). The split also keeps DOM order equal to visual order below md, which
+  // is s17's focus-order rule kept by construction rather than by order utilities.
+  //
+  // WHAT IS DELIBERATELY ABSENT BELOW md (s6's own exclusions): the glance grid, Today's brief, the
+  // waiting-queue pointer, quick access, the unfinished-encounters and tasks/messages cards -- the
+  // obligations among them already ride home.attention, so Needs Attention carries them -- and the
+  // refused-claims panel. EMPTY MODULES DO NOT OCCUPY SPACE: an empty module renders null rather than
+  // an empty state, because on a phone every centimetre is scroll. The honesty banners above stay on
+  // both breakpoints -- a module ABSENT because its read failed is exactly what they disclose.
+  //
+  // ⚠ CPR-360's widget order/visibility governs the DESKTOP grid only. s6 pins the mobile order
+  // outright, so the story does not consult widget(): a practitioner who hid a desktop card has
+  // customised the dashboard, not the specification.
+
+  const navItems = primaryNav(ctx.capabilities);
+  const canPlanner = navItems.some(i => i.href === "/practice/calendar");
+  const canReports = navItems.some(i => i.href === "/practice/reports");
+  // Whether StartYourDay has anything a phone can act on. When it does not -- nothing running, nothing
+  // planned, no plan-write capability, plan readable -- the hero hides below md rather than leaving an
+  // empty frame. ⚠ MIRRORS StartYourDay's own mobile branches; change the two together.
+  const startDayMobile = Boolean(metrics) || plan.unavailable || plan.next !== null || canPlan;
+
+  // s6 row 2 -- only actionable cross-day obligations, which is exactly what home.attention is: the
+  // desktop Needs Attention card, and the Tasks and Messages exception cards, all render from this one
+  // list, so the phone loses nothing by rendering it once. Rows are thumb-sized links (s4).
+  const mobileAttention = home.attention.length > 0 || home.blindSpots.length > 0 ? (
+    <section className={`${card} md:hidden`} aria-labelledby="m-attention">
+      <h2 id="m-attention" className={panelTitle}>Needs attention</h2>
+      <ul className="mt-3 space-y-2">
+        {home.attention.map((a: any) => {
+          const sv = SEVERITY[a.severity] ?? SEVERITY.normal;
+          return (
+            <li key={a.kind}>
+              <Link href={a.href}
+                className={`flex min-h-[var(--cp-touch)] items-center gap-2.5 rounded-lg border-l-[3px] bg-gray-50/70 px-3 py-2 ${sv.border}`}>
+                <span className="min-w-0 flex-1">
+                  <span className={`block text-[13px] font-semibold leading-snug ${sv.text}`}>{a.title}</span>
+                  <span className="block text-[11.5px] leading-snug text-gray-500">{a.detail}</span>
+                </span>
+                <span aria-hidden className="shrink-0 text-[13px] text-gray-400">→</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+      {home.blindSpots.length > 0 && (
+        <p className="mt-3 border-t border-gray-100 pt-2 text-[11px] leading-relaxed text-gray-500">
+          Not shown to you: {home.blindSpots.join(", ")}. This list cannot tell you whether anything
+          is waiting there.
+        </p>
+      )}
+    </section>
+  ) : null;
+
+  // s6 row 3, for the RUNNING case only -- when nothing runs, StartYourDay itself is the story's
+  // What's Next (its mobile rendering, same component). Open, never Start: startActivity ENDS the
+  // running session first (activity.ts), and a one-tap control that quietly closes a live clinic is
+  // not a mobile affordance.
+  const mobileWhatsNext = metrics && plan.next ? (
+    <section className={`${card} md:hidden`} aria-labelledby="m-next">
+      <h2 id="m-next" className={panelTitle}>What&apos;s next</h2>
+      <p className="mt-2 text-[14px] font-semibold leading-snug text-gray-900">{plan.next.title}</p>
+      <p className="mt-0.5 text-[12px] text-gray-600">
+        {formatMinuteOfDay(plan.next.plannedStartMinute)} – {formatMinuteOfDay(plan.next.plannedEndMinute)}
+        {" · "}{[plan.next.label, plan.next.facilityName].filter(Boolean).join(" · ")}
+      </p>
+      <Link href="/practice/calendar"
+        className="mt-2.5 flex min-h-[var(--cp-touch)] w-full items-center justify-center rounded-lg border border-gray-200 text-[13px] font-semibold text-[var(--cp-primary-deep)]">
+        Open in Planner →
+      </Link>
+    </section>
+  ) : null;
+
+  // s6 row 4 -- the same cc.timeline rows the desktop card draws, as a compact chronological list.
+  // The overflow line is a count that ROUTES to the Planner (s6's deep-link rule), where desktop
+  // settles for saying "and N more today".
+  const mobilePlan = cc.timeline.length > 0 ? (
+    <section className={`${card} md:hidden`} aria-labelledby="m-plan">
+      <h2 id="m-plan" className={panelTitle}>Today&apos;s plan</h2>
+      <ul className="mt-3 space-y-2">
+        {cc.timeline.slice(0, 8).map(t => (
+          <li key={t.id} className="flex items-baseline gap-2">
+            <span className="w-10 shrink-0 text-[11.5px] tabular-nums text-gray-500">{t.timeLabel}</span>
+            <span aria-hidden className="mt-1 h-2 w-2 shrink-0 rounded-full" style={{ background: t.colour }} />
+            <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-gray-800">{t.patientName}</span>
+            <span className="shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+              style={{ background: `color-mix(in srgb, ${t.colour} 14%, white)`, color: t.colour }}>
+              {t.typeLabel}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {cc.timeline.length > 8 && (
+        <Link href="/practice/calendar"
+          className="mt-2 flex min-h-[var(--cp-touch)] items-center text-[12.5px] font-semibold text-[var(--cp-primary-deep)]">
+          and {cc.timeline.length - 8} more today — open the Planner →
+        </Link>
+      )}
+    </section>
+  ) : null;
+
+  // s6 row 5 -- the optional secondary links, gated by the same capability-filtered nav the sidebar
+  // and bottom bar use, so nobody is handed a door their capabilities cannot open.
+  const mobileLinks = canPlanner || canReports ? (
+    <div className="flex gap-2 md:hidden">
+      {canPlanner && (
+        <Link href="/practice/calendar"
+          className="flex min-h-[var(--cp-touch)] flex-1 items-center justify-center rounded-xl border border-gray-200 bg-white text-[13px] font-semibold text-[var(--cp-primary-deep)]">
+          Planner →
+        </Link>
+      )}
+      {canReports && (
+        <Link href="/practice/reports"
+          className="flex min-h-[var(--cp-touch)] flex-1 items-center justify-center rounded-xl border border-gray-200 bg-white text-[13px] font-semibold text-[var(--cp-primary-deep)]">
+          Reports →
+        </Link>
+      )}
+    </div>
+  ) : null;
+
   return (
     <div className="-m-5 min-h-full bg-[var(--cp-canvas)] p-5">
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-4">
@@ -132,9 +267,11 @@ export default async function PracticeCommandCentre() {
         <div className="flex flex-wrap items-baseline gap-3">
           <div>
             <h1 className="text-xl font-bold text-gray-900">Practice Command Centre</h1>
-            <p className="text-[13px] text-gray-500">
+            <p className="text-[13px] text-gray-500 max-md:hidden">
               {/* s7: counts are session-scoped after session start, day-scoped before it. Said on the
-                  page, because the same eight numbers mean different things either side of that line. */}
+                  page, because the same eight numbers mean different things either side of that line.
+                  Hidden below md: "figures below" describes the desktop grid, and the mobile story's
+                  modules each label their own window instead. */}
               {dash.scope.kind === "session"
                 ? "Scoped to your running session — figures below count this clinic, not the whole day."
                 : "Scoped to today — figures below count the whole day until you start a session."}
@@ -162,8 +299,14 @@ export default async function PracticeCommandCentre() {
         {failedFeeders.length > 0 && !dash.unavailable && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12.5px] text-amber-800">
             <span className="font-semibold">Some of this page could not be read just now</span>
-            {" — "}{failedFeeders.join(", ")}. Everything else below is current; those cards show no figure
-            rather than a nought.
+            {" — "}{failedFeeders.join(", ")}.{" "}
+            {/* Two endings for one sentence: the desktop's cards stand and show no figure; on the
+                phone an unreadable module is ABSENT (s6: empty modules do not occupy space), and
+                "those cards" would point at nothing. */}
+            <span className="max-md:hidden">Everything else below is current; those cards show no figure
+            rather than a nought.</span>
+            <span className="md:hidden">Everything else below is current; a module that could not be read
+            shows nothing here rather than a nought.</span>
           </p>
         )}
         {dash.unavailable && (
@@ -173,8 +316,17 @@ export default async function PracticeCommandCentre() {
           </p>
         )}
 
+        {/* ── s6 row 2, idle ordering: when nothing is running, row 1 is absent and Needs Attention
+               LEADS the story -- above the hero, whose StartYourDay is then row 3's What's Next. DOM
+               order tracks visual order in both states (s17 focus order), which is why this module
+               has two conditional slots rather than a CSS order. ──────────────────────────────────── */}
+        {!metrics && mobileAttention}
+
         {/* ── Hero briefing ─────────────────────────────────────────────────────────────────────── */}
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        {/* Below md the hero is StartYourDay alone -- glance, brief and the handoff are desktop
+            panels (s6's exclusions) -- and when even StartYourDay has nothing a phone can act on the
+            whole section vanishes rather than leaving an empty frame. */}
+        <section className={`grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]${startDayMobile ? "" : " max-md:hidden"}`}>
           {/* THE COMP'S TOP ROW: Zone 1 · Today at a Glance · Today's Brief. */}
           <div className="grid gap-4 lg:grid-cols-3">
 
@@ -187,8 +339,9 @@ export default async function PracticeCommandCentre() {
             {/* ── TODAY AT A GLANCE (s3) ──────────────────────────────────────────────────────── */}
             {/* flex-col so the tile grid can GROW: this card stands beside taller siblings and used
                 to hold eight cramped tiles above a void (walkthrough 2026-08-16 #7 -- "space this to
-                fill the widget"). The grid takes the spare height and the rows share it. */}
-            <div className={`${card} flex flex-col`}>
+                fill the widget"). The grid takes the spare height and the rows share it.
+                max-md:hidden: an eight-tile grid is a desktop panel, and s6's story does not have it. */}
+            <div className={`${card} flex max-md:hidden flex-col`}>
               <div className="mb-3 flex items-center gap-2">
                 <h2 className={panelTitle}>Today at a glance</h2>
                 {/* THE WINDOW IS ON THE CARD, not assumed. The same eight tiles mean "this clinic"
@@ -257,8 +410,10 @@ export default async function PracticeCommandCentre() {
               )}
             </div>
 
-            {/* Today's brief — the comp's "AI Briefing", named for what it is. */}
-            <div className={card}>
+            {/* Today's brief — the comp's "AI Briefing", named for what it is. max-md:hidden: the
+                brief's sentences derive from the same home.attention rows the mobile Needs Attention
+                module renders directly, so the phone keeps the obligations and loses the digest. */}
+            <div className={`${card} max-md:hidden`}>
               <div className="mb-3 flex items-center gap-2">
                 <span aria-hidden className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[12px] ${PANEL.brief.badge}`}>
                   {PANEL.brief.icon}
@@ -318,7 +473,7 @@ export default async function PracticeCommandCentre() {
 
           {/* ── Planner handoff (s4.1) -- the large weekly locations panel moved to the Planner
                  (s4.2), its canonical home. What stays is the ROUTE there, with today's shape. ── */}
-          <div className={card} style={widget("locations")}>
+          <div className={`${card} max-md:hidden`} style={widget("locations")}>
             <PanelHead k="locations" title="Planner" href="/practice/calendar" hrefLabel="Open Planner" />
             <p className="text-[12px] leading-relaxed text-gray-700">
               Schedule changes, the week&apos;s locations, availability and booking all live in the
@@ -335,12 +490,22 @@ export default async function PracticeCommandCentre() {
           </div>
         </section>
 
+        {/* ── s6 rows 2-5, running ordering: the current session led the story, and it continues
+               here -- needs attention, what's next, today's plan, the two links. Each renders null
+               when it has nothing, and nothing renders at md and up. ─────────────────────────────── */}
+        {metrics && mobileAttention}
+        {mobileWhatsNext}
+        {mobilePlan}
+        {mobileLinks}
+
         {/* ══ CPR-HFE-001 v1.1 s4: POINTERS, NOT CONSOLES ═════════════════════════════════════════
             The detailed waiting queue, the encounter launcher, the session status panel, the live
             session timeline and the session-operational alerts ALL moved to Current Session -- their
             canonical home (s4.2). What stays here is s10's allowed form: a count that ROUTES. The
-            zone cards below are day orientation and cross-day obligations only (s13). ═══════════ */}
-        <section className="grid gap-4 lg:grid-cols-3">
+            zone cards below are day orientation and cross-day obligations only (s13).
+            max-md:hidden, all three: the pointer and drafts cards' obligations ride the mobile Needs
+            Attention module; a second rendering would be the story contradicting itself. ═══════════ */}
+        <section className="max-md:hidden grid gap-4 lg:grid-cols-3">
           {/* ── Live clinic pointer ──────────────────────────────────────────────────────────────── */}
           <div className={card}>
             <PanelHead k="queue" title="Live clinic" href="/practice/today" hrefLabel="Open Current Session" />
@@ -421,7 +586,7 @@ export default async function PracticeCommandCentre() {
         </section>
 
         {/* ── s4.1: Today's plan in time order · Planner handoff via Quick access · exceptions ──── */}
-        <section className="grid gap-4 lg:grid-cols-3">
+        <section className="max-md:hidden grid gap-4 lg:grid-cols-3">
           <div className={card} style={widget("schedule")}>
             <PanelHead k="timeline" title="Today's plan" href="/practice/calendar" hrefLabel="Open Planner" />
             {cc.timeline.length === 0 ? (
@@ -507,7 +672,7 @@ export default async function PracticeCommandCentre() {
         </section>
 
         {/* ── What this screen will not claim ──────────────────────────────────────────────────────── */}
-        <details className={card}>
+        <details className={`${card} max-md:hidden`}>
           <summary className="cursor-pointer list-none text-[12px] font-semibold text-gray-600 hover:text-gray-900">
             <span className="mr-1 text-gray-400">›</span>
             {cc.refused.length} things the design shows that this build will not claim
@@ -528,7 +693,7 @@ export default async function PracticeCommandCentre() {
           workspaceId={ctx.workspaceId}
           userId={ctx.userId}
           gate={{ state: offline.state, reason: offline.reason, purge: offline.purge }}
-          nav={primaryNav(ctx.capabilities).map(i => ({ href: i.href, label: i.label, icon: i.icon }))}
+          nav={navItems.map(i => ({ href: i.href, label: i.label, icon: i.icon }))}
           billingCaptureAllowed={BILLING_CAPTURE_CAPABILITIES.every(c => ctx.capabilities.includes(c))}
         />
       </div>
