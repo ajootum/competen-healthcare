@@ -11,6 +11,9 @@ import { estateRolesOf, highestRole, hasPlatformRole, type AppRole } from "@/lib
 import { admitToEstate, NO_MEMBERSHIP_DESTINATION } from "@/lib/platform-membership";
 import { resolveHqPositions } from "@/lib/hq/context";
 import { rememberStaffWorkspace } from "@/lib/staff/workspace-preference";
+import { hqSearchCatalogue } from "@/lib/hq/search-catalogue";
+import HqSearchLauncher from "./_components/HqSearchLauncher";
+import { ALL_NAV_TABLES } from "./_components/nav-tables";
 import SessionIdentityNotice, { RememberSessionIdentity } from "@/components/SessionIdentityNotice";
 
 // Sidebar IA aligned to the Mission Control model (MC-001). The nav config and
@@ -210,6 +213,13 @@ export default async function SuperAdminLayout({ children }: { children: React.R
         {/* Pages stay readable at max-w-6xl; a workspace page opts out of the
             cap by rendering data-wide on its root (rule in globals.css). */}
         <main id="main-content" data-content className="flex-1 md:ml-56 px-4 md:px-6 py-8 max-w-6xl">
+          {/* COMP-HQ-ACCESS-001 s15's "Search HQ / Go to...". The corpus is built on the SERVER and
+              already filtered, so an unauthorised destination's name never reaches this HTML -- and
+              the launcher itself holds no permission logic to read around. It grants nothing: every
+              destination re-authorises on arrival. */}
+          <div className="mb-4 flex justify-end">
+            <HqSearchLauncher destinations={hqSearchCatalogue(ALL_NAV_TABLES, { isOwner, capabilities: hqCapabilities })} />
+          </div>
           {children}
         </main>
       </div>

@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { filterHqNav, canSeeHqLink } from "../src/lib/hq/nav-filter";
+import { hqSearchCatalogue, matchHqDestinations } from "../src/lib/hq/search-catalogue";
 import { capabilityForRoute, HQ_HOME_CAPABILITY, HQ_CAPABILITY_CODES } from "../src/lib/hq/spaces";
 import { GENERAL_NAV, ALL_NAV_TABLES } from "../src/app/super-admin/_components/nav-tables";
 import { resolveHqPositions } from "../src/lib/hq/context";
@@ -216,6 +217,35 @@ const NOBODY = { isOwner: false, capabilities: [] as string[] };
     else ok("D5", countItems(filterHqNav(GENERAL_NAV, { isOwner: true, capabilities: [] })) === fullGeneral,
       `owner accounts (${owners.length} live) see all ${fullGeneral} links`);
   }
+
+  // ══ S. COMP-HQ-ACCESS-001 s15 -- THE SEARCH LAUNCHER'S CORPUS ══════════════════════════════════
+  //
+  // ⚠ s15's last line is the one that matters: "do not expose unauthorised object names through
+  // search". The corpus is built on the SERVER from the same nav tables the sidebar renders, through
+  // the same canSeeHqLink filter -- so these pins hold that leak shut at its source rather than
+  // trusting a browser to hide anything.
+  console.log("\nS. Search HQ / Go to (s15)");
+  const ownerCorpus = hqSearchCatalogue(ALL_NAV_TABLES, { isOwner: true, capabilities: [] });
+  const noneCorpus = hqSearchCatalogue(ALL_NAV_TABLES, { isOwner: false, capabilities: [] });
+  ok("S1", ownerCorpus.length > 20 && new Set(ownerCorpus.map(d => d.href)).size === ownerCorpus.length,
+    `an owner sees every destination exactly once (${ownerCorpus.length} deduped across the tables)`);
+  ok("S2", noneCorpus.length === 0,
+    "⚠ a viewer holding NO capability is offered nothing -- unauthorised names never reach the browser");
+  const oneCap = HQ_CAPABILITY_CODES[0];
+  const oneViewer = { isOwner: false, capabilities: [oneCap] };
+  const oneCorpus = hqSearchCatalogue(ALL_NAV_TABLES, oneViewer);
+  ok("S3", oneCorpus.every(d => canSeeHqLink(d.href, oneViewer)),
+    `one capability offers only what that capability opens (${oneCorpus.length} destination(s))`);
+  ok("S4", matchHqDestinations(ownerCorpus, "").length === 0,
+    "an empty query answers nothing rather than dumping the whole console");
+  ok("S5", matchHqDestinations(noneCorpus, "overview").length === 0,
+    "⚠ an unauthorised viewer cannot find a destination by typing its exact name");
+  const multi = matchHqDestinations(ownerCorpus, "mission control");
+  ok("S6", multi.length > 0 && multi.every(d =>
+    /mission/i.test(`${d.label} ${d.group}`) && /control/i.test(`${d.label} ${d.group}`)),
+    `every term must match, not any (${multi.length} row(s) for "mission control")`);
+  ok("S7", matchHqDestinations(ownerCorpus, "super-admin").length === 0,
+    "the href is NOT searchable -- a route fragment would answer with the entire console");
 
   console.log(`\n${"=".repeat(72)}`);
   console.log(`PASS ${pass}   FAIL ${failures.length}   SKIP ${skips.length}`);
