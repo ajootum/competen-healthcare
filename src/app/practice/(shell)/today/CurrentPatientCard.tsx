@@ -155,14 +155,17 @@ export default function CurrentPatientCard({ person, canStartEncounter, canAttac
 
       {/* ── THE ONE PRIMARY ACTION (s19: Continue/Start Encounter before anything administrative) ── */}
       <div className="mt-3 flex flex-wrap items-center gap-2">
+        {/* CPR-MOB-001 s7 row 3: below md the one primary action grows to full width at
+            touch-primary size -- THE dominant control of the cockpit viewport (s4 allows exactly
+            one). max-md:* only; at md and up both render exactly as before. */}
         {person.encounterId ? (
           <Link href={`/practice/encounters/${person.encounterId}`}
-            className={`rounded-lg px-4 py-2 text-[13px] font-semibold ${BUTTON.primary}`}>
+            className={`rounded-lg px-4 py-2 text-[13px] font-semibold max-md:flex max-md:min-h-[var(--cp-touch-primary)] max-md:w-full max-md:items-center max-md:justify-center max-md:text-[14px] ${BUTTON.primary}`}>
             Continue encounter →
           </Link>
         ) : person.patientId && canStartEncounter ? (
           <button type="button" disabled={busy} onClick={() => void start(person.patientId!)}
-            className={`rounded-lg px-4 py-2 text-[13px] font-semibold ${BUTTON.primary} disabled:opacity-50`}>
+            className={`rounded-lg px-4 py-2 text-[13px] font-semibold max-md:flex max-md:min-h-[var(--cp-touch-primary)] max-md:w-full max-md:items-center max-md:justify-center max-md:text-[14px] ${BUTTON.primary} disabled:opacity-50`}>
             {busy ? "Opening the consultation…" : "Start encounter"}
           </button>
         ) : !person.patientId ? (
@@ -190,7 +193,7 @@ export default function CurrentPatientCard({ person, canStartEncounter, canAttac
         )}
         {person.patientId && (
           <Link href={`/practice/encounters/record/${person.patientId}`}
-            className="text-[12px] font-semibold text-[var(--cp-primary)] hover:underline">
+            className="text-[12px] font-semibold text-[var(--cp-primary)] hover:underline max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center">
             Open record
           </Link>
         )}

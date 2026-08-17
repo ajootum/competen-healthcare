@@ -68,17 +68,19 @@ export default function ExpectedCheckIn({ people, total }: {
             {p.timeLabel && (
               <span className="shrink-0 text-[10px] tabular-nums text-gray-400">b. {p.timeLabel}</span>
             )}
+            {/* CPR-MOB-001 s4: the one-click transition grows to thumb size below md -- max-md:*
+                no-ops only, the desktop strip is untouched at md and up. */}
             {p.status === "CONFIRMED" ? (
               <button type="button" disabled={busyId !== null}
                 onClick={() => act(p.appointmentId, "arrive")}
-                className="shrink-0 rounded border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                className="shrink-0 rounded border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 max-md:min-h-[var(--cp-touch)] max-md:rounded-lg max-md:px-3 max-md:text-[12px]">
                 {busyId === p.appointmentId ? "Checking in..." : "Check in"}
               </button>
             ) : (
               <button type="button" disabled={busyId !== null}
                 onClick={() => act(p.appointmentId, "confirm")}
                 title="This is a booking request from the patient side. Confirm it first; Check in appears next."
-                className="shrink-0 rounded border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                className="shrink-0 rounded border border-gray-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 max-md:min-h-[var(--cp-touch)] max-md:rounded-lg max-md:px-3 max-md:text-[12px]">
                 {busyId === p.appointmentId ? "Confirming..." : "Confirm"}
               </button>
             )}
@@ -88,7 +90,7 @@ export default function ExpectedCheckIn({ people, total }: {
       {error && <p className="mt-1 text-[11px] text-red-600">{error}</p>}
       <p className="mt-1 text-[11px] text-gray-500">
         {overflow > 0 && <>And {overflow} more later in the day.{" "}</>}
-        <Link href="/practice/calendar" className="font-semibold text-[var(--cp-primary)] hover:underline">
+        <Link href="/practice/calendar" className="font-semibold text-[var(--cp-primary)] hover:underline max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center">
           Full book in the Planner &rarr;
         </Link>
       </p>

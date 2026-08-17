@@ -64,9 +64,11 @@ export default function AttachRecordInline({ entryId, prefillName }: {
 
   if (!open) {
     return (
+      // CPR-MOB-001 s4: thumb-sized below md (max-md:* no-ops); the desktop row keeps its compact
+      // affordance untouched.
       <button type="button"
         onClick={() => { setOpen(true); if (prefillName.trim().length >= 2) void search(prefillName); }}
-        className="shrink-0 rounded-md border border-amber-300 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-50">
+        className="shrink-0 rounded-md border border-amber-300 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 hover:bg-amber-50 max-md:min-h-[var(--cp-touch)] max-md:rounded-lg max-md:px-3 max-md:text-[12px]">
         Attach record
       </button>
     );
@@ -75,19 +77,21 @@ export default function AttachRecordInline({ entryId, prefillName }: {
   return (
     <div className="w-full rounded-lg border border-amber-200 bg-amber-50/50 p-2">
       <div className="flex items-center gap-2">
+        {/* max-md:text-[16px] is not styling: below 16px iOS zooms the whole page on focus, and a
+            zoomed cockpit mid-clinic is a worse defect than a slightly larger input (s16). */}
         <input autoFocus value={q} onChange={e => search(e.target.value)}
           aria-label="Search the register by name, phone or number"
           placeholder="Search the register..."
-          className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1 text-[12px]" />
+          className="w-full rounded-lg border border-gray-200 bg-white px-2 py-1 text-[12px] max-md:min-h-[var(--cp-touch)] max-md:text-[16px]" />
         <button type="button" onClick={() => setOpen(false)}
-          className="shrink-0 text-[11px] font-semibold text-gray-500 hover:text-gray-800">close</button>
+          className="shrink-0 text-[11px] font-semibold text-gray-500 hover:text-gray-800 max-md:min-h-[var(--cp-touch)] max-md:px-2 max-md:text-[12px]">close</button>
       </div>
       {hits.length > 0 && (
         <ul className="mt-1 max-h-36 overflow-y-auto rounded-lg border border-gray-200 bg-white">
           {hits.map(h => (
             <li key={h.id}>
               <button type="button" disabled={busy} onClick={() => attach(h.id)}
-                className="block w-full px-2 py-1.5 text-left text-[12px] text-gray-800 hover:bg-gray-50 disabled:opacity-50">
+                className="block w-full px-2 py-1.5 text-left text-[12px] text-gray-800 hover:bg-gray-50 disabled:opacity-50 max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center">
                 {h.label} <span className="font-semibold text-[var(--cp-primary)]">attach</span>
               </button>
             </li>

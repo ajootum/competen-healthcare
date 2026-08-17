@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import { PANEL, QUEUE_SWATCH } from "@/lib/practice/palette";
 import AttachRecordInline from "./AttachRecordInline";
@@ -159,7 +159,7 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
           </span>
         )}
         {href && (
-          <Link href={href} className="ml-auto text-[11px] font-semibold text-[var(--cp-primary)] hover:underline">
+          <Link href={href} className="ml-auto text-[11px] font-semibold text-[var(--cp-primary)] hover:underline max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center">
             Full queue →
           </Link>
         )}
@@ -193,7 +193,7 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
               return (
                 <button key={t.key} type="button" role="tab" aria-selected={active}
                   onClick={() => setTab(t.key)}
-                  className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${tone}`}>
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:px-3.5 ${tone}`}>
                   {t.label} <span className="tabular-nums opacity-70">({n})</span>
                 </button>
               );
@@ -207,14 +207,23 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
               {people.length === 0 ? "Nobody is waiting." : "Nobody is waiting in this group."}
             </p>
           ) : (
-            <ul className="space-y-0.5">
+            <ul className="space-y-0.5 max-md:space-y-2">
               {shown.map(p => {
                 const sw = QUEUE_SWATCH[p.status] ?? QUEUE_SWATCH.PAUSED;
                 const name = p.href
                   ? <Link href={p.href} className="min-w-0 flex-1 truncate text-[12.5px] text-gray-800 hover:text-[var(--cp-primary)]">{p.name}</Link>
                   : <span className="min-w-0 flex-1 truncate text-[12.5px] text-gray-800">{p.name}</span>;
+                // ⚠ THE TWO FACES SHARE THESE GUARDS' TRUTH: the mobile card below re-states the
+                // desktop row's exact draw conditions through these four booleans. Change a guard in
+                // ONE face and the other face silently offers (or hides) an action the engine will
+                // refuse -- change them TOGETHER, and only together.
+                const showSeen = Boolean(onMarkSeen && p.patientId);
+                const showCheckIn = Boolean(onCheckIn && p.staleArrival);
+                const showStart = Boolean(onStartEncounter && p.patientId && p.status !== "IN_CONSULTATION");
+                const showLeft = Boolean(onLeft && (p.status === "WAITING" || p.status === "READY"));
                 return (
-                  <li key={p.id} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-gray-50">
+                  <Fragment key={p.id}>
+                  <li className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-gray-50 max-md:hidden">
                     <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${GROUP_DOT[p.group]}`} />
                     {name}
                     <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold ${sw.chip}`}>
@@ -283,6 +292,85 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
                       </button>
                     )}
                   </li>
+
+                  {/* ══ CPR-MOB-001 s7 row 4: THE SAME ROW AS A VERTICAL QUEUE CARD (below md) ════
+                      Patient, status in words, wait duration where valid, and the actions at thumb
+                      size -- the same data, the same handlers, the same guards (the four booleans
+                      above), a second face. What the desktop row says in hover titles this face
+                      says in VISIBLE WORDS, because hover does not exist here (s4): the stale
+                      arrival flag is a sentence, and a null wait is named rather than tooltipped. */}
+                  <li className="rounded-xl border border-gray-200 p-3 md:hidden">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        {p.href
+                          ? <Link href={p.href} className="block truncate text-[14px] font-semibold leading-snug text-gray-900">{p.name}</Link>
+                          : <p className="truncate text-[14px] font-semibold leading-snug text-gray-900">{p.name}</p>}
+                        <p className="mt-0.5 text-[11px] tabular-nums text-gray-500">
+                          {/* How they reached the corridor, as a WORD where it is not the default --
+                              the desktop row's coloured dot alone would be status by colour (s19). */}
+                          {p.group !== "booked" && (
+                            <span className={`font-semibold ${
+                              p.group === "emergency" ? "text-[var(--cmp-text-danger)]" : "text-[var(--cmp-text-warning)]"}`}>
+                              {p.group === "emergency" ? "Emergency" : "Walk-in"}{" · "}
+                            </span>
+                          )}
+                          {p.bookedTimeLabel ? `booked ${p.bookedTimeLabel} · ` : ""}
+                          {/* s7: wait duration WHERE VALID. An entry with no usable arrival stamp
+                              says "wait unknown" -- words, never a 0 min that would be the worst
+                              available lie. */}
+                          {p.waitingMinutes === null ? "wait unknown" : `waiting ${waitLabel(p.waitingMinutes)}`}
+                          {p.timeLabel ? ` · arrived ${p.timeLabel}` : ""}
+                        </p>
+                        {p.staleArrival && (
+                          <p className="mt-0.5 text-[10.5px] font-semibold text-amber-700">
+                            Arrival stamp is from a previous day — the wait above is a stale clock.
+                          </p>
+                        )}
+                      </div>
+                      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold ${sw.chip}`}>
+                        {p.status.replace(/_/g, " ").toLowerCase()}
+                      </span>
+                    </div>
+                    {canAttach && !p.patientId && (
+                      <div className="mt-2"><AttachRecordInline entryId={p.id} prefillName={p.name} /></div>
+                    )}
+                    {(showStart || showSeen || showCheckIn || showLeft) && (
+                      <div className="mt-2.5 flex flex-wrap gap-2">
+                        {/* Start leads: it is the row's s7 action. Outlined, not filled -- the one
+                            dominant primary action of this viewport stays with the current patient
+                            card (s4). */}
+                        {showStart && (
+                          <button type="button" disabled={busyId === p.id}
+                            onClick={() => onStartEncounter!(p.patientId!)}
+                            className="flex min-h-[var(--cp-touch)] flex-1 items-center justify-center rounded-lg border border-[var(--cp-primary)]/40 px-3 text-[12.5px] font-semibold text-[var(--cp-primary)] disabled:opacity-50">
+                            Start →
+                          </button>
+                        )}
+                        {showSeen && (
+                          <button type="button" disabled={busyId === p.id}
+                            onClick={() => onMarkSeen!(p.patientId!)}
+                            className="flex min-h-[var(--cp-touch)] flex-1 items-center justify-center rounded-lg border border-gray-200 px-3 text-[12.5px] font-semibold text-gray-700 disabled:opacity-50">
+                            Seen ✓
+                          </button>
+                        )}
+                        {showCheckIn && (
+                          <button type="button" disabled={busyId === p.id}
+                            onClick={() => onCheckIn!(p.id)}
+                            className="flex min-h-[var(--cp-touch)] flex-1 items-center justify-center rounded-lg border border-gray-200 px-3 text-[12.5px] font-semibold text-gray-700 disabled:opacity-50">
+                            Check in ✓
+                          </button>
+                        )}
+                        {showLeft && (
+                          <button type="button" disabled={busyId === p.id}
+                            onClick={() => onLeft!(p.id)}
+                            className="flex min-h-[var(--cp-touch)] flex-1 items-center justify-center rounded-lg px-3 text-[12.5px] text-gray-500 disabled:opacity-50">
+                            Didn&apos;t wait
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                  </Fragment>
                 );
               })}
             </ul>
