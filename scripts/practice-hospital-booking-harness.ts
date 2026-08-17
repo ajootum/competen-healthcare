@@ -118,9 +118,15 @@ async function main() {
   ok("1a another practice's location is refused", !crossTenant.ok && crossTenant.code === "NOT_FOUND",
     JSON.stringify(crossTenant));
 
+  // WARNING: EXPLICIT DURATIONS ON EVERY BOOKING WHOSE END TIME THE ARITHMETIC BELOW USES. These
+  // fixtures were written when a duration-less booking took the legacy 20-minute practice default;
+  // the booking taxonomy later gave hospital_consultation a 30-minute visit-type default, every end
+  // time silently moved, and 4d/9b/9c went red against a correct engine ("only 40 minutes... needs
+  // 45" -- the gap the comments promise is measured from ends the engine no longer stamps). The
+  // drift class: a fixture that borrows a DEFAULT is pinned to a value somebody else may move.
   const control1 = await bookAppointment(admin, {
     workspaceId: wsA, patientName: "Control One", appointmentType: "hospital_consultation",
-    scheduledAt: at("08:00"), locationId: mulago, actorId: OWNER, correlationId: "hb-1c",
+    scheduledAt: at("08:00"), durationMinutes: 20, locationId: mulago, actorId: OWNER, correlationId: "hb-1c",
   });
   ok("1b CONTROL: our own location books", control1.ok, JSON.stringify(control1));
 
@@ -145,7 +151,7 @@ async function main() {
 
   const sameSite = await bookAppointment(admin, {
     workspaceId: wsA, patientName: "Same Site", appointmentType: "hospital_consultation",
-    scheduledAt: at("08:30"), locationId: mulago, actorId: OWNER, correlationId: "hb-3b",
+    scheduledAt: at("08:30"), durationMinutes: 20, locationId: mulago, actorId: OWNER, correlationId: "hb-3b",
   });
   ok("3b CONTROL: back-to-back at the SAME hospital is allowed", sameSite.ok, JSON.stringify(sameSite));
 
@@ -167,7 +173,7 @@ async function main() {
 
   const clearGap = await bookAppointment(admin, {
     workspaceId: wsA, patientName: "Clear Gap", appointmentType: "hospital_consultation",
-    scheduledAt: at("09:40"), locationId: nsambya, actorId: OWNER, correlationId: "hb-4c",
+    scheduledAt: at("09:40"), durationMinutes: 20, locationId: nsambya, actorId: OWNER, correlationId: "hb-4c",
   });
   ok("4d CONTROL: a gap that clears the buffer is allowed", clearGap.ok, JSON.stringify(clearGap));
 
@@ -259,7 +265,7 @@ async function main() {
   // Force one through: allowOverlap skips the travel check the same way it skips double-booking.
   const forced = await bookAppointment(admin, {
     workspaceId: wsA, patientName: "Forced Move", appointmentType: "hospital_consultation",
-    scheduledAt: at("10:05"), locationId: mulago, allowOverlap: true,
+    scheduledAt: at("10:05"), durationMinutes: 20, locationId: mulago, allowOverlap: true,
     actorId: OWNER, correlationId: "hb-9",
   });
   ok("9a a deliberate override still books", forced.ok, JSON.stringify(forced));
