@@ -71,6 +71,29 @@ export default function LoginPage() {
   });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // COMP-ID-ROUTE-001: the post-authentication resolution, rendered in the form card's place.
+  // "one" renders the brief orientation while the browser is already navigating (s4); "many" the
+  // authorised chooser (s5); "none" the controlled no-product state (s7); "unavailable" fails
+  // CLOSED with a retry -- access is never inferred from a failed read (s3).
+  const [resolution, setResolution] = useState<
+    | { state: "one"; destination: { name: string; href: string } }
+    | { state: "many"; destinations: { code: string; name: string; blurb: string; href: string }[] }
+    | { state: "none" }
+    | { state: "unavailable" }
+    | null
+  >(null);
+
+  async function resolveDestinations() {
+    try {
+      const res = await fetch("/api/auth/destinations");
+      const r = await res.json().catch(() => null);
+      if (!res.ok || !r?.state) { setResolution({ state: "unavailable" }); return; }
+      setResolution(r);
+      if (r.state === "one") window.location.href = r.destination.href;
+    } catch {
+      setResolution({ state: "unavailable" });
+    }
+  }
   // ⚠ A LAZY INITIALISER, NOT AN EFFECT. setState inside an effect body is the cascading-render shape
   // the lint rule rejects, and the URL is known before the first render anyway. The typeof guard is for
   // the one server render a client component still gets, where window does not exist.
@@ -108,8 +131,17 @@ export default function LoginPage() {
       const next = new URLSearchParams(window.location.search).get("next");
       // ⚠ A DESTINATION STILL BEING BUILT RESOLVES TO MY COMPETEN, where everything the account DOES
       // hold is one click away. Honouring the next would land them on a marketing page they just left.
-      const dest = next && next.startsWith("/") && !next.startsWith("//") && !BUILDING[next] ? next : "/dashboard";
-      window.location.href = dest;
+      if (next && next.startsWith("/") && !next.startsWith("//") && !BUILDING[next]) {
+        // Explicit product intent overrides everything (COMP-ID-ROUTE s2/s10): a gateway sent them.
+        window.location.href = next;
+        return;
+      }
+      // COMP-ID-ROUTE-001 s3: NEUTRAL entry -- no product intent -- so the server resolves what this
+      // account actually holds. The old unconditional /dashboard survives INSIDE the resolver: the
+      // platform estate is one destination in the set, so a single-home account behaves exactly as
+      // before, and an account holding more sees the chooser instead of a silent default.
+      await resolveDestinations();
+      setLoading(false);
     }
   }
 
@@ -189,7 +221,64 @@ export default function LoginPage() {
                 </p>
               </div>
             )}
-            <form onSubmit={handleSubmit} className="mt-7 flex flex-col gap-4">
+            {/* ── COMP-ID-ROUTE-001: after a NEUTRAL sign-in the resolution takes the form's place.
+                Four states, none of them a dashboard-shaped guess. Inaccessible products are OMITTED,
+                never shown disabled (s12); nothing here preselects (s5). */}
+            {resolution?.state === "one" && (
+              <div className="mt-7 rounded-2xl border border-gray-200 bg-white p-5" role="status">
+                <p className="text-[14px] font-semibold text-gray-900">Signed in successfully</p>
+                <p className="mt-1 text-[13px] text-gray-600">Taking you to {resolution.destination.name}…</p>
+                {/* s4: if automatic navigation fails, the explicit action remains. */}
+                <Link href={resolution.destination.href}
+                  className="mt-3 inline-block text-[13px] font-semibold text-[var(--cmp-color-primary)] hover:underline">
+                  Continue to {resolution.destination.name} →
+                </Link>
+              </div>
+            )}
+            {resolution?.state === "many" && (
+              <div className="mt-7">
+                <p className="text-[14px] font-semibold text-gray-900">Where would you like to go?</p>
+                <ul className="mt-3 flex flex-col gap-2">
+                  {resolution.destinations.map(d => (
+                    <li key={d.code}>
+                      <Link href={d.href}
+                        className="block rounded-xl border border-gray-200 bg-white px-4 py-3 hover:border-[var(--cmp-color-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--cmp-color-primary)]">
+                        <span className="block text-[13.5px] font-semibold text-gray-900">{d.name}</span>
+                        <span className="mt-0.5 block text-[12px] text-gray-600">{d.blurb}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {resolution?.state === "none" && (
+              <div className="mt-7 rounded-2xl border border-gray-200 bg-white p-5">
+                <p className="text-[14px] font-semibold text-gray-900">Your Competen account is active</p>
+                <p className="mt-1 text-[13px] text-gray-600">
+                  No Competen product access is currently assigned to this account.
+                </p>
+                <div className="mt-3 flex flex-col gap-1.5 text-[13px]">
+                  <a href="mailto:hello@competenhealthcare.com" className="font-semibold text-[var(--cmp-color-primary)] hover:underline">
+                    Talk to us about access →
+                  </a>
+                  <Link href="/" className="font-semibold text-gray-600 hover:underline">Return to Competen</Link>
+                </div>
+              </div>
+            )}
+            {resolution?.state === "unavailable" && (
+              <div className="mt-7 rounded-2xl border border-amber-200 bg-amber-50 p-5" role="alert">
+                <p className="text-[14px] font-semibold text-amber-900">Signed in, but your destinations could not be read</p>
+                {/* s3: fail CLOSED. Guessing a destination here would be inferring access from a
+                    failed read -- the one forbidden move. The retry re-runs the resolver only. */}
+                <p className="mt-1 text-[13px] text-amber-800">Nothing is wrong with your account. Try again in a moment.</p>
+                <button type="button" onClick={() => { setResolution(null); void resolveDestinations(); }}
+                  className="mt-3 rounded-lg border border-amber-300 px-3 py-1.5 text-[13px] font-semibold text-amber-900 hover:bg-amber-100">
+                  Try again
+                </button>
+              </div>
+            )}
+            <form onSubmit={handleSubmit}
+              className={`mt-7 flex flex-col gap-4 ${resolution ? "hidden" : ""}`}>
               <div>
                 <label htmlFor="email" className="block text-[12.5px] font-semibold text-gray-700 mb-1.5">Email address</label>
                 <div className="relative">

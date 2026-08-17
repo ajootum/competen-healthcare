@@ -163,8 +163,16 @@ async function main() {
     !readFileSync("src/app/staff/workspaces/page.tsx", "utf8").includes("disabled="));
 
   // ── 6. PW-014 STANDS -- universal landing unchanged for everyone but the staff door ────────────
-  ok("6a. ⚠ /login still lands on /dashboard and never routes into the staff selector",
-    loginSrc.includes(': "/dashboard"') && !loginSrc.includes("/staff/workspaces"));
+  //
+  // ⚠ 6a REPOINTED FOR COMP-ID-ROUTE-001 (2026-08-17). /login's neutral landing stopped being the
+  // unconditional "/dashboard" literal and became the SERVER-RESOLVED destination set -- in which
+  // the platform estate (/dashboard) is one destination, so a single-home account behaves exactly
+  // as PW-014 decided. What this pin protects is unchanged and still asserted: the CUSTOMER
+  // identity never routes into the staff selector, and the estate landing survives inside the
+  // resolver (product-resolution.ts carries the PW-014 reconciliation in its header).
+  ok("6a. ⚠ /login resolves destinations server-side, keeps /dashboard as the estate landing, and never routes into the staff selector",
+    loginSrc.includes("resolveDestinations") && !loginSrc.includes("/staff/workspaces")
+    && readFileSync("src/lib/identity/product-resolution.ts", "utf8").includes('href: "/dashboard"'));
   ok("6b. the SSO fallback destination is still the universal landing",
     readFileSync("src/lib/oauth-providers.ts", "utf8").includes('fallback = "/dashboard"'));
   const referrers = walk("src/app")
