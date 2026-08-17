@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCaller, isResponse, isSuper } from "@/lib/api-auth";
+import { getCaller, isResponse } from "@/lib/api-auth";
+import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import {
   getFormat, updateFormat, formatHistory, formatPractitionerNumber,
   FORMAT_CHANGE_ACKNOWLEDGEMENT,
@@ -17,7 +18,18 @@ import {
 export async function GET() {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isSuper(c)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // !!CPR-PD-014 build 2: THE CAPABILITY, NOT OWNERSHIP.
+  //
+  // This read an ownership test on the caller, which broke in both directions. A real Practice Product
+  // Director -- the position this endpoint exists to serve -- was refused, because the check asked
+  // whether they OWNED the platform rather than whether they held the right. And any super_admin
+  // invoked it holding no HQ position at all, so the HQ plane recorded nothing and governed nothing.
+  // PD-014 says it plainly: "Do not equate Product Director with Super Admin."
+  //
+  // !!hqApiGate, NOT requireHqCapability: this is a fetch, and a redirect is not a status a caller can
+  // act on. resolveHqContext keeps the owner short-circuit, so an owner is unaffected by this change.
+  const gate = await hqApiGate(["hq.practice.configuration.manage"]);
+  if (isHqRefusal(gate)) return gate;
 
   const admin = c.admin as any; // eslint-disable-line @typescript-eslint/no-explicit-any
   const [format, history] = await Promise.all([getFormat(admin), formatHistory(admin)]);
@@ -39,7 +51,18 @@ export async function GET() {
 export async function PATCH(req: NextRequest) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isSuper(c)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // !!CPR-PD-014 build 2: THE CAPABILITY, NOT OWNERSHIP.
+  //
+  // This read an ownership test on the caller, which broke in both directions. A real Practice Product
+  // Director -- the position this endpoint exists to serve -- was refused, because the check asked
+  // whether they OWNED the platform rather than whether they held the right. And any super_admin
+  // invoked it holding no HQ position at all, so the HQ plane recorded nothing and governed nothing.
+  // PD-014 says it plainly: "Do not equate Product Director with Super Admin."
+  //
+  // !!hqApiGate, NOT requireHqCapability: this is a fetch, and a redirect is not a status a caller can
+  // act on. resolveHqContext keeps the owner short-circuit, so an owner is unaffected by this change.
+  const gate = await hqApiGate(["hq.practice.configuration.manage"]);
+  if (isHqRefusal(gate)) return gate;
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }

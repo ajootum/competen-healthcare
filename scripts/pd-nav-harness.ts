@@ -22,10 +22,10 @@
  *
  * Source and pure constants only: no database, no env, no dev server.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
-  PD_NAV, PD_GROUPS, PD_HOME, PD_ALL_HREFS, PD_EXTERNAL_HREFS,
+  PD_NAV, PD_GROUPS, PD_HOME, PD_ALL_HREFS, PD_EXTERNAL_HREFS, capabilityForPdHref,
 } from "../src/app/super-admin/_components/pd-nav";
 
 let pass = 0;
@@ -183,11 +183,93 @@ const ungated = ours.filter(h => existsSync(pageFor(h)) && !GUARD.test(readFileS
 ok("5b every route AWAITS its own server-side capability guard",
   ungated.length === 0, `${ungated.length} ungated: ${ungated.slice(0, 4).join(", ")}`);
 
+/**
+ * ⚠ 5c: THE PAGE ASKS FOR EXACTLY WHAT THE SIDEBAR SAYS IT NEEDS (PD-014 build 2).
+ *
+ * The capability now lives in two places -- the nav table, which decides what to DRAW, and the page,
+ * which decides what to SERVE. That duplication is deliberate: a page must state its own guard, because
+ * Next will render it whether or not anything navigated to it. But two copies drift, and drifting APART
+ * is the dangerous direction: a sidebar that hides a module while its route still serves anybody who
+ * types the URL is precisely PD-001 s7's "a hidden navigation item does not constitute authorization".
+ *
+ * So the pin reads each page's actual argument and compares it with what the TABLE answers for that
+ * page's href. Neither side is trusted over the other; they are required to agree.
+ */
+const wrongCapability: string[] = [];
+for (const h of ours) {
+  if (!existsSync(pageFor(h))) continue;
+  const declared = /await\s+requireHqCapability\s*\(\s*"([^"]+)"/.exec(readFileSync(pageFor(h), "utf8"))?.[1];
+  const expected = capabilityForPdHref(h);
+  if (declared !== expected) wrongCapability.push(`${h}: page asks ${declared ?? "nothing"}, table says ${expected ?? "nothing"}`);
+}
+ok("5c every route asks for the capability its own nav entry declares",
+  wrongCapability.length === 0, wrongCapability.slice(0, 3).join(" | "));
+
+// ⚠ AND THE TWELVE ARE TWELVE DIFFERENT ANSWERS, not one code wearing twelve labels. Before build 2
+// every page asked for hq.practice.operations.view, which made 5c trivially satisfiable by a table that
+// had collapsed to a single capability -- green, and meaningless.
+const distinct = new Set(PD_NAV.flatMap(g => g.items).map(i => i.capability));
+ok("5c-control the modules ask for distinct capabilities, not one code repeated",
+  distinct.size === 12, `${distinct.size} distinct across 12 modules`);
+
 // ⚠ CONTROL. 5a and 5b are both satisfied by an EMPTY list, so a table that lost its hrefs would make
 // them green. This proves the scan had real work to do.
 ok("5-control the destination scan read a real table",
   ours.length >= 60 && PD_ALL_HREFS.length > PD_NAV.flatMap(g => g.items).length,
   `${ours.length} routes owned, ${PD_ALL_HREFS.length} destinations total`);
+
+// ---------------------------------------------------------------------------------------------
+// 6. PD-014 BUILD 2 -- EVERY CAPABILITY THE CODE ASKS FOR IS ONE A MIGRATION CREATES
+// ---------------------------------------------------------------------------------------------
+console.log("\n6. build 2 -- the codes the product asks for exist in the catalogue");
+
+/**
+ * ⚠ THE SHARPEST FAILURE THIS ARC CAN HAVE, AND IT IS SILENT IN BOTH DIRECTIONS.
+ *
+ * A capability code is a STRING. Ask for "hq.practice.helth.view" and nobody holds it, so the guard
+ * refuses everyone, for ever, with a perfectly ordinary 403 -- while every harness stays green, because
+ * a typo is still a capability check. And the sidebar filter hides the module too, so there is not even
+ * an empty page to notice. The estate has already paid twice for a capability catalogue that did not
+ * reach the people who needed it (migrations 303 and 305, healed by 307); this is the same class one
+ * layer up.
+ *
+ * So the codes are read out of the MIGRATIONS -- the only place a capability actually comes into
+ * existence -- and every code the product names is required to be among them. Executed, not grepped.
+ */
+const migrationDir = join(process.cwd(), "supabase/migrations");
+const catalogued = new Set<string>();
+for (const f of readdirSync(migrationDir)) {
+  if (!f.endsWith(".sql")) continue;
+  const sql = readFileSync(join(migrationDir, f), "utf8");
+  // insert into hq_capability (...) values ('code', ...), ('code', ...)
+  for (const block of sql.matchAll(/insert\s+into\s+hq_capability[\s\S]*?;/gi))
+    for (const m of block[0].matchAll(/\(\s*'(hq\.[a-z0-9._]+)'/g)) catalogued.add(m[1]);
+}
+
+const asked = new Set<string>(PD_NAV.flatMap(g => g.items).map(i => i.capability));
+// the action codes the five converted operator routes name
+for (const f of [
+  "src/app/api/v1/practice/flags/route.ts",
+  "src/app/api/v1/practice/identifier-format/route.ts",
+  "src/app/api/v1/practice/operations/users/route.ts",
+  "src/app/api/v1/practice/provisioning/individual/route.ts",
+  "src/app/api/v1/practice/provisioning/[requestId]/route.ts",
+]) {
+  const p = join(process.cwd(), f);
+  if (!existsSync(p)) continue;
+  for (const m of readFileSync(p, "utf8").matchAll(/hqApiGate\(\s*\[\s*"([^"]+)"/g)) asked.add(m[1]);
+}
+
+const uncatalogued = [...asked].filter(c => !catalogued.has(c));
+ok("6a every capability the product asks for is created by a migration",
+  uncatalogued.length === 0,
+  `not in any hq_capability insert: ${uncatalogued.join(", ")}`);
+
+// ⚠ CONTROL: an empty catalogue would make 6a vacuously green, and a regex that stopped matching the
+// migrations is exactly how that happens.
+ok("6a-control the migration scan found a real catalogue",
+  catalogued.size >= 20 && asked.size >= 12,
+  `${catalogued.size} capabilities catalogued, ${asked.size} asked for`);
 
 // ---------------------------------------------------------------------------------------------
 console.log(`\n${pass} passed, ${fails.length} failed`);

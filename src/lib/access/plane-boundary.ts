@@ -307,9 +307,14 @@ export const UNRESOLVED_EXCEPTIONS: readonly UnresolvedException[] = [
 //   src/app/api/v1/practice/provisioning/individual/route.ts  provisions a workspace for a named user
 //   src/app/api/v1/practice/provisioning/[requestId]/route.ts resumes a failed provisioning saga
 //
-// Every one of them answers `403` to a non-super caller and none of them calls
-// `requirePracticeContext`, so they are the platform plane by every test except their path. Two of them
-// reach `src/lib/practice/provisioning.ts`, whose reads this harness therefore does NOT judge.
+// ⚠ THEY NO LONGER ANSWER 403 TO EVERY NON-SUPER CALLER, AND THAT WAS THE POINT (PD-014 build 2,
+// 2026-08-17). This comment used to say they did. All five now gate on `hqApiGate([...])` against a
+// named Practice capability instead of on ownership, because "answers 403 to a non-super caller" was
+// describing a defect rather than a design: the Practice Product Director these endpoints exist to
+// serve was refused by every one of them, while any super_admin invoked them holding no HQ position at
+// all. What has NOT changed is why they are listed here -- none of them calls `requirePracticeContext`,
+// so they are the platform plane by every test except their path, and this harness still does not judge
+// their reads. Two of them reach `src/lib/practice/provisioning.ts`, whose reads it therefore skips.
 //
 // ⚠ THEY ARE NOT SILENTLY ADOPTED. Extending the entry set to cover them would force the allowlist to
 // admit `practice_entitlement`, `practice_configuration`, `practice_onboarding`,

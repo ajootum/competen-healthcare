@@ -359,11 +359,28 @@ ok("A3", badRpc.length === 0,
 // This finds them the same way a reviewer would — a route that refuses a non-super caller and never
 // calls requirePracticeContext is the platform plane wearing a practice path — and requires the set to
 // be exactly the declared one, so a sixth fails rather than appearing.
+/**
+ * ⚠ THE DETECTOR WIDENED WHEN THE GATE CHANGED (CPR-PD-014 build 2, 2026-08-17).
+ *
+ * This found operator routes by their `isSuper(` call. All five then moved to `hqApiGate([...])` --
+ * PD-014's "do not equate Product Director with Super Admin" -- and the detector stopped seeing them:
+ * `goneOperator` would have listed three of the five as having vanished, and A6 would have gone red for
+ * the work succeeding. The SET has not moved; the way these routes say "landlord only" has.
+ *
+ * So the test is now "gated on the platform plane, and never calling requirePracticeContext", which is
+ * the property the pin was always about. A route that drops BOTH gates still falls out and still fails.
+ */
 const practiceApi = join(ROOT, "src/app/api/v1/practice");
+// ⚠ COMMENTS STRIPPED FIRST. The converted routes EXPLAIN the ownership test they replaced, so an
+// unstripped scan reads the explanation and reports the old gate as still present -- a needle matching
+// its own documentation, which this repo has paid for repeatedly.
+const stripComments = (s: string) =>
+  s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+const OPERATOR_GATE = /\bisSuper\s*\(|\bhqApiGate\s*\(/;
 const operatorOnly: string[] = [];
 if (existsSync(practiceApi)) for (const f of walk(practiceApi)) {
-  const src = readFileSync(f, "utf8");
-  if (/\bisSuper\s*\(/.test(src) && !/requirePracticeContext\s*\(/.test(src)) operatorOnly.push(rel(f));
+  const src = stripComments(readFileSync(f, "utf8"));
+  if (OPERATOR_GATE.test(src) && !/requirePracticeContext\s*\(/.test(src)) operatorOnly.push(rel(f));
 }
 const undeclaredOperator = operatorOnly.filter(f => !OUT_OF_SCOPE_OPERATOR_ROUTES.includes(f));
 const goneOperator = OUT_OF_SCOPE_OPERATOR_ROUTES.filter(f => !operatorOnly.includes(f));

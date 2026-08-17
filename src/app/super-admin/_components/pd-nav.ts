@@ -23,7 +23,21 @@
 // are additional destinations rather than the only way in.
 
 export type PdNavChild = { label: string; href: string };
-export type PdNavItem = { label: string; href: string; icon: string; children?: PdNavChild[] };
+export type PdNavItem = {
+  label: string;
+  href: string;
+  icon: string;
+  /**
+   * The HQ capability this destination requires (CPR-PD-014 build 2, migration 311).
+   *
+   * !! ONE DEFINITION, READ BY BOTH HALVES. The sidebar filter decides what to DRAW from this, and the
+   * route decides what to SERVE from it. PD-001 s7 is explicit that "a hidden navigation item does not
+   * constitute authorization" -- so these must be the same string, or the sidebar and the guard are two
+   * opinions about the same door and only one of them is enforced.
+   */
+  capability: string;
+  children?: PdNavChild[];
+};
 export type PdNavGroup = { group: string; items: PdNavItem[] };
 
 /** The four groups, in PD-001 s2's order. Exported so a harness cannot drift from the table. */
@@ -35,10 +49,10 @@ export const PD_HOME = "/super-admin";
 
 export const PD_NAV: PdNavGroup[] = [
   { group: "OPERATE", items: [
-    { label: "Mission Control", href: PD_HOME, icon: "🎛️" },
+    { label: "Mission Control", href: PD_HOME, icon: "🎛️", capability: "hq.practice.mission.view" },
 
-    { label: "Practices", href: "/super-admin/pd/practices", icon: "🏥" },
-    { label: "Practitioners", href: "/super-admin/pd/practitioners", icon: "👥" },
+    { label: "Practices", href: "/super-admin/pd/practices", icon: "🏥", capability: "hq.practice.practices.view" },
+    { label: "Practitioners", href: "/super-admin/pd/practitioners", icon: "👥", capability: "hq.practice.practitioners.view" },
 
     // ⚠ PD-001 s3 — THE EXISTING PAGE IS RE-PARENTED HERE, NOT REPLACED. "The current Competen Practice
     // module shown in the existing build must be retained and reorganised under Product Operations."
@@ -48,7 +62,7 @@ export const PD_NAV: PdNavGroup[] = [
     // its whole honesty. s3 also says why the diagnostics child exists at all — "raw implementation
     // details (UUIDs, database row counts, migration identifiers, saga step names…) must not dominate
     // Product Director Mission Control. They belong in Technical Operations / Diagnostics."
-    { label: "Product Operations", href: "/super-admin/pd/operations", icon: "⚙️", children: [
+    { label: "Product Operations", href: "/super-admin/pd/operations", icon: "⚙️", capability: "hq.practice.operations.view", children: [
       { label: "Operations Overview", href: "/super-admin/pd/operations" },
       { label: "Provisioning & Onboarding", href: "/super-admin/pd/operations/provisioning" },
       { label: "Practice Workspaces", href: "/super-admin/pd/operations/workspaces" },
@@ -58,7 +72,7 @@ export const PD_NAV: PdNavGroup[] = [
   ]},
 
   { group: "UNDERSTAND", items: [
-    { label: "Product Intelligence", href: "/super-admin/pd/intelligence", icon: "📈", children: [
+    { label: "Product Intelligence", href: "/super-admin/pd/intelligence", icon: "📈", capability: "hq.practice.intelligence.view", children: [
       { label: "Overview", href: "/super-admin/pd/intelligence" },
       { label: "Adoption", href: "/super-admin/pd/intelligence/adoption" },
       { label: "Engagement", href: "/super-admin/pd/intelligence/engagement" },
@@ -71,8 +85,8 @@ export const PD_NAV: PdNavGroup[] = [
       { label: "Funnel Analysis", href: "/super-admin/pd/intelligence/funnel" },
       { label: "Trends & Comparisons", href: "/super-admin/pd/intelligence/trends" },
     ]},
-    { label: "Adoption & Growth", href: "/super-admin/pd/adoption", icon: "📊" },
-    { label: "Commercial", href: "/super-admin/pd/commercial", icon: "💳", children: [
+    { label: "Adoption & Growth", href: "/super-admin/pd/adoption", icon: "📊", capability: "hq.practice.adoption.view" },
+    { label: "Commercial", href: "/super-admin/pd/commercial", icon: "💳", capability: "hq.practice.commercial.view", children: [
       { label: "Commercial Overview", href: "/super-admin/pd/commercial" },
       { label: "Plans & Pricing", href: "/super-admin/pd/commercial/plans" },
       { label: "Trials", href: "/super-admin/pd/commercial/trials" },
@@ -88,7 +102,7 @@ export const PD_NAV: PdNavGroup[] = [
   ]},
 
   { group: "CONTROL", items: [
-    { label: "Product Health", href: "/super-admin/pd/health", icon: "💚", children: [
+    { label: "Product Health", href: "/super-admin/pd/health", icon: "💚", capability: "hq.practice.health.view", children: [
       { label: "Health Overview", href: "/super-admin/pd/health" },
       { label: "Services & Components", href: "/super-admin/pd/health/services" },
       { label: "Availability & Performance", href: "/super-admin/pd/health/availability" },
@@ -101,7 +115,7 @@ export const PD_NAV: PdNavGroup[] = [
       { label: "Security Signals", href: "/super-admin/pd/health/security-signals" },
       { label: "Health History", href: "/super-admin/pd/health/history" },
     ]},
-    { label: "Support & Incidents", href: "/super-admin/pd/support", icon: "🛟", children: [
+    { label: "Support & Incidents", href: "/super-admin/pd/support", icon: "🛟", capability: "hq.practice.support.view", children: [
       { label: "Overview", href: "/super-admin/pd/support" },
       { label: "Support Cases", href: "/super-admin/pd/support/cases" },
       { label: "Incident Management", href: "/super-admin/pd/support/incidents" },
@@ -117,7 +131,7 @@ export const PD_NAV: PdNavGroup[] = [
     // PD-010 s2's eleven submodules. s1 draws the boundary the labels alone do not: Health DETECTS,
     // Support COORDINATES, Operations REMEDIATES, and this ASSESSES — "it does not operate day-to-day
     // product workflows".
-    { label: "Governance & Risk", href: "/super-admin/pd/governance", icon: "🛡️", children: [
+    { label: "Governance & Risk", href: "/super-admin/pd/governance", icon: "🛡️", capability: "hq.practice.governance.view", children: [
       { label: "Governance Overview", href: "/super-admin/pd/governance" },
       { label: "Product Risk Register", href: "/super-admin/pd/governance/risks" },
       { label: "Controls & Assurance", href: "/super-admin/pd/governance/controls" },
@@ -133,7 +147,7 @@ export const PD_NAV: PdNavGroup[] = [
   ]},
 
   { group: "MANAGE", items: [
-    { label: "Product Configuration", href: "/super-admin/pd/configuration", icon: "🎚️", children: [
+    { label: "Product Configuration", href: "/super-admin/pd/configuration", icon: "🎚️", capability: "hq.practice.configuration.view", children: [
       { label: "Configuration Overview", href: "/super-admin/pd/configuration" },
       { label: "Practice Defaults", href: "/super-admin/pd/configuration/defaults" },
       { label: "Clinical Configuration", href: "/super-admin/pd/configuration/clinical" },
@@ -146,7 +160,7 @@ export const PD_NAV: PdNavGroup[] = [
       { label: "AI Configuration", href: "/super-admin/pd/configuration/ai" },
       { label: "Configuration History", href: "/super-admin/pd/configuration/history" },
     ]},
-    { label: "Releases & Capabilities", href: "/super-admin/pd/releases", icon: "🚀", children: [
+    { label: "Releases & Capabilities", href: "/super-admin/pd/releases", icon: "🚀", capability: "hq.practice.releases.view", children: [
       { label: "Overview", href: "/super-admin/pd/releases" },
       { label: "Capability Registry", href: "/super-admin/pd/releases/capabilities" },
       { label: "Release Management", href: "/super-admin/pd/releases/management" },
@@ -162,6 +176,32 @@ export const PD_NAV: PdNavGroup[] = [
     ]},
   ]},
 ];
+
+/**
+ * The capability a destination requires, resolved by LONGEST MATCHING PREFIX over the table.
+ *
+ * !! CHILDREN INHERIT THEIR PARENT, WHICH IS WHY THIS IS A PREFIX MATCH AND NOT A LOOKUP. A child is a
+ * view of the same module -- /pd/health/errors is Product Health -- so it asks for what the module asks
+ * for. Giving each child its own code would mean 85 codes to grant, and a Director who could open
+ * Product Health but not its Errors page, which is not a permission anybody wants to express.
+ *
+ * !! LONGEST wins, and that matters for exactly one entry: PD_HOME is "/super-admin", a prefix of every
+ * other destination in the table. A first-match scan would answer "Mission Control" for all 85.
+ *
+ * Returns null for an href the table does not own. A caller must REFUSE on null rather than defaulting:
+ * "no capability is declared for this" is not "anybody may".
+ */
+export function capabilityForPdHref(href: string): string | null {
+  let best: { href: string; capability: string } | null = null;
+  for (const group of PD_NAV) {
+    for (const item of group.items) {
+      const owns = href === item.href || href.startsWith(`${item.href}/`);
+      if (!owns) continue;
+      if (!best || item.href.length > best.href.length) best = { href: item.href, capability: item.capability };
+    }
+  }
+  return best?.capability ?? null;
+}
 
 /** Every destination in the table, parents and children, deduplicated. */
 export const PD_ALL_HREFS: string[] = [...new Set(

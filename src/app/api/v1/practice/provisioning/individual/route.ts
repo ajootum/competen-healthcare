@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCaller, isResponse, isSuper } from "@/lib/api-auth";
+import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import {
   validateIndividual, payloadHash, runProvisioning, platformFlag, type IndividualRequest,
 } from "@/lib/practice/provisioning";
@@ -39,7 +40,18 @@ export async function POST(req: NextRequest) {
   // Eligibility under the launch flags.
   const targetUserId = body.targetUserId && body.targetUserId !== c.userId ? body.targetUserId : c.userId;
   if (targetUserId !== c.userId) {
-    if (!isSuper(c)) return err(403, "ACCESS_DENIED", "only a platform operator may provision for another user", correlationId);
+  // !!CPR-PD-014 build 2: THE CAPABILITY, NOT OWNERSHIP.
+  //
+  // This read an ownership test on the caller, which broke in both directions. A real Practice Product
+  // Director -- the position this endpoint exists to serve -- was refused, because the check asked
+  // whether they OWNED the platform rather than whether they held the right. And any super_admin
+  // invoked it holding no HQ position at all, so the HQ plane recorded nothing and governed nothing.
+  // PD-014 says it plainly: "Do not equate Product Director with Super Admin."
+  //
+  // !!hqApiGate, NOT requireHqCapability: this is a fetch, and a redirect is not a status a caller can
+  // act on. resolveHqContext keeps the owner short-circuit, so an owner is unaffected by this change.
+  const gate = await hqApiGate(["hq.practice.provision.execute"]);
+  if (isHqRefusal(gate)) return gate;
     if (!(await platformFlag(c.admin, "practice_pilot_provisioning")))
       return err(403, "ACCESS_DENIED", "pilot provisioning is disabled", correlationId);
   } else {

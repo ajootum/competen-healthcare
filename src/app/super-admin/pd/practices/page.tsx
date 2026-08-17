@@ -14,7 +14,7 @@ import PdNotBuilt from "../_components/PdNotBuilt";
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  await requireHqCapability("hq.practice.operations.view");
+  await requireHqCapability("hq.practice.practices.view");
   return (
     <PdNotBuilt
       name="Practices"

@@ -73,6 +73,8 @@ export default function ProductDirectorSidebar({
   profileName,
   positionNames,
   workspaces,
+  capabilities,
+  isOwner,
   header,
   children,
 }: {
@@ -83,6 +85,22 @@ export default function ProductDirectorSidebar({
   positionNames: string[];
   /** Server-resolved switch destinations. Visibility grants nothing; see PdContextSwitcher. */
   workspaces: WorkspaceLink[];
+  /**
+   * What this viewer actually holds, resolved server-side (CPR-PD-001 s7: "sidebar visibility is
+   * capability/entitlement driven; do not hard-code access from job title alone").
+   *
+   * ⚠ HIDING IS COURTESY, NOT SECURITY. s7 again: "a hidden navigation item does not constitute
+   * authorization." Every destination re-authorises on arrival through its own requireHqCapability, so
+   * this list only decides what is worth OFFERING. If it were ever the only check, typing the URL would
+   * defeat it -- which is exactly the failure the 85 per-page guards exist to prevent.
+   *
+   * ⚠ AN OWNER HOLDS NO HQ CAPABILITIES BY CONSTRUCTION -- resolveHqPositions short-circuits before
+   * reading any HQ table -- so an empty list from an owner means "everything", not "nothing". Inferring
+   * ownership from an empty list is how every owner gets a blank sidebar; the HQ sidebar's own filter
+   * carries this warning for the same reason.
+   */
+  capabilities: string[];
+  isOwner: boolean;
   /** The PUI-002 global header, rendered on the server and passed through as a slot. */
   header: React.ReactNode;
   children: React.ReactNode;
@@ -102,6 +120,23 @@ export default function ProductDirectorSidebar({
     () => window.matchMedia(DESKTOP_QUERY).matches,
     () => true,
   );
+
+  /**
+   * s7's capability-driven visibility. An owner sees the table unchanged, for the reason in the prop's
+   * own comment: their capability list is empty BY CONSTRUCTION, so filtering against it would blank
+   * the sidebar for exactly the people who may see everything.
+   *
+   * ⚠ A GROUP WITH NOTHING LEFT IN IT DISAPPEARS ENTIRELY. An empty CONTROL heading over blank space
+   * tells a viewer there is something there they cannot have, which is both useless and a small
+   * disclosure -- s7 rules that out for object names and the same argument covers a section heading.
+   */
+  const visibleNav = useMemo(() => {
+    if (isOwner) return PD_NAV;
+    const held = new Set(capabilities);
+    return PD_NAV
+      .map(g => ({ ...g, items: g.items.filter(i => held.has(i.capability)) }))
+      .filter(g => g.items.length > 0);
+  }, [isOwner, capabilities]);
 
   const geometry = PD_SIDEBAR_GEOMETRY[mode];
   /** Is the desktop sidebar presenting as an icon rail right now? */
@@ -136,6 +171,9 @@ export default function ProductDirectorSidebar({
     positionNames,
     workspaces,
     pathname,
+    // s7: the filtered table, resolved once in the parent so the rail and the drawer cannot disagree
+    // about which destinations exist for this viewer.
+    nav: visibleNav,
   };
 
   return (
@@ -268,7 +306,7 @@ type ToggleSpec =
 
 function PdSidebarBody({
   geometry, rail, navId, onTip, onHideTip, onNavigate, toggle,
-  profileName, positionNames, workspaces, pathname,
+  profileName, positionNames, workspaces, pathname, nav,
 }: {
   geometry: PdSidebarGeometry;
   rail: boolean;
@@ -282,6 +320,8 @@ function PdSidebarBody({
   positionNames: string[];
   workspaces: WorkspaceLink[];
   pathname: string;
+  /** The capability-filtered nav, from the parent. See its useMemo for why an owner is exempt. */
+  nav: typeof PD_NAV;
 }) {
   /**
    * ⚠ DERIVED FROM THE WHOLE TABLE, PARENTS AND CHILDREN TOGETHER, AND NEVER FROM A FILTERED COPY.
@@ -361,7 +401,7 @@ function PdSidebarBody({
         className="flex-1 overflow-y-auto px-2"
         onScroll={onHideTip}
       >
-        {PD_NAV.map(({ group, items }) => (
+        {nav.map(({ group, items }) => (
           <div key={group} className="mb-2">
             {/* s4: the heading may go in the rail. s4 again: "navigation grouping must remain
                 semantically represented" -- so it is the <ul>'s accessible name that carries the group,

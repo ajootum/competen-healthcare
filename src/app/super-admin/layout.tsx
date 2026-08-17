@@ -230,6 +230,8 @@ export default async function SuperAdminLayout({ children }: { children: React.R
             pre-paint script. The sidebar writes it back on toggle; see pd-sidebar-mode.ts. */}
         <ProductDirectorSidebar
           initialMode={readPdSidebarMode(cookieStore.get(PD_SIDEBAR_COOKIE)?.value)}
+          capabilities={hqCapabilities}
+          isOwner={isOwner}
           profileName={profile?.full_name ?? null}
           positionNames={hqPositions.positionNames}
           workspaces={workspaces}

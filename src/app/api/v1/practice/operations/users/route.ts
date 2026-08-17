@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCaller, isResponse, isSuper } from "@/lib/api-auth";
+import { getCaller, isResponse } from "@/lib/api-auth";
+import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 
 // GET /api/v1/practice/operations/users?q= -- find the person a pilot workspace is being provisioned FOR.
 //
@@ -13,7 +14,18 @@ import { getCaller, isResponse, isSuper } from "@/lib/api-auth";
 export async function GET(req: NextRequest) {
   const c = await getCaller();
   if (isResponse(c)) return c;
-  if (!isSuper(c)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  // !!CPR-PD-014 build 2: THE CAPABILITY, NOT OWNERSHIP.
+  //
+  // This read an ownership test on the caller, which broke in both directions. A real Practice Product
+  // Director -- the position this endpoint exists to serve -- was refused, because the check asked
+  // whether they OWNED the platform rather than whether they held the right. And any super_admin
+  // invoked it holding no HQ position at all, so the HQ plane recorded nothing and governed nothing.
+  // PD-014 says it plainly: "Do not equate Product Director with Super Admin."
+  //
+  // !!hqApiGate, NOT requireHqCapability: this is a fetch, and a redirect is not a status a caller can
+  // act on. resolveHqContext keeps the owner short-circuit, so an owner is unaffected by this change.
+  const gate = await hqApiGate(["hq.practice.operations.view"]);
+  if (isHqRefusal(gate)) return gate;
 
   const q = (req.nextUrl.searchParams.get("q") ?? "").trim();
   if (q.length < 2) return NextResponse.json({ results: [], note: "type at least two characters" });
