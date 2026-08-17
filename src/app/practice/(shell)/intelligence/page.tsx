@@ -105,6 +105,34 @@ export default async function IntelligencePage({ searchParams }: {
 
   const active = INTELLIGENCE_TABS.find(t => t.key === tab)!;
 
+  // ══ CPR-MOB-001 s13 PRIORITY 6: ASK PRACTICE, PROMINENT ═════════════════════════════════════════
+  //
+  // s13 singles this out -- "Ask Practice should be especially prominent on mobile because it reduces
+  // navigation burden" -- so below md it stops being a 28px input tucked beside the page title and
+  // becomes a full-width tinted module at its contract position in the vertical story.
+  //
+  // ⚠ NOT A SECOND ASK FIELD. It renders the SAME AskField client component against the same
+  // tabHref, so there is one submit path, one consent gate and one disclosure log (AskField's own
+  // doctrine). The header copy is hidden below md; exactly one is ever in a viewport.
+  //
+  // ⚠ NOT ONE NEW WORD. The heading and the sentence are the assistant TAB'S OWN label and blurb,
+  // read from the registry rather than retyped here -- CPR-PI-001 v2 froze this workspace's content,
+  // and a mobile face that invented its own description of Ask Practice would be a second source of
+  // truth for what Ask Practice is.
+  const assistantTab = INTELLIGENCE_TABS.find(t => t.key === "assistant")!;
+  const mobileAsk = (
+    <section className="rounded-xl border border-sky-200 bg-sky-50/60 p-4 md:hidden"
+      aria-labelledby="m-ask">
+      <h2 id="m-ask" className="text-[14px] font-bold text-gray-900">
+        <span aria-hidden className="mr-1 text-sky-600">&#10022;</span>{assistantTab.label}
+      </h2>
+      <p className="mt-0.5 text-[12px] leading-snug text-gray-600">{assistantTab.blurb}</p>
+      <div className="mt-2.5">
+        <AskField tabHref={tabHref("assistant")} />
+      </div>
+    </section>
+  );
+
   return (
     <div className="max-w-7xl">
       {/* ── s7.1 HEADER ─────────────────────────────────────────────────────────────────────────── */}
@@ -115,16 +143,23 @@ export default async function IntelligencePage({ searchParams }: {
             What needs you now, and what your own records add up to.
           </p>
         </div>
-        <div className="ml-auto flex min-w-[280px] flex-1 flex-col items-end gap-2">
-          <div className="flex w-full flex-wrap items-center justify-end gap-2">
+        {/* Below md the right-hand control column stops being a right-aligned rail and becomes the
+            full-width top of the page, because s13's PRIORITY 1 is the period selector: the first
+            thing a phone reader must be able to see and change. Every class here is max-md:* — the
+            desktop rail is byte-identical at md and up. */}
+        <div className="ml-auto flex min-w-[280px] flex-1 flex-col items-end gap-2 max-md:w-full max-md:min-w-0 max-md:items-stretch">
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 max-md:justify-start">
             <RangePicker fromDay={suite.range.period.fromDay} toDay={suite.range.period.toDay}
               days={custom ? null : (days ?? DEFAULT_RANGE_DAYS)} />
             <Link href="/practice/reports"
-              className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)]">
+              className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] max-md:flex max-md:min-h-[var(--cp-touch)] max-md:flex-1 max-md:items-center max-md:justify-center">
               Generate report
             </Link>
           </div>
-          <div className="w-full max-w-md">
+          {/* s13 puts Ask Practice at PRIORITY 6, not beside the title — so below md this copy is
+              hidden and the SAME component is rendered once, larger, in its contract position
+              further down. One Ask field per viewport, never two. */}
+          <div className="w-full max-w-md max-md:hidden">
             <AskField tabHref={tabHref("assistant")} />
           </div>
         </div>
@@ -142,12 +177,20 @@ export default async function IntelligencePage({ searchParams }: {
         {/* CPR-PI-001 v2 s3: the STRIP is v2's order (mapped from the strip, not filtered from the
             catalogue, so declaration order cannot quietly reorder the screen); off-strip keys stay
             valid for old links. */}
+        {/* CPR-MOB-001 s5 leaves this strip as a strip. Its large-tab-set row offers a section
+            SELECTOR, and the _responsive SectionTabs primitive implements exactly that above five
+            tabs -- but it drives an onSelect callback, and these are eight bookmarkable <Link>s that
+            carry the period in the query string. Converting them would trade the whole screen's URL
+            semantics (and the "hand this window to a colleague" property RangePicker is built around)
+            for a dropdown. s5's own first fallback, "scrollable tabs", is what this already is, and
+            it scrolls inside its own box rather than scrolling the page -- which is the distinction
+            s4's no-horizontal-scroll rule turns on. Only the touch height is raised below md. */}
         {INTELLIGENCE_TAB_STRIP.map(k => INTELLIGENCE_TABS.find(t => t.key === k)!).map(t => {
           const on = t.key === tab;
           const s = TAB_SWATCH[t.swatch] ?? TAB_SWATCH.primary;
           return (
             <Link key={t.key} href={tabHref(t.key)} aria-current={on ? "page" : undefined}
-              className={`shrink-0 rounded-t-lg px-3 py-1.5 text-[12px] font-semibold transition ${on ? s.on : s.off}`}>
+              className={`shrink-0 rounded-t-lg px-3 py-1.5 text-[12px] font-semibold transition max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center ${on ? s.on : s.off}`}>
               {t.label}
             </Link>
           );
@@ -163,7 +206,23 @@ export default async function IntelligencePage({ searchParams }: {
 
       <div className="mt-4">
         {tab === "overview" && (
-          <div className="flex flex-col gap-4">
+          // ⚠ HIDDEN BELOW md, AND THIS IS THE ONE JUDGEMENT CALL ON THIS SCREEN.
+          //
+          // CPR-MOB-001 s13 names SEVEN things mobile Intelligence shows, in order, and none of the
+          // seven is this seven-panel grid; s5's transformation row for a multi-panel dashboard is
+          // "priority-ordered single column"; s13 says outright "Do not stack every desktop chart on
+          // mobile". Stacked below md this grid puts seven full panels between the tab strip and the
+          // KPI cards that are s13's PRIORITY 2 — the shrunken dashboard the contract exists to stop.
+          //
+          // NOTHING BECOMES UNREACHABLE. Every panel here has a canonical tab that the strip above
+          // already reaches on a phone: brief, patients, pathways and reports each own one, and the
+          // View more disclosure at the foot of the mobile story links to them by name. That is s13's
+          // priority 7 ("View more for deeper charts and secondary metrics") rather than a deletion.
+          //
+          // ⚠ HONEST LIMIT: CSS hiding still SHIPS this markup to the phone, so s18's "lazy-load
+          // secondary analytics" is only half-kept. Fixing it properly needs a server-side viewport
+          // decision this render has no access to; recorded, not papered over.
+          <div className="flex flex-col gap-4 max-md:hidden">
             {/* s7.3's seven panels, in s7.3's order. */}
             <div className="grid gap-4 lg:grid-cols-3 items-start">
               <div className="lg:col-span-2 flex flex-col gap-4">
@@ -210,7 +269,11 @@ export default async function IntelligencePage({ searchParams }: {
         {tab === "overview" && (
           <OverviewV2Area suite={suite} extras={await piV2Extras(admin, shell.ctx, {
             fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay, todayDate: suite.range.period.toDay,
-          })} />
+          })}
+            // CPR-MOB-001 s13: the area places these two at priorities 6 and 7. tabHref is passed so
+            // the View more doors carry the period -- a door that reset the window would be the
+            // exact bug the `carried` params exist to prevent.
+            mobileAsk={mobileAsk} tabHref={tabHref} />
         )}
         {tab === "patients" && await (async () => {
           // v2 s6 cohort controls: registered segments + saved combinations, filters not destinations.
@@ -283,6 +346,16 @@ export default async function IntelligencePage({ searchParams }: {
           </div>
         )}
       </div>
+
+      {/* ⚠ THE OTHER TABS KEEP THEIR ASK TOO. Hiding the header field below md would otherwise strip
+          Ask Practice off every area except Overview, which is the opposite of s13's reason for
+          promoting it ("it reduces navigation burden"). Overview gets it INSIDE the area at priority
+          6; Assistant is excluded because it already IS Ask Practice, and two ask fields in one
+          viewport is the duplicate-entry-point defect AskField's own doctrine argues against.
+          The wrapper is md:hidden as well, so desktop gains no stray margin. */}
+      {tab !== "overview" && tab !== "assistant" && (
+        <div className="mt-4 md:hidden">{mobileAsk}</div>
+      )}
 
       {/* ⚠ THE PAYLOAD SAYS SO TOO. `ratesComputed: false` travels in the API response, so a second
           surface cannot render any of this as a percentage and call it the same data. */}

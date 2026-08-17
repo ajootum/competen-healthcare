@@ -39,11 +39,15 @@ export default function AskField({ tabHref }: { tabHref: string }) {
           onChange={e => setQ(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter") submit(); }}
           placeholder="Ask about your own records…"
-          className="w-full rounded-lg border border-gray-200 py-1.5 pl-7 pr-2.5 text-[12px] text-gray-800 outline-none placeholder:text-gray-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+          // CPR-MOB-001 s4: 44px minimum below md, where this field is the prominent Ask module s13
+          // asks for. text-[16px] on the phone is not a style choice -- iOS Safari zooms the whole
+          // page in when a focused input's text is under 16px, which would break s4's no-horizontal-
+          // scroll rule on the one control s13 most wants used. Desktop keeps text-[12px] exactly.
+          className="w-full rounded-lg border border-gray-200 py-1.5 pl-7 pr-2.5 text-[12px] text-gray-800 outline-none placeholder:text-gray-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-100 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]"
         />
       </label>
       <button type="button" onClick={submit} disabled={q.trim().length < 3}
-        className="rounded-lg bg-sky-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-sky-700 disabled:opacity-40">
+        className="rounded-lg bg-sky-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-sky-700 disabled:opacity-40 max-md:min-h-[var(--cp-touch)] max-md:px-5 max-md:text-[13px]">
         Ask
       </button>
     </div>

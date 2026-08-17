@@ -59,12 +59,28 @@ export default function RangePicker({ fromDay, toDay, days }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ══ CPR-MOB-001: THIS CONTROL IS s13's PRIORITY 1 ══════════════════════════════════════════════
+  //
+  // "Period selector + optional cohort/filter" is the FIRST thing mobile Intelligence shows, so below
+  // md the row spreads to full width and every control grows to s4's 44px minimum. Three deliberate
+  // choices:
+  //
+  //   * NOT behind a FilterSheet. s5 turns a filter ROW into a sheet button, and that is right for a
+  //     secondary six-control row -- but this is the screen's top-priority control, and putting the
+  //     one thing s13 ranks first behind a tap that must be discovered inverts the contract. It also
+  //     would need a second copy of `from`/`to` state, which is the duplicated business logic s19
+  //     forbids.
+  //   * THE VISIBLE LABELS ARE NOW VISIBLE ON PHONES TOO. They were `sr-only` below 640px; s16 says
+  //     placeholders and hidden labels are not labels. At 640px and up nothing changes -- they were
+  //     already showing -- so the desktop rendering is untouched.
+  //   * The vertical rule is hidden below md: a 1px divider inside a wrapped, full-width stack marks
+  //     nothing, and reads as a rendering artefact.
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-wrap items-center gap-1.5 max-md:w-full">
       {RANGE_PRESETS.map(p => (
         <button key={p.days} type="button" onClick={() => go({ days: String(p.days) })}
           aria-pressed={days === p.days}
-          className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${
+          className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition max-md:min-h-[var(--cp-touch)] max-md:flex-1 max-md:text-[12px] ${
             days === p.days
               ? "border-[var(--cp-primary)] bg-[var(--cp-primary)] text-white"
               : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
@@ -72,18 +88,20 @@ export default function RangePicker({ fromDay, toDay, days }: {
           {p.label}
         </button>
       ))}
-      <span className="mx-1 h-4 w-px bg-gray-200" aria-hidden />
-      <label className="flex items-center gap-1 text-[10px] text-gray-500">
-        <span className="sr-only sm:not-sr-only">From</span>
-        <input type="date" value={from} max={to} onChange={e => setFrom(e.target.value)} className={input} />
+      <span className="mx-1 h-4 w-px bg-gray-200 max-md:hidden" aria-hidden />
+      <label className="flex items-center gap-1 text-[10px] text-gray-500 max-md:flex-1 max-md:text-[11px]">
+        <span>From</span>
+        <input type="date" value={from} max={to} onChange={e => setFrom(e.target.value)}
+          className={`${input} max-md:min-h-[var(--cp-touch)] max-md:w-full`} />
       </label>
-      <label className="flex items-center gap-1 text-[10px] text-gray-500">
-        <span className="sr-only sm:not-sr-only">To</span>
-        <input type="date" value={to} min={from} onChange={e => setTo(e.target.value)} className={input} />
+      <label className="flex items-center gap-1 text-[10px] text-gray-500 max-md:flex-1 max-md:text-[11px]">
+        <span>To</span>
+        <input type="date" value={to} min={from} onChange={e => setTo(e.target.value)}
+          className={`${input} max-md:min-h-[var(--cp-touch)] max-md:w-full`} />
       </label>
       <button type="button" onClick={() => go({ from, to })}
         aria-pressed={days === null}
-        className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${
+        className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold max-md:min-h-[var(--cp-touch)] max-md:w-full max-md:text-[12px] ${
           days === null
             ? "border-[var(--cp-primary)] bg-[var(--cp-primary)] text-white"
             : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"

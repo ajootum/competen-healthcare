@@ -5,7 +5,7 @@ import type { ConditionalZones } from "@/lib/practice/pi-conditional";
 import CohortSaveControl from "./CohortSaveControl";
 import { SEGMENT_REGISTRY } from "@/lib/practice/segment-registry";
 import { metricById } from "@/lib/practice/intelligence-registry";
-import { weekdayPattern } from "@/lib/practice/intelligence-constants";
+import { weekdayPattern, INTELLIGENCE_TABS, type IntelligenceTabKey } from "@/lib/practice/intelligence-constants";
 
 // CPR-PI-001 v2 P0 -- the five rebuilt screen contracts (s6-s10), composed from the EXISTING modules
 // plus pi-v2's three extras. No figure here is computed in this file: presentation only, so a screen
@@ -31,9 +31,11 @@ function ofPct(numerator: number | null, denominator: number | null): string {
   return `${numerator} of ${denominator} (${Math.round((numerator / denominator) * 100)}%)`;
 }
 
-function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
+// `className` exists so ONE card in a grid can be breakpoint-scoped without wrapping it in a div --
+// a wrapper would stop it being a direct grid child and would silently break the desktop column count.
+function Kpi({ label, value, sub, className }: { label: string; value: string; sub?: string; className?: string }) {
   return (
-    <div>
+    <div className={className}>
       <p className="text-[11px] font-semibold text-gray-500">{label}</p>
       <p className="mt-0.5 text-xl font-bold text-gray-900">{value}</p>
       {sub && <p className="text-[10px] text-gray-500">{sub}</p>}
@@ -81,7 +83,29 @@ function MiniTrend({ buckets }: { buckets: { day: string; total: number }[] }) {
 
 // ══ 1. OVERVIEW (v2 s6) ═════════════════════════════════════════════════════════════════════════════
 
-export function OverviewV2Area({ suite, extras }: { suite: Suite; extras: PiV2Extras }) {
+// ⚠ CPR-MOB-001 s13 LIVES IN THIS FUNCTION, AND IT REORDERS NOTHING.
+//
+// s13's mobile priority order is 1 period selector, 2 three-to-four KPI cards, 3 top conditions,
+// 4 practice changes, 5 care gaps / continuity, 6 Ask Practice, 7 View more. The DOM order this
+// screen already had -- KPIs, top conditions, practice changes, follow-up status, care gaps, trend --
+// is s13's 2,3,4,5 verbatim, so below md nothing moves. Only three things happen:
+//
+//   * the 6-up KPI grid shows FOUR below md (s5's "prioritise 3-4 key metrics"), the other two going
+//     into View more UNCHANGED and IN THEIR OWN ORDER;
+//   * Ask Practice is slotted at 6 by the page, which owns the one AskField;
+//   * the consultations chart and the two secondary KPIs sit behind View more at 7.
+//
+// Every figure below is rendered by the SAME expression the desktop face uses -- no mobile branch
+// reads a field of its own, which is the only reliable defence against a mobile card confidently
+// rendering a property the payload never carried.
+export function OverviewV2Area({ suite, extras, mobileAsk, tabHref }: {
+  suite: Suite; extras: PiV2Extras;
+  /** s13 priority 6, injected by the page so there is exactly one AskField in the tree. */
+  mobileAsk?: React.ReactNode;
+  /** Range-carrying tab links for the View more doors. Without it they are omitted, never built
+      range-less: a door that silently resets the period is worse than no door. */
+  tabHref?: (key: IntelligenceTabKey) => string;
+}) {
   const mods = suite.workspace.modules;
   const o = mods.overview;
   const f = mods.followUps;
@@ -97,11 +121,32 @@ export function OverviewV2Area({ suite, extras }: { suite: Suite; extras: PiV2Ex
     { label: "Overdue clinical follow-ups", count: overdue?.value ?? null, href: "/practice/follow-ups?filter=overdue" },
   ];
 
+  // THE TWO SECONDARY KPIs, DEFINED ONCE AND PLACED TWICE. Identical expressions in the desktop grid
+  // (hidden below md) and inside View more (hidden at md and up), so the two faces cannot drift into
+  // showing different numbers for the same label -- the conflicting-copy failure the whole engine
+  // layer is arranged to prevent.
+  const secondaryKpis = (className?: string) => (
+    <>
+      <Kpi label="Follow-ups due" value={metricValue(metrics?.follow_ups_due)} className={className} />
+      <Kpi label="Visits per patient"
+        value={extras.available && extras.data && extras.data.avgVisitsPerPatient.patients > 0
+          ? (extras.data.avgVisitsPerPatient.encounters / extras.data.avgVisitsPerPatient.patients).toFixed(1)
+          : "—"}
+        sub={extras.available && extras.data
+          ? `${extras.data.avgVisitsPerPatient.encounters} visits, ${extras.data.avgVisitsPerPatient.patients} patients`
+          : undefined}
+        className={className} />
+    </>
+  );
+
   return (
     <div className="flex flex-col gap-3">
       <section className={CARD}>
         {!o.available ? <Unavailable module={o} /> : (
-          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          // grid-cols-2 is the BASE only: sm and lg still win at 640 and 1024, so the desktop grid is
+          // 3-up and 6-up exactly as before. The change is confined to phones, where a single column
+          // of six made s13's priority-2 cards a scroll instead of a glance.
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <Kpi label="Patients seen" value={metricValue(metrics.patients_seen)} />
             <Kpi label="Consultations" value={metricValue(metrics.completed)} />
             <Kpi label="Returning patients"
@@ -111,14 +156,7 @@ export function OverviewV2Area({ suite, extras }: { suite: Suite; extras: PiV2Ex
             <Kpi label="Follow-ups completed"
               value={completion ? ofPct(completion.numerator, completion.denominator) : "—"}
               sub="of those raised this period" />
-            <Kpi label="Follow-ups due" value={metricValue(metrics.follow_ups_due)} />
-            <Kpi label="Visits per patient"
-              value={extras.available && extras.data && extras.data.avgVisitsPerPatient.patients > 0
-                ? (extras.data.avgVisitsPerPatient.encounters / extras.data.avgVisitsPerPatient.patients).toFixed(1)
-                : "—"}
-              sub={extras.available && extras.data
-                ? `${extras.data.avgVisitsPerPatient.encounters} visits, ${extras.data.avgVisitsPerPatient.patients} patients`
-                : undefined} />
+            {secondaryKpis("max-md:hidden")}
           </div>
         )}
       </section>
@@ -186,7 +224,65 @@ export function OverviewV2Area({ suite, extras }: { suite: Suite; extras: PiV2Ex
         </section>
       </div>
 
-      <TrendSection suite={suite} />
+      {/* ── s13 PRIORITY 7's CHART, ABOVE md ONLY ───────────────────────────────────────────────
+          It is NOT converted to a ranked list: MiniTrend is already the "simplified mini chart" s13
+          offers as the alternative, and it already carries the textual summary s17 requires under it
+          ("N this period, M in the period before, busiest ..."). Converting a 30-day bar sparkline
+          into a 30-row ranked list would be strictly less comprehensible on a phone, which is the
+          test s13 sets. So it moves behind View more unchanged rather than being redrawn. */}
+      <TrendSection suite={suite} className="max-md:hidden" />
+
+      {/* ── s13 PRIORITY 6: ASK PRACTICE, in its contract position ──────────────────────────────
+          Slotted rather than built here: the page owns the single AskField (see its doctrine), and
+          this area owns only WHERE it lands in the vertical story. */}
+      {mobileAsk}
+
+      {/* ── s13 PRIORITY 7: VIEW MORE ───────────────────────────────────────────────────────────
+          "View more for deeper charts and secondary metrics", and that is exactly and only what is
+          in here: the two KPI cards s5 asked to be demoted, the consultations chart, and doors to
+          the deeper areas the desktop overview grid draws (which is hidden below md -- see the page).
+          Collapsed by default and native <details>, so it costs one tap and no JavaScript. */}
+      <details className="rounded-xl border border-gray-200 bg-white md:hidden">
+        <summary className="flex min-h-[var(--cp-touch)] cursor-pointer list-none items-center gap-2 px-4 text-[13px] font-semibold text-[var(--cp-primary-deep)]">
+          View more
+          <span aria-hidden className="ml-auto text-gray-400">&#9662;</span>
+        </summary>
+        <div className="flex flex-col gap-3 border-t border-gray-100 p-4">
+          {/* The demoted two, from the SAME expression the desktop grid renders. Omitted entirely
+              when the module could not be read -- the section above already carries that reason, and
+              two em dashes with no explanation beside them is the confident blank this workspace
+              exists to refuse. */}
+          {o.available && <div className="grid grid-cols-2 gap-3">{secondaryKpis()}</div>}
+          <TrendSection suite={suite} />
+          {/* ⚠ DOORS, NOT COPIES -- AND FOR TWO OF THEM THIS IS THE ONLY MOBILE ROUTE.
+              INTELLIGENCE_TAB_STRIP draws nine of the twelve tabs; brief, cohorts and pathways are
+              OFF-STRIP and reachable by URL alone. The desktop overview grid is where Today's Brief
+              and Care Pathways were actually surfaced, so hiding that grid below md without these
+              two links would strand both areas on a phone. Patient Intelligence and Reports are on
+              the strip as well; all four are listed so that every panel the hidden grid drew has a
+              door, rather than leaving a reader to work out which two happen to be in the strip.
+              Labels come from the registry, so this list cannot drift from what the strip calls
+              them. If a key here is ever added to the strip, this list is still correct. */}
+          {tabHref && (
+            <ul className="flex flex-col gap-2">
+              {(["brief", "patients", "pathways", "reports"] as IntelligenceTabKey[]).map(k => {
+                const t = INTELLIGENCE_TABS.find(x => x.key === k);
+                if (!t) return null;
+                return (
+                  <li key={k}>
+                    <Link href={tabHref(k)}
+                      className="flex min-h-[var(--cp-touch)] items-center gap-2 rounded-lg border border-gray-100 px-3 text-[12.5px] font-semibold text-[var(--cp-primary-deep)]">
+                      <span className="min-w-0 flex-1">{t.label}</span>
+                      <span aria-hidden className="text-gray-400">&rarr;</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </details>
+
       <TrustFooter ids={["pi.followup_completion", "pi.avg_visits_per_patient", "pi.top_conditions_by_patients"]} />
     </div>
   );
@@ -218,12 +314,12 @@ function ConditionsList({ suite, limit }: { suite: Suite; limit: number }) {
   );
 }
 
-function TrendSection({ suite }: { suite: Suite }) {
+function TrendSection({ suite, className }: { suite: Suite; className?: string }) {
   const c = suite.workspace.modules.clinicalActivity;
-  if (!c.available) return <section className={CARD}><Unavailable module={c} /></section>;
+  if (!c.available) return <section className={`${CARD} ${className ?? ""}`}><Unavailable module={c} /></section>;
   const trend: any = (c.data as any).trend;
   return (
-    <section className={CARD}>
+    <section className={`${CARD} ${className ?? ""}`}>
       <h3 className="text-[13px] font-bold text-gray-900">Consultations over time</h3>
       <div className="mt-2"><MiniTrend buckets={trend.buckets ?? []} /></div>
       <p className="mt-1 text-[11px] text-gray-600">
@@ -338,9 +434,11 @@ export function PatientV2Area({ suite, extras, segments, cohort, activeSegment, 
           <p className="mt-1 text-[12px] text-gray-600">{segments.message}</p>
         ) : (
           <>
+            {/* CPR-MOB-001 s13 priority 1's "optional cohort/filter". Below md every chip grows to
+                s4's 44px; the desktop row is unchanged at md and up. */}
             <div className="mt-2 flex flex-wrap gap-1.5">
               <Link href={segmentHref(null)}
-                className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold ${activeSegment === null
+                className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center ${activeSegment === null
                   ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
                   : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
                 All patients
@@ -348,7 +446,7 @@ export function PatientV2Area({ suite, extras, segments, cohort, activeSegment, 
               {segments.results.map(r => (
                 <Link key={r.segment.segmentId} href={segmentHref(r.segment.segmentId)}
                   title={r.segment.definition}
-                  className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold ${activeSegment === r.segment.segmentId
+                  className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center ${activeSegment === r.segment.segmentId
                     ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
                     : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
                   {r.segment.displayName} &middot; {ofPct(r.count, r.denominator)}
@@ -356,11 +454,16 @@ export function PatientV2Area({ suite, extras, segments, cohort, activeSegment, 
                 </Link>
               ))}
               {/* Gate-failed segments: the registry's refusal, worn as a disabled chip -- a zero here
-                  would read as a fact about patients instead of a missing writer. */}
+                  would read as a fact about patients instead of a missing writer.
+                  ⚠ s4: THE REASON WAS HOVER-ONLY, AND A PHONE HAS NO HOVER. Above md the `title`
+                  still carries it; below md the same string renders as visible words, because a
+                  greyed chip saying "not computable yet" with no reachable why is the disabled
+                  control that reads as a broken product. One source, two presentations. */}
               {SEGMENT_REGISTRY.filter(s => s.gateFailed).map(s => (
                 <span key={s.segmentId} title={s.gateFailed}
-                  className="cursor-help rounded-lg border border-dashed border-slate-300 px-2.5 py-1 text-[11px] text-slate-400">
+                  className="cursor-help rounded-lg border border-dashed border-slate-300 px-2.5 py-1 text-[11px] text-slate-400 max-md:block max-md:w-full max-md:cursor-auto">
                   {s.displayName} &middot; not computable yet
+                  <span className="mt-0.5 block text-[10px] leading-snug text-slate-500 md:hidden">{s.gateFailed}</span>
                 </span>
               ))}
             </div>
@@ -369,7 +472,7 @@ export function PatientV2Area({ suite, extras, segments, cohort, activeSegment, 
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Saved</span>
                 {savedCohorts.map(c => (
                   <Link key={c.id} href={cohortHref(c.id)}
-                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold ${activeCohortId === c.id
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center ${activeCohortId === c.id
                       ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
                       : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
                     {c.name}
