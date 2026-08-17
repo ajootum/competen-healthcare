@@ -67,15 +67,30 @@ export default async function EnterpriseLayout({ children }: { children: React.R
   // names the four pillars (the UX spec's product family) and no tenant, workspace or catalogue row.
   if (shell.state === "AUTH_REQUIRED") return <>{children}</>;
 
-  if (shell.state === "NO_TENANT")
-    return (
-      <NoAccess>
-        This account is not attached to an organisation on Competen Enterprise, so there is nothing to
-        show here. If your organisation uses Competen Enterprise, an administrator there can attach
-        your account.
-      </NoAccess>
-    );
+  /**
+   * ⚠ NO_TENANT BELONGS TO THE CHILDREN TOO (2026-08-17, the owner opening competenhealthcare.com/enterprise).
+   *
+   * This branch used to render the "your account is not attached to an organisation" card, and it did
+   * so at EVERY path under /enterprise -- including /enterprise itself, which is the PUBLIC PRODUCT
+   * PAGE. So anyone already signed in to Competen for another reason (a practitioner using Practice, a
+   * member of staff in HQ) who followed a product link to see what Enterprise IS was shown a dead end
+   * telling them they were not attached to something they had never asked to join. The marketing
+   * gateway sat behind it, rendered by nobody.
+   *
+   * The gateway's own reasoning is the argument: page.tsx calls the signed-out visitor "a PROSPECT
+   * following a product card". A signed-in visitor with no Enterprise tenant is exactly as much a
+   * prospect -- being signed in to a DIFFERENT product is not evidence of anything about this one.
+   * Being signed out was never what made them a prospect; having no tenant is.
+   *
+   * The sentence is not lost, it is MOVED to where somebody actually reached for tenant content:
+   * /enterprise/workforce's own layout. That is where "an administrator there can attach your account"
+   * answers a real question, rather than pre-empting one nobody asked.
+   */
+  if (shell.state === "NO_TENANT") return <>{children}</>;
 
+  // ⚠ REFUSED STAYS. It is not "you are a prospect" -- it is a genuine block, or an outage the gate
+  // could not read past, and enterpriseRefusalSentence says which. Quietly swapping that for a
+  // marketing page would be the product claiming everything is fine while something is wrong.
   if (shell.state === "REFUSED")
     return <NoAccess>{shell.sentence}</NoAccess>;
 

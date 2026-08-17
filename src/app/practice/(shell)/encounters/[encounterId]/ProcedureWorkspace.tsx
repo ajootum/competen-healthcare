@@ -21,14 +21,24 @@ import {
   OUTCOME_TYPES, OUTCOME_SEVERITIES, SEVERITY_REQUIRED_FOR,
   procedureFieldPlan, procedureReadiness, type ProcedureTypeShape,
 } from "@/lib/practice/procedure-constants";
+import { HHMM_RE } from "@/lib/practice/practice-time";
+import { TimeInput } from "@/components/ui/wall-clock";
 
 // ⚠ THE ENGINE'S OWN LIST, WIDENED TO string SO THE SCREEN CANNOT HOLD A SECOND OPINION. If this were
 // retyped here, the day somebody added a status needing a reason the engine would refuse the batch and
 // the field asking for that reason would never be drawn.
 const NEEDS_REASON: readonly string[] = PROCEDURE_STATUSES_NEEDING_REASON;
 
-/** The product-wide 24-hour shape (walkthroughs #1 and #19). The input carries it as `pattern` too. */
-const HHMM = /^([01]?\d|2[0-3]):[0-5]\d$/;
+/**
+ * The product-wide 24-hour shape (walkthroughs #1 and #19).
+ *
+ * ⚠ IMPORTED, NOT RETYPED (2026-08-17). This was a seventh hand-written copy of the same regex, and a
+ * hand-written copy is exactly how four inputs once shipped with their backslashes eaten -- `[01]?d`,
+ * demanding a literal letter d and refusing "09:00". HHMM_RE is compiled from the same string
+ * TimeInput writes into the `pattern` attribute, so the tint below and the control's own validation
+ * are now incapable of disagreeing. Same name, same usages, one definition.
+ */
+const HHMM = HHMM_RE;
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 // CPR-PROC-HFE-005: select the clinical object first, then reveal only the fields that matter for it.
@@ -655,7 +665,10 @@ export default function ProcedureWorkspace(props: {
                                   into a timestamptz, so a Kampala 14:30 was stored as 14:30 UTC and
                                   read back as 17:30. The date and the time now travel separately and
                                   the SERVER composes the instant in the practice timezone -- the
-                                  booking path's rule, because a client cannot compose an instant. */}
+                                  booking path's rule, because a client cannot compose an instant.
+                                  ⚠ THE TIME HALF IS THE SHARED TimeInput (2026-08-17); only the
+                                  control moved. The date stays type="date" -- its value carries no
+                                  zone to get wrong -- and the server still composes the instant. */}
                               {it.status === "SCHEDULED" && (
                                 <div className="grid gap-2 sm:col-span-2 sm:grid-cols-2">
                                   <div>
@@ -667,10 +680,9 @@ export default function ProcedureWorkspace(props: {
                                   </div>
                                   <div>
                                     <label className={FIELD_LABEL} htmlFor={`when-time-${it.key}`}>Scheduled time *</label>
-                                    <input id={`when-time-${it.key}`} value={it.scheduledTime} disabled={busy}
-                                      required pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="14:30" inputMode="numeric"
-                                      title="24-hour clock, HH:MM -- for example 09:00 or 14:30"
-                                      onChange={e => set(it.key, { scheduledTime: e.target.value })}
+                                    <TimeInput id={`when-time-${it.key}`} value={it.scheduledTime} disabled={busy}
+                                      required placeholder="14:30"
+                                      onChange={v => set(it.key, { scheduledTime: v })}
                                       className={`${input} mt-1 ${HHMM.test(it.scheduledTime) ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
                                   </div>
                                 </div>

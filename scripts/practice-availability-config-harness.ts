@@ -573,6 +573,137 @@ async function main() {
       && genRetime.ok && genRetime.data.slotsRetimed === 1
       && genBooked.ok && genBooked.data.slotsRetimed === 0);
 
+  // ══ 15. A TIME OF DAY IS 0..1439, AND THE ENGINE IS WHERE THAT IS DECIDED ═══════════════════════
+  //
+  // A session is stored as MINUTES FROM MIDNIGHT. The engines used to test only the ORDER, so 78000 was
+  // accepted as an ending and written -- and the screens were safe only while `type="time"` made the
+  // browser guarantee HH:MM. A client guard protects one screen; this is the door everything comes
+  // through.
+  //
+  // ⚠ EVERY WINDOW BELOW IS ORDERED CORRECTLY ON PURPOSE. "a session must end after it starts" must not
+  // be able to fire, or one of these would go green while the check it was written for had quietly
+  // stopped running -- which is a failure this repo has already had once and which a bare `!r.ok` cannot
+  // see. Hence the assertions compare THE SENTENCE, and the sentence is spelled out here rather than
+  // imported from the engine, so a needle cannot match itself.
+  const START_RANGE = (got: string) =>
+    `startsMinute must be a whole number of minutes from midnight, 0 to 1439 (0 is midnight, 1439 is 23:59); got ${got}`;
+  const END_RANGE = (got: string) =>
+    `endsMinute must be a whole number of minutes from midnight, 1 to 1440 (1440 is midnight at the end of the day); got ${got}`;
+  const said = (r: { ok: boolean; message?: string }) => (r.ok ? "ACCEPTED -- nothing was refused" : r.message ?? "");
+  /** A caller that never parsed its input. The engine's argument type says number; a JS caller may lie. */
+  const asMinute = (v: unknown) => v as number;
+
+  const negStart = await addSession(admin, ctxA.ctx, {
+    locationId: locId, weekday: 3, startsMinute: -30, endsMinute: 60,
+    actorId: OWNER, correlationId: "av-15a",
+  });
+  ok("15a a NEGATIVE start is refused, naming the field and the range",
+    !negStart.ok && negStart.code === "VALIDATION_ERROR" && negStart.message === START_RANGE("-30"),
+    said(negStart));
+
+  const hugeEnd = await addSession(admin, ctxA.ctx, {
+    locationId: locId, weekday: 3, startsMinute: 9 * 60, endsMinute: 78000,
+    actorId: OWNER, correlationId: "av-15b",
+  });
+  ok("15b 78000 -- the value that was actually being written -- is refused as an ending",
+    !hugeEnd.ok && hugeEnd.code === "VALIDATION_ERROR" && hugeEnd.message === END_RANGE("78000"),
+    said(hugeEnd));
+
+  // ⚠ 1440 IS THE ASYMMETRY, AND BOTH HALVES OF IT ARE ASSERTED. A session may run TO midnight; none may
+  // START there, because that instant is the next day's minute 0 and the generator has no day for it.
+  // Allowing it as a start would be the same defect in a smaller coat, and refusing it as an end would
+  // be a new defect committed in the name of fixing an old one.
+  const midnightStart = await addSession(admin, ctxA.ctx, {
+    locationId: locId, weekday: 3, startsMinute: 1440, endsMinute: 1440,
+    actorId: OWNER, correlationId: "av-15c",
+  });
+  ok("15c 1440 as a START is refused -- nothing begins at the end of the day",
+    !midnightStart.ok && midnightStart.code === "VALIDATION_ERROR"
+    && midnightStart.message === START_RANGE("1440"),
+    said(midnightStart));
+
+  const fractionalEnd = await addSession(admin, ctxA.ctx, {
+    locationId: locId, weekday: 3, startsMinute: 9 * 60, endsMinute: 1000.5,
+    actorId: OWNER, correlationId: "av-15d",
+  });
+  ok("15d a NON-INTEGER ending is refused -- half a minute is not a minute",
+    !fractionalEnd.ok && fractionalEnd.code === "VALIDATION_ERROR"
+    && fractionalEnd.message === END_RANGE("1000.5"),
+    said(fractionalEnd));
+
+  // ⚠ THE TRAP THIS GUARD IS SHAPED AROUND. Number("9am") is NaN, and NaN fails EVERY comparison:
+  // `NaN > 1439` is false, `NaN < 0` is false, and `13*60 <= NaN` is false too, so both a two-comparison
+  // range check AND the ordering check let it through. Only Number.isInteger catches it.
+  const nanStart = await addSession(admin, ctxA.ctx, {
+    locationId: locId, weekday: 3, startsMinute: Number("9am"), endsMinute: 13 * 60,
+    actorId: OWNER, correlationId: "av-15e",
+  });
+  ok("15e NaN from a string the client never parsed is refused, and is named as NaN",
+    !nanStart.ok && nanStart.code === "VALIDATION_ERROR" && nanStart.message === START_RANGE("NaN"),
+    said(nanStart));
+
+  // The other half of the same defect: toMinutes("0900") returned 54000, and a caller that skipped it
+  // altogether sends the string itself. A number-typed argument does not stop a JavaScript caller.
+  const stringStart = await addSession(admin, ctxA.ctx, {
+    locationId: locId, weekday: 3, startsMinute: asMinute("0900"), endsMinute: 13 * 60,
+    actorId: OWNER, correlationId: "av-15f",
+  });
+  ok("15f a STRING that looks like a time is refused, and the refusal shows it was a string",
+    !stringStart.ok && stringStart.code === "VALIDATION_ERROR"
+    && stringStart.message === START_RANGE(`"0900"`),
+    said(stringStart));
+
+  // ⚠ CONTROL: THE BOUND IS NOT "REFUSE EVERYTHING NEAR MIDNIGHT". A 22:00-24:00 session is legitimate,
+  // is what a night clinic looks like, and must still be accepted -- otherwise 15a-15f would be passing
+  // against an engine that had simply stopped taking sessions.
+  const toMidnight = await addSession(admin, ctxA.ctx, {
+    locationId: locId, weekday: 3, startsMinute: 22 * 60, endsMinute: 1440,
+    actorId: OWNER, correlationId: "av-15g",
+  });
+  ok("15g CONTROL: a session running TO midnight (1440) is accepted, so the bound is not just severity",
+    toMidnight.ok, said(toMidnight));
+  const nightId = toMidnight.ok ? toMidnight.data.id : "";
+  const { data: nightRow } = await admin.from("practice_availability_template")
+    .select("starts_minute, ends_minute").eq("id", nightId || "00000000-0000-4000-8000-000000000000").maybeSingle();
+  ok("15h and 1440 really is on disk -- the database's own check agrees with the engine's",
+    nightId !== "" && nightRow?.starts_minute === 1320 && nightRow?.ends_minute === 1440,
+    JSON.stringify(nightRow));
+
+  // The other three writers. Each takes the same pair and each used to check only the order.
+  const badEdit = await editSession(admin, ctxA.ctx, {
+    templateId: nightId, startsMinute: 78000, actorId: OWNER, correlationId: "av-15i",
+  });
+  ok("15i editSession refuses the same value, judged on the MERGED window and not on the argument alone",
+    !badEdit.ok && badEdit.code === "VALIDATION_ERROR" && badEdit.message === START_RANGE("78000"),
+    said(badEdit));
+
+  const badDuplicate = await duplicateSession(admin, ctxA.ctx, {
+    templateId: nightId, toWeekdays: [4], endsMinute: Number("half nine"),
+    actorId: OWNER, correlationId: "av-15j",
+  });
+  ok("15j duplicateSession refuses NaN before it copies the window onto every day in the list",
+    !badDuplicate.ok && badDuplicate.code === "VALIDATION_ERROR"
+    && badDuplicate.message === END_RANGE("NaN"),
+    said(badDuplicate));
+
+  const goodDuplicate = await duplicateSession(admin, ctxA.ctx, {
+    templateId: nightId, toWeekdays: [4], endsMinute: 1440,
+    actorId: OWNER, correlationId: "av-15k",
+  });
+  ok("15k CONTROL: the same duplicate with 22:00-24:00 copies, so 15j is the window and not the path",
+    goodDuplicate.ok && goodDuplicate.data.created.length === 1 && goodDuplicate.data.refused.length === 0,
+    JSON.stringify(goodDuplicate.ok ? goodDuplicate.data : goodDuplicate));
+
+  // ⚠ AND NOTHING GOT THROUGH. The refusals above are only worth having if the disk agrees, so the whole
+  // workspace is read back rather than the rows the assertions happen to know about.
+  const { data: allTemplates } = await admin.from("practice_availability_template")
+    .select("id, starts_minute, ends_minute").eq("workspace_id", wsA);
+  const outOfRange = ((allTemplates ?? []) as { id: string; starts_minute: number; ends_minute: number }[])
+    .filter(t => !Number.isInteger(t.starts_minute) || t.starts_minute < 0 || t.starts_minute > 1439
+      || !Number.isInteger(t.ends_minute) || t.ends_minute < 1 || t.ends_minute > 1440);
+  ok("15l no session in the whole practice holds a time that is not a time of day",
+    (allTemplates ?? []).length > 0 && outOfRange.length === 0, JSON.stringify(outOfRange));
+
   await cleanup();
 
   console.log(`\n  ${pass} passed, ${fails.length} failed`);

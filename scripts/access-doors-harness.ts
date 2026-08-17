@@ -81,6 +81,41 @@ async function main() {
   ok("2d-control. the password needle can hit: the Practice form carries one",
     readFileSync("src/app/practice/sign-in/SignInForm.tsx", "utf8").includes('type="password"'));
 
+  /**
+   * ⚠ 2e/2f: THE PUBLIC PRODUCT PAGE ANSWERS A PROSPECT WHETHER OR NOT THEY ARE SIGNED IN.
+   *
+   * Found by the owner on competenhealthcare.com/enterprise (2026-08-17). The outer layout rendered
+   * "this account is not attached to an organisation" for NO_TENANT -- at EVERY path beneath
+   * /enterprise, including /enterprise itself. So anyone already signed in to Competen for another
+   * reason (a practitioner on Practice, a member of HQ staff) who followed a product link to find out
+   * what Enterprise IS was met with a dead end about not belonging to something they had never asked
+   * to join, while the marketing gateway sat behind it, rendered for nobody.
+   *
+   * The page's own words are the argument: it calls the signed-out visitor "a PROSPECT following a
+   * product card". Having no tenant is what makes somebody a prospect; being signed out never was.
+   *
+   * These pins hold the two halves apart, because the fix is only correct if BOTH are true: the root
+   * shows the gateway to a tenant-less visitor, AND the honest sentence still exists where a person
+   * actually reached for tenant content. Deleting the sentence would trade one defect for another.
+   */
+  const entLayout = readFileSync("src/app/enterprise/layout.tsx", "utf8");
+  const entPage = readFileSync("src/app/enterprise/page.tsx", "utf8");
+  ok("2e. /enterprise renders the gateway for a signed-in visitor with no tenant, not a dead end",
+    /NO_TENANT"\s*\)\s*return\s*<>\{children\}<\/>/.test(entLayout)
+    && /AUTH_REQUIRED"\s*\|\|\s*shell\.state\s*===\s*"NO_TENANT"/.test(entPage));
+
+  // ⚠ REFUSED IS NOT THE SAME STATE and must NOT have been swept into the same branch: it means a
+  // genuine block or an outage the gate could not read past, and a product that answered that with a
+  // marketing page would be claiming all is well while something is wrong.
+  ok("2e-control. REFUSED still renders its own sentence rather than the gateway",
+    /REFUSED"\s*\)\s*\n?\s*return <NoAccess>\{shell\.sentence\}<\/NoAccess>/.test(entLayout));
+
+  const entWorkforce = readFileSync("src/app/enterprise/workforce/layout.tsx", "utf8");
+  ok("2f. the not-attached sentence still exists, on the tenant surface, with a way onward",
+    entWorkforce.includes("NO_TENANT")
+    && entWorkforce.includes("an administrator there can attach")
+    && entWorkforce.includes('href="/enterprise"'));
+
   // ── 3. THE STAFF DOOR REUSES THE SHARED MACHINERY ──────────────────────────────────────────────
   const staffForm = readFileSync("src/app/staff/StaffSignInForm.tsx", "utf8");
   ok("3a. the staff form posts to the shared login route", staffForm.includes('"/api/auth/login"'));

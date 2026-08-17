@@ -343,13 +343,37 @@ async function main() {
       stripComments(readFileSync(`src/app/practice/(shell)/calendar/${f}`, "utf8"))));
   ok("planner time entry is the 24-hour text pattern -- no native time picker anywhere in the folder",
     timeInputFiles.length === 0, timeInputFiles.join(", "));
-  ok("...and the 24-hour pattern is genuinely present where times are entered, so the pin is not scanning an empty folder",
-    /pattern="\^\(\[01\]\?/.test(readFileSync("src/app/practice/(shell)/calendar/AddActivityForm.tsx", "utf8")));
+  // ⚠ REPOINTED FROM THE LITERAL TO THE CONTROL (2026-08-17). This read AddActivityForm.tsx for a
+  // `pattern="^([01]?` literal, as the NON-VACUITY control for the pin above: a folder that enters no
+  // times at all would pass "no native picker here" while proving nothing. The five wall-clock fields
+  // in this folder have now moved to the shared <TimeInput/>, which imports HHMM_PATTERN and writes
+  // the attribute itself -- so the literal is gone BY DESIGN, and a pin demanding it would be red for
+  // the work succeeding (this repo's recorded "never pin what you are actively changing" trap).
+  //
+  // The property it was really about is unchanged and is asserted directly: this folder genuinely
+  // enters times, and it does so through a 24-hour control. Stronger than the old grep in two ways --
+  // it is folder-wide rather than one exemplar file, and it requires the mount to come from the SHARED
+  // module, so a local component named TimeInput could not satisfy it.
+  const calFiles = readdirSync("src/app/practice/(shell)/calendar").filter(f => f.endsWith(".tsx"));
+  const mounts = calFiles.filter(f =>
+    stripComments(readFileSync(`src/app/practice/(shell)/calendar/${f}`, "utf8")).includes("<TimeInput"));
+  const unshared = mounts.filter(f =>
+    !/import\s*\{[^}]*\bTimeInput\b[^}]*\}\s*from\s*"@\/components\/ui\/wall-clock"/
+      .test(readFileSync(`src/app/practice/(shell)/calendar/${f}`, "utf8")));
+  ok("...and time entry is genuinely present here, through the SHARED 24-hour control, so the pin above is not scanning an empty folder",
+    mounts.length >= 3 && unshared.length === 0,
+    `mounts=${mounts.join(", ") || "none"}${unshared.length ? ` -- not from wall-clock: ${unshared.join(", ")}` : ""}`);
   // ⚠ PRESENCE WAS NOT VALIDITY (walkthrough #14, 2026-08-17). Four inputs carried the pattern with
   // its backslashes EATEN -- `[01]?d` demanding a literal letter d -- so "09:00" could never match
   // and the popup refused every value it asked for. The pin above stayed green throughout, because
   // it checked that a pattern existed, not that the pattern could accept a time. This one runs the
   // real HTML-pattern semantics (anchored RegExp) against the value its own placeholder promises.
+  //
+  // ⚠ IT NOW EXECUTES ZERO LITERALS IN THIS FOLDER, AND THAT IS THE DESTINATION, NOT A HOLE. It keeps
+  // its teeth as a RATCHET: the day a screen here writes its own pattern again, it is executed and a
+  // broken one is caught. What the shared control writes is executed too, once, where it is defined --
+  // practice-responsive-harness 3b runs HHMM_PATTERN and HHMM_RE against real times. No floor is
+  // asserted here, because requiring a literal is the thing this arc removed.
   const brokenPatternFiles = readdirSync("src/app/practice/(shell)/calendar")
     .filter(f => f.endsWith(".tsx"))
     .filter(f => {

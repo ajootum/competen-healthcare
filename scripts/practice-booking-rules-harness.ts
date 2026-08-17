@@ -112,21 +112,31 @@ async function cleanup() {
   // discarding it. The bespoke unpick above runs first and is unchanged.
   // ⚠ THE PURGE'S VERDICT IS READ, NOT DISCARDED (2026-08-17).
   //
-  // This call threw its return value away, and that is how a crashed run became a self-perpetuating
-  // one: a workspace left behind by a partial run makes the NEXT run reuse it, which fails in
-  // assign_capabilities with an FK violation on a membership that no longer exists -- and then fails
-  // the same way for ever, because nothing says the state was never cleaned. Five runs failed at five
-  // different points before anyone could say what was stale.
+  // This harness spent an afternoon dying before its first assertion with an FK violation on
+  // practice_role_assignment.membership_id -- a membership that had been cascaded away between being
+  // read and being used. It failed five times at five different capabilities, which is the shape of a
+  // race rather than of a broken step.
+  //
+  // ⚠ AND THE OBVIOUS EXPLANATION WAS TESTED AND IS WRONG. "A killed run leaves a workspace behind and
+  // the next run inherits it" was the theory; it was checked by provisioning both users deliberately
+  // and leaving the state exactly as a killed process does, then running this harness against it. It
+  // recovered and passed at baseline. Leftover PROVISIONED state is not the cause, and anyone starting
+  // from that assumption will spend the afternoon again.
+  //
+  // What the evidence does support: the failures happened only while a SECOND process was running this
+  // same harness, or immediately after one was killed. OWNER and OTHER are hard-coded uuids, so two
+  // concurrent runs share them -- one run's cleanup deletes the workspace, cascading away the
+  // memberships the other run is mid-way through granting capabilities to. This harness is therefore
+  // NOT safe to run twice at once, and nothing in it says so out loud.
   //
   // purgeWorkspacesOwnedBy already reports `blocked` and `unreadable`; it just had nobody listening.
-  // This does not throw -- a blocked purge is not necessarily fatal and the assertions below may still
-  // be meaningful -- but it can no longer happen silently.
+  // That is worth keeping regardless -- a purge that silently does nothing is its own trap -- but it is
+  // not the cause of the failure above.
   const purged = await purgeWorkspacesOwnedBy(admin, [OWNER, OTHER]);
   if (purged.blocked.length || purged.unreadable)
     console.warn(`  ⚠ cleanup did not fully purge: blocked=${JSON.stringify(purged.blocked)}`
       + ` unreadable=${JSON.stringify(purged.unreadable)}`
-      + "\n    A workspace surviving cleanup makes the next run reuse it, which is how this harness"
-      + " fails in provisioning with an FK violation on a membership that has been cascaded away.");
+      + "\n    This harness reuses fixed owner uuids, so it must not run concurrently with itself.");
 }
 
 /**

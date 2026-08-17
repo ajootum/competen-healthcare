@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import FullScreenSheet from "../_responsive/FullScreenSheet";
+import { TimeInput } from "@/components/ui/wall-clock";
 import { useBelowMd } from "./use-below-md";
 
 // The diary console (CPR-V2-003 V3), Day mode only since CPR-PLN-002: the day's schedule, availability
@@ -159,11 +160,11 @@ export default function CalendarConsole({ date, timezone, canManage, initial, lo
       <div className="grid grid-cols-2 gap-2">
         <label className="block">
           <span className="text-[11px] text-gray-600">Time (24-hour)</span>
-          {/* 24-hour text input, not type="time" -- the native picker renders 12-hour on many
-              machines and the owner asked for the 24-hour clock. */}
-          <input required value={form.time} onChange={e => setForm(p => ({ ...p, time: e.target.value }))}
-            pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="09:00" inputMode="numeric"
-            title="24-hour clock, HH:MM — for example 09:00 or 14:30" className={`mt-0.5 ${input}`} />
+          {/* The shared 24-hour control, not type="time" -- the native picker renders 12-hour on
+              many machines and the owner asked for the 24-hour clock. The pattern is imported
+              inside TimeInput rather than copied here, which is how the eaten backslashes got in. */}
+          <TimeInput value={form.time} onChange={v => setForm(p => ({ ...p, time: v }))}
+            className={`mt-0.5 ${input}`} required placeholder="09:00" />
         </label>
         <label className="block">
           <span className="text-[11px] text-gray-600">Length (minutes)</span>

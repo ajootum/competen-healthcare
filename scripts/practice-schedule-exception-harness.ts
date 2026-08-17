@@ -182,22 +182,35 @@ async function main() {
   // reason: the wrong day, the wrong place, cancelled, a no-show, completed, and (for the narrowed
   // window) too early. A `count === 3` assertion is true of a dozen wrong implementations; naming the
   // ids is true of one.
+  //
+  // ⚠ `acknowledged` IS WHY THIS FIXTURE STILL LOADS. Migration 255 added a WORKSPACE-SCOPED exclusion
+  // constraint: one clinician cannot hold two live appointments over one instant, and it deliberately
+  // carries no location term, because nobody can be at TMR and Kololo at 10:00. C1_OTHER_LOC is exactly
+  // that pair with A1_IN_WINDOW -- ON PURPOSE, since 1f and 1g exist to prove that a change scoped to one
+  // location leaves the other location's booking alone, and they need both bookings in the same hour to
+  // mean anything. Migration 255 gives that decision a column: `overlap_acknowledged` is the deliberate
+  // double-book s14 permits with a reason. Setting it on the one row that needs it keeps every time in
+  // this fixture exactly as it was, so no assertion below is quietly measuring a different diary.
+  //
+  // Without it the whole file died at this insert -- before assertion 1a -- which is a harness reporting
+  // no coverage at all in the shape of a stack trace.
   const rows = [
-    { tag: "A1_IN_WINDOW", location_id: LOC_MAIN, patient_id: PATIENT, patient_name: "Aisha Nakato", scheduled_at: at(DAY_X, 10 * 60), status: "CONFIRMED" },
-    { tag: "A2_REQUESTED", location_id: LOC_MAIN, patient_id: null, patient_name: "Brian Okello", scheduled_at: at(DAY_X, 11 * 60), status: "REQUESTED" },
-    { tag: "A3_NO_LOCATION", location_id: null, patient_id: null, patient_name: "Claire Ayebazibwe", scheduled_at: at(DAY_X, 12 * 60), status: "CONFIRMED" },
-    { tag: "A4_EARLY", location_id: LOC_MAIN, patient_id: null, patient_name: "Daniel Ssemakula", scheduled_at: at(DAY_X, 7 * 60), status: "CONFIRMED" },
-    { tag: "A5_CANCELLED", location_id: LOC_MAIN, patient_id: null, patient_name: "Esther Nabirye", scheduled_at: at(DAY_X, 10 * 60 + 30), status: "CANCELLED" },
-    { tag: "A6_NO_SHOW", location_id: LOC_MAIN, patient_id: null, patient_name: "Francis Mugisha", scheduled_at: at(DAY_X, 10 * 60 + 45), status: "NO_SHOW" },
-    { tag: "A7_COMPLETED", location_id: LOC_MAIN, patient_id: null, patient_name: "Grace Atim", scheduled_at: at(DAY_X, 11 * 60 + 15), status: "COMPLETED" },
-    { tag: "B1_OTHER_DAY", location_id: LOC_MAIN, patient_id: null, patient_name: "Henry Kalule", scheduled_at: at(DAY_Y, 10 * 60), status: "CONFIRMED" },
-    { tag: "C1_OTHER_LOC", location_id: LOC_OTHER, patient_id: null, patient_name: "Irene Nassuna", scheduled_at: at(DAY_X, 10 * 60), status: "CONFIRMED" },
+    { tag: "A1_IN_WINDOW", location_id: LOC_MAIN, patient_id: PATIENT, patient_name: "Aisha Nakato", scheduled_at: at(DAY_X, 10 * 60), status: "CONFIRMED", acknowledged: false },
+    { tag: "A2_REQUESTED", location_id: LOC_MAIN, patient_id: null, patient_name: "Brian Okello", scheduled_at: at(DAY_X, 11 * 60), status: "REQUESTED", acknowledged: false },
+    { tag: "A3_NO_LOCATION", location_id: null, patient_id: null, patient_name: "Claire Ayebazibwe", scheduled_at: at(DAY_X, 12 * 60), status: "CONFIRMED", acknowledged: false },
+    { tag: "A4_EARLY", location_id: LOC_MAIN, patient_id: null, patient_name: "Daniel Ssemakula", scheduled_at: at(DAY_X, 7 * 60), status: "CONFIRMED", acknowledged: false },
+    { tag: "A5_CANCELLED", location_id: LOC_MAIN, patient_id: null, patient_name: "Esther Nabirye", scheduled_at: at(DAY_X, 10 * 60 + 30), status: "CANCELLED", acknowledged: false },
+    { tag: "A6_NO_SHOW", location_id: LOC_MAIN, patient_id: null, patient_name: "Francis Mugisha", scheduled_at: at(DAY_X, 10 * 60 + 45), status: "NO_SHOW", acknowledged: false },
+    { tag: "A7_COMPLETED", location_id: LOC_MAIN, patient_id: null, patient_name: "Grace Atim", scheduled_at: at(DAY_X, 11 * 60 + 15), status: "COMPLETED", acknowledged: false },
+    { tag: "B1_OTHER_DAY", location_id: LOC_MAIN, patient_id: null, patient_name: "Henry Kalule", scheduled_at: at(DAY_Y, 10 * 60), status: "CONFIRMED", acknowledged: false },
+    { tag: "C1_OTHER_LOC", location_id: LOC_OTHER, patient_id: null, patient_name: "Irene Nassuna", scheduled_at: at(DAY_X, 10 * 60), status: "CONFIRMED", acknowledged: true },
   ];
   const { data: apptRows, error: apptErr } = await admin.from("practice_appointment").insert(
     rows.map(r => ({
       workspace_id: wsA, location_id: r.location_id, patient_id: r.patient_id,
       patient_name: r.patient_name, appointment_type: "new_consultation",
       scheduled_at: r.scheduled_at, duration_minutes: 30, status: r.status,
+      overlap_acknowledged: r.acknowledged,
     })),
   ).select("id, patient_name");
   if (apptErr || !apptRows) throw new Error(`appointment fixture failed: ${apptErr?.message}`);
@@ -732,6 +745,110 @@ async function main() {
     ok("11f and the queue it returns names the bookings still waiting",
       q.some(a => a.appointmentId === ID.A1_IN_WINDOW), JSON.stringify(q.map(a => a.reference)));
   }
+
+  // ══ 12. A CHANGE'S WINDOW IS A TIME OF DAY, NOT ANY NUMBER ═════════════════════════════════════
+  //
+  // starts_minute and ends_minute are MINUTES FROM MIDNIGHT. This engine tested only the order, so
+  // 78000 was accepted and written -- and an exception whose window is minute 78000 describes a day that
+  // does not exist, which the generator then honours.
+  //
+  // ⚠ EVERY WINDOW BELOW IS ORDERED CORRECTLY ON PURPOSE, so "a session must end after it starts" cannot
+  // be the thing doing the refusing. The assertions compare THE SENTENCE for the same reason: a refusal
+  // asserted as `!r.ok` stays green when a different validation takes over, and this repo has already
+  // shipped one test that passed for that reason. The sentences are spelled out here rather than
+  // imported, so the needle cannot match itself.
+  const RANGE_START = (got: string) =>
+    `startsMinute must be a whole number of minutes from midnight, 0 to 1439 (0 is midnight, 1439 is 23:59); got ${got}`;
+  const RANGE_END = (got: string) =>
+    `endsMinute must be a whole number of minutes from midnight, 1 to 1440 (1440 is midnight at the end of the day); got ${got}`;
+  const why = (r: { ok: boolean; message?: string }) => (r.ok ? "ACCEPTED -- nothing was refused" : r.message ?? "");
+  /** A caller that never parsed its input. The argument type says number; a JavaScript caller may lie. */
+  const asMinute = (v: unknown) => v as number;
+  const FAR = dueDateFrom(today, 90);
+  const FAR2 = dueDateFrom(today, 92);
+
+  const negWindow = await commitScheduleChange(admin, A, {
+    kind: "extra_session", fromDate: FAR, toDate: FAR, startsMinute: -1, endsMinute: 60, ...ACT,
+  });
+  ok("12a a NEGATIVE start is refused, naming the field and the range",
+    !negWindow.ok && negWindow.code === "VALIDATION_ERROR" && negWindow.message === RANGE_START("-1"),
+    why(negWindow));
+
+  const hugeWindow = await commitScheduleChange(admin, A, {
+    kind: "extra_session", fromDate: FAR, toDate: FAR, startsMinute: 9 * 60, endsMinute: 78000, ...ACT,
+  });
+  ok("12b 78000 -- the value that was actually being written -- is refused as an ending",
+    !hugeWindow.ok && hugeWindow.code === "VALIDATION_ERROR" && hugeWindow.message === RANGE_END("78000"),
+    why(hugeWindow));
+
+  const midnightStart = await commitScheduleChange(admin, A, {
+    kind: "extra_session", fromDate: FAR, toDate: FAR, startsMinute: 1440, endsMinute: 1440, ...ACT,
+  });
+  ok("12c 1440 as a START is refused -- that instant is the next day's minute 0",
+    !midnightStart.ok && midnightStart.code === "VALIDATION_ERROR"
+    && midnightStart.message === RANGE_START("1440"),
+    why(midnightStart));
+
+  const fractional = await commitScheduleChange(admin, A, {
+    kind: "extra_session", fromDate: FAR, toDate: FAR, startsMinute: 90.5, endsMinute: 13 * 60, ...ACT,
+  });
+  ok("12d a NON-INTEGER start is refused -- half a minute is not a minute",
+    !fractional.ok && fractional.code === "VALIDATION_ERROR" && fractional.message === RANGE_START("90.5"),
+    why(fractional));
+
+  // ⚠ THE TRAP. Number("9am") is NaN, and NaN fails every comparison: `NaN > 1439` is false, `NaN < 0`
+  // is false, and `endsMinute <= NaN` is false as well -- so a two-comparison range check AND the
+  // ordering check both wave it through. Only Number.isInteger sees it.
+  const nan = await commitScheduleChange(admin, A, {
+    kind: "extra_session", fromDate: FAR, toDate: FAR,
+    startsMinute: Number("9am"), endsMinute: 13 * 60, ...ACT,
+  });
+  ok("12e NaN from a string the caller never parsed is refused, and is named as NaN",
+    !nan.ok && nan.code === "VALIDATION_ERROR" && nan.message === RANGE_START("NaN"),
+    why(nan));
+
+  const rawString = await commitScheduleChange(admin, A, {
+    kind: "extra_session", fromDate: FAR, toDate: FAR,
+    startsMinute: asMinute("0900"), endsMinute: 13 * 60, ...ACT,
+  });
+  ok("12f a STRING that looks like a time is refused, and the refusal shows it was a string",
+    !rawString.ok && rawString.code === "VALIDATION_ERROR" && rawString.message === RANGE_START(`"0900"`),
+    why(rawString));
+
+  // ⚠ CONTROL: THE BOUND IS NOT "REFUSE EVERYTHING NEAR MIDNIGHT". A one-off session running 22:00 to
+  // midnight is legitimate and must commit, or 12a-12f would be passing against an engine that had
+  // simply stopped accepting changes.
+  const toMidnight = await commitScheduleChange(admin, A, {
+    kind: "extra_session", fromDate: FAR, toDate: FAR, startsMinute: 22 * 60, endsMinute: 1440, ...ACT,
+  });
+  ok("12g CONTROL: a change running TO midnight (1440) is accepted, so the bound is not just severity",
+    toMidnight.ok, why(toMidnight));
+  const { data: midnightRow } = await admin.from("practice_availability_exception")
+    .select("starts_minute, ends_minute")
+    .eq("id", toMidnight.ok ? toMidnight.data.exceptionId : "00000000-0000-4000-8000-000000000000")
+    .maybeSingle();
+  ok("12h and 1440 really is on disk -- the database's own check agrees with the engine's",
+    midnightRow?.starts_minute === 1320 && midnightRow?.ends_minute === 1440, JSON.stringify(midnightRow));
+
+  // ⚠ CONTROL: A WHOLE DAY IS STILL A LEGAL WINDOW. Leave carries no minutes at all, and a guard that
+  // refused null would have taken every day of leave in the product with it.
+  const wholeDayLeave = await commitScheduleChange(admin, A, {
+    kind: "leave", fromDate: FAR2, toDate: FAR2, ...ACT,
+  });
+  ok("12i CONTROL: a whole-day change with NO window still commits -- null is not out of range",
+    wholeDayLeave.ok, why(wholeDayLeave));
+
+  // ⚠ AND NOTHING GOT THROUGH. The refusals are only worth having if the disk agrees, so every stored
+  // window in the practice is read back rather than the rows these assertions happen to know about.
+  const { data: allExceptions } = await admin.from("practice_availability_exception")
+    .select("id, starts_minute, ends_minute").eq("workspace_id", wsA);
+  const outOfRange = ((allExceptions ?? []) as { id: string; starts_minute: number | null; ends_minute: number | null }[])
+    .filter(e => (e.starts_minute !== null
+        && (!Number.isInteger(e.starts_minute) || e.starts_minute < 0 || e.starts_minute > 1439))
+      || (e.ends_minute !== null
+        && (!Number.isInteger(e.ends_minute) || e.ends_minute < 1 || e.ends_minute > 1440)));
+  ok("12j no change in the whole practice holds a window that is not a time of day",
+    (allExceptions ?? []).length > 0 && outOfRange.length === 0, JSON.stringify(outOfRange));
 
   await cleanup();
 

@@ -5,7 +5,10 @@ import { ACTIVITY_LABEL, type ActivityType } from "@/lib/practice/activity-const
 import {
   REMOVES_TIME, RESHAPES_TIME, ADDS_TIME,
 } from "@/lib/practice/schedule-exception-constants";
-import { commitScheduleChange } from "@/lib/practice/schedule-exceptions";
+// ⚠ minuteWindowRefusal LIVES THERE AND IS IMPORTED HERE, RATHER THAN THE OTHER WAY ROUND. This file
+// already imports that one, and the reverse would close the cycle its own header warns about. One
+// implementation, so a session and an exception can never disagree about what a time of day is.
+import { commitScheduleChange, minuteWindowRefusal } from "@/lib/practice/schedule-exceptions";
 // CPR-RECUR-001 (migration 274). ⚠ Constants and arithmetic only, from the file that touches no database
 // and imports nothing -- so the session editor in the browser and the generator on the server work out
 // the same Saturdays. Two implementations of "every other week" would disagree about somebody's month.
@@ -319,6 +322,10 @@ export async function addSession(admin: any, ctx: WorkspaceContext, args: {
     return { ok: false, status: 403, code: "FORBIDDEN", message: "appointment.manage is required" };
   if (!Number.isInteger(args.weekday) || args.weekday < 1 || args.weekday > 7)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "weekday must be 1 (Monday) to 7 (Sunday)" };
+  // ⚠ FIRST, BECAUSE THE ORDERING TEST BELOW CANNOT SEE NaN. `NaN <= NaN` is false, so a window built
+  // out of `Number("9am")` walks straight past "must end after it starts" and into the insert.
+  const badMinutes = minuteWindowRefusal(args.startsMinute, args.endsMinute);
+  if (badMinutes) return badMinutes;
   if (args.endsMinute <= args.startsMinute)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a session must end after it starts" };
 
@@ -416,6 +423,10 @@ export async function editSession(admin: any, ctx: WorkspaceContext, args: {
     note: args.note !== undefined ? args.note : t.note,
   };
 
+  // ⚠ THE MERGED VALUE, NOT THE ARGUMENT. An edit that changes only the end must still be judged against
+  // the start it is keeping, and checking `args` would let a caller who omitted a field skip the test.
+  const badMinutes = minuteWindowRefusal(next.starts_minute, next.ends_minute);
+  if (badMinutes) return badMinutes;
   if (next.ends_minute <= next.starts_minute)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a session must end after it starts" };
   if (!Number.isInteger(next.weekday) || next.weekday < 1 || next.weekday > 7)
@@ -513,6 +524,10 @@ export async function duplicateSession(admin: any, ctx: WorkspaceContext, args: 
   const startsMinute = args.startsMinute ?? t.starts_minute;
   const endsMinute = args.endsMinute ?? t.ends_minute;
   const locationId = args.locationId !== undefined ? args.locationId : t.location_id;
+  // The window the COPIES will carry, checked once here rather than per weekday: every copy gets these
+  // two numbers, so one bad window would otherwise be written to every day in the list.
+  const badMinutes = minuteWindowRefusal(startsMinute, endsMinute);
+  if (badMinutes) return badMinutes;
   if (endsMinute <= startsMinute)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a session must end after it starts" };
 

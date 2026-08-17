@@ -1297,10 +1297,32 @@ async function main() {
   });
   ok("14b. ⚠ every time pattern here ACCEPTS a time -- no pattern with eaten backslashes",
     badPatternFiles.length === 0, badPatternFiles.join(", "));
-  // The control for both: this folder really does carry the 24-hour text idiom, so 14a/14b are not
-  // green merely because nothing was found to test.
-  ok("14c-control. the 24-hour text pattern is genuinely present in this folder",
-    /pattern="\^\(\[01\]\?/.test(wsTree));
+  // The control for both: this folder really does carry the 24-hour idiom, so 14a/14b are not green
+  // merely because nothing was found to test.
+  //
+  // ⚠ REPOINTED FROM THE LITERAL TO THE CONTROL (2026-08-17). It read wsTree for a `pattern="^([01]?`
+  // literal. The folder's two wall-clock fields -- EncounterConsole's follow-up visit time and
+  // ProcedureWorkspace's scheduled time -- now mount the shared <TimeInput/>, which imports
+  // HHMM_PATTERN and writes the attribute itself, so the literal is gone BECAUSE THE FIX LANDED. A
+  // pin still demanding it would be red for the work succeeding, which is this repo's most-repeated
+  // harness mistake: never pin the thing you are actively trying to change.
+  //
+  // Same property, asserted at the control instead: both wall-clock fields exist and both are the
+  // shared one. Named files rather than a count, so adding a third time field cannot turn it red --
+  // and the import is required to be the SHARED module, so a local component of the same name would
+  // not satisfy it. 14b above keeps executing any literal that survives, without requiring one.
+  const CLOCK_SITES: [string, string][] = [
+    ["EncounterConsole.tsx", "fu-book-time"],      // the follow-up visit time (walkthrough #19)
+    ["ProcedureWorkspace.tsx", "when-time-"],      // the scheduled-procedure time, date-plus-time
+  ];
+  const notShared = CLOCK_SITES.filter(([f, anchor]) => {
+    const src = readFileSync(join(encWs, f), "utf8");
+    return !src.includes(anchor)
+      || !/<TimeInput\b/.test(stripJs(src))
+      || !/import\s*\{[^}]*\bTimeInput\b[^}]*\}\s*from\s*"@\/components\/ui\/wall-clock"/.test(src);
+  }).map(([f]) => f);
+  ok("14c-control. both wall-clock fields here are genuinely present and are the SHARED 24-hour control",
+    notShared.length === 0, notShared.join(", "));
 
   report();
 }

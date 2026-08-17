@@ -80,6 +80,72 @@ export const impactReadingValue = <T>(r: Reading<T>, fallback: T): T =>
 
 const nowIso = () => new Date().toISOString();
 
+// ── IS THAT A TIME OF DAY AT ALL? ────────────────────────────────────────────────────────────────────
+//
+// ⚠ A SESSION AND AN EXCEPTION ARE STORED AS MINUTES FROM MIDNIGHT, AND UNTIL NOW NOTHING CHECKED THAT
+// THE NUMBER WAS ONE. Both engines tested only the ORDER -- "a session must end after it starts" -- so
+// 78000 was a longer 9am and was written, and a diary that says a clinic runs to minute 78000 generates
+// slots on a day that does not exist.
+//
+// IT WAS NOT HYPOTHETICAL. The setup screens' toMinutes() helper is not a parser: it returned 54000 for
+// "0900" and 0 for "9am", and those screens were safe only for as long as the browser's `type="time"`
+// guaranteed a well-formed HH:MM. The moment the control changed, the guarantee left with it. Client
+// guards were added, but a client guard protects one screen; the next screen, an integration, or a
+// script reaches these functions directly. THE ENGINE IS THE ONLY PLACE THIS CAN ACTUALLY BE CLOSED.
+//
+// ---- WHY 1440 IS A LEGAL END AND AN ILLEGAL START ---------------------------------------------------
+//
+// A session that runs to midnight ends at minute 1440 -- there is no other way to write "until the day is
+// over", and refusing it would be a new defect in the name of fixing an old one. Nothing STARTS at 1440:
+// that instant is the next day's minute 0, so a session beginning there is either a typo or a wrapped
+// window, and the generator has no day to put it on. This is not a fresh opinion -- it is exactly what
+// migration 230 already checks in SQL (`starts_minute between 0 and 1439`, `ends_minute between 1 and
+// 1440`) on both practice_availability_template and practice_availability_exception. The engine now
+// refuses the same values the database would, with a sentence instead of a constraint name.
+//
+// ---- THE TRAP THIS IS WRITTEN AROUND ---------------------------------------------------------------
+//
+// ⚠ NaN FAILS EVERY COMPARISON. `Number("9am")` is NaN, and `NaN > 1439` is false and `NaN < 0` is false,
+// so a range check written as two comparisons waves it through -- and so does the ordering check above,
+// because `NaN <= NaN` is false too. `Number.isInteger` is therefore the test, not the bounds: it is
+// false for NaN, for 90.5, for Infinity, for null, and for the string "0900" that a caller who never
+// converted its input would send.
+export const MINUTE_OF_DAY_LAST_START = 1439;
+export const MINUTE_OF_DAY_END_OF_DAY = 1440;
+
+/** So a refusal can show what it was given without a string pretending to be a number. */
+const describeMinute = (v: unknown) => (typeof v === "string" ? `"${v}"` : String(v));
+
+/**
+ * Refuse a minute-of-day that is not one, in the same shape every other refusal here uses.
+ *
+ * Returns null when the value is fine, so a caller reads as `const bad = ...; if (bad) return bad;`.
+ * `bound` picks the end of the day this value is allowed to touch: a start may not be 1440, an end may.
+ */
+export function minuteOfDayRefusal(
+  field: string, value: unknown, bound: "start" | "end",
+): { ok: false; status: number; code: string; message: string } | null {
+  const min = bound === "end" ? 1 : 0;
+  const max = bound === "end" ? MINUTE_OF_DAY_END_OF_DAY : MINUTE_OF_DAY_LAST_START;
+  // ⚠ Number.isInteger FIRST, AND IT IS DOING THE REAL WORK. Number("9am") is NaN, and NaN fails every
+  // comparison it is given -- NaN >= 0 is false, NaN <= 1439 is false -- so a range written as two
+  // comparisons alone would let NaN through as "not out of range". This is the shape the screens'
+  // toMinutes() produces from a typo, now that a text field replaced the browser-guaranteed picker.
+  if (Number.isInteger(value) && (value as number) >= min && (value as number) <= max) return null;
+  return {
+    ok: false, status: 400, code: "VALIDATION_ERROR",
+    message: `${field} must be a whole number of minutes from midnight, ${min} to ${max}`
+      + (bound === "end" ? " (1440 is midnight at the end of the day)" : " (0 is midnight, 1439 is 23:59)")
+      + `; got ${describeMinute(value)}`,
+  };
+}
+
+/** Both halves of a window, first refusal wins. The three session writers all take exactly this pair. */
+export function minuteWindowRefusal(startsMinute: unknown, endsMinute: unknown) {
+  return minuteOfDayRefusal("startsMinute", startsMinute, "start")
+    ?? minuteOfDayRefusal("endsMinute", endsMinute, "end");
+}
+
 // ── WHO IS IN THE TIME BEING CHANGED ─────────────────────────────────────────────────────────────────
 
 /**
@@ -389,6 +455,12 @@ export async function commitScheduleChange(admin: any, ctx: WorkspaceContext, ar
   const endsMinute = args.endsMinute ?? null;
   if (kind.needsWindow && (startsMinute == null || endsMinute == null))
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `${kind.label.toLowerCase()} needs a start and an end` };
+  // ⚠ BEFORE THE ORDERING TEST, NOT AFTER IT. `NaN <= NaN` is false, so "a session must end after it
+  // starts" is passed by a window made of two NaNs -- and each half is checked on its own because a kind
+  // that takes the whole day may legitimately carry one null and nothing else.
+  const badMinutes = (startsMinute != null ? minuteOfDayRefusal("startsMinute", startsMinute, "start") : null)
+    ?? (endsMinute != null ? minuteOfDayRefusal("endsMinute", endsMinute, "end") : null);
+  if (badMinutes) return badMinutes;
   if (startsMinute != null && endsMinute != null && endsMinute <= startsMinute)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a session must end after it starts" };
 

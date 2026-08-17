@@ -48,6 +48,9 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+// The single 24-hour definition, imported so the pin below executes THE THING THE PRODUCT USES rather
+// than a copy of it retyped here -- a harness that restates its expectation proves only self-equality.
+import { HHMM_PATTERN, HHMM_RE } from "../src/lib/practice/practice-time";
 
 let pass = 0;
 const fails: string[] = [];
@@ -248,18 +251,36 @@ ok("3a every pattern= attribute in the app compiles as a regular expression",
   uncompilable.length === 0,
   uncompilable.map(p => `${p.src} in ${p.file}`).join(", "));
 
-// A time pattern is recognised by its own shape rather than by the file it sits in, so a time control
-// added on a new screen is covered the day it lands.
-const timePatterns = patterns.filter(p => /2\[0-3\]|:\[0-5\]/.test(p.src));
 const ACCEPT = ["09:00", "9:00", "23:59", "00:00", "14:30"];
 const REJECT = ["24:00", "09:60", "9:00 AM", "0900", "", "11:00 PM"];
-const misbehaving = timePatterns.filter(p => {
+const behaves = (source: string) => {
   let re: RegExp;
-  try { re = new RegExp(p.src); } catch { return true; }
-  return !ACCEPT.every(v => re.test(v)) || !REJECT.every(v => !re.test(v));
-});
-ok("3b every 24-hour time pattern accepts real times and refuses 12-hour and out-of-range ones",
-  timePatterns.length > 0 && misbehaving.length === 0,
+  try { re = new RegExp(source); } catch { return false; }
+  return ACCEPT.every(v => re.test(v)) && REJECT.every(v => !re.test(v));
+};
+
+/**
+ * ⚠ REPOINTED AT THE DEFINITION RATHER THAN AT ITS COPIES (2026-08-17).
+ *
+ * This first executed every time-shaped `pattern=` LITERAL in the app, and required at least one to
+ * exist -- which was right while six screens each carried their own copy. Now that HHMM_PATTERN is
+ * the single definition and TimeInput is the only thing that writes the attribute, the literals are
+ * disappearing by design, and a pin demanding they exist would go red for the work succeeding: the
+ * exact "never pin something you are actively trying to change" trap this repo has hit repeatedly.
+ *
+ * So the executable assertion moves to the definition itself, which is where every control now gets
+ * its pattern from -- and 3c keeps executing any literal that still exists, without requiring any.
+ */
+ok("3b the one 24-hour definition accepts real times and refuses 12-hour and out-of-range ones",
+  behaves(HHMM_PATTERN) && behaves(HHMM_RE.source) && HHMM_RE.source === HHMM_PATTERN,
+  `HHMM_PATTERN=${HHMM_PATTERN} HHMM_RE=${HHMM_RE.source}`);
+
+// Any literal that DOES still exist is executed too -- a screen writing its own pattern is not
+// forbidden, it just cannot write a broken one. No floor: zero literals is the destination.
+const timePatterns = patterns.filter(p => /2\[0-3\]|:\[0-5\]/.test(p.src));
+const misbehaving = timePatterns.filter(p => !behaves(p.src));
+ok("3c every hand-written time pattern still in the app behaves the same as the definition",
+  misbehaving.length === 0,
   misbehaving.map(p => `${p.src} in ${p.file}`).join(", "));
 
 // control: the executor can actually fail -- a deliberately broken pattern must not pass the same test

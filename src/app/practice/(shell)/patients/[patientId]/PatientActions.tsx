@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import StartEncounterAction from "../../encounters/StartEncounterAction";
+import { TimeInput } from "@/components/ui/wall-clock";
 
 // The patient's action panel: starting a consultation, demographic edit (optimistic-concurrency
 // guarded), book-for-patient (writes the registry link, so the diary carries the registry's name), and
@@ -185,12 +186,12 @@ export default function PatientActions(props: {
           <h2 className="text-[13px] font-bold text-gray-900">Book for this patient</h2>
           <form className="mt-2 grid grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); bookAppt(); }}>
             <input type="date" value={book.date} onChange={e => setBook(p => ({ ...p, date: e.target.value }))} className={input} />
-            {/* A TEXT INPUT, NOT type="time": the native picker renders 12-hour on many machines and
-                the owner asked for the 24-hour clock. The pattern holds it to HH:MM; the server
-                composes the instant in the practice timezone either way. */}
-            <input value={book.time} onChange={e => setBook(p => ({ ...p, time: e.target.value }))}
-              required pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="09:00" inputMode="numeric"
-              title="24-hour clock, HH:MM — for example 09:00 or 14:30" className={input} />
+            {/* THE SHARED CONTROL, NOT type="time": the native picker renders 12-hour on many
+                machines and the owner asked for the 24-hour clock. TimeInput holds it to HH:MM off
+                the one imported pattern; the server composes the instant in the practice timezone
+                either way. */}
+            <TimeInput value={book.time} onChange={v => setBook(p => ({ ...p, time: v }))}
+              className={input} required placeholder="09:00" />
             {/* ⚠ TWO FIELDS, NOT ONE (s3). WHY the patient is being seen and HOW the consultation
                 happens are independent: a follow-up may be in person, by telephone or at home, and the
                 single list made those the same kind of thing -- so a teleconsultation recorded no

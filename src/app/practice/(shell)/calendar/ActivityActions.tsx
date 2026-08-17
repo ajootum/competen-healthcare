@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import type { PlannerActivity, PlannerWeek } from "@/lib/practice/planner";
 import { PLANNER_ACTIONS } from "@/lib/practice/planner-constants";
+import { TimeInput } from "@/components/ui/wall-clock";
 import { hhmm, minuteOfDay, shortDate, type LocationOption, type Notice, type RunAction } from "./planner-ui";
 
 // s5's ACTIONS ON A PLANNED BLOCK.
@@ -140,10 +141,9 @@ function MoveForm({ a, busy, go }: { a: PlannerActivity; busy: boolean; go: (act
   return (
     <Row label="Move to">
       <input type="date" value={date} onChange={e => setDate(e.target.value)} className={FIELD} aria-label="New date" />
-      {/* 24-hour text entry -- the owner's clock decision; see CalendarConsole. */}
-      <input value={start} onChange={e => setStart(e.target.value)} className={FIELD} aria-label="New start time"
-        pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="09:00" inputMode="numeric"
-        title="24-hour clock, HH:MM -- for example 09:00 or 14:30" />
+      {/* The shared 24-hour control -- the owner's clock decision; see CalendarConsole. The pattern,
+          keypad, tooltip and touch sizing live in TimeInput, not in a copy here. */}
+      <TimeInput value={start} onChange={setStart} className={FIELD} ariaLabel="New start time" placeholder="09:00" />
       <button type="button" disabled={busy || minute === null} className={PRIMARY}
         onClick={() => go("move", { planDate: date, plannedStartMinute: minute })}>
         Move
@@ -190,9 +190,7 @@ function SplitForm({ a, busy, go }: { a: PlannerActivity; busy: boolean; go: (ac
   const minute = minuteOfDay(at);
   return (
     <Row label="Split at">
-      <input value={at} onChange={e => setAt(e.target.value)} className={FIELD} aria-label="Split time"
-        pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="12:00" inputMode="numeric"
-        title="24-hour clock, HH:MM -- for example 09:00 or 14:30" />
+      <TimeInput value={at} onChange={setAt} className={FIELD} ariaLabel="Split time" placeholder="12:00" />
       <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="title of the second half"
         className={`${FIELD} min-w-[180px]`} aria-label="Title of the second half" />
       <button type="button" disabled={busy || minute === null} className={PRIMARY}

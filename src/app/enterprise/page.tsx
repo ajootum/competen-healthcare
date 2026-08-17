@@ -34,7 +34,13 @@ export default async function EnterpriseHome() {
   const shell = await resolveEnterpriseShell();
   // COMP-ENT-UX-001: the signed-out visitor is a PROSPECT following a product card, and this is the
   // gateway that orients them. Rendered, not redirected -- /enterprise IS the public route (spec s7).
-  if (shell.state === "AUTH_REQUIRED") return <EnterpriseGateway />;
+  // ⚠ AND NO_TENANT IS THE SAME AUDIENCE (2026-08-17). Signed in to Competen for some other reason,
+  // with no Enterprise organisation -- a practitioner on Practice, a member of HQ staff -- is still
+  // somebody who followed a product link to find out what Enterprise is. What made the visitor above
+  // a prospect was never that they were signed OUT; it was that they hold no tenant here. The layout
+  // used to intercept this state with a "not attached to an organisation" card at every path under
+  // /enterprise, including this one, so the gateway was unreachable for them.
+  if (shell.state === "AUTH_REQUIRED" || shell.state === "NO_TENANT") return <EnterpriseGateway />;
   // ⚠ NULL, NOT redirect(). A page executes even when its layout declines to render children -- the
   // layout gets children as a prop it may ignore, but the page has already run, and a redirect THROWN
   // here beats the layout's output. The first version redirected to /enterprise, which from under

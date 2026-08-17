@@ -141,6 +141,8 @@ const DOCUMENT_COLUMNS: RecordColumn<any>[] = [
     render: d => <span className="text-[11.5px] text-gray-600">{d.status}</span> },
 ];
 import { formatTime, formatDate, formatDayTime } from "@/lib/datetime";
+import { HHMM_RE } from "@/lib/practice/practice-time";
+import { TimeInput } from "@/components/ui/wall-clock";
 // The shared encounter visual language. Follow-up is the first tab on it; the other seven follow.
 import { PANEL, SectionHeader, EmptyState, Tip, Advisory } from "@/components/practice/EncounterKit";
 import DiagnosisWorkspace from "./DiagnosisWorkspace";
@@ -1972,12 +1974,15 @@ export default function EncounterConsole(props: {
                             {/* ⚠ TEXT, NOT type="time" -- the native picker follows the OS locale and
                                 drew "11:00 AM" on this very panel (walkthrough #19's screenshot). The
                                 owner's 24-hour decision is product-wide; the planner sweep (#1) missed
-                                this input because the freeze pin only scans the calendar folder. */}
-                            <input id="fu-book-time" value={fu.bookTime}
-                              required pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="14:30" inputMode="numeric"
-                              title="24-hour clock, HH:MM -- for example 09:00 or 14:30"
-                              onChange={e => setFu(p => ({ ...p, bookTime: e.target.value }))}
-                              className={`${input} mt-1 ${/^([01]?\d|2[0-3]):[0-5]\d$/.test(fu.bookTime) ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
+                                this input because the freeze pin only scans the calendar folder.
+                                It is the SHARED TimeInput now (2026-08-17): the pattern, keypad,
+                                tooltip and touch sizing come from one definition, and the amber
+                                not-yet-valid tint tests HHMM_RE -- compiled from that same string --
+                                instead of a seventh hand-typed copy of it. The date beside it stays
+                                type="date" and the SERVER still composes the instant. */}
+                            <TimeInput id="fu-book-time" value={fu.bookTime} required placeholder="14:30"
+                              onChange={v => setFu(p => ({ ...p, bookTime: v }))}
+                              className={`${input} mt-1 ${HHMM_RE.test(fu.bookTime) ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
                           </div>
                           {/* #15: WHERE the visit happens, on every booking surface. The empty choice
                               keeps the regular-week derivation; choosing covers the outside-hours
