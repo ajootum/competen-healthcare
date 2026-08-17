@@ -24,7 +24,7 @@ import { GENERAL_NAV, CKP_NAV, STUDIO_NAV, AI_NAV, GOV_NAV, SYS_NAV, OVERVIEW_HR
 // estate role at all, and RoleSwitcher indexes ROLE_CONFIG[activeRole] -- so passing a fabricated role
 // to keep the type happy would print a badge the person does not hold, which is the exact defect this
 // arc removes. No role, no switcher.
-export default function WorkspaceSidebar({ profileName, roles, activeRole, workspaces, isOwner, hqCapabilities }: {
+export default function WorkspaceSidebar({ profileName, roles, activeRole, workspaces, isOwner, hqCapabilities, positionNames = [] }: {
   profileName: string | null;
   roles: AppRole[];
   activeRole: AppRole | null;
@@ -34,6 +34,8 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
   // short-circuits before any HQ table is read. Inferring ownership from a non-empty list would blank the
   // sidebar for every platform owner. See src/lib/hq/nav-filter.ts.
   isOwner: boolean;
+  /** CPR-PD-001 s6: the names of the live appointments this person is here by, for the identity line. */
+  positionNames?: string[];
   hqCapabilities: string[];
 }) {
   const pathname = usePathname();
@@ -102,10 +104,26 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
             <p className="text-white text-xs font-medium truncate">{profileName}</p>
             {/* ⚠ THIS LINE IS ABOUT THE PERSON, NOT THE PLACE, SO IT MUST BE TRUE OF THEM. It read
                 "Platform Owner"/"Super Admin" for everybody, which was safe while super_admin was the only
-                way in and became false the moment an appointment could open this door. It names no
-                position -- what somebody holds is not the sidebar's to disclose -- only that they are here
-                by appointment rather than by ownership. */}
-            <p className="text-rose-300/60 text-[10px]">{isOwner ? (inWorkspace ? "Platform Owner" : "Super Admin") : "HQ Appointee"}</p>
+                way in and became false the moment an appointment could open this door.
+                ⚠ AND "HQ Appointee" IS SUPERSEDED (CPR-PD-001 s6, 2026-08-17, the owner reading it on
+                screen). That generic label was a deliberate reticence -- "what somebody holds is not the
+                sidebar's to disclose" -- and the spec withdraws it by name: the identity area "should
+                display the user's current effective role (for example, Practice Product Director) rather
+                than the generic 'HQ Appointee' label while operating in this workspace". Newest document
+                governs. The reticence was also answering a question nobody asked: the name of your own
+                appointment is not a disclosure TO YOU, and this line is only ever read by its subject.
+                ⚠ PLURAL IS NOT GUESSED AT. With more than one live appointment the effective one is
+                whichever the governance cookie selects, and resolving that here would cost the office
+                and appointment reads on all 205 HQ pages. The count is true without pretending, and the
+                "Acting as" switcher on the page is the authority -- it names the active one and can
+                change it. */}
+            <p className="text-rose-300/60 text-[10px]">
+              {isOwner
+                ? (inWorkspace ? "Platform Owner" : "Super Admin")
+                : positionNames.length === 1 ? positionNames[0]
+                : positionNames.length > 1 ? `${positionNames.length} HQ appointments`
+                : "HQ Appointee"}
+            </p>
           </div>
         </div>
         {activeRole !== null && (roles.length > 1 || workspaces.length > 0) && (

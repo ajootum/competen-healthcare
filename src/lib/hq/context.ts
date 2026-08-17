@@ -100,17 +100,17 @@ async function currentRoute(): Promise<string> {
 export async function resolveHqPositions(
   admin: ReturnType<typeof createAdminClient>,
   userId: string,
-): Promise<{ positions: string[]; capabilities: string[] }> {
+): Promise<{ positions: string[]; capabilities: string[]; positionNames: string[] }> {
   const { data: offices, error: oErr } = await admin
     .from("ogs_offices")
     .select("id, office_type, code, is_active, status")
     .limit(500);
-  if (oErr || !offices?.length) return { positions: [], capabilities: [] };
+  if (oErr || !offices?.length) return { positions: [], capabilities: [], positionNames: [] };
 
   const hqOfficeIds = (offices as { id: string; office_type: string | null; is_active: boolean | null; status: string | null }[])
     .filter(o => isHqOfficeType(o.office_type) && o.is_active !== false && o.status !== "dissolved" && o.status !== "archived")
     .map(o => o.id);
-  if (!hqOfficeIds.length) return { positions: [], capabilities: [] };
+  if (!hqOfficeIds.length) return { positions: [], capabilities: [], positionNames: [] };
 
   const { data: appts, error: aErr } = await admin
     .from("ogs_office_appointments")
@@ -118,7 +118,7 @@ export async function resolveHqPositions(
     .in("office_id", hqOfficeIds)
     .eq("person_id", userId)
     .limit(200);
-  if (aErr || !appts?.length) return { positions: [], capabilities: [] };
+  if (aErr || !appts?.length) return { positions: [], capabilities: [], positionNames: [] };
 
   const positions = [...new Set(
     (appts as { role: string | null; status: string | null }[])
@@ -129,15 +129,26 @@ export async function resolveHqPositions(
       .filter(a => appointmentGrantsAccess(a.status) && !!a.role)
       .map(a => a.role as string),
   )].sort();
-  if (!positions.length) return { positions: [], capabilities: [] };
+  if (!positions.length) return { positions: [], capabilities: [], positionNames: [] };
 
   // Only ACTIVE positions grant anything — deactivating a position must actually withdraw it.
+  //
+  // ⚠ `name` IS SELECTED HERE AND COSTS NOTHING (CPR-PD-001 s6, 2026-08-17). This query already runs on
+  // every HQ page; the display name is one more column on it, not another round trip. It exists so the
+  // shell can say WHICH appointment somebody is here by, rather than the generic label s6 replaces.
   const { data: posRows } = await admin
-    .from("hq_position").select("code, is_active").in("code", positions).limit(200);
-  const live = new Set(((posRows ?? []) as { code: string; is_active: boolean | null }[])
-    .filter(p => p.is_active !== false).map(p => p.code));
+    .from("hq_position").select("code, name, is_active").in("code", positions).limit(200);
+  const liveRows = ((posRows ?? []) as { code: string; name: string | null; is_active: boolean | null }[])
+    .filter(p => p.is_active !== false);
+  const live = new Set(liveRows.map(p => p.code));
   const activePositions = positions.filter(p => live.has(p));
-  if (!activePositions.length) return { positions, capabilities: [] };
+  if (!activePositions.length) return { positions, capabilities: [], positionNames: [] };
+
+  // Names of the positions that actually grant, in the same order, so a caller can render one without
+  // re-reading anything. Falls back to the code: a position with no name is still a real appointment,
+  // and showing its code is truer than showing nothing.
+  const nameOf = new Map(liveRows.map(p => [p.code, p.name?.trim() || p.code]));
+  const positionNames = activePositions.map(p => nameOf.get(p) ?? p);
 
   const { data: grants } = await admin
     .from("hq_position_capability")
@@ -149,7 +160,7 @@ export async function resolveHqPositions(
       .map(g => g.capability_code),
   )].sort();
 
-  return { positions, capabilities };
+  return { positions, capabilities, positionNames };
 }
 
 /**

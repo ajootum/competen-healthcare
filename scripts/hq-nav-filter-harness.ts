@@ -135,9 +135,29 @@ const NOBODY = { isOwner: false, capabilities: [] as string[] };
   ok("B5", /parentHrefs\(table\.flatMap/.test(sidebar),
     "exact-match hrefs are derived from the unfiltered table, so highlighting does not depend on the viewer");
 
-  // A person here by appointment is not a super admin, and the console must not tell them they are.
-  ok("B6", /isOwner \? \(inWorkspace \? "Platform Owner" : "Super Admin"\) : "HQ Appointee"/.test(sidebar),
-    "the identity line under the viewer's name is true for a non-owner");
+  /**
+   * A person here by appointment is not a super admin, and the console must not tell them they are.
+   *
+   * ⚠ REPOINTED (CPR-PD-001 s6, 2026-08-17). This pinned the literal ternary ending in "HQ Appointee",
+   * and the spec withdraws that label by name: the identity area must show "the user's current
+   * effective role (for example, Practice Product Director) rather than the generic 'HQ Appointee'".
+   * So the pin now asserts the PROPERTY it was always about -- an owner is named as an owner, and a
+   * non-owner is named by the appointment they actually hold -- rather than one spelling of it.
+   *
+   * "HQ Appointee" survives as the LAST fallback, for the case where a viewer holds capabilities but
+   * no named position resolves. That branch must stay: it is the honest answer when there is no name,
+   * and deleting it would leave the line blank for exactly the person the pin exists to protect.
+   */
+  ok("B6", /isOwner\s*\n?\s*\? \(inWorkspace \? "Platform Owner" : "Super Admin"\)/.test(sidebar)
+        && /positionNames\.length === 1 \? positionNames\[0\]/.test(sidebar)
+        && /"HQ Appointee"/.test(sidebar),
+    "the identity line names the appointment held, and still answers honestly when none resolves");
+
+  // ⚠ AND THE NAME MUST REACH IT. A prop the layout never passes leaves the line permanently on its
+  // fallback, which would look exactly like the defect this change fixed -- green pin, unchanged screen.
+  ok("B6b", /positionNames=\{hqPositions\.positionNames\}/.test(layout)
+        && /\.select\("code, name, is_active"\)/.test(src("src/lib/hq/context.ts")),
+    "the layout passes real position names, resolved by the query that already runs");
   ok("B7", /const spaceLabel = isOwner \? "Super Admin" : "Competen HQ"/.test(sidebar)
         && /workspaceTitle=\{isOwner \? "Platform Super Admin" : "Competen HQ"\}/.test(layout),
     "sidebar and header both name the space honestly for a non-owner");

@@ -151,6 +151,37 @@ const strip = (s: string) =>
     ok("W0-control", REGISTERED_SOURCES.length >= 3 && /holds\(ctx,/.test(src),
       `count control: ${REGISTERED_SOURCES.length} source(s) registered and the capability test is present`);
 
+    /**
+     * ⚠ W0b: A STATUS FILTER MUST SPEAK THE COLUMN'S OWN VOCABULARY (2026-08-17).
+     *
+     * The provisioning-queue widget excluded "(succeeded,completed)" -- lowercase, and `succeeded` is
+     * not one of the eight values migration 191 permits at all. Postgres comparison is case-sensitive,
+     * so 'COMPLETED' NOT IN ('succeeded','completed') is TRUE and every finished request was drawn as
+     * pending. The owner's Mission Control showed four rows reading COMPLETED beneath a queue captioned
+     * "4 waiting" -- a widget confidently reporting the opposite of the truth, with nothing red anywhere.
+     *
+     * Executed rather than grepped: every status this filter names is checked against the CHECK
+     * constraint in the migration, so a value that cannot exist can never be filtered on again. That is
+     * the property -- not this particular pair of words.
+     */
+    // ⚠ SLICED TO THE RIGHT TABLE FIRST. Migration 191 declares `check (status in (...))` on several
+    // tables and the list spans two lines, so a regex over the whole file reads whichever block it
+    // reaches first -- which is how this pin's first draft "found" a ten-value vocabulary belonging to
+    // practice_workspace and declared the provisioning statuses invalid. Slice, then parse.
+    const mig191 = readFileSync("supabase/migrations/191-practice-provisioning-foundation.sql", "utf8");
+    const reqBlock = mig191.slice(mig191.indexOf("create table if not exists provisioning_request"));
+    const vocab = new Set(
+      (/check \(status in \(([\s\S]*?)\)\)/.exec(reqBlock)?.[1] ?? "")
+        .split(",").map(s => s.trim().replace(/^'|'$/g, "")).filter(Boolean),
+    );
+    const filtered = (/\.not\("status", "in", "\(([^)]+)\)"\)/.exec(src)?.[1] ?? "")
+      .split(",").map(s => s.trim()).filter(Boolean);
+    const notInVocab = filtered.filter(s => !vocab.has(s));
+    ok("W0b", vocab.size === 8 && filtered.length > 0 && notInVocab.length === 0,
+      `provisioning-status filter speaks the migration's vocabulary`
+      + ` (vocab=${vocab.size}, filtered=[${filtered.join(",")}]`
+      + `${notInVocab.length ? `, NOT IN THE CHECK: ${notInVocab.join(",")}` : ""})`);
+
     for (const source of REGISTERED_SOURCES) {
       const denied = await runWidget(source, { admin, isOwner: false, capabilities: [] });
       if (denied.state !== "forbidden") {

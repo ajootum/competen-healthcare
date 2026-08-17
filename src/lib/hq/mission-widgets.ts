@@ -65,7 +65,22 @@ export const WIDGET_SOURCES: Record<string, { capability: string; run: (ctx: Ctx
         const { data, error } = await ctx.admin
           .from("provisioning_request")
           .select("id, request_type, status, error_code, created_at")
-          .not("status", "in", "(succeeded,completed)")
+          /**
+           * ⚠ THE VOCABULARY IS UPPERCASE, AND THIS FILTER WAS LOWERCASE (2026-08-17).
+           *
+           * Migration 191 constrains provisioning_request.status to REQUESTED / IDENTITY_PENDING /
+           * PROVISIONING / ONBOARDING / ACTIVE / EXPIRED / FAILED / COMPLETED. This read excluded
+           * "(succeeded,completed)" -- lowercase, and `succeeded` is not one of the eight at all.
+           * Postgres string comparison is case-sensitive, so 'COMPLETED' NOT IN ('succeeded',
+           * 'completed') is TRUE and every finished request came back as pending. The owner's own
+           * Mission Control showed four rows reading COMPLETED under a queue captioned "4 waiting".
+           *
+           * ⚠ FAILED IS DELIBERATELY STILL LISTED. It is not waiting, but it is not finished either --
+           * it is the state that needs somebody, and the gate ledger already tells them to resume or
+           * clear it. Each row renders its own status, so a FAILED request reads as FAILED rather than
+           * being quietly counted as pending. Only the two states that need nobody are excluded.
+           */
+          .not("status", "in", "(COMPLETED,EXPIRED)")
           .order("created_at", { ascending: false })
           .limit(25);
         if (error) return { state: "unavailable", reason: error.message };

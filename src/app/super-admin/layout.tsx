@@ -133,7 +133,14 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   // pages inside it. A door onto nothing is worse than a closed one.
   const isOwner = userRoles.includes("super_admin") || hasPlatformRole(profile, "platform_owner");
   // Only asked when it can change the answer. An owner never pays for this read.
-  const hqCapabilities = isOwner ? [] : (await resolveHqPositions(admin, user.id)).capabilities;
+  // ⚠ THE WHOLE RESULT IS KEPT NOW, NOT JUST `.capabilities` (CPR-PD-001 s6). The position NAMES come
+  // back on the same reads -- the resolver selects them as one extra column on a query it already
+  // makes -- so the identity line can say which appointment somebody is here by without this layout,
+  // which runs on all 205 HQ pages, paying for a second resolution.
+  const hqPositions = isOwner
+    ? { capabilities: [] as string[], positionNames: [] as string[] }
+    : await resolveHqPositions(admin, user.id);
+  const hqCapabilities = hqPositions.capabilities;
 
   if (!isOwner && hqCapabilities.length === 0) {
     return (
@@ -207,7 +214,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
               for an owner, because the resolution above short-circuits before reading any HQ table. The
               filter must not infer ownership from the list, or every owner gets an empty sidebar. */}
           <WorkspaceSidebar profileName={profile?.full_name ?? null} roles={userRoles} activeRole={activeRole} workspaces={workspaces}
-            isOwner={isOwner} hqCapabilities={hqCapabilities} />
+            isOwner={isOwner} hqCapabilities={hqCapabilities} positionNames={hqPositions.positionNames} />
         </aside>
 
         {/* Pages stay readable at max-w-6xl; a workspace page opts out of the
