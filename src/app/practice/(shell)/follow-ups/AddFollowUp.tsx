@@ -84,7 +84,13 @@ export default function AddFollowUp({ onClose }: { onClose: () => void }) {
     window.location.reload();
   }
 
-  const field = "w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+  // CPR-MOB-001 s4/s16: every control here is thumb-height below md, and no field is under 16px --
+  // iOS zooms the page on focus below that, which is the horizontal scroll s4 forbids arriving by the
+  // back door. THE WORDING, THE FIELD SET AND THE REQUIRED-ACTION GATING ARE UNTOUCHED (s6/s7): this
+  // form is frozen; only its target sizes are responsive. The layout already stacked -- the grid is
+  // sm:grid-cols-2, so a phone was single-column before this phase and s16's visible labels were
+  // already here.
+  const field = "w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 
   return (
     <form onSubmit={submit} className="rounded-2xl border border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/[0.04] p-4">
@@ -116,7 +122,7 @@ export default function AddFollowUp({ onClose }: { onClose: () => void }) {
             <div className="flex items-center gap-2 rounded-lg border border-[var(--cp-primary)]/30 bg-white px-2.5 py-1.5">
               <span className="truncate text-[13px] font-semibold text-gray-800">{patientName}</span>
               <button type="button" onClick={() => { setPatientId(""); setPatientName(""); setQuery(""); }}
-                className="ml-auto text-[11px] font-semibold text-gray-500 hover:text-gray-800">change</button>
+                className="ml-auto text-[11px] font-semibold text-gray-500 hover:text-gray-800 max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:px-2 max-md:text-[12.5px]">change</button>
             </div>
           ) : (
             <>
@@ -133,7 +139,7 @@ export default function AddFollowUp({ onClose }: { onClose: () => void }) {
                   {patients.map(p => (
                     <button key={p.id} type="button"
                       onClick={() => { setPatientId(p.id); setPatientName(nameOf(p)); }}
-                      className="block w-full px-2 py-1.5 text-left text-[12.5px] text-gray-700 hover:bg-gray-50">
+                      className="block w-full px-2 py-1.5 text-left text-[12.5px] text-gray-700 hover:bg-gray-50 max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:text-[13.5px]">
                       {nameOf(p)}
                     </button>
                   ))}
@@ -184,18 +190,22 @@ export default function AddFollowUp({ onClose }: { onClose: () => void }) {
 
       {error && <p className="mt-2 text-[12px] text-[var(--cmp-text-critical)]">{error}</p>}
 
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex gap-2 max-md:flex-wrap">
         <button type="submit" disabled={busy || !patientId || !followUpType}
-          className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold ${BUTTON.primary}`}>
+          className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold max-md:min-h-[var(--cp-touch-primary)] max-md:flex-1 max-md:text-[14px] ${BUTTON.primary}`}>
           {asDraft ? "Save draft" : "Add follow-up"}
         </button>
+        {/* ⚠ THE REASON THE BUTTON IS DISABLED STAYS BESIDE IT AND STAYS WORDED THE SAME (s6/s7, and
+            the walkthrough defect where a greyed control read as a broken product). Its place in the
+            DOM is unchanged -- below md `order-last` drops it onto its own full-width line under both
+            controls, where a wrapped sentence is read rather than squeezed between two buttons. */}
         {patientId && !followUpType && (
-          <span className="self-center text-[11.5px] text-[var(--cmp-text-warning)]">
+          <span className="self-center text-[11.5px] text-[var(--cmp-text-warning)] max-md:order-last max-md:w-full">
             Choose the follow-up action.
           </span>
         )}
         <button type="button" onClick={onClose}
-          className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold ${BUTTON.quiet}`}>
+          className={`rounded-lg px-3 py-1.5 text-[12.5px] font-semibold max-md:min-h-[var(--cp-touch-primary)] max-md:text-[14px] ${BUTTON.quiet}`}>
           Cancel
         </button>
       </div>

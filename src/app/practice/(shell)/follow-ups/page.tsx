@@ -67,8 +67,10 @@ export default async function FollowUpsPage({ searchParams }: {
         {/* The door to plan authoring. Without it the templates screen is a URL nobody was told about,
             which is the built-but-unreachable class this codebase keeps finding the hard way. */}
         <div className="mb-1.5 flex justify-end">
+          {/* CPR-MOB-001 s4: 44px below md. A door that only a mouse can hit is the same unreachable
+              screen this link exists to prevent, one input device further along. */}
           <Link href="/practice/follow-ups/templates"
-            className="text-[11.5px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+            className="text-[11.5px] font-semibold text-[var(--cp-primary-deep)] hover:underline max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center">
             Plan templates &rarr;
           </Link>
         </div>
