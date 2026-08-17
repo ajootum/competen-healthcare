@@ -105,9 +105,25 @@ export default function OfflineCacheWriter(
       // Scoped to /practice/ rather than the whole origin: nothing outside Practice has an offline
       // story, and a worker with a wider scope than its purpose is a worker that will one day answer a
       // request nobody thought about.
+      //
+      // ⚠ PRODUCTION ONLY, AND DEV ACTIVELY UNREGISTERS (2026-08-17). The worker's static branch is
+      // cache-first for /_next/static, which is safe in production -- chunk URLs are content-hashed,
+      // so a new build can never collide with a stale entry -- and poisonous in dev, where Turbopack
+      // reuses chunk names across rebuilds: the cache then serves YESTERDAY'S JavaScript under
+      // TODAY'S URL. That is the whole "local server does not seem to be updated" / hydration-
+      // mismatch class this session kept re-fixing with rm -rf .next. The worker itself was innocent
+      // for documents (navigations are network-first); the assets were the leak. Unregistering (not
+      // merely skipping) heals a browser that already carries a dev-registered worker.
       if ("serviceWorker" in navigator) {
         try {
-          await navigator.serviceWorker.register("/sw.js", { scope: "/practice/", updateViaCache: "none" });
+          if (process.env.NODE_ENV === "production") {
+            await navigator.serviceWorker.register("/sw.js", { scope: "/practice/", updateViaCache: "none" });
+          } else {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map(r => r.unregister()));
+            const keys = await caches.keys();
+            await Promise.all(keys.filter(k => k.startsWith("competen-practice-shell")).map(k => caches.delete(k)));
+          }
         } catch {
           // A browser that refuses the worker still gets the cache -- it simply cannot boot the offline
           // page from a cold start. Reported through the outcome below rather than thrown.
