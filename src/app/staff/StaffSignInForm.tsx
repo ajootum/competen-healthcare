@@ -54,7 +54,16 @@ export default function StaffSignInForm() {
     } else {
       // Hard navigation so the SERVER resolves appointments and roles -- this form never guesses
       // what the account holds, the same rule as the practice form.
-      window.location.href = "/staff/workspaces";
+      //
+      // ⚠ AND A DEEP LINK SURVIVES IT (COMP-HQ-ACCESS-001 s14). A staff route that sent somebody
+      // here to authenticate gets them back afterwards; without this the destination was dropped and
+      // they arrived at the selector wondering where their bookmark went. VALIDATED, never trusted:
+      // a single leading slash only, so "//evil.example" -- a valid pathname, and a real open-redirect
+      // attack -- is refused, and the destination re-authorises itself on arrival as every staff
+      // route does.
+      const asked = new URLSearchParams(window.location.search).get("next");
+      const dest = asked && asked.startsWith("/") && !asked.startsWith("//") ? asked : "/staff/workspaces";
+      window.location.href = dest;
     }
   }
 

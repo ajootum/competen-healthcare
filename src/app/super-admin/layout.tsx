@@ -1,6 +1,6 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import Link from "next/link";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
 import SidebarToggle from "@/components/SidebarToggle";
@@ -19,7 +19,25 @@ import SessionIdentityNotice, { RememberSessionIdentity } from "@/components/Ses
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+
+  // ⚠ A BOOKMARKED HQ ROUTE SURVIVES THE SIGN-IN (COMP-HQ-ACCESS-001 s14: "All authorised routes
+  // support bookmarking. If signed out, authenticate then restore the validated route.").
+  //
+  // This used to redirect to a bare /login, which DROPPED the destination: somebody opening a
+  // bookmarked Mission Control while signed out authenticated and then surfaced somewhere else
+  // entirely, with no way to tell why. The practice shell already solved exactly this and its idiom
+  // is reused rather than reinvented -- a layout cannot know its own pathname, so the path comes
+  // from the proxy's x-pathname header.
+  //
+  // ⚠ VALIDATED, NOT TRUSTED. Only a plain relative /super-admin path is honoured; anything else
+  // falls back to the door itself. `//evil.example` is a valid pathname and an open redirect is a
+  // real attack, so the shape is tested rather than assumed -- and /login validates `next` again on
+  // arrival, as does the estate gate below when the person lands.
+  if (!user) {
+    const asked = (await headers()).get("x-pathname") ?? "";
+    const next = /^\/super-admin(\/[A-Za-z0-9\-/]*)?$/.test(asked) ? asked : "/super-admin";
+    redirect(`/login?next=${encodeURIComponent(next)}`);
+  }
 
   const admin = createAdminClient();
   const { data: profile } = await admin

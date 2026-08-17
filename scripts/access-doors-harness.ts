@@ -157,6 +157,25 @@ async function main() {
     /decision\.state === "DIRECT"\) redirect\(decision\.destination\.href\)/
       .test(readFileSync("src/app/staff/workspaces/page.tsx", "utf8")));
 
+  // ── 4l-4n. DEEP LINKS SURVIVE THE SIGN-IN (COMP-HQ-ACCESS-001 s14) ────────────────────────────
+  //
+  // "All authorised routes support bookmarking. If signed out, authenticate then restore the
+  // validated route." A bookmarked Mission Control used to be DROPPED: /super-admin redirected to a
+  // bare /login and the person surfaced somewhere else with no way to tell why.
+  const hqLayout = readFileSync("src/app/super-admin/layout.tsx", "utf8");
+  ok("4l. ⚠ a signed-out HQ deep link carries its destination into the sign-in",
+    /redirect\(`\/login\?next=\$\{encodeURIComponent\(next\)\}`\)/.test(hqLayout)
+    && hqLayout.includes('headers()).get("x-pathname")'),
+    "the destination must ride to /login, not be dropped");
+  ok("4m. ⚠ and it is VALIDATED, not trusted -- an open redirect is a real attack",
+    /\^\\\/super-admin/.test(hqLayout) && hqLayout.includes('"/super-admin"'),
+    "only a plain relative /super-admin path may be honoured");
+  const signInForm = readFileSync("src/app/staff/StaffSignInForm.tsx", "utf8");
+  const staffDoorPage = readFileSync("src/app/staff/page.tsx", "utf8");
+  ok("4n. the staff door returns somebody to where they were sent from, refusing protocol-relative",
+    signInForm.includes('startsWith("/")') && signInForm.includes('!asked.startsWith("//")')
+    && staffDoorPage.includes('!asked.startsWith("//")'));
+
   // ── 5. NO FAKERY ON THE NEW SURFACES ───────────────────────────────────────────────────────────
   const newSurfaces = [
     ...staffSources,

@@ -29,11 +29,20 @@ export const metadata = pageMetadata({
 
 export const dynamic = "force-dynamic";
 
-export default async function StaffGatewayPage() {
+export default async function StaffGatewayPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  // Already signed in: identity is proven, so the only question left is the resolver's.
-  if (user) redirect("/staff/workspaces");
+  // Already signed in: identity is proven, so the only question left is the resolver's -- unless a
+  // route sent them here with somewhere to be (s14's bookmark restoration). Validated to a single
+  // leading slash, because "//evil.example" is a valid pathname; the destination re-authorises
+  // itself on arrival as every staff route does.
+  if (user) {
+    const raw = (await searchParams).next;
+    const asked = Array.isArray(raw) ? raw[0] : raw;
+    redirect(asked && asked.startsWith("/") && !asked.startsWith("//") ? asked : "/staff/workspaces");
+  }
 
   return (
     <div className="min-h-screen bg-[#0f1923] flex flex-col">
