@@ -138,7 +138,10 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
               className="flex-1 rounded-lg border border-[var(--cp-primary-border)] bg-white px-3 py-2 text-[12.5px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50">
               {busy === "end" ? "Ending…" : "End Session"}
             </button>
-            <Link href="/practice/calendar"
+            {/* ⚠ SAYS SESSION, GOES TO THE SESSION. This primary said "View Session" and opened the
+                Planner -- a wrong door on the page's one running-state action (caught during the
+                MOB 3a review, 2026-08-17). The cockpit is the session's canonical home. */}
+            <Link href="/practice/today"
               className="flex-1 rounded-lg bg-[var(--cp-primary)] px-3 py-2 text-center text-[12.5px] font-semibold text-white hover:opacity-90">
               View Session
             </Link>
