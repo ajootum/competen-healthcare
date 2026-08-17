@@ -40,6 +40,58 @@ const CHANNEL_LABEL = Object.fromEntries(RELEASE_CHANNELS) as Record<string, str
 
 const cell = "px-3 py-2 align-top text-[12.5px]";
 
+// ══ CPR-MOB-001 s12 row 2 / s19's card-fallback rule — THE THREE HONESTY CELLS, EXTRACTED ═════════════
+//
+// ⚠ THESE EXIST BECAUSE THE TABLE NOW HAS TWO FACES AND THE SENTENCES MUST NOT DRIFT. Below md the seven
+// columns become cards; from md up the table is exactly what it was. Each of the three cells below says
+// something specific about a GAP in the record of where a clinical document went, and the whole point of
+// extracting them is that "not recorded" cannot become an empty card field on a phone while it stays
+// italic on a desktop. One definition, both faces — 4b's IdentityChips move, for the same reason.
+//
+// ⚠ AND NOT ONE OF THEM RENDERS A BLANK OR A ZERO. An empty cell reads as "nothing to say"; every one of
+// these is "this was never written down", which is a different fact and looks like one.
+
+/** The patient a copy was about. An em dash, because a release need not have a patient. */
+function PatientCell({ name }: { name: string | null }) {
+  return <>{name ?? "—"}</>;
+}
+
+/** Who is holding the copy. */
+function RecipientCell({ recipient, note }: { recipient: string | null; note: string | null }) {
+  return (
+    <>
+      {recipient
+        ? <span className="text-gray-700">{recipient}</span>
+        : <span className="italic text-gray-400">not recorded</span>}
+      {note && <span className="block text-[11px] text-gray-500">{note}</span>}
+    </>
+  );
+}
+
+/** Who recorded the release. */
+function ReleasedByCell({ name }: { name: string | null }) {
+  return name
+    ? <span className="text-gray-600">{name}</span>
+    : <span className="italic text-gray-400">name not on record</span>;
+}
+
+/** The document's status NOW, plus the one alarming derived fact. Words, never colour alone (s4). */
+function DocumentNowCell({ status, outdated }: { status: keyof typeof DOC_STATUS; outdated: boolean }) {
+  const chip = DOC_STATUS[status];
+  return (
+    <>
+      <span className={`inline-block rounded px-1.5 py-0.5 text-[10.5px] font-bold ${chip.chip}`} title={chip.blurb}>
+        {chip.label}
+      </span>
+      {outdated && (
+        <span className="mt-0.5 block text-[10.5px] font-semibold text-rose-700">
+          this copy is out of date
+        </span>
+      )}
+    </>
+  );
+}
+
 export default async function SharedAndIssuedPage() {
   const shell = await resolvePracticeShell();
   if (shell.state !== "READY") redirect("/practice");
@@ -145,7 +197,74 @@ export default async function SharedAndIssuedPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* ══ CPR-MOB-001 s12 row 2 — THE CARDS, BELOW md ═══════════════════════════════════════════
+              "Document list → Cards showing title/type/date/status and primary action", and s5's
+              "Wide data table → Card/list rows". This is the ONE genuinely wide table in the workspace:
+              seven columns behind a min-w-[860px], which on a 390px phone is s4's forbidden horizontal
+              scroll for a core workflow.
+
+              ⚠ CardList THE PRIMITIVE WAS REJECTED, AND THE REASON IS A RUNTIME ONE, NOT A TASTE ONE.
+              It is a "use client" component whose whole contract is function props — getKey, title,
+              fields, action. This page is a server component (force-dynamic, createAdminClient), and a
+              function passed from a server component to a client one is not serialisable: Next throws
+              "Functions cannot be passed directly to Client Components" at render. Both existing
+              adopters, PatientsScreen and MobileReportsLanding, are themselves "use client". Adopting it
+              here would mean making this page a client component and shipping the whole issued register
+              to the browser to gain a card layout — so the cards are server-rendered here instead, and
+              the four honesty cells are shared with the table above rather than the markup.
+
+              ⚠ THE PRIMARY ACTION IS THE TITLE, AND THERE IS ONLY ONE. This page's own rule — "NO ACTION
+              LIVES HERE", four paragraphs up — is untouched: the card opens the document, exactly as the
+              table's title cell does. Issuing still happens on the document, beside the text being
+              issued, because a one-tap Issue in a list is how somebody releases the wrong letter. */}
+          <ul className="md:hidden flex flex-col gap-2.5 p-3">
+            {issued.map(r => (
+              <li
+                key={r.id}
+                className={`rounded-xl border bg-white p-3.5 ${
+                  r.outdatedForHolder ? "border-rose-300" : "border-gray-200"}`}
+              >
+                <Link
+                  href={r.href}
+                  className="flex min-h-[var(--cp-touch)] items-center text-[14px] font-semibold leading-snug text-gray-900"
+                >
+                  {r.title}
+                </Link>
+                <p className="text-[11.5px] text-gray-400">{DOC_TYPE_LABEL[r.docType] ?? r.docType}</p>
+                <div className="mt-1.5">
+                  <DocumentNowCell status={r.documentStatus} outdated={r.outdatedForHolder} />
+                </div>
+                <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+                  {/* Visible labels on every field (s16) — a card has no column header to inherit one. */}
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Patient</dt>
+                    <dd className="text-[12.5px] text-gray-700"><PatientCell name={r.patientName} /></dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-bold uppercase tracking-wide text-gray-400">How</dt>
+                    <dd className="text-[12.5px] text-gray-700">{CHANNEL_LABEL[r.channel] ?? r.channel}</dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-bold uppercase tracking-wide text-gray-400">When</dt>
+                    <dd className="text-[12.5px] text-gray-600">{r.releasedAt.slice(0, 10)}</dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Recorded by</dt>
+                    <dd className="text-[12.5px]"><ReleasedByCell name={r.releasedByName} /></dd>
+                  </div>
+                  {/* ⚠ FULL WIDTH, AND NOT TRUNCATED. "To whom" is the answer to the only question this
+                      page exists to answer, and it carries the optional note under it. */}
+                  <div className="col-span-2 min-w-0">
+                    <dt className="text-[10px] font-bold uppercase tracking-wide text-gray-400">To whom</dt>
+                    <dd className="text-[12.5px]"><RecipientCell recipient={r.recipient} note={r.note} /></dd>
+                  </div>
+                </dl>
+              </li>
+            ))}
+          </ul>
+
+          <div className="max-md:hidden overflow-x-auto">
             <table className="w-full min-w-[860px] border-collapse">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/60 text-left text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">
@@ -159,46 +278,32 @@ export default async function SharedAndIssuedPage() {
                 </tr>
               </thead>
               <tbody>
-                {issued.map(r => {
-                  const chip = DOC_STATUS[r.documentStatus];
-                  return (
-                    <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
-                      <td className={cell}>
-                        <Link href={r.href} className="font-semibold text-gray-900 hover:text-[var(--cp-primary-deep)] hover:underline">
-                          {r.title}
-                        </Link>
-                        <span className="block text-[11px] text-gray-400">{DOC_TYPE_LABEL[r.docType] ?? r.docType}</span>
-                      </td>
-                      <td className={`${cell} text-gray-700`}>{r.patientName ?? "—"}</td>
-                      <td className={`${cell} text-gray-700`}>{CHANNEL_LABEL[r.channel] ?? r.channel}</td>
-                      <td className={cell}>
-                        {r.recipient
-                          ? <span className="text-gray-700">{r.recipient}</span>
-                          /* ⚠ NOT BLANK. An empty cell reads as "nothing to say"; this is a gap in the
-                             record of where a clinical document went, and it should look like one. */
-                          : <span className="italic text-gray-400">not recorded</span>}
-                        {r.note && <span className="block text-[11px] text-gray-500">{r.note}</span>}
-                      </td>
-                      <td className={`${cell} whitespace-nowrap text-gray-600`}>{r.releasedAt.slice(0, 10)}</td>
-                      <td className={`${cell} text-gray-600`}>
-                        {r.releasedByName ?? <span className="italic text-gray-400">name not on record</span>}
-                      </td>
-                      <td className={cell}>
-                        <span className={`inline-block rounded px-1.5 py-0.5 text-[10.5px] font-bold ${chip.chip}`} title={chip.blurb}>
-                          {chip.label}
-                        </span>
-                        {r.outdatedForHolder && (
-                          <span className="mt-0.5 block text-[10.5px] font-semibold text-rose-700">
-                            this copy is out of date
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {/* ⚠ EVERY CELL BELOW THAT CAN SAY "this was never recorded" IS NOW THE SAME COMPONENT
+                    THE CARDS ABOVE RENDER. The markup is unchanged from what shipped — it was lifted,
+                    not rewritten — so this table is pixel-identical at md and up, and the two faces
+                    cannot drift apart the next time one of these sentences is edited. */}
+                {issued.map(r => (
+                  <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
+                    <td className={cell}>
+                      <Link href={r.href} className="font-semibold text-gray-900 hover:text-[var(--cp-primary-deep)] hover:underline">
+                        {r.title}
+                      </Link>
+                      <span className="block text-[11px] text-gray-400">{DOC_TYPE_LABEL[r.docType] ?? r.docType}</span>
+                    </td>
+                    <td className={`${cell} text-gray-700`}><PatientCell name={r.patientName} /></td>
+                    <td className={`${cell} text-gray-700`}>{CHANNEL_LABEL[r.channel] ?? r.channel}</td>
+                    <td className={cell}><RecipientCell recipient={r.recipient} note={r.note} /></td>
+                    <td className={`${cell} whitespace-nowrap text-gray-600`}>{r.releasedAt.slice(0, 10)}</td>
+                    <td className={`${cell} text-gray-600`}><ReleasedByCell name={r.releasedByName} /></td>
+                    <td className={cell}>
+                      <DocumentNowCell status={r.documentStatus} outdated={r.outdatedForHolder} />
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
+          </>
         )}
       </section>
 

@@ -44,7 +44,10 @@ import Dictation from "@/components/practice/Dictation";
 // button would eventually say ready over an engine that says no.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+// The max-md tail is s4's 44px floor and nothing else. 16px text below md is also what stops iOS Safari
+// zooming the viewport the moment a field takes focus -- a zoom the practitioner then has to undo by
+// hand, mid-sentence, on a form they are trying to finish.
+const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 
 type MergeValue = { field: string; description: string; value: string | null; state: "resolved" | "empty" };
 type MergeReading =
@@ -185,15 +188,36 @@ export default function DocumentConsole(props: {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[13px] font-bold text-gray-900">Document</h2>
           {/* s8's page and PDF preview. The print view IS the PDF export -- one definition of what the
-              paper looks like, produced by the browser's own print-to-PDF. */}
-          <a href={props.printHref} className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+              paper looks like, produced by the browser's own print-to-PDF.
+
+              ⚠ CPR-MOB-001 s12 row 3, "Preview → Full-screen document preview where supported". IT
+              ALREADY IS, and that is the whole answer: printHref is its own ROUTE
+              (/practice/documents/[documentId]/print), not a modal over this page, so on a phone it
+              opens as a full screen showing the letterhead and the body exactly as they will print.
+              There was nothing to build; the link only had to stop being 12px of text between two other
+              things. Below md it becomes a full-width touch control, because on a phone "see what this
+              actually looks like" is the most common reason to open a document at all. */}
+          <a href={props.printHref}
+            className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline max-md:flex max-md:w-full max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:justify-center max-md:rounded-lg max-md:border max-md:border-gray-200 max-md:text-[13.5px] max-md:no-underline">
             Preview and print &rarr;
           </a>
         </div>
         {targets.length === 0 && !canAmend && !signable ? (
           <p className="mt-2 text-[12px] text-gray-400">This document is closed. No further changes are possible.</p>
         ) : (
-          <div className="mt-2 flex gap-1.5 flex-wrap">
+          /* ══ CPR-MOB-001 s12 row 5 — "Large Approve/Return/Issue-type controls as appropriate" ══════
+             THIS ROW IS THAT ROW. The transitions this bar draws are Mark ready, Reopen for editing,
+             Amend and Mark entered in error -- the approve/return/withdraw family s12 is naming -- and
+             each was a 30px-tall button in a wrapped row. Below md they stack full width at s4's 44px
+             floor, which also stops "Mark entered in error" from ever sharing a line with "Mark ready"
+             where a thumb could take the wrong one.
+
+             ⚠ WHAT DID NOT CHANGE: which buttons exist, what they say, who may see them, or what they
+             do. `documentActionFor`, the `props.canAuthor` gate and the ENTERED_IN_ERROR danger styling
+             are untouched -- s12 opens by saying the document architecture remains frozen. The danger
+             control keeps its own border and text colour AND is the only one that says a destructive
+             thing in words, so it is not distinguished by colour alone (s4). */
+          <div className="mt-2 flex gap-1.5 flex-wrap max-md:flex-col">
             {targets.map(to => {
               const action = documentActionFor(props.status, to);
               if (!action) return null;
@@ -201,7 +225,7 @@ export default function DocumentConsole(props: {
               const danger = to === "ENTERED_IN_ERROR";
               return (
                 <button key={to} type="button" disabled={busy} onClick={() => transition(action, `${documentLabelFor(props.status, to)} done.`)}
-                  className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50 ${
+                  className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50 max-md:flex max-md:min-h-[var(--cp-touch)] max-md:w-full max-md:items-center max-md:justify-center max-md:text-[14px] ${
                     danger ? "border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] hover:bg-[var(--cmp-surface-critical)]"
                       : "border border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
                   {documentLabelFor(props.status, to)}
@@ -241,9 +265,13 @@ export default function DocumentConsole(props: {
                   the text the record holds, not the text on this screen.
                 </p>
               )}
-              <label className="mt-2 flex items-start gap-2 text-[12px] text-gray-800">
+              {/* ⚠ THE ATTESTATION TICK GROWS BELOW md AND NOTHING ELSE ABOUT IT MOVES. A 3.5-unit
+                  checkbox is 14px; s4's floor exists so that the deliberate act of attesting cannot be
+                  performed by a thumb that missed. The label still wraps the input, so the sentence
+                  itself is the target -- it was already the honest way round and stays that way. */}
+              <label className="mt-2 flex items-start gap-2 text-[12px] text-gray-800 max-md:gap-3 max-md:text-[13.5px] max-md:leading-relaxed">
                 <input type="checkbox" checked={attested} onChange={e => setAttested(e.target.checked)}
-                  className="mt-0.5 h-3.5 w-3.5 accent-[var(--cp-primary)]" />
+                  className="mt-0.5 h-3.5 w-3.5 accent-[var(--cp-primary)] max-md:h-5 max-md:w-5" />
                 <span>I have read the statement above and I am signing this document.</span>
               </label>
               <button
@@ -266,7 +294,12 @@ export default function DocumentConsole(props: {
                   }
                   window.location.reload();
                 }}
-                className="mt-2 rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
+                /* s4: 48px is preferred for a primary action, and this is the most consequential
+                   control in the workspace -- a signature is an attestation that cannot be withdrawn,
+                   only superseded. It stays exactly as disabled as it was: `busy || !attested ||
+                   dirty`, the same three conditions, so a bigger button is not an easier one to press
+                   by accident. */
+                className="mt-2 rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50 max-md:flex max-md:min-h-[var(--cp-touch-primary)] max-md:w-full max-md:items-center max-md:justify-center max-md:text-[15px]">
                 Sign
               </button>
             </>
@@ -302,10 +335,14 @@ export default function DocumentConsole(props: {
           </div>
         )}
 
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <label className="col-span-2 text-[11px] font-semibold text-gray-500" htmlFor="doc-title">Title</label>
+        {/* One column below md, the same two above it — and every col-span-2 carries max-md:col-span-1
+            so the stacked grid cannot grow an implicit second track. Document type and Addressed to are
+            the pair that stops sharing a line: neither is a short field, and s10 only permits two
+            side-by-side where they clearly fit. */}
+        <div className="mt-2 grid grid-cols-2 gap-2 max-md:grid-cols-1">
+          <label className="col-span-2 text-[11px] font-semibold text-gray-500 max-md:col-span-1" htmlFor="doc-title">Title</label>
           <input id="doc-title" disabled={!editable} value={draft.title} onChange={e => set({ title: e.target.value })}
-            className={`${input} col-span-2 disabled:bg-gray-50 disabled:text-gray-500`} />
+            className={`${input} col-span-2 max-md:col-span-1 disabled:bg-gray-50 disabled:text-gray-500`} />
 
           <select aria-label="Document type" disabled={!editable} value={draft.docType} onChange={e => set({ docType: e.target.value })}
             className={`${input} disabled:bg-gray-50 disabled:text-gray-500`}>
@@ -315,9 +352,14 @@ export default function DocumentConsole(props: {
             value={draft.addressedTo} onChange={e => set({ addressedTo: e.target.value })}
             className={`${input} disabled:bg-gray-50 disabled:text-gray-500`} />
 
-          <label className="col-span-2 mt-1 text-[11px] font-semibold text-gray-500" htmlFor="doc-body">Body</label>
+          <label className="col-span-2 mt-1 text-[11px] font-semibold text-gray-500 max-md:col-span-1" htmlFor="doc-body">Body</label>
+          {/* ⚠ THE BODY'S SIZE BELOW md IS STATED, NOT INHERITED BY ACCIDENT. `input` now carries
+              max-md:text-[16px] and this textarea carries text-[12px]; which of the two wins below md
+              is a question about Tailwind's output ordering, and the answer to a question like that
+              should not be load-bearing on a clinical editor. 16px is the deliberate choice — it is
+              what stops iOS Safari zooming the page when the field takes focus mid-document. */}
           <textarea id="doc-body" ref={bodyRef} rows={18} disabled={!editable} value={draft.body} onChange={e => set({ body: e.target.value })}
-            className={`${input} col-span-2 resize-y font-mono text-[12px] leading-relaxed disabled:bg-gray-50 disabled:text-gray-500`} />
+            className={`${input} col-span-2 max-md:col-span-1 resize-y font-mono text-[12px] max-md:text-[16px] leading-relaxed disabled:bg-gray-50 disabled:text-gray-500`} />
         </div>
 
         {editable && (
@@ -435,7 +477,20 @@ export default function DocumentConsole(props: {
             Records that a copy left this practice &mdash; to whom, how and when. Nothing is sent from
             here, so there is no delivery receipt and none is implied.
           </p>
-          <form className="mt-2 grid grid-cols-2 gap-2" onSubmit={async e => {
+          {/* ══ CPR-MOB-001 s12 row 5, the "Issue-type" control, and s16 ═══════════════════════════════
+              ⚠ THE TWO FIELDS STOP SHARING A LINE BELOW md. s10: "Avoid side-by-side dense form fields
+              on narrow screens unless two short fields clearly fit." A channel select beside an email
+              address does not fit on a 390px phone -- the address, which is the field that must be
+              right, gets about 150px of it. One column below md, the two-column grid above md
+              unchanged.
+
+              ⚠ WHAT IS STILL WRONG HERE, AND IS NOT FIXED BY THIS PHASE: these three controls carry
+              `aria-label` and a placeholder, and s16 is explicit that "placeholders are not
+              substitutes" for a visible label. That is true at EVERY width, not just below md, so the
+              honest fix changes the desktop form -- which this phase may not do. Reported rather than
+              half-fixed: a label visible only on a phone would leave the defect in place and hide the
+              evidence of it. */}
+          <form className="mt-2 grid grid-cols-2 gap-2 max-md:grid-cols-1" onSubmit={async e => {
             e.preventDefault();
             const done = await call({ release }, "Recorded.", false);
             if (!done) return;
@@ -448,15 +503,19 @@ export default function DocumentConsole(props: {
             </select>
             <input aria-label="To whom" placeholder={recipientRequired ? "Email address it went to" : "To whom (optional)"}
               value={release.recipient} onChange={e => setRelease(r => ({ ...r, recipient: e.target.value }))} className={input} />
-            <input aria-label="Note" placeholder="Note (optional)" value={release.note} onChange={e => setRelease(r => ({ ...r, note: e.target.value }))} className={`${input} col-span-2`} />
+            {/* ⚠ EVERY col-span-2 IN THIS FORM NEEDS max-md:col-span-1 BESIDE IT. CSS Grid does not clamp
+                a span to the track count: `grid-column: span 2` inside a one-column grid CREATES an
+                implicit second column, so stacking the form without this would have silently widened it
+                past the viewport and reintroduced the horizontal scroll s4 forbids. */}
+            <input aria-label="Note" placeholder="Note (optional)" value={release.note} onChange={e => setRelease(r => ({ ...r, note: e.target.value }))} className={`${input} col-span-2 max-md:col-span-1`} />
             {recipientRequired && (
-              <p className="col-span-2 -mt-1 text-[11px] text-gray-500">
+              <p className="col-span-2 -mt-1 text-[11px] text-gray-500 max-md:col-span-1">
                 An emailed copy needs the address it went to. There is no sent-items folder here to
                 reconstruct it from later.
               </p>
             )}
             <button type="submit" disabled={busy || (recipientRequired && !release.recipient.trim())}
-              className="col-span-2 rounded-lg border border-gray-200 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              className="col-span-2 rounded-lg border border-gray-200 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 max-md:col-span-1 max-md:flex max-md:min-h-[var(--cp-touch-primary)] max-md:items-center max-md:justify-center max-md:text-[14px]">
               Record
             </button>
           </form>

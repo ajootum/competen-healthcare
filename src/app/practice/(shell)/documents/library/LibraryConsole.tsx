@@ -57,11 +57,16 @@ export default function LibraryConsole({
     else setNotice({ kind: "err", text: "That file could not be opened." });
   }
 
-  async function upload(file: File) {
+  // ⚠ `title` IS ONLY EVER PASSED BY THE CAMERA PATH, and only because a camera has no filename worth
+  // keeping. Every phone hands back "image.jpg" or an IMG_ number, so deriving the title the usual way
+  // fills this practice's library with documents called "image". The date is a fact about the capture,
+  // not a guess about the contents -- this deliberately does NOT invent a subject for the photograph.
+  // The file picker path is unchanged and still takes the name the file actually has.
+  async function upload(file: File, title?: string) {
     setBusy(true); setNotice(null);
     const form = new FormData();
     form.set("file", file);
-    form.set("title", file.name.replace(/\.[^.]+$/, ""));
+    form.set("title", title ?? file.name.replace(/\.[^.]+$/, ""));
     if (activeFolder) form.set("folderId", activeFolder);
     const res = await fetch("/api/v1/practice/library", { method: "POST", body: form });
     const data = await res.json().catch(() => ({}));
@@ -171,11 +176,50 @@ export default function LibraryConsole({
           <div className="flex items-baseline justify-between gap-2 flex-wrap">
             <h2 className="text-[13px] font-bold text-gray-900">{inBin ? "Recycle bin" : "Documents"}</h2>
             {canManage && !inBin && (
-              <label className="cursor-pointer rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
-                Upload
-                <input type="file" className="hidden" disabled={busy}
-                  onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); }} />
-              </label>
+              /* ══ CPR-MOB-001 s12 row 4 — "Mobile file picker/camera capture ONLY where permitted and
+                   technically supported" ═══════════════════════════════════════════════════════════════
+                   BOTH HALVES OF THAT ROW ARE TRUE HERE, AND EACH WAS CHECKED SEPARATELY.
+
+                   PERMITTED: unchanged. Both controls sit inside the same `canManage && !inBin` gate the
+                   Upload button has always had — library.manage, decided by the server, and the camera
+                   adds no new door into this practice's storage.
+
+                   TECHNICALLY SUPPORTED: checked against the server, not assumed. The upload path is
+                   POST /api/v1/practice/library, which validates `file.type` against LIBRARY_MIME --
+                   and that set contains image/jpeg, image/png and image/webp, which is exactly what a
+                   phone camera produces. A capture is therefore a file this endpoint already accepts;
+                   nothing on the server needed changing and nothing was changed. MAX_LIBRARY_BYTES is
+                   25MB, comfortably above a phone photo, and an oversized or wrong-typed file still
+                   comes back through the same error notice as before.
+
+                   ⚠ TWO CONTROLS, NOT ONE CONTROL WITH `capture` BOLTED ON. Putting capture= on the
+                   existing input would force the camera on a phone and TAKE AWAY the file picker, so a
+                   practitioner could no longer upload the PDF sitting in their downloads. s12 asks for
+                   picker AND capture. The camera one is md:hidden because `capture` is inert on a
+                   desktop browser -- a "Take a photo" button that silently opens a file dialog is a
+                   control that lies about what it does.
+
+                   ⚠ AND THIS IS THE LIBRARY, WHICH IS NOT PATIENT DATA. The library holds the practice's
+                   own documents -- protocols, blank forms, price lists. It is the ONLY upload path in
+                   this workspace; there is no patient-document upload anywhere in Documents (arrivals
+                   are classified, never uploaded, and s20 Phase 4's patient upload channel does not
+                   exist). So no photograph taken here can be filed against a patient by this control,
+                   which is the right limit for a camera button and is why it can exist at all. */
+              <div className="flex flex-wrap items-center gap-1.5">
+                <label className="flex cursor-pointer items-center rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 max-md:min-h-[var(--cp-touch)]">
+                  Upload
+                  <input type="file" className="hidden" disabled={busy}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+                </label>
+                <label className="md:hidden flex cursor-pointer items-center rounded-lg border border-gray-200 px-3 text-[12px] font-semibold text-gray-700 min-h-[var(--cp-touch)]">
+                  Take a photo
+                  <input type="file" accept="image/*" capture="environment" className="hidden" disabled={busy}
+                    onChange={e => {
+                      const f = e.target.files?.[0];
+                      if (f) upload(f, `Photo ${new Date().toISOString().slice(0, 10)}`);
+                    }} />
+                </label>
+              </div>
             )}
           </div>
 
@@ -215,14 +259,21 @@ export default function LibraryConsole({
           ) : (
             <ul className="mt-2 flex flex-col">
               {documents.map((d: any) => (
-                <li key={d.id} className="flex items-baseline gap-2 border-b border-gray-100 py-1.5 last:border-0">
+                /* ⚠ s12 row 3, "Preview → Full-screen document preview where supported": the title IS
+                   the preview control, and on a phone it already opens full screen. `open()` fetches a
+                   signed URL and hands it to the browser in a new tab, so a PDF or an image fills the
+                   device's own viewer with its own pinch-zoom -- which is a better reader than anything
+                   this page could draw, and it is what "where supported" means. Nothing about that
+                   path changed; it only needed to be big enough to hit. */
+                <li key={d.id} className="flex items-baseline gap-2 border-b border-gray-100 py-1.5 last:border-0 max-md:flex-wrap">
                   {canManage && !inBin && (
                     <input type="checkbox" checked={selected.includes(d.id)} aria-label={`Select ${d.title}`}
+                      className="max-md:h-5 max-md:w-5"
                       onChange={e => setSelected(s => e.target.checked ? [...s, d.id] : s.filter(x => x !== d.id))} />
                   )}
-                  <span className="min-w-0">
+                  <span className="min-w-0 max-md:flex-1">
                     <button type="button" onClick={() => open(d.id)}
-                      className="block truncate text-[12px] font-semibold text-gray-800 hover:underline">
+                      className="block truncate text-[12px] font-semibold text-gray-800 hover:underline max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:text-[13.5px]">
                       {d.title}
                     </button>
                     <span className="block text-[10px] text-gray-500">
@@ -231,24 +282,27 @@ export default function LibraryConsole({
                     </span>
                   </span>
                   {canManage && (
-                    <span className="ml-auto shrink-0 flex gap-2">
+                    /* s4's 44px floor over three text links that were about 15px tall. Purge keeps its
+                       confirm() and its critical colour, and gains a border below md so the two
+                       destructive-vs-not controls are not distinguished by colour alone. */
+                    <span className="ml-auto shrink-0 flex gap-2 max-md:ml-0 max-md:w-full max-md:gap-1.5">
                       {inBin ? (
                         <>
                           <button type="button" disabled={busy} onClick={() => act({ documentId: d.id, action: "restore" })}
-                            className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                            className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline max-md:flex max-md:flex-1 max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:justify-center max-md:rounded-lg max-md:border max-md:border-gray-200 max-md:text-[13px] max-md:no-underline">
                             Restore
                           </button>
                           <button type="button" disabled={busy} onClick={() => {
                             if (confirm(`Purge "${d.title}"? The file itself is deleted and cannot be restored.`)) {
                               act({ documentId: d.id, action: "purge" });
                             }
-                          }} className="text-[11px] text-[var(--cmp-text-critical)] hover:underline">
+                          }} className="text-[11px] text-[var(--cmp-text-critical)] hover:underline max-md:flex max-md:flex-1 max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:justify-center max-md:rounded-lg max-md:border max-md:border-[var(--cmp-color-critical)] max-md:text-[13px] max-md:font-semibold">
                             Purge
                           </button>
                         </>
                       ) : (
                         <button type="button" disabled={busy} onClick={() => act({ documentId: d.id })}
-                          className="text-[11px] text-gray-500 hover:text-[var(--cmp-text-critical)] hover:underline">
+                          className="text-[11px] text-gray-500 hover:text-[var(--cmp-text-critical)] hover:underline max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:rounded-lg max-md:border max-md:border-gray-200 max-md:px-3 max-md:text-[13px]">
                           Remove
                         </button>
                       )}

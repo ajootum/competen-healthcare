@@ -27,8 +27,10 @@ import { INCOMING_DOC_TYPES } from "@/lib/practice/communication-constants";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+// s4's 44px floor and the 16px that keeps iOS Safari from zooming on focus, below md only.
 const input =
-  "w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12.5px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+  "w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12.5px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 "
+  + "max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 
 export default function ClassifyPanel({ row, canClassify }: {
   row: {
@@ -105,15 +107,18 @@ export default function ClassifyPanel({ row, canClassify }: {
           </p>
 
           {/* ── LINK ─────────────────────────────────────────────────────────────────────────────── */}
+          {/* min-w-[12rem] is 192px, which on a 360px phone leaves the Search button about 100px and
+              then wraps anyway. Below md the field takes the full width and Search sits under it at
+              s4's floor. */}
           <div className="mt-2 flex flex-wrap items-end gap-1.5">
-            <label className="flex min-w-[12rem] flex-1 flex-col gap-0.5">
+            <label className="flex min-w-[12rem] flex-1 flex-col gap-0.5 max-md:min-w-0 max-md:w-full">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Patient</span>
               <input value={q} onChange={e => setQ(e.target.value)} placeholder="Name, phone or practice ID"
                 onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); void search(); } }}
                 className={input} />
             </label>
             <button type="button" onClick={() => void search()} disabled={busy || !q.trim()}
-              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11.5px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11.5px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 max-md:flex max-md:min-h-[var(--cp-touch)] max-md:w-full max-md:items-center max-md:justify-center max-md:text-[14px]">
               Search
             </button>
           </div>
@@ -130,11 +135,15 @@ export default function ClassifyPanel({ row, canClassify }: {
             <p className="mt-1 text-[11px] text-gray-500">Nobody in this practice matches that.</p>
           )}
           {results !== null && results.length > 0 && (
-            <ul className="mt-1 flex flex-wrap gap-1">
+            /* ⚠ ONE CANDIDATE PER LINE BELOW md. This is the control that decides which patient's record
+               an arriving result is filed into, and side-by-side 11.5px chips are precision tapping on
+               exactly the choice s16 says must not require it. The selected state already carries a
+               border, a background AND a text colour, so it is not signalled by colour alone. */
+            <ul className="mt-1 flex flex-wrap gap-1 max-md:flex-col max-md:gap-1.5">
               {results.map(r => (
                 <li key={r.id}>
                   <button type="button" onClick={() => setChosen({ id: r.id, name: r.displayName })}
-                    className={`rounded-lg border px-2 py-1 text-[11.5px] font-semibold transition ${
+                    className={`rounded-lg border px-2 py-1 text-[11.5px] font-semibold transition max-md:flex max-md:min-h-[var(--cp-touch)] max-md:w-full max-md:items-center max-md:px-3 max-md:text-[14px] ${
                       chosen?.id === r.id
                         ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
                         : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}>
@@ -146,24 +155,28 @@ export default function ClassifyPanel({ row, canClassify }: {
           )}
 
           {/* ── CLASSIFY ─────────────────────────────────────────────────────────────────────────── */}
-          <div className="mt-2 flex flex-wrap items-end gap-1.5">
-            <label className="flex flex-col gap-0.5">
+          {/* Both fields already carry a VISIBLE label (s16), and both are native controls, so a phone
+              brings its own picker for each. They only needed the width and the 44px floor. */}
+          <div className="mt-2 flex flex-wrap items-end gap-1.5 max-md:flex-col max-md:items-stretch">
+            <label className="flex flex-col gap-0.5 max-md:w-full">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">What is it?</span>
               <select value={docType} onChange={e => setDocType(e.target.value)} className={input}>
                 {INCOMING_DOC_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
               </select>
             </label>
-            <label className="flex flex-col gap-0.5">
+            <label className="flex flex-col gap-0.5 max-md:w-full">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Document date</span>
               <input type="date" value={receivedOn} onChange={e => setReceivedOn(e.target.value)} className={input} />
             </label>
+            {/* The one dominant action in this panel, and it already names the patient it will file
+                under rather than saying "Save" over an unstated choice. Full width at 48px below md. */}
             <button type="button" disabled={busy}
               onClick={() => void send({
                 id: row.id,
                 ...(chosen ? { patientId: chosen.id } : {}),
                 docType, receivedOn,
               })}
-              className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[11.5px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
+              className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[11.5px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50 max-md:flex max-md:min-h-[var(--cp-touch-primary)] max-md:w-full max-md:items-center max-md:justify-center max-md:text-[14px]">
               {chosen ? `File under ${chosen.name}` : "Save classification"}
             </button>
           </div>
@@ -173,12 +186,16 @@ export default function ClassifyPanel({ row, canClassify }: {
             <div className="mt-2 border-t border-gray-200 pt-2">
               {!unlinking ? (
                 <button type="button" onClick={() => setUnlinking(true)}
-                  className="text-[11px] font-semibold text-rose-600 hover:underline">
+                  className="text-[11px] font-semibold text-rose-600 hover:underline max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:text-left max-md:text-[13px]">
                   This is not about {row.patientName ?? "this patient"} &mdash; remove the link
                 </button>
               ) : (
-                <div className="flex flex-wrap items-end gap-1.5">
-                  <label className="flex min-w-[14rem] flex-1 flex-col gap-0.5">
+                /* ⚠ THE REASON FIELD AND THE TWO CONTROLS STACK BELOW md, and Cancel keeps its own full
+                   width rather than being the narrow thing beside a destructive button. The reason is
+                   still required before Remove enables — `!reason.trim()` is untouched — because it goes
+                   on the record. */
+                <div className="flex flex-wrap items-end gap-1.5 max-md:flex-col max-md:items-stretch">
+                  <label className="flex min-w-[14rem] flex-1 flex-col gap-0.5 max-md:w-full max-md:min-w-0">
                     <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
                       Why? This goes on the record.
                     </span>
@@ -187,11 +204,11 @@ export default function ClassifyPanel({ row, canClassify }: {
                   </label>
                   <button type="button" disabled={busy || !reason.trim()}
                     onClick={() => void send({ id: row.id, action: "unlink", reason })}
-                    className="rounded-lg border border-rose-300 bg-white px-2.5 py-1.5 text-[11.5px] font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">
+                    className="rounded-lg border border-rose-300 bg-white px-2.5 py-1.5 text-[11.5px] font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50 max-md:flex max-md:min-h-[var(--cp-touch)] max-md:w-full max-md:items-center max-md:justify-center max-md:text-[14px]">
                     Remove the link
                   </button>
                   <button type="button" onClick={() => { setUnlinking(false); setReason(""); }}
-                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11.5px] font-semibold text-gray-600 hover:bg-gray-50">
+                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11.5px] font-semibold text-gray-600 hover:bg-gray-50 max-md:flex max-md:min-h-[var(--cp-touch)] max-md:w-full max-md:items-center max-md:justify-center max-md:text-[14px]">
                     Cancel
                   </button>
                 </div>

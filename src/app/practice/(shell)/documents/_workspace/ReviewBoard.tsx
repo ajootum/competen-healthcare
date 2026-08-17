@@ -68,8 +68,13 @@ type Review = {
   timezone: string;
 };
 
+// CPR-MOB-001 s4's 44px floor and s16's native controls, added below md only. The reviewer picker and
+// the "by when" field are already a native <select> and <input type="date">, so a phone gets its own
+// wheel and calendar for free — they only had to be big enough to hit. 16px text below md is also what
+// keeps iOS Safari from zooming the page when a field takes focus.
 const input =
-  "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12.5px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+  "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12.5px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 "
+  + "max-md:min-h-[var(--cp-touch)] max-md:w-full max-md:text-[16px]";
 
 function Unreadable({ what, detail }: { what: string; detail: string }) {
   return (
@@ -368,16 +373,20 @@ function UnlinkedBulk({ unlinked, canClassify }: { unlinked: Reading<Row[]>; can
         <>
           <ul className="flex flex-col gap-1">
             {rows.slice(0, DOC_BULK_LIMIT).map(r => (
-              <li key={r.id} className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5">
+              /* ⚠ THE TICK IS 14px AND THIS IS THE SELECTION THAT FEEDS THE MOST DAMAGING ACTION ON
+                 THE SCREEN — filing a batch against one patient. A mis-tap here is not a cosmetic
+                 problem, so it takes s4's floor below md, and the metadata drops to its own line
+                 rather than being crushed against the title. */
+              <li key={r.id} className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 max-md:flex-wrap max-md:py-2">
                 {canClassify && (
                   <input
                     type="checkbox" checked={selected.includes(r.id)} onChange={() => toggle(r.id)}
                     aria-label={`Select ${r.title}`}
-                    className="h-3.5 w-3.5 accent-[var(--cp-primary)]"
+                    className="h-3.5 w-3.5 accent-[var(--cp-primary)] max-md:h-5 max-md:w-5"
                   />
                 )}
-                <span className="flex-1 text-[12.5px] font-semibold text-gray-800">{r.title}</span>
-                <span className="text-[10.5px] text-gray-400">
+                <span className="flex-1 text-[12.5px] font-semibold text-gray-800 max-md:text-[13.5px]">{r.title}</span>
+                <span className="text-[10.5px] text-gray-400 max-md:w-full">
                   {r.source} &middot; {DOC_TYPE_LABEL[r.docType] ?? r.docType} &middot; {r.at}
                 </span>
               </li>
@@ -395,18 +404,21 @@ function UnlinkedBulk({ unlinked, canClassify }: { unlinked: Reading<Row[]>; can
               <p className="text-[12px] font-bold text-gray-900">
                 File {selected.length} document{selected.length === 1 ? "" : "s"}
               </p>
-              <div className="mt-2 flex flex-wrap items-end gap-2">
-                <label className="flex flex-col gap-1">
+              {/* Below md this stops being a wrapped row and becomes the vertical order the task is
+                  actually done in: find the patient, choose the type, then file. "File them" is the one
+                  dominant action in the viewport (s4) and sits last, under the thumb. */}
+              <div className="mt-2 flex flex-wrap items-end gap-2 max-md:flex-col max-md:items-stretch">
+                <label className="flex flex-col gap-1 max-md:w-full">
                   <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">Patient</span>
                   <span className="flex gap-1">
                     <input className={input} value={q} onChange={e => setQ(e.target.value)} placeholder="Search by name" />
                     <button type="button" onClick={search} disabled={busy}
-                      className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-gray-700 disabled:opacity-50">
+                      className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-gray-700 disabled:opacity-50 max-md:min-h-[var(--cp-touch)] max-md:shrink-0 max-md:px-4 max-md:text-[14px]">
                       Search
                     </button>
                   </span>
                 </label>
-                <label className="flex flex-col gap-1">
+                <label className="flex flex-col gap-1 max-md:w-full">
                   <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">Document type</span>
                   <select className={input} value={docType} onChange={e => setDocType(e.target.value)}>
                     <option value="">Leave as it is</option>
@@ -416,15 +428,20 @@ function UnlinkedBulk({ unlinked, canClassify }: { unlinked: Reading<Row[]>; can
                   </select>
                 </label>
                 <button type="button" onClick={run} disabled={busy || (!chosen && !docType)}
-                  className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-40">
+                  className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-40 max-md:flex max-md:min-h-[var(--cp-touch-primary)] max-md:w-full max-md:items-center max-md:justify-center max-md:text-[15px]">
                   {busy ? "Filing…" : "File them"}
                 </button>
               </div>
 
               {chosen && (
-                <p className="mt-1.5 text-[11.5px] text-gray-700">
-                  They will be linked to <span className="font-bold">{chosen.name}</span>.{" "}
-                  <button type="button" onClick={() => setChosen(null)} className="underline">change</button>
+                <p className="mt-1.5 text-[11.5px] text-gray-700 max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-2 max-md:text-[13px]">
+                  <span>They will be linked to <span className="font-bold">{chosen.name}</span>.</span>{" "}
+                  {/* "change" was an underlined word about 15px tall; it is the only way back from the
+                      wrong patient, so below md it is a control rather than a hyperlink in a sentence. */}
+                  <button type="button" onClick={() => setChosen(null)}
+                    className="underline max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:rounded-lg max-md:border max-md:border-gray-300 max-md:bg-white max-md:px-3 max-md:font-semibold max-md:no-underline">
+                    change
+                  </button>
                 </p>
               )}
               {searchIncomplete && (
@@ -433,12 +450,18 @@ function UnlinkedBulk({ unlinked, canClassify }: { unlinked: Reading<Row[]>; can
                 </p>
               )}
               {results && !chosen && (
-                <ul className="mt-1.5 flex flex-wrap gap-1">
+                /* ⚠ THESE CHIPS DECIDE WHICH PATIENT A BATCH OF DOCUMENTS IS FILED AGAINST, and they
+                   were 11.5px text in a 2px-padded box, packed side by side. That is precision tapping
+                   on the highest-consequence choice this panel makes (s16: "searchable clinical
+                   selectors must remain usable without precision tapping"). Below md each candidate is
+                   a full-width 44px row, one per line, so the neighbouring name is never a thumb's
+                   width away. */
+                <ul className="mt-1.5 flex flex-wrap gap-1 max-md:flex-col max-md:gap-1.5">
                   {results.length === 0 && <li className="text-[11.5px] text-gray-400">No patient matched.</li>}
                   {results.map(p => (
                     <li key={p.id}>
                       <button type="button" onClick={() => setChosen({ id: p.id, name: p.displayName })}
-                        className="rounded border border-gray-200 bg-white px-2 py-0.5 text-[11.5px] font-semibold text-gray-700 hover:border-[var(--cp-primary)]">
+                        className="rounded border border-gray-200 bg-white px-2 py-0.5 text-[11.5px] font-semibold text-gray-700 hover:border-[var(--cp-primary)] max-md:flex max-md:min-h-[var(--cp-touch)] max-md:w-full max-md:items-center max-md:px-3 max-md:text-[14px]">
                         {p.displayName}
                       </button>
                     </li>
@@ -520,8 +543,11 @@ function Unsigned({ unsigned, members, canAssign }: {
                     {DOC_STATUS[r.status].label}
                   </span>
                   {canAssign && members.state === "ok" && (
+                    /* s12 row 5's control on this queue. It says what it does in words and keeps
+                       saying it — "Ask for a review" / "Close" — so its state is never carried by
+                       appearance alone (s4). Below md it takes the 44px floor. */
                     <button type="button" onClick={() => { setOpenFor(openFor === r.id ? null : r.id); setError(null); }}
-                      className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50">
+                      className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:rounded-lg max-md:px-3 max-md:text-[13px]">
                       {openFor === r.id ? "Close" : "Ask for a review"}
                     </button>
                   )}
@@ -530,25 +556,28 @@ function Unsigned({ unsigned, members, canAssign }: {
 
               {openFor === r.id && members.state === "ok" && (
                 <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-2.5">
-                  <div className="flex flex-wrap items-end gap-2">
-                    <label className="flex flex-col gap-1">
+                  {/* Every field here already has a VISIBLE label, which is what s16 asks for and what
+                      most of the rest of this workspace does not do. Below md they stack in task order
+                      and Assign lands last, full width, as the one dominant action in the viewport. */}
+                  <div className="flex flex-wrap items-end gap-2 max-md:flex-col max-md:items-stretch">
+                    <label className="flex flex-col gap-1 max-md:w-full">
                       <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">Reviewer</span>
                       <select className={input} value={assignTo} onChange={e => setAssignTo(e.target.value)}>
                         <option value="">Choose somebody</option>
                         {members.value.map(m => <option key={m.userId} value={m.userId}>{m.name}</option>)}
                       </select>
                     </label>
-                    <label className="flex flex-col gap-1">
+                    <label className="flex flex-col gap-1 max-md:w-full">
                       <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">By when</span>
                       <input type="date" className={input} value={dueOn} onChange={e => setDueOn(e.target.value)} />
                     </label>
-                    <label className="flex flex-1 flex-col gap-1">
+                    <label className="flex flex-1 flex-col gap-1 max-md:w-full">
                       <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">What to look at</span>
                       <input className={input} value={note} onChange={e => setNote(e.target.value)}
                         placeholder="Optional. What you want them to check." />
                     </label>
                     <button type="button" onClick={() => assign(r.id)} disabled={busy || !assignTo}
-                      className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-40">
+                      className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-bold text-white disabled:opacity-40 max-md:flex max-md:min-h-[var(--cp-touch-primary)] max-md:w-full max-md:items-center max-md:justify-center max-md:text-[15px]">
                       {busy ? "Assigning…" : "Assign"}
                     </button>
                   </div>

@@ -10,7 +10,8 @@ import { NOTE_TYPES } from "@/lib/practice/encounter-constants";
 // unpublished, so a half-written template cannot reach a consultation by accident -- which matters
 // because the thing it would reach is a clinical record.
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+// s4's 44px floor and the 16px that stops iOS Safari zooming on focus, below md only.
+const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 
 type Section = { noteType: string; heading: string; prompt: string; defaultBody: string; required: boolean };
 
@@ -100,13 +101,17 @@ export default function TemplateConsole({ templates }: {
       )}
 
       <button type="button" onClick={() => setOpen(o => !o)}
-        className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+        className="rounded-lg border border-gray-200 px-3 py-1.5 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 max-md:flex max-md:min-h-[var(--cp-touch)] max-md:w-full max-md:items-center max-md:justify-center max-md:text-[14px]">
         {open ? "Cancel" : "Write a template"}
       </button>
 
       {open && (
         <form className="mt-3 flex flex-col gap-2" onSubmit={e => { e.preventDefault(); post(); }}>
-          <div className="grid grid-cols-2 gap-2">
+          {/* ⚠ A BARE grid-cols-2 IS TWO COLUMNS AT EVERY WIDTH, INCLUDING 360px. Title beside Code, and
+              a template kind beside a description, each in about 160px — s10 permits two side-by-side
+              fields only where two SHORT fields clearly fit, and none of these four is short. One
+              column below md; unchanged above. */}
+          <div className="grid grid-cols-2 gap-2 max-md:grid-cols-1">
             <input required placeholder="Title" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className={input} />
             <input required placeholder="Code (lower_case)" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} className={input} />
             <select aria-label="Template kind" value={form.kind} onChange={e => setForm(f => ({ ...f, kind: e.target.value }))} className={input}>
@@ -126,9 +131,10 @@ export default function TemplateConsole({ templates }: {
                 onChange={e => setForm(f => ({ ...f, bodyTemplate: e.target.value }))}
                 placeholder={"Dear {{referral.addressee}},\n\nI am referring {{patient.name}}, born {{patient.date_of_birth}}...\n\n{{practitioner.name}}"}
                 className={`${input} font-mono`} />
-              <label className="flex items-center gap-2 text-[11px] text-gray-600">
+              <label className="flex items-center gap-2 text-[11px] text-gray-600 max-md:min-h-[var(--cp-touch)] max-md:text-[13px]">
                 <input type="checkbox" checked={form.includeLetterhead}
-                  onChange={e => setForm(f => ({ ...f, includeLetterhead: e.target.checked }))} />
+                  onChange={e => setForm(f => ({ ...f, includeLetterhead: e.target.checked }))}
+                  className="max-md:h-5 max-md:w-5" />
                 Print the practice letterhead above this
               </label>
               <div className="rounded-lg border border-gray-100 bg-gray-50/60 p-2">
@@ -154,17 +160,21 @@ export default function TemplateConsole({ templates }: {
             <p className="mt-1 text-[11px] font-semibold text-gray-500">Sections</p>
           )}
           {!isDocument && sections.map((s, i) => (
-            <div key={i} className="grid grid-cols-2 gap-2 rounded-lg border border-gray-100 p-2">
+            /* Same one-column stack below md — and every col-span-2 needs max-md:col-span-1 beside it,
+               because CSS Grid answers `span 2` in a one-column grid by inventing a second column
+               rather than by clamping. */
+            <div key={i} className="grid grid-cols-2 gap-2 rounded-lg border border-gray-100 p-2 max-md:grid-cols-1">
               <select aria-label="Segment" value={s.noteType} onChange={e => patch(i, { noteType: e.target.value })} className={input}>
                 {NOTE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
               <input required={i === 0} placeholder="Heading" value={s.heading} onChange={e => patch(i, { heading: e.target.value })} className={input} />
               <input placeholder="Prompt shown beside the box (not written into the note)" value={s.prompt}
-                onChange={e => patch(i, { prompt: e.target.value })} className={`${input} col-span-2`} />
+                onChange={e => patch(i, { prompt: e.target.value })} className={`${input} col-span-2 max-md:col-span-1`} />
               <input placeholder="Starting text written INTO the note (optional)" value={s.defaultBody}
-                onChange={e => patch(i, { defaultBody: e.target.value })} className={`${input} col-span-2`} />
-              <label className="col-span-2 flex items-center gap-2 text-[11px] text-gray-600">
-                <input type="checkbox" checked={s.required} onChange={e => patch(i, { required: e.target.checked })} />
+                onChange={e => patch(i, { defaultBody: e.target.value })} className={`${input} col-span-2 max-md:col-span-1`} />
+              <label className="col-span-2 flex items-center gap-2 text-[11px] text-gray-600 max-md:col-span-1 max-md:min-h-[var(--cp-touch)] max-md:text-[13px]">
+                <input type="checkbox" checked={s.required} onChange={e => patch(i, { required: e.target.checked })}
+                  className="max-md:h-5 max-md:w-5" />
                 Mark this section required
               </label>
             </div>

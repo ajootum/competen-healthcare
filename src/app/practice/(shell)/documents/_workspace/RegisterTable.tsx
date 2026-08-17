@@ -5,6 +5,7 @@ import {
   patientLinkState, type DocFilter,
 } from "@/lib/practice/documents-workspace-constants";
 import ClassifyPanel from "./ClassifyPanel";
+import FilterDisclosure from "./FilterDisclosure";
 
 // CPR-DOC-002 s3 (Patient Documents, My Documents) and s10 (search, filters, retrieval).
 //
@@ -32,8 +33,12 @@ import ClassifyPanel from "./ClassifyPanel";
 // forty documents against one patient.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
+// ⚠ THE max-md:* TAIL IS THE ONLY CHANGE, AND IT IS ADDITIVE. s4's 44px floor and s16's "use native
+// date/select controls" — these already ARE native <select> and <input type="date">, so a phone gets its
+// own wheel pickers for free; they only needed to be big enough to hit and wide enough to read.
 const selectClass =
-  "rounded-lg border border-gray-200 px-2 py-1.5 text-[12.5px] outline-none focus:border-[var(--cp-primary)]";
+  "rounded-lg border border-gray-200 px-2 py-1.5 text-[12.5px] outline-none focus:border-[var(--cp-primary)] "
+  + "max-md:w-full max-md:min-h-[var(--cp-touch)] max-md:text-[14px]";
 
 export default function RegisterTable({
   register, filter, action, canClassify, emptyTitle, emptyBody,
@@ -69,35 +74,54 @@ export default function RegisterTable({
         </p>
       )}
 
-      {/* ── s10's FILTERS ─────────────────────────────────────────────────────────────────────────── */}
-      <form method="get" action={action} className="flex flex-wrap items-end gap-2 rounded-2xl border border-gray-200 bg-white p-3">
-        <label className="flex flex-col gap-0.5">
+      {/* ── s10's FILTERS ───────────────────────────────────────────────────────────────────────────
+          ⚠ CPR-MOB-001 s5 collapses this row behind one control BELOW md and leaves it untouched above.
+          Seven controls plus Apply and Clear is a comfortable wrapped row on a desktop and, on a 390px
+          phone, a stack tall enough to push every document off the screen — which is how somebody
+          concludes a register is empty. FilterDisclosure holds ONE copy of the controls; see its header
+          for why FilterSheet was rejected and why the inputs stay in the DOM while hidden.
+
+          The count is computed here, on the server, from the same DocFilter the engine applied — so the
+          badge can never disagree with the list underneath it. */}
+      {/* ⚠ THE md CLASSES ON THIS FORM ARE THE ORIGINAL ONES, UNTOUCHED: `flex flex-wrap items-end
+          gap-2`. Only the max-md column stack is new, and FilterDisclosure's panel is md:contents, so at
+          md and up every control below is still a direct flex item of this row exactly as it shipped. */}
+      <form method="get" action={action} className="flex flex-wrap items-end gap-2 rounded-2xl border border-gray-200 bg-white p-3 max-md:flex-col max-md:items-stretch">
+        <FilterDisclosure
+          activeCount={
+            [filter.q, filter.type, filter.status?.length ? "y" : null, filter.origin?.length ? "y" : null,
+              filter.link, filter.from, filter.to, filter.patientId].filter(Boolean).length
+          }
+        >
+        <label className="flex flex-col gap-0.5 max-md:w-full">
           <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">Search</span>
+          {/* w-56 is 224px, which fits a desktop row and overflows a 360px phone once padding is
+              counted. Full width below md; unchanged above. */}
           <input name="q" defaultValue={filter.q ?? ""} placeholder="Title, patient, sender"
-            className="w-56 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12.5px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10" />
+            className="w-56 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12.5px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:w-full max-md:min-h-[var(--cp-touch)] max-md:text-[14px]" />
         </label>
-        <label className="flex flex-col gap-0.5">
+        <label className="flex flex-col gap-0.5 max-md:w-full">
           <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">Type</span>
           <select name="type" defaultValue={filter.type ?? ""} className={selectClass}>
             <option value="">All types</option>
             {DOC_TYPE_OPTIONS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
         </label>
-        <label className="flex flex-col gap-0.5">
+        <label className="flex flex-col gap-0.5 max-md:w-full">
           <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">Status</span>
           <select name="status" defaultValue={filter.status?.join(",") ?? ""} className={selectClass}>
             <option value="">All statuses</option>
             {DOC_STATUSES.map(s => <option key={s} value={s}>{DOC_STATUS[s].label}</option>)}
           </select>
         </label>
-        <label className="flex flex-col gap-0.5">
+        <label className="flex flex-col gap-0.5 max-md:w-full">
           <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">Source</span>
           <select name="origin" defaultValue={filter.origin?.join(",") ?? ""} className={selectClass}>
             <option value="">Any source</option>
             {DOC_ORIGINS.map(o => <option key={o} value={o}>{DOC_ORIGIN[o].label}</option>)}
           </select>
         </label>
-        <label className="flex flex-col gap-0.5">
+        <label className="flex flex-col gap-0.5 max-md:w-full">
           <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">Patient link</span>
           <select name="link" defaultValue={filter.link ?? ""} className={selectClass}>
             <option value="">Either</option>
@@ -105,11 +129,11 @@ export default function RegisterTable({
             <option value="unlinked">Not linked</option>
           </select>
         </label>
-        <label className="flex flex-col gap-0.5">
+        <label className="flex flex-col gap-0.5 max-md:w-full">
           <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">From</span>
           <input type="date" name="from" defaultValue={filter.from ?? ""} className={selectClass} />
         </label>
-        <label className="flex flex-col gap-0.5">
+        <label className="flex flex-col gap-0.5 max-md:w-full">
           <span className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">To</span>
           <input type="date" name="to" defaultValue={filter.to ?? ""} className={selectClass} />
         </label>
@@ -123,15 +147,23 @@ export default function RegisterTable({
             whole practice -- a filter that quietly returns MORE than it did before is worse than one
             that cannot be set. */}
         {filter.patientId && <input type="hidden" name="patientId" value={filter.patientId} />}
+        {/* Below md these two become full-width touch controls stacked under the fields, which is where
+            a thumb already is; from md up they sit on the row exactly as before. */}
         <button type="submit"
-          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-gray-700 hover:bg-gray-50">
+          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-gray-700 hover:bg-gray-50 max-md:min-h-[var(--cp-touch-primary)] max-md:w-full max-md:border-[var(--cp-primary)] max-md:bg-[var(--cp-primary)] max-md:text-white">
           Apply
         </button>
         <Link href={action}
-          className="rounded-lg px-2 py-1.5 text-[12.5px] font-semibold text-gray-500 hover:text-gray-800">
+          className="rounded-lg px-2 py-1.5 text-[12.5px] font-semibold text-gray-500 hover:text-gray-800 max-md:flex max-md:min-h-[var(--cp-touch)] max-md:w-full max-md:items-center max-md:justify-center max-md:border max-md:border-gray-200 max-md:bg-white">
           Clear
         </Link>
-        <span className="ml-auto text-[11.5px] text-gray-400">
+        </FilterDisclosure>
+
+        {/* ⚠ THE COUNT STAYS OUT OF THE DISCLOSURE. It is not a filter; it is the length of the list
+            below, and it carries "that could be read" when a source failed. Collapsing it with the
+            controls would hide the one sentence that distinguishes a short list from an incomplete
+            one at exactly the width where the list itself is hardest to survey. */}
+        <span className="text-[11.5px] text-gray-400 md:ml-auto">
           {rows.length === 1 ? "1 document" : `${rows.length} documents`}
           {register.unreadable.length > 0 && " that could be read"}
         </span>
@@ -177,10 +209,17 @@ export default function RegisterTable({
               const origin = DOC_ORIGIN[r.origin];
               return (
                 <li key={`${r.origin}:${r.id}`} className="border-b border-gray-100 py-2.5 last:border-0">
+                  {/* ══ CPR-MOB-001 s12 row 2 ═══════════════════════════════════════════════════════════
+                      "Cards showing title/type/date/status and primary action." This row already carried
+                      all five — it is a <li>, not a table row — so nothing is added and nothing is
+                      dropped. What changes below md is that the TITLE TAKES ITS OWN LINE and the chips
+                      wrap under it, instead of seven items competing on one wrapped line where the
+                      document's name ends up as a two-word fragment between a version badge and a date.
+                      The title is also the primary action: it opens the document. */}
                   <div className="flex flex-wrap items-center gap-2">
                     {r.href
-                      ? <Link href={r.href} className="text-[13px] font-semibold text-gray-900 hover:underline">{r.title}</Link>
-                      : <span className="text-[13px] font-semibold text-gray-900">{r.title}</span>}
+                      ? <Link href={r.href} className="text-[13px] font-semibold text-gray-900 hover:underline max-md:flex max-md:w-full max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:text-[14px]">{r.title}</Link>
+                      : <span className="text-[13px] font-semibold text-gray-900 max-md:block max-md:w-full max-md:text-[14px]">{r.title}</span>}
                     <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500">
                       {DOC_TYPE_LABEL[r.docType] ?? r.docType}
                     </span>
@@ -196,7 +235,11 @@ export default function RegisterTable({
                     )}
                     {/* ⚠ THE STATUS CHIP CARRIES ITS STORED VALUE IN THE TOOLTIP. The word is derived from
                         s7's vocabulary; the column value is what a support question is really about. */}
-                    <span className={`ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold ${status.chip}`}
+                    {/* ⚠ md:ml-auto, NOT ml-auto. On a wrapped phone line `ml-auto` shoves the status
+                        chip to the far right of whatever line it lands on, stranding it away from the
+                        origin and date it belongs with. Above md the row does not wrap and the chip sits
+                        exactly where it always has. */}
+                    <span className={`md:ml-auto rounded px-1.5 py-0.5 text-[10px] font-bold ${status.chip}`}
                       title={`${status.blurb} Stored as ${r.stored}.`}>
                       {status.label}
                     </span>
