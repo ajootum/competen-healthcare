@@ -132,84 +132,100 @@ ok("1c-control the token scan actually found references and would catch a deleti
   `referenced=${referenced.size} defined=${defined.size}`);
 
 // ---------------------------------------------------------------------------------------------
-// 2. THE CLOCK -- product-wide, as a ratchet
+// 2. THE CLOCK -- a flat ban inside Practice, a ratchet outside it
 // ---------------------------------------------------------------------------------------------
-console.log("\n2. the 24-hour clock -- native pickers as a ratcheted inventory");
+console.log("\n2. the 24-hour clock -- no native picker in Practice, and a ratchet beyond it");
 
 /**
- * ⚠ THIS IS DEBT, RECORDED HONESTLY, NOT A CLEAN BILL.
- *
  * A native time or datetime-local input draws whatever the OPERATING SYSTEM's locale says, so a 24-hour
- * product renders "11:00 AM" on half the machines that open it -- and when the value is a datetime-local
- * fed to a timestamptz, the offsetless string is read in the connection's zone and a Kampala 14:30 is
- * stored as 14:30 UTC. Both halves of that were paid for on the encounters screen on 2026-08-17.
+ * product renders "11:00 AM" on any machine set to en-US. And when a datetime-local value reaches a
+ * timestamptz, the offsetless string is read in the connection's zone: a Kampala 14:30 stored as 14:30
+ * UTC and read back as 17:30. Both halves were paid for on the encounters screen on 2026-08-17.
  *
- * The guard written that day was scoped to ONE FOLDER, and this scan is what a product-wide version
- * finds: the surfaces below still hold native pickers. They are listed rather than ignored, with the
- * count each currently holds, and the rule is a RATCHET -- a file may hold FEWER than its recorded
- * number and may leave the list entirely, but it may never hold more, and a file NOT on this list may
- * hold none at all. So the debt can only shrink, and no new instance can arrive anywhere in the app.
- *
- * ⚠ SHARPEST FIRST, for whoever picks this up: activity/ActivityConsole.tsx is not merely a locale
- * display problem. It prefills with new Date().toISOString().slice(0,16) -- a UTC wall clock poured
- * into a control the browser renders as local time -- so in Kampala its "now" default is three hours
- * behind, and it then composes the instant in the BROWSER's zone rather than the practice's, which is
- * the travelling-practitioner bug the timezone doctrine exists to prevent. The type="time" entries are
- * milder: those fields store a wall clock string and compose no instant, so they are a display-locale
- * complaint rather than a data one.
+ * ⚠ THIS PIN USED TO BE A RATCHET OVER SEVENTEEN RECORDED INSTANCES, and it is now a FLAT BAN, because
+ * the debt was paid rather than merely bounded: the wall-clock fields moved to the shared TimeInput,
+ * and the six that composed instants -- ActivityConsole's two and OfflineReader's four -- now capture a
+ * date and a 24-hour time and compose them where the practice's timezone is actually known (the route,
+ * or on a device, the day pack). What was found on the way is worth keeping in view: ActivityConsole
+ * prefilled from `new Date().toISOString().slice(0,16)`, UTC's wall clock poured into a control the
+ * browser draws as local, so its "now" default sat three hours behind in Kampala.
  */
-const PICKER_DEBT: Record<string, number> = {
-  "src/app/practice/(shell)/activity/ActivityConsole.tsx": 2,
-  "src/app/practice/(shell)/setup/availability/AvailabilityConsole.tsx": 2,
-  "src/app/practice/(shell)/setup/availability/SessionCard.tsx": 2,
-  "src/app/practice/(shell)/setup/availability/WeekBoard.tsx": 2,
-  "src/app/practice/(shell)/setup/availability-booking/ExceptionWorkspace.tsx": 2,
-  "src/app/practice/(shell)/setup/availability-booking/RuleWorkspace.tsx": 1,
-  "src/app/practice/(shell)/setup/availability-booking/SessionWorkspace.tsx": 2,
-  "src/app/practice/offline/OfflineReader.tsx": 4,
-};
-
 const pickerCounts = new Map<string, number>();
 for (const f of APP_FILES) {
   const hits = [...strip(readFileSync(f, "utf8")).matchAll(/type="(?:time|datetime-local)"/g)].length;
   if (hits) pickerCounts.set(rel(f), hits);
 }
 
-const newOffenders = [...pickerCounts].filter(([f]) => f.startsWith("src/app/practice/") && !(f in PICKER_DEBT));
-ok("2a no practice surface outside the recorded inventory holds a native picker",
-  newOffenders.length === 0,
-  newOffenders.map(([f, n]) => `${f} (${n})`).join(", "));
+const inPractice = [...pickerCounts].filter(([f]) => f.startsWith("src/app/practice/"));
+ok("2a no surface in Practice holds a native time or datetime-local picker",
+  inPractice.length === 0,
+  inPractice.map(([f, n]) => `${f} (${n})`).join(", "));
 
-const grown = [...pickerCounts].filter(([f, n]) => f in PICKER_DEBT && n > PICKER_DEBT[f]);
-ok("2b no recorded surface has grown more native pickers",
-  grown.length === 0,
-  grown.map(([f, n]) => `${f} now ${n}, was ${PICKER_DEBT[f]}`).join(", "));
+/**
+ * ⚠ THE REST OF THE ESTATE IS DEBT, RECORDED RATHER THAN CLAIMED CLEAN.
+ *
+ * Thirteen native pickers live outside Practice, in products this arc did not touch. They are a
+ * RATCHET: a listed file may hold fewer and may leave the list, but never more, and a file NOT listed
+ * may hold none. So the debt can only shrink and no new instance can arrive anywhere in src/app.
+ *
+ * The datetime-local entries here carry the same instant-composition hazard as ActivityConsole's did,
+ * and should be read as unexamined rather than as safe -- nobody has traced what their values reach.
+ */
+const PICKER_DEBT_OUTSIDE_PRACTICE: Record<string, number> = {
+  "src/app/admin/operations/OperationsConsole.tsx": 1,
+  "src/app/assessor/calendar/ScheduleForm.tsx": 1,
+  "src/app/assessor/simulation/SimCentre.tsx": 1,
+  "src/app/educator/coaching/CoachingBoard.tsx": 1,
+  "src/app/healthcare-worker/medications/AddMedication.tsx": 1,
+  "src/app/office-governance/meetings/MeetingsAdmin.tsx": 1,
+  "src/app/super-admin/platform-ops/forms/FormDesigner.tsx": 2,
+  "src/app/super-admin/platform-ops/releases/ReleaseManager.tsx": 1,
+  "src/app/supervisor/mdt/MdtActions.tsx": 2,
+  "src/app/supervisor/settings/WardConfigClient.tsx": 1,
+  "src/app/supervisor/task-center/TaskConsole.tsx": 1,
+};
 
-// The surfaces the walkthrough actually cleaned. Named individually because these are the ones a
-// future edit is most likely to "helpfully" revert to a native control.
-const MUST_STAY_CLEAN = [
-  "src/app/practice/(shell)/calendar",
-  "src/app/practice/(shell)/encounters",
-  "src/app/practice/(shell)/patients",
-  "src/app/practice/(shell)/today",
-  "src/app/practice/(shell)/follow-ups",
-];
-for (const surface of MUST_STAY_CLEAN) {
-  const dirty = [...pickerCounts.keys()].filter(f => f.startsWith(surface + "/"));
-  ok(`2c ${surface.replace("src/app/practice/(shell)/", "")} holds no native picker`,
-    dirty.length === 0, dirty.join(", "));
-}
+const strayOutside = [...pickerCounts].filter(([f, n]) =>
+  !f.startsWith("src/app/practice/")
+  && (!(f in PICKER_DEBT_OUTSIDE_PRACTICE) || n > PICKER_DEBT_OUTSIDE_PRACTICE[f]));
+ok("2b outside Practice, no file has gained a native picker and no new file holds one",
+  strayOutside.length === 0,
+  strayOutside.map(([f, n]) => `${f} now ${n}, recorded ${PICKER_DEBT_OUTSIDE_PRACTICE[f] ?? 0}`).join(", "));
 
-// ⚠ CONTROL, AND THIS ONE IS LOAD-BEARING. The comment stripper is doing real work here: several of
-// the cleaned files above contain the string type="time" inside a comment explaining why they do not
-// use it. If strip() ever broke, 2c would go red for the best possible reason and be "fixed" by
-// deleting the explanations. So: prove the raw text DOES contain what the stripped text does not.
-const cleanedRaw = PRACTICE_FILES
-  .filter(f => MUST_STAY_CLEAN.some(s => rel(f).startsWith(s + "/")))
-  .map(f => readFileSync(f, "utf8"));
-ok("2c-control the cleaned surfaces do document the rule, and stripping is what tells the two apart",
-  cleanedRaw.some(s => /type="time"/.test(s)) && cleanedRaw.every(s => !/type="time"/.test(strip(s))),
-  "if this fails, the stripper broke -- do not delete the comments");
+/**
+ * ⚠ CONTROL, AND IT IS LOAD-BEARING. Many Practice files contain the string type="time" INSIDE a
+ * comment explaining why they do not use one. If strip() ever broke, 2a would go red for the best
+ * possible reason and be "fixed" by deleting the explanations. So prove the raw text DOES contain what
+ * the stripped text does not: the ban above is being enforced against code, not against prose.
+ */
+const practiceRaw = PRACTICE_FILES.map(f => readFileSync(f, "utf8"));
+ok("2a-control Practice does document the rule in prose, so the stripper has real work to do",
+  practiceRaw.some(s => /type="time"/.test(s)),
+  "if this fails, the explanations were deleted -- 2a would then be passing over nothing");
+
+// ⚠ THE STRIPPER IS PROVED ON ITS OWN PROBE, NOT ON THE CORPUS. Testing it against the real files
+// made this control fail whenever 2a failed, which is the wrong signal: a genuine violation would then
+// read as "the stripper broke". A fixed probe keeps the two answers independent.
+ok("2a-control2 stripping removes the needle from a comment and leaves it in code",
+  !/type="time"/.test(strip(`// a note about type="time"\n`))
+  && !/type="time"/.test(strip(`{/* a note about type="time" */}\n`))
+  && /type="time"/.test(strip(`<input type="time" />\n`)));
+
+/**
+ * ⚠ AND THE COMPOSITION, WHICH IS THE HALF A PICKER SCAN CANNOT SEE. Swapping the control fixes the
+ * 12-hour display; it does not by itself fix WHERE the instant is composed. Both screens that used to
+ * compose one on the client now name the practice timezone, and these pins say so by the imports the
+ * fix depends on -- so ripping the composition out again cannot pass quietly.
+ */
+const activitiesRoute = strip(readFileSync(join(APP, "api", "v1", "practice", "activities", "route.ts"), "utf8"));
+ok("2d the activities route composes a wall clock server-side, in the practice's timezone",
+  /instantInZone/.test(activitiesRoute) && /workspaceClock/.test(activitiesRoute)
+  && !/new Date\((?:body|x)\.\w+At\)/.test(activitiesRoute));
+
+const offlineReader = strip(readFileSync(join(PRACTICE, "offline", "OfflineReader.tsx"), "utf8"));
+ok("2e the offline capture forms compose in the practice's timezone, not the device's",
+  /instantInZone/.test(offlineReader)
+  && !/new Date\((?:takenAt|startedAt|endedAt)\)/.test(offlineReader));
 
 // ---------------------------------------------------------------------------------------------
 // 3. PATTERN INTEGRITY -- compiled and executed, never grepped

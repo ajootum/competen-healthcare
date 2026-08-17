@@ -86,7 +86,7 @@ async function provision(): Promise<string> {
     { id: req!.id, target_user_id: USER_W, correlation_id: "harness-weightdec", workspace_id: null },
     payload("Weight Decision Harness"),
   );
-  if (!run.ok || !run.workspaceId) throw new Error(`provisioning failed: ${run.errorCode}`);
+  if (!run.ok || !run.workspaceId) throw new Error(`provisioning failed: ${run.errorCode}${run.detail ? " -- " + run.detail : ""}`);
   return run.workspaceId;
 }
 

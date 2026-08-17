@@ -106,25 +106,49 @@ phase 10 asks for, and it is deliberately the path of least resistance only for 
 
 Adding a native picker anywhere in the app is not an exception available at any price; see §5.
 
-## 5. Recorded debt — the clock
+## 5. The clock — paid off inside Practice, ratcheted outside it
 
-The product-wide scan at freeze found **17 native pickers still live inside Practice**, on surfaces
-this arc did not reach. They are recorded in the harness as a **ratchet**: a listed file may hold
-fewer and may leave the list, but may never hold more, and any file *not* listed may hold none. The
-debt can only shrink, and no new instance can arrive anywhere in `src/app`.
+The scan at freeze found **17 native pickers inside Practice**. **All 17 are now gone** (2026-08-17),
+so pin 2a is a **flat ban**: no surface under `src/app/practice` may hold a `type="time"` or
+`type="datetime-local"` at all.
 
-Sharpest first, for whoever picks this up:
+What the swap turned out to involve, because it was not the mechanical job it looked like:
 
-- **`activity/ActivityConsole.tsx`** is a data bug, not merely a display one. It prefills with
-  `new Date().toISOString().slice(0,16)` — a UTC wall clock poured into a control the browser renders
-  as local time, so in Kampala its "now" default sits three hours behind — and then composes the
-  instant in the *browser's* zone rather than the practice's, which is the travelling-practitioner
-  failure the timezone doctrine exists to prevent. Two inputs.
-- **`offline/OfflineReader.tsx`** — four, same `datetime-local` shape, and worth checking against the
-  outbox's own composition rules before touching.
-- **`setup/availability` and `setup/availability-booking`** — eleven `type="time"` inputs across five
-  files. These are milder: the fields store a wall-clock string and compose no instant, so they are a
-  locale-display complaint rather than a data-integrity one.
+- **`activity/ActivityConsole.tsx`** was a data bug, not a display one. It prefilled from
+  `new Date().toISOString().slice(0,16)` — UTC's wall clock poured into a control the browser draws
+  as local time, so in Kampala its "now" default sat three hours behind — and then composed the
+  instant in the *browser's* zone. It now sends a date and a 24-hour time, and **the route composes**
+  in the practice's timezone, refusing by name rather than guessing.
+- **`offline/OfflineReader.tsx`** composed real instants, but in the *device's* zone. The day pack
+  already carries the practice timezone, so the device now composes correctly with no network. Three
+  copies of a device-clock prefill helper collapsed into one practice-zone helper.
+- **The eleven `type="time"` fields** under `setup/availability*` stored wall-clock strings and
+  composed no instant — but the swap was still not free. `type="time"` *guaranteed* a valid `HH:MM`;
+  a text field does not, and those forms' `toMinutes()` helper is not a parser: `toMinutes("0900")`
+  returns **54000** and `toMinutes("9am")` returns **0**. The engines only check ordering
+  (`end > start`), so `09:00`→`1300` would have passed and written a session ending at minute 78000.
+  The browser's guarantee was load-bearing. Every converted field now carries an `HHMM_RE` guard with
+  a sentence naming the format.
+
+**One control, one definition.** `TimeInput` (`src/components/ui/wall-clock.tsx`) carries the pattern,
+the keypad, the validation-bubble text and the touch sizing; `HHMM_PATTERN` lives once in
+`practice-time.ts` and `HHMM_RE` is compiled *from that same string*, so the attribute and the
+validator cannot drift. Six screens had hand-copied that pattern, which is how its backslashes were
+once eaten — leaving four inputs that rejected the very example their tooltip gave.
+
+### Still outstanding
+
+- **Six screens still hand-write the pattern** (calendar, encounters, patients). They are safe — pin
+  3b compiles and executes every `pattern=` in the app — but they should move to the shared control.
+  Not done here because they sit behind 64- and 132-pin freeze harnesses.
+- **No server-side minute-range validation.** `Number(body.startsMinute)` is taken bare and no engine
+  bounds it, so a non-browser caller can still write minute 78000. `addSession`, `editSession`,
+  `duplicateSession` and `commitScheduleChange` each need `0 <= m <= 1439`.
+- **13 native pickers remain outside Practice** (admin, assessor, educator, healthcare-worker,
+  office-governance, super-admin, supervisor), held as a ratchet in the harness. The `datetime-local`
+  ones carry the same instant-composition hazard ActivityConsole's did and **nobody has traced what
+  their values reach** — unexamined, not safe. **Owner's decision (2026-08-17): scheduled for roughly
+  two weeks out, around 2026-08-31.**
 
 ## 6. Performance — satisfied by construction
 

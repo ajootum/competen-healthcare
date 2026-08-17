@@ -8,6 +8,12 @@ import {
   EXCEPTION_KINDS, RESOLUTIONS, RESOLUTIONS_AT_COMMIT, RESOLUTIONS_PER_BOOKING,
   IMPACT_STATE_CHIP, resolutionLabel, exceptionKindLabel,
 } from "@/lib/practice/schedule-exception-constants";
+// ⚠ THE 24-HOUR CONTROL, NOT THE NATIVE TIME PICKER, which draws itself in the OPERATING SYSTEM's
+// locale -- so a machine set to en-US renders "11:00 AM" on a screen whose every other clock is
+// 24-hour. The value shape is unchanged ("09:00"), so nothing downstream moves. HHMM_RE is the same
+// expression the control's own `pattern` attribute is compiled from -- imported, never re-typed.
+import { TimeInput } from "@/components/ui/wall-clock";
+import { HHMM_RE } from "@/lib/practice/practice-time";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -91,6 +97,29 @@ export default function ExceptionWorkspace({
   const kind = EXCEPTION_KINDS.find(k => k.code === draft?.kind) ?? EXCEPTION_KINDS[0];
 
   /**
+   * ⚠ A TEXT CONTROL DOES NOT GUARANTEE WHAT THE NATIVE PICKER GUARANTEED, AND NOTHING ELSE ON THIS PATH
+   * CATCHES IT. There is no <form> here -- both buttons are type="button" with onClick handlers -- so
+   * `pattern` on the control is a validation bubble that never fires and the guard has to live in the
+   * handler. And the thing it is guarding against is not a visible error: `toMinutes` reads "9am" as
+   * NOUGHT, because Number("9am") is NaN and `NaN || 0` is 0. So an unguarded "9am" would post
+   * startsMinute: 0 -- a perfectly valid number -- and the practitioner would be shown the impact of
+   * cancelling from MIDNIGHT, then commit it.
+   *
+   * The ordering check is here for a second reason: the engine refuses end <= start on commit
+   * (schedule-exceptions.ts), but preview_impact does NOT, so a reversed window previews as "nobody is
+   * affected" and is only refused one button later. Saying it at the field is the honest moment.
+   */
+  const windowShown = !!draft && (kind.needsWindow || !draft.wholeDay);
+  const windowProblem: string | null = (() => {
+    if (!draft || !windowShown) return null;
+    if (!HHMM_RE.test(draft.from) || !HHMM_RE.test(draft.to))
+      return "Both times need to be on the 24-hour clock, written as HH:MM — for example 09:00 or 14:30.";
+    if (toMinutes(draft.to) <= toMinutes(draft.from))
+      return "The end of the window has to be after its start.";
+    return null;
+  })();
+
+  /**
    * ⚠ EVERY EDIT THROWS THE PREVIEW AWAY. The count belongs to one exact change; the moment the dates,
    * the place or the window move it is a count of a different Friday, and a stale number under a live
    * commit button is the whole failure AC-04 describes.
@@ -122,6 +151,10 @@ export default function ExceptionWorkspace({
   // ══ s5.3 STEPS 1 AND 2 ═════════════════════════════════════════════════════════════════════════
   async function checkImpact() {
     if (!draft) return;
+    // ⚠ REFUSED HERE, NOT SILENTLY POSTED. The sentence is already on screen beside the field; saying it
+    // again at the top is what a person who pressed the button gets, rather than a button that does
+    // nothing.
+    if (windowProblem) { setNotice({ kind: "err", text: windowProblem }); return; }
     setBusy(true); setNotice(null); setImpact(null); setImpactError(null);
     const { ok, data } = await post({ action: "preview_impact", ...payloadFor(draft) });
     setBusy(false);
@@ -139,6 +172,9 @@ export default function ExceptionWorkspace({
   // ══ s5.3 STEPS 3, 4 AND 5 ══════════════════════════════════════════════════════════════════════
   async function commit() {
     if (!draft || !impact || !resolution) return;
+    // Transitively covered -- every edit throws the impact away and the commit needs one -- but the
+    // write is the step that cannot be taken back, so it checks the value it is about to send.
+    if (windowProblem) { setNotice({ kind: "err", text: windowProblem }); return; }
     setBusy(true); setNotice(null);
     const { ok, data } = await post({
       action: "commit_change", ...payloadFor(draft), resolution, note: note.trim() || null,
@@ -301,17 +337,24 @@ export default function ExceptionWorkspace({
                 <>
                   <label className={labelCls}>
                     From
-                    <input type="time" value={draft.from} className={field}
-                      onChange={e => set("from", e.target.value)} />
+                    <TimeInput value={draft.from} className={field}
+                      onChange={v => set("from", v)} />
                   </label>
                   <label className={labelCls}>
                     To
-                    <input type="time" value={draft.to} className={field}
-                      onChange={e => set("to", e.target.value)} />
+                    <TimeInput value={draft.to} className={field} placeholder="13:00"
+                      onChange={v => set("to", v)} />
                   </label>
                 </>
               )}
             </div>
+            {/* ⚠ SAID AT THE FIELD, AS IT IS TYPED. The two buttons refuse the same thing, but a
+                refusal that only arrives on a click is a refusal somebody has already committed to. */}
+            {windowProblem && (
+              <p role="alert" className="mt-1.5 text-[11px] leading-relaxed text-rose-700">
+                {windowProblem}
+              </p>
+            )}
 
             {/* ---- 4. WHAT IT BECOMES (s5.2's location change and activity substitution) ---- */}
             {kind.needsReplacementLocation && (

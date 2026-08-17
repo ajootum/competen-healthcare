@@ -193,6 +193,12 @@ export async function runProvisioning(admin: any, req: {
   id: string; target_user_id: string; correlation_id: string; workspace_id: string | null;
 }, payload: IndividualRequest): Promise<{
   ok: boolean; workspaceId?: string; failedStep?: StepCode; errorCode?: string;
+  /**
+   * The database's own sentence about what went wrong, when there is one. Null on success and on the
+   * failures that are a refusal rather than an error. Declared here so a CALLER can print it: the
+   * error code alone names the step, which is the one thing already obvious from the code.
+   */
+  detail?: string | null;
   /** Whether the practitioner identity exists after this run. False never fails the run -- see above. */
   identityIssued?: boolean;
 }> {
@@ -206,11 +212,28 @@ export async function runProvisioning(admin: any, req: {
 
   let workspaceId = req.workspace_id;
 
-  const fail = async (step: StepCode, code: string) => {
+  /**
+   * ⚠ THE DATABASE'S OWN SENTENCE IS CARRIED OUT, NOT DISCARDED (2026-08-17).
+   *
+   * Every caller of this used to hand `fail` a step and a CODE, and throw the Postgres error away at
+   * the call site. So a provisioning run that died reported exactly "CAPABILITY_GRANT_FAILED" -- which
+   * says which STEP broke and nothing whatever about WHY, and the step is the one thing already
+   * obvious from the code name. A harness blocked by it could not be diagnosed without editing this
+   * file, which is precisely what happened.
+   *
+   * `detail` is optional so no existing call site changes meaning; the ones that hold a real error now
+   * pass it. It is recorded on the audit row too, because a failure nobody can explain a week later is
+   * a failure that gets rerun rather than fixed.
+   */
+  const fail = async (step: StepCode, code: string, detail?: string | null) => {
     await markStep(admin, req.id, step, "failed", code);
     await admin.from("provisioning_request").update({ status: "FAILED", error_code: code, updated_at: new Date().toISOString() }).eq("id", req.id);
-    await audit(admin, { workspaceId, actorId: req.target_user_id, eventType: "practice.provisioning_failed", payload: { requestId: req.id, failedStep: step, errorCode: code }, correlationId: req.correlation_id });
-    return { ok: false as const, failedStep: step, errorCode: code, workspaceId: workspaceId ?? undefined };
+    await audit(admin, { workspaceId, actorId: req.target_user_id, eventType: "practice.provisioning_failed", payload: { requestId: req.id, failedStep: step, errorCode: code, detail: detail ?? null }, correlationId: req.correlation_id });
+    return {
+      ok: false as const, failedStep: step, errorCode: code,
+      detail: detail ?? null,
+      workspaceId: workspaceId ?? undefined,
+    };
   };
 
   // 1. create_workspace
@@ -278,7 +301,9 @@ export async function runProvisioning(admin: any, req: {
       const { error } = await admin.from("practice_role_assignment")
         .insert({ membership_id: m.id, capability_code: c.capability_code, source: "role_default" });
       // A duplicate here means a concurrent run won the partial index; that is success, not failure.
-      if (error && !/duplicate|unique/i.test(error.message)) return fail("assign_capabilities", "CAPABILITY_GRANT_FAILED");
+      if (error && !/duplicate|unique/i.test(error.message))
+        return fail("assign_capabilities", "CAPABILITY_GRANT_FAILED",
+          `${c.capability_code} for role ${m.role}: ${error.message}`);
       granted++;
     }
   }

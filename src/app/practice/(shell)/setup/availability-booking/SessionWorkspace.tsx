@@ -15,6 +15,12 @@ import {
   describeRecurrence, isDateIso, shortDate, addDaysIso,
 } from "@/lib/practice/recurrence";
 import { retimingClause } from "@/lib/practice/generation-report-text";
+// ⚠ THE 24-HOUR CONTROL, NOT THE NATIVE TIME PICKER, which draws itself in the OPERATING SYSTEM's
+// locale, so a machine set to en-US renders "11:00 AM" on a screen whose every other clock is 24-hour.
+// The value shape is unchanged ("09:00"), so nothing downstream moves. HHMM_RE is the same expression
+// the control's own `pattern` attribute is compiled from -- imported, never re-typed.
+import { TimeInput } from "@/components/ui/wall-clock";
+import { HHMM_RE } from "@/lib/practice/practice-time";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -351,6 +357,12 @@ export default function SessionWorkspace({
   const derived = (() => {
     if (!draft) return null;
     const minutes = draft.appointmentMinutes !== "" ? Number(draft.appointmentMinutes) : defaultMinutes;
+    // ⚠ THIS RUNS ON EVERY KEYSTROKE, BEFORE ANY SUBMIT VALIDATION HAS HAD A CHANCE TO REFUSE ANYTHING.
+    // toMinutes below reads "9am" as NOUGHT -- Number("9am") is NaN and `NaN || 0` is 0 -- so a half-typed
+    // start would silently be treated as midnight and this line would draw a confident slot count off it.
+    // A number nobody can act on is worse than no number, and no-number is a state this panel already
+    // draws honestly.
+    if (!HHMM_RE.test(draft.from) || !HHMM_RE.test(draft.to)) return null;
     const span = toMinutes(draft.to) - toMinutes(draft.from);
     if (!minutes || minutes <= 0 || span <= 0) return null;
     return { count: Math.floor(span / minutes), minutes, fromDefault: draft.appointmentMinutes === "" };
@@ -572,15 +584,21 @@ export default function SessionWorkspace({
               </span>
             </label>
 
+            {/* ⚠ WHAT REFUSES A MALFORMED TIME HERE IS THE BROWSER'S OWN FORM VALIDATION. These two sit
+                inside the <form onSubmit={save}> that wraps them, whose only trigger is a real submit
+                button, so `required` and the control's `pattern` are checked before `save` is ever
+                called -- and the control's title is what the validation bubble reads out, which is why
+                it states the format with an example rather than saying "invalid input". Nothing here
+                submits programmatically; draftRef is used only to scroll the form into view. */}
             <label className={labelCls}>
               Starts
-              <input type="time" required value={draft.from}
-                onChange={e => set("from", e.target.value)} className={field} />
+              <TimeInput required value={draft.from}
+                onChange={v => set("from", v)} className={field} />
             </label>
             <label className={labelCls}>
               Ends
-              <input type="time" required value={draft.to}
-                onChange={e => set("to", e.target.value)} className={field} />
+              <TimeInput required value={draft.to}
+                onChange={v => set("to", v)} className={field} placeholder="13:00" />
             </label>
 
             <label className={labelCls}>

@@ -181,6 +181,9 @@ export default async function ActivityPage({ searchParams }: {
         </p>
       )}
 
+      {/* `timezone` and `today` are for PREFILLING "when" with the practice's now rather than UTC's.
+          The stored instant is still composed by the route, which is where the timezone is
+          authoritative rather than a prop somebody could forget to pass. */}
       <ActivityConsole
         records={record.items}
         portfolio={portfolio}
@@ -188,6 +191,8 @@ export default async function ActivityPage({ searchParams }: {
         onlyMine={onlyMine}
         kind={kind ?? ""}
         me={shell.ctx.userId}
+        timezone={clock.timezone}
+        today={clock.today}
         periodQuery={periodQuery}
         monthGrid={monthGrid}
       />

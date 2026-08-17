@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { ACTIVITY_KINDS, PARTICIPATION, PARTICIPANT_ROLES } from "@/lib/practice/clinical-activity";
 import { ClinicalRecordTable, type RecordColumn } from "@/components/practice/ClinicalRecordTable";
+import { TimeInput } from "@/components/ui/wall-clock";
+import { HHMM_RE, wallClockInZone } from "@/lib/practice/practice-time";
 
 // CPR-PCA-HFE-012 -- the Procedures & Clinical Activity portfolio console.
 //
@@ -57,8 +59,18 @@ const KIND_TINT_FALLBACK = "bg-gray-100 text-gray-600";
 
 type Row = any;
 
-export default function ActivityConsole({ records, portfolio, locations, onlyMine, kind, me, periodQuery = "", monthGrid = null }: {
+export default function ActivityConsole({
+  records, portfolio, locations, onlyMine, kind, me, timezone, today, periodQuery = "", monthGrid = null,
+}: {
   records: Row[]; portfolio: any; locations: any[]; onlyMine: boolean; kind: string; me: string;
+  /**
+   * ⚠ THE PRACTICE'S CLOCK, READ BY THE PAGE AND PASSED DOWN -- for PREFILLING ONLY.
+   *
+   * A form that offers "now" has to offer the practice's now, and this component has no way to read a
+   * workspace row. It must never be used to COMPOSE a stored instant: that happens in the route, where
+   * the timezone is authoritative rather than a prop somebody could forget to pass.
+   */
+  timezone: string; today: string;
   /**
    * s6's Month view, computed by the PAGE (the timezone and the period live there) and null in List
    * view. weeks are Monday-first with null padding; buckets and hrefs are keyed by YYYY-MM-DD.
@@ -84,9 +96,21 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
   const [open, setOpen] = useState(false);
   // The active filter may live behind More; it must not be invisible while lit.
   const [showMore, setShowMore] = useState(MORE_FILTERS.some(([k]) => k === kind));
+  /**
+   * ⚠ THE DEFAULT IS THE PRACTICE'S NOW, NOT UTC's (2026-08-17).
+   *
+   * Both forms below prefilled with `new Date().toISOString().slice(0, 16)`, which is UTC's wall clock
+   * poured into a control the browser draws as local time. In Kampala that offered "now" as three
+   * hours ago, on a form whose whole purpose is recording when something happened -- and a person has
+   * no reason to doubt a time the machine filled in for them.
+   *
+   * The date and time are also SEPARATE fields now rather than one datetime-local: the instant is
+   * composed by the route, in the practice's timezone, because this component cannot know it and its
+   * machine's zone is not evidence of it.
+   */
   const [form, setForm] = useState({
     kind: "ward_round", title: "", detail: "", participation: "participated",
-    occurredAt: new Date().toISOString().slice(0, 16),
+    occurredDate: today, occurredTime: wallClockInZone(timezone),
     durationMinutes: "", cpdMinutes: "", locationId: "", portfolio: false,
   });
   // s13's explicit external-procedure workflow (migration 302) -- its own form, never a mode of the
@@ -94,11 +118,26 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
   const [extOpen, setExtOpen] = useState(false);
   const [extForm, setExtForm] = useState({
     label: "", source: "", sourceRef: "", role: "operator", detail: "",
-    performedAt: new Date().toISOString().slice(0, 16), cpdMinutes: "", portfolio: true,
+    performedDate: today, performedTime: wallClockInZone(timezone), cpdMinutes: "", portfolio: true,
   });
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
+  /**
+   * ⚠ A TEXT FIELD DOES NOT GUARANTEE WHAT type="time" GUARANTEED.
+   *
+   * The native control the 24-hour swap replaced only ever handed back a valid HH:MM or an empty
+   * string -- the browser enforced it. A text input will hold "9am", "0900" or a pasted paragraph, and
+   * `pattern` blocks nothing here because both of these forms save from an onClick handler rather than
+   * a native form submission. So the same check the attribute expresses is made in code, from the one
+   * definition, and the refusal SAYS THE FORMAT rather than reporting that something went wrong.
+   */
+  const badTime = (v: string) => !HHMM_RE.test(v.trim());
+  const TIME_SENTENCE = "Enter the time on the 24-hour clock, as HH:MM -- for example 09:00 or 14:30.";
+
   async function submitExternal() {
+    if (badTime(extForm.performedTime)) {
+      setNotice({ kind: "err", text: TIME_SENTENCE }); return;
+    }
     setBusy(true); setNotice(null);
     const res = await fetch("/api/v1/practice/activities", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -107,7 +146,8 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
           label: extForm.label, source: extForm.source,
           sourceRef: extForm.sourceRef || null, role: extForm.role,
           detail: extForm.detail || undefined,
-          performedAt: new Date(extForm.performedAt).toISOString(),
+          // The wall clock, composed into an instant by the route in the practice's timezone.
+          performedDate: extForm.performedDate, performedTime: extForm.performedTime.trim(),
           cpdMinutes: extForm.cpdMinutes ? Number(extForm.cpdMinutes) : null,
           portfolio: extForm.portfolio,
         },
@@ -131,13 +171,17 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
   }
 
   async function submit() {
+    if (badTime(form.occurredTime)) {
+      setNotice({ kind: "err", text: TIME_SENTENCE }); return;
+    }
     setBusy(true); setNotice(null);
     const res = await fetch("/api/v1/practice/activities", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         kind: form.kind, title: form.title, detail: form.detail || undefined,
         participation: form.participation,
-        occurredAt: new Date(form.occurredAt).toISOString(),
+        // The wall clock, composed into an instant by the route in the practice's timezone.
+        occurredDate: form.occurredDate, occurredTime: form.occurredTime.trim(),
         durationMinutes: form.durationMinutes ? Number(form.durationMinutes) : null,
         cpdMinutes: form.cpdMinutes ? Number(form.cpdMinutes) : null,
         locationId: form.locationId || null, portfolio: form.portfolio,
@@ -371,8 +415,17 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-[11px] font-semibold text-gray-500">When performed</span>
-                <input type="datetime-local" required value={extForm.performedAt}
-                  onChange={e => setExtForm(f => ({ ...f, performedAt: e.target.value }))} className={input} />
+                {/* ⚠ A DATE AND A 24-HOUR TIME, NOT datetime-local. The native control draws the
+                    operating system's locale, so this read "11:00 AM" on any US-locale machine in a
+                    product that speaks 24-hour everywhere else -- and its offsetless value was being
+                    turned into an instant in the BROWSER's zone. type="date" stays: its value is
+                    unambiguous, it carries no zone to get wrong, and the native calendar is the
+                    better control. They are stacked so this cell still occupies one grid column. */}
+                <input type="date" required value={extForm.performedDate}
+                  onChange={e => setExtForm(f => ({ ...f, performedDate: e.target.value }))} className={input} />
+                <TimeInput value={extForm.performedTime} required className={input}
+                  ariaLabel="Time it was performed, 24-hour clock"
+                  onChange={v => setExtForm(f => ({ ...f, performedTime: v }))} />
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-[11px] font-semibold text-gray-500">Reference</span>
@@ -427,8 +480,12 @@ export default function ActivityConsole({ records, portfolio, locations, onlyMin
             <div className="grid sm:grid-cols-4 gap-2">
               <label className="flex flex-col gap-1">
                 <span className="text-[11px] font-semibold text-gray-500">When</span>
-                <input type="datetime-local" required value={form.occurredAt}
-                  onChange={e => setForm(f => ({ ...f, occurredAt: e.target.value }))} className={input} />
+                {/* Same split as the external-procedure form above, and for the same two reasons. */}
+                <input type="date" required value={form.occurredDate}
+                  onChange={e => setForm(f => ({ ...f, occurredDate: e.target.value }))} className={input} />
+                <TimeInput value={form.occurredTime} required className={input}
+                  ariaLabel="Time it happened, 24-hour clock"
+                  onChange={v => setForm(f => ({ ...f, occurredTime: v }))} />
               </label>
               <label className="flex flex-col gap-1">
                 <span className="text-[11px] font-semibold text-gray-500">How long</span>

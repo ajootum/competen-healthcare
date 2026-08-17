@@ -5,6 +5,7 @@ import {
   listProcedureTemplates, createProcedureTemplate, applyProcedureTemplate,
   portfolioSummary, setPortfolio, recordExternalProcedure, removeExternalProcedure,
 } from "@/lib/practice/clinical-activity";
+import { workspaceClock, instantInZone } from "@/lib/practice/practice-time";
 
 // GET    /api/v1/practice/activities                    -- the clinical activity log
 // GET    /api/v1/practice/activities?view=portfolio     -- what the caller has done, counted
@@ -76,14 +77,60 @@ export async function POST(req: NextRequest) {
     NextResponse.json({ error: { code: r.code, message: r.message } }, { status: r.status });
   const ctx = { actorId: auth.caller.userId, correlationId: auth.caller.traceId, workspaceId: auth.ctx.workspaceId };
 
+  /**
+   * ⚠ AN INSTANT IS COMPOSED HERE, IN THE PRACTICE TIMEZONE -- never on the client (2026-08-17).
+   *
+   * Both write paths below used to take a bare `datetime-local` value that the browser had turned into
+   * an instant with `new Date(v).toISOString()`. That reads the offsetless string in the BROWSER's
+   * zone, which is right exactly while the practitioner is sitting in the practice's zone and wrong the
+   * moment they travel or their machine's clock zone was never set -- and the form's own default was
+   * worse, prefilled from `new Date().toISOString().slice(0,16)`, which is UTC's wall clock and sat
+   * three hours behind in Kampala.
+   *
+   * A client cannot compose an instant: it does not know the practice timezone, and its own machine's
+   * zone is not evidence of it. So the screen now sends a wall clock -- a date and a 24-hour time --
+   * and this composes it, reusing the idiom the appointments and procedures routes already carry.
+   *
+   * A real instant is still accepted for a caller holding one, exactly as bookAppointment does. What is
+   * NOT done is guessing: an unreadable wall clock is refused by name, because the alternative is an
+   * activity filed at a moment nobody chose.
+   */
+  let zone: string | null = null;
+  const instantFrom = async (
+    instant: unknown, date: unknown, time: unknown, label: string,
+  ): Promise<{ ok: true; at: string } | { ok: false; res: NextResponse }> => {
+    const asInstant = instant === undefined || instant === null ? "" : String(instant);
+    if (asInstant) return { ok: true, at: asInstant };
+
+    const d = date === undefined || date === null ? "" : String(date).trim();
+    const t = time === undefined || time === null ? "" : String(time).trim();
+    if (!d || !t)
+      return { ok: false, res: fail({
+        code: "VALIDATION_ERROR", status: 400,
+        message: `${label} needs a date and a time on the 24-hour clock`,
+      }) };
+
+    if (zone === null) zone = (await workspaceClock(auth.caller.admin, auth.ctx.workspaceId)).timezone;
+    const at = instantInZone(d, t, zone);
+    if (!at)
+      return { ok: false, res: fail({
+        code: "VALIDATION_ERROR", status: 400,
+        message: `${label} could not be read as a moment in ${zone}`
+          + " -- the date must be YYYY-MM-DD and the time HH:MM on the 24-hour clock",
+      }) };
+    return { ok: true, at };
+  };
+
   if (body.externalProcedure) {
     // s13: EXPLICIT, never the default shape of this POST -- a generic manual procedure path is what
     // the spec forbids. Every field forwarded whole (the six-dropped-fields route class).
     const x = body.externalProcedure;
+    const when = await instantFrom(x.performedAt, x.performedDate, x.performedTime, "The time it was performed");
+    if (!when.ok) return when.res;
     const result = await recordExternalProcedure(auth.caller.admin, {
       ...ctx, label: String(x.label ?? ""), source: String(x.source ?? ""),
       sourceRef: x.sourceRef ?? null, role: x.role, detail: x.detail,
-      performedAt: String(x.performedAt ?? ""), cpdMinutes: x.cpdMinutes ?? null,
+      performedAt: when.at, cpdMinutes: x.cpdMinutes ?? null,
       portfolio: x.portfolio === true, performedBy: x.performedBy ?? null,
     });
     if (!result.ok) return fail(result);
@@ -130,9 +177,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ...result.data, correlationId: auth.caller.traceId }, { status: 201 });
   }
 
+  const when = await instantFrom(body.occurredAt, body.occurredDate, body.occurredTime, "The time it happened");
+  if (!when.ok) return when.res;
   const result = await recordActivity(auth.caller.admin, {
     ...ctx, kind: String(body.kind ?? ""), title: String(body.title ?? ""),
-    occurredAt: String(body.occurredAt ?? ""), detail: body.detail,
+    occurredAt: when.at, detail: body.detail,
     durationMinutes: body.durationMinutes ?? null, participation: body.participation,
     performedBy: body.performedBy ?? null, locationId: body.locationId ?? null,
     encounterId: body.encounterId ?? null, cpdMinutes: body.cpdMinutes ?? null,

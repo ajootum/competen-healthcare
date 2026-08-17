@@ -66,7 +66,7 @@ async function provision(user: string, name: string, suffix: string): Promise<st
     actor_user_id: user, target_user_id: user, payload_hash: "harness", correlation_id: "harness-search",
   }).select("id").single();
   const run = await runProvisioning(admin, { id: req!.id, target_user_id: user, correlation_id: "harness-search", workspace_id: null }, payload(name));
-  if (!run.ok || !run.workspaceId) throw new Error(`provisioning failed: ${run.errorCode}`);
+  if (!run.ok || !run.workspaceId) throw new Error(`provisioning failed: ${run.errorCode}${run.detail ? " -- " + run.detail : ""}`);
   return run.workspaceId;
 }
 

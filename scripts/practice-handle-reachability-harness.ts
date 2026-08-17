@@ -201,7 +201,7 @@ async function main() {
   const run = await runProvisioning(
     admin, { id: req.id, target_user_id: OWNER, correlation_id: "harness-handle", workspace_id: null },
     payload("Dr Handle Fixture"));
-  if (!run.ok || !run.workspaceId) throw new Error(`provisioning failed: ${run.errorCode}`);
+  if (!run.ok || !run.workspaceId) throw new Error(`provisioning failed: ${run.errorCode}${run.detail ? " -- " + run.detail : ""}`);
   const ctxRes = await resolveWorkspaceContext(admin, OWNER, run.workspaceId);
   if (!ctxRes.ok) throw new Error(`context resolution failed: ${ctxRes.reason}`);
   const CTX = ctxRes.ctx;

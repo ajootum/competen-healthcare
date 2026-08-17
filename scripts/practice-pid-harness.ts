@@ -56,7 +56,7 @@ async function provision(suffix: string, owner: string = OWNER): Promise<string>
   }).select("id").single();
   if (error || !req) throw new Error(`provisioning request refused: ${error?.message ?? "no row"}`);
   const run = await runProvisioning(admin, { id: req.id, target_user_id: owner, correlation_id: "harness-pid", workspace_id: null }, payload(`HARNESS PID ${suffix} (synthetic)`));
-  if (!run.ok || !run.workspaceId) throw new Error(`provisioning failed: ${run.errorCode}`);
+  if (!run.ok || !run.workspaceId) throw new Error(`provisioning failed: ${run.errorCode}${run.detail ? " -- " + run.detail : ""}`);
   return run.workspaceId;
 }
 

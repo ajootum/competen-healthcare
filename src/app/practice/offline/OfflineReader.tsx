@@ -29,6 +29,42 @@ import {
 import { captureMeasurement, captureEncounter, captureFollowUp, captureCollection, CAPTURE_HELD_NOTE } from "@/lib/practice/offline-capture";
 import { FOLLOW_UP_CATEGORIES, FOLLOW_UP_PRIORITIES } from "@/lib/practice/follow-up-constants";
 import { PAYMENT_METHODS, CURRENCY_EXPONENT, formatMinor } from "@/lib/practice/billing-constants";
+import { TimeInput } from "@/components/ui/wall-clock";
+import { HHMM_RE, instantInZone, practiceToday, wallClockInZone } from "@/lib/practice/practice-time";
+
+/**
+ * Now, as a wall-clock date and 24-hour time in the PRACTICE's timezone.
+ *
+ * ⚠ THIS REPLACED THREE COPIES OF A HELPER THAT READ THE DEVICE'S CLOCK (`now.getHours()`), one inside
+ * each capture form. On a device sitting in the practice that is the same answer; on one that has
+ * travelled, or whose clock zone was never set, it is not -- and the value it prefills is the moment a
+ * clinical observation gets filed at. The practice's zone travels with the day pack, so this is
+ * answerable with no network, which is the whole reason it is done here rather than deferred to sync.
+ *
+ * ⚠ Called from the OPEN handler rather than an effect: a setState in an effect body is a cascading
+ * render the lint rule rejects, and the value is genuinely a consequence of the click.
+ */
+function nowInPractice(timezone: string, offsetMinutes = 0): { date: string; time: string } {
+  const at = new Date(Date.now() + offsetMinutes * 60_000);
+  return { date: practiceToday(timezone, at), time: wallClockInZone(timezone, at) };
+}
+
+/**
+ * The composed instant for a capture form, or a REFUSAL SENTENCE naming what is wrong.
+ *
+ * ⚠ A text time field does not guarantee what type="time" guaranteed -- the browser no longer enforces
+ * HH:MM -- and these forms save from an onClick handler, so `pattern` blocks nothing. The check is made
+ * here, from the single definition, and a bad value is refused rather than composed into a wrong
+ * moment. Offline this matters more than anywhere: there is no server about to disagree.
+ */
+function composeCapture(date: string, time: string, timezone: string): { at: string } | { problem: string } {
+  if (!date.trim() || !time.trim()) return { problem: "Enter the date and the time this was taken." };
+  if (!HHMM_RE.test(time.trim()))
+    return { problem: "Enter the time on the 24-hour clock, as HH:MM -- for example 09:00 or 14:30." };
+  const at = instantInZone(date.trim(), time.trim(), timezone);
+  if (!at) return { problem: `That date and time could not be read as a moment in ${timezone || "this practice's timezone"}.` };
+  return { at };
+}
 
 // CP-OFFLINE-SURVEY-001 s3.4 — the cached clinic day, and its age, on one screen.
 //
@@ -225,6 +261,7 @@ export default function OfflineReader({ cacheKey }: { cacheKey?: CryptoKey | nul
                     // "open" toggle, so a rendered list never touches the clinical data at all.
                     clinicalPack={clinical?.state === "ok" ? clinical.pack : null}
                     workspaceId={workspaceId}
+                    timezone={result.day.timezone}
                     open={opened === p.id}
                     onToggle={() => setOpened(opened === p.id ? null : p.id)}
                   />
@@ -416,10 +453,20 @@ function GuidanceRow(
  * function's return type rather than a flipped boolean.
  */
 function PatientRow(
-  { patient, clinicalPack, workspaceId, open, onToggle }:
+  { patient, clinicalPack, workspaceId, timezone, open, onToggle }:
   {
     patient: OfflinePatient; clinicalPack: OfflineClinicalPack | null;
-    workspaceId: string | null; open: boolean; onToggle: () => void;
+    workspaceId: string | null;
+    /**
+     * ⚠ THE PRACTICE'S TIMEZONE, CARRIED IN THE DAY PACK -- and the reason it has to be threaded this
+     * far down is that the capture forms compose instants. `new Date("2026-08-18T14:30")` reads an
+     * offsetless string in the DEVICE's zone, which is the one zone that is not evidence of anything:
+     * a phone that has travelled, or was never set, files a clinical observation at a moment nobody
+     * chose. The pack knows where the practice is, so the device can compose correctly even with no
+     * network -- which is the whole point of composing here rather than deferring it to sync.
+     */
+    timezone: string;
+    open: boolean; onToggle: () => void;
   },
 ) {
   const row = offlineListRow(patient);
@@ -487,15 +534,18 @@ function PatientRow(
               recorded in the light of. */}
           <CaptureReading
             workspaceId={workspaceId} patientId={detail.patientId} patientName={row.name}
+            timezone={timezone}
           />
           <CaptureVisit
             workspaceId={workspaceId} patientId={detail.patientId} patientName={row.name}
+            timezone={timezone}
           />
           <CaptureFollowUp
             workspaceId={workspaceId} patientId={detail.patientId} patientName={row.name}
           />
           <CaptureCollection
             workspaceId={workspaceId} patientId={detail.patientId} patientName={row.name}
+            timezone={timezone}
           />
         </div>
       )}
@@ -520,8 +570,8 @@ function PatientRow(
  * ⚠ AND THE BUTTON SAYS SO TOO. "Save" would be the wrong verb before anything is saved anywhere.
  */
 function CaptureReading(
-  { workspaceId, patientId, patientName }:
-  { workspaceId: string | null; patientId: string | null; patientName: string },
+  { workspaceId, patientId, patientName, timezone }:
+  { workspaceId: string | null; patientId: string | null; patientName: string; timezone: string },
 ) {
   const [params, setParams] = useState<OfflineParametersReadResult | null>(null);
   const [identity, setIdentity] = useState<DeviceIdentity | null>(null);
@@ -529,7 +579,8 @@ function CaptureReading(
   const [definitionId, setDefinitionId] = useState("");
   const [value, setValue] = useState("");
   const [unit, setUnit] = useState("");
-  const [takenAt, setTakenAt] = useState("");
+  const [takenDate, setTakenDate] = useState("");
+  const [takenTime, setTakenTime] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [held, setHeld] = useState<string | null>(null);
@@ -541,18 +592,9 @@ function CaptureReading(
   }, [open]);
 
   /**
-   * Now, in the shape a datetime-local input wants, on the LOCAL clock -- which is the one the
-   * practitioner is reading off their own watch.
-   *
-   * ⚠ Computed when the form is OPENED rather than in an effect. A setState in an effect body is a
-   * cascading render the lint rule rejects, and the value is genuinely a consequence of the click.
+   * (The local-clock prefill helper that sat here is now `nowInPractice` at module scope -- one copy,
+   * reading the practice's zone from the day pack rather than the device's.)
    */
-  function nowForInput(): string {
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  }
-
   const chosen = params?.state === "ok"
     ? params.set.parameters.find(p => p.id === definitionId) ?? null
     : null;
@@ -564,6 +606,11 @@ function CaptureReading(
 
   async function submit() {
     if (!workspaceId || !patientId || !identity || !chosen) return;
+    // ⚠ THE PRACTITIONER'S WALL CLOCK, COMPOSED IN THE PRACTICE'S ZONE. Sending the raw offsetless
+    // string would let the server read a 09:00 reading as 09:00 UTC; composing it with `new Date()`
+    // read it in the DEVICE's zone, which is right only while the device is where the practice is.
+    const when = composeCapture(takenDate, takenTime, timezone);
+    if ("problem" in when) { setProblem(when.problem); return; }
     setBusy(true); setProblem(null); setHeld(null);
     const numeric = chosen.dataType === "decimal" || chosen.dataType === "integer";
     const result = await captureMeasurement({
@@ -571,9 +618,7 @@ function CaptureReading(
       patientId, definitionId: chosen.id,
       value: numeric ? Number(value) : value.trim(),
       unit: unit || chosen.canonicalUnit,
-      // ⚠ THE PRACTITIONER'S TIME, CONVERTED TO AN ABSOLUTE INSTANT. A datetime-local carries no zone;
-      // sending it raw would let the server read a 09:00 reading as 09:00 UTC and file it hours out.
-      effectiveAt: takenAt ? new Date(takenAt).toISOString() : "",
+      effectiveAt: when.at,
     });
     setBusy(false);
     if (!result.ok) { setProblem(result.reason); return; }
@@ -586,7 +631,8 @@ function CaptureReading(
 
   if (!open)
     return (
-      <button type="button" onClick={() => { setTakenAt(nowForInput()); setOpen(true); }}
+      <button type="button"
+        onClick={() => { const n = nowInPractice(timezone); setTakenDate(n.date); setTakenTime(n.time); setOpen(true); }}
         className="mt-2 rounded-lg border border-[var(--cp-primary)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary)]">
         Record a reading
       </button>
@@ -658,8 +704,18 @@ function CaptureReading(
                 it with today's date, because a three-day-old observation filed as today is a lie
                 recorded as a clinical fact. So it must be possible to correct it here. */}
             <span className="text-[11px] text-gray-600">When it was taken</span>
-            <input type="datetime-local" value={takenAt} onChange={e => setTakenAt(e.target.value)}
-              className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
+            {/* ⚠ A DATE AND A 24-HOUR TIME, NOT datetime-local -- the native control draws the OS
+                locale, so this asked for the time in AM/PM on any US-locale device in a product that
+                speaks 24-hour everywhere else. type="date" stays: its value carries no zone to get
+                wrong and the native calendar is genuinely the better control on a phone. */}
+            <div className="mt-0.5 flex gap-1">
+              <input type="date" value={takenDate} onChange={e => setTakenDate(e.target.value)}
+                aria-label="Date it was taken"
+                className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-[12px]" />
+              <TimeInput value={takenTime} onChange={setTakenTime}
+                ariaLabel="Time it was taken, 24-hour clock"
+                className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-[12px]" />
+            </div>
           </label>
 
           {plausibility.text && (
@@ -674,7 +730,7 @@ function CaptureReading(
       {held && <p className="mt-1.5 rounded border border-gray-300 bg-gray-50 px-2 py-1 text-[11.5px] leading-relaxed text-gray-800">{held}</p>}
 
       <div className="mt-2 flex items-center gap-2">
-        <button type="button" disabled={busy || !chosen || value.trim() === "" || !takenAt} onClick={submit}
+        <button type="button" disabled={busy || !chosen || value.trim() === "" || !takenDate || !takenTime} onClick={submit}
           className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
           {/* ⚠ NOT "Save". Nothing is saved anywhere until this device reaches the practice. */}
           {busy ? "Holding…" : "Hold on this device"}
@@ -703,16 +759,18 @@ function CaptureReading(
  * where the encounter opens for review, and a captured narrative never blocks later structured notes.
  */
 function CaptureVisit(
-  { workspaceId, patientId, patientName }:
-  { workspaceId: string | null; patientId: string | null; patientName: string },
+  { workspaceId, patientId, patientName, timezone }:
+  { workspaceId: string | null; patientId: string | null; patientName: string; timezone: string },
 ) {
   const [identity, setIdentity] = useState<DeviceIdentity | null>(null);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("in_person");
   const [pathway, setPathway] = useState("new_walk_in");
   const [reason, setReason] = useState("");
-  const [startedAt, setStartedAt] = useState("");
-  const [endedAt, setEndedAt] = useState("");
+  const [startedDate, setStartedDate] = useState("");
+  const [startedTime, setStartedTime] = useState("");
+  const [endedDate, setEndedDate] = useState("");
+  const [endedTime, setEndedTime] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -723,22 +781,20 @@ function CaptureVisit(
     void cachedIdentity().then(setIdentity);
   }, [open]);
 
-  function nowForInput(offsetMinutes = 0): string {
-    const now = new Date(Date.now() + offsetMinutes * 60_000);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  }
-
   async function submit() {
     if (!workspaceId || !patientId || !identity) return;
+    // Both instants composed in the practice's zone, and BOTH refused by name rather than one of them
+    // silently becoming "" -- an encounter with a start and no end is a different, later argument.
+    const from = composeCapture(startedDate, startedTime, timezone);
+    if ("problem" in from) { setProblem(`Started: ${from.problem}`); return; }
+    const to = composeCapture(endedDate, endedTime, timezone);
+    if ("problem" in to) { setProblem(`Ended: ${to.problem}`); return; }
     setBusy(true); setProblem(null); setHeld(null);
     const result = await captureEncounter({
       workspaceId, deviceId: identity.deviceId, userId: identity.userId,
       patientId, pathway, encounterMode: mode,
       reasonForVisit: reason.trim() || null,
-      // Absolute instants, same as the reading above -- a datetime-local carries no zone.
-      startedAt: startedAt ? new Date(startedAt).toISOString() : "",
-      endedAt: endedAt ? new Date(endedAt).toISOString() : "",
+      startedAt: from.at, endedAt: to.at,
       notes: { narrative: notes },
     });
     setBusy(false);
@@ -753,7 +809,13 @@ function CaptureVisit(
   if (!open)
     return (
       <button type="button"
-        onClick={() => { setStartedAt(nowForInput(-30)); setEndedAt(nowForInput()); setOpen(true); }}
+        onClick={() => {
+          // Half an hour ago to now -- the shape of a visit just finished, both on the practice's clock.
+          const began = nowInPractice(timezone, -30), ended = nowInPractice(timezone);
+          setStartedDate(began.date); setStartedTime(began.time);
+          setEndedDate(ended.date); setEndedTime(ended.time);
+          setOpen(true);
+        }}
         className="mt-2 ml-2 rounded-lg border border-[var(--cp-primary)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary)]">
         Record a visit
       </button>
@@ -802,18 +864,31 @@ function CaptureVisit(
           className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
       </label>
 
-      <div className="mt-1.5 grid grid-cols-2 gap-2">
+      {/* ⚠ REQUIRED AND EDITABLE, both of them -- the server refuses a visit with no times rather than
+          stamping it with the upload moment. See the reading's time field for the doctrine, and for
+          why each is now a date beside a 24-hour time rather than one datetime-local. */}
+      <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
         <label className="block">
-          {/* ⚠ REQUIRED AND EDITABLE, both of them -- the server refuses a visit with no times rather
-              than stamping it with the upload moment. See the reading's time field for the doctrine. */}
           <span className="text-[11px] text-gray-600">Started</span>
-          <input type="datetime-local" value={startedAt} onChange={e => { setStartedAt(e.target.value); setHeld(null); }}
-            className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
+          <div className="mt-0.5 flex gap-1">
+            <input type="date" value={startedDate} aria-label="Date the visit started"
+              onChange={e => { setStartedDate(e.target.value); setHeld(null); }}
+              className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-[12px]" />
+            <TimeInput value={startedTime} ariaLabel="Time the visit started, 24-hour clock"
+              onChange={v => { setStartedTime(v); setHeld(null); }}
+              className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-[12px]" />
+          </div>
         </label>
         <label className="block">
           <span className="text-[11px] text-gray-600">Ended</span>
-          <input type="datetime-local" value={endedAt} onChange={e => { setEndedAt(e.target.value); setHeld(null); }}
-            className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
+          <div className="mt-0.5 flex gap-1">
+            <input type="date" value={endedDate} aria-label="Date the visit ended"
+              onChange={e => { setEndedDate(e.target.value); setHeld(null); }}
+              className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-[12px]" />
+            <TimeInput value={endedTime} ariaLabel="Time the visit ended, 24-hour clock"
+              onChange={v => { setEndedTime(v); setHeld(null); }}
+              className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-[12px]" />
+          </div>
         </label>
       </div>
 
@@ -827,7 +902,8 @@ function CaptureVisit(
       {held && <p className="mt-1.5 rounded border border-gray-300 bg-gray-50 px-2 py-1 text-[11.5px] leading-relaxed text-gray-800">{held}</p>}
 
       <div className="mt-2 flex items-center gap-2">
-        <button type="button" disabled={busy || notes.trim() === "" || !startedAt || !endedAt} onClick={submit}
+        <button type="button" onClick={submit}
+          disabled={busy || notes.trim() === "" || !startedDate || !startedTime || !endedDate || !endedTime}
           className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
           {/* ⚠ NOT "Save". Nothing is saved anywhere until this device reaches the practice. */}
           {busy ? "Holding…" : "Hold on this device"}
@@ -970,8 +1046,8 @@ function CaptureFollowUp(
  * books will say.
  */
 function CaptureCollection(
-  { workspaceId, patientId, patientName }:
-  { workspaceId: string | null; patientId: string | null; patientName: string },
+  { workspaceId, patientId, patientName, timezone }:
+  { workspaceId: string | null; patientId: string | null; patientName: string; timezone: string },
 ) {
   const [identity, setIdentity] = useState<DeviceIdentity | null>(null);
   const [open, setOpen] = useState(false);
@@ -979,7 +1055,8 @@ function CaptureCollection(
   const [amountMajor, setAmountMajor] = useState("");
   const [currency, setCurrency] = useState("UGX");
   const [method, setMethod] = useState("cash");
-  const [takenAt, setTakenAt] = useState("");
+  const [takenDate, setTakenDate] = useState("");
+  const [takenTime, setTakenTime] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [held, setHeld] = useState<string | null>(null);
@@ -995,12 +1072,6 @@ function CaptureCollection(
     void cachedBillingCapture().then(setBillingVerdict);
   }, [open]);
 
-  function nowForInput(): string {
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  }
-
   // The one conversion, done where the preview can show its result. Math.round holds the "money is
   // integers" rule against float entry; a figure that rounds to nothing is refused by the capture.
   const exp = CURRENCY_EXPONENT[currency] ?? 2;
@@ -1009,11 +1080,14 @@ function CaptureCollection(
 
   async function submit() {
     if (!workspaceId || !patientId || !identity) return;
+    // The practice's zone, not the device's -- a receipt is numbered against this moment at sync.
+    const when = composeCapture(takenDate, takenTime, timezone);
+    if ("problem" in when) { setProblem(when.problem); return; }
     setBusy(true); setProblem(null); setHeld(null);
     const result = await captureCollection({
       workspaceId, deviceId: identity.deviceId, userId: identity.userId,
       patientId, description, amountMinor, currency, method,
-      collectedAt: takenAt ? new Date(takenAt).toISOString() : "",
+      collectedAt: when.at,
     });
     setBusy(false);
     if (!result.ok) { setProblem(result.reason); return; }
@@ -1026,7 +1100,8 @@ function CaptureCollection(
 
   if (!open)
     return (
-      <button type="button" onClick={() => { setTakenAt(nowForInput()); setOpen(true); }}
+      <button type="button"
+        onClick={() => { const n = nowInPractice(timezone); setTakenDate(n.date); setTakenTime(n.time); setOpen(true); }}
         className="mt-2 ml-2 rounded-lg border border-[var(--cp-primary)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary)]">
         Record money taken
       </button>
@@ -1087,8 +1162,15 @@ function CaptureCollection(
 
       <label className="mt-1.5 block">
         <span className="text-[11px] text-gray-600">When it was taken</span>
-        <input type="datetime-local" value={takenAt} onChange={e => { setTakenAt(e.target.value); setHeld(null); }}
-          className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1 text-[12px]" />
+        {/* Date beside a 24-hour time -- see the reading's field for why datetime-local is gone. */}
+        <div className="mt-0.5 flex gap-1">
+          <input type="date" value={takenDate} aria-label="Date the money was taken"
+            onChange={e => { setTakenDate(e.target.value); setHeld(null); }}
+            className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-[12px]" />
+          <TimeInput value={takenTime} ariaLabel="Time the money was taken, 24-hour clock"
+            onChange={v => { setTakenTime(v); setHeld(null); }}
+            className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-[12px]" />
+        </div>
       </label>
 
       {problem && <p className="mt-1.5 text-[11.5px] leading-relaxed text-rose-700">{problem}</p>}
@@ -1096,7 +1178,8 @@ function CaptureCollection(
 
       <div className="mt-2 flex items-center gap-2">
         <button type="button"
-          disabled={busy || description.trim() === "" || !takenAt || !Number.isInteger(amountMinor) || amountMinor <= 0}
+          disabled={busy || description.trim() === "" || !takenDate || !takenTime
+            || !Number.isInteger(amountMinor) || amountMinor <= 0}
           onClick={submit}
           className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
           {/* ⚠ NOT "Save", and NEVER "Issue receipt". Nothing is saved anywhere until sync. */}

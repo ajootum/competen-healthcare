@@ -110,6 +110,46 @@ export function instantInZone(dateIso: string, timeHHMM: string, timezone: strin
   return new Date(guess).toISOString();
 }
 
+/**
+ * ⚠ THE 24-HOUR WALL CLOCK, DEFINED ONCE AS A STRING AND COMPILED FROM IT.
+ *
+ * The HTML `pattern` attribute needs a string and JavaScript validation needs a RegExp, and this repo
+ * has already paid for keeping the two by hand: four inputs shipped carrying `[01]?d` -- the
+ * backslashes eaten in transit -- so the control demanded a literal letter "d" and refused "09:00",
+ * the very example its own tooltip gave. The pin covering them checked that a pattern EXISTED.
+ *
+ * Deriving the RegExp from the attribute string makes the two incapable of disagreeing, and exporting
+ * both means no screen ever writes the pattern out again. Six screens had hand-copied it.
+ */
+export const HHMM_PATTERN = "^([01]?\\d|2[0-3]):[0-5]\\d$";
+export const HHMM_RE = new RegExp(HHMM_PATTERN);
+
+/**
+ * The current wall clock in a practice's timezone, as HH:MM on the 24-hour clock.
+ *
+ * ⚠ FOR PREFILLING A CONTROL, NEVER FOR COMPOSING A STORED INSTANT. It answers "what time is it where
+ * this practice is", which is what a form should offer as its default -- `new Date().toTimeString()`
+ * answers "what time is it where this BROWSER is", and the two differ for a practitioner who has
+ * travelled or whose machine's clock zone was never set.
+ *
+ * The companion mistake this replaces is `new Date().toISOString().slice(11, 16)`, which is UTC's wall
+ * clock: in Kampala that prefills a form three hours behind, and the person filing it has no reason to
+ * doubt a value the machine offered them.
+ */
+export function wallClockInZone(timezone: string | null | undefined, at: Date = new Date()): string {
+  const tz = timezone || "UTC";
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: tz,
+    }).format(at);
+  } catch {
+    // A broken zone must not take a form down. UTC is stated rather than guessed at silently.
+    return new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC",
+    }).format(at);
+  }
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /** The workspace's own today. One query, so callers do not each re-read the timezone. */

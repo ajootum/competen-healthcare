@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import SessionCard from "./SessionCard";
 import { retimingClause } from "@/lib/practice/generation-report-text";
+import { TimeInput } from "@/components/ui/wall-clock";
+import { HHMM_RE } from "@/lib/practice/practice-time";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -161,6 +163,20 @@ export default function WeekBoard({ sessions, locations, clinics, today }: {
         <form className="mt-3 flex flex-wrap items-end gap-2 rounded-xl border border-[var(--cp-primary)]/25 bg-[var(--cp-primary)]/[0.04] p-3"
           onSubmit={e => {
             e.preventDefault();
+            // ⚠ THE GUARD type="time" USED TO BE. The native picker could only ever hand back HH:MM or
+            // nothing; a text control will hand back "9am", "0900" or a pasted paragraph. `required` and
+            // `pattern` do block THIS submit -- the form is native and the button is type="submit" -- but
+            // the shape is re-checked here because the failure downstream is silent rather than loud:
+            // toMinutes("0900") is 54000 and toMinutes("9am") is 0, both plausible numbers, and the
+            // engine's "a session must end after it starts" is a comparison on exactly those numbers. It
+            // would accept 09:00–"1300" as a session ending at minute 78000.
+            if (!HHMM_RE.test(draft.from) || !HHMM_RE.test(draft.to)) {
+              setNotice({
+                kind: "err",
+                text: "Start and end have to be times on the 24-hour clock — 09:00 or 14:30, not 9am, 9:00 AM or 0900.",
+              });
+              return;
+            }
             void send({
               action: "add_session", weekday: addingTo,
               startsMinute: toMinutes(draft.from), endsMinute: toMinutes(draft.to),
@@ -177,14 +193,14 @@ export default function WeekBoard({ sessions, locations, clinics, today }: {
           </label>
           <label className="flex flex-col text-[10px] font-semibold text-gray-600">
             From
-            <input type="time" required value={draft.from}
-              onChange={e => setDraft(d => ({ ...d, from: e.target.value }))}
+            <TimeInput required value={draft.from}
+              onChange={v => setDraft(d => ({ ...d, from: v }))}
               className="mt-0.5 rounded-lg border border-gray-200 px-2 py-1.5 text-[12px]" />
           </label>
           <label className="flex flex-col text-[10px] font-semibold text-gray-600">
             To
-            <input type="time" required value={draft.to}
-              onChange={e => setDraft(d => ({ ...d, to: e.target.value }))}
+            <TimeInput required value={draft.to} placeholder="13:00"
+              onChange={v => setDraft(d => ({ ...d, to: v }))}
               className="mt-0.5 rounded-lg border border-gray-200 px-2 py-1.5 text-[12px]" />
           </label>
           <label className="flex min-w-[160px] flex-1 flex-col text-[10px] font-semibold text-gray-600">

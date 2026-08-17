@@ -11,6 +11,12 @@ import {
   WAITING_LIST_NO_SCREEN_NOTE, QUEUE_PRIORITY_NO_SCREEN_NOTE,
 } from "@/lib/practice/booking-rule-constants";
 import { SESSION_APPOINTMENT_TYPES, appointmentTypeLabel, WEEKDAY_SHORT } from "@/lib/practice/practice-session-constants";
+// ⚠ THE 24-HOUR CONTROL, NOT THE NATIVE TIME PICKER, which draws itself in the OPERATING SYSTEM's
+// locale -- so a machine set to en-US renders "11:00 AM" on a screen whose every other clock is
+// 24-hour. The value shape is unchanged ("10:00"), so nothing downstream moves. HHMM_RE is the same
+// expression the control's own `pattern` attribute is compiled from -- imported, never re-typed.
+import { TimeInput } from "@/components/ui/wall-clock";
+import { HHMM_RE } from "@/lib/practice/practice-time";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -226,6 +232,24 @@ export default function RuleWorkspace({
   }
 
   async function explain() {
+    // ⚠ THE GUARD IS HERE BECAUSE THERE IS NO <form> ON THIS SCREEN. The button is type="button" with an
+    // onClick, so the control's `pattern` never gets a submit to block and is decoration on this path.
+    //
+    // And the failure it prevents is not a wrong answer, it is a DEAD BUTTON: `new Date("...T9am:00")`
+    // is an Invalid Date, and `.toISOString()` on one THROWS. Thrown here, the rejection escapes before
+    // `setBusy(false)`, so the button would stay disabled with nothing on screen -- the product looking
+    // broken rather than saying what is wrong.
+    //
+    // ⚠ THE DATE IS CHECKED TOO, AND THAT PART WAS ALREADY UNGUARDED. A date input can be CLEARED, and
+    // an empty date reaches the same Invalid Date by the same route. That predates the control swap.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(probe.date)) {
+      setDecisionError("Choose a date for the booking you want explained.");
+      return;
+    }
+    if (!HHMM_RE.test(probe.time)) {
+      setDecisionError("The time needs to be on the 24-hour clock, written as HH:MM — for example 09:00 or 14:30.");
+      return;
+    }
     setBusy(true); setDecision(null); setDecisionError(null);
     const r = await post({
       action: "evaluate", channel: probe.channel, appointmentType: probe.appointmentType,
@@ -825,8 +849,8 @@ export default function RuleWorkspace({
               onChange={e => setProbe(p => ({ ...p, date: e.target.value }))} />
           </label>
           <label className={labelCls}>Time
-            <input className={field} type="time" value={probe.time}
-              onChange={e => setProbe(p => ({ ...p, time: e.target.value }))} />
+            <TimeInput className={field} value={probe.time} placeholder="10:00"
+              onChange={v => setProbe(p => ({ ...p, time: v }))} />
           </label>
         </div>
         <button type="button" disabled={busy || !mayBook} onClick={explain}

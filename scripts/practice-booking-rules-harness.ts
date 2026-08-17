@@ -81,7 +81,7 @@ async function provision(user: string, name: string, suffix: string): Promise<st
   }).select("id").single();
   if (error || !req) throw new Error(`provisioning request refused: ${error?.message ?? "no row"}`);
   const run = await runProvisioning(admin, { id: req.id, target_user_id: user, correlation_id: CORR, workspace_id: null }, payload(name));
-  if (!run.ok || !run.workspaceId) throw new Error(`provisioning failed: ${run.errorCode}`);
+  if (!run.ok || !run.workspaceId) throw new Error(`provisioning failed: ${run.errorCode}${run.detail ? " -- " + run.detail : ""}`);
   return run.workspaceId;
 }
 
@@ -110,7 +110,23 @@ async function cleanup() {
   // ⚠ The workspace delete itself lives in _cleanup.ts: it unpicks the six tables that reference
   // practice_parameter_definition with no on-delete clause, and REPORTS a failure instead of
   // discarding it. The bespoke unpick above runs first and is unchanged.
-  await purgeWorkspacesOwnedBy(admin, [OWNER, OTHER]);
+  // ⚠ THE PURGE'S VERDICT IS READ, NOT DISCARDED (2026-08-17).
+  //
+  // This call threw its return value away, and that is how a crashed run became a self-perpetuating
+  // one: a workspace left behind by a partial run makes the NEXT run reuse it, which fails in
+  // assign_capabilities with an FK violation on a membership that no longer exists -- and then fails
+  // the same way for ever, because nothing says the state was never cleaned. Five runs failed at five
+  // different points before anyone could say what was stale.
+  //
+  // purgeWorkspacesOwnedBy already reports `blocked` and `unreadable`; it just had nobody listening.
+  // This does not throw -- a blocked purge is not necessarily fatal and the assertions below may still
+  // be meaningful -- but it can no longer happen silently.
+  const purged = await purgeWorkspacesOwnedBy(admin, [OWNER, OTHER]);
+  if (purged.blocked.length || purged.unreadable)
+    console.warn(`  ⚠ cleanup did not fully purge: blocked=${JSON.stringify(purged.blocked)}`
+      + ` unreadable=${JSON.stringify(purged.unreadable)}`
+      + "\n    A workspace surviving cleanup makes the next run reuse it, which is how this harness"
+      + " fails in provisioning with an FK violation on a membership that has been cascaded away.");
 }
 
 /**

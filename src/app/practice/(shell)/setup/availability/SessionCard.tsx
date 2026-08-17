@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 // CPR-RECUR-001 (migration 274). Pure arithmetic, the same the generator runs on.
 import { readRecurrence, recurrenceBadge, nextOccurrences, shortDate } from "@/lib/practice/recurrence";
+import { TimeInput } from "@/components/ui/wall-clock";
+import { HHMM_RE } from "@/lib/practice/practice-time";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -196,6 +198,19 @@ export default function SessionCard({ session, locations, clinics = [], kindHue,
       {mode === "edit" && (
         <form className="mt-1.5 flex flex-col gap-1 border-t border-gray-100 pt-1.5" onSubmit={e => {
           e.preventDefault();
+          // ⚠ THE GUARD type="time" USED TO BE -- AND HERE IT IS ALSO A GUARD THAT NEVER EXISTED.
+          // These two fields carried no `required`, so the native picker already allowed an EMPTY value,
+          // and toMinutes("") is 0: clearing the start and saving moved the session to midnight without
+          // a word. `required` closes that, `pattern` closes "9am", and both are re-checked here because
+          // what they protect is a comparison on minutes -- editSession's "a session must end after it
+          // starts" reads toMinutes("1300") as 78000 and finds it perfectly well ordered.
+          if (!HHMM_RE.test(draft.from) || !HHMM_RE.test(draft.to)) {
+            setNotice({
+              kind: "err",
+              text: "Start and end have to be times on the 24-hour clock — 09:00 or 14:30, not 9am, 9:00 AM or 0900.",
+            });
+            return;
+          }
           send({
             action: "edit_session", templateId: session.id,
             weekday: Number(draft.weekday),
@@ -208,10 +223,11 @@ export default function SessionCard({ session, locations, clinics = [], kindHue,
             {WEEKDAYS.map(([n, l]) => <option key={n} value={n}>{l}</option>)}
           </select>
           <div className="flex gap-1">
-            <input type="time" value={draft.from} onChange={e => setDraft(d => ({ ...d, from: e.target.value }))}
-              className="w-full rounded border border-gray-200 px-1 py-1 text-[10px]" aria-label="Start" />
-            <input type="time" value={draft.to} onChange={e => setDraft(d => ({ ...d, to: e.target.value }))}
-              className="w-full rounded border border-gray-200 px-1 py-1 text-[10px]" aria-label="End" />
+            <TimeInput required value={draft.from} onChange={v => setDraft(d => ({ ...d, from: v }))}
+              className="w-full rounded border border-gray-200 px-1 py-1 text-[10px]" ariaLabel="Start" />
+            <TimeInput required value={draft.to} onChange={v => setDraft(d => ({ ...d, to: v }))}
+              placeholder="13:00"
+              className="w-full rounded border border-gray-200 px-1 py-1 text-[10px]" ariaLabel="End" />
           </div>
           <select value={draft.locationId} onChange={e => setDraft(d => ({ ...d, locationId: e.target.value }))}
             className="rounded border border-gray-200 px-1 py-1 text-[10px]" aria-label="Location">

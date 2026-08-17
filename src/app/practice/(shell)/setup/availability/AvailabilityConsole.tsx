@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   generationSummary, mistimedHeading, hhmmOf, type MistimedWindowLike,
 } from "@/lib/practice/generation-report-text";
+import { TimeInput } from "@/components/ui/wall-clock";
+import { HHMM_RE } from "@/lib/practice/practice-time";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -143,6 +145,19 @@ export default function AvailabilityConsole({ locations, rules, inert, today, ca
           <form className="flex flex-wrap items-end gap-2" onSubmit={e => {
             e.preventDefault();
             const adds = exception.kind === "extra_session" || exception.kind === "extended_hours";
+            // ⚠ THE GUARD type="time" USED TO BE, AND IT IS CONDITIONAL BECAUSE THE FIELDS ARE.
+            // Leave and closures take the whole day and never render these two, so their contents are
+            // not read and must not be judged -- a stale "9am" left behind by switching the kind would
+            // otherwise block recording a holiday that has no times at all. When the kind DOES add time,
+            // the shape is checked before toMinutes sees it: toMinutes("1300") is 78000, which the
+            // engine's "a session must end after it starts" reads as a well-ordered window.
+            if (adds && (!HHMM_RE.test(exception.from) || !HHMM_RE.test(exception.to))) {
+              setNotice({
+                kind: "err",
+                text: "The start and end have to be times on the 24-hour clock — 09:00 or 14:30, not 9am, 9:00 AM or 0900.",
+              });
+              return;
+            }
             send({
               action: "add_exception", kind: exception.kind,
               fromDate: exception.fromDate, toDate: exception.toDate,
@@ -165,10 +180,11 @@ export default function AvailabilityConsole({ locations, rules, inert, today, ca
                 two kinds that add, because leave takes the day. */}
             {(exception.kind === "extra_session" || exception.kind === "extended_hours") && (
               <>
-                <input type="time" value={exception.from} onChange={e => setException(s => ({ ...s, from: e.target.value }))}
-                  className={`${input} w-28`} aria-label="Start" required />
-                <input type="time" value={exception.to} onChange={e => setException(s => ({ ...s, to: e.target.value }))}
-                  className={`${input} w-28`} aria-label="End" required />
+                <TimeInput value={exception.from} onChange={v => setException(s => ({ ...s, from: v }))}
+                  className={`${input} w-28`} ariaLabel="Start" required />
+                <TimeInput value={exception.to} onChange={v => setException(s => ({ ...s, to: v }))}
+                  placeholder="13:00"
+                  className={`${input} w-28`} ariaLabel="End" required />
               </>
             )}
             <select value={exception.locationId} onChange={e => setException(s => ({ ...s, locationId: e.target.value }))}

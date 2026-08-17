@@ -123,7 +123,7 @@ async function provision(userId: string, name: string): Promise<string | null> {
   };
   const run = await runProvisioning(admin,
     { id: req.id, target_user_id: userId, correlation_id: CORR, workspace_id: null }, payload);
-  if (!run.ok || !run.workspaceId) { console.error(`provisioning failed: ${run.errorCode}`); return null; }
+  if (!run.ok || !run.workspaceId) { console.error(`provisioning failed: ${run.errorCode}${run.detail ? " -- " + run.detail : ""}`); return null; }
   return run.workspaceId;
 }
 
