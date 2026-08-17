@@ -111,6 +111,7 @@ export default function QueueWithActions({ people, unavailableReason, truncatedN
       onStartEncounter={canStartEncounter ? startEncounter : undefined}
       onCheckIn={canCheckIn ? (id => queueAction(id, "check_in")) : undefined}
       onLeft={canCheckIn ? (id => queueAction(id, "left")) : undefined}
+      canAttach={canCheckIn}
     />
   );
 }

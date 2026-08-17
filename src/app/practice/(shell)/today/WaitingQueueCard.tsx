@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { PANEL, QUEUE_SWATCH } from "@/lib/practice/palette";
+import AttachRecordInline from "./AttachRecordInline";
 
 // CPR-V5-004 s2 WAITING QUEUE -- who is in the corridor, split the way the session engine splits them.
 //
@@ -104,6 +105,12 @@ export type WaitingQueueCardProps = {
    */
   onCheckIn?: (entryId: string) => void;
   /**
+   * #18: a row with NO patient record may attach one in place -- the affordance that turns
+   * "cannot start, permanently" into one search and one pick. Drawing gated here; the queue API
+   * gates the write again.
+   */
+  canAttach?: boolean;
+  /**
    * Walkthrough #4c: records that this person left without being seen (queue LEFT -- kept, never
    * deleted). Drawn only on WAITING/READY rows, the two states the engine allows to become LEFT.
    */
@@ -130,7 +137,7 @@ const GROUP_DOT: Record<QueueGroupKey, string> = {
 };
 
 export default function WaitingQueueCard(props: WaitingQueueCardProps) {
-  const { people, unavailableReason, truncatedNotice, href, onStartEncounter, onMarkSeen, onCheckIn, onLeft, busyId, error } = props;
+  const { people, unavailableReason, truncatedNotice, href, onStartEncounter, onMarkSeen, onCheckIn, onLeft, canAttach, busyId, error } = props;
   const [tab, setTab] = useState<QueueTabKey>("all");
 
   const countFor = (k: QueueTabKey) => k === "all" ? people.length : people.filter(p => p.group === k).length;
@@ -227,6 +234,12 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
                         title={p.timeLabel ? `Arrived ${p.timeLabel}` : undefined}>
                         {waitLabel(p.waitingMinutes)}
                       </span>
+                    )}
+                    {/* #18: the record-less row carries its own cure. Everything below this line is
+                        gated on p.patientId, so without the attachment this row could do nothing,
+                        forever, while pointing at a register that never pointed back. */}
+                    {canAttach && !p.patientId && (
+                      <AttachRecordInline entryId={p.id} prefillName={p.name} />
                     )}
                     {/* CPR-ADOPT-001 s2. Drawn only when this row HAS a patient to attach an encounter
                         to -- a queue entry for somebody not yet registered has nothing to mark. */}

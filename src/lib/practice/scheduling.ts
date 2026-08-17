@@ -828,6 +828,64 @@ export async function checkInQueueEntry(admin: any, args: {
 }
 
 /**
+ * Walkthrough 2026-08-17 #18 -- ATTACHING A RECORD TO A NAME-ONLY ARRIVAL, IN PLACE.
+ *
+ * A name-only booking checks in and becomes a queue entry with a name and NO patient_id -- and
+ * nothing in the product ever closed that loop: "Find or register them first" was a bare pointer
+ * to the register, and a patient registered there stayed unattached to the arrival forever. The
+ * cockpit then rightly refused to start the encounter, permanently.
+ *
+ * Attach is a one-way, once-only act: an entry that already HAS a record refuses (re-pointing a
+ * linked arrival at a different person is a clinical-identity edit this door must not offer), and
+ * the patient must be active in this workspace -- the same standard launchEncounter holds. When
+ * the entry rides a name-only APPOINTMENT, the attachment flows through to it: the diary row, the
+ * planner and the patient's own upcoming list all heal in the same act.
+ */
+export async function attachPatientToQueueEntry(admin: any, args: {
+  workspaceId: string; entryId: string; patientId: string; actorId: string; correlationId: string;
+}): Promise<EngineResult<{ patientId: string; appointmentAttached: boolean }>> {
+  const { data: entry } = await admin.from("practice_queue_entry")
+    .select("id, status, patient_id, appointment_id")
+    .eq("id", args.entryId).eq("workspace_id", args.workspaceId).maybeSingle();
+  if (!entry) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  if (entry.patient_id)
+    return { ok: false, status: 422, code: "ALREADY_ATTACHED",
+      message: "this arrival already has a patient record attached" };
+
+  const { data: patient } = await admin.from("practice_patient")
+    .select("id, status").eq("id", args.patientId).eq("workspace_id", args.workspaceId).maybeSingle();
+  if (!patient) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  if (patient.status !== "active")
+    return { ok: false, status: 422, code: "PATIENT_NOT_ACTIVE",
+      message: "this patient record is not active (archived or merged)" };
+
+  const { error: writeErr } = await admin.from("practice_queue_entry")
+    .update({ patient_id: args.patientId, updated_at: new Date().toISOString() })
+    .eq("workspace_id", args.workspaceId).eq("id", entry.id);
+  if (writeErr) return { ok: false, status: 422, code: "REFUSED_BY_DATABASE", message: writeErr.message };
+
+  // The name-only appointment behind this arrival heals in the same act -- but NEVER a booking that
+  // already names somebody else, which would be re-pointing a different person's diary entry.
+  let appointmentAttached = false;
+  if (entry.appointment_id) {
+    const { data: appt } = await admin.from("practice_appointment")
+      .select("id, patient_id").eq("id", entry.appointment_id).eq("workspace_id", args.workspaceId).maybeSingle();
+    if (appt && !appt.patient_id) {
+      const { error: apptErr } = await admin.from("practice_appointment")
+        .update({ patient_id: args.patientId, updated_at: new Date().toISOString(), updated_by: args.actorId })
+        .eq("workspace_id", args.workspaceId).eq("id", appt.id);
+      appointmentAttached = !apptErr;
+    }
+  }
+
+  await audit(admin, {
+    workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.queue_patient_attached",
+    payload: { entryId: entry.id, patientId: args.patientId, appointmentAttached }, correlationId: args.correlationId,
+  });
+  return { ok: true, data: { patientId: args.patientId, appointmentAttached } };
+}
+
+/**
  * Walkthrough 2026-08-16 #4c -- THE QUEUE ROW FOLLOWS THE CLINICAL ACT.
  *
  * Until this existed, a queue entry was born at check-in and NOTHING in the product ever moved it

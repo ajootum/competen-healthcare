@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { BUTTON, QUEUE_SWATCH } from "@/lib/practice/palette";
+import AttachRecordInline from "./AttachRecordInline";
 import { waitLabel } from "./WaitingQueueCard";
 import { startEncounterFor } from "@/lib/practice/encounter-start";
 
@@ -32,6 +33,8 @@ export type FlowPerson = {
   role: "current" | "next";
   name: string;
   patientId: string | null;
+  /** #18: the queue entry behind this person, so a record-less arrival can attach one IN PLACE. */
+  queueEntryId: string | null;
   /** Identity fields (s8: "sufficiently strong to prevent wrong-patient selection"). Null when absent. */
   patientNumber: string | null;
   birthDate: string | null;
@@ -58,10 +61,12 @@ const ENCOUNTER_STATE: Record<string, string> = {
   PAUSED: "Consultation paused",
 };
 
-export default function CurrentPatientCard({ person, canStartEncounter, unavailableReason }: {
+export default function CurrentPatientCard({ person, canStartEncounter, canAttach, unavailableReason }: {
   person: FlowPerson | null;
   /** Decides what is DRAWN. The encounter API re-checks the capability, which is the actual control. */
   canStartEncounter: boolean;
+  /** #18: whether the attach-in-place affordance is drawn for a record-less arrival. */
+  canAttach: boolean;
   unavailableReason: string | null;
 }) {
   const [busy, setBusy] = useState(false);
@@ -163,10 +168,21 @@ export default function CurrentPatientCard({ person, canStartEncounter, unavaila
         ) : !person.patientId ? (
           // No dead controls: the button that cannot work is ABSENT and the reason is a sentence with
           // the route to fixing it.
-          <p className="text-[12px] text-amber-800">
-            This arrival has no patient record attached, so an encounter cannot be started.{" "}
-            <Link href="/practice/patients" className="font-semibold underline">Find or register them first →</Link>
-          </p>
+          <div className="flex flex-col gap-1.5">
+            <p className="text-[12px] text-amber-800">
+              This arrival has no patient record attached, so an encounter cannot be started.
+            </p>
+            {/* #18: the cure lives on the card, not across the product. One search, one pick, and
+                Start appears by the guard that was always here. The register link survives inside
+                the component for the genuinely new. */}
+            {canAttach && person.queueEntryId ? (
+              <AttachRecordInline entryId={person.queueEntryId} prefillName={person.name} />
+            ) : (
+              <p className="text-[12px] text-amber-800">
+                <Link href="/practice/patients" className="font-semibold underline">Find or register them first →</Link>
+              </p>
+            )}
+          </div>
         ) : (
           <p className="text-[12px] text-gray-500">
             Starting an encounter needs a permission you do not hold here.

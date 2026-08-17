@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
-import { transitionQueueEntry, checkInQueueEntry } from "@/lib/practice/scheduling";
+import { transitionQueueEntry, checkInQueueEntry, attachPatientToQueueEntry } from "@/lib/practice/scheduling";
 
 // PATCH /api/v1/practice/queue/{entryId} { action } -- queue movement (DM-001 s7 QueueEntry states).
 // Capability queue.manage: the assistant runs the waiting room; the auditor does not.
@@ -25,6 +25,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ en
 
   let body: { action?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
+
+  // #18: attach a registered patient to a name-only arrival. Not a state move either -- identity,
+  // once, with the engine refusing re-pointing and inactive records.
+  if (body.action === "attach") {
+    const result = await attachPatientToQueueEntry(auth.caller.admin, {
+      workspaceId: auth.ctx.workspaceId, entryId,
+      patientId: String((body as Record<string, unknown>).patientId ?? ""),
+      actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+    });
+    if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
+    return NextResponse.json({ entry: result.data, correlationId: auth.caller.traceId });
+  }
 
   if (body.action === "check_in") {
     const result = await checkInQueueEntry(auth.caller.admin, {

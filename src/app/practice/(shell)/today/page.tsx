@@ -107,6 +107,7 @@ export default async function CurrentSessionPage() {
     role: (flow.current ? "current" : "next") as "current" | "next",
     name: person.name,
     patientId: person.patientId,
+    queueEntryId: person.queueEntryId,
     patientNumber: person.patientNumber,
     birthDate: person.birthDate,
     ageEstimateYears: person.ageEstimateYears,
@@ -290,6 +291,7 @@ export default async function CurrentSessionPage() {
           <CurrentPatientCard
             person={flowPerson}
             canStartEncounter={hasCapability(shell.ctx, "encounter.create")}
+            canAttach={hasCapability(shell.ctx, "queue.manage")}
             unavailableReason={flowReason}
           />
 
