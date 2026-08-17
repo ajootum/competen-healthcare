@@ -176,6 +176,14 @@ export default function DayPlanner({
                       <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
                         {s.slotKindLabel}
                       </span>
+                      {/* #17: the strip wears today's PLANNED hours, not the template's -- said out
+                          loud so a window longer than the regular Monday reads as a decision, not
+                          a glitch. */}
+                      {s.extendedByPlan && (
+                        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-800">
+                          Extended by today&rsquo;s plan
+                        </span>
+                      )}
                       {s.source === "program" && (
                         // ⚠ A PROGRAM SESSION IS NOT BOOKABLE TIME. It is the regular week saying a clinic
                         // runs; until times are generated there is nothing for anybody to take.

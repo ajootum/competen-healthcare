@@ -357,6 +357,9 @@ export type PlannerSession = {
   /** Every figure is the length of a list you can open: these are the ids behind `capacity.booked`. */
   appointmentIds: string[];
   capacity: SessionCapacity;
+  /** #17: true when today's planned activity ran past the template's end and this strip wears the
+   *  plan's hours -- so the screen can say WHY the window is longer than the regular week's. */
+  extendedByPlan?: boolean;
 };
 
 /** A date the regular week does not describe: leave, a closure, an extra session, a location change. */
@@ -1303,6 +1306,34 @@ function buildDay(
     });
   }
   day.sessions.sort((a, b) => a.startMinute - b.startMinute || a.endMinute - b.endMinute);
+
+  // ---- Walkthrough 2026-08-17 #17: TODAY'S PLAN OUTRANKS THE WEEKLY PRESET. -------------------------
+  //
+  // The template said the clinic ends at 13:00; the practitioner planned TODAY'S clinic to 15:00 and
+  // booked somebody at 13:00 -- who then sat under "booked outside any session" an inch below a plan
+  // that plainly covers them. When an uncancelled planned activity at the SAME place overlaps a
+  // session and runs past its end, the session strip wears the plan's end and adopts the bookings
+  // inside the extension (unplaced or same-place ones only -- a booking at a DIFFERENT hospital is
+  // genuinely elsewhere and stays loose). capacity.booked counts what the strip now lists; slots and
+  // free are untouched, because the extension adds no generated times and pretending otherwise is
+  // the lie the capacity note exists to prevent.
+  {
+    const placed = new Set(day.sessions.flatMap(s => s.appointmentIds));
+    for (const s of day.sessions) {
+      const covering = day.activities.find(a =>
+        a.state !== "cancelled" && a.locationId && a.locationId === s.locationId
+        && a.plannedStartMinute < s.endMinute && a.plannedEndMinute > s.endMinute);
+      if (!covering) continue;
+      const adopted = booked.filter(a =>
+        !placed.has(a.id)
+        && a.startMinute >= s.endMinute && a.startMinute < covering.plannedEndMinute
+        && (!a.locationId || a.locationId === s.locationId));
+      s.endMinute = covering.plannedEndMinute;
+      s.extendedByPlan = true;
+      for (const a of adopted) { s.appointmentIds.push(a.id); placed.add(a.id); }
+      s.capacity.booked += adopted.length;
+    }
+  }
 
   // ---- THE DAY'S CAPACITY. Sums of the sessions above, with the unknowable left unknown. ----
   if (day.sessions.length > 0) {

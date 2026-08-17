@@ -215,7 +215,10 @@ export default function Timeline({ timeline, canManage, onChanged }: {
                 <div key={l.id ?? "none"} className="min-w-[140px] flex-1 truncate">
                   <p className="truncate text-[12px] font-semibold text-gray-800">{l.name}</p>
                   <p className="truncate text-[10px] text-gray-400">
-                    {l.type === "unassigned" ? "no place recorded"
+                    {/* #17: the cure rides with the diagnosis -- dragging a block onto a hospital's
+                        lane PERSISTS the place (the PUT this screen already does), and new bookings
+                        stopped landing here once the day's plan began settling locations. */}
+                    {l.type === "unassigned" ? "no place recorded -- drag a block onto its hospital to set it"
                       : l.facilityName ?? (l.type === "hospital" ? "no facility linked -- set it in Practice Settings" : String(l.type).replace(/_/g, " "))}
                   </p>
                 </div>

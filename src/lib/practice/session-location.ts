@@ -103,6 +103,52 @@ export async function locationFromRegularWeek(
 }
 
 /**
+ * Walkthrough 2026-08-17 #17 -- TODAY'S PLAN OUTRANKS THE WEEKLY PRESET.
+ *
+ * The regular week says the Monday clinic ends at 13:00; the practitioner planned TODAY'S clinic to
+ * 15:00. A 13:00 booking then read "outside the regular week, so no location was assumed" -- the
+ * derivation was consulting the template about a day the practitioner had already amended. This
+ * asks the day's own plan FIRST: a planned, uncancelled activity with a location whose window
+ * covers the instant settles the place; the weekly template is the fallback, not the authority,
+ * for any day that has its own answer.
+ *
+ * ⚠ NOT practitioner-scoped, deliberately. This product is the individual practice -- one
+ * practitioner, one plan per day. The day multi-practitioner planning exists, this read needs the
+ * practitioner the booking is FOR, and this comment is the marker for that change.
+ *
+ * ⚠ A FAILED PLAN READ FALLS THROUGH to the regular week rather than refusing: losing the amendment
+ * costs a location suggestion, losing the whole derivation would cost every ordinary booking too.
+ */
+export async function locationForInstant(
+  admin: any, workspaceId: string, instantIso: string, timezone: string,
+): Promise<DerivedLocation> {
+  const at = new Date(instantIso);
+  if (!Number.isNaN(at.getTime())) {
+    const localMs = at.getTime() + zoneOffsetMinutes(timezone, at) * 60000;
+    const local = new Date(localMs);
+    const localDate = local.toISOString().slice(0, 10);
+    const minuteOfDay = local.getUTCHours() * 60 + local.getUTCMinutes();
+
+    const { data, error } = await admin.from("practice_activity")
+      .select("location_id, planned_start_minute, planned_end_minute")
+      .eq("workspace_id", workspaceId).eq("plan_date", localDate)
+      .is("cancelled_at", null).not("location_id", "is", null);
+    if (!error) {
+      const covering = ((data ?? []) as any[]).filter(a =>
+        a.planned_start_minute <= minuteOfDay && minuteOfDay < a.planned_end_minute);
+      const places = [...new Set(covering.map(a => a.location_id))] as string[];
+      if (places.length === 1)
+        return { locationId: places[0], derived: true, outsideRegularWeek: false,
+          reason: "taken from today's plan for this time" };
+      if (places.length > 1)
+        return { locationId: null, derived: false, outsideRegularWeek: false,
+          reason: "two activities at different locations cover this time today, so it was not assumed" };
+    }
+  }
+  return locationFromRegularWeek(admin, workspaceId, instantIso, timezone);
+}
+
+/**
  * Walkthrough 2026-08-16 #6 -- WHERE A FOLLOW-UP DAY HAPPENS, from the same regular week.
  *
  * The instant-based resolver above answers "where am I at 10:15 on Tuesday". A follow-up has only a

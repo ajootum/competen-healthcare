@@ -2,7 +2,7 @@ import { audit } from "@/lib/practice/audit";
 import { loadTaxonomy, validateChoice, deriveBookingSource } from "@/lib/practice/taxonomy";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
 import { practiceToday, zonedDayRange, workspaceClock } from "@/lib/practice/practice-time";
-import { locationFromRegularWeek } from "@/lib/practice/session-location";
+import { locationForInstant } from "@/lib/practice/session-location";
 import { resolveBookingRule, hhmm as hhmmOf } from "@/lib/practice/availability-config";
 // CPR-V5-007 s7.7. ⚠ No cycle: practice-sessions reaches 11 modules and this one is not among them,
 // checked rather than assumed. It is imported so the per-session walk-in limit has ONE resolver shared
@@ -486,7 +486,9 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
   let outsideRegularWeek: string | null = null;
   if (!locationId) {
     const { timezone } = await workspaceClock(admin, input.workspaceId);
-    const derived = await locationFromRegularWeek(admin, input.workspaceId, new Date(startMs).toISOString(), timezone);
+    // #17: today's PLAN first, the weekly template second. An extended or extra activity the
+    // practitioner planned for this very day is a better answer than the preset it amends.
+    const derived = await locationForInstant(admin, input.workspaceId, new Date(startMs).toISOString(), timezone);
     if (derived.derived && derived.locationId) locationId = derived.locationId;
     else if (derived.outsideRegularWeek) outsideRegularWeek = derived.reason;
   }
