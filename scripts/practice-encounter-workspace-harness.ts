@@ -1270,6 +1270,38 @@ async function main() {
   const { count: left } = await admin.from("practice_encounter").select("*", { count: "exact", head: true }).in("workspace_id", [wsA, wsB]);
   ok("synthetic data cleaned up (cascade)", (left ?? 0) === 0, `${left}`);
 
+  // ── 14. THE CLOCK, EXECUTED RATHER THAN GREPPED (2026-08-17) ─────────────────────────────────────
+  //
+  // Earned by a real defect: the scheduled-procedure control was a native datetime-local, which draws
+  // its time in the OS locale -- the "11:00 AM" class the owner removed from the planner (walkthrough
+  // #1) and the follow-up visit time (#19). It survived both sweeps because the planner's guard only
+  // scans the CALENDAR folder. This is that guard, pointed here.
+  //
+  // ⚠ COMMENT-STRIPPED, and this file is why the rule exists: the notes beside the fixed control now
+  // NAME datetime-local in prose, so an unstripped scan would match its own documentation.
+  //
+  // ⚠ AND THE PATTERNS ARE COMPILED, NOT MATCHED. A pattern with its backslashes eaten (`[01]?d`)
+  // demands a literal letter d, refuses every real time, and reads as present to a grep -- exactly
+  // the walkthrough-#14 defect. Feeding each one "09:00" is the only test that catches it.
+  const stripJs = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const timePickerFiles = wsFiles.filter(f =>
+    /type="time"|type="datetime-local"/.test(stripJs(readFileSync(join(encWs, f), "utf8"))));
+  ok("14a. ⚠ no native time or datetime picker in the encounter workspace -- the OS locale does not"
+    + " decide this product's clock",
+    timePickerFiles.length === 0, timePickerFiles.join(", "));
+  const badPatternFiles = wsFiles.filter(f => {
+    const src = stripJs(readFileSync(join(encWs, f), "utf8"));
+    return [...src.matchAll(/pattern="([^"]+)"/g)].some(m => {
+      try { return !new RegExp(m[1]).test("09:00"); } catch { return true; }
+    });
+  });
+  ok("14b. ⚠ every time pattern here ACCEPTS a time -- no pattern with eaten backslashes",
+    badPatternFiles.length === 0, badPatternFiles.join(", "));
+  // The control for both: this folder really does carry the 24-hour text idiom, so 14a/14b are not
+  // green merely because nothing was found to test.
+  ok("14c-control. the 24-hour text pattern is genuinely present in this folder",
+    /pattern="\^\(\[01\]\?/.test(wsTree));
+
   report();
 }
 

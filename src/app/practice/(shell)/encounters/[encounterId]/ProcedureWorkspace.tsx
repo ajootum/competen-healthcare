@@ -27,6 +27,9 @@ import {
 // the field asking for that reason would never be drawn.
 const NEEDS_REASON: readonly string[] = PROCEDURE_STATUSES_NEEDING_REASON;
 
+/** The product-wide 24-hour shape (walkthroughs #1 and #19). The input carries it as `pattern` too. */
+const HHMM = /^([01]?\d|2[0-3]):[0-5]\d$/;
+
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 // CPR-PROC-HFE-005: select the clinical object first, then reveal only the fields that matter for it.
 //
@@ -64,7 +67,9 @@ type Item = {
   /** s8's answers to the catalogue-declared fields, keyed by field key. */
   details: Record<string, string>;
   /** CPR-TRT-PROC-003 s10. Only meaningful while the status is SCHEDULED, and required by the engine then. */
-  scheduledAt: string;
+  // The wall clock the practitioner typed. Composed into an instant BY THE SERVER (see the control).
+  scheduledDate: string;
+  scheduledTime: string;
   /** s12: the item's own optional detail, open only when the practitioner opens it. */
   open: boolean;
   outcome?: { ok: boolean; message?: string };
@@ -140,7 +145,7 @@ let seq = 0;
 const newItem = (seed: Partial<Item> = {}): Item => ({
   key: `p${++seq}`, procedureTypeId: null, label: "", site: "", laterality: "not_applicable",
   consentStatus: "not_recorded", status: "PERFORMED",
-  indication: "", immediateOutcome: "", abandonedReason: "", scheduledAt: "", details: {}, open: false,
+  indication: "", immediateOutcome: "", abandonedReason: "", scheduledDate: "", scheduledTime: "", details: {}, open: false,
   ...seed,
 });
 
@@ -251,7 +256,14 @@ export default function ProcedureWorkspace(props: {
   };
 
   const pending = items.filter(i => !i.outcome?.ok);
-  const readiness = pending.map(i => procedureReadiness(i, shapeOf(i)));
+  // ⚠ THE READINESS MIRROR KEEPS ITS ONE SHAPE. procedureReadiness (and the engine behind it) asks a
+  // single question -- "is there a scheduled moment?" -- so the split control answers it by presenting
+  // a COMPLETE wall clock rather than by teaching a second rulebook about dates and times. An invalid
+  // time therefore reads as "not scheduled yet", which is exactly what it is.
+  const readiness = pending.map(i => procedureReadiness(
+    { ...i, scheduledAt: i.scheduledDate && HHMM.test(i.scheduledTime) ? `${i.scheduledDate}T${i.scheduledTime}` : "" },
+    shapeOf(i),
+  ));
   const blocked = readiness.filter(r => !r.ready).length;
   const set = (key: string, patch: Partial<Item>) =>
     setItems(p => p.map(i => (i.key === key ? { ...i, ...patch } : i)));
@@ -285,7 +297,10 @@ export default function ProcedureWorkspace(props: {
               abandonedReason: NEEDS_REASON.includes(it.status)
                 ? (it.abandonedReason.trim() || undefined) : undefined,
               // Likewise: a scheduled time is meaningless on anything but SCHEDULED, and required there.
-              scheduledAt: it.status === "SCHEDULED" ? (it.scheduledAt || undefined) : undefined,
+              // Wall clock only -- the route composes it in the practice timezone. A client that sent
+              // an instant here would be declaring a zone it does not know.
+              scheduledDate: it.status === "SCHEDULED" ? (it.scheduledDate || undefined) : undefined,
+              scheduledTime: it.status === "SCHEDULED" ? (it.scheduledTime || undefined) : undefined,
               // ⚠ s8's ANSWERS, SENT ONLY FOR A GOVERNED ITEM. A free-text procedure declares no fields,
               // so anything sitting in `details` from a type the practitioner switched away from must
               // not travel -- the engine drops undeclared keys anyway, and sending them would make the
@@ -631,13 +646,33 @@ export default function ProcedureWorkspace(props: {
                                   without it rather than inventing now(), so drawing the status without
                                   drawing this field would put a dead end on the screen. It WAS a dead
                                   end until today for a different reason -- see PendingProcedure. */}
+                              {/* ⚠ A DATE PLUS A 24-HOUR TEXT TIME, NOT datetime-local (2026-08-17).
+                                  Two defects in one control, and the second was the serious one.
+                                  (1) The native picker draws its TIME in the OS locale, so this field
+                                  showed "11:00 AM" -- the 12-hour class the owner removed from the
+                                  planner (#1) and the follow-up visit time (#19).
+                                  (2) It sent a bare wall-clock string that the engine wrote straight
+                                  into a timestamptz, so a Kampala 14:30 was stored as 14:30 UTC and
+                                  read back as 17:30. The date and the time now travel separately and
+                                  the SERVER composes the instant in the practice timezone -- the
+                                  booking path's rule, because a client cannot compose an instant. */}
                               {it.status === "SCHEDULED" && (
-                                <div className="sm:col-span-2">
-                                  <label className={FIELD_LABEL} htmlFor={`when-${it.key}`}>Scheduled for *</label>
-                                  <input id={`when-${it.key}`} type="datetime-local" value={it.scheduledAt}
-                                    disabled={busy}
-                                    onChange={e => set(it.key, { scheduledAt: e.target.value })}
-                                    className={`${input} mt-1 ${it.scheduledAt ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
+                                <div className="grid gap-2 sm:col-span-2 sm:grid-cols-2">
+                                  <div>
+                                    <label className={FIELD_LABEL} htmlFor={`when-${it.key}`}>Scheduled date *</label>
+                                    <input id={`when-${it.key}`} type="date" value={it.scheduledDate}
+                                      disabled={busy}
+                                      onChange={e => set(it.key, { scheduledDate: e.target.value })}
+                                      className={`${input} mt-1 ${it.scheduledDate ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
+                                  </div>
+                                  <div>
+                                    <label className={FIELD_LABEL} htmlFor={`when-time-${it.key}`}>Scheduled time *</label>
+                                    <input id={`when-time-${it.key}`} value={it.scheduledTime} disabled={busy}
+                                      required pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="14:30" inputMode="numeric"
+                                      title="24-hour clock, HH:MM -- for example 09:00 or 14:30"
+                                      onChange={e => set(it.key, { scheduledTime: e.target.value })}
+                                      className={`${input} mt-1 ${HHMM.test(it.scheduledTime) ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
+                                  </div>
                                 </div>
                               )}
 
