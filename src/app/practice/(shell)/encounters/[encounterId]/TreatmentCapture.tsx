@@ -85,11 +85,27 @@ const CARD = "rounded-xl border border-gray-200 bg-white p-3.5";
 // siblings for a week. BAND_RECORD / BAND_SAFETY_OK / BAND_SAFETY_ATTENTION / BAND_SHORTCUTS / BAND_WORK
 // now live in encounter-band-constants.ts, imported at the top of this file, with the reasoning for each.
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
-const BTN = "rounded-lg bg-[var(--cp-primary)] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50";
-const QUIET = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50";
-const CHIP = "rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-gray-800 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/5 disabled:opacity-50";
-const CHIP_ON = "rounded-full border border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary-deep)]";
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-MOB-001 s10 — "searchable pickers and LARGE TOUCH CONTROLS for ... treatments", and "avoid opening
+// the keyboard unless freetext is necessary".
+//
+// THE CHIPS ARE THE KEYBOARD-AVOIDANCE MECHANISM ON THIS TAB, which is why they get the biggest lift.
+// s6's shortcuts, the practitioner's favourites, the formulation / route / frequency / duration option
+// lists and the dose-unit picker are all chips over CONFIGURED vocabularies (13a-2b) — every one of them
+// is a treatment recorded with no keyboard at all. At px-2.5 py-1 they were ~26px targets, which on a
+// phone is a picker you cannot use without precision tapping (s16 forbids exactly that), so the fastest
+// path on the tab was the slowest to hit. 44px makes selection the cheap route it is designed to be.
+//
+// ⚠ CHIP AND CHIP_ON GET THE SAME GEOMETRY, DELIBERATELY. They differ only in colour; if only one grew,
+// pressing a chip would resize it and reflow the row under the finger that just pressed it.
+//
+// Every suffix is `max-md:` — inert at md and up, so the desktop tab is unchanged.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
+const BTN = "rounded-lg bg-[var(--cp-primary)] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50 max-md:inline-flex max-md:min-h-[var(--cp-touch-primary)] max-md:items-center max-md:justify-center max-md:px-4 max-md:text-[14px]";
+const QUIET = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:justify-center max-md:px-3.5 max-md:text-[12.5px]";
+const CHIP = "rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-gray-800 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/5 disabled:opacity-50 max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:px-3.5 max-md:text-[13px]";
+const CHIP_ON = "rounded-full border border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary-deep)] max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:px-3.5 max-md:text-[13px]";
 const LABEL = "block text-[10px] font-semibold uppercase tracking-wide text-gray-500";
 
 type RecordedTreatment = {

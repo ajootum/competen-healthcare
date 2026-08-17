@@ -37,7 +37,12 @@ import type { WeightPromptState } from "@/lib/practice/encounter-workspace-const
 // "Weight 22 kg (08 Aug 2025)" beside a live encounter is why: on 2026-08-08 that is a figure over a year
 // old on a small child, drawn as a current safety fact.
 
-const input = "w-full rounded border border-gray-200 px-1.5 py-1 text-[12px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+// ⚠ CPR-MOB-001 s4/s16 — SIZE ONLY, AND THE PARAGRAPH ABOVE IS WHY THAT MATTERS HERE. This was the
+// smallest field on the screen (px-1.5 py-1 at 12px is roughly a 26px target) and it is the number the
+// dose calculator multiplies by. `max-md:` adds the 44px floor and the 16px size that stops iOS zooming
+// on focus; it adds NO value, NO defaultValue and NO placeholder, so the carry-forward prohibition the
+// harness scans this file for is untouched — a class cannot bind an input to a prior measurement.
+const input = "w-full rounded border border-gray-200 px-1.5 py-1 text-[12px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 
 export default function WeightTile(props: {
   state: WeightPromptState;

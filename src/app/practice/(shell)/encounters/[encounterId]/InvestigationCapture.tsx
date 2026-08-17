@@ -57,11 +57,23 @@ import {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const CARD = "rounded-xl border border-gray-200 bg-white p-3.5";
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
-const BTN = "rounded-lg bg-[var(--cp-primary)] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50";
-const QUIET = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50";
-const CHIP = "rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-gray-800 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/5 disabled:opacity-50";
-const CHIP_ON = "rounded-full border border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary-deep)]";
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-MOB-001 s10 — "searchable pickers and large touch controls for ... investigations", and "avoid
+// opening the keyboard unless freetext is necessary".
+//
+// The panel/favourite/frequently-requested chips ARE the no-keyboard path on this tab: the catalogue
+// search exists for the long tail, and everything a practice actually requests week to week is one tap
+// on a chip. At ~26px those taps needed precision this surface does not get in a consultation, so the
+// chips take s4's 44px floor and the search box takes the 16px that stops iOS zooming the page on focus.
+//
+// CHIP and CHIP_ON share geometry so selecting one does not reflow the row under the finger.
+// All `max-md:` — the desktop tab is unchanged.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
+const BTN = "rounded-lg bg-[var(--cp-primary)] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50 max-md:inline-flex max-md:min-h-[var(--cp-touch-primary)] max-md:items-center max-md:justify-center max-md:px-4 max-md:text-[14px]";
+const QUIET = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:justify-center max-md:px-3.5 max-md:text-[12.5px]";
+const CHIP = "rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-gray-800 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/5 disabled:opacity-50 max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:px-3.5 max-md:text-[13px]";
+const CHIP_ON = "rounded-full border border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[var(--cp-primary-deep)] max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:px-3.5 max-md:text-[13px]";
 
 type Selected = { id: string | null; label: string; reasonOverride: string; again: boolean; details: Record<string, string> };
 
@@ -778,7 +790,15 @@ export default function InvestigationCapture(props: {
           {/* ══ THE PICKER -- s4 ═══════════════════════════════════════════════════════════════ */}
           {pickerOpen && (
             <div className={`${CARD} mt-3`}>
-              <input autoFocus className={input} value={query} onChange={e => setQuery(e.target.value)}
+              {/* CPR-MOB-001 s16: "all form controls require visible labels; placeholders are not
+                  substitutes." This search carried an aria-label and a placeholder, and the placeholder
+                  is the searchHint — which vanishes on the first keystroke, exactly when a phone screen
+                  is otherwise just a keyboard and a list of results. The visible twin is `md:hidden`,
+                  so the desktop picker opens looking as it always has. */}
+              <label htmlFor="inv-search" className="mb-1 block text-[11px] font-semibold text-gray-600 md:hidden">
+                Search investigations
+              </label>
+              <input id="inv-search" autoFocus className={input} value={query} onChange={e => setQuery(e.target.value)}
                 placeholder={searchHint} aria-label="Search investigations" />
 
               <div className="mt-2 flex flex-wrap gap-1">

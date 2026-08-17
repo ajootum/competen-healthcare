@@ -184,7 +184,29 @@ import ProcedureWorkspace from "./ProcedureWorkspace";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-MOB-001 s10/s4/s16 — THE MOBILE FACE OF THIS SCREEN IS MOSTLY THESE FOUR STRINGS.
+//
+// s10's frame is "the recent Encounter HFE workflow remains functionally frozen; only layout adapts",
+// and the cheapest honest reading of that is: change the SHARED control classes, not the controls. Every
+// field, every quiet button and every quick action on this screen wears one of the constants below, so
+// a `max-md:` suffix here dresses 43 control sites in this file (167 across the ten files this phase
+// touched, counted rather than estimated) and reaches NOTHING at md and up — the tail of each string is
+// inert above 768px, so the desktop rendering is byte-for-byte what it was.
+//
+// TWO no-ops, and the second is not cosmetic:
+//   · max-md:min-h-[var(--cp-touch)] — s4's 44px floor. py-2 at 13px is about 34px, which is a miss on
+//     every clinical field on the most clinically loaded surface in the product.
+//   · max-md:text-[16px] on the INPUTS — below 16px iOS zooms the whole page on focus and does not zoom
+//     back out, so a practitioner who taps a dose field is left on a horizontally-scrolled page, which
+//     is the one thing s4 forbids outright. AttachRecordInline records the same trap on the cockpit.
+//
+// ⚠ NOT ADDED TO `input`: any change to `type`. s16 wants numeric keyboards for numeric fields and
+// date/time pickers for dates, and `inputMode` is set per-field where the field is genuinely numeric —
+// but the 24-hour TEXT time input stays text with inputMode="numeric" (walkthrough #19: the native time
+// picker follows the OS locale and drew "11:00 AM" on this very panel). No native time input, anywhere.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 const CARD = "rounded-xl border border-gray-200 bg-white p-4";
 const FU_LABEL = "text-[10.5px] font-semibold uppercase tracking-wide text-gray-600";
 
@@ -196,7 +218,9 @@ const FU_LABEL = "text-[10.5px] font-semibold uppercase tracking-wide text-gray-
  * hearing "star" after every label is noise, not access.
  */
 const REQ = <span aria-hidden className="font-bold text-[var(--cmp-text-critical)]"> *</span>;
-const QUIET_BTN = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50";
+// s4's 44px floor again, and `inline-flex items-center` with it: a min-height on a button whose content
+// is not a flex item grows the box and leaves the label sitting at the top of it.
+const QUIET_BTN = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:justify-center max-md:px-3.5 max-md:text-[12.5px]";
 
 /**
  * CPR-HFE-TRT-004 s11's quick-action tray. "Compact grid/tray; neutral buttons except
@@ -213,8 +237,23 @@ const QUIET_BTN = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] f
  * is hidden -- the screen must not silently differ between two people looking at one consultation), but
  * a practitioner can now read what it says.
  */
+/**
+ * CPR-MOB-001 s4's 44px floor, for the row-level controls that do not wear QUIET_BTN.
+ *
+ * A dozen actions on this screen are hand-classed rather than sharing a constant — the referral status
+ * moves, the follow-up row's Link-a-visit and Settle, the plan-template chips, the note tab's Save to
+ * record and Expand, the draft Retry. Most sit at `px-2 py-0.5 text-[11px]`, which is roughly a 20px
+ * target: fine for a pointer, a coin-toss for a thumb. Several of them WRITE TO THE RECORD, and the one
+ * next to them usually writes something different.
+ *
+ * Appended, never substituted, and every utility inside is `max-md:` — so each of those buttons keeps
+ * its exact desktop appearance and grows only where a finger is doing the pressing.
+ */
+const TOUCH =
+  "max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:justify-center max-md:px-3.5 max-md:text-[12.5px]";
+
 const QA_BASE =
-  "flex items-center gap-1.5 rounded-lg border px-2 py-2 text-[11px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cp-primary)] focus-visible:ring-offset-1";
+  "flex items-center gap-1.5 rounded-lg border px-2 py-2 text-[11px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cp-primary)] focus-visible:ring-offset-1 max-md:min-h-[var(--cp-touch)] max-md:px-3 max-md:text-[12.5px]";
 const QA_ALLOWED = `${QA_BASE} border-gray-200 bg-white text-gray-700 hover:bg-[var(--cp-primary)]/[0.07] hover:border-[var(--cp-primary)]/40`;
 const QA_DENIED = `${QA_BASE} border-gray-200 bg-gray-50 text-gray-500`;
 
@@ -350,6 +389,33 @@ export default function EncounterConsole(props: {
   const editable = props.canEdit && !locked;
 
   const [tab, setTab] = useState("overview");
+  // ── CPR-MOB-001 s10: THE TAB THE CODE JUST SWITCHED TO HAS TO BE THE TAB YOU CAN SEE ──────────────
+  //
+  // Nine controls on this screen call setTab() without anybody touching the strip: the six decision
+  // cards and the quick-action tray. On desktop all eight tabs fit and the highlight simply moves. On a
+  // phone the strip is scrolled, so pressing "Diagnosis" in the decisions row swapped the CONTENT while
+  // the visible part of the strip still showed Overview underlined — the screen answers a tap by
+  // appearing not to have moved, which is the walkthrough's REACHABLE-≠-DISCOVERABLE defect exactly.
+  //
+  // ⚠ scrollLeft ON THE STRIP, NEVER scrollIntoView. scrollIntoView walks up the ancestor chain and is
+  // entitled to scroll the PAGE — on this page that would jerk a practitioner away from the block they
+  // were reading, mid-consultation, as a side effect of a tab change. Writing the strip's own
+  // scrollLeft cannot move anything but the strip.
+  //
+  // No breakpoint test and no matchMedia: the guard is `scrollWidth > clientWidth`, which is the actual
+  // condition ("this strip is scrolled"), true on a narrow phone and false on a desktop where the eight
+  // fit. A width test would be a proxy for it, and would be wrong at the first tablet that disagreed.
+  const tabStrip = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const strip = tabStrip.current;
+    if (!strip || strip.scrollWidth <= strip.clientWidth) return;
+    const active = strip.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!active) return;
+    strip.scrollTo({
+      left: Math.max(0, active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2),
+      behavior: "smooth",
+    });
+  }, [tab]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [bodies, setBodies] = useState<Record<string, string>>(() => {
@@ -494,6 +560,35 @@ export default function EncounterConsole(props: {
     // the shortest that does not chatter on every keystroke.
     const timer = setInterval(() => { void flushDrafts(); }, 20_000);
     return () => clearInterval(timer);
+  }, [editable, flushDrafts]);
+
+  // ── CPR-MOB-001 s10/s18: "PRESERVE IN-PROGRESS ENCOUNTER STATE IF THE APP BACKGROUNDS" ────────────
+  //
+  // ⚠ THIS IS NOT A SECOND PERSISTENCE, AND THAT IS THE WHOLE DESIGN. s18 says to preserve unsaved
+  // encounter data "according to existing CP offline/sync rules", and the existing rule is the CPR-130
+  // draft above: one endpoint, one flush, one recovery panel. What was missing was not a store — it was
+  // a TRIGGER. The interval is the only thing that ever fires it, so up to twenty seconds of typing
+  // lived nowhere but in a browser tab, and on a phone a browser tab is the one thing the operating
+  // system is entitled to discard without asking. Answering a call mid-consultation could lose the
+  // paragraph; nothing on the desktop path has that failure because a desktop tab is not evicted.
+  //
+  // So the same `flushDrafts` gets a second caller. Not a copy of it — the SAME callback the timer and
+  // the Retry control share, which is why "retry", "every twenty seconds" and "you just backgrounded
+  // the app" cannot drift into meaning three different things.
+  //
+  // ⚠ visibilitychange → "hidden", NOT beforeunload/pagehide. Mobile browsers are documented not to fire
+  // unload reliably when the OS evicts a backgrounded tab; `hidden` is the last event guaranteed to
+  // arrive, and it also covers the ordinary cases — switching apps, locking the device, changing tabs.
+  //
+  // ⚠ AND IT FIRES ON ROTATION TOO — for nothing. A rotate does not unmount this component, so the
+  // draft state survives it on its own; the flush is simply harmless there, because flushDrafts skips
+  // every segment that is not dirty. s10's rotation half needs no code, and inventing some would have
+  // meant a second copy of the note bodies to go stale.
+  useEffect(() => {
+    if (!editable) return;
+    const onHide = () => { if (document.visibilityState === "hidden") void flushDrafts(); };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
   }, [editable, flushDrafts]);
 
   async function expandInto(noteType: string) {
@@ -711,6 +806,61 @@ export default function EncounterConsole(props: {
 
   const targets = ENCOUNTER_TRANSITIONS[props.status] ?? [];
 
+  /** Is this transition one of the two that destroy the encounter rather than advance it? */
+  const isDanger = (to: string) => to === "CANCELLED" || to === "ENTERED_IN_ERROR";
+
+  /**
+   * Would this transition actually draw a button? The engine's table says what is POSSIBLE for the
+   * status; this adds the two capability gates that decide whether THIS caller sees it.
+   *
+   * ⚠ IT EXISTS SO THE MOBILE DOCK CAN ASK BEFORE IT DRAWS A CONTAINER. Filtering targets by status
+   * alone would let the dock render its bar, its row and its disclosure for a caller who holds neither
+   * capability — a pinned white strip above the bottom navigation with nothing in it, permanently, on
+   * a phone. A read-only viewer looking at somebody else's encounter is exactly that caller.
+   */
+  const mayTransition = (to: string) =>
+    !!actionFor(props.status, to) && (to === "SIGNED" ? props.canSign : props.canEdit);
+
+  // ── WHAT THE MOBILE DOCK HOLDS, DECIDED ONCE ─────────────────────────────────────────────────────
+  //
+  // Computed up here rather than inside the dock because TWO places downstream need the answer: the
+  // dock itself, and the spacer that reserves its height at the very END of the page. Those two are
+  // far apart in the tree (the dock sits with the action bar it belongs to; the spacer has to be the
+  // last thing in the document or it reserves height in the middle of the consultation instead of
+  // under the bar) — and a spacer that disagreed with the bar about whether the bar exists is either
+  // a gap in the middle of the page or a last section nobody can read.
+  const dockForward = targets.filter(to => !isDanger(to) && mayTransition(to));
+  const dockUndo = targets.filter(to => isDanger(to) && mayTransition(to));
+  const dockVisible = !!notice || dockForward.length > 0 || dockUndo.length > 0;
+
+  /**
+   * ONE TRANSITION BUTTON, RENDERED IN TWO PLACES — AND IT IS ONE FUNCTION SO THERE IS STILL ONE LIST.
+   *
+   * CPR-MOB-001 s10 asks for a sticky primary action; the encounter's actions are not the console's to
+   * invent, they are ENCOUNTER_TRANSITIONS[status] mapped through actionFor — the same table the engine
+   * checks and the database CHECK constrains. Giving the mobile bar its own `<button>` markup would have
+   * been the second list of buttons the action bar's own header warns against, so instead the markup was
+   * extracted and BOTH frames call this. The gate (`allowed`), the danger treatment and the sign
+   * treatment are computed here exactly once.
+   *
+   * `extra` is appended, never substituted: desktop passes "" and gets the string it always had.
+   */
+  const transitionButton = (to: string, extra = "") => {
+    const action = actionFor(props.status, to);
+    if (!action || !mayTransition(to)) return null;
+    const needsSign = to === "SIGNED";
+    const danger = isDanger(to);
+    return (
+      <button key={to} type="button" disabled={busy} onClick={() => transition(action, `${labelFor(props.status, to)} done.`)}
+        className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50 ${
+          needsSign ? "bg-[var(--cp-primary)] text-white hover:bg-[var(--cp-primary-deep)]"
+            : danger ? "border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] hover:bg-[var(--cmp-surface-critical)]"
+              : "border border-gray-200 text-gray-700 hover:bg-gray-50"} ${extra}`}>
+        {labelFor(props.status, to)}
+      </button>
+    );
+  };
+
   const quickAction = (a: typeof QUICK_ACTIONS[number]) => {
     if (a.tab) { setTab(a.tab); setNotice(null); }
   };
@@ -845,8 +995,15 @@ export default function EncounterConsole(props: {
     <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_320px]">
       {/* ══ CENTRE: CPR-ENC-003 s3's FOUR COGNITIVE BLOCKS ═══════════════════════════════════════ */}
       <div className="flex flex-col gap-4">
+        {/* ⚠ max-md:hidden BECAUSE THE ANSWER MUST NOT ARRIVE OFFSCREEN. This paragraph is the ONLY
+            thing that reports a refusal — every transition, every referral, every note save lands
+            here, and `call()` reloads the page on success, so what a practitioner reads here is
+            almost always a failure. It sits at the top of a page that is several screens long on a
+            phone: pressing Complete from deep in the Notes tab would have answered somewhere the
+            practitioner could not see, which is the cockpit's End-from-deep-scroll defect exactly.
+            Below md the same notice renders inside the pinned dock instead — one per viewport. */}
         {notice && (
-          <p className={`rounded-lg px-3 py-2 text-[12px] ${notice.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{notice.text}</p>
+          <p className={`rounded-lg px-3 py-2 text-[12px] max-md:hidden ${notice.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{notice.text}</p>
         )}
 
         {/* ══ THE ACTION BAR, AT THE TOP ═══════════════════════════════════════════════════════════
@@ -869,34 +1026,91 @@ export default function EncounterConsole(props: {
               billing surface inside the consultation. */}
           {(props.status === "COMPLETED" || props.status === "SIGNED") && (
             <a href={`/practice/payments?encounter=${props.encounterId}`}
-              className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-600 hover:bg-gray-50">
+              className="rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:px-3.5 max-md:text-[12.5px]">
               Charges &amp; payment &rarr;
             </a>
           )}
           {targets.length === 0 ? (
             <p className="text-[12px] text-gray-400">Closed. No further transitions are possible.</p>
           ) : (
-            <div className="ml-auto flex gap-1.5 flex-wrap">
-              {targets.map(to => {
-                const action = actionFor(props.status, to);
-                if (!action) return null;
-                const needsSign = to === "SIGNED";
-                const allowed = needsSign ? props.canSign : props.canEdit;
-                if (!allowed) return null;
-                const danger = to === "CANCELLED" || to === "ENTERED_IN_ERROR";
-                return (
-                  <button key={to} type="button" disabled={busy} onClick={() => transition(action, `${labelFor(props.status, to)} done.`)}
-                    className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50 ${
-                      needsSign ? "bg-[var(--cp-primary)] text-white hover:bg-[var(--cp-primary-deep)]"
-                        : danger ? "border border-[var(--cmp-color-critical)] text-[var(--cmp-text-critical)] hover:bg-[var(--cmp-surface-critical)]"
-                          : "border border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
-                    {labelFor(props.status, to)}
-                  </button>
-                );
-              })}
+            /* CPR-MOB-001 s10: below md these same buttons are the pinned dock at the foot of the
+               screen instead — `max-md:hidden` here so no viewport ever carries the act twice. */
+            <div className="ml-auto flex gap-1.5 flex-wrap max-md:hidden">
+              {targets.map(to => transitionButton(to))}
             </div>
           )}
+          {/* A card whose only content is a heading reads as a broken panel. Below md this card keeps
+              its heading and says, in words, where its buttons went — the walkthrough's rule that a
+              control a person cannot find is a control that does not exist. */}
+          {targets.some(mayTransition) && (
+            <p className="ml-auto text-[11.5px] text-gray-500 md:hidden">
+              Actions are pinned at the bottom of the screen.
+            </p>
+          )}
         </section>
+
+        {/* ══ CPR-MOB-001 s10: "USE A STICKY SAVE/CONTINUE OR EQUIVALENT PRIMARY ACTION" ═════════════
+            ────────────────────────────────────────────────────────────────────────────────────────
+            WHY THIS EXISTS AT ALL. The action bar above is at the TOP by an HFE ruling: finishing is
+            the commonest act on this screen and it used to sit below every form on it. That ruling
+            solved a desktop scroll of one or two screens. On a phone the same page is six or seven
+            screens, and a bar at the top of it is a bar nobody can reach without scrolling back past
+            everything they just decided not to do — the SAME defect the ruling fixed, reappearing at a
+            different width. s4 says primary actions belong "near the lower half of the screen"; this is
+            the top bar's mobile position, not a second copy of it.
+
+            ⚠ StickyPrimaryAction (the s5 primitive) WAS JUDGED AND REJECTED, on two grounds.
+            First, it admits exactly ONE label and ONE destination, and the encounter's state table is
+            not one action: ACTIVE offers Pause, Complete and Cancel, and COMPLETED offers Sign and
+            Reopen. Naming one of them "the" primary would mean this component deciding which
+            transition is the forward one — a second opinion about ENCOUNTER_TRANSITIONS, which is the
+            one thing 13c-3 exists to prevent. (There IS no producer for that fact; see the report.)
+            Second, the primitive renders as an in-flow button from md up, so adopting it would draw a
+            NINTH button on the desktop action bar or need `md:hidden` wrapped round it, which hollows
+            out half the component. What IS taken from it is its arithmetic: this dock sits on exactly
+            the two tokens the bottom navigation occupies, so the two cannot drift into covering each
+            other, and it carries the spacer that keeps the last content off its back (s17).
+
+            ⚠ THE DESTRUCTIVE TRANSITIONS ARE BEHIND A DISCLOSURE, AND NOTHING IS REMOVED. "Cancel
+            encounter" and "Mark entered in error" are irreversible; a permanent thumb-sized target for
+            either, riding under a page somebody is scrolling one-handed at clinic pace, is an accident
+            waiting for a bump. They are one tap away in a <details> that says what it holds — s4's
+            progressive disclosure, with a visible control rather than a gesture (s17), and every
+            transition the engine allows is still reachable on a phone.
+
+            ⚠ AND THE NOTICE RIDES HERE. `call()` reloads on success, so this paragraph is almost always
+            a refusal; a refusal that renders six screens above the button that caused it has not been
+            reported. Rendered inside the dock, the answer arrives where the question was asked. It is
+            drawn even when the encounter is closed and has no transitions, because saving a note on a
+            signed encounter can still fail. */}
+        {dockVisible && (
+          <div className="fixed inset-x-0 bottom-[calc(var(--cp-bottomnav-h)_+_var(--cp-safe-bottom))] z-30 border-t border-gray-200 bg-white/95 px-3 py-2.5 backdrop-blur md:hidden">
+            {notice && (
+              <p role="status" className={`mb-2 rounded-lg px-3 py-2 text-[12.5px] ${notice.kind === "ok"
+                ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
+                : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>
+                {notice.text}
+              </p>
+            )}
+            {dockForward.length > 0 && (
+              <div className="flex gap-2">
+                {dockForward.map(to =>
+                  transitionButton(to, "flex min-h-[var(--cp-touch-primary)] flex-1 items-center justify-center text-[13.5px]"))}
+              </div>
+            )}
+            {dockUndo.length > 0 && (
+              <details className="mt-1.5">
+                <summary className="flex min-h-[var(--cp-touch)] cursor-pointer items-center text-[12px] font-semibold text-gray-500">
+                  Other actions for this encounter
+                </summary>
+                <div className="flex flex-wrap gap-2 pb-1">
+                  {dockUndo.map(to =>
+                    transitionButton(to, "flex min-h-[var(--cp-touch)] flex-1 items-center justify-center text-[12.5px]"))}
+                </div>
+              </details>
+            )}
+          </div>
+        )}
 
         {/* ── CPR-ENC-002 s7: WARNINGS, NEVER REFUSALS ──────────────────────────────────────────
             ⚠ NOTHING HERE BLOCKS ANYTHING, and that is the specification's own word. A consultation
@@ -975,11 +1189,27 @@ export default function EncounterConsole(props: {
 
         {/* ── The comp's tab row ─────────────────────────────────────────────────────────────────── */}
         <div className="rounded-xl border border-gray-200 bg-white">
-          <nav aria-label="Encounter sections" className="flex gap-0.5 overflow-x-auto border-b border-gray-100 px-2">
+          {/* ══ CPR-MOB-001 s5's TAB ROW ══════════════════════════════════════════════════════════
+              s5 offers two mobile renderings for a tab bar: "scrollable short tabs OR section
+              selector/dropdown for large tab sets". EIGHT tabs is a large set by SectionTabs' own
+              threshold of five — and the strip is kept anyway, because these eight labels are one word
+              each (Overview, Diagnoses, Treatment, Procedures, Investigations, Follow-up, Attachments,
+              Notes) and s5's first branch is written for exactly that. A <select> would hide seven
+              destinations behind a tap and cost the practitioner the one thing this strip gives them
+              for free: seeing that the other seven exist. The strip scrolls inside its own box, which
+              is not the workflow-level horizontal scroll s4 forbids.
+
+              ⚠ SectionTabs THE PRIMITIVE WAS NOT ADOPTED, for the reason 4b rejected it twice: it owns
+              BOTH faces, so adopting it here replaces the desktop nav — losing `aria-current="page"`
+              for `aria-pressed`, and putting the frozen desktop tab row inside a component that this
+              screen does not control. s10 permits layout to adapt, not the desktop rendering to change.
+
+              The buttons take s4's 44px floor below md; py-2.5 at 12px was about 38px. */}
+          <nav ref={tabStrip} aria-label="Encounter sections" className="flex gap-0.5 overflow-x-auto border-b border-gray-100 px-2">
             {ENCOUNTER_TABS.map(([key, label]) => (
               <button key={key} type="button" onClick={() => setTab(key)}
                 aria-current={tab === key ? "page" : undefined}
-                className={`shrink-0 border-b-2 px-3 py-2.5 text-[12px] font-semibold transition-colors ${
+                className={`shrink-0 border-b-2 px-3 py-2.5 text-[12px] font-semibold transition-colors max-md:min-h-[var(--cp-touch)] max-md:text-[13px] ${
                   tab === key
                     ? "border-[var(--cp-primary)] text-[var(--cp-primary-deep)]"
                     : "border-transparent text-gray-500 hover:text-gray-800"}`}>
@@ -1154,7 +1384,7 @@ export default function EncounterConsole(props: {
                                   <div className="mt-1 flex flex-wrap gap-1">
                                     {REFERRAL_STATUSES.filter(([s]) => s !== r.status).map(([s, label]) => (
                                       <button key={s} type="button" disabled={busy} onClick={() => setReferralStatus(r.id, s)}
-                                        className="rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                                        className={`rounded border border-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 ${TOUCH}`}>
                                         {label}
                                       </button>
                                     ))}
@@ -1409,7 +1639,11 @@ export default function EncounterConsole(props: {
                             <button key={x.key} type="button"
                               onClick={() => setFuFilter(on && x.key !== "all" ? "all" : x.key)}
                               aria-pressed={on}
-                              className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${on
+                              // s11's status filters stay CHIPS rather than becoming a FilterSheet —
+                              // there are only a handful, they apply on press with no Apply step, and
+                              // the count each one carries is the thing worth seeing without opening
+                              // anything. TOUCH is all they needed.
+                              className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${TOUCH} ${on
                                 ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
                                 : "border-gray-200 bg-white text-gray-700 hover:border-[var(--cp-primary)]/50"}`}>
                               {x.label} <span className="font-normal text-gray-500">{n}</span>
@@ -1466,14 +1700,14 @@ export default function EncounterConsole(props: {
                           <button type="button" disabled={busy}
                             onClick={() => setBookingFu(bookingFu === f.id ? null : f.id)}
                             aria-label={`Link a booked visit to ${f.reason}`}
-                            className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                            className={`rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 ${TOUCH}`}>
                             {bookingFu === f.id ? "Cancel" : "Link a visit"}
                           </button>
                         )}
                         <button type="button" disabled={busy}
                           onClick={() => { setFuOutcome(""); setClosingFu(closingFu === f.id ? null : f.id); }}
                           aria-label={`Settle ${f.reason} in this consultation`}
-                          className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                          className={`rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 ${TOUCH}`}>
                           Settle in this consultation
                         </button>
                       </span>
@@ -1498,7 +1732,7 @@ export default function EncounterConsole(props: {
                           {props.patientAppointments.map((a: any) => (
                             <button key={a.id} type="button" disabled={busy}
                               onClick={() => linkVisit(f.id, a.id)}
-                              className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/[0.07] disabled:opacity-50">
+                              className={`rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/[0.07] disabled:opacity-50 ${TOUCH}`}>
                               {formatDayTime(a.scheduled_at) ?? String(a.scheduled_at).slice(0, 16)}
                               <span className="ml-1 font-normal text-gray-500">
                                 {String(a.appointment_type ?? "").replace(/_/g, " ")}
@@ -1528,6 +1762,27 @@ export default function EncounterConsole(props: {
                      product with no band, on the fourth tab to be given one. */
                   <form className={`${BAND_WORK} mt-3 p-4`} onSubmit={e => { e.preventDefault(); raiseFollowUp(); }}>
                     <h4 className="text-[13px] font-bold text-gray-900">Add follow-up</h4>
+                    {/* ══ CPR-MOB-001 s10, AND THE HALF OF THE ROW THAT SAYS "UNLESS" ═══════════════
+                        "Avoid side-by-side dense form fields on narrow screens UNLESS TWO SHORT FIELDS
+                        CLEARLY FIT." Two pairs are left paired on purpose, and it is a judgement about
+                        these particular controls rather than a shortcut:
+
+                          Due + Priority     — the intervals are "1 week", "2 weeks", "On a date…";
+                                               the priorities are Routine, Soon, Urgent. At 360px each
+                                               column is about 160px, which fits every one of them.
+                          Visit date + Visit time — "2026-08-31" and "14:30". The time is the 24-hour
+                                               TEXT input (walkthrough #19: the native picker follows
+                                               the OS locale and drew "11:00 AM" here), and five
+                                               characters do not need a row of their own.
+
+                        Everything with an arbitrary-length option list, a nested field or a sentence
+                        underneath spans both columns below md — marked field by field.
+
+                        ⚠ THE FROZEN SEQUENCE IS UNTOUCHED. FUP-002's order — subject, due, priority,
+                        action, location, owner, book-visit, category, instructions — is the DOM order
+                        and stays the DOM order at every width. No CSS `order` utility appears anywhere
+                        in this work: reordering a clinical form by breakpoint would make the tab
+                        sequence and the reading sequence disagree (s17), and the sequence is frozen. */}
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       {/* ⚠ s6 MARKS THE REQUIRED FIELDS AND s3 ASKS FOR VISIBLE LABELS. These three
                           selects carried an aria-label and nothing a sighted user could read, so the
@@ -1601,7 +1856,17 @@ export default function EncounterConsole(props: {
                           the visit an explicit separate choice, below. Choosing an action also FILES
                           THE CATEGORY (HFE s7's deterministic inference) unless a human already
                           chose one under More details. */}
-                      <div>
+                      {/* ⚠ CPR-MOB-001 s10 — FULL WIDTH BELOW md, AND `max-md:col-span-2` RATHER THAN
+                          A ONE-COLUMN GRID. The container stays `grid-cols-2` at every width and the
+                          fields that do not fit span BOTH columns; switching the container to
+                          `grid-cols-1` would leave the four existing `col-span-2` children spanning a
+                          column that no longer exists, and CSS answers that by inventing an implicit
+                          one — a silently broken form on the narrowest screen, which is the one nobody
+                          would be looking at. Spanning both of two is the same result with no implicit
+                          track. The action's nine labels ("Review clinical progress", "Check
+                          investigation result") are unreadable in half of a 360px card, and it is a
+                          REQUIRED field wearing an amber wash: the one that must not be guessed at. */}
+                      <div className="max-md:col-span-2">
                         <label className={FU_LABEL} htmlFor="fu-type">Action{REQ}</label>
                         <select id="fu-type" value={fu.followUpType}
                           onChange={e => {
@@ -1624,7 +1889,9 @@ export default function EncounterConsole(props: {
                           by name (walkthrough 2026-08-16): even with one site, site-vs-not-specified
                           is a real choice, so it draws whenever any facility exists. */}
                       {props.facilities.length >= 1 && (
-                        <div>
+                        // s10: full width below md — facility names are arbitrary length, and the
+                        // place-for-day sentence underneath is a whole clause.
+                        <div className="max-md:col-span-2">
                           <label className={FU_LABEL} htmlFor="fu-location">Location</label>
                           <select id="fu-location" value={fu.locationId}
                             onChange={e => setFu(p => ({ ...p, locationId: e.target.value, locationTouched: true }))}
@@ -1647,7 +1914,10 @@ export default function EncounterConsole(props: {
                           colleague" is not offerable -- a dropdown of uuids would be worse than none.
                           What IS offerable is the viewer themselves, or a named queue, and the database
                           refuses both at once because "whose is this" needs one answer. */}
-                      <div>
+                      {/* s10: full width below md — choosing "A team or queue" reveals a NESTED text
+                          field directly under this select, and a text field in half a column is the
+                          side-by-side density the row is written against. */}
+                      <div className="max-md:col-span-2">
                         <label className={FU_LABEL} htmlFor="fu-owner">Assigned to{REQ}</label>
                         {/* HFE s4/s9: assignment is REQUIRED and defaults to Me -- an obligation
                             nobody owns is the board's oldest failure mode. Unassigned left this
@@ -1713,7 +1983,9 @@ export default function EncounterConsole(props: {
                               keeps the regular-week derivation; choosing covers the outside-hours
                               booking no location can be assumed for. */}
                           {props.bookingLocations.length > 0 && (
-                            <div>
+                            // s10: full width below md. "Decided by the regular week" is the resting
+                            // option and it is the longest string in the control.
+                            <div className="max-md:col-span-2">
                               <label className={FU_LABEL} htmlFor="fu-book-location">Visit location</label>
                               <select id="fu-book-location" value={fu.bookLocationId}
                                 onChange={e => setFu(p => ({ ...p, bookLocationId: e.target.value }))}
@@ -1830,7 +2102,7 @@ export default function EncounterConsole(props: {
                           {props.planTemplates.map((t: any) => (
                             <button key={t.id} type="button" disabled={busy}
                               onClick={() => applyPlan(t.id)}
-                              className="rounded-full border border-gray-300 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-gray-700 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/[0.07] disabled:opacity-50">
+                              className={`rounded-full border border-gray-300 bg-white px-2.5 py-1 text-[11.5px] font-semibold text-gray-700 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/[0.07] disabled:opacity-50 ${TOUCH}`}>
                               {t.title}
                               <span className="ml-1 font-normal text-gray-500">
                                 {(t.steps ?? []).length} step{(t.steps ?? []).length === 1 ? "" : "s"}
@@ -1908,17 +2180,38 @@ export default function EncounterConsole(props: {
 
                   {props.canDocument && (
                     <form className="mt-3 grid grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); createDocument(); }}>
-                      <input required placeholder="Title" value={doc.title} onChange={e => setDoc(p => ({ ...p, title: e.target.value }))} className={`${input} col-span-2`} />
-                      <select aria-label="Document type" value={doc.docType} onChange={e => setDoc(p => ({ ...p, docType: e.target.value }))} className={input}>
+                      {/* ⚠ CPR-MOB-001 s16: "ALL FORM CONTROLS REQUIRE VISIBLE LABELS; PLACEHOLDERS ARE
+                          NOT SUBSTITUTES." Two of these three controls were labelled by placeholder
+                          alone, which is a label that disappears the moment somebody types into it —
+                          on a phone, where the field and the keyboard are the whole screen, that leaves
+                          a half-filled form of unnamed boxes. The labels are `md:hidden` and tied by
+                          htmlFor, so the desktop form is exactly as it was; the placeholders stay, both
+                          because they are useful examples and because they are what the field inventory
+                          pins. The select already carries an aria-label and gains the visible twin. */}
+                      <label htmlFor="doc-title" className="col-span-2 -mb-1 block text-[11px] font-semibold text-gray-600 md:hidden">
+                        Title
+                      </label>
+                      <input id="doc-title" required placeholder="Title" value={doc.title} onChange={e => setDoc(p => ({ ...p, title: e.target.value }))} className={`${input} col-span-2`} />
+                      {/* s10: both span the full width below md — the document types are phrases
+                          ("Consultation summary", "Referral letter", "Fit note") and the addressee is
+                          a person's or a service's name. Neither is one of s10's "two short fields". */}
+                      <label htmlFor="doc-type" className="col-span-2 -mb-1 block text-[11px] font-semibold text-gray-600 md:hidden">
+                        Document type
+                      </label>
+                      <select id="doc-type" aria-label="Document type" value={doc.docType} onChange={e => setDoc(p => ({ ...p, docType: e.target.value }))} className={`${input} max-md:col-span-2`}>
                         {DOC_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
                       </select>
-                      <input placeholder="Addressed to (optional)" value={doc.addressedTo} onChange={e => setDoc(p => ({ ...p, addressedTo: e.target.value }))} className={input} />
-                      <label className="col-span-2 flex items-center gap-2 text-[12px] text-gray-600">
-                        <input type="checkbox" checked={doc.composeFrom} onChange={e => setDoc(p => ({ ...p, composeFrom: e.target.checked }))} />
+                      <label htmlFor="doc-addressed" className="col-span-2 -mb-1 block text-[11px] font-semibold text-gray-600 md:hidden">
+                        Addressed to (optional)
+                      </label>
+                      <input id="doc-addressed" placeholder="Addressed to (optional)" value={doc.addressedTo} onChange={e => setDoc(p => ({ ...p, addressedTo: e.target.value }))} className={`${input} max-md:col-span-2`} />
+                      <label className="col-span-2 flex items-center gap-2 text-[12px] text-gray-600 max-md:min-h-[var(--cp-touch)] max-md:text-[13px]">
+                        <input type="checkbox" checked={doc.composeFrom} onChange={e => setDoc(p => ({ ...p, composeFrom: e.target.checked }))}
+                          className="max-md:h-5 max-md:w-5" />
                         Start from what is recorded in this consultation
                       </label>
                       <button type="submit" disabled={busy || !doc.title.trim()}
-                        className="col-span-2 rounded-lg border border-gray-200 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                        className="col-span-2 rounded-lg border border-gray-200 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 max-md:min-h-[var(--cp-touch-primary)] max-md:text-[14px]">
                         Create document
                       </button>
                       <div className="col-span-2">
@@ -2000,7 +2293,7 @@ export default function EncounterConsole(props: {
                       <span className="flex items-center gap-1.5 text-[11.5px] font-semibold text-[var(--cmp-text-critical)]" role="status">
                         Draft not saved
                         <button type="button" onClick={() => void flushDrafts()}
-                          className="rounded border border-[var(--cmp-color-critical)] px-1.5 py-0.5 text-[10.5px] hover:bg-[var(--cmp-surface-critical)]">
+                          className={`rounded border border-[var(--cmp-color-critical)] px-1.5 py-0.5 text-[10.5px] hover:bg-[var(--cmp-surface-critical)] ${TOUCH}`}>
                           Retry
                         </button>
                       </span>
@@ -2137,14 +2430,14 @@ export default function EncounterConsole(props: {
                             {editable && (
                               <>
                                 <button type="button" disabled={busy} onClick={() => saveNote(t)}
-                                  className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                                  className={`rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 ${TOUCH}`}>
                                   Save to record
                                 </button>
                                 {/* CPR-130 smart text. Expansion is a BUTTON, never something that happens
                                     as you type: text in a clinical note must not change under somebody's hands. */}
                                 {props.phrases.length > 0 && (
                                   <button type="button" disabled={busy} onClick={() => expandInto(t)}
-                                    className="rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                                    className={`rounded border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-50 ${TOUCH}`}>
                                     Expand
                                   </button>
                                 )}
@@ -2210,7 +2503,7 @@ export default function EncounterConsole(props: {
           <div className="flex items-center justify-between gap-2">
             <h2 className={RAIL_MEDIUM_H}>Procedures in this encounter</h2>
             <button type="button" onClick={() => setTab("procedures")}
-              className="rounded-lg px-1.5 py-1 text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:bg-[var(--cp-primary)]/[0.07] hover:underline">+ Add</button>
+              className={`rounded-lg px-1.5 py-1 text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:bg-[var(--cp-primary)]/[0.07] hover:underline ${TOUCH}`}>+ Add</button>
           </div>
           {props.procedures.filter(p => p.encounter_id === props.encounterId).length === 0 ? (
             <p className="mt-2 text-[12px] text-gray-500">None recorded in this consultation.</p>
@@ -2296,6 +2589,19 @@ export default function EncounterConsole(props: {
               );
             })}
           </div>
+          {/* ⚠ CPR-MOB-001 s4: "DO NOT USE HOVER-ONLY INFORMATION OR CONTROLS." The greyed actions
+              above carry their reason in a `title` attribute, and a phone has no hover — so the one
+              thing a practitioner needs to know about a control that will not respond ("it is a
+              permission, not a fault") was unreachable on the device this row is written for. The
+              titles stay for the pointer; below md the same sentence is drawn. Rendered only when
+              something IS denied, because a permanent line about a state nobody is in is the noise
+              that teaches people to stop reading these. The cockpit's stale-arrival title became a
+              visible sentence for this reason; this is the same fix on the same rule. */}
+          {QUICK_ACTIONS.some(a => !(held[a.capability] !== false && (a.capability !== "encounter.edit" || editable))) && (
+            <p className={`mt-2 md:hidden ${RAIL_META}`}>
+              The greyed actions need a permission you do not hold. Nothing is hidden from you here.
+            </p>
+          )}
           {/* ⚠ "PRINT SUMMARY" IS A BUTTON AND IT DOES NOT PRINT. It opens Attachments, because what this
               product can print is a DOCUMENT -- a consultation summary with a version, a signature and a
               release register behind it. A one-click window.print() would produce an unversioned sheet
@@ -2312,6 +2618,21 @@ export default function EncounterConsole(props: {
           </p>
         </section>
       </aside>
+
+      {/* ⚠ CPR-MOB-001 s17: "BOTTOM NAVIGATION AND STICKY ACTION BARS MUST NOT OBSCURE CONTENT."
+          THE IN-FLOW TWIN OF THE PINNED DOCK, and it is half of that component even though it draws
+          nothing. `fixed` takes the dock out of flow, so the document ends where it always did and the
+          dock sits on top of the last ~76px of it — which on this screen is the Quick actions tray and
+          the sentence explaining what Print summary does. The shell's <main> already pads past the
+          bottom NAVIGATION; nothing has ever padded past a bar that did not exist until now.
+
+          ⚠ IT IS THE LAST CHILD OF THE WHOLE COMPONENT, NOT A SIBLING OF THE DOCK. The dock is rendered
+          beside the action bar it belongs to, near the TOP of the centre column; a spacer there would
+          reserve 96px in the middle of the consultation and still leave the last section underneath the
+          bar — the defect intact, plus a hole in the page. Below xl this grid is one column, so being
+          last in the DOM is being last on the screen. `md:hidden` and `dockVisible` keep it exactly as
+          conditional as the thing it is reserving room for. */}
+      {dockVisible && <div aria-hidden className="h-24 md:hidden" />}
     </div>
   );
 }

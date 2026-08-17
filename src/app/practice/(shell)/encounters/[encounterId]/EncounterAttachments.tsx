@@ -53,8 +53,12 @@ type Attachment = {
 
 const KIND_LABEL = Object.fromEntries(ATTACHMENT_KINDS as readonly (readonly [string, string])[]);
 
+// CPR-MOB-001 s4/s16 — the two controls this string dresses are the attachment CATEGORY and the note,
+// which the field inventory pins by their htmlFor ids (att-kind, att-caption). A class edit cannot move
+// an id, and `max-md:` cannot reach md and up, so this buys the 44px floor and the 16px anti-zoom size
+// on the capture path where a capture is a FILE, and changes nothing else.
 const input =
-  "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+  "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 const LABEL = "text-[10.5px] font-semibold uppercase tracking-wide text-gray-600";
 
 const sizeOf = (bytes: number) =>

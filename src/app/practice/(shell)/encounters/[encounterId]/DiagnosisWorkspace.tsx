@@ -271,9 +271,29 @@ export default function DiagnosisWorkspace(props: {
         {/* ── The working set ──────────────────────────────────────────────────────────────────── */}
         {props.editable && props.canDiagnose && (
           <div className="mt-4">
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead className={WS_HEAD}>
+            {/* ══ CPR-MOB-001 s10: "AVOID SIDE-BY-SIDE DENSE FORM FIELDS ON NARROW SCREENS" ═════════
+                THE ONE PLACE ON THIS SURFACE THAT ACTUALLY SCROLLED SIDEWAYS. Five columns — a free
+                text field, a 130px select, a 90px radio, a 150px checkbox and a remove button — inside
+                `overflow-x-auto` is a horizontal scroll at 360px, which s4 forbids for core workflows,
+                and recording a diagnosis is as core as this product gets.
+
+                ⚠ LINEARISED, NOT DUPLICATED. The obvious fix is a second `md:hidden` card list beside
+                the table; it is the wrong fix HERE because `name="dx-primary"` is a single radio group
+                — two DOM copies of it would be one group spanning both faces, and the browser would
+                clear a selection React still believed in. So the SAME cells linearise: the table, its
+                body and its rows become blocks below md, each row becomes a bordered card, and every
+                cell gains the visible label the (now hidden) column heading was carrying for it. One
+                DOM, one radio group, one source of every value.
+
+                s16: "all form controls require visible labels; placeholders are not substitutes" — which
+                is exactly what a column heading stops being the moment the column does. Each label is
+                `md:hidden` and tied to its control by htmlFor, so nothing about the desktop table moves.
+
+                The row cards, the radio and the tickbox all take s4's 44px floor; the radio and checkbox
+                grow to 20px because a 13px OS default is not a touch target however large its label. */}
+            <div className="overflow-x-auto max-md:overflow-visible">
+              <table className="w-full border-collapse max-md:block">
+                <thead className={`${WS_HEAD} max-md:hidden`}>
                   <tr>
                     <th scope="col" className={WS_TH}>Diagnosis</th>
                     <th scope="col" className={`${WS_TH} w-[130px]`}>Status</th>
@@ -282,11 +302,14 @@ export default function DiagnosisWorkspace(props: {
                     <th scope="col" className={`${WS_TH} w-[70px]`} />
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="max-md:block">
                   {rows.map((r, i) => (
-                    <tr key={r.key} className={`${WS_ROW} ${r.outcome?.ok ? "bg-emerald-50/50" : r.outcome ? "bg-rose-50/50" : ""}`}>
-                      <td className={WS_TD}>
-                        <input value={r.label} disabled={busy || r.outcome?.ok === true}
+                    <tr key={r.key} className={`${WS_ROW} max-md:mb-2.5 max-md:block max-md:rounded-xl max-md:border max-md:border-gray-200 max-md:p-3 ${r.outcome?.ok ? "bg-emerald-50/50" : r.outcome ? "bg-rose-50/50" : ""}`}>
+                      <td className={`${WS_TD} max-md:block`}>
+                        <label htmlFor={`dx-label-${r.key}`} className="mb-1 block text-[11px] font-semibold text-gray-600 md:hidden">
+                          Diagnosis
+                        </label>
+                        <input id={`dx-label-${r.key}`} value={r.label} disabled={busy || r.outcome?.ok === true}
                           placeholder="Type a diagnosis..." className={input}
                           onChange={e => set(i, { label: e.target.value, outcome: undefined })} />
                         {r.outcome && !r.outcome.ok && (
@@ -294,30 +317,45 @@ export default function DiagnosisWorkspace(props: {
                         )}
                         {r.outcome?.ok && <p className="mt-1 text-[11px] font-semibold text-emerald-700">recorded</p>}
                       </td>
-                      <td className={WS_TD}>
-                        <select value={r.certainty} disabled={busy || r.outcome?.ok === true} className={input}
+                      <td className={`${WS_TD} max-md:mt-2 max-md:block`}>
+                        <label htmlFor={`dx-certainty-${r.key}`} className="mb-1 block text-[11px] font-semibold text-gray-600 md:hidden">
+                          Status
+                        </label>
+                        <select id={`dx-certainty-${r.key}`} value={r.certainty} disabled={busy || r.outcome?.ok === true} className={input}
                           onChange={e => set(i, { certainty: e.target.value })}>
                           {DIAGNOSIS_CERTAINTIES.map(c => <option key={c} value={c}>{c.replace(/_/g, " ")}</option>)}
                         </select>
                       </td>
-                      <td className={`${WS_TD} text-center`}>
-                        <input type="radio" name="dx-primary" checked={r.isPrimary}
-                          disabled={busy || r.outcome?.ok === true}
-                          aria-label={`Primary diagnosis: ${r.label || "row " + (i + 1)}`}
-                          onChange={e => setPrimary(i, e.target.checked)} />
+                      <td className={`${WS_TD} text-center max-md:mt-1 max-md:block max-md:text-left`}>
+                        {/* ⚠ ONE RADIO, WRAPPED — NOT TWO WITH ONE HIDDEN. `name="dx-primary"` is a
+                            single group across the whole working set, so a second DOM copy per row
+                            would put two members of that group in the document for every row and let
+                            the browser clear a selection React still held in state. Only the WORDS are
+                            `md:hidden`; the control is the same node in both frames, and it keeps its
+                            aria-label in both so the accessible name never depends on the viewport. */}
+                        <label className="flex items-center gap-2 text-[12.5px] text-gray-700 max-md:min-h-[var(--cp-touch)] md:justify-center md:gap-0">
+                          <input type="radio" name="dx-primary" checked={r.isPrimary}
+                            disabled={busy || r.outcome?.ok === true}
+                            aria-label={`Primary diagnosis: ${r.label || "row " + (i + 1)}`}
+                            onChange={e => setPrimary(i, e.target.checked)}
+                            className="max-md:h-5 max-md:w-5" />
+                          <span className="md:hidden">Primary diagnosis</span>
+                        </label>
                       </td>
-                      <td className={WS_TD}>
-                        <label className="flex items-center gap-1.5 text-[11.5px] text-gray-600"
+                      <td className={`${WS_TD} max-md:block`}>
+                        <label className="flex items-center gap-1.5 text-[11.5px] text-gray-600 max-md:min-h-[var(--cp-touch)] max-md:gap-2 max-md:text-[12.5px]"
                           title="Carries this condition across visits. The diagnosis for today is recorded either way.">
                           <input type="checkbox" checked={r.keepAsProblem}
                             disabled={busy || r.outcome?.ok === true}
-                            onChange={e => set(i, { keepAsProblem: e.target.checked })} />
+                            onChange={e => set(i, { keepAsProblem: e.target.checked })}
+                            className="max-md:h-5 max-md:w-5" />
                           keep as ongoing
                         </label>
                       </td>
-                      <td className={`${WS_TD} text-right`}>
+                      <td className={`${WS_TD} text-right max-md:mt-2 max-md:block max-md:text-left`}>
                         {rows.length > 1 && !r.outcome?.ok && (
-                          <button type="button" disabled={busy} className={ROW_REMOVE}
+                          <button type="button" disabled={busy}
+                            className={`${ROW_REMOVE} max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:justify-center max-md:px-3.5 max-md:text-[12.5px]`}
                             onClick={() => setRows(p => p.filter((_, j) => j !== i))}>
                             Remove
                           </button>

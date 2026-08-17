@@ -144,8 +144,12 @@ const newItem = (seed: Partial<Item> = {}): Item => ({
   ...seed,
 });
 
+// CPR-MOB-001 s10/s16 — every field on the procedure card wears this one string, so the 44px floor and
+// the 16px iOS anti-zoom size are bought here once for Side, Consent, Indication, Reason, Immediate
+// outcome, Site and Scheduled-for. `max-md:` only: the desktop card is unchanged, and the htmlFor ids
+// that tie each label to its control (and that the harness pins) are untouched by a class edit.
 const input =
-  "w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12.5px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+  "w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12.5px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 const FIELD_LABEL = "text-[10.5px] font-semibold uppercase tracking-wide text-gray-500";
 
 export default function ProcedureWorkspace(props: {
