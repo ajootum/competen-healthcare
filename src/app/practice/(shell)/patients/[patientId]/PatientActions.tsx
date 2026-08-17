@@ -39,17 +39,29 @@ export default function PatientActions(props: {
     defaultModeId: string | null;
     readable: boolean;
   };
+  /**
+   * Walkthrough 2026-08-17 #15: WHERE, on every booking surface. Left empty the engine still derives
+   * the place from the regular week -- the zero-click ordinary case -- but an outside-hours booking
+   * ("no location was assumed") no longer needs a trip to the planner to become visible under its
+   * hospital.
+   */
+  locations: { id: string; name: string }[];
+  /** The practice's today, from the workspace clock -- never UTC's, which is yesterday until 03:00. */
+  todayDate: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [edit, setEdit] = useState({ displayName: props.displayName, sex: props.sex, birthDate: props.birthDate ?? "" });
   const [book, setBook] = useState({
-    date: new Date().toISOString().slice(0, 10), time: "09:00",
+    // ⚠ THE PRACTICE'S TODAY, handed down by the server. new Date().toISOString() is UTC's date,
+    // which in Kampala is YESTERDAY until 03:00 -- the 21-hours-a-day class, in a default.
+    date: props.todayDate, time: "09:00",
     // The legacy string still travels until every reader is off it -- see BookInput in scheduling.ts.
     type: "scheduled_followup",
     visitTypeId: props.taxonomy.defaultVisitTypeId ?? "",
     modeId: props.taxonomy.defaultModeId ?? "",
+    locationId: "",
   });
   const [mergeTarget, setMergeTarget] = useState("");
 
@@ -93,6 +105,8 @@ export default function PatientActions(props: {
         visitTypeId: book.visitTypeId || null,
         consultationModeId: book.modeId || null,
         date: book.date, time: book.time,
+        // #15: empty means the regular week decides, exactly as before this select existed.
+        locationId: book.locationId || undefined,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -190,6 +204,19 @@ export default function PatientActions(props: {
                 {props.taxonomy.modes.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
               </select>
             </label>
+            {/* #15: WHERE, without leaving this card. The empty choice is the ordinary case and
+                changes nothing -- the regular week still decides. Choosing is for the booking the
+                pink notice warns about: outside the week, where no location can be assumed. */}
+            {props.locations.length > 0 && (
+              <label className="col-span-2 flex flex-col gap-1">
+                <span className="text-[10.5px] font-semibold text-gray-500">Location</span>
+                <select value={book.locationId} className={input}
+                  onChange={e => setBook(p => ({ ...p, locationId: e.target.value }))}>
+                  <option value="">Decided by the regular week</option>
+                  {props.locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </label>
+            )}
             <button type="submit" disabled={busy}
               className="col-span-2 rounded-lg bg-[var(--cp-primary)] py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
               Book appointment

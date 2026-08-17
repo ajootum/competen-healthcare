@@ -129,7 +129,11 @@ export default async function PatientPage({ params, searchParams }: {
   // access log, in raw UTC slices. A booking that exists but cannot be seen where the decision is made
   // is the REACHABLE-but-not-DISCOVERABLE failure this product keeps re-finding. What is upcoming now
   // renders directly under the name, in the practice's own clock.
-  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
+  const { timezone, today } = await workspaceClock(admin, shell.ctx.workspaceId);
+  // #15: the booking card offers WHERE. Active places only -- a closed location is not somewhere
+  // a new appointment happens.
+  const { data: locationRows } = await admin.from("practice_location")
+    .select("id, name").eq("workspace_id", shell.ctx.workspaceId).eq("active", true).order("name");
   const fmtWhen = (iso: string) => {
     try {
       return new Intl.DateTimeFormat("en-GB", {
@@ -287,6 +291,8 @@ export default async function PatientPage({ params, searchParams }: {
             defaultModeId: taxonomy.defaultModeId,
             readable: taxonomy.readable,
           }}
+          locations={((locationRows ?? []) as { id: string; name: string }[]).map(l => ({ id: l.id, name: l.name }))}
+          todayDate={today}
         />
       </div>
 

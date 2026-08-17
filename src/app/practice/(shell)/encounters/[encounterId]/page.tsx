@@ -113,7 +113,7 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
   // attach it to.
   const [
     templates, noteVersions, documents, followUpList, intervals, procedures, procedureTypes,
-    frequentProcs, planTemplates, facilities, patientDetail,
+    frequentProcs, planTemplates, facilities, bookingLocationRead, patientDetail,
     phrases, attachments, draftState, snapshot, session, practitioner,
   ] = await Promise.all([
     listTemplates(admin, shell.ctx.workspaceId, { kind: "encounter_note" }),
@@ -131,6 +131,9 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
     listPlanTemplates(admin, shell.ctx.workspaceId),
     // s6's Location.
     listFacilities(admin, shell.ctx),
+    // #15: the OTHER register of places -- practice_location, for the booked visit. Active only.
+    admin.from("practice_location")
+      .select("id, name").eq("workspace_id", shell.ctx.workspaceId).eq("active", true).order("name"),
     // ⚠ FOR s10's BOOKING LINK, AND IT IS A READ OF EXISTING APPOINTMENTS RATHER THAN A BOOKING
     // FLOW. getPatient returns the patient's last 25 appointments; the tab filters them to live and
     // future ones. See EncounterConsole for why linking beats booking here.
@@ -446,6 +449,8 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
           followUpsUnavailable={followUpList.unavailable}
           planTemplates={planTemplates}
           facilities={facilities}
+          bookingLocations={(((bookingLocationRead as any).data ?? []) as { id: string; name: string }[])
+            .map(l => ({ id: l.id, name: l.name }))}
           // ⚠ FILTERED TO LIVE AND FUTURE HERE, ON THE SERVER, because scheduleFollowUp refuses anything
           // else by name -- offering a cancelled or past appointment would be drawing a control whose
           // only outcome is a 422. getPatient returns the last 25 in either direction.

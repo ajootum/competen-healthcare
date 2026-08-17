@@ -274,6 +274,9 @@ export default function EncounterConsole(props: {
   planTemplates: any[];
   /** s6's Location. */
   facilities: any[];
+  /** #15: WHERE the booked visit happens (practice_location -- the appointment register's places,
+   *  distinct from the follow-up's facility). Empty choice = the regular week decides. */
+  bookingLocations: { id: string; name: string }[];
   /** s10: LIVE and FUTURE only, filtered on the server -- see page.tsx. */
   patientAppointments: any[];
   /** So the Assigned-to column can say "You" rather than printing a uuid or a vague noun. */
@@ -369,7 +372,7 @@ export default function EncounterConsole(props: {
     dueDate: "",
     // CPR-FUP-002 s11: booking is an EXPLICIT choice beside the obligation, never implied by the
     // action type. bookVisit reveals the visit fields and nothing else sets them.
-    bookVisit: false, bookDate: "", bookTime: "09:00",
+    bookVisit: false, bookDate: "", bookTime: "09:00", bookLocationId: "",
     // #6: true once the practitioner has chosen a place BY HAND -- the regular-week suggestion may
     // prefill an untouched select and must never overwrite a human choice.
     locationTouched: false,
@@ -587,6 +590,8 @@ export default function EncounterConsole(props: {
           patientId: props.patientId, appointmentType: "scheduled_followup",
           date: fu.bookDate, time: fu.bookTime || "09:00",
           reason: fu.reason,
+          // #15: empty means the regular week decides, exactly as before this select existed.
+          locationId: fu.bookLocationId || undefined,
         }),
       });
       const bookedData = await booked.json().catch(() => ({}));
@@ -1689,6 +1694,22 @@ export default function EncounterConsole(props: {
                               onChange={e => setFu(p => ({ ...p, bookTime: e.target.value }))}
                               className={`${input} mt-1`} />
                           </div>
+                          {/* #15: WHERE the visit happens, on every booking surface. The empty choice
+                              keeps the regular-week derivation; choosing covers the outside-hours
+                              booking no location can be assumed for. */}
+                          {props.bookingLocations.length > 0 && (
+                            <div>
+                              <label className={FU_LABEL} htmlFor="fu-book-location">Visit location</label>
+                              <select id="fu-book-location" value={fu.bookLocationId}
+                                onChange={e => setFu(p => ({ ...p, bookLocationId: e.target.value }))}
+                                className={`${input} mt-1`}>
+                                <option value="">Decided by the regular week</option>
+                                {props.bookingLocations.map(l => (
+                                  <option key={l.id} value={l.id}>{l.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
                         </>
                       )}
                       {/* ── HFE s7: CATEGORY, DEMOTED AND INFERRED ─────────────────────────────────
