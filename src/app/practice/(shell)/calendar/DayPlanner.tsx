@@ -282,16 +282,59 @@ export default function DayPlanner({
               <p className="border-b border-gray-100 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-gray-500">
                 Booked outside any session
               </p>
+              {/* ⚠ THE SAME GATEWAY AS A SESSION ROW (walkthrough 2026-08-17 #16). These rows drew a
+                  name and two words and offered NOTHING -- no record link, no check-in, no start --
+                  which read as "no access". An outside-session booking is still a patient being
+                  seen today; being outside the schedule changes where the row SITS, never what it
+                  can do. Same handlers, same guards, same today-only rule as the session rows. */}
               <ul className="divide-y divide-gray-50">
                 {loose.map(a => (
-                  <li key={a.id} className="flex flex-wrap items-baseline gap-x-2 px-3 py-1.5 text-[12px]">
+                  <li key={a.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 px-3 py-1.5 text-[12px]">
                     <span className="w-[46px] shrink-0 tabular-nums text-gray-600">{hhmm(a.startMinute)}</span>
-                    <span className={`min-w-0 flex-1 truncate ${a.voided
-                      ? "text-gray-400 line-through" : "font-semibold text-gray-900"}`}>
-                      {a.patientName}
-                    </span>
+                    {a.href ? (
+                      <Link href={a.href} className={`min-w-0 flex-1 truncate hover:underline ${a.voided
+                        ? "text-gray-400 line-through" : "font-semibold text-gray-900"}`}>
+                        {a.patientName}
+                      </Link>
+                    ) : (
+                      <span className={`min-w-0 flex-1 truncate ${a.voided
+                        ? "text-gray-400 line-through" : "font-semibold text-gray-900"}`}>
+                        {a.patientName}
+                      </span>
+                    )}
                     <span className="shrink-0 text-[11px] text-gray-500">{a.typeLabel}</span>
                     <span className="shrink-0 text-[11px] text-gray-500">{a.statusLabel}</span>
+                    {a.arrivedMinute !== null && (
+                      <span className="shrink-0 text-[10px] text-gray-500">arrived {hhmm(a.arrivedMinute)}</span>
+                    )}
+                    {day.isToday && canManage && !a.voided && a.status === "CONFIRMED" && (
+                      <button type="button" disabled={rowBusy === a.id}
+                        onClick={() => checkIn(a.id)}
+                        title="Record this patient as arrived now. The server stamps the moment; they join the cockpit queue."
+                        className="shrink-0 rounded-md border border-[var(--cp-primary)]/30 px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
+                        {rowBusy === a.id ? "…" : "Check in ✓"}
+                      </button>
+                    )}
+                    {day.isToday && canManage && !a.voided && a.status === "ARRIVED"
+                      && a.patientId && !a.encounterHref && (
+                      <button type="button" disabled={rowBusy === a.id}
+                        onClick={() => startFor(a.id, a.patientId!)}
+                        title="Open the consultation for this patient. An unfinished one is resumed, never duplicated."
+                        className="shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
+                        {rowBusy === a.id ? "…" : "Start →"}
+                      </button>
+                    )}
+                    {a.encounterHref && (
+                      <Link href={a.encounterHref}
+                        className="shrink-0 text-[10px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                        consultation
+                      </Link>
+                    )}
+                    {rowError?.id === a.id && (
+                      <span className="w-full text-[10.5px] font-semibold text-[var(--cmp-text-critical)]">
+                        {rowError.text}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
