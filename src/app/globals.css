@@ -409,6 +409,31 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
   --cp-area-8: #7C3AED;
 }
 
+/* ── CPR-PD-001: the Practice Product Director shell ────────────────────────────────────────────────
+   The PD-001 mocks give the Product Director sidebar a deep crimson/maroon ground. Nothing in the
+   estate declared one: the platform tokens stop at --cmp-color-critical (#DC2626), which is a STATUS
+   red and must not become a surface -- a whole sidebar painted in the colour that elsewhere means
+   "critical" is exactly the colour-carries-meaning defect PD-001 s9 forbids. So the shell gets its own
+   named ramp, at the same layer and for the same reason --cp-shell (#0B1E4B, the Practice tenant navy)
+   was named here rather than inlined.
+
+   ⚠ AND IT IS A SECOND SHELL, NOT A REPAINT OF THE FIRST. Competen HQ's sidebar stays navy-black;
+   Practice's tenant sidebar stays navy. Three consoles a person can hold at once, three grounds, so
+   "which product am I looking at" is answerable before a single label is read. PD-001 s6 asks the
+   header to identify the product context -- this is the same answer in colour.
+
+   Contrast is against --pd-shell: the dim ink is ~7:1 and the bright ink ~14:1, so the AA floor holds
+   for the idle state as well as the active one. Raise with design when PD-001 is next revised. */
+:root {
+  --pd-shell: #4C0519;          /* the sidebar ground */
+  --pd-shell-deep: #2E0310;     /* one step darker: the flyout, and the footer's ground */
+  --pd-shell-hover: #641226;    /* hover / focus fill */
+  --pd-shell-active: #7F1D33;   /* the active destination's fill */
+  --pd-shell-line: #7A2337;     /* hairlines and the active marker, on the crimson ground */
+  --pd-shell-ink: #FFE4E9;      /* label ink */
+  --pd-shell-ink-dim: #E8A9B6;  /* idle label and section-heading ink */
+}
+
 /* ══════════════════════════════════════════════════════════════════════════════════════════════════
    CPR-360 PERSONALISATION — theme, accent, size, density, visual noise.
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { matchHqDestinations, type HqDestination } from "@/lib/hq/search-catalogue";
 
@@ -29,24 +29,38 @@ export default function HqSearchLauncher({ destinations }: { destinations: HqDes
 
   const results = matchHqDestinations(destinations, query);
 
+  // Defined above the effects so all three ways out -- Escape, the backdrop, and choosing a result --
+  // close the same way. The setters are stable, so the empty dependency list is honest.
+  const close = useCallback(() => { setOpen(false); setQuery(""); setCursor(0); }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setOpen(v => !v);
       }
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [close]);
 
+  /**
+   * ⚠ THE RESET MOVED OUT OF THE EFFECT, AND IT IS THE SAME LESSON AS THE DRAWER'S (2026-08-17).
+   *
+   * This read `if (open) focus(); else { setQuery(""); setCursor(0); }` in an effect on [open] --
+   * setState synchronously in an effect body, which React's own lint rule refuses as a cascading
+   * render, and which this file's ESLint reports as an error. It was never linted when it shipped.
+   *
+   * Clearing on CLOSE is not synchronisation, it is what closing MEANS, so it belongs on the actions
+   * that close. The effect keeps only the part that really is synchronising React with an external
+   * system -- moving focus into the DOM when the panel appears.
+   */
   useEffect(() => {
     if (open) inputRef.current?.focus();
-    else { setQuery(""); setCursor(0); }
   }, [open]);
 
-  const go = (href: string) => { setOpen(false); router.push(href); };
+  const go = (href: string) => { close(); router.push(href); };
 
   if (!open) {
     return (
@@ -62,7 +76,7 @@ export default function HqSearchLauncher({ destinations }: { destinations: HqDes
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setOpen(false)} aria-hidden />
+      <div className="fixed inset-0 z-40 bg-black/50" onClick={close} aria-hidden />
       <div role="dialog" aria-modal="true" aria-label="Search HQ"
         className="fixed left-1/2 top-24 z-50 w-[min(36rem,92vw)] -translate-x-1/2 rounded-2xl border border-white/10 bg-[#101a24] p-3 shadow-2xl">
         <input ref={inputRef} value={query}

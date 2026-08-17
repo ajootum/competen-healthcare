@@ -15,6 +15,9 @@ import { hqSearchCatalogue } from "@/lib/hq/search-catalogue";
 import HqSearchLauncher from "./_components/HqSearchLauncher";
 import { ALL_NAV_TABLES } from "./_components/nav-tables";
 import SessionIdentityNotice, { RememberSessionIdentity } from "@/components/SessionIdentityNotice";
+import { resolveMissionProfile } from "@/lib/hq/mission-profile";
+import ProductDirectorSidebar from "./_components/ProductDirectorSidebar";
+import { PD_SIDEBAR_COOKIE, readPdSidebarMode } from "./_components/pd-sidebar-mode";
 
 // Sidebar IA aligned to the Mission Control model (MC-001). The nav config and
 // its Clinical Knowledge Platform branch live in the WorkspaceSidebar client
@@ -138,7 +141,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
   // makes -- so the identity line can say which appointment somebody is here by without this layout,
   // which runs on all 205 HQ pages, paying for a second resolution.
   const hqPositions = isOwner
-    ? { capabilities: [] as string[], positionNames: [] as string[] }
+    ? { positions: [] as string[], capabilities: [] as string[], positionNames: [] as string[] }
     : await resolveHqPositions(admin, user.id);
   const hqCapabilities = hqPositions.capabilities;
 
@@ -183,6 +186,75 @@ export default async function SuperAdminLayout({ children }: { children: React.R
             </form>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
+  // ⚠ WHICH SIDEBAR? (CPR-PD-001 s7.) Competen HQ governs all four product lines; a Product Director
+  // governs one. The two are separate navigations by specification -- "product switching occurs through
+  // the HQ/product context architecture rather than by mixing unrelated product sidebars" -- so the shell
+  // this layout renders is a decision, not a variant.
+  //
+  // ⚠ IT IS THE GOVERNANCE CONTEXT THAT DECIDES, NEVER A JOB TITLE OR A POSITION CODE. resolveMissionProfile
+  // is the same resolver Mission Control composes itself from (PLAT-GOV-MC-001 s10, "selected by governance
+  // context"), so the sidebar and the dashboard inside it cannot disagree about which product this person
+  // is here to run -- and a second Practice position, added later, needs no change here.
+  //
+  // ⚠ AN OWNER IS NEVER PRODUCT-SCOPED AND KEEPS THE HQ SIDEBAR. That is correct: the owner governs four
+  // product lines and must not be handed one product's navigation. It is also why this branch cannot be
+  // seen from a super_admin account, which is the account most likely to be used to check it.
+  //
+  // ⚠ AND IT DECIDES PRESENTATION ONLY. Every destination below still calls requireHqCapability on
+  // arrival (s7: "a hidden navigation item does not constitute authorization"). Rendering this sidebar
+  // grants nothing, and rendering the HQ one withholds nothing.
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
+  const mission = isOwner
+    ? null
+    : await resolveMissionProfile(admin, {
+        isOwner: false,
+        positions: hqPositions.positions,
+        capabilities: hqCapabilities,
+      });
+  const isProductDirector = mission?.profile.governanceLevel === "product"
+    && mission.profile.productLineCode === "practice";
+
+  if (isProductDirector) {
+    return (
+      <div className="min-h-screen bg-gray-50 font-[family-name:var(--font-geist-sans)]">
+        <a href="#main-content" className="cmp-skip-link">Skip to main content</a>
+        <RememberSessionIdentity userId={user.id} displayName={profile?.full_name ?? null} />
+        {/* ⚠ THE COLLAPSE PREFERENCE IS READ HERE, ON THE SERVER, AND THAT IS THE WHOLE POINT OF THE
+            COOKIE (PD-014 build 1: persist it "without making navigation dependent on client-only
+            state"). The width is correct in the first byte, so there is no wrong-width frame and no
+            pre-paint script. The sidebar writes it back on toggle; see pd-sidebar-mode.ts. */}
+        <ProductDirectorSidebar
+          initialMode={readPdSidebarMode(cookieStore.get(PD_SIDEBAR_COOKIE)?.value)}
+          profileName={profile?.full_name ?? null}
+          positionNames={hqPositions.positionNames}
+          workspaces={workspaces}
+          header={
+            <GlobalHeader
+              // s6: the product context, named. And no header hamburger -- this sidebar carries its own
+              // persistent toggle (s4), and the header's one is wired to the estate's localStorage
+              // mechanism, which would be a second answer to the same question.
+              workspaceTitle="Competen Practice"
+              workspaceHref="/super-admin"
+              showSidebarToggle={false}
+              user={header.user}
+              workspaces={header.workspaces}
+              units={header.units}
+              activeUnitId={header.activeUnitId}
+              notifications={header.notifications}
+              messages={header.messages}
+            />
+          }
+        >
+          <div className="mb-4 flex justify-end">
+            <HqSearchLauncher destinations={hqSearchCatalogue(ALL_NAV_TABLES, { isOwner, capabilities: hqCapabilities })} />
+          </div>
+          {children}
+        </ProductDirectorSidebar>
       </div>
     );
   }
