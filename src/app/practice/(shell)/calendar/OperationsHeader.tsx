@@ -38,7 +38,9 @@ export default function OperationsHeader({ c }: { c: any }) {
         {/* EACH FIGURE IN ITS OWN TYPE'S COLOUR, taken from APPOINTMENT_KINDS rather than chosen here --
             so the "3 New" in this row is the same indigo as every new-patient block on the timeline
             above it, and a hue can never mean one thing in the summary and another in the grid. */}
-        <div className="mt-3 grid grid-cols-5 gap-1">
+        {/* CPR-MOB-001 s5: five figures in one row is a squeeze at 320px -- below md they wrap to a
+            3+2 grid. Same five figures, same order, same colours; max-md:* no-op at md and up. */}
+        <div className="mt-3 grid grid-cols-5 gap-1 max-md:grid-cols-3 max-md:gap-y-2">
           {[
             ["Booked", s.booked, "var(--cp-slate-700)"],
             ["Follow-up", s.followUps, APPOINTMENT_KINDS.scheduled_followup.colour],

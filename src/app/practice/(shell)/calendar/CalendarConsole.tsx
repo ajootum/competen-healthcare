@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import FullScreenSheet from "../_responsive/FullScreenSheet";
+import { useBelowMd } from "./use-below-md";
 
 // The diary console (CPR-V2-003 V3), Day mode only since CPR-PLN-002: the day's schedule, availability
 // blocks and the booking form -- book, walk-in, check in, cancel, no-show, complete. Every action calls
@@ -43,7 +45,9 @@ const STATUS_TONE: Record<string, string> = {
   NO_SHOW: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
 };
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+// CPR-MOB-001 s16: thumb-height and 16px below md -- under 16px iOS zooms the page on focus. The
+// max-md:* additions are no-ops at md and up; the desktop form is byte-identical there.
+const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 
 export default function CalendarConsole({ date, timezone, canManage, initial, locations = [] }: {
   date: string;
@@ -57,6 +61,11 @@ export default function CalendarConsole({ date, timezone, canManage, initial, lo
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [form, setForm] = useState({ patientName: "", patientPhone: "", appointmentType: "new_consultation", time: "09:00", durationMinutes: "20", reason: "", locationId: "" });
+  // CPR-MOB-001 s8 ("Book patient -- full-screen/mobile form using existing booking rules"): below md
+  // the SAME form opens in a FullScreenSheet from one trigger at the top of the console. Gated on the
+  // hook, not on CSS, because the sheet's focus trap must never run against the desktop form.
+  const belowMd = useBelowMd();
+  const [bookOpen, setBookOpen] = useState(false);
 
   async function refresh() {
     const r = await fetch(`/api/v1/practice/appointments?date=${date}`);
@@ -125,16 +134,103 @@ export default function CalendarConsole({ date, timezone, canManage, initial, lo
   const fmt = (iso: string) =>
     new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: timezone });
 
+  // ── THE BOOKING FORM, BUILT ONCE AND MOUNTED IN TWO FRAMES (CPR-MOB-001 s8, s19) ────────────────
+  //
+  // One JSX value, one state, one submit path: the desktop Book card and the mobile full-screen sheet
+  // both render THIS, so the booking rules cannot fork -- there is nothing to fork. The success
+  // behaviour is walkthrough #3's contract in both frames: per-patient fields clear, type and location
+  // stay, the time advances to the end of the slot just booked. That is also why the sheet stays OPEN
+  // after a booking: back-to-back booking is enter-name, press, enter-name, press, and the ok notice
+  // below confirms each one where the thumb already is.
+  const noticeLine = notice && (
+    <p className={`mt-3 rounded-lg px-3 py-2 text-[12px] ${notice.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>
+      {notice.text}
+    </p>
+  );
+
+  const bookForm = (
+    <form className="mt-2 flex flex-col gap-2" onSubmit={e => { e.preventDefault(); book(false); }}>
+      <input required placeholder="Patient name" aria-label="Patient name" value={form.patientName} onChange={e => setForm(p => ({ ...p, patientName: e.target.value }))} className={input} />
+      <input placeholder="Phone (optional)" aria-label="Phone (optional)" value={form.patientPhone} onChange={e => setForm(p => ({ ...p, patientPhone: e.target.value }))} className={input} />
+      {/* ⚠ WALKTHROUGH DEFECT #2 (owner, 2026-08-16): these two fields relied on tooltips,
+          and a bare "20" explains nothing. Visible labels, and the DERIVED end time below
+          the row -- the end is what the two numbers actually mean together, and showing it
+          confirms the booking's span before the button is pressed. */}
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block">
+          <span className="text-[11px] text-gray-600">Time (24-hour)</span>
+          {/* 24-hour text input, not type="time" -- the native picker renders 12-hour on many
+              machines and the owner asked for the 24-hour clock. */}
+          <input required value={form.time} onChange={e => setForm(p => ({ ...p, time: e.target.value }))}
+            pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="09:00" inputMode="numeric"
+            title="24-hour clock, HH:MM — for example 09:00 or 14:30" className={`mt-0.5 ${input}`} />
+        </label>
+        <label className="block">
+          <span className="text-[11px] text-gray-600">Length (minutes)</span>
+          <input type="number" min={5} max={480} value={form.durationMinutes} onChange={e => setForm(p => ({ ...p, durationMinutes: e.target.value }))} className={`mt-0.5 ${input}`} title="Duration in minutes" />
+        </label>
+      </div>
+      {addMinutes(form.time, Number(form.durationMinutes) || 0) && Number(form.durationMinutes) > 0 && (
+        <p className="text-[11px] text-gray-500">
+          Ends {addMinutes(form.time, Number(form.durationMinutes))}
+        </p>
+      )}
+      <select value={form.appointmentType} aria-label="Appointment type" onChange={e => setForm(p => ({ ...p, appointmentType: e.target.value }))} className={input}>
+        {TYPES.filter(([k]) => k !== "walk_in").map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+      </select>
+
+      {/* WHERE. A practitioner who works at two hospitals has to say which one, and the engine
+          refuses a booking that leaves no time to get between them. Hidden entirely when the
+          practice has one place, because then the question does not arise. */}
+      {locations.length > 1 && (
+        <select value={form.locationId} aria-label="Where this appointment happens" onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))}
+          className={input} title="Where this appointment happens">
+          <option value="">Where — not specified</option>
+          {locations.map(l => (
+            <option key={l.id} value={l.id}>
+              {l.name}{l.type === "hospital" && !l.facility ? " (no facility linked -- set it in Practice Settings)" : ""}
+            </option>
+          ))}
+        </select>
+      )}
+
+      <input placeholder="Reason (optional)" aria-label="Reason (optional)" value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} className={input} />
+      <div className="flex gap-2 max-md:flex-col">
+        <button type="submit" disabled={busy || !form.patientName.trim()}
+          className="flex-1 rounded-lg bg-[var(--cp-primary)] py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50 max-md:min-h-[var(--cp-touch-primary)] max-md:text-[14px]">
+          Book appointment
+        </button>
+        <button type="button" disabled={busy || !form.patientName.trim()} onClick={() => book(true)}
+          className="flex-1 rounded-lg border border-gray-200 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 max-md:min-h-[var(--cp-touch)]">
+          Register walk-in now
+        </button>
+      </div>
+    </form>
+  );
+
+  const bookNote = (
+    <p className="mt-2 text-[10px] text-gray-400 max-md:text-[11px]">
+      A booking made here carries a name only. To open a clinical record for someone, register
+      them in Patients and book from their record — or search for them there and start the
+      encounter directly.
+    </p>
+  );
+
   return (
     <div className="max-w-6xl">
       {/* The label used to say UTC while fmt() rendered practice time -- a lie in small print. The
           date strip that sat beside it is gone: the planner's navigator owns the day. */}
       <p className="text-[13px] text-gray-500">{date} &middot; times in the practice&apos;s timezone</p>
 
-      {notice && (
-        <p className={`mt-3 rounded-lg px-3 py-2 text-[12px] ${notice.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>
-          {notice.text}
-        </p>
+      {noticeLine}
+
+      {/* CPR-MOB-001 s8: ONE trigger where the thumb starts, opening the sheet below. The desktop
+          Book card is untouched at md and up; this button does not exist there. */}
+      {canManage && (
+        <button type="button" onClick={() => setBookOpen(true)}
+          className="mt-3 flex min-h-[var(--cp-touch-primary)] w-full items-center justify-center rounded-xl bg-[var(--cp-primary)] px-4 text-[14px] font-semibold text-white md:hidden">
+          Book a patient
+        </button>
       )}
 
       <div className="mt-4 grid lg:grid-cols-3 gap-4">
@@ -160,7 +256,7 @@ export default function CalendarConsole({ date, timezone, canManage, initial, lo
                         // queued; starting, pausing and finishing the consultation is Current Session's
                         // work, and there is exactly one place that does it.
                         <Link href="/practice/today"
-                          className="rounded border border-[var(--cp-primary-border)] bg-[var(--cp-primary)]/5 px-2.5 py-1 text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:bg-[var(--cp-primary)]/10">
+                          className="rounded border border-[var(--cp-primary-border)] bg-[var(--cp-primary)]/5 px-2.5 py-1 text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:bg-[var(--cp-primary)]/10 max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:rounded-lg max-md:px-3 max-md:text-[12px]">
                           Start the consultation in Current Session &rarr;
                         </Link>
                       ) : (
@@ -171,12 +267,14 @@ export default function CalendarConsole({ date, timezone, canManage, initial, lo
                     </div>
                   )}
                   {canManage && (
+                    // CPR-MOB-001 s4: the same five lifecycle verbs at thumb size below md; the
+                    // desktop row is untouched at md and up (max-md:* no-ops only).
                     <div className="mt-1.5 flex gap-1.5 flex-wrap">
-                      {a.status === "REQUESTED" && <button disabled={busy} onClick={() => transition(a.id, "confirm", "Confirmed.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50">Confirm</button>}
-                      {a.status === "CONFIRMED" && <button disabled={busy} onClick={() => transition(a.id, "arrive", "Checked in and queued.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50">Check in</button>}
-                      {a.status === "CONFIRMED" && <button disabled={busy} onClick={() => transition(a.id, "no_show", "Marked as no-show.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50">No-show</button>}
-                      {a.status === "ARRIVED" && <button disabled={busy} onClick={() => transition(a.id, "complete", "Completed.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50">Complete</button>}
-                      {["REQUESTED", "CONFIRMED", "ARRIVED"].includes(a.status) && <button disabled={busy} onClick={() => transition(a.id, "cancel", "Cancelled.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-[var(--cmp-text-critical)] hover:bg-[var(--cmp-surface-critical)]">Cancel</button>}
+                      {a.status === "REQUESTED" && <button disabled={busy} onClick={() => transition(a.id, "confirm", "Confirmed.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50 max-md:min-h-[var(--cp-touch)] max-md:rounded-lg max-md:px-3 max-md:text-[12px]">Confirm</button>}
+                      {a.status === "CONFIRMED" && <button disabled={busy} onClick={() => transition(a.id, "arrive", "Checked in and queued.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50 max-md:min-h-[var(--cp-touch)] max-md:rounded-lg max-md:px-3 max-md:text-[12px]">Check in</button>}
+                      {a.status === "CONFIRMED" && <button disabled={busy} onClick={() => transition(a.id, "no_show", "Marked as no-show.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50 max-md:min-h-[var(--cp-touch)] max-md:rounded-lg max-md:px-3 max-md:text-[12px]">No-show</button>}
+                      {a.status === "ARRIVED" && <button disabled={busy} onClick={() => transition(a.id, "complete", "Completed.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-gray-600 hover:bg-gray-50 max-md:min-h-[var(--cp-touch)] max-md:rounded-lg max-md:px-3 max-md:text-[12px]">Complete</button>}
+                      {["REQUESTED", "CONFIRMED", "ARRIVED"].includes(a.status) && <button disabled={busy} onClick={() => transition(a.id, "cancel", "Cancelled.")} className="rounded border border-gray-200 px-2 py-0.5 text-[11px] text-[var(--cmp-text-critical)] hover:bg-[var(--cmp-surface-critical)] max-md:min-h-[var(--cp-touch)] max-md:rounded-lg max-md:px-3 max-md:text-[12px]">Cancel</button>}
                     </div>
                   )}
                 </li>
@@ -206,7 +304,7 @@ export default function CalendarConsole({ date, timezone, canManage, initial, lo
           <section className="rounded-xl border border-gray-200 bg-white p-4">
             <h2 className="text-[13px] font-bold text-gray-900">Waiting</h2>
             <Link href="/practice/today"
-              className="mt-2 flex items-baseline gap-2 rounded-lg border border-gray-100 px-3 py-2 text-[12px] hover:bg-gray-50">
+              className="mt-2 flex items-baseline gap-2 rounded-lg border border-gray-100 px-3 py-2 text-[12px] hover:bg-gray-50 max-md:min-h-[var(--cp-touch)] max-md:items-center">
               <span className="text-gray-800">
                 {day.queue.length === 0 ? "Nobody is waiting" : `${day.queue.length} waiting`}
               </span>
@@ -218,76 +316,29 @@ export default function CalendarConsole({ date, timezone, canManage, initial, lo
             </p>
           </section>
 
-          {/* Book / walk-in (quick actions) */}
+          {/* Book / walk-in (quick actions). max-md:hidden is the desktop face stepping aside below
+              md, where the SAME form (the const above) lives in the full-screen sheet instead. */}
           {canManage && (
-            <section className="rounded-xl border border-gray-200 bg-white p-4">
+            <section className="rounded-xl border border-gray-200 bg-white p-4 max-md:hidden">
               <h2 className="text-[13px] font-bold text-gray-900">Book</h2>
-              <form className="mt-2 flex flex-col gap-2" onSubmit={e => { e.preventDefault(); book(false); }}>
-                <input required placeholder="Patient name" value={form.patientName} onChange={e => setForm(p => ({ ...p, patientName: e.target.value }))} className={input} />
-                <input placeholder="Phone (optional)" value={form.patientPhone} onChange={e => setForm(p => ({ ...p, patientPhone: e.target.value }))} className={input} />
-                {/* ⚠ WALKTHROUGH DEFECT #2 (owner, 2026-08-16): these two fields relied on tooltips,
-                    and a bare "20" explains nothing. Visible labels, and the DERIVED end time below
-                    the row -- the end is what the two numbers actually mean together, and showing it
-                    confirms the booking's span before the button is pressed. */}
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="block">
-                    <span className="text-[11px] text-gray-600">Time (24-hour)</span>
-                    {/* 24-hour text input, not type="time" -- the native picker renders 12-hour on many
-                        machines and the owner asked for the 24-hour clock. */}
-                    <input required value={form.time} onChange={e => setForm(p => ({ ...p, time: e.target.value }))}
-                      pattern="^([01]?\d|2[0-3]):[0-5]\d$" placeholder="09:00" inputMode="numeric"
-                      title="24-hour clock, HH:MM — for example 09:00 or 14:30" className={`mt-0.5 ${input}`} />
-                  </label>
-                  <label className="block">
-                    <span className="text-[11px] text-gray-600">Length (minutes)</span>
-                    <input type="number" min={5} max={480} value={form.durationMinutes} onChange={e => setForm(p => ({ ...p, durationMinutes: e.target.value }))} className={`mt-0.5 ${input}`} title="Duration in minutes" />
-                  </label>
-                </div>
-                {addMinutes(form.time, Number(form.durationMinutes) || 0) && Number(form.durationMinutes) > 0 && (
-                  <p className="text-[11px] text-gray-500">
-                    Ends {addMinutes(form.time, Number(form.durationMinutes))}
-                  </p>
-                )}
-                <select value={form.appointmentType} onChange={e => setForm(p => ({ ...p, appointmentType: e.target.value }))} className={input}>
-                  {TYPES.filter(([k]) => k !== "walk_in").map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-                </select>
-
-                {/* WHERE. A practitioner who works at two hospitals has to say which one, and the engine
-                    refuses a booking that leaves no time to get between them. Hidden entirely when the
-                    practice has one place, because then the question does not arise. */}
-                {locations.length > 1 && (
-                  <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))}
-                    className={input} title="Where this appointment happens">
-                    <option value="">Where — not specified</option>
-                    {locations.map(l => (
-                      <option key={l.id} value={l.id}>
-                        {l.name}{l.type === "hospital" && !l.facility ? " (no facility linked -- set it in Practice Settings)" : ""}
-                      </option>
-                    ))}
-                  </select>
-                )}
-
-                <input placeholder="Reason (optional)" value={form.reason} onChange={e => setForm(p => ({ ...p, reason: e.target.value }))} className={input} />
-                <div className="flex gap-2">
-                  <button type="submit" disabled={busy || !form.patientName.trim()}
-                    className="flex-1 rounded-lg bg-[var(--cp-primary)] py-2 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
-                    Book appointment
-                  </button>
-                  <button type="button" disabled={busy || !form.patientName.trim()} onClick={() => book(true)}
-                    className="flex-1 rounded-lg border border-gray-200 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                    Register walk-in now
-                  </button>
-                </div>
-              </form>
-              <p className="mt-2 text-[10px] text-gray-400">
-                A booking made here carries a name only. To open a clinical record for someone, register
-                them in Patients and book from their record — or search for them there and start the
-                encounter directly.
-              </p>
+              {bookForm}
+              {bookNote}
             </section>
           )}
         </div>
       </div>
+
+      {/* CPR-MOB-001 s8: the mobile booking frame. Mounted only below md (the hook, not CSS -- the
+          sheet's focus trap must never run against the visible desktop card), containing the same
+          form value the desktop card renders, notice included so an engine refusal answers INSIDE
+          the sheet rather than under it. */}
+      {belowMd && canManage && (
+        <FullScreenSheet open={bookOpen} onClose={() => setBookOpen(false)} title="Book a patient">
+          {noticeLine}
+          {bookForm}
+          {bookNote}
+        </FullScreenSheet>
+      )}
     </div>
   );
 }

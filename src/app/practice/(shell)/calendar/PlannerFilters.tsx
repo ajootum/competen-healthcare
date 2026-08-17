@@ -9,6 +9,8 @@ import {
 } from "@/lib/practice/planner-constants";
 import { ACTIVITY_TYPES, ACTIVITY_LABEL, type ActivityType } from "@/lib/practice/activity-constants";
 import { plannerHref, hhmm, shortDate, type LocationOption, type PlannerUrlState } from "./planner-ui";
+import { useBodyScrollLock } from "../_responsive/use-body-scroll-lock";
+import { useBelowMd } from "./use-below-md";
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // CP-PLAN-002 s4 -- CONTENT CONTROLS AND SCHEDULE SEARCH.
@@ -52,7 +54,18 @@ export default function PlannerFilters({
   // carries the ACTIVE-FILTER COUNT -- so a phone screen is not five select boxes tall, and a hidden
   // filter can never be a silent one: the number on the button says something is narrowing the view.
   // Desktop keeps the full row exactly as CPR-PLN-002 left it.
+  //
+  // CPR-MOB-001 s8 ("Filters -- single Filter button -> sheet"): the SAME control now opens the SAME
+  // panel as a bottom sheet below md -- backdrop, thumb-height controls, Done above the safe area --
+  // instead of an inline fold. The _responsive FilterSheet primitive was judged and NOT adopted here:
+  // it owns its own trigger, and this screen's trigger is the frozen one (the freeze harness pins its
+  // wording and its expanded state), so adopting the primitive wholesale would have meant either two
+  // Filter buttons on one phone screen or a pinned control that no longer does anything. The sheet
+  // CONTRACT is the primitive's -- one trigger with the count, controls in the sheet, closure at the
+  // bottom -- rebuilt around the pinned trigger with the same scroll-lock hook.
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const belowMd = useBelowMd();
+  useBodyScrollLock(filtersOpen && belowMd);
   const activeCount = [
     filters.show !== "all", !!filters.locationId, !!filters.activityType,
     !!filters.appointmentType, !!filters.status, filters.query.trim().length > 0,
@@ -65,12 +78,30 @@ export default function PlannerFilters({
     <section className="rounded-2xl border border-gray-200 bg-white p-3">
       <button type="button" onClick={() => setFiltersOpen(o => !o)}
         aria-expanded={filtersOpen}
-        className={`rounded-lg border px-2.5 py-1.5 text-[12px] font-semibold md:hidden ${activeCount > 0
+        className={`min-h-[var(--cp-touch)] rounded-lg border px-2.5 py-1.5 text-[12px] font-semibold md:hidden ${activeCount > 0
           ? "border-[var(--cp-primary-border)] bg-[var(--cp-primary)]/5 text-[var(--cp-primary-deep)]"
           : "border-gray-200 text-gray-700"}`}>
         Filters ({activeCount}) {filtersOpen ? "⌃" : "⌄"}
       </button>
-      <div className={`${filtersOpen ? "mt-2 flex" : "hidden md:flex"} flex-wrap items-end gap-2`}>
+      {/* The sheet's backdrop -- a real, labelled exit (s17: never gesture-only), mounted only while
+          the panel is a sheet so a rotation to desktop cannot strand it. */}
+      {filtersOpen && belowMd && (
+        <button type="button" aria-label="Close filters" onClick={() => setFiltersOpen(false)}
+          className="fixed inset-0 z-40 cursor-default bg-black/40 md:hidden" />
+      )}
+      <div
+        onKeyDown={e => { if (e.key === "Escape") setFiltersOpen(false); }}
+        className={`${filtersOpen
+          ? "mt-2 flex max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-50 max-md:m-0 max-md:max-h-[80vh] max-md:flex-col max-md:flex-nowrap max-md:items-stretch max-md:gap-3 max-md:overflow-y-auto max-md:rounded-t-2xl max-md:border-t max-md:border-gray-200 max-md:bg-white max-md:p-4 max-md:pb-[calc(var(--cp-safe-bottom)_+_16px)] max-md:shadow-2xl"
+          : "hidden md:flex"} flex-wrap items-end gap-2`}>
+        {/* The sheet's own header row. md:hidden -- the desktop row has the section around it. */}
+        <div className="flex w-full items-center justify-between md:hidden">
+          <h3 className="text-[15px] font-bold text-gray-900">Filters</h3>
+          <button type="button" onClick={() => setFiltersOpen(false)}
+            className="flex min-h-[var(--cp-touch)] items-center rounded-lg px-3 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
+            Close
+          </button>
+        </div>
         <Select label="Show" value={filters.show} onChange={v => go({ show: v })}
           options={PLANNER_SHOW_OPTIONS.map(o => [o.key, o.label])} />
 
@@ -92,19 +123,27 @@ export default function PlannerFilters({
           options={[["", "Any status"], ...Object.entries(APPOINTMENT_STATUS_LABEL)]} />
 
         {/* ── SEARCH THE SCHEDULE ───────────────────────────────────────────────────────────────── */}
-        <form className="ml-auto flex items-end gap-1.5"
+        <form className="ml-auto flex items-end gap-1.5 max-md:ml-0 max-md:w-full"
           onSubmit={e => { e.preventDefault(); go({ q }); }}>
-          <label className="flex flex-col gap-0.5 text-[11px] font-semibold text-gray-600">
+          <label className="flex flex-col gap-0.5 text-[11px] font-semibold text-gray-600 max-md:min-w-0 max-md:flex-1">
             Search schedule
+            {/* max-md:text-[16px] is not styling: below 16px iOS zooms the page on focus (s16). */}
             <input value={q} onChange={e => setQ(e.target.value)}
               placeholder="Patient, location or activity"
-              className="w-[220px] rounded-lg border border-gray-200 px-2 py-1 text-[12px] text-gray-800" />
+              className="w-[220px] rounded-lg border border-gray-200 px-2 py-1 text-[12px] text-gray-800 max-md:min-h-[var(--cp-touch)] max-md:w-full max-md:text-[16px]" />
           </label>
           <button type="submit"
-            className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white">
+            className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white max-md:min-h-[var(--cp-touch)]">
             Search
           </button>
         </form>
+
+        {/* The sheet's closure, where the thumb is. The controls above apply themselves the moment
+            they change (each is a navigation), so this is Done, not Apply -- nothing is pending. */}
+        <button type="button" onClick={() => setFiltersOpen(false)}
+          className="flex min-h-[var(--cp-touch-primary)] w-full items-center justify-center rounded-xl bg-[var(--cp-primary)] px-4 text-[14px] font-semibold text-white md:hidden">
+          Done
+        </button>
       </div>
 
       {plannerFiltersActive(filters) && (
@@ -183,10 +222,12 @@ function Select({ label, value, onChange, options }: {
   label: string; value: string; onChange: (v: string) => void; options: [string, string][];
 }) {
   return (
-    <label className="flex flex-col gap-0.5 text-[11px] font-semibold text-gray-600">
+    // In the sheet each control is full width and thumb-height; the desktop row is untouched (all
+    // max-md:* -- CPR-MOB-001 s16's visible labels were already here).
+    <label className="flex flex-col gap-0.5 text-[11px] font-semibold text-gray-600 max-md:w-full">
       {label}
       <select value={value} onChange={e => onChange(e.target.value)}
-        className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-[12px] font-normal text-gray-800">
+        className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-[12px] font-normal text-gray-800 max-md:min-h-[var(--cp-touch)] max-md:w-full max-md:text-[16px]">
         {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
       </select>
     </label>

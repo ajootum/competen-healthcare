@@ -31,28 +31,59 @@ export default function AvailabilityRibbon({ c }: { c: any }) {
           compare them against.
         </p>
       ) : (
-        <ul className="mt-3 flex flex-wrap gap-2">
-          {c.ribbon.map((r: any) => (
-            <li key={r.id}
-              className="rounded-lg border px-3 py-2"
-              style={{ borderColor: `color-mix(in srgb, ${r.colour} 35%, white)`, background: `color-mix(in srgb, ${r.colour} 7%, white)` }}>
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: r.colour }} />
-                <span className="text-[12px] font-bold" style={{ color: r.colour }}>{r.label}</span>
-                {/* DERIVED. See the header. */}
-                <span className="text-[11px] text-gray-500">{r.full ? "full" : "available"}</span>
-              </span>
-              <span className="mt-0.5 block text-[12px] text-gray-700">
-                {hhmm(r.from)} – {hhmm(r.to)}
-              </span>
-              {r.location && <span className="block text-[11px] text-gray-500">{r.location}</span>}
-            </li>
-          ))}
-        </ul>
+        <>
+          {/* The desktop face, untouched at md and up. */}
+          <ul className="mt-3 flex flex-wrap gap-2 max-md:hidden">
+            {c.ribbon.map((r: any) => (
+              <li key={r.id}
+                className="rounded-lg border px-3 py-2"
+                style={{ borderColor: `color-mix(in srgb, ${r.colour} 35%, white)`, background: `color-mix(in srgb, ${r.colour} 7%, white)` }}>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: r.colour }} />
+                  <span className="text-[12px] font-bold" style={{ color: r.colour }}>{r.label}</span>
+                  {/* DERIVED. See the header. */}
+                  <span className="text-[11px] text-gray-500">{r.full ? "full" : "available"}</span>
+                </span>
+                <span className="mt-0.5 block text-[12px] text-gray-700">
+                  {hhmm(r.from)} – {hhmm(r.to)}
+                </span>
+                {r.location && <span className="block text-[11px] text-gray-500">{r.location}</span>}
+              </li>
+            ))}
+          </ul>
+
+          {/* CPR-MOB-001 s8 -- "Availability: compact availability blocks; expand for details."
+              Each block is one thumb-height line: kind (in words, never colour alone -- s4) and
+              times. Opening it shows the derived taken/available state and the place. Native
+              details/summary, because this file is a server component and a disclosure needs no
+              client state. */}
+          <ul className="mt-3 flex flex-col gap-1.5 md:hidden">
+            {c.ribbon.map((r: any) => (
+              <li key={r.id}>
+                <details className="rounded-lg border"
+                  style={{ borderColor: `color-mix(in srgb, ${r.colour} 35%, white)`, background: `color-mix(in srgb, ${r.colour} 7%, white)` }}>
+                  <summary className="flex min-h-[var(--cp-touch)] cursor-pointer list-none items-center gap-1.5 px-3 text-[12px]">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: r.colour }} aria-hidden />
+                    <span className="font-bold" style={{ color: r.colour }}>{r.label}</span>
+                    <span className="tabular-nums text-gray-700">{hhmm(r.from)}–{hhmm(r.to)}</span>
+                    <span className="ml-auto shrink-0 text-[11px] font-semibold text-gray-500">Details ⌄</span>
+                  </summary>
+                  <div className="px-3 pb-2 text-[12px] text-gray-700">
+                    {/* DERIVED. See the header. */}
+                    <p>{r.full ? "Full — every time in this block is taken." : "Available — this block still has bookable time."}</p>
+                    {r.location && <p className="text-[11px] text-gray-500">{r.location}</p>}
+                  </div>
+                </details>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
 
-      {/* ── The legend, which is also the colour mapping s46 asks to be configurable ────────── */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gray-100 pt-2">
+      {/* ── The legend, which is also the colour mapping s46 asks to be configurable. Desktop only:
+          below md every compact block already names its kind in words, so a second list of the same
+          words is height without information. ────────────────────────────────────────────────── */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gray-100 pt-2 max-md:hidden">
         {Object.entries(c.kinds ?? {}).map(([k, v]: [string, any]) => (
           <span key={k} className="flex items-center gap-1 text-[11px] text-gray-600">
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: v.colour }} />

@@ -21,6 +21,8 @@ import DayPlanner from "./DayPlanner";
 import DayInspector from "./DayInspector";
 import ContextPanel from "./ContextPanel";
 import AddActivityForm, { type AddDraft } from "./AddActivityForm";
+import FullScreenSheet from "../_responsive/FullScreenSheet";
+import { useBelowMd } from "./use-below-md";
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // THE PRACTICE PLANNER -- CP-PLAN-002's four views over one payload, compressed by CPR-PLN-002.
@@ -77,6 +79,10 @@ export default function PlannerWorkspace({
   dayOperations?: ReactNode;
 }) {
   const router = useRouter();
+  // CPR-MOB-001 s8: one behavioural breakpoint question, for the ONE surface that must MOUNT
+  // differently on a phone (the add form's full-screen sheet). Everything else on this screen adapts
+  // by CSS alone.
+  const belowMd = useBelowMd();
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice>(null);
   const [draft, setDraft] = useState<AddDraft | null>(null);
@@ -189,9 +195,11 @@ export default function PlannerWorkspace({
             {/* s5.1's AI Planner entry point. A DISCLOSURE, not a card: s5.3 says that while the
                 capability is unavailable it must not hold a large persistent card, and the panel it
                 opens says honestly what does and does not exist. */}
+            {/* CPR-MOB-001 s4: thumb-sized below md; max-md:* no-ops leave the desktop header as
+                CPR-PLN-002 froze it. */}
             <button type="button" onClick={() => { setAiOpen(o => !o); setLegendOpen(false); }}
               aria-expanded={aiOpen}
-              className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold ${aiOpen
+              className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold max-md:min-h-[var(--cp-touch)] ${aiOpen
                 ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
                 : "border-[var(--cp-primary-border)] bg-[var(--cp-primary)]/5 text-[var(--cp-primary-deep)] hover:bg-[var(--cp-primary)]/10"}`}>
               AI Planner
@@ -199,7 +207,7 @@ export default function PlannerWorkspace({
             {/* s5.3: the Legend is a compact popover opened from a control, not a permanent tall card. */}
             <button type="button" onClick={() => { setLegendOpen(o => !o); setAiOpen(false); }}
               aria-expanded={legendOpen}
-              className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold ${legendOpen
+              className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold max-md:min-h-[var(--cp-touch)] ${legendOpen
                 ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
                 : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
               Legend
@@ -207,14 +215,14 @@ export default function PlannerWorkspace({
             {canManage && (
               <div className="relative flex">
                 <button type="button" onClick={() => openAdd()}
-                  className="rounded-l-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)]">
+                  className="rounded-l-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] max-md:min-h-[var(--cp-touch)]">
                   + Add Activity
                 </button>
                 {/* s5.3: Quick Actions are consolidated here -- the same add flow with the type
                     preselected, one control instead of a permanent card of eight buttons. */}
                 <button type="button" onClick={() => setTypeMenuOpen(o => !o)}
                   aria-expanded={typeMenuOpen} aria-label="Add an activity of a specific type"
-                  className="rounded-r-lg border-l border-white/30 bg-[var(--cp-primary)] px-2 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)]">
+                  className="rounded-r-lg border-l border-white/30 bg-[var(--cp-primary)] px-2 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] max-md:min-h-[var(--cp-touch)] max-md:min-w-[var(--cp-touch)]">
                   ⌄
                 </button>
                 {typeMenuOpen && (
@@ -222,7 +230,7 @@ export default function PlannerWorkspace({
                     {PLANNER_QUICK_ACTIONS.map(q => (
                       <button key={String(q.key)} type="button"
                         onClick={() => openAdd({ activityType: String(q.key), title: activityLabel(String(q.key)) })}
-                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] font-semibold text-gray-700 hover:bg-gray-50 max-md:min-h-[var(--cp-touch)]">
                         <span className={`h-2 w-2 shrink-0 rounded-full ${toneFor(String(q.key)).dot}`} aria-hidden />
                         <span className="min-w-0 truncate">{q.label}</span>
                       </button>
@@ -353,23 +361,46 @@ export default function PlannerWorkspace({
 
       {/* THE ADD FLOW, above whichever view is open, so pressing + Add Activity never opens a form
           somewhere below the fold. One form for every entry point -- header, type menu, day cards,
-          canvas and inspector all call the same openAdd. */}
-      {draft && canManage && (
+          canvas and inspector all call the same openAdd.
+
+          CPR-MOB-001 s8: "Add activity -- full-screen form or bottom sheet." Below md the SAME form,
+          with the same draft state and the same submit path, mounts inside FullScreenSheet instead of
+          inline -- one form component, two frames, zero duplicated logic (s19). The mount is gated on
+          the hook rather than on CSS because the sheet runs a focus trap and a scroll lock, which a
+          display:none copy would still run against the visible desktop form. */}
+      {draft && canManage && (belowMd ? (
+        <FullScreenSheet open onClose={() => setDraft(null)} title="Add an activity">
+          <AddActivityForm
+            bare draft={draft} setDraft={setDraft} locations={locations}
+            busy={busy === "add"} notice={notice?.subject === "add" ? notice : null}
+            onSubmit={async body => { const ok = await run("plan", body, "add"); if (ok) setDraft(null); }}
+            onCancel={() => setDraft(null)}
+          />
+        </FullScreenSheet>
+      ) : (
         <AddActivityForm
           draft={draft} setDraft={setDraft} locations={locations}
           busy={busy === "add"} notice={notice?.subject === "add" ? notice : null}
           onSubmit={async body => { const ok = await run("plan", body, "add"); if (ok) setDraft(null); }}
           onCancel={() => setDraft(null)}
         />
-      )}
+      ))}
 
       {/* ── THE FOUR COMPOSITIONS (s6) ─────────────────────────────────────────────────────────── */}
       {period.view === "week" ? (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)_330px]">
           <WeekPanel week={range} selectedDate={day.date} canManage={canManage}
             onAdd={date => openAdd({ planDate: date })} urlState={urlState} />
-          {detail}
-          {inspector}
+          {/* CPR-MOB-001 s8: "Week -- stacked day cards with activity/location/booked/free summary."
+              My Week's cards above ARE that face, so below md Week mode is those cards and nothing
+              else; the selected-day canvas and the inspector return at md. The wrapper is a visual
+              no-op everywhere it shows them: xl:contents hands both back to the outer grid as the
+              same two columns, and between md and xl it is the same single-column stack with the
+              same gap. Each card's "Open Day view" is the one-action route onward (HFE-10). */}
+          <div className="max-md:hidden grid gap-4 xl:contents">
+            {detail}
+            {inspector}
+          </div>
         </div>
       ) : period.view === "day" ? (
         <div className="flex flex-col gap-4">

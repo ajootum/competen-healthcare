@@ -23,9 +23,12 @@ const HANDLED: Record<string, true> = {
   cancel: true, change_location: true, add_notes: true,
 };
 
-const BTN = "rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50";
-const PRIMARY = "rounded-lg bg-[var(--cp-primary)] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50";
-const FIELD = "rounded-lg border border-gray-200 px-2 py-1 text-[12px] text-gray-800";
+// CPR-MOB-001 s8 ("Move activity -- tap Move/Edit; drag is optional, not required"): these tap
+// controls ARE the mobile move story, so below md every one of them is thumb-height and every field
+// is 16px (under 16px iOS zooms the page on focus -- s16). max-md:* no-ops; desktop is unchanged.
+const BTN = "rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 max-md:min-h-[var(--cp-touch)] max-md:px-3 max-md:text-[12px]";
+const PRIMARY = "rounded-lg bg-[var(--cp-primary)] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50 max-md:min-h-[var(--cp-touch)] max-md:px-3 max-md:text-[12px]";
+const FIELD = "rounded-lg border border-gray-200 px-2 py-1 text-[12px] text-gray-800 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 
 export default function ActivityActions({ activity: a, locations, week, busy, notice, run }: {
   activity: PlannerActivity;
@@ -162,7 +165,7 @@ function DuplicateForm({ a, week, busy, go }: {
       <div className="mt-1 flex flex-wrap gap-1.5">
         {week.days.filter(d => d.date !== a.planDate).map(d => (
           <label key={d.date}
-            className={`flex cursor-pointer items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold ${dates.includes(d.date)
+            className={`flex cursor-pointer items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold max-md:min-h-[var(--cp-touch)] max-md:px-3 max-md:text-[12px] ${dates.includes(d.date)
               ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/5 text-[var(--cp-primary-deep)]"
               : "border-gray-200 text-gray-700"}`}>
             <input type="checkbox" className="sr-only" checked={dates.includes(d.date)} onChange={() => toggle(d.date)} />
@@ -207,7 +210,7 @@ function CancelForm({ busy, go }: { busy: boolean; go: (action: string, body: Re
       <input type="text" value={reason} onChange={e => setReason(e.target.value)} placeholder="reason (optional)"
         className={`${FIELD} min-w-[220px]`} aria-label="Cancellation reason" />
       <button type="button" disabled={busy}
-        className="rounded-lg bg-rose-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
+        className="rounded-lg bg-rose-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-rose-700 disabled:opacity-50 max-md:min-h-[var(--cp-touch)] max-md:px-3 max-md:text-[12px]"
         onClick={() => go("cancel", { reason })}>
         Cancel this activity
       </button>

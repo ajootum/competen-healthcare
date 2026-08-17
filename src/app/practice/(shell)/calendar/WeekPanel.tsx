@@ -118,7 +118,7 @@ function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState, lo
           // either.
           aria-label={`${open ? "Hide" : "Show"} ${day.weekdayName} ${shortDate(day.date)} detail in this list`}
           title={open ? "Hide detail here" : "Show detail here"}
-          className="shrink-0 rounded-md px-1.5 py-0.5 text-[12px] text-gray-500 hover:bg-gray-100">
+          className="shrink-0 rounded-md px-1.5 py-0.5 text-[12px] text-gray-500 hover:bg-gray-100 max-md:min-h-[var(--cp-touch)] max-md:min-w-[var(--cp-touch)]">
           {open ? "⌃" : "⌄"}
         </button>
       </div>
@@ -225,15 +225,17 @@ function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState, lo
 
           {/* CPR-PLAN-002 HFE-10: the DAY VIEW is one action away. The Review link above drives the
               canvas WITHIN Week mode; this one changes mode, and says so. */}
+          {/* CPR-MOB-001 s8: below md these cards ARE Week mode, so the one action onward and the
+              add control are thumb-sized there. max-md:* only -- the desktop card is untouched. */}
           <Link scroll={false}
             href={plannerHref({ ...urlState, view: "day", date: day.date, from: null, to: null, sel: null })}
-            className="mt-2 inline-block text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+            className="mt-2 inline-block text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center">
             Open Day view →
           </Link>
 
           {canManage && (
             <button type="button" onClick={onAdd}
-              className="mt-2 w-full rounded-lg border border-dashed border-gray-300 px-2 py-1.5 text-[12px] font-semibold text-gray-600 hover:border-[var(--cp-primary)] hover:text-[var(--cp-primary-deep)]">
+              className="mt-2 w-full rounded-lg border border-dashed border-gray-300 px-2 py-1.5 text-[12px] font-semibold text-gray-600 hover:border-[var(--cp-primary)] hover:text-[var(--cp-primary-deep)] max-md:min-h-[var(--cp-touch)]">
               + Add Activity
             </button>
           )}

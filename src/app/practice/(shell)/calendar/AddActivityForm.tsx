@@ -25,14 +25,16 @@ export type AddDraft = {
   locationId: string;
 };
 
-const FIELD = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[13px] text-gray-800";
+// CPR-MOB-001 s16: below md every field is thumb-height, and 16px -- below 16px iOS zooms the whole
+// page on focus. max-md:* no-ops; the desktop form is unchanged at md and up.
+const FIELD = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[13px] text-gray-800 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 
 const TYPE_OPTIONS: string[] = [
   ...ACTIVITY_TYPES,
   ...PLANNER_QUICK_ACTIONS.map(q => String(q.key)).filter(k => !(ACTIVITY_TYPES as readonly string[]).includes(k)),
 ];
 
-export default function AddActivityForm({ draft, setDraft, locations, busy, notice, onSubmit, onCancel }: {
+export default function AddActivityForm({ draft, setDraft, locations, busy, notice, onSubmit, onCancel, bare }: {
   draft: AddDraft;
   setDraft: (d: AddDraft) => void;
   locations: LocationOption[];
@@ -40,6 +42,9 @@ export default function AddActivityForm({ draft, setDraft, locations, busy, noti
   notice: Notice;
   onSubmit: (body: Record<string, unknown>) => void;
   onCancel: () => void;
+  /** CPR-MOB-001 s8: true when FullScreenSheet supplies the frame -- the card chrome and the heading
+      would then be a card inside a dialog saying its own name twice. The FIELDS are identical. */
+  bare?: boolean;
 }) {
   const startMinute = minuteOfDay(draft.start);
   const endMinute = minuteOfDay(draft.end);
@@ -47,7 +52,7 @@ export default function AddActivityForm({ draft, setDraft, locations, busy, noti
 
   return (
     <form
-      className="rounded-2xl border border-[var(--cp-primary-border)] bg-white p-4"
+      className={bare ? "" : "rounded-2xl border border-[var(--cp-primary-border)] bg-white p-4"}
       onSubmit={e => {
         e.preventDefault();
         onSubmit({
@@ -60,7 +65,7 @@ export default function AddActivityForm({ draft, setDraft, locations, busy, noti
         });
       }}
     >
-      <h2 className="text-[14px] font-bold text-gray-900">Add an activity</h2>
+      {!bare && <h2 className="text-[14px] font-bold text-gray-900">Add an activity</h2>}
 
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
@@ -109,13 +114,14 @@ export default function AddActivityForm({ draft, setDraft, locations, busy, noti
         </label>
       </div>
 
-      <div className="mt-3 flex items-center gap-2">
+      <div className="mt-3 flex items-center gap-2 max-md:flex-wrap">
+        {/* CPR-MOB-001 s4: the one primary action of this task grows to touch-primary size below md. */}
         <button type="submit" disabled={busy || startMinute === null || endMinute === null}
-          className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
+          className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50 max-md:min-h-[var(--cp-touch-primary)] max-md:flex-1 max-md:text-[14px]">
           {busy ? "Adding…" : "Add activity"}
         </button>
         <button type="button" onClick={onCancel}
-          className="rounded-lg border border-gray-200 px-3 py-1.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
+          className="rounded-lg border border-gray-200 px-3 py-1.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 max-md:min-h-[var(--cp-touch)]">
           Cancel
         </button>
         {notice && (

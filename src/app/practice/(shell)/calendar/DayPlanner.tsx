@@ -251,7 +251,7 @@ export default function DayPlanner({
                               <button type="button" disabled={rowBusy === a.id}
                                 onClick={() => checkIn(a.id)}
                                 title="Record this patient as arrived now. The server stamps the moment; they join the cockpit queue."
-                                className="shrink-0 rounded-md border border-[var(--cp-primary)]/30 px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
+                                className="shrink-0 rounded-md border border-[var(--cp-primary)]/30 px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50 max-md:min-h-[var(--cp-touch)] max-md:rounded-lg max-md:px-3 max-md:text-[12px]">
                                 {rowBusy === a.id ? "…" : "Check in ✓"}
                               </button>
                             )}
@@ -260,7 +260,7 @@ export default function DayPlanner({
                               <button type="button" disabled={rowBusy === a.id}
                                 onClick={() => startFor(a.id, a.patientId!)}
                                 title="Open the consultation for this patient. An unfinished one is resumed, never duplicated."
-                                className="shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
+                                className="shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50 max-md:min-h-[var(--cp-touch)] max-md:rounded-lg max-md:px-3 max-md:text-[12px]">
                                 {rowBusy === a.id ? "…" : "Start →"}
                               </button>
                             )}
@@ -319,7 +319,7 @@ export default function DayPlanner({
                       <button type="button" disabled={rowBusy === a.id}
                         onClick={() => checkIn(a.id)}
                         title="Record this patient as arrived now. The server stamps the moment; they join the cockpit queue."
-                        className="shrink-0 rounded-md border border-[var(--cp-primary)]/30 px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
+                        className="shrink-0 rounded-md border border-[var(--cp-primary)]/30 px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50 max-md:min-h-[var(--cp-touch)] max-md:rounded-lg max-md:px-3 max-md:text-[12px]">
                         {rowBusy === a.id ? "…" : "Check in ✓"}
                       </button>
                     )}
@@ -328,7 +328,7 @@ export default function DayPlanner({
                       <button type="button" disabled={rowBusy === a.id}
                         onClick={() => startFor(a.id, a.patientId!)}
                         title="Open the consultation for this patient. An unfinished one is resumed, never duplicated."
-                        className="shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50">
+                        className="shrink-0 rounded-md px-1.5 py-0.5 text-[10.5px] font-semibold text-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/8 disabled:opacity-50 max-md:min-h-[var(--cp-touch)] max-md:rounded-lg max-md:px-3 max-md:text-[12px]">
                         {rowBusy === a.id ? "…" : "Start →"}
                       </button>
                     )}

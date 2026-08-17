@@ -68,7 +68,7 @@ export default function AgendaList({ range, period, filters, urlState }: {
   // The band bodies, keyed the same way AGENDA_BANDS is, so the render below is one loop over s8.1's
   // list and a band cannot be dropped without the harness noticing the label go missing.
   const chip = (active: boolean) =>
-    `rounded-lg border px-2.5 py-1 text-[12px] font-semibold ${active
+    `rounded-lg border px-2.5 py-1 text-[12px] font-semibold max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center ${active
       ? "border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 text-[var(--cp-primary-deep)]"
       : "border-gray-200 text-gray-600 hover:border-[var(--cp-primary)] hover:text-[var(--cp-primary-deep)]"}`;
 
@@ -262,9 +262,11 @@ function AgendaDay({ day, shown, urlState, today, rowOpen, toggleRow, defaultOpe
       <div className="flex flex-wrap items-baseline gap-2">
         {/* s9's one-action move to the day: the date IS the link, and it says so on hover. */}
         <Link scroll={false} href={dayHref}
-          className="group text-[13px] font-bold text-gray-900 hover:underline">
+          className="group text-[13px] font-bold text-gray-900 hover:underline max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center">
           {day.weekdayShort} {shortDate(day.date)}
-          <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 opacity-0 group-hover:opacity-100">
+          {/* CPR-MOB-001 s4: hover exists nowhere on a phone, so the cue that this date IS the way
+              into the day stays visible below md instead of waiting for a hover that never comes. */}
+          <span className="ml-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 opacity-0 group-hover:opacity-100 max-md:opacity-100">
             Open day →
           </span>
         </Link>
@@ -383,7 +385,7 @@ function SessionRow({ day, session: s, shown, urlState, today, open, onToggle, l
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-2.5 py-1.5">
         <button type="button" onClick={onToggle} aria-expanded={open}
           aria-label={`${open ? "Hide" : "Show"} the bookings in this session, in this list`}
-          className="shrink-0 self-center rounded-md px-1 text-[12px] text-gray-500 hover:bg-gray-100">
+          className="shrink-0 self-center rounded-md px-1 text-[12px] text-gray-500 hover:bg-gray-100 max-md:min-h-[var(--cp-touch)] max-md:min-w-[var(--cp-touch)]">
           {open ? "⌃" : "⌄"}
         </button>
         <span aria-hidden className={`h-2 w-2 shrink-0 self-center rounded-full ${s.capacity.blocked ? "bg-gray-300" : tone.dot}`} />

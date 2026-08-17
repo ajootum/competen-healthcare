@@ -157,7 +157,13 @@ export default function Timeline({ timeline, canManage, onChanged }: {
   }
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-4">
+    <>
+    {/* CPR-MOB-001 s8: "drag is optional enhancement, not required on mobile" -- and a drag surface
+        shrunk under a thumb is s19's "broken miniature version", not an adaptation: the lanes force
+        horizontal scrolling (s4 forbids it for core workflows) and a finger over a 20-minute block is
+        a mis-drop waiting to be audited. So the surface is desktop-and-tablet-only (max-md:hidden),
+        and the md:hidden face below SAYS SO rather than leaving a silent hole where a panel was. */}
+    <section className="max-md:hidden rounded-xl border border-gray-200 bg-white p-4">
       <div className="flex items-baseline gap-2">
         <h2 className="text-[13px] font-bold text-gray-900">Timeline</h2>
         <span className="text-[11px] text-gray-500">
@@ -310,5 +316,19 @@ export default function Timeline({ timeline, canManage, onChanged }: {
         move is recorded with both the old time and the new one.
       </p>
     </section>
+
+    {/* The mobile face: the truth about where this capability lives, in one quiet card. The day's
+        bookings themselves are not lost -- the console below this panel lists every one of them with
+        its lifecycle actions -- only the DRAG interaction stays on wider screens. */}
+    <section className="md:hidden rounded-xl border border-gray-200 bg-white p-4">
+      <h2 className="text-[13px] font-bold text-gray-900">Timeline</h2>
+      <p className="mt-1 text-[12px] text-gray-500">
+        The drag-and-drop timeline needs a wider screen and is not shown here. Every booking on this
+        day is listed in the console below with its actions; moving one to a new time or a different
+        hospital is done by drag on a tablet or desktop, under the same rules -- a clash is refused,
+        and an arrived or finished appointment cannot be moved at all.
+      </p>
+    </section>
+    </>
   );
 }

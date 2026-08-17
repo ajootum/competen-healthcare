@@ -18,7 +18,9 @@ import { calendarDay, SLOT_KINDS } from "@/lib/practice/calendar";
 import { bookingLocations, locationDay } from "@/lib/practice/hospital-booking";
 import { timelineDay } from "@/lib/practice/timeline";
 import { workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
+import { plannerHref } from "./planner-ui";
 import PlannerWorkspace from "./PlannerWorkspace";
+import MobileDefaultView from "./MobileDefaultView";
 import CalendarConsole from "./CalendarConsole";
 import OperationsHeader from "./OperationsHeader";
 import AvailabilityRibbon from "./AvailabilityRibbon";
@@ -257,6 +259,13 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   return (
     <div className="-m-5 min-h-full bg-[var(--cp-canvas)] p-5">
       <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5">
+        {/* CPR-MOB-001 s8: on a phone the DEFAULT view is Day -- applied only when the URL named no
+            view, by replacing the bare URL with ?view=day. An explicit ?view= of any kind, on any
+            width, is honoured untouched, and the engine's own week fallback above is not consulted
+            differently -- see MobileDefaultView's header. */}
+        {!isPlannerView(params.view) && (
+          <MobileDefaultView dayHref={plannerHref({ ...urlState, view: "day", from: null, to: null })} />
+        )}
         <PlannerWorkspace
           range={range}
           period={period}

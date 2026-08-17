@@ -69,7 +69,7 @@ export default function DayInspector({
         {/* The collapse control exists only where the inspector is not a column of its own. */}
         <button type="button" onClick={() => setOpenOnSmall(o => !o)}
           aria-expanded={openOnSmall}
-          className="ml-auto rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 xl:hidden">
+          className="ml-auto rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 max-md:min-h-[var(--cp-touch)] max-md:px-3 max-md:text-[12px] xl:hidden">
           {openOnSmall ? "Hide" : "Show"}
         </button>
       </div>
@@ -81,7 +81,7 @@ export default function DayInspector({
             <button key={t.key} type="button" role="tab" id={`inspector-tab-${t.key}`}
               aria-selected={tab === t.key} aria-controls={`inspector-panel-${t.key}`}
               onClick={() => setTab(t.key)}
-              className={`flex items-center gap-1.5 rounded-t-lg border-b-2 px-2.5 py-1.5 text-[12px] font-semibold ${
+              className={`flex items-center gap-1.5 rounded-t-lg border-b-2 px-2.5 py-1.5 text-[12px] font-semibold max-md:min-h-[var(--cp-touch)] ${
                 tab === t.key
                   ? "border-[var(--cp-primary)] text-[var(--cp-primary-deep)]"
                   : "border-transparent text-gray-500 hover:text-gray-800"}`}>
