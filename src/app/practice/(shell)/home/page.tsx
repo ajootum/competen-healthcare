@@ -120,6 +120,9 @@ export default async function PracticeCommandCentre() {
     plan: "today's plan", glance: "today's figures", queue: "the waiting queue",
     timeline: "the session timeline", followUps: "follow-ups", alerts: "operational alerts",
     drafts: "unfinished encounters",
+    // The two the map was missing (MOB 3a review): a failed read printed the raw key "brief" in the
+    // amber banner -- exactly the feeder's-key-not-a-message failure this map exists to prevent.
+    brief: "the needs-attention list", flow: "the patient flow",
   };
   // The four "Practice performance (today)" figures LEFT this page (HFE-001 s4.2: performance and
   // longitudinal metrics belong to Practice Intelligence; the session's own operational figures
