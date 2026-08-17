@@ -48,7 +48,30 @@ export type StaffSnapshot = {
 };
 
 export type StaffGatewayDecision =
-  /** At least one workspace is genuinely held -- render the selector listing exactly those. */
+  /**
+   * ⚠ EXACTLY ONE DESTINATION -- go there, do not ask (COMP-HQ-ACCESS-001 UPDATED s7/s8).
+   *
+   * This surface used to render a one-card chooser here, deliberately: COMP-STAFF-ACCESS-001 s7
+   * step 7 permits "route OR confirm", and confirming let somebody see which door they were walking
+   * through. The newer consolidated HQ specification takes that choice away in as many words --
+   * "HQ is a secure operating shell, not a mandatory intermediate page", "eliminate Staff Login ->
+   * HQ -> Product -> Role -> Mission Control for routine use" -- and makes it acceptance test one:
+   * a Product Director with a single assignment arrives directly in their Mission Control. The
+   * newest document governs, so the confirm step is superseded rather than merely dropped.
+   *
+   * ⚠ THE OLD COMMENT'S SECOND REASON WAS CHECKED, NOT WAVED AWAY. It claimed loop-freedom "by
+   * construction" because nothing here redirected. The refusal paths were read before this changed:
+   * /super-admin refuses to NO_MEMBERSHIP_DESTINATION (/practice/home) and no offerable destination
+   * redirects back to the staff door, so a refused direct landing terminates elsewhere. If a future
+   * workspace ever bounces back here, THAT is the loop -- and this note is where to look.
+   *
+   * Governance contexts still ride along: a person holding several appointments inside one HQ door
+   * has one DESTINATION, and the context switcher lives on the other side of it. The day My HQ
+   * exists, a cross-portfolio identity may land there instead -- that is s12's pattern, not this
+   * branch's.
+   */
+  | { state: "DIRECT"; destination: WorkspaceLink; governanceContexts: StaffGovernanceContext[] }
+  /** More than one workspace is genuinely held -- render the selector listing exactly those. */
   | { state: "SELECT"; workspaces: WorkspaceLink[]; governanceContexts: StaffGovernanceContext[] }
   /** Gate 1 says this account belongs to Competen Practice, not the estate. No staff environment. */
   | { state: "PRACTICE_ONLY"; destination: "/practice/home" }
@@ -84,6 +107,10 @@ export function decideStaffGateway(s: StaffSnapshot): StaffGatewayDecision {
   if (s.isOwner) offer(HQ_DOOR);
   for (const w of s.workspaces) offer(w);
 
+  // ⚠ ONE DESTINATION IS NOT A CHOICE. See the DIRECT branch's note above for the supersession and
+  // the loop check that had to be done before this line could exist.
+  if (workspaces.length === 1)
+    return { state: "DIRECT", destination: workspaces[0], governanceContexts: s.governanceContexts };
   if (workspaces.length > 0)
     return { state: "SELECT", workspaces, governanceContexts: s.governanceContexts };
 

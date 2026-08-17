@@ -11,10 +11,13 @@ import { resolveStaffGateway } from "@/lib/staff/gateway";
 // destination is shown as a disabled teaser (ARCH s14). Every destination re-authorises itself on
 // arrival: this page routes, it grants nothing.
 //
-// ⚠ EXACTLY ONE CONTEXT STILL RENDERS THE PAGE, as a confirm rather than a silent redirect -- the
-// spec allows "route or confirm" (s7 step 7) and a person crossing an internal trust boundary should
-// see which door they are walking through. It also keeps this surface free of redirect loops by
-// construction.
+// ⚠ EXACTLY ONE CONTEXT NOW ROUTES, AND THIS NOTE RECORDS THE REVERSAL. It used to confirm instead:
+// the older staff specification permitted "route or confirm" (s7 step 7), and confirming let a person
+// crossing an internal trust boundary see which door they were walking through. COMP-HQ-ACCESS-001
+// (updated consolidated) withdraws that permission -- "HQ is a secure operating shell, not a
+// mandatory intermediate page" -- and makes direct landing its first acceptance test. The newest
+// document governs. The loop-freedom the old note claimed "by construction" was re-established by
+// reading the refusal paths instead; see the DIRECT branch in lib/staff/selector.ts.
 //
 // ⚠ EVERY NO-ACCESS STATE IS A SENTENCE WITH AN EXIT, never a privileged fallback (s15): who you
 // are signed in as, what is true of this account, and where to go -- sign out, support, or the
@@ -145,7 +148,20 @@ export default async function StaffWorkspacesPage() {
     );
   }
 
-  // SELECT -- at least one genuinely held destination.
+  // ⚠ DIRECT -- exactly one destination, so this page does not ask (COMP-HQ-ACCESS-001 s7/s8).
+  //
+  // The header above used to record the opposite choice, and it was a reasonable one under the older
+  // staff specification, which permitted "route or confirm". The consolidated HQ document removes the
+  // permission: HQ must not be a compulsory intermediate page, and its first acceptance test is a
+  // single-assignment director landing straight in their Mission Control. The decision itself lives
+  // in the pure selector, where the harness holds it with fixture identities.
+  //
+  // Loop-safety was CHECKED rather than assumed before this redirect was added -- see the note on the
+  // DIRECT branch in selector.ts: every offerable destination's refusal path terminates somewhere
+  // other than this door.
+  if (decision.state === "DIRECT") redirect(decision.destination.href);
+
+  // SELECT -- more than one genuinely held destination.
   const { workspaces, governanceContexts } = decision;
   return (
     <Frame name={fullName}>

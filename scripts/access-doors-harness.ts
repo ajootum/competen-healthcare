@@ -96,11 +96,16 @@ async function main() {
     && staffSources.every(([, src]) => !src.includes("roles?.length ? p.roles : [p.role]")));
 
   // ── 4. THE PURE GATEWAY DECISION -- fixture identities, only held contexts ─────────────────────
+  // ⚠ 4a, 4d, 4h and 4i REPOINTED (2026-08-17, COMP-HQ-ACCESS-001 updated consolidated). They
+  // asserted SELECT for identities holding exactly ONE destination, which was the older staff
+  // spec's permitted "confirm" branch. The consolidated HQ document withdraws that permission and
+  // makes direct landing acceptance test one, so single-destination identities now resolve DIRECT.
+  // What each pin PROVES is unchanged -- the offer is still exactly what is held, deduped, and
+  // gate 1 still outranks it -- only the state name moved with the doctrine.
   const OWNER = identity({ isOwner: true });
   const dOwner = decideStaffGateway(OWNER);
-  ok("4a. an owner is offered HQ, first and exactly once",
-    dOwner.state === "SELECT" && dOwner.workspaces[0].href === HQ_DOOR.href
-    && dOwner.workspaces.filter(w => w.href === HQ_DOOR.href).length === 1);
+  ok("4a. an owner is taken straight to HQ, offered exactly once",
+    dOwner.state === "DIRECT" && dOwner.destination.href === HQ_DOOR.href);
 
   // ⚠ THE LOAD-BEARING PIN (break-tested): gate 1 outranks every offer. Even a contradictory
   // workspace list cannot open the staff environment for a practice-only identity.
@@ -125,9 +130,9 @@ async function main() {
     governanceContexts: [{ appointmentId: "a1", positionCode: "cp_product_director", positionName: "CP Product Director", productLineCode: "practice" }],
     appointmentStatuses: ["active"],
   }));
-  ok("4d. an HQ appointee's governance context rides through to the selector",
-    dAppointee.state === "SELECT" && dAppointee.governanceContexts.length === 1
-    && dAppointee.workspaces.some(w => w.href === "/super-admin"));
+  ok("4d. an HQ appointee's governance context rides through to the landing",
+    dAppointee.state === "DIRECT" && dAppointee.governanceContexts.length === 1
+    && dAppointee.destination.href === "/super-admin");
 
   ok("4e. a member holding nothing lands on the honest ground state",
     decideStaffGateway(identity({})).state === "NO_APPOINTMENT");
@@ -137,11 +142,20 @@ async function main() {
     decideStaffGateway(identity({ appointmentStatuses: ["active"] })).state === "INSUFFICIENT");
   // ⚠ CONTROL: 4g must pass for the right reason -- the same appointment WITH a workspace selects.
   const dCtl = decideStaffGateway(identity({ appointmentStatuses: ["active"], workspaces: [two[0]] }));
-  ok("4h-control. INSUFFICIENT requires emptiness: the same fixture with one workspace selects",
-    dCtl.state === "SELECT");
+  ok("4h-control. INSUFFICIENT requires emptiness: the same fixture with one workspace lands there",
+    dCtl.state === "DIRECT" && dCtl.destination.href === two[0].href);
   const dDup = decideStaffGateway(identity({ workspaces: [two[0], two[0]] }));
-  ok("4i. a duplicated destination renders once",
-    dDup.state === "SELECT" && dDup.workspaces.length === 1);
+  ok("4i. a duplicated destination is deduped, so it lands rather than offering the same door twice",
+    dDup.state === "DIRECT" && dDup.destination.href === two[0].href);
+
+  // ⚠ THE NEW DOCTRINE, PINNED AT BOTH ENDS (COMP-HQ-ACCESS-001 s7/s8, acceptance test one).
+  // One destination is not a choice; two still are. Break-tested: restoring the old
+  // `workspaces.length > 0 -> SELECT` branch takes this red.
+  ok("4j. ⚠ one destination lands DIRECTLY and several still ask -- HQ is not a compulsory page",
+    dCtl.state === "DIRECT" && dTwo.state === "SELECT" && dTwo.workspaces.length === 2);
+  ok("4k. ⚠ and the door ACTS on it: the workspaces page redirects a DIRECT decision",
+    /decision\.state === "DIRECT"\) redirect\(decision\.destination\.href\)/
+      .test(readFileSync("src/app/staff/workspaces/page.tsx", "utf8")));
 
   // ── 5. NO FAKERY ON THE NEW SURFACES ───────────────────────────────────────────────────────────
   const newSurfaces = [
