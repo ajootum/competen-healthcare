@@ -53,6 +53,36 @@ function Absent({ title, children }: { title: string; children: React.ReactNode 
   );
 }
 
+/**
+ * The practitioner's initials, leading each row the same way PracticeAvatar leads the estate register
+ * (src/app/super-admin/pd/practices/page.tsx) — same hash-to-tone mapping, so a person who is also a
+ * Practice owner reads with a consistent colour across both screens.
+ *
+ * ⚠ THE HUE IS DERIVED FROM THE NAME AND CARRIES NO MEANING. §18's rule is never to encode state in
+ * colour alone; this encodes IDENTITY, so a row a reader has seen before is recognisable at a glance.
+ * Lifecycle, recency and attention all print their own word via Pill below.
+ */
+const AVATAR_TONES = [
+  "bg-teal-100 text-teal-800", "bg-sky-100 text-sky-800", "bg-violet-100 text-violet-800",
+  "bg-amber-100 text-amber-800", "bg-rose-100 text-rose-800", "bg-emerald-100 text-emerald-800",
+];
+
+function PractitionerAvatar({ name }: { name: string | null }) {
+  const label = name ?? "?";
+  const initials = label.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("") || "?";
+  let hash = 0;
+  for (let i = 0; i < label.length; i++) hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
+  return (
+    <span
+      aria-hidden
+      className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[10.5px] font-bold ${
+        AVATAR_TONES[hash % AVATAR_TONES.length]}`}
+    >
+      {initials}
+    </span>
+  );
+}
+
 function Pill({ tone, children }: { tone: "neutral" | "warning" | "error" | "success"; children: React.ReactNode }) {
   const map = {
     neutral: "border-gray-300 bg-[var(--cmp-surface-neutral)] text-[var(--cmp-text-neutral)]",
@@ -257,14 +287,19 @@ export default async function Page({
               return (
                 <tr key={r.userId} className="border-b border-gray-100 align-top last:border-0">
                   <th scope="row" className="px-3 py-2 text-left font-normal">
-                    <span className="block font-semibold text-gray-900">
-                      {r.fullName ?? <span className="italic text-gray-500">Name not recorded on the profile</span>}
-                    </span>
-                    <span className="block font-mono text-[11px] text-gray-500">
-                      {r.practitionerNumber
-                        ?? (data.identitiesReadable
-                          ? "no practitioner number issued"
-                          : "practitioner numbers could not be read")}
+                    <span className="flex items-start gap-2">
+                      <PractitionerAvatar name={r.fullName} />
+                      <span className="min-w-0">
+                        <span className="block font-semibold text-gray-900">
+                          {r.fullName ?? <span className="italic text-gray-500">Name not recorded on the profile</span>}
+                        </span>
+                        <span className="block font-mono text-[11px] text-gray-500">
+                          {r.practitionerNumber
+                            ?? (data.identitiesReadable
+                              ? "no practitioner number issued"
+                              : "practitioner numbers could not be read")}
+                        </span>
+                      </span>
                     </span>
                   </th>
                   <td className="px-3 py-2">
