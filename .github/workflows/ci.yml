@@ -129,6 +129,21 @@ jobs:
       - run: npm ci
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+      # ⚠ DIAGNOSTIC, NOT CEREMONY. The first CI run of this job failed while the identical suite passed
+      # from a genuinely cold start on the author's Windows machine, and job logs are not readable
+      # without repo-admin rights -- so this prints the one thing that distinguishes the leading
+      # hypothesis (localhost resolving to ::1 while next dev listens on IPv4) from every other cause.
+      # Remove it once this job has been green for a while.
+      - name: Which address answers
+        run: |
+          npm run dev &
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null http://127.0.0.1:3000; then echo "127.0.0.1:3000 ANSWERS after ${i}s"; break; fi
+            sleep 1
+          done
+          curl -sf -o /dev/null http://localhost:3000 && echo "localhost:3000 ANSWERS" || echo "localhost:3000 DOES NOT ANSWER  <-- the IPv6 hypothesis"
+          node -e "require('dns').lookup('localhost',{all:true},(e,a)=>console.log('localhost resolves to',JSON.stringify(a)))"
+          pkill -f "next dev" || true
       - name: Smoke suite
         run: npx playwright test
       # The report is the diagnosis when a smoke journey fails; a failed run with no artifact means

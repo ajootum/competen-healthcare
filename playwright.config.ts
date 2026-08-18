@@ -29,7 +29,7 @@ export default defineConfig({
   reporter: [["list"], ["html", { open: "never", outputFolder: "playwright-report" }]],
 
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000",
     // Evidence on failure only (§5: "capture useful failure evidence such as trace/screenshot only
     // through normal Playwright test artifacts; do not expose secrets in logs").
     trace: "retain-on-failure",
@@ -44,9 +44,14 @@ export default defineConfig({
   // reasoning already recorded for this repo's other CI jobs: a hermetic run is worth the extra
   // ~10-20s boot time the moment more than one person or process could be relying on a shared
   // server's state.
+  // ⚠ 127.0.0.1, NOT `localhost`, ON PURPOSE. On Linux `localhost` can resolve to ::1 while `next dev`
+  // is listening on IPv4, so the browser and the server end up on different stacks and every navigation
+  // fails to connect — a failure mode that cannot reproduce on this Windows dev machine, which is
+  // exactly why it reached CI. Pinning the literal address removes the resolver from the equation on
+  // both platforms.
   webServer: {
     command: "npm run dev",
-    url: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
+    url: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },
