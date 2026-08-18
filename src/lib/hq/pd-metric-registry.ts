@@ -43,7 +43,12 @@ export type PdMetric = {
    * borrowed, because a metric borrowed from another module arrives with that module's definition and
    * the two then drift.
    */
-  module: "intelligence" | "adoption" | "commercial" | "mission";
+  /**
+   * `configuration` was added by CPR-PD-011. Its metrics are about the CONFIGURATION ESTATE — how many
+   * settings are declared, how many carry an override, what is pending — and not about practices or
+   * money, so none of them is borrowable from the modules above.
+   */
+  module: "intelligence" | "adoption" | "commercial" | "mission" | "configuration";
   displayName: string;
   /** Exact business meaning -- what a reader may take this number to claim. */
   definition: string;
@@ -410,6 +415,242 @@ export const PD_METRICS: PdMetric[] = [
     numerator: "practices with at least one row for the capability",
     denominator: "practices in the operations page, whether or not the capability is enabled for them",
     spec: "PD-002 §7",
+  },
+
+  // ── PRODUCT CONFIGURATION (CPR-PD-011) ────────────────────────────────────────────────────────
+  //
+  // ⚠ THIS MODULE IS THE OPPOSITE SHAPE TO THE THREE ABOVE, AND THE DIFFERENCE DECIDES WHAT MAY RENDER.
+  //
+  // Product Intelligence is absent because the FACT is not recorded. Product Configuration has the
+  // opposite problem: three configuration estates are built, populated and audited — a registry with
+  // safety classifications and override policies (migration 092), an override store with draft/publish
+  // and version snapshots (076), and a change-set lifecycle (099) — and a resolver that already returns
+  // an effective value WITH a provenance trace (src/lib/config/runtime.ts:26-40).
+  //
+  // What is missing is the SUBJECT. Not one Competen Practice setting is a registry object: the registry
+  // is seeded from WORKSPACE_CATALOG, which catalogues Unit Manager, Shift Supervisor and the Personal
+  // Workspace and contains the word "practice" nowhere. So every figure below is real — and every one of
+  // them is about a DIFFERENT PRODUCT'S configuration unless the metric says otherwise. Rendering the
+  // registry total under the heading "Practice configuration" would be the most plausible lie available
+  // on this screen, which is why cfg.definitions_practice exists beside cfg.definitions and carries a
+  // denominator.
+  {
+    metricId: "cfg.definitions", module: "configuration",
+    displayName: "Configuration definitions",
+    definition:
+      "Rows in the platform configuration registry, by lifecycle status. ⚠ THE ESTATE'S CATALOGUE, NOT "
+      + "PRACTICE'S — see cfg.definitions_practice for how much of it is about Competen Practice.",
+    producer: "real",
+    source: "configuration_registry_objects (migration 092:9), read by loadRegistry (src/lib/config/registry.ts:23)",
+    spec: "PD-011 §4, §6",
+  },
+  {
+    metricId: "cfg.definitions_practice", module: "configuration",
+    displayName: "Definitions describing Competen Practice",
+    definition:
+      "Registry objects whose key or route names Competen Practice, over every registry object. This is "
+      + "the figure that says whether Product Configuration has a subject yet.",
+    producer: "real",
+    source: "configuration_registry_objects.object_key / .route matched against /practice/i",
+    missing:
+      "⚠ THE MATCH IS A HEURISTIC AND THE SCREEN SAYS SO. The registry carries no product column, so "
+      + "membership of Competen Practice is inferred from the key and the route. That is exact today "
+      + "because the seeder writes `workspace.<catalogue key>` and the catalogue has no Practice entry; "
+      + "it would need replacing by a real product column the moment one is added.",
+    numerator: "registry objects naming Competen Practice",
+    denominator: "registry objects of any kind",
+    spec: "PD-011 §4",
+  },
+  {
+    metricId: "cfg.high_risk", module: "configuration",
+    displayName: "High-risk settings",
+    definition:
+      "Registry objects classified clinical-safety-critical, security-critical, regulatory-critical or "
+      + "financial-control-critical — PD-011 §4's Sensitivity attribute, already modelled.",
+    producer: "real",
+    source: "configuration_registry_objects.safety_classification (migration 092:24, nine-value check constraint)",
+    spec: "PD-011 §4, §6",
+  },
+  {
+    metricId: "cfg.platform_enforced", module: "configuration",
+    displayName: "Platform-enforced rules",
+    definition:
+      "Registry objects no lower scope may override: override_policy 'none', or configurability_class "
+      + "'mandatory_locked'. PD-011 §3's top rung, counted.",
+    producer: "real",
+    source: "configuration_registry_objects.override_policy / .configurability_class (migration 092:22-26)",
+    spec: "PD-011 §3",
+  },
+  {
+    metricId: "cfg.overrides_published", module: "configuration",
+    displayName: "Overridden values",
+    definition:
+      "Override rows whose `published` value is set — a value some scope has actually moved away from "
+      + "its default, as opposed to an unpublished draft.",
+    producer: "real",
+    source: "workspace_config_overrides.published (migration 076:16-32), read by loadConfigOverrides",
+    spec: "PD-011 §6",
+  },
+  {
+    metricId: "cfg.effective_value_trace", module: "configuration",
+    displayName: "Effective value and its source scope",
+    definition:
+      "For one configuration key in one context: the value that wins, and the layer it came from — "
+      + "PD-011 §5's \"30 minutes — Market override (Uganda)\".",
+    producer: "real",
+    source:
+      "resolveRuntime (src/lib/config/runtime.ts:27-40) returns `effective`, `raw`, `layers` and a "
+      + "`trace` array carrying every contributing layer and its scope ref",
+    missing:
+      "⚠ THE MACHINERY RESOLVES; THE LADDER IS NOT PD-011's. SCOPE_ORDER is platform → tenant → hospital "
+      + "→ unit → role → user (src/lib/config/workspace-config.ts:13). §3 asks for platform-enforced → "
+      + "product default → market → plan/segment → Practice → practitioner. Two rungs have no scope at "
+      + "all and the tenancy rungs point at `hospitals`, not at `practice_workspace`.",
+    spec: "PD-011 §5",
+  },
+  {
+    metricId: "cfg.pending_changes", module: "configuration",
+    displayName: "Pending changes",
+    definition:
+      "Unpublished override drafts, plus change sets in DRAFT, VALIDATED, APPROVED or SCHEDULED — the "
+      + "changes that exist and are not yet live.",
+    producer: "real",
+    source:
+      "workspace_config_overrides.draft where published is null (076:16-32) and "
+      + "configuration_releases.status (migration 099:18-19)",
+    spec: "PD-011 §6, §16",
+  },
+  {
+    metricId: "cfg.scheduled_changes", module: "configuration",
+    displayName: "Scheduled changes",
+    definition: "Change sets carrying a future effective time — PD-011 §16's SCHEDULED state.",
+    producer: "real",
+    source: "configuration_releases.scheduled_for with rollout = 'scheduled' (migration 099:14-16)",
+    spec: "PD-011 §16",
+  },
+  {
+    metricId: "cfg.failed_activation", module: "configuration",
+    displayName: "Failed activations",
+    definition: "Change sets whose activation failed — PD-011 §16's FAILED state.",
+    producer: "real", source: "configuration_releases.status = 'failed' (migration 099:18)",
+    spec: "PD-011 §16, §28",
+  },
+  {
+    metricId: "cfg.governance_quality", module: "configuration",
+    displayName: "Definitions with a governance gap",
+    definition:
+      "Registry objects missing an owner, missing a data source, pointing at a dependency that does not "
+      + "exist, or parented to a key that does not exist. PD-011 §4 requires ownership and dependencies "
+      + "on every definition; these are the ones that do not have them.",
+    producer: "real",
+    source: "computed by loadRegistry (src/lib/config/registry.ts:36-41) over configuration_registry_objects",
+    spec: "PD-011 §4, §19",
+  },
+  {
+    metricId: "cfg.recent_changes", module: "configuration",
+    displayName: "Recent configuration changes",
+    definition:
+      "Who changed which setting at which scope, with the previous value, most recent first.",
+    producer: "real",
+    source:
+      "workspace_config_audit (migration 076:51+ — action set/reset/publish/rollback, old_value, actor), "
+      + "configuration_registry_audit (092:47) and configuration_release_events (099:31)",
+    missing:
+      "⚠ THREE TRAILS, AND THEY DO NOT COVER THE SAME SUBJECT. workspace_config_audit records a VALUE "
+      + "change at a scope (set/reset/publish/rollback, carrying both old_value and new_value). "
+      + "configuration_registry_audit records a DEFINITION change. configuration_release_events records "
+      + "a CHANGE-SET transition. Answering \"what happened to this setting\" means reading all three — "
+      + "and none of them covers the Practice-plane domain tables of §7–§15, whose changes are audited "
+      + "into practice_audit_event, which this plane may not read (plane-boundary.ts declares its "
+      + "absence deliberate).",
+    spec: "PD-011 §6, §22, §26",
+  },
+  {
+    metricId: "cfg.practice_domain_settings", module: "configuration",
+    displayName: "Practice domain configuration",
+    definition:
+      "The real, live values behind PD-011 §7–§15: booking rules, note templates, follow-up templates, "
+      + "task templates, security policy, capture settings and the rest.",
+    producer: "derivable",
+    source:
+      "roughly twenty practice_* configuration tables — practice_configuration (191:101), "
+      + "practice_booking_rule (+_version) (230:158, 244:161), practice_note_template (195:58), "
+      + "practice_follow_up_template (206:34), practice_task_template (211:54), "
+      + "practice_security_policy (213:66), practice_capture_setting (275:468) and others",
+    missing:
+      "⚠ NOT A MISSING QUERY AND NOT A MISSING TABLE — A REFUSED READ. None of these tables is on the "
+      + "platform-plane allowlist (src/lib/access/plane-boundary.ts), so a page under "
+      + "src/app/super-admin/** that read one would be refused by scripts/plane-boundary-harness.ts. "
+      + "The rows exist and are written by the product every day; this plane may not see them. Widening "
+      + "the allowlist is an owner decision — it has been taken once, deliberately, for one table — and "
+      + "it is not a decision a screen may take for itself.",
+    spec: "PD-011 §7–§15",
+  },
+  {
+    metricId: "cfg.markets_configured", module: "configuration",
+    displayName: "Markets configured",
+    definition: "Markets for which an approved market-specific configuration override exists.",
+    producer: "absent", source: null,
+    missing:
+      "⚠ THERE IS NO MARKET LAYER TO CONFIGURE. workspace_config_overrides.scope_type is constrained by "
+      + "migration 076:20-21 to exactly platform, tenant, hospital, unit, role and user. `market` is not "
+      + "a legal value, so no market override has ever been written and none could be. Counting the "
+      + "distinct countries of the practices that exist is a real figure and is shown on Market & "
+      + "Localization — but it counts PRACTICES, not configured markets, and calling it the second "
+      + "would imply a governed layer that nothing can evaluate.",
+    spec: "PD-011 §6, §14",
+  },
+  {
+    metricId: "cfg.drift", module: "configuration",
+    displayName: "Configuration drift",
+    definition:
+      "Divergence between the authoritative configuration and the state actually applied at runtime.",
+    producer: "absent", source: null,
+    missing:
+      "Nothing observes the runtime. There is no agent, no heartbeat and no applied-configuration "
+      + "report, so no runtime state has ever been verified and §20's required \"last verified runtime "
+      + "state and timestamp\" has no value to show. §20 names `unknown` as a drift class for exactly "
+      + "this case; a drift tile reading zero would claim a comparison nobody performed.",
+    spec: "PD-011 §20",
+  },
+  {
+    metricId: "cfg.expired_overrides", module: "configuration",
+    displayName: "Expired temporary overrides",
+    definition: "Overrides whose temporary validity has ended and whose inheritance has resumed.",
+    producer: "absent", source: null,
+    missing:
+      "No override carries an expiry. workspace_config_overrides (076:16-32) has no valid-until column "
+      + "and no scheduled-removal record, so a temporary override cannot be expressed, cannot lapse and "
+      + "cannot be counted. §16's EXPIRED state has no representation in this schema.",
+    spec: "PD-011 §16, §28",
+  },
+  {
+    metricId: "cfg.approvals_outstanding", module: "configuration",
+    displayName: "Changes awaiting approval",
+    definition: "Proposed configuration changes whose required approver has not yet decided.",
+    producer: "absent", source: null,
+    missing:
+      "⚠ APPROVAL IS A STATUS HERE, NOT A RECORD. configuration_releases.status can read 'approved' "
+      + "(099:18) and configuration_release_events can carry an 'approved' event, but no definition "
+      + "declares an APPROVAL CLASS (§4), no row names a required approver, and there is no "
+      + "configuration_approval object at all. So 'awaiting approval' is not a state this database can "
+      + "distinguish from 'nobody has looked at it', and maker-checker (§17) is not modelled — which is "
+      + "why nothing on these pages offers an approve button.",
+    spec: "PD-011 §4, §17",
+  },
+  {
+    metricId: "cfg.affected_practices", module: "configuration",
+    displayName: "Practices a proposed change would affect",
+    definition:
+      "The descendants a change at a given scope would reach — PD-011 §17's preview before activation.",
+    producer: "absent", source: null,
+    missing:
+      "A Practice cannot be the SCOPE of an override, so no change can be addressed to one and no set "
+      + "of affected practices can be computed. workspace_config_overrides.hospital_id references "
+      + "hospitals(id) (076:18) and the scope enum's tenancy rungs are `tenant` and `hospital`; "
+      + "practice_workspace is not reachable from this store. Under the two-gate split "
+      + "(COMP-ARCH-PSA-001) that is a product boundary, not an oversight.",
+    spec: "PD-011 §17",
   },
 ];
 
