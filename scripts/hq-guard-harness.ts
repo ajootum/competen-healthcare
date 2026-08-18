@@ -42,13 +42,43 @@ loadEnvConfig(process.cwd());
 // 205 since the HQ appointment screen landed. ⚠ Moved deliberately after confirming that page calls
 // requireHqContext itself -- the count control exists so a /super-admin page cannot appear unnoticed, and
 // bumping it without checking the gate would defeat the only thing it does.
+/**
+ * ⚠ A FLOOR, NOT AN EQUALITY, AND THE DIFFERENCE IS THE WHOLE POINT OF THE CONTROL.
+ *
+ * This was `=== 205` and went red the moment the Product Director workspace added pages -- reporting the
+ * product GROWING as a regression, which is the recorded assertion-shape failure: never pin a count you
+ * are actively trying to change. The invariant this control actually owns is "the walker found the
+ * estate", because a walker that reads NOTHING makes every "no page is ungated" assertion below pass
+ * vacuously. A floor states exactly that and survives the estate growing. An equality states the
+ * estate's SIZE, which nobody ever promised to hold still.
+ */
 const PAGE_BASELINE = 205;
 const MIGRATION = "supabase/migrations/264-hq-positions-and-spaces.sql";
 // ⚠ THE SEED IS NO LONGER ONE FILE. Migration 273 (the operator licence door) adds a capability AND a
 // grant, so parsing 264 alone made B1 and B5 red the moment 273 was applied -- the harness measuring a
 // catalogue the product had moved past. Every migration that seeds hq_capability or hq_position_capability
 // belongs here.
-const SEED_MIGRATIONS = [MIGRATION, "supabase/migrations/273-operator-licence-verification.sql"];
+/**
+ * ⚠ DERIVED, NOT HAND-MAINTAINED, AND THAT CHANGED ON 2026-08-18 BECAUSE THE HAND-MAINTAINED VERSION
+ * WENT STALE EXACTLY AS PREDICTED.
+ *
+ * This was the literal list [264, 273]. Migration 311 then seeded eleven Product Director capabilities
+ * and eight PD write capabilities, and nobody added it here -- so D1/D2 compared a 30-row DDL against a
+ * 49-row catalogue and reported the CODE as wrong when the code was right and the harness was reading
+ * two thirds of the estate.
+ *
+ * Same class as the recorded hq-scan.ts rule ("any new guard helper must be taught to the scanner in the
+ * SAME commit", four recurrences): a list somebody must remember to extend is a list that eventually is
+ * not extended. Deriving it means a future migration seeding a capability is picked up by existing.
+ *
+ * ⚠ AND A DERIVED LIST HAS ITS OWN FAILURE MODE -- an empty glob passes every check below vacuously,
+ * which is how a generated SURFACES list once silently stopped covering anything. S0 is the control.
+ */
+const SEED_MIGRATIONS = readdirSync("supabase/migrations")
+  .filter(f => f.endsWith(".sql"))
+  .map(f => `supabase/migrations/${f}`)
+  .filter(f => readFileSync(f, "utf8").includes("insert into hq_capability"))
+  .sort();
 const APP_ROOT = "src/app/super-admin";
 
 let pass = 0, fail = 0, pending = 0;
@@ -108,8 +138,8 @@ const grantsFor = (position: string) => ddlGrants.filter(g => g.position === pos
 // ── 1. The estate: no /super-admin page may be reachable on the layout alone ─
 console.log("\n1. THE ESTATE -- every page carries its own gate");
 const pages = walkPages(APP_ROOT);
-ok("E1", pages.length === PAGE_BASELINE,
-  `count control: ${pages.length} page.tsx under ${APP_ROOT} (baseline ${PAGE_BASELINE}) -- a walker that reads nothing passes every check below`);
+ok("E1", pages.length >= PAGE_BASELINE,
+  `count control: ${pages.length} page.tsx under ${APP_ROOT} (floor ${PAGE_BASELINE}) -- a walker that reads nothing passes every check below`);
 
 // ⚠ THE SCANNER RESOLVES CONSTANTS, AND THIS NEVER GAVE IT ANY. classifyHqGate takes a capability-constant
 // map as its third argument; passing none meant requireHqContext(HQ_HOME_CAPABILITY) could not be resolved
@@ -184,6 +214,12 @@ ok("I5", capabilityForRoute("/super-admin-elsewhere") === null && capabilityForR
 
 // ── 3. DDL vs TypeScript ────────────────────────────────────────────────────
 console.log("\n3. THE MIGRATION AND THE CODE AGREE");
+
+// ⚠ THE CONTROL FOR THE DERIVED SEED LIST. A glob that matched nothing would make D1 compare 0 against
+// 0-if-empty and D2 compare two empty sets -- both green, over an estate nobody read. It also names the
+// files, so a reader can see WHICH migrations were counted rather than trusting that some were.
+ok("S0", SEED_MIGRATIONS.length >= 2 && SEED_MIGRATIONS.some(f => f.includes("264-")) && ddlCapabilities.length > 0,
+  `seed-list control: ${SEED_MIGRATIONS.length} migration(s) seed hq_capability and yield ${ddlCapabilities.length} row(s) — ${SEED_MIGRATIONS.map(f => f.replace("supabase/migrations/", "").slice(0, 3)).join(", ")}`);
 ok("D1", ddlCapabilities.length === HQ_CAPABILITIES.length,
   `catalogue size control: ${ddlCapabilities.length} capabilities in the DDL, ${HQ_CAPABILITIES.length} in code`);
 ok("D2", eq([...ddlCapabilities].map(c => c.code).sort(), [...HQ_CAPABILITY_CODES].sort()),
@@ -361,17 +397,39 @@ ok("S3", classifyHqGate(naked).kind === "none",
   ok("G1", ownerLine,
     "the owner predicate is super_admin OR platform_owner -- the same test resolveHqContext():189 makes, so the door and the page guard cannot disagree");
 
-  // The owner branch must be able to answer WITHOUT the HQ read. `isOwner ? [] : await ...` is the shape
-  // that guarantees it; an unconditional await would mean a broken ogs_offices locks the owners out.
-  ok("G2", /isOwner\s*\?\s*\[\]\s*:\s*\(await resolveHqPositions\(/.test(layout),
-    "⚠ break-glass: the HQ tables are read ONLY for a non-owner, so no failure of ogs_offices can lock out the two owner accounts");
+  // The owner branch must be able to answer WITHOUT the HQ read. An unconditional await would mean a
+  // broken ogs_offices locks the owners out.
+  //
+  // ⚠ THIS PIN ONCE ENCODED A MECHANISM AND NOT THE INVARIANT, AND WENT RED ON WORKING CODE. It required
+  // the literal `isOwner ? [] : (await resolveHqPositions(`. CPR-PD-001 s6 legitimately changed the
+  // resolver to return an OBJECT rather than a bare array, so that one spelling stopped matching while
+  // the break-glass property was untouched -- a false red, which is how a genuinely red harness gets
+  // ignored. Sixth instance of this class in this build.
+  //
+  // THE INVARIANT: every call to resolveHqPositions in this layout sits on the false branch of an
+  // isOwner test. Asserted by finding the call and reading BACKWARDS to the nearest `isOwner`, rather
+  // than by matching the punctuation between them.
+  const resolverCalls = [...layout.matchAll(/await\s+resolveHqPositions\s*\(/g)];
+  const everyCallIsOwnerGuarded = resolverCalls.length > 0 && resolverCalls.every(m => {
+    // the ternary's false branch, or an `if (!isOwner)` block -- either shape satisfies the property
+    const before = layout.slice(Math.max(0, m.index - 220), m.index);
+    return /isOwner\s*(\?[\s\S]*:|&&)/.test(before) || /!\s*isOwner/.test(before);
+  });
+  ok("G2", everyCallIsOwnerGuarded,
+    `⚠ break-glass: all ${resolverCalls.length} HQ-table read(s) in the door sit behind an isOwner test, so no failure of ogs_offices can lock out the owner accounts`);
 
   // ⚠ capabilities, NOT positions. resolveHqPositions returns a non-empty `positions` for a DEACTIVATED
   // position (context.ts:121) and only empties `capabilities`, so gating on positions would leave a
   // switched-off position still opening this door.
-  ok("G3", /hqCapabilities\s*=\s*isOwner/.test(layout) && /!isOwner\s*&&\s*hqCapabilities\.length\s*===\s*0/.test(layout)
-        && !/hqPositions\.length/.test(layout),
-    "the gate reads `capabilities`, so DEACTIVATING a position actually shuts this door");
+  //
+  // ⚠ SAME REWRITE AS G2, SAME REASON. This required `hqCapabilities = isOwner`, which was the shape
+  // before s6 kept the whole resolver result. What matters is not how hqCapabilities is assigned but
+  // WHAT THE REFUSAL TESTS: the length of the capability list, never the position list.
+  const refusesOnCapabilities = /!\s*isOwner\s*&&\s*hqCapabilities\.length\s*===\s*0/.test(layout);
+  const neverRefusesOnPositions =
+    !/hqPositions\.length/.test(layout) && !/hqPositions\.positions\.length\s*===\s*0/.test(layout);
+  ok("G3", refusesOnCapabilities && neverRefusesOnPositions,
+    "the gate reads `capabilities` and never `positions`, so DEACTIVATING a position actually shuts this door");
 
   // ── The appointments API's office scope, and the roster/access split ────────────────────────────────
   const strip = (f: string) => readFileSync(f, "utf8").replace(/\/\*[\s\S]*?\*\//g, "")

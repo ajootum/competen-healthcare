@@ -57,11 +57,51 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   { code: "hq.platform.audit.view",           space: "platform"  },
   { code: "hq.practice.operations.view",      space: "practice"  },
   // ⚠ ADDED BY MIGRATION 273, and this list had to follow it. The DB gained the capability and this
-  // catalogue did not, so B1 went red -- which is the drift control working: decideHq() answers from THIS
-  // list, so a capability the database grants and the code has never heard of grants nothing at runtime.
+  // catalogue did not, so B1 went red -- which is the drift control working.
+  //
+  // ⚠⚠ AND THE SENTENCE THAT USED TO FOLLOW HERE WAS WRONG. It said "decideHq() answers from THIS list,
+  // so a capability the database grants and the code has never heard of grants nothing at runtime."
+  // It does not. decideHq() answers from `input.capabilities`, and resolveHqPositions() builds that by
+  // reading hq_position_capability DIRECTLY -- this catalogue never filters it (context.ts:153-161).
+  //
+  // The nineteen codes below were granted in the database and absent here for the whole PD build, and
+  // every one of them worked. So the true consequence of this drift is the reverse of what was written:
+  // the runtime is FINE and the CODE IS BLIND. Anything reasoning about the capability estate from this
+  // list -- the nav filter, the access scanner, the space grouping -- was reasoning over two thirds of it.
+  // A stale allowlist that grants nothing is a lockout; a stale allowlist that filters nothing is a blind
+  // spot, and the second is the one you do not notice.
+  //
   // It is the operator licence door (PLAT-OVERSIGHT-SURVEY-001 D5): a WRITE, and the only operator-side
   // write over a practitioner identity, which is why it is its own code rather than folded into the view.
   { code: "hq.practice.licence.verify",       space: "practice"  },
+
+  // ── CPR-PD: the Product Director workspace, one capability per PD-001 nav destination ───────────
+  // Seeded by the PD migrations and granted to positions; this list is catching up with them.
+  { code: "hq.practice.mission.view",         space: "practice"  },
+  { code: "hq.practice.practices.view",       space: "practice"  },
+  { code: "hq.practice.practitioners.view",   space: "practice"  },
+  { code: "hq.practice.intelligence.view",    space: "practice"  },
+  { code: "hq.practice.adoption.view",        space: "practice"  },
+  { code: "hq.practice.commercial.view",      space: "practice"  },
+  { code: "hq.practice.health.view",          space: "practice"  },
+  { code: "hq.practice.support.view",         space: "practice"  },
+  { code: "hq.practice.governance.view",      space: "practice"  },
+  { code: "hq.practice.configuration.view",   space: "practice"  },
+  { code: "hq.practice.releases.view",        space: "practice"  },
+
+  // ⚠ THE WRITES, KEPT SEPARATE FROM THE VIEWS ON PURPOSE. CPR-PD-010 s19 requires exactly this split:
+  // "Separate capabilities for viewing risks, editing assessments, testing controls, approving decisions,
+  // accepting risk, managing exceptions, viewing restricted security/privacy evidence and exporting" --
+  // and s19 continues that the Product Director "must not automatically self-approve every high-risk
+  // acceptance". A single .manage code covering both would make that segregation unexpressible.
+  { code: "hq.practice.provision.execute",    space: "practice"  },
+  { code: "hq.practice.flags.manage",         space: "practice"  },
+  { code: "hq.practice.release.activate",     space: "practice"  },
+  { code: "hq.practice.release.rollback",     space: "practice"  },
+  { code: "hq.practice.export.execute",       space: "practice"  },
+  { code: "hq.practice.change.approve",       space: "practice"  },
+  { code: "hq.practice.risk.accept",          space: "practice"  },
+  { code: "hq.practice.configuration.manage", space: "practice"  },
   { code: "hq.learning.competencies.view",    space: "learning"  },
   { code: "hq.learning.content.view",         space: "learning"  },
   { code: "hq.learning.studio.view",          space: "learning"  },
