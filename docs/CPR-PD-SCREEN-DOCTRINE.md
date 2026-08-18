@@ -58,6 +58,16 @@ not by remembering.
 **No implementation detail on a director surface.** No UUIDs, no saga step names, no migration numbers
 (PD-001 §3, PD-002 §4). Those belong in Technical Operations and may be capability-restricted.
 
+⚠ **But the fix is PLACEMENT, not deletion — and the two look identical in a diff.** Product
+Configuration reached review with 59 identifiers in visible sentences: *"migration 076:20-21"*,
+*"runtime.ts:19-21"*. Deleting them would have been the wrong repair, because a verdict like *"no market
+override can ever be written"* is worth nothing if the reader cannot check it. The rework ended on 62 —
+*more* — with every one inside a `<details>` body or a `citation` field, and none in a visible sentence.
+The visible sentence speaks the product's language; the evidence is one click away.
+
+⚠ **Count them; do not read for them.** Every one of those 59 sentences was individually defensible,
+so a screenshot review passed them. A `grep` over the loader did not.
+
 ## 3. The density rules
 
 **Explanations belong behind a real `<details>`, not in the layout.** The sentence explaining a figure
@@ -99,6 +109,12 @@ disagrees with `tsc` and a production build, dev is usually the one lying.
 **Measure contrast, do not judge it.** The active sidebar fill looked fine and was 2.37:1 — under
 WCAG 1.4.11's 3:1 for a state indicator. "Not colour alone" and "the colour is discernible" are two
 different rules and only one was being met.
+
+⚠ **Disjoint FILE ownership is not disjoint HARNESS ownership.** Two agents ran this pass with no file
+in common, and the second one's new `countRows(admin, table, col, …)` helper turned
+`plane-boundary-harness` red — *in the first one's verification run*. The boundary harness judges the
+whole import closure, so a shared global check is a shared surface even when nothing is co-edited.
+Never conclude "not mine" from a red harness; find whose it is, and hold the commit until it is green.
 
 ## 5. What no PD screen can verify about itself
 
