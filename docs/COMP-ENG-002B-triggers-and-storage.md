@@ -3,7 +3,38 @@
 **Read-only, 2026-08-19.** The last two object classes before §10's gate can be assessed. **Neither is
 measured, and both are blocked for a stated reason rather than an oversight.**
 
-## §9.4 Triggers — BLOCKED on measurement infrastructure
+## §9.4 Triggers — ✅ MEASURED (migration 332 applied 2026-08-19)
+
+`scripts/trigger-drift-audit.ts`, reading `plat_trigger_registry()`:
+
+| | |
+|---|---|
+| Declared in numbered migrations, not retired | **45** |
+| Deployed in `public` | **45** |
+| **DISABLED** (present but not firing) | **0** |
+| **MISSING** (declared, absent) | **0** |
+| **WRONG FUNCTION** (fires something else) | **0** |
+| UNDECLARED | **0** |
+
+**Exact match. The append-only invariants are genuinely deployed**, including
+`trg_mos_support_event_immutable`.
+
+⚠ **A DISABLED trigger is the dangerous case and is checked explicitly.** `ALTER TABLE … DISABLE
+TRIGGER` leaves the object in place: an existence check sees it while the invariant is gone. `tgenabled`
+is compared, not just presence.
+
+⚠ **The first run reported a phantom, and the bug was mine.** It flagged
+`trg_mos_support_event_immutable` as UNDECLARED — an append-only trigger apparently in production and in
+no migration, which is exactly the alarming shape this audit exists to find. It is declared, in migration
+318. My drop-tracking required `drop trigger …; create trigger` **back to back**, and migration 319
+legitimately breaks that shape: it drops the trigger, DELETEs the rows the immutability rule would
+otherwise refuse, alters five columns, and restores the trigger 52 lines later. The rule now retires a
+declaration only if **no** create follows anywhere in the same file.
+
+Break-tested: injecting a declared-but-absent trigger produces `MISSING (1)` and exit 1; removed, back to
+ALL GREEN.
+
+## §9.4 (superseded) Triggers — how it was blocked
 
 **45 triggers are declared** across the numbered migrations. **Zero can be compared against production.**
 
@@ -80,9 +111,16 @@ correctly and an unpinned function would have been named.
 | Policy roles measured | ✅ 0 divergence, break-tested |
 | Migration 166 audited whole | ✅ not a partial application |
 | All 20 MISSING dispositioned | ✅ only one should be restored as written |
-| **Trigger posture measured** | ❌ **blocked — migration 332 awaiting application** |
+| **Trigger posture measured** | ✅ **45/45 exact, 0 disabled, 0 missing, 0 mis-wired** |
 | **Storage posture measured** | ❌ **not in repository at all; must be captured first** |
 | Canonical end state approved | ❌ owner decision |
 
-**The gate cannot pass yet, and the two remaining blockers are now concrete and actionable** rather than
-unknown: apply one read-only migration, and capture two buckets' policies into version control.
+**Every measurement §10 requires is now done except storage.** The gate has exactly **two** remaining
+blockers, and only one of them is measurement:
+
+1. **Storage posture is not in the repository at all** — someone must read the live `avatars` and
+   `evidence` bucket policies from the Supabase dashboard and encode them forward. This is work, not a
+   measurement: nothing in version control records what they are.
+2. **The canonical end state must be approved** — and the evidence says it cannot be *derived*. Of the
+   20 MISSING policies, only one should be restored as written; five would create cross-tenant exposure;
+   one grants a write path the product removed; eleven encode role-name authorization ADR-008 retired.
