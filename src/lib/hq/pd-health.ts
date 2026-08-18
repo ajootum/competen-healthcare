@@ -19,9 +19,12 @@ export * from "@/lib/hq/pd-health-model";
 //
 // ⚠ AND IT READS NO PRACTICE TABLE AT ALL. Four platform-plane tables, nothing else. The two facts this
 // module most wants — sync-transaction age and message delivery — live on the practice plane and are not
-// on its allowlist, so they are rendered as REFUSED READS: the rows exist, the product writes them daily,
-// and this plane may not count them. Saying "no data" about a table full of rows is the comfortable
-// sentence and the false one.
+// on its allowlist, so they are rendered as REFUSED READS: the product HAS a write path for each, and
+// this plane may not count them. ⚠ AND THE REFUSAL SAYS WHAT IT KNOWS, WHICH IS LESS THAN IT FIRST SAID.
+// An earlier version of this file asserted "the rows exist, the product writes them daily". The sync
+// table is written by the sync engine and holds ZERO rows — no device has synced in this environment —
+// so the claim was architecturally true and empirically false. A refusal may say the read is forbidden;
+// it may not say what it would have found.
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 
 export type Figure =
@@ -332,9 +335,11 @@ export const PLANE_REFUSED = [
     what: "Sync and offline transaction health",
     tables: ["practice_sync_transaction"],
     why:
-      "Competen Practice writes a row every time a device syncs, and the offline outbox is one of the "
-      + "few genuinely instrumented paths in the product. The table is not on the practice plane's "
-      + "allowlist, so this plane may not read it. Widening the allowlist is an owner decision.",
+      "The sync engine writes a row for every device sync, so the offline outbox is one of the few "
+      + "genuinely instrumented paths in the product. ⚠ WHAT THIS SCREEN CANNOT TELL YOU IS WHETHER ANY "
+      + "ROW IS THERE. The table is not on the practice plane's allowlist, so this plane may not read it "
+      + "— which means it also cannot report the count as zero. The write path existing and the table "
+      + "holding data are two different facts, and a refused read distinguishes neither.",
     spec: "PD-008E",
   },
   {
