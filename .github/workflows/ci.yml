@@ -1,5 +1,5 @@
 # CI (COMP-SEC-001 "Developer Security Standards" -- the smallest real increment, per the
-# conformance map). Three jobs, each a distinct red light.
+# conformance map). Four jobs, each a distinct red light.
 #
 # ⚠ NO SECRETS, BY DESIGN. The database harnesses authenticate with the service-role key, and that
 # key does not belong in GitHub. They run locally against the live database, as they always have;
@@ -9,6 +9,14 @@
 # ⚠ THE DEPENDENCY GATE IS OURS (scripts/audit-gate.ts + security/audit-allowlist.json), not a
 # third-party parser -- the first candidate crashed against npm's report shape, and a gate that can
 # crash can be green by accident. Every tolerated advisory prints on every run.
+#
+# ⚠ THE `test` JOB (COMP-ENG-001 s6/s9) IS DELIBERATELY NARROW. It runs the 10 files under
+# src/**/*.test.ts (vitest.config.ts's own include pattern) -- confirmed locally, twice, to pass
+# deterministically with zero Supabase/service-role dependency before this job existed. It does NOT
+# run any of the 212 scripts/*-harness.ts acceptance scripts: those authenticate against the one
+# live Supabase project this repo has (no staging project exists yet -- see
+# docs/HARNESS-INVENTORY.md), and handing that key to GitHub is explicitly out of scope until a
+# staging strategy is built (COMP-ENG-001 s7, s9 step 8).
 
 name: CI
 
@@ -61,6 +69,19 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Dependency gate (high/critical, allowlist with reasons)
         run: npx tsx scripts/audit-gate.ts
+
+  test:
+    name: Unit tests (Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Vitest
+        run: npm run test
 
   migrations:
     name: Migration house rules (changed files)
