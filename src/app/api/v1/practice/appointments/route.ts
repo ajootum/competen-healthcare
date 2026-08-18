@@ -3,6 +3,7 @@ import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { bookAppointment, loadDay } from "@/lib/practice/scheduling";
 import { appointmentNotice } from "@/lib/practice/messaging";
 import { workspaceClock, instantInZone } from "@/lib/practice/practice-time";
+import { emitEvent } from "@/lib/mos/event";
 
 // GET  /api/v1/practice/appointments?date=YYYY-MM-DD -- the day's diary + live queue + blocks.
 // POST /api/v1/practice/appointments -- book (PEN-001 rules: double-booking refused unless exempt type
@@ -22,15 +23,59 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ date, ...day, correlationId: auth.caller.traceId });
 }
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-CORE-MOS-001 phase 3 - Patient Booking, the first instrumented critical journey.
+//
+// ⚠ THE HANDLER IS WRAPPED RATHER THAN SPRINKLED, AND THAT IS THE WHOLE SAFETY ARGUMENT. This route has
+// FIVE terminal return paths: invalid JSON, missing fields, an unreadable date, an engine refusal and a
+// success. Six emit calls scattered through them would work until somebody added a sixth return and did
+// not add a sixth emit - and the failure mode is silent, because attempts would then exceed outcomes and
+// every booking success rate would read low forever with nothing to show it was wrong.
+//
+// So the body below is UNCHANGED and moved into createAppointment, and POST emits exactly one attempt
+// and exactly one outcome around it. A new return path inside cannot escape the pairing.
+//
+// ⚠ AND TELEMETRY NEVER DECIDES THE RESPONSE. emitEvent catches everything and returns a result which
+// is deliberately ignored here: the booking is already made by the time the outcome is emitted, and a
+// failure to record it must not turn a successful booking into a 5xx.
 export async function POST(req: NextRequest) {
   const auth = await requirePracticeContext("appointment.manage");
   if (isDenied(auth)) return auth;
 
+  const startedAt = Date.now();
+  const correlationId = auth.caller.traceId;
+  const base = {
+    practiceId: auth.ctx.workspaceId,
+    practitionerId: auth.caller.userId,
+    correlationId,
+    component: "scheduling",
+  } as const;
+
+  await emitEvent(auth.caller.admin, { ...base, eventName: "practice.booking.started", outcome: "started" });
+
+  const { res, failureCode } = await createAppointment(req, auth);
+
+  await emitEvent(auth.caller.admin, failureCode === null
+    ? { ...base, eventName: "practice.booking.created", outcome: "success", durationMs: Date.now() - startedAt }
+    : { ...base, eventName: "practice.booking.failed", outcome: "failure", failureCode, durationMs: Date.now() - startedAt });
+
+  return res;
+}
+
+/**
+ * The original handler, unchanged except that every return now names its failure code so the outcome
+ * event carries a stable taxonomy rather than an HTTP status.
+ */
+async function createAppointment(
+  req: NextRequest,
+  auth: Extract<Awaited<ReturnType<typeof requirePracticeContext>>, { ctx: unknown }>,
+): Promise<{ res: NextResponse; failureCode: string | null }> {
+
   let body: Record<string, unknown>;
-  try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
+  try { body = await req.json(); } catch { return { res: NextResponse.json({ error: "invalid JSON" }, { status: 400 }), failureCode: "INVALID_JSON" }; }
   const hasWallClock = typeof body.date === "string" && typeof body.time === "string";
   if ((!body.patientName && !body.patientId) || !body.appointmentType || (!body.scheduledAt && !hasWallClock))
-    return NextResponse.json({ error: "patientName (or patientId), appointmentType and either scheduledAt or date+time are required" }, { status: 400 });
+    return { res: NextResponse.json({ error: "patientName (or patientId), appointmentType and either scheduledAt or date+time are required" }, { status: 400 }), failureCode: "MISSING_FIELDS" };
 
   // ⚠ WALL-CLOCK TIMES ARE COMPOSED HERE, IN THE PRACTICE TIMEZONE -- never on the client. The booking
   // widgets used to send `${date}T${time}:00.000Z`, which DECLARES a Kampala 09:00 to be 09:00 UTC and
@@ -44,10 +89,13 @@ export async function POST(req: NextRequest) {
     const { timezone } = await workspaceClock(auth.caller.admin, auth.ctx.workspaceId);
     const instant = instantInZone(String(body.date), String(body.time), timezone);
     if (!instant)
-      return NextResponse.json(
-        { error: `date and time could not be read as a moment in ${timezone} -- date must be YYYY-MM-DD and time HH:MM (24-hour)` },
-        { status: 400 },
-      );
+      return {
+        res: NextResponse.json(
+          { error: `date and time could not be read as a moment in ${timezone} -- date must be YYYY-MM-DD and time HH:MM (24-hour)` },
+          { status: 400 },
+        ),
+        failureCode: "UNREADABLE_WALL_CLOCK",
+      };
     scheduledAt = instant;
   }
 
@@ -75,7 +123,7 @@ export async function POST(req: NextRequest) {
     correlationId: auth.caller.traceId,
   });
 
-  if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
+  if (!result.ok) return { res: NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status }), failureCode: result.code };
 
   // THE PATIENT IS TOLD SECOND, AND NEVER AT THE BOOKING'S EXPENSE. The appointment already exists by
   // this line; a provider outage must not turn a successful booking into a 5xx. The engine decides from
@@ -88,5 +136,5 @@ export async function POST(req: NextRequest) {
     workspaceId: auth.ctx.workspaceId, appointmentId: result.data.id,
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
-  return NextResponse.json({ appointment: result.data, notice, correlationId: auth.caller.traceId }, { status: 201 });
+  return { res: NextResponse.json({ appointment: result.data, notice, correlationId: auth.caller.traceId }, { status: 201 }), failureCode: null };
 }
