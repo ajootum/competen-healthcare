@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
+import { emitEvent } from "@/lib/mos/event";
 import { getEncounter, transitionEncounter } from "@/lib/practice/encounters";
 import { saveNoteSegment } from "@/lib/practice/documentation";
 import { ENCOUNTER_ACTIONS } from "@/lib/practice/encounter-constants";
@@ -30,26 +31,38 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ en
   // claim the CLIENT makes, and it is stored as such: only the browser knows whether the words arrived
   // through a keyboard or a microphone, and there is no way to verify it server-side. It is provenance,
   // not evidence, and the record shows it beside the text rather than inferring anything from it.
+  // ── CPR-CORE-MOS-001 phase 3 — Save Encounter, the fifth instrumented critical journey ───────────
+  //
+  // ⚠ THE WRAPPER GOES ROUND THE BRANCH, NOT THE HANDLER, BECAUSE THIS ROUTE IS SHAPED DIFFERENTLY.
+  // The four routes instrumented before this one guard first and then do one thing. This one parses the
+  // body first and then chooses between two acts with two different capabilities — a note save needs
+  // encounter.edit, signing needs encounter.sign. Emitting at the top would put an event before a guard,
+  // which is exactly what S3 forbids: an unauthorized caller could write telemetry.
+  //
+  // ⚠ AND THE invalid-JSON RETURN ABOVE EMITS NOTHING, ON PURPOSE. It sits before any guard, so there is
+  // no authenticated practice to attribute an attempt to. A malformed request is therefore not counted
+  // as an attempt — the pairing still holds, because no attempt was emitted either.
   if (body.noteType !== undefined) {
     const auth = await requirePracticeContext("encounter.edit");
     if (isDenied(auth)) return auth;
-    const result = await saveNoteSegment(auth.caller.admin, {
-      workspaceId: auth.ctx.workspaceId, encounterId, noteType: String(body.noteType),
-      body: String(body.body ?? ""), source: body.source ? String(body.source) : undefined,
-      actorId: auth.caller.userId, correlationId: auth.caller.traceId,
-    });
-    if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
-    // Walkthrough #5: documenting is consulting. A saved segment with content promotes a DRAFT
-    // encounter to ACTIVE -- best-effort, never the save's failure. Keystroke drafts (the drafts
-    // route) deliberately do not do this.
-    if (String(body.body ?? "").trim()) {
-      const { ensureConsultationStarted } = await import("@/lib/practice/encounters");
-      await ensureConsultationStarted(auth.caller.admin, {
-        workspaceId: auth.ctx.workspaceId, encounterId,
-        actorId: auth.caller.userId, correlationId: auth.caller.traceId,
-      });
-    }
-    return NextResponse.json({ saved: result.data, correlationId: auth.caller.traceId });
+
+    const startedAt = Date.now();
+    const base = {
+      practiceId: auth.ctx.workspaceId,
+      practitionerId: auth.caller.userId,
+      correlationId: auth.caller.traceId,
+      component: "encounter",
+    } as const;
+
+    await emitEvent(auth.caller.admin, { ...base, eventName: "practice.encounter.save_attempted", outcome: "started" });
+
+    const { res, failureCode } = await saveEncounterNote(encounterId, body, auth);
+
+    await emitEvent(auth.caller.admin, failureCode === null
+      ? { ...base, eventName: "practice.encounter.saved", outcome: "success", durationMs: Date.now() - startedAt }
+      : { ...base, eventName: "practice.encounter.save_failed", outcome: "failure", failureCode, durationMs: Date.now() - startedAt });
+
+    return res;
   }
 
   const to = ENCOUNTER_ACTIONS[body.action ?? ""];
@@ -96,4 +109,34 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ en
   return NextResponse.json({
     encounter: result.data, settledFollowUps, settleError, correlationId: auth.caller.traceId,
   });
+}
+
+/**
+ * The note-save body, unchanged, moved out so the branch above can pair its attempt with exactly one
+ * outcome. Every return names its failure code; none returns a bare response.
+ */
+async function saveEncounterNote(
+  encounterId: string,
+  body: { noteType?: string; body?: string; source?: string },
+  auth: Extract<Awaited<ReturnType<typeof requirePracticeContext>>, { ctx: unknown }>,
+): Promise<{ res: NextResponse; failureCode: string | null }> {
+  const result = await saveNoteSegment(auth.caller.admin, {
+    workspaceId: auth.ctx.workspaceId, encounterId, noteType: String(body.noteType),
+    body: String(body.body ?? ""), source: body.source ? String(body.source) : undefined,
+    actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+  });
+  if (!result.ok) {
+    return { res: NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status }), failureCode: result.code };
+  }
+  // Walkthrough #5: documenting is consulting. A saved segment with content promotes a DRAFT
+  // encounter to ACTIVE -- best-effort, never the save's failure. Keystroke drafts (the drafts
+  // route) deliberately do not do this.
+  if (String(body.body ?? "").trim()) {
+    const { ensureConsultationStarted } = await import("@/lib/practice/encounters");
+    await ensureConsultationStarted(auth.caller.admin, {
+      workspaceId: auth.ctx.workspaceId, encounterId,
+      actorId: auth.caller.userId, correlationId: auth.caller.traceId,
+    });
+  }
+  return { res: NextResponse.json({ saved: result.data, correlationId: auth.caller.traceId }), failureCode: null };
 }
