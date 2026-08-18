@@ -1,5 +1,5 @@
 # CI (COMP-SEC-001 "Developer Security Standards" -- the smallest real increment, per the
-# conformance map). Four jobs, each a distinct red light.
+# conformance map). Five jobs, each a distinct red light.
 #
 # ⚠ NO SECRETS, BY DESIGN. The database harnesses authenticate with the service-role key, and that
 # key does not belong in GitHub. They run locally against the live database, as they always have;
@@ -13,10 +13,16 @@
 # ⚠ THE `test` JOB (COMP-ENG-001 s6/s9) IS DELIBERATELY NARROW. It runs the 10 files under
 # src/**/*.test.ts (vitest.config.ts's own include pattern) -- confirmed locally, twice, to pass
 # deterministically with zero Supabase/service-role dependency before this job existed. It does NOT
-# run any of the 212 scripts/*-harness.ts acceptance scripts: those authenticate against the one
-# live Supabase project this repo has (no staging project exists yet -- see
+# run any of the 180 DATABASE-DEPENDENT scripts/*-harness.ts acceptance scripts: those authenticate
+# against the one live Supabase project this repo has (no staging project exists yet -- see
 # docs/HARNESS-INVENTORY.md), and handing that key to GitHub is explicitly out of scope until a
 # staging strategy is built (COMP-ENG-001 s7, s9 step 8).
+#
+# ⚠ THE `harnesses` JOB RUNS 22 OF THE 32 CREDENTIAL-FREE ONES, NOT ALL 32. Each of the 32 was run
+# twice with a scrubbed environment on 2026-08-18: six are RED on real pre-existing defects and four
+# would have reported green in CI for a reason unrelated to what they check (no build, no dev server,
+# no working-tree diff, or a live network call). scripts/ci-harnesses.ts names all ten and the reason
+# each is out, and fails if a newly added pure/local harness is in neither list.
 
 name: CI
 
@@ -82,6 +88,22 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Vitest
         run: npm run test
+
+  harnesses:
+    name: Acceptance harnesses (no-credential subset)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # scripts/ci-harnesses.ts holds the list AND the reason each excluded harness is out, printing
+      # every exclusion on each run. It also fails if a newly added pure/local harness appears in
+      # neither list -- otherwise a harness written later is silently absent from CI forever.
+      - name: Credential-free acceptance harnesses
+        run: npx tsx scripts/ci-harnesses.ts
 
   migrations:
     name: Migration house rules (changed files)
