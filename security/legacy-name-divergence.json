@@ -1,0 +1,131 @@
+{
+  "comment": "COMP-ENG-002E §3 -- APPROVED LEGACY_NAME_DIVERGENCE. Production carries these policy names; the repository declares the names in repositoryName. Each pair was measured body-identical by scripts/rls-body-audit.ts (verdict RENAMED-ONLY, which compares USING and WITH CHECK after normalisation). §3: a clean staging build SHALL use repository-canonical names, and these production aliases are accepted rather than renamed for cosmetic parity. ⚠ SEMANTIC PARITY REMAINS MANDATORY -- this file excuses a NAME, never a body, command, role or access difference. An entry whose bodies stop matching is drift, not an alias.",
+  "approved": "2026-08-19, COMP-ENG-002E §3",
+  "aliases": [
+    {
+      "table": "assessment_method_configs",
+      "productionName": "read methods",
+      "repositoryName": "Authenticated read methods"
+    },
+    {
+      "table": "assessment_method_configs",
+      "productionName": "super admin methods",
+      "repositoryName": "Super admin manages methods"
+    },
+    {
+      "table": "checklist_items",
+      "productionName": "read items",
+      "repositoryName": "Authenticated read items"
+    },
+    {
+      "table": "checklist_items",
+      "productionName": "super admin items",
+      "repositoryName": "Super admin manages items"
+    },
+    {
+      "table": "competency_cycles",
+      "productionName": "Hospital admin manages cycles",
+      "repositoryName": "Hospital admin views all cycles"
+    },
+    {
+      "table": "competency_skills",
+      "productionName": "read skills",
+      "repositoryName": "Authenticated read skills"
+    },
+    {
+      "table": "competency_skills",
+      "productionName": "super admin skills",
+      "repositoryName": "Super admin manages skills"
+    },
+    {
+      "table": "framework_scoring",
+      "productionName": "read fw scoring",
+      "repositoryName": "Authenticated read fw scoring"
+    },
+    {
+      "table": "framework_scoring",
+      "productionName": "super admin fw scoring",
+      "repositoryName": "Super admin manages fw scoring"
+    },
+    {
+      "table": "performance_criteria",
+      "productionName": "read criteria",
+      "repositoryName": "Authenticated read criteria"
+    },
+    {
+      "table": "performance_criteria",
+      "productionName": "super admin criteria",
+      "repositoryName": "Super admin manages criteria"
+    },
+    {
+      "table": "policies",
+      "productionName": "read policies",
+      "repositoryName": "Authenticated read policies"
+    },
+    {
+      "table": "policies",
+      "productionName": "super admin policies",
+      "repositoryName": "Super admin manages policies"
+    },
+    {
+      "table": "reassessment_schedules",
+      "productionName": "read schedules",
+      "repositoryName": "Authenticated read schedules"
+    },
+    {
+      "table": "reassessment_schedules",
+      "productionName": "super admin schedules",
+      "repositoryName": "Super admin manages schedules"
+    },
+    {
+      "table": "report_templates",
+      "productionName": "read reports",
+      "repositoryName": "Authenticated read reports"
+    },
+    {
+      "table": "report_templates",
+      "productionName": "super admin reports",
+      "repositoryName": "Super admin manages reports"
+    },
+    {
+      "table": "scoring_levels",
+      "productionName": "read levels",
+      "repositoryName": "Authenticated read levels"
+    },
+    {
+      "table": "scoring_levels",
+      "productionName": "super admin levels",
+      "repositoryName": "Super admin manages levels"
+    },
+    {
+      "table": "scoring_scales",
+      "productionName": "read scales",
+      "repositoryName": "Authenticated read scales"
+    },
+    {
+      "table": "scoring_scales",
+      "productionName": "super admin scales",
+      "repositoryName": "Super admin manages scales"
+    },
+    {
+      "table": "skill_checklists",
+      "productionName": "read checklists",
+      "repositoryName": "Authenticated read checklists"
+    },
+    {
+      "table": "skill_checklists",
+      "productionName": "super admin checklists",
+      "repositoryName": "Super admin manages checklists"
+    },
+    {
+      "table": "workflow_templates",
+      "productionName": "read workflows",
+      "repositoryName": "Authenticated read workflows"
+    },
+    {
+      "table": "workflow_templates",
+      "productionName": "super admin workflows",
+      "repositoryName": "Super admin manages workflows"
+    }
+  ]
+}
