@@ -1,0 +1,53 @@
+import { defineConfig, devices } from "@playwright/test";
+
+// COMP-ENG-001A — the initial Playwright smoke framework.
+//
+// ⚠ MINIMAL ON PURPOSE (§5: "the minimum Playwright configuration and test structure necessary for
+// the seven approved journeys"). One project (Chromium), no cross-browser matrix, no visual
+// regression, no component testing — those are later, separately-approved expansions (§7 non-goal:
+// "do not expand the smoke suite into comprehensive E2E coverage in this change").
+//
+// ⚠ NOT YET WIRED INTO CI. §6 Stage C: "Add a PR smoke job only after required test
+// credentials/environment are safely provisioned." No synthetic automation practitioner identity
+// exists in this database today (checked directly, read-only, 2026-08-18 — see
+// e2e/README.md). Four of the seven journeys need one and are not runnable end-to-end until it
+// exists. Wiring this into ci.yml before then would either leave a permanently-red required check or
+// require weakening the gate to "allow failure," both worse than leaving it local-only and honest.
+// ⚠ WORKERS PINNED TO 1, ALWAYS — NOT JUST IN CI. Confirmed by real local execution, 2026-08-18: with
+// the default parallel workers, several tests hit different cold routes on the single `npm run dev`
+// process at once, the on-demand compiler falls behind, and navigation exceeds the 30s test timeout —
+// 3 of 3 credential-free journeys failed. Serial (`--workers=1`) against the same warm server: 3
+// passed, 4 skipped, ~6s total. §5 requires "deterministic, independent, fast" — a suite that fails
+// under its own default concurrency isn't deterministic, and this is a smoke suite, not a perf
+// benchmark, so trading a few seconds of wall-clock for reliability is the right call.
+export default defineConfig({
+  testDir: "./e2e",
+  fullyParallel: false,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
+  workers: 1,
+  reporter: [["list"], ["html", { open: "never", outputFolder: "playwright-report" }]],
+
+  use: {
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
+    // Evidence on failure only (§5: "capture useful failure evidence such as trace/screenshot only
+    // through normal Playwright test artifacts; do not expose secrets in logs").
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
+  },
+
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+  ],
+
+  // ⚠ REUSES AN ALREADY-RUNNING DEV SERVER LOCALLY, ALWAYS STARTS FRESH IN CI. This mirrors the
+  // reasoning already recorded for this repo's other CI jobs: a hermetic run is worth the extra
+  // ~10-20s boot time the moment more than one person or process could be relying on a shared
+  // server's state.
+  webServer: {
+    command: "npm run dev",
+    url: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
+    reuseExistingServer: !process.env.CI,
+    timeout: 60_000,
+  },
+});

@@ -13,6 +13,10 @@
 # testing
 /coverage
 
+# playwright (COMP-ENG-001A) -- generated run output, never source
+/playwright-report/
+/test-results/
+
 # next.js
 /.next/
 # Verification builds -- NEXT_BUILD_DIR=.next-verify npx next build. Kept out of .next on purpose so a
