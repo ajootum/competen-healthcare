@@ -1,6 +1,6 @@
 # COMP-ENG-002C §3 + §6 — The two unaccounted policies, and live storage capture
 
-**Read-only.** No canonicalisation migration written. Two read-only registry migrations handed over.
+**Read-only analysis.** Registry migrations 332 and 333 applied by the owner; canonicalisation migration 334 written and handed over (not applied).
 
 ## §3 — The arithmetic, resolved
 
@@ -12,18 +12,29 @@ The spec is right that my categories accounted for 18 of 20. Enumerating all twe
 | Cross-tenant exposure — **REJECT/RETIRE** | 5 | `access_review_items_read`, `access_reviews_read`, `sod_rules_read` (166), `adm_profile_read` (109), `op_observations_read` (039) |
 | Removed write path — **RETIRE** | 1 | `assessments :: Educator validates assessments` |
 | Required and safe as written — **RESTORE** | 1 | `departments :: Group admin reads org departments` |
-| Rename family — **RETIRE legacy name** | **12** | see below |
-| **Unaccounted** | 1 | `profiles :: Super admin reads all profiles` |
+| Rename family — **RETIRE legacy name, adopt live** | **11** | 009/007 policies renamed in-database |
+| **Unaccounted #1** | 1 | `profiles :: Super admin reads all profiles` |
+| **Unaccounted #2** | 1 | `competency_scores :: Educator views hospital scores` |
 | | **20** | |
 
 **The two "unaccounted" were:**
 
 1. **`profiles :: "Super admin reads all profiles"`** — I had categorised it as *UNRESOLVED*, which is not
    one of the four decision types, so it fell outside the count.
-2. **`checklist_responses :: "Assessor manages checklist responses"`** — the rename family is **12, not
-   11**. This one was the *confirmed exemplar* in my dispositions document: described in full, then
-   accidentally excluded when I enumerated "the same shape across…" the other eleven. **My "~11" was an
-   undercount, and the approximation is exactly why the spec's audit caught it.**
+2. **`competency_scores :: "Educator views hospital scores"` (ALL)** — **I had wrongly folded this into
+   the rename family.** It is not a rename: it has **no live counterpart at all**. `competency_scores`
+   carries exactly one live policy, `"Nurse views competency scores"`, which pairs with a *different*
+   repo declaration. The rename family is therefore **11, exactly as the spec counted** — my "~12" was
+   the error.
+
+⚠ **This correction came from the generator refusing to emit.** Building the canonicalisation SQL from
+measured live state, the tool could not find a live policy to pair with `"Educator views hospital
+scores"` and printed `NOT FOUND LIVE — INVESTIGATE, not emitted` rather than inventing a name. Had it
+guessed, a genuine absence would have been silently encoded as a rename.
+
+⚠ **And it supersedes what I told the owner earlier**, which named `checklist_responses` as the second
+unaccounted policy on a counting-slip theory. That was wrong: `checklist_responses` is a confirmed
+rename, its live counterpart exists and its body matches.
 
 ## §4 disposition records for the two
 
@@ -40,18 +51,18 @@ The spec is right that my categories accounted for 18 of 20. Enumerating all twe
 | **Evidence** | `rls-body-audit.ts` (absent from live); grep of every `from("profiles")` call site showing admin-client use; `plat_rls_registry` showing 4 surviving policies |
 | **Approval note** | §2's rule decides it: restoration requires *current* architectural justification, and there is none — the read path is service-role, and the policy is both recursive and role-name based. ⚠ Previously held UNRESOLVED at owner instruction; this is a recommendation for approval, not a unilateral reclassification. |
 
-### 2. `public.checklist_responses :: "Assessor manages checklist responses"` (ALL)
+### 2. `public.competency_scores :: "Educator views hospital scores"` (ALL)
 
 | Field | Record |
 |---|---|
 | **Historical source** | `supabase/migrations/009-assessment-engine.sql` |
-| **Historical purpose** | Let the assessor on an assessment, or an educator/hospital_admin/super_admin, manage its checklist responses |
-| **Current workflow** | **The workflow still exists and is live** — deployed as `"Manage checklist responses"`, renamed in-database and never written back. Bodies are **semantically identical** (confirmed by body comparison). |
-| **Security impact** | **None from the rename.** Access is unchanged. But both forms encode `p.role in ('educator','hospital_admin','super_admin')` — role-name authorization **ADR-008 retired**. |
-| **Compensating control** | The live policy already provides the access; no gap exists today. |
-| **Decision** | **RETIRE the legacy name** (the live policy is canonical), and **REPLACE the predicate** with a capability check under ADR-008's burn-down. Do **not** re-create the old name. |
-| **Evidence** | `rls-body-audit.ts --table checklist_responses` — repo `exists (select 1 from assessments a where a.id = assessment_id and (a.assessor_id = auth.uid() or exists (… p.role in (…))))` vs live, identical modulo Postgres rewriting |
-| **Approval note** | Same disposition as the other eleven renames; it was described but miscounted, not mis-analysed. |
+| **Historical purpose** | Let an educator, hospital_admin or assessor in the same hospital read **and write** every competency score in that hospital's cycles, through an ordinary client |
+| **Current workflow** | **The workflow exists and is server-mediated.** `api/educator/validate` and `api/educator/ai-validate` read and write `competency_scores` through `c.admin` (the service role) behind `getCaller` + `isEducator` + `assertCycleScope`. **No ordinary-client path uses it.** |
+| **Security impact** | It is an **ALL** policy, so restoring opens a client-side **write** path to competency scores — not merely a read exposure. Its predicate is `p.role in ('educator','hospital_admin','assessor')`, a role-name primitive **ADR-008 retired**. |
+| **Compensating control** | The two educator routes above, each with tenant scoping via `assertCycleScope` and an `audit_log` row. |
+| **Decision** | **RETIRE** |
+| **Evidence** | `rls-body-audit.ts --table competency_scores` — one live policy (`"Nurse views competency scores"`), which pairs with a different repo declaration; this one has no counterpart. Call-site grep showing admin-client access. |
+| **Approval note** | Same reasoning as the educator-validation case: the product moved this workflow behind a server boundary, and the declaration is older than the architecture. Restoring it would reintroduce a write path the product does not offer. |
 
 **All 20 now have an explicit disposition.** §9's first gate condition is met.
 
