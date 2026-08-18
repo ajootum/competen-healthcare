@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClientOrNull } from "@/lib/supabase/server";
 import { platformFlag } from "@/lib/practice/provisioning";
 import SignupForm from "./SignupForm";
 
@@ -20,7 +20,7 @@ import SignupForm from "./SignupForm";
 export const dynamic = "force-dynamic";
 
 export default async function SignupPage() {
-  const open = await platformFlag(createAdminClient(), "estate_public_signup");
+  const open = await platformFlag(createAdminClientOrNull(), "estate_public_signup");
 
   if (open) return <SignupForm />;
 

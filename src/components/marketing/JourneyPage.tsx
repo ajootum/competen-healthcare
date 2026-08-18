@@ -3,7 +3,7 @@ import PracticeHeader from "@/components/marketing/PracticeHeader";
 import { resolvedJourneys } from "@/lib/marketing/journey-gates";
 import SiteFooter from "@/components/marketing/SiteFooter";
 import { PatternField } from "@/components/marketing/Pattern";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClientOrNull } from "@/lib/supabase/server";
 import { platformFlag } from "@/lib/practice/provisioning";
 import { PRACTICE_ACCENT } from "@/lib/marketing/practice-content";
 import { AVAILABILITY, JOURNEY_GATES, JOURNEYS, contactFor } from "@/lib/marketing/practice-site";
@@ -44,7 +44,7 @@ export default async function JourneyPage({
 
   // A journey with no gate can never open here, so it never reads the database.
   const gate = JOURNEY_GATES[journeyKey] ?? null;
-  const open = gate ? await platformFlag(createAdminClient(), gate.flag) : false;
+  const open = gate ? await platformFlag(createAdminClientOrNull(), gate.flag) : false;
   // The panel below and the header above must agree about what is open, or a page can say "sign in here"
   // while the button beside it still routes back to this same page.
   const journeys = await resolvedJourneys();

@@ -118,14 +118,14 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-no-database-reachable-in-ci
-      # ⚠ A PLACEHOLDER STRING, NOT A KEY, AND NOT A SECRET. createAdminClient() (src/lib/supabase/
-      # server.ts) passes process.env.SUPABASE_SERVICE_ROLE_KEY straight to createClient(), which throws
-      # "supabaseKey is required" on undefined -- so with the variable ABSENT the app crashes at client
-      # CONSTRUCTION and every route touching it 500s, before any network call is attempted. That is what
-      # reddened this job twice: / passed (it never builds an admin client) while /practice and
-      # /practice/home failed. Any non-empty string fixes it; this one points nowhere and grants nothing.
-      # A real service-role key must never appear here -- owner ruling, 2026-08-19.
-      SUPABASE_SERVICE_ROLE_KEY: placeholder-not-a-key-grants-nothing
+      # ⚠ NO SUPABASE_SERVICE_ROLE_KEY HERE, DELIBERATELY, AND ITS ABSENCE IS NOW PART OF THE TEST.
+      # A placeholder was added here when this job first went red, then REMOVED after COMP-ENG-002 §6/§7
+      # asked the right question: "a privileged Supabase key must not be added merely because a route
+      # currently throws without it." The audit (docs/COMP-ENG-002-admin-client-audit.md) found the throw
+      # was a real defect, not a missing config -- five PUBLIC pages constructed a privileged client just
+      # to read one launch-flag boolean, and did it eagerly enough to crash before the fail-safe that was
+      # already written for exactly this case could run. They now use createAdminClientOrNull().
+      # Keeping the variable unset means this job proves that fix stays fixed.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

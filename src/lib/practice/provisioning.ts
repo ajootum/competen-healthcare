@@ -107,7 +107,16 @@ export { audit };
  * The same bug class as the partial-index upsert this codebase has hit twice: an error discarded at the
  * call site becomes a wrong answer somewhere far away.
  */
-export async function platformFlag(admin: any, flag: string): Promise<boolean> {
+export async function platformFlag(admin: any | null, flag: string): Promise<boolean> {
+  // ⚠ NULL IS A REAL ANSWER, NOT A MISSING ARGUMENT (COMP-ENG-002 §7). Public pages pass
+  // createAdminClientOrNull(), which yields null where the environment has no privileged key -- a CI
+  // runner, a contributor without a .env.local. Treating that as OFF is the same verdict this function
+  // already reaches for a failed read, and for the same stated reason: a flag lookup must not take a
+  // public page down. Previously the page crashed at client construction before reaching this line.
+  if (!admin) {
+    console.error(`[practice] no privileged client available to read launch flag "${flag}" -- treating it as OFF`);
+    return false;
+  }
   const { data, error } = await admin.from("practice_platform_flags")
     .select("enabled").eq("flag", flag).maybeSingle();
   if (error) {

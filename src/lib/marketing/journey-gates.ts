@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClientOrNull } from "@/lib/supabase/server";
 import { platformFlag } from "@/lib/practice/provisioning";
 import { JOURNEYS, JOURNEY_GATES, type PracticeJourney } from "./practice-site";
 
@@ -20,7 +20,7 @@ export async function resolvedJourneys(): Promise<PracticeJourney[]> {
   const gated = JOURNEYS.filter(j => JOURNEY_GATES[j.key]);
   if (gated.length === 0) return JOURNEYS;
 
-  const admin = createAdminClient();
+  const admin = createAdminClientOrNull();
   const flags = [...new Set(gated.map(j => JOURNEY_GATES[j.key].flag))];
   // platformFlag logs and returns false on a read failure, so a database problem closes the buttons back
   // to the explainer rather than taking the marketing page down. Closed is the safe direction: the

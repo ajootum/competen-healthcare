@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClientOrNull } from "@/lib/supabase/server";
 import { hasPracticeMembership } from "@/lib/practice/shell";
 import { platformFlag } from "@/lib/practice/provisioning";
 import { pageMetadata } from "@/lib/marketing/site";
@@ -29,7 +29,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   if (await hasPracticeMembership()) redirect("/practice/home");
 
-  const enabled = await platformFlag(createAdminClient(), "practice_sign_in");
+  const enabled = await platformFlag(createAdminClientOrNull(), "practice_sign_in");
 
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center p-6">

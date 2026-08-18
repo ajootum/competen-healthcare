@@ -11,7 +11,7 @@ import {
 import { FAQS, contactFor } from "@/lib/marketing/practice-site";
 import { pageMetadata } from "@/lib/marketing/site";
 import { hasPracticeMembership } from "@/lib/practice/shell";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClientOrNull } from "@/lib/supabase/server";
 import { platformFlag } from "@/lib/practice/provisioning";
 
 // CPR-V2-001 v3 — the Competen Practice homepage.
@@ -58,7 +58,10 @@ export default async function Page() {
   // honest page reached by a dishonest button. So the primary action is whatever is actually open:
   // create a practice, else sign in, else talk to us. The trial line only appears when a trial can
   // genuinely be started.
-  const admin = createAdminClient();
+  // COMP-ENG-002 §7: nullable rather than throwing. This is a PUBLIC page and the client exists only to
+  // read two launch-flag booleans; platformFlag treats a null client as OFF, which is the same verdict
+  // it already reaches for a failed read.
+  const admin = createAdminClientOrNull();
   const [signupOpen, signInOpen, journeys] = await Promise.all([
     platformFlag(admin, "practice_public_signup"),
     platformFlag(admin, "practice_sign_in"),

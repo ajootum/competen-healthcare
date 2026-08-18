@@ -3,7 +3,7 @@ import JourneyPage from "@/components/marketing/JourneyPage";
 import { PRACTICE_ACCENT } from "@/lib/marketing/practice-content";
 import { PRACTICE_LOGIN } from "@/lib/marketing/practice-site";
 import { pageMetadata } from "@/lib/marketing/site";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClientOrNull } from "@/lib/supabase/server";
 import { platformFlag } from "@/lib/practice/provisioning";
 
 // LP-DOC-001 Practice Login Experience.
@@ -32,7 +32,7 @@ export const dynamic = "force-dynamic";
 const container = "mx-auto w-full max-w-7xl px-5 sm:px-8";
 
 export default async function Page() {
-  const signInOpen = await platformFlag(createAdminClient(), "practice_sign_in");
+  const signInOpen = await platformFlag(createAdminClientOrNull(), "practice_sign_in");
   return (
     <JourneyPage
       journeyKey="practice-login"

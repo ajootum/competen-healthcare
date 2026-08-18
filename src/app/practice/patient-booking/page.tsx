@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createAdminClient } from "@/lib/supabase/server";
+import { createAdminClientOrNull } from "@/lib/supabase/server";
 import { platformFlag } from "@/lib/practice/provisioning";
 import { patientBookingSurface } from "@/lib/practice/patient-access";
 import { PATIENT_BOOKING_FLAG } from "@/lib/practice/patient-access-constants";
@@ -44,13 +44,17 @@ export const metadata = {
 };
 
 export default async function Page() {
-  const admin = createAdminClient();
+  const admin = createAdminClientOrNull();
 
   // ⚠ THE FLAG IS CHECKED FIRST AND SEPARATELY, AND IT 404s RATHER THAN EXPLAINING ITSELF. A gate that
   // says "this feature is switched off for this deployment" to an anonymous visitor is a gate that tells
   // strangers what is coming. Off by default: the flag has no row, and platformFlag returns false for a
   // flag it cannot find as well as for one it cannot read.
-  if (!(await platformFlag(admin, PATIENT_BOOKING_FLAG))) notFound();
+  // COMP-ENG-002 §7. Unlike the other public flag pages this one also does a real privileged read
+  // below, so the null case is narrowed here rather than passed on: a client we cannot construct means
+  // the flag cannot be read, platformFlag calls that OFF, and OFF already means notFound(). The visitor
+  // gets the same controlled 404 a disabled flag produces instead of a 500 from a constructor.
+  if (!admin || !(await platformFlag(admin, PATIENT_BOOKING_FLAG))) notFound();
 
   const surface = await patientBookingSurface(admin);
 
