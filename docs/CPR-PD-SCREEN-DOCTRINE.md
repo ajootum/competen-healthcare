@@ -68,6 +68,12 @@ The visible sentence speaks the product's language; the evidence is one click aw
 ⚠ **Count them; do not read for them.** Every one of those 59 sentences was individually defensible,
 so a screenshot review passed them. A `grep` over the loader did not.
 
+**This rule is the one thing here a machine enforces:** `scripts/pd-screen-doctrine-harness.ts`. A flat
+ban in the modules built against this document, and a **ratchet** over the earlier ones — Practices,
+Practitioners and Operations, whose component files have no disclosure at all, which is why their
+citations ended up in prose. That debt is 16 and may only fall. Everything else on this page is still
+enforced by whoever is reading.
+
 ## 3. The density rules
 
 **Explanations belong behind a real `<details>`, not in the layout.** The sentence explaining a figure

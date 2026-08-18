@@ -48,7 +48,13 @@ export type PdMetric = {
    * settings are declared, how many carry an override, what is pending — and not about practices or
    * money, so none of them is borrowable from the modules above.
    */
-  module: "intelligence" | "adoption" | "commercial" | "mission" | "configuration";
+  /**
+   * `releases` was added by CPR-PD-012. Its metrics are about the CAPABILITY AND RELEASE CONTROL
+   * PLANE - what capabilities exist, what is deployed, what is rolling out and who may use it. The
+   * module divides cleanly: the capability CATALOGUE is real code that ships with the product, and
+   * every RELEASE, ROLLOUT and READINESS object PD-012 names is absent from this schema.
+   */
+  module: "intelligence" | "adoption" | "commercial" | "mission" | "configuration" | "releases";
   displayName: string;
   /** Exact business meaning -- what a reader may take this number to claim. */
   definition: string;
@@ -651,6 +657,392 @@ export const PD_METRICS: PdMetric[] = [
       + "practice_workspace is not reachable from this store. Under the two-gate split "
       + "(COMP-ARCH-PSA-001) that is a product boundary, not an oversight.",
     spec: "PD-011 §17",
+  },
+
+  // ── RELEASES & CAPABILITIES (CPR-PD-012) ──────────────────────────────────────────────────────
+  //
+  // ⚠ PD-012 §4 STATES THE RULE THIS WHOLE MODULE TURNS ON: "Lifecycle state is distinct from a
+  // runtime feature flag. A capability cannot be made generally available merely by toggling a flag."
+  // This repository has excellent ACTIVATION machinery and no LIFECYCLE machinery, so the entries
+  // below split almost exactly along that line: the catalogue and its dependencies are real, and every
+  // release, rollout and readiness object the specification names is absent.
+  //
+  // ⚠ AND THREE OF THE `derivable` ENTRIES ARE REFUSED READS, NOT MISSING QUERIES. The rows exist and
+  // the Practice product writes them daily; practice_capability_activation and its event log are not
+  // on the platform-plane allowlist, so no page under src/app/super-admin/** may read them. That is a
+  // different sentence from "the fact does not exist" and the screens say which.
+  {
+    metricId: "rel.capability_catalogue", module: "releases",
+    displayName: "Governed Practice capabilities",
+    definition:
+      "The canonical catalogue of independently governed Competen Practice capabilities — PD-012 §3's "
+      + "capability object. Twelve, and the union is the whole vocabulary.",
+    producer: "real",
+    source:
+      "CAPABILITY_REGISTRY, src/lib/practice/capability-registry.ts:44-56 and :127-263 — code "
+      + "constants, so this count needs no database round trip and can never be unreadable",
+    spec: "PD-012 §3",
+  },
+  {
+    metricId: "rel.capability_dependency_edges", module: "releases",
+    displayName: "Declared capability dependencies",
+    definition:
+      "Edges of PD-012 §15's dependency graph: capability-to-capability requirements plus the "
+      + "configuration artefacts a capability needs before it can work.",
+    producer: "real",
+    source:
+      "`requires` / `requiresSetup` / `recommends` on each CapabilityDefinition "
+      + "(capability-registry.ts:99-112), with requiredClosure and dependentClosure exported so a "
+      + "screen and a harness use the same rule rather than two copies of it",
+    spec: "PD-012 §3, §15",
+  },
+  {
+    metricId: "rel.launch_flags", module: "releases",
+    displayName: "Practice launch flags",
+    definition:
+      "The three ordered launch flags that are the ONE genuine exposure control this product has over "
+      + "Competen Practice: pilot provisioning, sign-in and public signup.",
+    producer: "real",
+    source:
+      "practice_platform_flags (migration 191:256-260), read through loadPracticeOps() and ordered by "
+      + "FLAG_ORDER (src/lib/practice/operations.ts:36). Allowlisted on the platform plane for "
+      + "flag / enabled / note",
+    spec: "PD-012 §8, §19",
+  },
+  {
+    metricId: "rel.releases_recorded", module: "releases",
+    displayName: "Releases recorded",
+    definition:
+      "Rows in the platform release log. ⚠ A RELEASE ROW IS A HUMAN'S ENTRY, NOT A DEPLOYMENT FACT: no "
+      + "CI/CD pipeline writes this table, so it records what somebody chose to record.",
+    producer: "real",
+    source:
+      "plat_deployments (migration 044:32-41, enriched 054:29-31) — version, channel, status, notes, "
+      + "released_at, git_commit, build_number, created_by",
+    spec: "PD-012 §6",
+  },
+  {
+    metricId: "rel.rollbacks_recorded", module: "releases",
+    displayName: "Rollbacks recorded",
+    definition: "Release rows whose status is rolled_back.",
+    producer: "real",
+    source: "plat_deployments.status = 'rolled_back' (044:36, one of four legal values)",
+    spec: "PD-012 §16, §18",
+  },
+  {
+    metricId: "rel.estate_flags", module: "releases",
+    displayName: "Estate feature flags",
+    definition:
+      "⚠ FLAGS ON A DIFFERENT PLANE, AND THE LABEL MATTERS MORE THAN THE COUNT. plat_feature_flags is "
+      + "the HOSPITAL ESTATE's flag catalogue, scoped per tenant. It is not a Competen Practice control "
+      + "and no CP.* capability is reachable from it.",
+    producer: "real",
+    source:
+      "plat_feature_flags (042:91-97) and plat_feature_flag_assignments (042:98-106), the latter "
+      + "carrying scope_type in (global, tenant, country, plan, cohort)",
+    spec: "PD-012 §8",
+  },
+  {
+    metricId: "rel.config_change_sets", module: "releases",
+    displayName: "Configuration change sets",
+    definition:
+      "Change sets in the configuration publishing service — the nearest thing to PD-012 §6's release "
+      + "record that this repository actually has, and it releases CONFIGURATION, not code.",
+    producer: "real",
+    source:
+      "configuration_releases (migration 099:7-27): channel, rollout mode, objects, validation, "
+      + "checkpoint and a status enum of eight values",
+    spec: "PD-012 §6",
+  },
+  {
+    metricId: "rel.gate_auto_pass", module: "releases",
+    displayName: "Automatic readiness checks passing",
+    definition:
+      "The IAM-001 §14 cutover checklist evaluated against the live database — the only readiness gate "
+      + "that exists in this product, and it is a LAUNCH gate for the product as a whole rather than a "
+      + "per-release or per-capability gate.",
+    producer: "real",
+    source: "evaluateGate() (src/lib/practice/operations.ts:232-296), composed through loadPdOperations",
+    numerator: "auto checks in state pass", denominator: "auto checks evaluated",
+    spec: "PD-012 §7, §19",
+  },
+  {
+    metricId: "rel.capability_activation_estate", module: "releases",
+    displayName: "Practices with each capability active",
+    definition:
+      "How many Practice workspaces have each CP.* capability switched on — PD-012 §10's entitlement "
+      + "answer at the practice level.",
+    producer: "derivable",
+    source:
+      "practice_capability_activation (migration 278:85-148), unique on "
+      + "(workspace_id, capability_code), plus defaultActive() for the two capabilities whose registry "
+      + "default is `on` and which are therefore active WITH NO STORED ROW (capability-registry.ts:92)",
+    missing:
+      "⚠ NOT A MISSING QUERY AND NOT AN EMPTY TABLE — A REFUSED READ. practice_capability_activation is "
+      + "not on the platform-plane allowlist (src/lib/access/plane-boundary.ts), so a page under "
+      + "src/app/super-admin/** that read it would be turned red by scripts/plane-boundary-harness.ts. "
+      + "The rows exist and the Practice product writes them. Widening the allowlist is an owner "
+      + "decision — taken once, deliberately, for one table — and not one a screen may take for "
+      + "itself. ⚠ And the count would need defaultActive(), not a row count: absence of a row means "
+      + "the registry default, so counting rows would report no Calendar for every practice "
+      + "provisioned before migration 278.",
+    spec: "PD-012 §10, §17",
+  },
+  {
+    metricId: "rel.capability_activation_history", module: "releases",
+    displayName: "Capability activations over time",
+    definition:
+      "When each capability was switched on or off across the estate, and by which of the four "
+      + "sources — explicit, dependency, mode preset or provisioning default.",
+    producer: "derivable",
+    source:
+      "practice_capability_activation_event (278:165-207): action, state_before, state_after, source, "
+      + "mode_code, actor_id, correlation_id, reason, occurred_at",
+    missing:
+      "The same refused read as rel.capability_activation_estate. This is the richest release-history "
+      + "stream in the product — it answers WHY a capability changed, not merely that it did — and it "
+      + "sits on the Practice plane, so Release History cannot show it.",
+    spec: "PD-012 §18",
+  },
+  {
+    metricId: "rel.entitlement_plan_mix", module: "releases",
+    displayName: "Capability entitlement by plan",
+    definition:
+      "Which plan entitles a Practice to which capability — PD-012 §13's plan availability map.",
+    producer: "derivable",
+    source:
+      "practice_entitlement (191:138-150) holds plan_code and status per workspace; practice_plans "
+      + "(191:249-254) is the plan catalogue",
+    missing:
+      "⚠ TWO WALLS, AND THE SECOND IS THE REAL ONE. practice_entitlement is not on the platform-plane "
+      + "allowlist, so this plane may not read it. And even with the read, NOTHING MAPS A CP.* "
+      + "CAPABILITY TO A PLAN anywhere in this schema: there is no capability column on a plan, no plan "
+      + "column on an activation, and no join table between them. §13's mapping object does not exist, "
+      + "so plan availability is not a query away — it is a schema away.",
+    spec: "PD-012 §13",
+  },
+  {
+    metricId: "rel.rollout_percentage", module: "releases",
+    displayName: "Rollout percentage",
+    definition:
+      "The share of the eligible population a capability is currently exposed to — PD-012 §9's "
+      + "Percentage Rollout stage.",
+    producer: "absent", source: null,
+    missing:
+      "⚠ NOTHING ANYWHERE STORES A ROLLOUT PERCENTAGE, AND NOTHING COULD ASSIGN ONE. It needs two "
+      + "things and this product has neither. A store: there is no percentage column on any table, and "
+      + "plat_feature_flag_assignments targets by scope_type in (global, tenant, country, plan, cohort) "
+      + "— never by proportion (042:101). And a deterministic bucketing function to make assignment "
+      + "sticky per subject, which §9 requires and which does not exist in this codebase. "
+      + "configuration_releases.rollout does read 'phased' and 'canary' (099:12-13) — those are "
+      + "CONFIGURATION-release mode names, one word each, on a different object, carrying no "
+      + "proportion, no cohort and no assignment.",
+    numerator: "subjects exposed", denominator: "eligible subjects",
+    spec: "PD-012 §9",
+  },
+  {
+    metricId: "rel.rollout_stage", module: "releases",
+    displayName: "Rollout stage",
+    definition:
+      "Which of §9's seven stages a capability's rollout currently sits at — Internal, Synthetic/Test, "
+      + "Named Pilot, Early Access, Percentage, Market/Plan or General Availability.",
+    producer: "absent", source: null,
+    missing:
+      "There is no rollout object at all: no rollout, no rollout_stage, no rollout_cohort and no "
+      + "rollout_assignment table, and §25 names all four. A capability has an ACTIVATION state per "
+      + "practice — active or inactive, 278:92 — which is a switch, not a stage, and it is set by the "
+      + "practice rather than by a rollout plan.",
+    spec: "PD-012 §9, §25",
+  },
+  {
+    metricId: "rel.active_rollouts", module: "releases",
+    displayName: "Active rollouts",
+    definition: "Rollouts currently in progress, by stage — the headline of §5's overview.",
+    producer: "absent", source: null,
+    missing:
+      "Follows from rel.rollout_stage: with no rollout object, a rollout cannot be started, paused, "
+      + "expanded, contracted or counted. A tile reading zero would say \"nothing is rolling out\" when "
+      + "the truth is that this product cannot express a rollout at all.",
+    spec: "PD-012 §5, §9",
+  },
+  {
+    metricId: "rel.capability_lifecycle", module: "releases",
+    displayName: "Capability lifecycle state",
+    definition:
+      "PD-012 §4's eight-state lifecycle — Proposed, Development, Internal, Pilot, Early Access, "
+      + "General Availability, Deprecated, Retired.",
+    producer: "absent", source: null,
+    missing:
+      "⚠ THE DISTINCTION §4 FORBIDS COLLAPSING IS CURRENTLY COLLAPSED BY OMISSION. Nothing carries a "
+      + "lifecycle state: CapabilityDefinition (capability-registry.ts:99-112) has no lifecycle field, "
+      + "and practice_capability_activation.state is active or inactive PER PRACTICE (278:92) — a "
+      + "switch one customer flips, not a product stage this company declares. So \"capabilities by "
+      + "lifecycle state\" (§5) has no producer, and no capability can be shown as GA or Deprecated.",
+    spec: "PD-012 §4, §5",
+  },
+  {
+    metricId: "rel.capability_owner", module: "releases",
+    displayName: "Capability owner",
+    definition: "The named product or domain owner accountable for a capability (§3) or a flag (§8).",
+    producer: "absent", source: null,
+    missing:
+      "No owner field exists on any capability definition or on either flag table. §3 requires a named "
+      + "owner on every capability and §8 requires one on every production flag; neither has a column "
+      + "to hold it, so an ownerless-capability count would be twelve out of twelve and would read as a "
+      + "governance finding rather than as a missing schema.",
+    spec: "PD-012 §3, §8",
+  },
+  {
+    metricId: "rel.capability_governance_class", module: "releases",
+    displayName: "Capability governance class",
+    definition:
+      "The security, privacy, clinical-safety or commercial review class a capability's changes require.",
+    producer: "absent", source: null,
+    missing:
+      "Not modelled for CP.* capabilities. ⚠ The CONFIGURATION registry does carry a "
+      + "safety_classification with a nine-value vocabulary (migration 092), which is the right shape — "
+      + "on a different object set, one that contains no Practice capability. Borrowing it would "
+      + "attribute a classification nobody assigned.",
+    spec: "PD-012 §3, §7",
+  },
+  {
+    metricId: "rel.release_content", module: "releases",
+    displayName: "What is in a release",
+    definition:
+      "The capabilities, fixes, migrations and configuration changes a release contains — §6's Content "
+      + "field, and the join that would let a capability point at the release that shipped it.",
+    producer: "absent", source: null,
+    missing:
+      "plat_deployments.notes is free text (044:37). There is no release_item table, no "
+      + "release-to-capability link and no migration manifest, so a release cannot say what it shipped "
+      + "and a capability cannot say which release it arrived in. ⚠ Migration state is doubly absent: "
+      + "nothing in this database records which migrations have been applied, so §7's migrations gate "
+      + "has no evidence to read.",
+    spec: "PD-012 §6, §7, §25",
+  },
+  {
+    metricId: "rel.release_approvals", module: "releases",
+    displayName: "Release approvals and risk class",
+    definition:
+      "§6's Risk class and Approvals fields, and §5's high-risk pending approvals — who must sign a "
+      + "release off, and whether they have.",
+    producer: "absent", source: null,
+    missing:
+      "Neither exists. plat_deployments has no risk column, no approver and no approval record, and "
+      + "there is no release_approval object of any kind. So \"awaiting approval\" cannot be "
+      + "distinguished from \"nobody has looked at it\", and maker-checker (§21) has nowhere to record "
+      + "a decision — which is why nothing in this module offers an approve button.",
+    spec: "PD-012 §5, §6, §21",
+  },
+  {
+    metricId: "rel.readiness_gates", module: "releases",
+    displayName: "Release readiness gates",
+    definition:
+      "§7's twelve gates — build, migrations, configuration, dependencies, security, privacy, clinical "
+      + "safety, product health, critical journeys, support readiness, pilot acceptance and "
+      + "commercial/market — each with a pass, fail, conditional or unknown result and its evidence.",
+    producer: "absent", source: null,
+    missing:
+      "⚠ ALL TWELVE. There is no readiness_gate_definition, no readiness_gate_result and no attestation "
+      + "record, so no gate can pass, fail or block an expansion. Four of the twelve depend on Product "
+      + "Health, which has no health store and no journey checks, so those four could not be automated "
+      + "even once a gate object existed. What DOES exist is the IAM-001 cutover checklist "
+      + "(operations.ts:232-296) — a launch gate for the product as a whole, evaluated live, with its "
+      + "human-attested items kept separate and never auto-greened.",
+    spec: "PD-012 §7",
+  },
+  {
+    metricId: "rel.flag_governance", module: "releases",
+    displayName: "Flag owner, type and expiry",
+    definition:
+      "§8's canonical flag record: owner, flag type (release, experiment, operational kill switch or "
+      + "temporary compatibility) and an expiry or review date.",
+    producer: "absent", source: null,
+    missing:
+      "plat_feature_flags has key, description, default_on and product_code (042:91-97) and none of the "
+      + "four governance fields. practice_platform_flags has flag, enabled and note (191:256-260) — no "
+      + "owner, no type, no expiry either. So §8's requirement that temporary flags carry expiry or "
+      + "review dates \"to prevent permanent hidden product states\" cannot be enforced: a temporary "
+      + "flag is indistinguishable from a permanent one in both stores.",
+    spec: "PD-012 §8",
+  },
+  {
+    metricId: "rel.market_availability", module: "releases",
+    displayName: "Capability availability by market",
+    definition:
+      "Which capabilities are permitted in which country or market, with effective dates and state (§12).",
+    producer: "absent", source: null,
+    missing:
+      "⚠ NO CAPABILITY-TO-MARKET MAPPING EXISTS. practice_workspace.country and practice_location.country "
+      + "record where practices ARE, which §12 is explicit must not be confused with where a capability "
+      + "is PERMITTED (\"do not infer market availability from locale or currency\"). "
+      + "plat_feature_flag_assignments has a `country` scope (042:101) — on the hospital estate plane, "
+      + "for estate flags, reaching no CP.* capability.",
+    spec: "PD-012 §12",
+  },
+  {
+    metricId: "rel.kill_switch", module: "releases",
+    displayName: "Capability kill switch",
+    definition:
+      "An operational control that withdraws a capability across the estate to a known safe posture "
+      + "(§8, §16), with recovery and re-enable criteria.",
+    producer: "absent", source: null,
+    missing:
+      "There is no product-level kill switch for any CP.* capability. Deactivating a capability writes "
+      + "practice_capability_activation PER WORKSPACE (278:85) — it is the practice's own switch, not "
+      + "the landlord's, and there is no path that sets it across the estate. ⚠ The three launch flags "
+      + "ARE real kill switches for ENTRY (provisioning, sign-in, signup) and are the honest thing to "
+      + "point at; they withdraw the door, not a feature.",
+    spec: "PD-012 §8, §16",
+  },
+  {
+    metricId: "rel.post_deploy_verification", module: "releases",
+    displayName: "Post-deployment verification",
+    definition:
+      "§6's requirement that release completion needs post-deployment verification and not only CI/CD "
+      + "success — the health and critical-journey evidence recorded after a deploy, and again after a "
+      + "rollback (§16).",
+    producer: "absent", source: null,
+    missing:
+      "There is no post-deploy evidence because there is no health telemetry to record: Product Health "
+      + "has no health-issue store and no critical-journey check, so a release cannot be verified, a "
+      + "rollback cannot be confirmed recovered, and a deploy that succeeded while the product broke "
+      + "would look identical to one that worked.",
+    spec: "PD-012 §6, §16",
+  },
+  {
+    metricId: "rel.pilot_acceptance", module: "releases",
+    displayName: "Pilot cohorts and acceptance",
+    definition:
+      "§14's pilot record: named participants, start and end, capability and version under test, "
+      + "structured acceptance criteria and an explicit exit decision.",
+    producer: "absent", source: null,
+    missing:
+      "No pilot object exists. practice_pilot_provisioning is a BOOLEAN — one flag saying whether a "
+      + "platform operator may provision workspaces at all — and provisioning_request records the "
+      + "mechanics of creating one, with no pilot name, no cohort, no acceptance criterion and no exit "
+      + "decision. practice_cohort (migration 305) is a Product-Intelligence analytics cohort on the "
+      + "Practice plane, not a release cohort, and this plane may not read it. §14's \"do not treat "
+      + "absence of complaints as acceptance\" has nowhere to record acceptance instead.",
+    spec: "PD-012 §14",
+  },
+  {
+    metricId: "rel.availability_decision", module: "releases",
+    displayName: "Effective availability decision",
+    definition:
+      "§11's resolver: a machine-readable decision plus safe human-readable reason codes for why a "
+      + "capability is or is not available to a given subject, across all eleven conditions.",
+    producer: "absent", source: null,
+    missing:
+      "Five of §11's eleven conditions have no store at all — lifecycle, the release-version linkage, "
+      + "market, plan or segment, and a governance block — and one more, subject entitlement, is on the "
+      + "Practice plane and refused here. A resolver that evaluated only the conditions this plane can "
+      + "see would return \"available\" from a partial evaluation, and §11's own decision object makes "
+      + "that worse rather than better: a machine-readable verdict carries more authority than a "
+      + "sentence, and this one would be wrong for precisely the reasons it could not see. The real "
+      + "gate exists inside the Practice product, where the activation rows and the permission grants "
+      + "both live.",
+    spec: "PD-012 §10, §11",
   },
 ];
 

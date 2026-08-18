@@ -610,7 +610,11 @@ export async function loadPdConfiguration(admin: Admin): Promise<PdConfiguration
     );
   }
   const regRead = reg.provisioned && regCount !== null && !registryLied;
-  if (!reg.provisioned) problems.push("configuration_registry_objects: the table is not present (migration 092 has not been applied here).");
+  // ⚠ THE MIGRATION NUMBER IS DELIBERATELY NOT IN THIS SENTENCE. It renders in ReadFailures, which is
+  // visible page text, and PD-001 s3 keeps implementation identifiers off a Director surface. The fact
+  // the reader needs is that the store is absent in THIS environment rather than empty; which migration
+  // creates it (092) is a deployment question and belongs to Technical Operations.
+  if (!reg.provisioned) problems.push("configuration_registry_objects: the table is not present in this environment, which is not the same as an empty registry.");
 
   const bySafetyMap = new Map<string, number>();
   for (const o of regObjects) bySafetyMap.set(o.safety_classification, (bySafetyMap.get(o.safety_classification) ?? 0) + 1);
