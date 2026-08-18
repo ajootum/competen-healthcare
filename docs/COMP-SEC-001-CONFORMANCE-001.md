@@ -50,7 +50,8 @@ honest form of conformance is an attestation pointer, and claiming it as ours wo
 | CSRF protection | **PARTIAL** | No token layer. What actually stands: SameSite auth cookies, Next server-action origin checking, and JSON APIs behind authenticated context. The survey called CSRF absent; this line is the honest refinement — mitigated by defaults, not protected by design. |
 | XSS mitigation | **SATISFIED (by framework) + CSP report-only** | React escaping throughout; the QR code on the two-factor screen deliberately rendered as `img`, never `dangerouslySetInnerHTML`. |
 | SQL injection prevention | **SATISFIED** | All data access via PostgREST parameterized calls; no string-built SQL serves user input. Migrations are hand-applied files, not runtime SQL. |
-| Content Security Policy | **PARTIAL — deliberately Report-Only** | `Content-Security-Policy-Report-Only` shipped in `next.config.ts:182` with the enforcing switch documented as a one-word change. Enforcement is a decision, pending report data — the same measure-before-enforce doctrine as the idle limit. |
+| CSP — monitoring / observation | **SATISFIED** | `Content-Security-Policy-Report-Only` shipped in `next.config.ts:182`. ⚠ Report-only is not a partial credit here: the non-inline directives — `object-src`, `base-uri`, `frame-ancestors`, `form-action`, `connect-src`, `img-src` — are meaningfully tight *and are the ones needing real-world observation before they enforce*. Observation is the control that is actually in place. |
+| CSP — enforcement | **IN PROGRESS** | Owner ruling 2026-08-19: treat as a genuine rollout, not a checkbox. Ladder: report-only → collect violations → classify → remove unnecessary sources → test in staging → enforce the non-inline protections → keep tightening. ⚠ Enforcing today would require broad `'unsafe-inline'` on both `script-src` and `style-src` for three concrete reasons (a blocking inline anti-flash script in `layout.tsx`, Next's per-route `self.__next_f.push` bootstrap that no fixed hash covers, and React 19 + Tailwind v4 inline style *attributes*) — which is a policy worth little as an XSS control, manufactured to look complete. Blocked on staging (COMP-ENG-002) for the test step. |
 | Input validation client and server | **SATISFIED** | Engines validate server-side as doctrine; offline capture re-validates at the bedside in the same sentences (the two-list-no-drift rule, pinned by harness). |
 
 ## Infrastructure Security
@@ -84,9 +85,9 @@ honest form of conformance is an attestation pointer, and claiming it as ours wo
 | Spec line | Verdict | Evidence / gap |
 |---|---|---|
 | Automated encrypted backups | **PLATFORM-ATTESTED** | Supabase backups/PITR per plan tier — the attestation should name the tier and its actual PITR window. |
-| Disaster recovery testing | **NOT SATISFIED** | Never performed. A restore has never been rehearsed; until one is, backup conformance is a claim about Supabase, not about this product's recoverability. |
+| Disaster recovery testing | **NOT SATISFIED — procedure ready, blocked on staging** | Still never performed, and the verdict does not move until it is. What changed 2026-08-19: `docs/COMP-DR-001-rehearsal-runbook.md` is the executable procedure with measurement points and a pass definition, and it runs against staging by owner ruling — so it is blocked on COMP-ENG-002, not on knowing what to do. Backup conformance remains a claim about Supabase until a restore is rehearsed. |
 | High availability | **PLATFORM-ATTESTED** | Host SLAs. |
-| RPO / RTO objectives | **NOT SATISFIED** | Never defined. Defining them is a one-page owner decision that gives the two lines above something to be tested against. |
+| RPO / RTO objectives | **SATISFIED (defined), UNMEASURED** | Owner decision 2026-08-19, ADR-009: **RPO 24h, RTO 8h** — initial service targets, subject to tightening. Held in `src/lib/super-admin/recovery-objectives.ts` and prefilled as the target on any exercise logged in the Recovery console, so a drill cannot be scored against a number nobody agreed. ⚠ Defined is not achieved: no restore has been rehearsed, so these are objectives with no measurement behind them, and the console says so on its own surface. |
 
 ## Developer Security Standards
 
@@ -103,7 +104,18 @@ honest form of conformance is an attestation pointer, and claiming it as ours wo
 1. **"All services authenticated"** — holds. Every practice route behind `requirePracticeContext`/shell guards (the 98-open-routes incident found and closed); all 205 HQ pages enforce; estate layouts gate on membership.
 2. **"Every sensitive action audited"** — holds as discipline (state-changing engines write audit rows with correlation ids), with the auth trail's not-recorded list keeping the claim honest.
 3. **"No plaintext secrets"** — holds for the repository (`.env*` ignored, zero tracked env files). Rotation remains the gap named above.
-4. **"RBAC enforced platform-wide"** — holds, two-plane by design; the s14 role-check-ban reading is the open question over it.
+4. **"RBAC enforced platform-wide"** — ⚠ **holds only if read as application-layer enforcement, and this map previously let it imply RLS.** Owner ruling 2026-08-19: state the architecture as it is, in three layers, rather than let a spec phrase describe a system nobody built.
+
+   | Layer | What actually enforces | Reality |
+   |---|---|---|
+   | **Database enforcement** | RLS *where technically appropriate* | ⚠ Not the primary control. 209 of 209 `practice_*` tables carry RLS with **zero policies**, and the service role bypasses RLS entirely. RLS is not what stops a cross-tenant read today. |
+   | **Application authorization** | `getCaller()` and the other approved boundaries, capability resolution, the tenant/product boundary | **This is the real control.** 358 of 455 API routes enter an approved boundary; 6 are allowlisted with reasons; 91 authenticate ad-hoc and are a ratcheted backlog (`scripts/auth-boundary-harness.ts`). |
+   | **Privileged server access** | service-role, strictly server-side, audited | Legitimate and deliberate — but it is why the layer above must hold, since nothing beneath it will. |
+
+   Two open items sit under this, in the owner's priority order: **routes bypassing the boundary
+   entirely** (91, ADR-008 §note / `auth-boundary-harness`) rank **above** the role-name migration
+   (ADR-008), because a route that never reaches the gateway is more consequential than one that reaches
+   it and then uses an older abstraction inside.
 5. **"Security settings configurable by tenant"** — holds on the practice plane (`practice_security_policy`: MFA requirement, idle limit, audited updates). No org/product/role/user override axes (COMP-AUTH-001's admin matrix) exist.
 
 ## What this map changes

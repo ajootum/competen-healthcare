@@ -45,6 +45,7 @@ wish, not a record.
 | [ADR-009](./ADR-009-recovery-objectives.md) | Initial recovery objectives - RPO 24h, RTO 8h | Accepted |
 | [ADR-010](./ADR-010-email-verification.md) | Production accounts require verified email addresses | Accepted |
 | [ADR-011](./ADR-011-clinical-session-policy.md) | Clinical session policy - 10-minute lock, 30-minute logout | Accepted |
+| [ADR-012](./ADR-012-security-architecture.md) | The actual security architecture - three layers, not RLS-enforced RBAC | Accepted |
 
 Initial set published under COMP-ENG-001 §5, 2026-08-18. Each ADR below was written by reading the actual
 code, migrations, and harnesses cited in it — not reconstructed from memory of what the decision was
