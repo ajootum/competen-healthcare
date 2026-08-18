@@ -47,8 +47,30 @@ type Deployed = {
 };
 type Authored = {
   name: string; table: string; file: string; cmd: string | null;
-  using: string | null; withCheck: string | null;
+  using: string | null; withCheck: string | null; roles: string[];
 };
+
+/**
+ * Normalise a role set for comparison.
+ *
+ * ⚠ AN ABSENT `TO` CLAUSE MEANS PUBLIC, NOT "UNSPECIFIED". Postgres defaults a policy with no TO clause
+ * to PUBLIC — every role, including `anon`. Treating the absence as "no opinion" would silently excuse
+ * the single broadest thing a policy can be, which is the opposite of what COMP-ENG-002B §9 priority 1
+ * is asking about.
+ */
+function roleSet(roles: string[] | string | null | undefined): string[] {
+  if (!roles) return ["public"];
+  const arr = Array.isArray(roles)
+    ? roles
+    : String(roles).replace(/^\{|\}$/g, "").split(",");
+  const cleaned = arr.map(r => r.trim().replace(/^"|"$/g, "").toLowerCase()).filter(Boolean);
+  return cleaned.length ? [...new Set(cleaned)].sort() : ["public"];
+}
+
+/** PUBLIC contains every role, so it is the widest possible set. */
+const widerThan = (live: string[], repo: string[]) =>
+  (live.includes("public") && !repo.includes("public"))
+  || live.some(r => !repo.includes(r) && !repo.includes("public"));
 
 /** Reads a balanced-parenthesis group starting at `open`, returning its inner text. */
 function balanced(src: string, open: number): { text: string; end: number } | null {
@@ -131,10 +153,13 @@ function authoredPolicies(): Authored[] {
         const p = body.indexOf("(", idx);
         return balanced(body, p)?.text ?? null;
       };
+      // `to role_a, role_b` sits between the optional FOR and the USING/WITH CHECK clauses.
+      const toM = body.match(/\bto\s+([a-z_][\w",\s]*?)(?=\s+(?:using|with\s+check)\b|\s*$)/i);
       out.push({
         name, table, file: `supabase/migrations/${f}`,
         cmd: cmdM ? cmdM[1].toUpperCase() : null,
         using: grab(uIdx), withCheck: grab(wIdx),
+        roles: roleSet(toM ? toM[1].split(",") : null),
       });
     }
   }
@@ -180,6 +205,20 @@ async function main() {
 
   const tables = new Set([...deployed.map(d => d.tbl), ...authored.map(a => a.table)]);
   const rows: { table: string; verdict: string; detail: string }[] = [];
+
+  // ── §9 priority 1: per-policy ROLES, reported separately from bodies ──────────────────────────
+  // ⚠ A CORRECT BODY ON AN UNEXPECTEDLY BROAD ROLE SET IS AN AUTHORIZATION DEFECT, and it would be
+  // invisible in a body-only comparison -- every one of those policies would read EQUIVALENT. Kept as
+  // its own verdict so a widening can never be absorbed by a matching predicate.
+  const roleRows: { table: string; policy: string; repo: string[]; live: string[]; wider: boolean }[] = [];
+  for (const d of deployed) {
+    const a = authoredByKey.get(`${d.tbl}::${d.policy_name}`);
+    if (!a) continue;
+    const live = roleSet(d.roles), repo = a.roles;
+    if (live.join() !== repo.join()) {
+      roleRows.push({ table: d.tbl, policy: d.policy_name, repo, live, wider: widerThan(live, repo) });
+    }
+  }
 
   for (const t of [...tables].sort()) {
     if (only && t !== only) continue;
@@ -238,6 +277,20 @@ async function main() {
     for (const r of list.slice(0, only ? 999 : 40)) console.log(`  ${r.table}: ${r.detail}`);
     if (!only && list.length > 40) console.log(`  ... and ${list.length - 40} more (use --table to inspect)`);
   }
+  // ── Roles report ─────────────────────────────────────────────────────────────────────────────
+  const wider = roleRows.filter(r => r.wider);
+  const narrower = roleRows.filter(r => !r.wider);
+  console.log(`\n── ROLES (§9 priority 1) ──`);
+  console.log(`  policies whose deployed role set differs from the declaration: ${roleRows.length}`);
+  console.log(`    BROADER than declared (authorization defect class): ${wider.length}`);
+  console.log(`    narrower than declared:                             ${narrower.length}`);
+  for (const r of wider.slice(0, 30)) {
+    console.log(`  ⚠ ${r.table} :: ${r.policy}  repo=[${r.repo.join(",")}] live=[${r.live.join(",")}]`);
+  }
+  for (const r of narrower.slice(0, 15)) {
+    console.log(`    ${r.table} :: ${r.policy}  repo=[${r.repo.join(",")}] live=[${r.live.join(",")}]`);
+  }
+
   console.log("\n⚠ EQUIVALENT means an exact match after conservative normalisation. REVIEW means a human");
   console.log("  must read both predicates — it is not by itself a defect. This tool does not decide.\n");
 }
