@@ -34,26 +34,35 @@ export default async function Page() {
         readAt={s.readAt}
       />
 
-      <div className="rounded-xl border border-[var(--cmp-color-warning)] bg-[var(--cmp-surface-warning)] p-4">
-        <p className="text-[13px] font-bold text-[var(--cmp-text-warning)]">
-          Incidents are real here. Cases, problems, postmortems, escalations and corrective actions have no record type yet.
+      <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+        <p className="text-[13px] font-bold text-amber-900">
+          All six record types are real now. None of them has an intake, so every count below is a zero that cannot rise.
         </p>
         <p className="mt-1.5 max-w-4xl text-[12px] leading-relaxed text-gray-800">
-          The incident model is Practice-native and scoped to the canonical subjects and the eight
-          critical journeys, so every figure about an incident below is counted rather than estimated.
-          The other five objects §1 defines do not exist as tables — they are models to build, not
-          queries somebody has not written yet, and this module says which is which rather than showing
-          five zeroes.
+          The five objects §1 defines alongside the incident now exist: a support case, a problem, an
+          escalation, a postmortem and a corrective action, each with the lifecycle and the constraints
+          its section describes. So these figures are counted rather than refused — and they count what
+          has been <em>recorded</em>, which today is nothing, because no form, API or channel writes to
+          any of them.
         </p>
-        <Explain summary="Why a zero would have been the wrong rendering">
-          A zero is a measurement: it says somebody looked and found none. Every one of those five would
-          have shown zero open cases, zero overdue actions, zero problems — and a Director reading a
-          quiet panel would reasonably conclude the estate was quiet. It is not quiet; it is unrecorded.
-          <Cite>mos_incident and mos_incident_open exist; no case, problem, postmortem, escalation or corrective-action table does</Cite>
+        <Explain summary="Why that distinction is worth a banner">
+          Until migration 318 these panels refused to render, and a refusal invites a question. A zero
+          ends one. &ldquo;No open cases&rdquo; reads as <em>practitioners are not hitting problems</em>
+          and means <em>a practitioner has nowhere to report one</em> — the same pixels, the opposite
+          conclusion. Every screen in this module carries that sentence beside its counts, taken from
+          the metric registry rather than retyped, so it cannot be softened on one page and not another.
+          <Cite>mos_support_case, mos_problem, mos_escalation, mos_postmortem, mos_corrective_action — created 2026-08-18, all empty</Cite>
         </Explain>
       </div>
 
       <ReadFailures problems={s.problems} />
+
+      {s.truncated.length > 0 && (
+        <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11.5px] leading-relaxed text-amber-900">
+          ⚠ More than 500 rows exist for {s.truncated.join(", ")} and this page read the first 500 of
+          each. Those counts describe a page of results, not the estate.
+        </p>
+      )}
 
       {/* ── §3's posture ───────────────────────────────────────────────────────────────────────── */}
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -68,19 +77,20 @@ export default async function Page() {
         {/* ── §3's Needs Attention, restricted to triggers that can fire ─────────────────────── */}
         <Panel
           title="Needs attention (§3)"
-          note="Only the triggers with a producer. The five that cannot fire are named below rather than left as an implied all-clear."
+          note="Four of §3's six triggers fire now. The two that cannot are named below rather than left as an implied all-clear."
         >
           {s.attention.length === 0 ? (
             <p className="text-[12px] leading-relaxed text-gray-600">
-              No open incident is missing a commander. ⚠ That is one trigger of six, and the other five
-              have nothing to fire from — so this panel being empty says less than it appears to.
+              Nothing is unowned, overdue or unresolved on the four triggers that can fire. ⚠ Two of the
+              six still have nothing to fire from, and none of the four has an intake — so this panel
+              being empty says less than it appears to.
             </p>
           ) : (
             <ul className="flex flex-col divide-y divide-gray-100">
               {s.attention.map(a => (
-                <li key={a.incidentId} className="py-2.5 first:pt-0 last:pb-0">
+                <li key={a.key} className="py-2.5 first:pt-0 last:pb-0">
                   <div className="flex items-start justify-between gap-2">
-                    <Link href={`/super-admin/pd/support/incident-360?id=${a.incidentId}`}
+                    <Link href={a.href}
                       className="text-[12.5px] font-semibold text-gray-900 hover:text-teal-700">
                       {a.title}
                     </Link>
@@ -133,10 +143,24 @@ export default async function Page() {
         </Panel>
       </div>
 
-      {/* ── the five record types that do not exist ────────────────────────────────────────────── */}
+      {/* ── the five that are now real ─────────────────────────────────────────────────────────── */}
       <Panel
-        title="Record types §1 defines that this schema does not have"
-        note="Each is a model with a lifecycle, not a screen waiting for a query."
+        title="The five record types §1 defines beside the incident"
+        note="Counted from their own stores. Each is a measured zero and will stay one until something can write to it."
+      >
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <Stat label="Open cases" f={s.records.cases} />
+          <Stat label="Open problems" f={s.records.problems} />
+          <Stat label="Open escalations" f={s.records.escalations} />
+          <Stat label="Postmortems written" f={s.records.postmortems} />
+          <Stat label="Overdue actions" f={s.records.overdueActions} tone="warn" />
+        </div>
+      </Panel>
+
+      {/* ── what genuinely still has no store ──────────────────────────────────────────────────── */}
+      <Panel
+        title="What §7 and §8 still define that this schema does not have"
+        note="This list held the five record types above until they were built. Leaving them on it would teach a reader to distrust the gaps that are real."
       >
         <AbsentList items={s.missing} />
       </Panel>
@@ -155,7 +179,13 @@ export default async function Page() {
         </p>
       </Panel>
 
-      <Panel title="The eleven submodules (§2)" note="The chip is the state of the RECORD TYPE, not of the page.">
+      {/* ⚠ "the ten below this one", not "the eleven". §2 counts eleven including this overview, and a
+          heading claiming eleven over a grid of ten is the kind of small wrongness that makes a reader
+          start counting everything else on the page. */}
+      <Panel
+        title="The ten submodules below this one (§2)"
+        note="The chip is the state of the RECORD TYPE, not of the page. Five of them moved to Built when their records were created."
+      >
         <SubmoduleGrid items={SUPPORT_SUBMODULES} />
       </Panel>
     </div>

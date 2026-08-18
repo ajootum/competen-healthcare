@@ -63,6 +63,21 @@ export type PdMetric = {
   source: string | null;
   /** For derivable: what must be computed. For absent: the fact that does not exist. */
   missing?: string;
+  /**
+   * ⚠ THE PRODUCER IS REAL, THE NUMBER IS HONEST, AND HERE IS WHAT IT STILL DOES NOT MEAN.
+   *
+   * Added by CPR-PD-009 for a case the other two dimensions cannot express. Migration 318 gave the five
+   * support record types real tables, so `sup.cases_open` became a genuine count -- but NOTHING WRITES
+   * TO THEM YET. There is no intake route, no form, no API, no channel. The count is a true measurement
+   * of what has been recorded, and it will read zero forever until an intake exists.
+   *
+   * That is exactly the shape of number that misleads worst. Zero open cases reads as "practitioners
+   * are not hitting problems"; it actually means "a practitioner has nowhere to report one". An absence
+   * sentence cannot say this, because the fact is not absent -- it is recorded, in an empty store.
+   *
+   * A caveat is not permanent. It is removed in the same commit that gives the metric its writer.
+   */
+  caveat?: string;
   /** A rate may not render without both (CPR-PI-001 v2 s14, and s19 requires the denominator shown). */
   numerator?: string;
   denominator?: string;
@@ -1403,71 +1418,127 @@ export const PD_METRICS: PdMetric[] = [
     producer: "real", source: "mos_incident.started_at",
     spec: "PD-009 §3",
   },
+  // ── ⚠ THE FIVE RECORD TYPES MIGRATION 318 MADE REAL ────────────────────────────────────────────
+  //
+  // Each of these read `absent` until 2026-08-18, and the missing sentence said so accurately: the
+  // TABLE did not exist. It does now, so the producer is real and the count is a true measurement.
+  //
+  // Every one carries a `caveat` instead, because the second half of the problem is untouched: no
+  // intake route writes to any of them. A zero here is measured, and it will stay zero however many
+  // problems practitioners actually hit. See the field's own documentation above.
   {
     metricId: "sup.cases_open", module: "support",
     displayName: "Open support cases",
-    definition: "Practitioner or Practice-reported cases in a non-terminal state — §4's case estate.",
-    producer: "absent", source: null,
-    missing:
-      "⚠ NO SUPPORT CASE RECORD EXISTS ANYWHERE IN THIS SCHEMA. §4 defines a case with a stable id, a "
-      + "reporter, a category, a priority, an SLA state and a linked incident — none of those columns "
-      + "exists because the table does not. plat_support_tickets is the closest shape and keys on "
-      + "tenant_id, which a Practice cannot be. This is a model to build, not a query to write.",
+    definition: "Recorded cases in a non-terminal state — §4's case estate, as recorded.",
+    producer: "real", source: "mos_support_case.status (migration 318)",
+    caveat:
+      "⚠ NOTHING CAN RAISE A CASE YET. The record exists; the intake does not — no form, no API, no "
+      + "channel. This counts what has been recorded, which is not what practitioners have hit.",
     spec: "PD-009 §4",
   },
   {
     metricId: "sup.first_response", module: "support",
     displayName: "Median first response",
-    definition: "The median time from a case being raised to its first human response — §3's support pulse.",
+    definition: "The median hours from a case being raised to its first response, over cases that have one.",
+    producer: "real", source: "mos_support_case.created_at and .first_response_at (migration 318)",
+    caveat:
+      "The times are recorded now, but §3's BREACH is still uncomputable: no response target is "
+      + "configured anywhere, so a duration cannot be judged late. A median without a target is a "
+      + "description, not a verdict.",
+    numerator: "hours to first response", denominator: "cases with a first response recorded",
+    spec: "PD-009 §3",
+  },
+  {
+    metricId: "sup.response_target", module: "support",
+    displayName: "Cases past their response target",
+    definition: "Cases whose first response is later than the target for their priority — §3's breach trigger.",
     producer: "absent", source: null,
     missing:
-      "It needs a case record and a response event, and neither exists. ⚠ AND A RESPONSE TARGET TOO: §3 "
-      + "asks for breached response targets, and no target is configured anywhere, so even with the "
-      + "times there would be nothing to breach.",
-    numerator: "time to first response", denominator: "cases with a response",
+      "⚠ NO RESPONSE TARGET IS CONFIGURED ANYWHERE. §4 separates priority from severity precisely so a "
+      + "target can attach to priority, and the priority column exists — but nothing states what P1 or "
+      + "P2 promises. Inventing one here would manufacture the baseline the breach is measured against, "
+      + "which is the definition of an invented target.",
     spec: "PD-009 §3",
   },
   {
     metricId: "sup.escalations", module: "support",
     displayName: "Open escalations",
-    definition: "Overdue, high-impact, blocked or cross-team escalations — §2's escalation estate.",
-    producer: "absent", source: null,
-    missing:
-      "No escalation record exists. An escalation is a stateful object with a reason, a target and a "
-      + "deadline; nothing in this schema carries any of the three.",
+    definition: "Escalations in a non-terminal state, by §9's trigger vocabulary.",
+    producer: "real", source: "mos_escalation.status (migration 318)",
+    caveat:
+      "⚠ NOTHING CAN RAISE AN ESCALATION YET. §9's eight triggers are a constrained vocabulary so they "
+      + "can be counted; nothing fires them, so the tally is of what was recorded by hand.",
     spec: "PD-009 §2",
   },
   {
     metricId: "sup.problems", module: "support",
     displayName: "Open problems",
     definition: "Recurring or systemic causes under investigation, each linking one or more incidents.",
-    producer: "absent", source: null,
-    missing:
-      "No problem record exists. §1 defines a problem as the underlying cause that GENERATES incidents, "
-      + "so it cannot be derived from the incidents it explains — the direction of the relationship is "
-      + "the wrong way round for inference.",
+    producer: "real", source: "mos_problem.status with mos_problem_incident (migration 318)",
+    caveat:
+      "⚠ A PROBLEM IS RAISED BY JUDGEMENT, NOT BY A QUERY. §1 defines it as the cause that GENERATES "
+      + "incidents, so it can never be inferred from them — the relationship runs the wrong way. This "
+      + "counts what somebody has decided is a problem, and nobody can record that decision yet.",
     spec: "PD-009 §2",
   },
   {
     metricId: "sup.postmortems", module: "support",
+    displayName: "Postmortems recorded",
+    definition: "Postmortems that exist, by §13's four states — draft, in review, approved, published.",
+    producer: "real", source: "mos_postmortem.status (migration 318)",
+    caveat:
+      "⚠ THIS COUNTS POSTMORTEMS WRITTEN, NOT POSTMORTEMS OWED. The two are different questions and "
+      + "only one of them has an answer — see sup.postmortems_outstanding.",
+    spec: "PD-009 §2",
+  },
+  {
+    metricId: "sup.postmortems_outstanding", module: "support",
     displayName: "Postmortems outstanding",
     definition: "Qualifying incidents whose postmortem is not complete — §5's POST-INCIDENT obligation.",
     producer: "absent", source: null,
     missing:
-      "No postmortem record exists, and no rule says which incidents qualify. §5 says closure cannot "
-      + "silently bypass a required postmortem; with neither the record nor the rule, this cannot yet "
-      + "be counted or enforced.",
+      "⚠ THE RECORD EXISTS AND THE RULE DOES NOT. Migration 318 added mos_postmortem, so a postmortem "
+      + "can be written — but NO RULE SAYS WHICH INCIDENTS REQUIRE ONE. §5 says closure must not "
+      + "silently bypass a required postmortem, and 'required' is the undefined word. Counting SEV-1 "
+      + "and SEV-2 without a postmortem would invent that rule on the screen and then enforce it.",
     spec: "PD-009 §2",
   },
   {
     metricId: "sup.corrective_actions", module: "support",
     displayName: "Overdue corrective actions",
-    definition: "Actions arising from incidents, problems or postmortems that are past their due date.",
+    definition:
+      "Actions from incidents, problems or postmortems whose due date has passed and whose state is "
+      + "not done, cancelled or accepted risk.",
+    producer: "real", source: "mos_corrective_action.due_on and .state (migration 318)",
+    caveat:
+      "⚠ OVERDUE IS COMPUTED ONLY OVER ACTIONS THAT CARRY A DUE DATE. §14 requires one on P1 and P2 and "
+      + "the schema enforces that, so nothing high-priority can hide — but a P3 or P4 with no due date "
+      + "can never be late, and is therefore invisible to this figure by design rather than by mistake.",
+    spec: "PD-009 §2",
+  },
+  {
+    metricId: "sup.communications", module: "support",
+    displayName: "Incident updates published",
+    definition: "Updates issued about an incident, to whichever audience §8 defines.",
     producer: "absent", source: null,
     missing:
-      "No corrective action record exists. §2 requires an owner and a due date on each, which is exactly "
-      + "what makes them countable as overdue — and exactly what has nowhere to live.",
-    spec: "PD-009 §2",
+      "⚠ NO UPDATE OR COMMUNICATION RECORD EXISTS. §8 wants an update with an audience, a channel, a "
+      + "time and an author, and a cadence to be late against. Migration 318 built the five record types "
+      + "§1 names and this is not one of them — it is the sixth object, and it is still a model to "
+      + "build. Its absence is why §3's 'update overdue' trigger cannot fire and why §7's Communications "
+      + "panel is dark.",
+    spec: "PD-009 §8",
+  },
+  {
+    metricId: "sup.decisions", module: "support",
+    displayName: "Incident decisions recorded",
+    definition: "Decisions taken during an incident, with the decision maker, rationale and time.",
+    producer: "absent", source: null,
+    missing:
+      "No decision record exists. §7 asks for the decision maker, the rationale and the timestamp on "
+      + "each, and a postmortem written without them reconstructs from memory what should have been "
+      + "captured as it happened.",
+    spec: "PD-009 §7",
   },
   {
     metricId: "sup.resolution_time", module: "support",
@@ -1503,6 +1574,18 @@ export function mayRender(metricId: string): boolean {
   if (m.producer === "absent") return false;
   if ((m.numerator || m.denominator) && !(m.numerator && m.denominator)) return false;
   return true;
+}
+
+/**
+ * The sentence a screen shows BESIDE a value that is real but not yet meaningful. Empty when there is
+ * nothing to qualify.
+ *
+ * ⚠ BESIDE, NOT INSTEAD. absenceSentence replaces a figure that must not render; this one accompanies a
+ * figure that must. A caveat is never a reason to hide a number — hiding it would lose the one true
+ * thing the number says, which is what has been recorded.
+ */
+export function caveatSentence(metricId: string): string {
+  return pdMetric(metricId)?.caveat ?? "";
 }
 
 /** The sentence a screen shows INSTEAD of a value. Written once, so thirty screens cannot each invent one. */

@@ -131,6 +131,39 @@ export async function loadOpenIncidents(admin: Admin): Promise<OpenIncident[] | 
     || (new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()));
 }
 
+export type AnyIncident = {
+  incidentId: string; title: string;
+  severity: IncidentSeverity; status: IncidentStatus;
+  startedAt: string; resolvedAt: string | null;
+  subjectType: string; journeyKey: string | null;
+};
+
+/**
+ * EVERY incident, resolved ones included, for the questions that are only answerable over closed work.
+ *
+ * ⚠ IT READS THE TABLE AND NOT mos_incident_open, WHICH IS THE POINT. The view exists to answer "what
+ * is happening now" and excludes exactly the rows a resolution time is computed from. Reusing it here
+ * would have produced a median over incidents that never resolved — a figure computed entirely from
+ * the rows that cannot contribute to it.
+ *
+ * ⚠ null ON A FAILED READ, on the same rule as loadOpenIncidents.
+ */
+export async function loadAllIncidents(admin: Admin): Promise<AnyIncident[] | null> {
+  const res = await admin.from("mos_incident")
+    .select("incident_id, title, severity, status, started_at, resolved_at, subject_type, journey_key")
+    .order("started_at", { ascending: false })
+    .limit(1000);
+  if (res.error || !Array.isArray(res.data)) return null;
+  return (res.data as Record<string, unknown>[]).map(r => ({
+    incidentId: String(r.incident_id), title: String(r.title),
+    severity: r.severity as IncidentSeverity, status: r.status as IncidentStatus,
+    startedAt: String(r.started_at),
+    resolvedAt: typeof r.resolved_at === "string" ? r.resolved_at : null,
+    subjectType: String(r.subject_type),
+    journeyKey: typeof r.journey_key === "string" ? r.journey_key : null,
+  }));
+}
+
 /**
  * §8's quantified impact, computed from the event store at read time.
  *

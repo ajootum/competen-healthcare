@@ -4,7 +4,11 @@ import { requireHqCapability } from "@/lib/hq/context";
 import { loadPdSupport, loadIncidentCommand } from "@/lib/hq/pd-support";
 import { SEVERITY_LABEL, STATUS_LABEL } from "@/lib/hq/mos-incident";
 import {
-  SupportHeader, Panel, SeverityBadge, StatusChip, AbsentList, Explain, Cite,
+  PRIORITY_LABEL, ACTION_STATE_LABEL, POSTMORTEM_STATUS_LABEL,
+  ESCALATION_TRIGGER_LABEL, ESCALATION_STATUS_LABEL,
+} from "@/lib/hq/mos-support";
+import {
+  SupportHeader, Panel, SeverityBadge, StatusChip, PriorityChip, AbsentList, Explain, Cite,
 } from "../_components/support-ui";
 
 // CPR-PD-009 §7 — INCIDENT 360 / COMMAND. The specification calls this the critical build.
@@ -197,6 +201,133 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
           )}
         </Panel>
       </div>
+
+      {/* ── §7 Actions Underway — dark until migration 318, real since ─────────────────────────── */}
+      <Panel
+        title="Actions underway (§7)"
+        note="Corrective actions raised from this incident. §7 asks for owner, state, due time, blocker and result on each — §14's record carries all five."
+      >
+        {c.actions === null ? (
+          <p className="text-[12px] leading-relaxed text-[var(--cmp-text-warning)]">
+            ⚠ The corrective action store could not be read. That is not zero actions — this panel is
+            unavailable, and a commander should not take it for an all-clear.
+          </p>
+        ) : c.actions.length === 0 ? (
+          <p className="text-[12px] leading-relaxed text-gray-600">
+            No corrective action names this incident. A measured zero — the store was read and holds
+            none. ⚠ Nothing can raise one yet, so it will stay zero until an intake exists.
+          </p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-gray-100">
+            {c.actions.map(a => (
+              <li key={a.actionId} className="py-2.5 first:pt-0 last:pb-0">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="min-w-0 text-[12.5px] font-semibold text-gray-900">{a.action}</p>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    <PriorityChip label={PRIORITY_LABEL[a.priority] ?? a.priority} />
+                    <StatusChip label={ACTION_STATE_LABEL[a.state] ?? a.state} />
+                  </span>
+                </div>
+                <p className="mt-1 text-[11.5px] text-gray-600">
+                  {a.ownerName}
+                  {a.dueOn ? ` · due ${a.dueOn}` : " · no due date"}
+                  {a.overdue ? ` · ${a.daysLate} day${a.daysLate === 1 ? "" : "s"} late` : ""}
+                </p>
+                {a.blocker && (
+                  <p className="mt-0.5 text-[11.5px] leading-relaxed text-[var(--cmp-text-warning)]">
+                    Blocked: {a.blocker}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel title="Escalations on this incident (§9)" note="Escalating asks somebody to act; it does not transfer command.">
+          {c.escalations === null ? (
+            <p className="text-[12px] leading-relaxed text-[var(--cmp-text-warning)]">
+              ⚠ The escalation store could not be read. That is not zero escalations.
+            </p>
+          ) : c.escalations.length === 0 ? (
+            <p className="text-[12px] leading-relaxed text-gray-600">Nothing has been escalated on this incident.</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {c.escalations.map(e => (
+                <li key={e.escalationId}>
+                  <p className="text-[12px] font-semibold text-gray-900">
+                    {ESCALATION_TRIGGER_LABEL[e.trigger] ?? e.trigger} → {e.targetTeam}
+                  </p>
+                  <p className="text-[11.5px] leading-relaxed text-gray-600">{e.reason}</p>
+                  <p className="mt-0.5 text-[11px] text-gray-500">
+                    {ESCALATION_STATUS_LABEL[e.status] ?? e.status}
+                    {e.overdue ? " · past its due time" : ""}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel title="Cases linked to this incident (§4)" note="One practice's report of the failure, as distinct from the failure itself.">
+          {c.cases === null ? (
+            <p className="text-[12px] leading-relaxed text-[var(--cmp-text-warning)]">
+              ⚠ The support case store could not be read. That is not zero cases.
+            </p>
+          ) : c.cases.length === 0 ? (
+            <p className="text-[12px] leading-relaxed text-gray-600">
+              No case is linked. ⚠ Which does not mean nobody has hit this — no practitioner can report
+              a case yet.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {c.cases.map(k => (
+                <li key={k.caseId} className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 text-[12px] text-gray-900">{k.title}</span>
+                  <PriorityChip label={PRIORITY_LABEL[k.priority] ?? k.priority} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
+
+      {/* ── §13's postmortem, where one exists ──────────────────────────────────────────────────── */}
+      <Panel title="Postmortem (§13)" note="One per incident — the schema enforces it.">
+        {!c.postmortemsReadable ? (
+          <p className="text-[12px] leading-relaxed text-[var(--cmp-text-warning)]">
+            ⚠ The postmortem store could not be read.
+          </p>
+        ) : c.postmortem === null ? (
+          <p className="text-[12px] leading-relaxed text-gray-600">
+            No postmortem has been written for this incident. ⚠ And no rule says whether one is owed —
+            §5 requires that closure not bypass a <em>required</em> postmortem, and nothing defines
+            which incidents qualify.{" "}
+            <Link href="/super-admin/pd/support/postmortems" className="font-semibold text-teal-700 hover:underline">
+              Root Cause &amp; Postmortems
+            </Link>
+          </p>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <StatusChip label={POSTMORTEM_STATUS_LABEL[c.postmortem.status] ?? c.postmortem.status} />
+              {c.postmortem.approvedBy && (
+                <span className="text-[11.5px] text-gray-600">approved by {c.postmortem.approvedBy}</span>
+              )}
+            </div>
+            <p className="mt-2 text-[12px] leading-relaxed text-gray-800">
+              {c.postmortem.executiveSummary ?? "No executive summary was written."}
+            </p>
+            <p className="mt-1.5 text-[11.5px] leading-relaxed">
+              <span className="font-semibold text-gray-700">Root cause: </span>
+              <span className={c.postmortem.rootCause ? "text-gray-900" : "text-gray-400"}>
+                {c.postmortem.rootCause ?? "not confirmed"}
+              </span>
+            </p>
+          </>
+        )}
+      </Panel>
 
       {/* ── the dark panels, named one by one ──────────────────────────────────────────────────── */}
       <Panel
