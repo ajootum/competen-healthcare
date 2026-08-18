@@ -30,14 +30,27 @@ const PAGE = 500;
 
 export type ReadResult<T> = { rows: T[]; truncated: boolean } | null;
 
+/**
+ * ⚠ THIS TAKES A BUILT QUERY, NOT A TABLE NAME AND A COLUMN STRING, AND THAT IS A BOUNDARY REQUIREMENT
+ * RATHER THAN A STYLE PREFERENCE.
+ *
+ * The first version was `readList(admin, table, columns, …)` and did `admin.from(table).select(columns)`
+ * inside. It read cleanly and it defeated the plane-boundary scanner completely: a `.select()` whose
+ * argument is a PARAMETER cannot be resolved to a column list, so all five callers were refused as
+ * UNRESOLVED_SELECT — one helper turning five auditable reads into five unauditable ones.
+ *
+ * The scanner is right to refuse it. A column list that only exists at runtime cannot be checked against
+ * an allowlist by anything, ever, and the whole point of the boundary is that it is checkable without
+ * running the product. So the literal lives at each call site where a reader — and the scanner — can see
+ * exactly which columns that read takes, and this helper keeps only the paging and the null-on-failure
+ * rule, which are the parts worth sharing.
+ */
 async function readList<T>(
-  admin: Admin, table: string, columns: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query: any,
   shape: (r: Record<string, unknown>) => T,
-  order: { column: string; ascending?: boolean },
 ): Promise<ReadResult<T>> {
-  const res = await admin.from(table).select(columns)
-    .order(order.column, { ascending: order.ascending ?? false, nullsFirst: false })
-    .limit(PAGE + 1);
+  const res = await query.limit(PAGE + 1);
   if (res.error) return null;
   const raw = (res.data ?? []) as Record<string, unknown>[];
   return { rows: raw.slice(0, PAGE).map(shape), truncated: raw.length > PAGE };
@@ -193,10 +206,10 @@ const s = (v: unknown): string | null => (typeof v === "string" && v.trim() !== 
 // ── the readers ─────────────────────────────────────────────────────────────────────────────────────
 
 export const loadCases = (admin: Admin): Promise<ReadResult<SupportCase>> =>
-  readList(admin, "mos_support_case",
-    "case_id,title,description,practice_id,reporter_name,source,category,product_area,priority,status,"
-    + "owner_name,incident_id,problem_id,duplicate_of,journey_key,created_at,first_response_at,"
-    + "resolved_at,resolution_category",
+  readList(
+    admin.from("mos_support_case")
+      .select("case_id,title,description,practice_id,reporter_name,source,category,product_area,priority,status,owner_name,incident_id,problem_id,duplicate_of,journey_key,created_at,first_response_at,resolved_at,resolution_category")
+      .order("created_at", { ascending: false, nullsFirst: false }),
     r => {
       const createdAt = String(r.created_at);
       const first = s(r.first_response_at);
@@ -214,12 +227,13 @@ export const loadCases = (admin: Admin): Promise<ReadResult<SupportCase>> =>
         isOpen: !CASE_TERMINAL.includes(String(r.status)),
       };
     },
-    { column: "created_at" });
+  );
 
 export const loadProblems = (admin: Admin): Promise<ReadResult<Problem>> =>
-  readList(admin, "mos_problem",
-    "problem_id,title,owner_name,status,priority,pattern_evidence,suspected_cause,confirmed_cause,"
-    + "workaround,target_outcome,journey_key,subject_type,created_at,resolved_at",
+  readList(
+    admin.from("mos_problem")
+      .select("problem_id,title,owner_name,status,priority,pattern_evidence,suspected_cause,confirmed_cause,workaround,target_outcome,journey_key,subject_type,created_at,resolved_at")
+      .order("created_at", { ascending: false, nullsFirst: false }),
     r => ({
       problemId: String(r.problem_id), title: String(r.title), ownerName: s(r.owner_name),
       status: String(r.status), priority: String(r.priority),
@@ -230,12 +244,13 @@ export const loadProblems = (admin: Admin): Promise<ReadResult<Problem>> =>
       createdAt: String(r.created_at), resolvedAt: s(r.resolved_at),
       isOpen: !PROBLEM_TERMINAL.includes(String(r.status)),
     }),
-    { column: "created_at" });
+  );
 
 export const loadEscalations = (admin: Admin): Promise<ReadResult<Escalation>> =>
-  readList(admin, "mos_escalation",
-    "escalation_id,trigger,incident_id,case_id,source_name,target_team,reason,requested_action,"
-    + "status,due_at,created_at,resolved_at",
+  readList(
+    admin.from("mos_escalation")
+      .select("escalation_id,trigger,incident_id,case_id,source_name,target_team,reason,requested_action,status,due_at,created_at,resolved_at")
+      .order("created_at", { ascending: false, nullsFirst: false }),
     r => {
       const status = String(r.status);
       const due = s(r.due_at);
@@ -250,13 +265,13 @@ export const loadEscalations = (admin: Admin): Promise<ReadResult<Escalation>> =
         overdue: open && due !== null && new Date(due) < new Date(),
       };
     },
-    { column: "created_at" });
+  );
 
 export const loadPostmortems = (admin: Admin): Promise<ReadResult<Postmortem>> =>
-  readList(admin, "mos_postmortem",
-    "postmortem_id,incident_id,status,executive_summary,impact,detection,response,root_cause,"
-    + "contributing_factors,open_hypotheses,what_worked,what_did_not,recovery,learning,"
-    + "approved_by,approved_at,created_at",
+  readList(
+    admin.from("mos_postmortem")
+      .select("postmortem_id,incident_id,status,executive_summary,impact,detection,response,root_cause,contributing_factors,open_hypotheses,what_worked,what_did_not,recovery,learning,approved_by,approved_at,created_at")
+      .order("created_at", { ascending: false, nullsFirst: false }),
     r => ({
       postmortemId: String(r.postmortem_id), incidentId: String(r.incident_id),
       status: String(r.status),
@@ -271,12 +286,13 @@ export const loadPostmortems = (admin: Admin): Promise<ReadResult<Postmortem>> =
       hasConfirmedCause: s(r.root_cause) !== null,
       hasOpenHypotheses: s(r.open_hypotheses) !== null,
     }),
-    { column: "created_at" });
+  );
 
 export const loadActions = (admin: Admin): Promise<ReadResult<CorrectiveAction>> =>
-  readList(admin, "mos_corrective_action",
-    "action_id,action,source,incident_id,problem_id,postmortem_id,owner_name,priority,due_on,state,"
-    + "blocker,evidence,effectiveness,accepted_by,accepted_rationale,change_ref,completed_at,created_at",
+  readList(
+    admin.from("mos_corrective_action")
+      .select("action_id,action,source,incident_id,problem_id,postmortem_id,owner_name,priority,due_on,state,blocker,evidence,effectiveness,accepted_by,accepted_rationale,change_ref,completed_at,created_at")
+      .order("created_at", { ascending: false, nullsFirst: false }),
     r => {
       const state = String(r.state);
       const due = s(r.due_on);
@@ -300,7 +316,7 @@ export const loadActions = (admin: Admin): Promise<ReadResult<CorrectiveAction>>
           : null,
       };
     },
-    { column: "created_at" });
+  );
 
 /** §12's link table, read as problem id → incident ids. Null on failure, on the rule at the top. */
 export async function loadProblemIncidents(admin: Admin): Promise<Map<string, string[]> | null> {

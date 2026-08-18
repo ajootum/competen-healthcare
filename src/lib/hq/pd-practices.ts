@@ -112,6 +112,26 @@ export type EstateRow = {
    */
   membershipBand: Band;
   attention: AttentionItem[];
+
+  /**
+   * §4's human-facing identifier. Added by migration 312 and only readable from this plane since the
+   * boundary was taught about it — the register spent that gap refusing to search by handle for a
+   * reason that had stopped being true.
+   */
+  handle: string | null;
+
+  /**
+   * §3's ACTIVITY column, MEASURED rather than invented.
+   *
+   * ⚠ THIS COLUMN USED TO SAY A "recent activity" CLASSIFICATION WOULD HAVE TO BE INVENTED. That was
+   * true: appointments and encounters are held to their tenancy column on this plane, so no timestamp
+   * was readable. The event store closed it — mos_event carries a practice_id, a journey, an outcome
+   * and a duration, and cannot carry clinical content by construction.
+   *
+   * So this counts what the practice DID, never what it was about. Null means the store could not be
+   * read; a zero here means the store was read and this practice ran nothing.
+   */
+  activity30d: { attempts: number; failures: number; journeys: number } | null;
 };
 
 export type EstateSort = "attention" | "created_desc" | "created_asc" | "name" | "lifecycle";
@@ -146,7 +166,7 @@ export type PracticeEstate = {
 };
 
 const PAGE_SIZE = 25;
-const WS_COLUMNS = "id, name, type, status, owner_person_id, country, timezone, created_at, updated_at";
+const WS_COLUMNS = "id, name, type, status, owner_person_id, country, timezone, created_at, updated_at, practice_handle";
 
 type WsRow = {
   id: string; name: string; type: string; status: string; owner_person_id: string;
@@ -321,7 +341,7 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
 
   // ── Owner names (D1), membership bands (D2), failed sagas ────────────────────────────────────────
   const ownerIds = [...new Set(rows.map(r => r.owner_person_id).filter(Boolean))];
-  const [peopleRes, memberCounts, failedRes, marketRes] = await Promise.all([
+  const [peopleRes, memberCounts, failedRes, marketRes, activityRes] = await Promise.all([
     ownerIds.length
       // ⚠ `email` IS NOT SELECTED, not selected-and-dropped. What is not fetched cannot be spread into
       // a payload by a later edit.
@@ -333,6 +353,14 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
     admin.from("provisioning_request").select("id, workspace_id, status").eq("status", "FAILED").limit(500),
     // Filter options, read from the data rather than hard-coded, so a new market appears on its own.
     admin.from("practice_workspace").select("country").range(0, 999),
+    // §3's activity, over the last 30 days. ⚠ Scoped to the page's practices rather than the estate:
+    // this is a per-row column, and reading every event ever emitted to fill six cells would be a table
+    // scan pretending to be a lookup.
+    admin.from("mos_event")
+      .select("practice_id, journey_key, outcome")
+      .in("practice_id", wsIds)
+      .gte("occurred_at", new Date(Date.now() - 30 * 86_400_000).toISOString())
+      .limit(5000),
   ]);
 
   if (peopleRes.error) problems.push(`owner names: ${peopleRes.error.message}`);
@@ -352,6 +380,31 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
     orphaned: failedRows.filter(r => !r.workspace_id).length,
   };
 
+  // §3's ACTIVITY, aggregated per practice.
+  //
+  // ⚠ A null map means the store could not be read, and that is carried through to the row as null
+  // rather than collapsing to zero. "This practice did nothing" and "nobody could tell" are the two
+  // readings this whole module exists to keep apart, and an aggregation is the easiest place to lose
+  // the distinction — an empty Map and an unreadable one look identical to a `.get()`.
+  if (activityRes.error) problems.push(`activity: ${activityRes.error.message}`);
+  const activityByWs = activityRes.error
+    ? null
+    : new Map<string, { attempts: number; failures: number; journeys: Set<string> }>();
+  if (activityByWs) {
+    const events = (activityRes.data ?? []) as {
+      practice_id: string | null; journey_key: string | null; outcome: string;
+    }[];
+    for (const e of events) {
+      if (!e.practice_id) continue;
+      const cur = activityByWs.get(e.practice_id)
+        ?? { attempts: 0, failures: 0, journeys: new Set<string>() };
+      cur.attempts += 1;
+      if (e.outcome === "failure" || e.outcome === "timeout") cur.failures += 1;
+      if (e.journey_key) cur.journeys.add(e.journey_key);
+      activityByWs.set(e.practice_id, cur);
+    }
+  }
+
   if (marketRes.error) problems.push(`markets: ${marketRes.error.message}`);
   const marketRows = (marketRes.data ?? []) as { country: string }[];
   const markets = [...new Set(marketRows.map(m => m.country).filter(Boolean))].sort();
@@ -364,6 +417,14 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
       // D2: banded HERE, on the server. Returning the number and rounding it for display would put the
       // exact figure in the payload, where anyone can read it.
       membershipBand: memberCounts === null ? null : bandOf(memberCounts[r.id] ?? 0),
+      handle: (r as unknown as { practice_handle: string | null }).practice_handle ?? null,
+      activity30d: activityByWs === null
+        ? null
+        : {
+            attempts: activityByWs.get(r.id)?.attempts ?? 0,
+            failures: activityByWs.get(r.id)?.failures ?? 0,
+            journeys: activityByWs.get(r.id)?.journeys.size ?? 0,
+          },
       attention: [
         ...lifecycleAttention(r.status),
         ...(failedByWs.has(r.id) ? [{

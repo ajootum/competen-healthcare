@@ -69,9 +69,29 @@ export type ModuleFacts = {
   rpc: { fn: string; owner: string | null; line: number }[];
 };
 
+/**
+ * ⚠ THE PLANE IS NO LONGER ONE TABLE FAMILY, AND THIS SCANNER ASSUMED IT WAS.
+ *
+ * `practice_` was the only prefix for as long as the practice plane meant practice tables. Then
+ * `mos_event` was allowlisted — the operational event store, which is Practice-scoped telemetry and the
+ * one store on this plane that cannot carry clinical content by construction.
+ *
+ * The scanner did not fail loudly. It reported the new grant as a DEAD GRANT — "allowlisted but never
+ * read" — while the read sat six lines away in the loader, because a detector that matches on
+ * `practice_` cannot see `mos_event` at all. The alarm was real and pointed at the wrong thing.
+ *
+ * This is the recorded class, on its fifth appearance in this build: a guard that must be taught about
+ * anything new in the same commit that introduces it. A prefix is the cheapest possible table
+ * classifier and it goes wrong the first time the plane grows a second family.
+ */
+export const PLANE_TABLE_PREFIXES = ["practice_", "mos_"] as const;
+
+const matchesPrefix = (table: string, prefix: string | readonly string[]): boolean =>
+  typeof prefix === "string" ? table.startsWith(prefix) : prefix.some(p => table.startsWith(p));
+
 // ── THE ANALYSIS ─────────────────────────────────────────────────────────────────────────────────────
 
-export function analyzeModule(source: string, fileName: string, tablePrefix = "practice_"): ModuleFacts {
+export function analyzeModule(source: string, fileName: string, tablePrefix: string | readonly string[] = PLANE_TABLE_PREFIXES): ModuleFacts {
   const sf = parse(source, fileName);
   const facts: ModuleFacts = {
     imports: [], importBindings: new Map(), exports: new Map(), starReexports: [],
@@ -184,7 +204,7 @@ export function analyzeModule(source: string, fileName: string, tablePrefix = "p
 export function extractImports(source: string, fileName = "file.ts"): ImportEdge[] {
   return analyzeModule(source, fileName).imports;
 }
-export function extractReads(source: string, fileName: string, tablePrefix = "practice_"): OwnedSite[] {
+export function extractReads(source: string, fileName: string, tablePrefix: string | readonly string[] = PLANE_TABLE_PREFIXES): OwnedSite[] {
   return analyzeModule(source, fileName, tablePrefix).sites;
 }
 
@@ -201,7 +221,7 @@ const FILTER_VERBS = new Set([
 ]);
 
 function attachSites(
-  sf: ts.SourceFile, root: ts.Node, owner: string | null, file: string, prefix: string, facts: ModuleFacts,
+  sf: ts.SourceFile, root: ts.Node, owner: string | null, file: string, prefix: string | readonly string[], facts: ModuleFacts,
 ): void {
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
@@ -221,7 +241,7 @@ function attachSites(
 }
 
 function collect(
-  sf: ts.SourceFile, fromCall: ts.CallExpression, file: string, prefix: string,
+  sf: ts.SourceFile, fromCall: ts.CallExpression, file: string, prefix: string | readonly string[],
   owner: string | null, out: OwnedSite[],
 ): void {
   const line = lineOf(sf, fromCall);
@@ -229,7 +249,7 @@ function collect(
   const resolved = arg ? resolveStrings(arg, sf) : { values: null, why: "no argument" };
 
   // Resolved, and none of them is a practice table: silence is correct.
-  if (resolved.values && resolved.values.every(v => !v.startsWith(prefix))) return;
+  if (resolved.values && resolved.values.every(v => !matchesPrefix(v, prefix))) return;
 
   const chain = walkChain(fromCall);
   const chainText = truncate(fromCall.getText(sf).replace(/\s+/g, " "), 140);
@@ -272,7 +292,7 @@ function collect(
   const argText = arg ? truncate(arg.getText(sf).replace(/\s+/g, " "), 60) : "";
   const tables = resolved.values ?? [null];
   for (const table of tables) {
-    if (table !== null && !table.startsWith(prefix)) continue;
+    if (table !== null && !matchesPrefix(table, prefix)) continue;
     out.push({
       owner, file, line, table, argText,
       resolvedFrom: resolved.values && resolved.values.length > 1 ? resolved.values.join(" | ") : null,

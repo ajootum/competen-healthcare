@@ -27,6 +27,47 @@ const SORTS: { value: EstateSort; label: string }[] = [
 ];
 
 /** A band renders as itself. `null` renders as the words, never as a dash and never as zero. */
+/**
+ * ⚠ A COLUMN THAT HAS NO PRODUCER, RENDERED IN ITS DESIGNED POSITION.
+ *
+ * The recorded doctrine is "refuse the claim, keep the layout" — an unavailable figure occupies the
+ * cell §3 gives it, with the reason on hover, because a MISSING column reads as a defect while an
+ * EMPTY one reads as a decision. This register previously dropped five columns and explained them in
+ * prose underneath, which is how it stopped resembling its own specification.
+ *
+ * ⚠ AND EVERY REASON HERE IS A CURRENT ONE. Three of the five refusals this page carried were stale by
+ * the time anybody looked: handle search, activity and health had all gained producers in the meantime
+ * and nothing went back to check. A dark cell is a claim about today, and it decays.
+ */
+const DARK: Record<string, string> = {
+  plan:
+    "No producer. A Practice cannot be the subject of a subscription row at all — plat_subscriptions, "
+    + "plat_billing_accounts and plat_invoices key on tenants(id) and practice_workspace has no "
+    + "tenant_id, so a Practice plan is unrepresentable rather than unpopulated.",
+  patients:
+    "Refused by decision, not by absence. The count exists; oversight decision D2 of 2026-08-08 says an "
+    + "exact per-practice patient count is business intelligence about a named clinician's book.",
+  adoption:
+    "The governed activation ladder is real and lives in practice_activation_event, which is not on "
+    + "this plane's allowlist. ⚠ The one absence on this row a governance decision could remove without "
+    + "a migration.",
+  health:
+    "No per-practice health objective is declared. Product Health computes product-level domains, and "
+    + "§4 is explicit that missing evidence must never resolve to Healthy — so this stays unknown rather "
+    + "than green until an objective exists to judge the evidence against.",
+};
+
+function DarkCell({ reason }: { reason: keyof typeof DARK | string }) {
+  return (
+    <span
+      className="cursor-help text-[10.5px] italic text-gray-300 underline decoration-dotted underline-offset-2"
+      title={DARK[reason] ?? "No producer."}
+    >
+      no producer
+    </span>
+  );
+}
+
 function BandCell({ band }: { band: Band }) {
   if (band === null) return <span className="text-[11px] italic text-[var(--cmp-text-warning)]">not readable</span>;
   return <span className="tabular-nums text-gray-700">{band}</span>;
@@ -211,12 +252,28 @@ export default async function Page(
               <table className="w-full text-[12px]">
                 <caption className="sr-only">Practice workspaces, {estate.rows.length} shown on this page</caption>
                 <thead>
+                  {/* ⚠ ALL TWELVE OF §3'S COLUMNS, IN THE COMP'S ORDER — including the ones with no
+                      producer. The recorded doctrine is "refuse the claim, KEEP THE LAYOUT": an
+                      unavailable figure renders in its designed position with a reason, because a
+                      missing column reads as a defect while an empty one reads as a decision. This
+                      table previously dropped five columns entirely and explained them in prose below,
+                      which is the opposite of that rule and is why the screen stopped resembling its
+                      own specification.
+                      ⚠ AND EACH DARK CELL LIGHTS UP BY ITSELF. The cell asks its producer; when one
+                      arrives it renders. Nothing here has to be switched on, and — the half that
+                      actually bites — nobody has to remember to delete a refusal that has come true.
+                      Three of these were already stale when this was rewritten. */}
                   <tr className="text-left text-[10px] uppercase tracking-wide text-gray-400">
                     <th scope="col" className="py-1 pr-3">Practice</th>
-                    <th scope="col" className="py-1 pr-3">Owner</th>
+                    <th scope="col" className="py-1 pr-3">Owner / handle</th>
                     <th scope="col" className="py-1 pr-3">Market</th>
                     <th scope="col" className="py-1 pr-3">Lifecycle</th>
-                    <th scope="col" className="py-1 pr-3 text-right">Membership</th>
+                    <th scope="col" className="py-1 pr-3">Plan</th>
+                    <th scope="col" className="py-1 pr-3 text-right">Practitioners</th>
+                    <th scope="col" className="py-1 pr-3 text-right">Activity (30d)</th>
+                    <th scope="col" className="py-1 pr-3 text-right">Patients</th>
+                    <th scope="col" className="py-1 pr-3 text-right">Adoption</th>
+                    <th scope="col" className="py-1 pr-3">Health</th>
                     <th scope="col" className="py-1 pr-3">Attention</th>
                     <th scope="col" className="py-1">Created</th>
                   </tr>
@@ -235,10 +292,47 @@ export default async function Page(
                       {/* ⚠ D1: the owner's NAME. Their email is not in this payload to fall back to. */}
                       <td className="py-1.5 pr-3 text-gray-600">
                         {r.ownerName ?? <span className="italic text-gray-400">name not readable</span>}
+                        {r.handle && (
+                          <span className="ml-1.5 font-mono text-[10.5px] text-gray-400">@{r.handle}</span>
+                        )}
                       </td>
                       <td className="py-1.5 pr-3 font-mono text-gray-600">{r.country}</td>
                       <td className="py-1.5 pr-3"><LifecycleBadge status={r.status} /></td>
+
+                      {/* PLAN — no producer. A Practice cannot be the subject of a subscription row. */}
+                      <td className="py-1.5 pr-3"><DarkCell reason="plan" /></td>
+
                       <td className="py-1.5 pr-3 text-right"><BandCell band={r.membershipBand} /></td>
+
+                      {/* ACTIVITY — MEASURED since the event store gained a practice key. */}
+                      <td className="py-1.5 pr-3 text-right">
+                        {r.activity30d === null ? (
+                          <span className="text-[10.5px] italic text-gray-400" title="The event store could not be read. That is not zero activity.">
+                            unreadable
+                          </span>
+                        ) : r.activity30d.attempts === 0 ? (
+                          <span className="text-gray-300" title="The event store was read and this practice ran nothing in 30 days. A measured zero.">0</span>
+                        ) : (
+                          <span className="tabular-nums text-gray-900" title={`${r.activity30d.journeys} journey(s), ${r.activity30d.failures} failed`}>
+                            {r.activity30d.attempts}
+                            {r.activity30d.failures > 0 && (
+                              <span className="ml-1 text-[10.5px] text-[var(--cmp-text-warning)]">
+                                {r.activity30d.failures} failed
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* PATIENTS — refused by decision, not by absence. */}
+                      <td className="py-1.5 pr-3 text-right"><DarkCell reason="patients" /></td>
+
+                      {/* ADOPTION — the one absence a governance decision could remove today. */}
+                      <td className="py-1.5 pr-3 text-right"><DarkCell reason="adoption" /></td>
+
+                      {/* HEALTH — §4: missing or unreadable evidence must never resolve to Healthy. */}
+                      <td className="py-1.5 pr-3"><DarkCell reason="health" /></td>
+
                       <td className="py-1.5 pr-3">
                         {r.attention.length === 0
                           ? <span className="text-gray-300">none</span>

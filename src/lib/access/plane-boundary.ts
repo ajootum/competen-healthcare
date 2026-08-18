@@ -100,6 +100,15 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
     columns: [
       "id", "name", "type", "status", "owner_person_id", "country", "timezone",
       "created_at", "updated_at",
+      // ⚠ ADDED BY MIGRATION 312 AND NOT TAUGHT TO THIS FILE UNTIL NOW. The Practices register
+      // correctly refused to offer search by handle and cited a different table as the reason — a
+      // refusal that was TRUE when written and became an oversight the moment 312 applied. Same class
+      // as the recorded hq-scan rule: a new column must be taught to the boundary in the same commit
+      // that creates it, or a surface goes on refusing something that has since become possible.
+      //
+      // Neither is sensitive. practice_handle is the human-facing identifier a practice puts on its own
+      // materials, and product_code says which Competen product the workspace belongs to.
+      "practice_handle", "product_code",
     ],
     count: true,
     why:
@@ -133,6 +142,62 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
     columns: ["workspace_id"],
     count: true,
     why: "counted, never listed. ⚠ TENANCY COLUMN ONLY — a patient's appointment time is not operational telemetry.",
+  },
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
+  // ⚠ THE MOS SUBSTRATE — LANDLORD-OWNED, AND INVISIBLE TO THIS FILE UNTIL 2026-08-18.
+  //
+  // These fourteen tables were built FOR the Product Director workspace: the canonical subject registry,
+  // the operational event envelope, the incident model and the five support record types. They are the
+  // landlord's own records about running the product.
+  //
+  // They were read from `/super-admin` for the whole of that build and this allowlist never saw one of
+  // them — not because anybody bypassed it, but because the scanner matched table names on the prefix
+  // `practice_` and could not see a `mos_` read at all. Widening the prefix surfaced fourteen tables and
+  // twelve read sites in a single run. The reads were always legitimate; the BLIND SPOT was the defect,
+  // and it is the same one recorded against scan.ts: a guard that cannot see a new family reports
+  // silence, and silence reads as safety.
+  //
+  // WHY `*` IS CORRECT HERE AND IS NOT CORRECT FOR practice_patient. This boundary exists to stop the
+  // landlord reading a TENANT'S CLINICAL RECORD. None of these tables holds one — PD-009's acceptance
+  // proves no support record type has a patient column, and the incident model carries a subject, a
+  // journey and an owner. A landlord reading its own incident register is not a boundary crossing.
+  //
+  // ⚠ mos_event IS THE EXCEPTION AND KEEPS AN EXPLICIT COLUMN LIST, because it has a free-form metadata
+  // column. That column carries a CHECK refusing thirteen patient keys, so a PHI write is rejected
+  // rather than reviewed — and it is still not granted here, because this plane needs to know WHICH
+  // journey ran and whether it succeeded, never what it was about.
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
+  // ⚠ EXACTLY WHAT IS READ, AND NOTHING ELSE. mos_subject_type and mos_support_event were on this list
+  // for one run and came straight back off: the harness reported them as DEAD GRANTS, because nothing
+  // on this plane reads either. A grant nobody uses is a door left open for nobody, and it is the kind
+  // of thing that is still open years later when somebody does want to walk through it.
+  ...(["mos_subject", "mos_journey", "mos_journey_event",
+    "mos_incident", "mos_incident_open", "mos_incident_event",
+    "mos_support_case", "mos_problem", "mos_problem_incident",
+    "mos_escalation", "mos_postmortem", "mos_corrective_action"] as const).map(table => ({
+      table,
+      columns: "*" as const,
+      count: true,
+      why:
+        "Landlord-owned operational substrate, built for this workspace. Holds no patient or "
+        + "practitioner clinical record — the landlord's own incident, support and subject registers. "
+        + "See the block comment above for why this was invisible to the boundary until 2026-08-18.",
+    })),
+  {
+    table: "mos_event",
+    columns: ["practice_id", "journey_key", "event_name", "outcome", "occurred_at", "duration_ms"],
+    count: true,
+    why:
+      "⚠ THE ONE STORE ON THIS PLANE THAT CANNOT CARRY CLINICAL CONTENT BY CONSTRUCTION, which is why "
+      + "it is allowlisted where practice_appointment and practice_encounter are held to their tenancy "
+      + "column alone. Its metadata column carries a CHECK constraint refusing thirteen patient keys — "
+      + "patient_id, mrn, nhs_number, date_of_birth, diagnosis, medication, clinical_note and the rest — "
+      + "so a PHI leak through this table is not a review failure waiting to happen, it is a rejected "
+      + "write. And metadata is deliberately NOT allowlisted here regardless: this plane reads WHICH "
+      + "journey ran, whether it succeeded and how long it took, never what it was about. "
+      + "That distinction is the whole reason a landlord surface can state a practice's activity without "
+      + "reading a single appointment: 'this practice completed forty bookings last week' is operational "
+      + "telemetry, and 'here is who they saw' is the clinician's book.",
   },
   {
     table: "practice_session",
