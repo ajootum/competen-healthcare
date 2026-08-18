@@ -82,9 +82,22 @@ const TODAY_ICON: Record<string, IconName> = {
   incidents: "incident",
 };
 
+/**
+ * ⚠ LABELLED GMT, AND STILL COMPUTED FROM toISOString() (owner decision, 2026-08-18).
+ *
+ * The instant is unchanged: GMT and UTC are the same offset, so this is a change of WORD, not of time.
+ * "GMT" is asked for because it is the label a reader recognises; "UTC" is the label a standards
+ * document uses. Nothing downstream reads this string, so the choice is presentational.
+ *
+ * ⚠ AND IT IS DELIBERATELY NOT THE VIEWER TIMEZONE. This stamp answers "how fresh is this page", which
+ * must mean the same thing to two people reading it in different countries -- a landlord console spans
+ * markets by definition. The panels that ARE local stay local: PD-002 s5 requires the day pulse to use
+ * "the selected market/scope and its local time", which is why Today is headed with the practice zone
+ * (Africa/Kampala) rather than this one. One page, two clocks, each labelled with which it is.
+ */
 const utcStamp = (iso: string) => {
   const d = new Date(iso);
-  return `${d.toISOString().slice(11, 16)} UTC on ${d.toISOString().slice(0, 10)}`;
+  return `${d.toISOString().slice(11, 16)} GMT on ${d.toISOString().slice(0, 10)}`;
 };
 
 /**
@@ -213,10 +226,32 @@ export default async function PdMissionControl({
           {/* ⚠ ONE LINE, NOT THREE STACKED. §2 A requires data freshness in the context header; it never
               required a column. The note that explains it is one hover/expand away rather than always
               occupying two lines of the fold. */}
-          <div className="flex items-center gap-2 text-right">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Updated</span>
-            <span className="text-[12px] tabular-nums text-gray-700">{utcStamp(m.freshness.generatedAt)}</span>
-            <ExplainDot label="What this timestamp means">{m.freshness.note}</ExplainDot>
+          {/* ⚠ THE RIGHT COLUMN CARRIES BOTH FACTS ABOUT THE READING, so neither costs a band of its own:
+              WHEN this was read, and WHO it was read as. The "Acting as" switcher had a full-width
+              bordered card below the header for one line of text -- the strip directly above the first
+              KPI, which is the most valuable space on the page. It is the same component with the same
+              behaviour; only its chrome and its position changed. */}
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Updated</span>
+              <span className="text-[12px] tabular-nums text-gray-700">{utcStamp(m.freshness.generatedAt)}</span>
+              <ExplainDot label="What this timestamp means">{m.freshness.note}</ExplainDot>
+            </div>
+            {contexts.length > 0 && (
+              <div className="text-right">
+                <GovernanceContextSwitcher
+                  compact
+                  contexts={contexts.map(c => ({
+                    appointmentId: c.appointmentId,
+                    positionName: c.positionName,
+                    productLine: c.productLineCode,
+                    capabilityCount: c.capabilities.length,
+                  }))}
+                  activeId={activeContextId}
+                  defaulted={contextDefaulted}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -250,20 +285,6 @@ export default async function PdMissionControl({
           </p>
         )}
 
-        {contexts.length > 0 && (
-          <div className="mt-2">
-            <GovernanceContextSwitcher
-              contexts={contexts.map(c => ({
-                appointmentId: c.appointmentId,
-                positionName: c.positionName,
-                productLine: c.productLineCode,
-                capabilityCount: c.capabilities.length,
-              }))}
-              activeId={activeContextId}
-              defaulted={contextDefaulted}
-            />
-          </div>
-        )}
       </header>
 
       {/* ⚠ THE OWNER PREVIEW SAYS PLAINLY THAT NOTHING CHANGED — the same sentence the composed shell

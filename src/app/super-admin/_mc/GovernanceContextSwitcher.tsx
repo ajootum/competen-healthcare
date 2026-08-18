@@ -20,10 +20,23 @@ export type SwitcherContext = {
   capabilityCount: number;
 };
 
-export default function GovernanceContextSwitcher({ contexts, activeId, defaulted }: {
+export default function GovernanceContextSwitcher({ contexts, activeId, defaulted, compact = false }: {
   contexts: SwitcherContext[];
   activeId: string | null;
   defaulted: boolean;
+  /**
+   * ⚠ OPT-IN, DEFAULTING TO THE EXISTING LOOK, SO THE HQ COMPOSITION IS UNTOUCHED.
+   *
+   * ComposedMissionControl renders this in a column where a card is the right shape. The Product
+   * Director's Mission Control renders it in the page header, where that same card spent a full-width
+   * bordered box on one line of text -- the most valuable strip on the page, sitting above the first
+   * KPI. This drops the card chrome and lets the caller place it.
+   *
+   * ⚠ IT CHANGES CHROME ONLY. No wording, no capability count and no behaviour: whoever is acting can
+   * still see which appointment they hold and can still switch it. A "compact" that quietly removed the
+   * switch would be hiding an authority control to save 40px, which is a bad trade at any size.
+   */
+  compact?: boolean;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +71,7 @@ export default function GovernanceContextSwitcher({ contexts, activeId, defaulte
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-3">
+    <div className={compact ? "" : "bg-white rounded-xl border border-gray-200 p-3"}>
       <p className="text-[11px] font-semibold text-gray-500">Acting as</p>
 
       {contexts.length === 1 ? (

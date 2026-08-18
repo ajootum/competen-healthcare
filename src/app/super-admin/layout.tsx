@@ -251,18 +251,10 @@ export default async function SuperAdminLayout({ children }: { children: React.R
               messages={header.messages}
             />
           }
+          search={
+            <HqSearchLauncher destinations={hqSearchCatalogue(ALL_NAV_TABLES, { isOwner, capabilities: hqCapabilities })} />
+          }
         >
-          {/* ⚠ THE SEARCH LAUNCHER SHARES THE FIRST ROW INSTEAD OF OWNING ONE (2026-08-18).
-              It sat in `mb-4 flex justify-end`, which is a full-width band containing one right-aligned
-              button — about 60px of empty page above the fold, on the screen whose whole point is that
-              the important things are visible without scrolling. It now floats against the top of the
-              content column and the page header sits beside it, so the row costs nothing.
-              `sticky` keeps it reachable once the page scrolls, which is what a Ctrl-K launcher is for. */}
-          <div className="pointer-events-none sticky top-2 z-20 -mb-9 flex justify-end">
-            <div className="pointer-events-auto">
-              <HqSearchLauncher destinations={hqSearchCatalogue(ALL_NAV_TABLES, { isOwner, capabilities: hqCapabilities })} />
-            </div>
-          </div>
           {children}
         </ProductDirectorSidebar>
       </div>

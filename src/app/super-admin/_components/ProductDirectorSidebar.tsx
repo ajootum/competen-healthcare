@@ -76,6 +76,7 @@ export default function ProductDirectorSidebar({
   capabilities,
   isOwner,
   header,
+  search,
   children,
 }: {
   /** Resolved from the cookie by the LAYOUT, so the first paint is already the right width. */
@@ -103,6 +104,8 @@ export default function ProductDirectorSidebar({
   isOwner: boolean;
   /** The PUI-002 global header, rendered on the server and passed through as a slot. */
   header: React.ReactNode;
+  /** The HQ search launcher, placed INSIDE the header band so it costs the page no row. */
+  search: React.ReactNode;
   children: React.ReactNode;
 }) {
   const pathname = usePathname() ?? "";
@@ -202,7 +205,19 @@ export default function ProductDirectorSidebar({
 
       {/* The PUI-002 header keeps the same left margin as the content, or it would sit over the rail. */}
       <div className={`hidden transition-[margin-left] duration-200 ease-out motion-reduce:transition-none md:block ${geometry.content}`}>
-        {header}
+        {/* ⚠ THE SEARCH LAUNCHER LIVES IN THE HEADER BAND, NOT IN THE PAGE (2026-08-18).
+            It first had a full-width row to itself in the content column -- 60px of empty page above
+            the fold. Making that row sticky removed the gap and introduced a worse defect: the button
+            then floated OVER the page header and collided with the "Updated ..." stamp, which the owner
+            saw immediately. A control that overlaps content is not a saving.
+            The header band is where a Ctrl-K launcher belongs anyway: it is chrome, not page content,
+            so it costs the page no vertical space at all and cannot overlap anything. */}
+        <div className="relative">
+          {header}
+          <div className="pointer-events-none absolute inset-y-0 right-4 hidden items-center lg:flex">
+            <div className="pointer-events-auto">{search}</div>
+          </div>
+        </div>
       </div>
 
       <aside

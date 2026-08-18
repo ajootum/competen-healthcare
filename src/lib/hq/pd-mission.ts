@@ -468,6 +468,23 @@ export async function loadPdMission(admin: any, opts: { market?: string | null }
   const inState = (...s: string[]) => s.reduce((n, k) => n + (statusMix.get(k) ?? 0), 0);
   const attentionEstate = inState("FAILED", "SUSPENDED");
 
+  /**
+   * ⚠ THE LIVE ESTATE AND THE RETIRED ONE, COUNTED SEPARATELY.
+   *
+   * RETIRED lists the states in which a Practice is no longer an operating one -- it takes no bookings,
+   * nobody works in it, and it cannot be opened. LIVE is everything else, which is deliberately the
+   * complement rather than a second hand-kept list: a state added to the schema tomorrow shows up in
+   * the headline and gets noticed, where a missing entry in an allowlist would silently vanish from it.
+   *
+   * ⚠ ARCHIVED IS NOT DELETED, AND THAT MATTERS HERE. Migration 247 makes lifecycle transitions
+   * append-only, so a Practice that has moved through states can never be removed -- archiving is the
+   * estate own way of retiring one. If the headline counted every row, the count could then only ever
+   * rise, and would drift further from the truth with each retirement.
+   */
+  const RETIRED_STATES = ["ARCHIVED", "CLOSING", "CLOSED", "FAILED"];
+  const retiredCount = inState(...RETIRED_STATES);
+  const liveCount = scoped.length - retiredCount;
+
   const newPeople = people.filter(r => r.joinedAt && r.joinedAt >= windowStart).length;
   const priorPeople = people.filter(r => r.joinedAt && r.joinedAt >= priorStart && r.joinedAt < windowStart).length;
 
@@ -480,10 +497,22 @@ export async function loadPdMission(admin: any, opts: { market?: string | null }
   const pulse: PulseCard[] = [
     {
       key: "practices", metricId: "mc.practices_total", label: "Practices",
-      figure: figure("mc.practices_total", () => (index.complete || scoped.length ? scoped.length : null),
+      // ⚠ THE HEADLINE IS THE LIVE ESTATE, NOT EVERY ROW THAT HAS EVER EXISTED (2026-08-18).
+      //
+      // This counted every lifecycle state, so an ARCHIVED practice was indistinguishable from an
+      // operating one in the figure a Product Director reads first. The estate held one real practice
+      // and one archived fixture and the card said "2" -- true of the table, and not true of the
+      // product. An archived practice takes no bookings, has no practitioners working in it and cannot
+      // be opened; counting it as a Practice makes the headline answer a question nobody asked.
+      //
+      // Archived is not hidden. It moves one line down, where it is context rather than the number.
+      figure: figure("mc.practices_total", () => (index.complete || scoped.length ? liveCount : null),
         "The list of Practices could not be read."),
-      window: `${scopeLabel} · every lifecycle state, as of now`,
+      window: `${scopeLabel} · open, setting up or being created — as of now`,
       context: [
+        retiredCount
+          ? `${retiredCount} archived or closed, not counted above`
+          : "",
         `${inState("ACTIVE")} open for use · ${inState("ONBOARDING")} setting up · ${inState("REQUESTED", "IDENTITY_PENDING", "PROVISIONING", "MIGRATING")} being created`,
         // ⚠ "NONE" IS A CLAIM AND IT NEEDS A COMPLETE SCAN BEHIND IT. On a partial read the practices
         // that failed or were suspended may simply be in the part that was not read, and printing
