@@ -64,10 +64,27 @@ async function main() {
   }
 
   // ── S · structural ───────────────────────────────────────────────────────
-  const sql = readdirSync("supabase/migrations").filter(f => f.startsWith("323-"))
+  const rawSql = readdirSync("supabase/migrations").filter(f => f.startsWith("323-"))
     .map(f => readFileSync(`supabase/migrations/${f}`, "utf8")).join("\n");
+  //
+  // ⚠ SQL COMMENTS STRIPPED, AND THE FIRST VERSION DID NOT DO IT — so S1 failed on the migration's own
+  // explanation, which contains the sentence "an is_active boolean is exactly how they do". That is the
+  // SECOND time today a structural pin matched the prose arguing against the thing it forbids (the
+  // first was in the evidence-gate harness). The class is recorded; the lesson evidently is that it
+  // applies to every language a harness reads, not just the one it is written in.
+  const sql = rawSql.split("\n").filter(l => !l.trim().startsWith("--")).join("\n");
+
   ok("S1", !/is_active\s+boolean/.test(sql),
     "⚠ §12: gov_exception declares NO is_active column — an expired exception cannot stay switched on because there is no switch");
+  //
+  // ⚠ COUNTS, NOT ABSENCE — and the first version of THIS control was wrong too. It asserted the word
+  // vanishes entirely from the stripped text, and it does not: `comment on table ... is '...'` is a SQL
+  // STATEMENT carrying a string literal, not a line comment, and the table's own comment says "Carries
+  // NO is_active flag". So the word legitimately survives, in a place that is neither DDL nor prose the
+  // stripper owns. Asserting that stripping REMOVED SOME is the claim that is actually true.
+  const occurrences = (t: string) => (t.match(/is_active/g) ?? []).length;
+  ok("S1c", occurrences(rawSql) > occurrences(sql) && occurrences(rawSql) > 0,
+    `control: the phrase appears ${occurrences(rawSql)} times in the file and ${occurrences(sql)} after stripping, so S1 read past the commentary rather than matching it`);
   ok("S2", /expires_on\s+date not null/.test(sql),
     "and expires_on is NOT NULL — a permanent exception is not an exception, it is an undocumented change of policy");
 
