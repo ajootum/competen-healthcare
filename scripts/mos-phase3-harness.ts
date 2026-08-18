@@ -1,21 +1,21 @@
 /**
  * CPR-CORE-MOS-001 PHASE 3 ACCEPTANCE — critical journey instrumentation.
  *
- * One journey at a time. Patient Booking is first because its attempt AND its outcome are both
+ * One journey at a time. Patient Booking was first because its attempt AND its outcome are both
  * observable server-side in one file, and because a correlation id already existed on the request.
+ * Start Encounter is the second, on the same shape.
  *
  * ⚠ SIGN IN WAS THE ORIGINAL CANDIDATE AND IS THE WRONG ONE, which is worth recording rather than
  * quietly not doing. Practice sign-in calls supabase.auth.signInWithPassword FROM THE CLIENT, so the
  * attempt and the failure never touch a server this code controls. Only the success is observable, in
- * the shell. A journey with successes and no attempts has no denominator — which is the exact defect
- * this whole substrate exists to remove, so instrumenting it that way would have been worse than
- * leaving it unmeasured and honest.
+ * the shell. A journey with successes and no attempts has no denominator — the exact defect this whole
+ * substrate exists to remove — so instrumenting it that way would be worse than leaving it unmeasured.
  *
  * WHAT THIS PROVES
  *
  *   P  the attempt/outcome pairing is STRUCTURAL, not a convention somebody has to remember
- *   L  a real emitted booking pair aggregates into the journey through the catalogue
- *   S  telemetry cannot decide the response, and cannot fail the booking
+ *   S  telemetry cannot decide the response, and cannot fail the request
+ *   L  a real emitted pair aggregates into the journey through the catalogue
  *
  *   npx --yes tsx scripts/mos-phase3-harness.ts
  */
@@ -39,9 +39,27 @@ const ok = (id: string, cond: boolean, msg: string) => {
   else { failures.push(`${id}  ${msg}`); console.log(`  FAIL  ${id}  ${msg}`); }
 };
 
-const ROUTE = "src/app/api/v1/practice/appointments/route.ts";
-const src = readFileSync(ROUTE, "utf8");
-const inner = src.slice(src.indexOf("async function createAppointment"));
+/**
+ * Every instrumented journey, and the route that emits it.
+ *
+ * ⚠ TABLE-DRIVEN SO THE INVARIANTS CANNOT BE HALF-APPLIED. Copying the pin block per route is how the
+ * third route ends up with four of the nine checks: the copy is made from the second, and whichever pin
+ * was added last is the one that does not travel. Adding a row here subjects a new route to all of them.
+ */
+const INSTRUMENTED = [
+  {
+    journey: "patient_booking",
+    route: "src/app/api/v1/practice/appointments/route.ts",
+    handler: "createAppointment",
+    attempt: "practice.booking.started",
+  },
+  {
+    journey: "start_encounter",
+    route: "src/app/api/v1/practice/encounters/route.ts",
+    handler: "startEncounter",
+    attempt: "practice.encounter.started",
+  },
+] as const;
 
 const FIXTURE_OWNER = `${FIXTURE_OWNER_PREFIX}0000-4000-8000-000000000314`;
 let fixtureId: string | null = null;
@@ -52,69 +70,86 @@ async function dropFixture() {
 }
 cleanupOnKill(dropFixture);
 
+const escapeDots = (s: string) => s.split(".").join("\\.");
+
 async function main() {
-  console.log("\nCPR-CORE-MOS-001 PHASE 3 — PATIENT BOOKING\n");
+  console.log("\nCPR-CORE-MOS-001 PHASE 3 — INSTRUMENTED JOURNEYS\n");
 
-  // ── P · the pairing is structural ─────────────────────────────────────────
-  // ⚠ THIS IS THE PIN THAT MATTERS MOST ON THIS PAGE. If a future return path inside the handler skips
-  // its outcome event, attempts exceed outcomes and every booking success rate reads low FOREVER, with
-  // nothing on any screen to show it is wrong. The invariant that prevents it is that the inner handler
-  // cannot return a bare response at all.
-  const bareReturns = (inner.match(/return NextResponse\./g) ?? []).length;
-  ok("P1", bareReturns === 0,
-    `⚠ no return inside the handler escapes the pairing — ${bareReturns} bare NextResponse returns (every one must be wrapped with its failureCode)`);
+  // ── P · the pairing is structural, on EVERY instrumented route ────────────
+  // ⚠ THE PIN THAT MATTERS MOST. If a future return path skips its outcome event, attempts exceed
+  // outcomes and that journey's success rate reads low FOREVER, with nothing on any screen to show it is
+  // wrong. The invariant that prevents it is that the inner handler cannot return a bare response at all.
+  for (const r of INSTRUMENTED) {
+    const src = readFileSync(r.route, "utf8");
+    const inner = src.slice(src.indexOf(`async function ${r.handler}`));
+    const tag = r.journey;
 
-  const wrapped = (inner.match(/return \{\s*res:|return \{ res:/g) ?? []).length;
-  ok("P2", wrapped >= 5,
-    `control: ${wrapped} wrapped returns found — P1 passing over a file with no returns at all would prove nothing`);
+    const bare = (inner.match(/return NextResponse\./g) ?? []).length;
+    ok(`P1:${tag}`, bare === 0,
+      `no return inside ${r.handler} escapes the pairing — ${bare} bare NextResponse returns`);
 
-  const started = (src.match(/eventName: "practice\.booking\.started"/g) ?? []).length;
-  ok("P3", started === 1,
-    `exactly one attempt is emitted per request — ${started} started emit(s)`);
+    const wrapped = (inner.match(/return \{ res:/g) ?? []).length;
+    ok(`P2:${tag}`, wrapped >= 4,
+      `control: ${wrapped} wrapped returns — P1 over a file with no returns would prove nothing`);
 
-  const outcomeEmits = (src.match(/practice\.booking\.(created|failed)/g) ?? []).length;
-  ok("P4", outcomeEmits === 2,
-    `exactly one outcome emit, branching to created or failed — ${outcomeEmits} outcome names`);
+    const attempts = (src.match(new RegExp(`eventName: "${escapeDots(r.attempt)}"`, "g")) ?? []).length;
+    ok(`P3:${tag}`, attempts === 1,
+      `exactly one attempt event name is declared — ${attempts}`);
 
-  // the outcome emit must sit AFTER the handler call and OUTSIDE any conditional return
-  const callAt = src.indexOf("await createAppointment(req, auth)");
-  const outcomeAt = src.indexOf('eventName: "practice.booking.created"');
-  const returnResAt = src.lastIndexOf("return res;");
-  ok("P5", callAt > 0 && outcomeAt > callAt && returnResAt > outcomeAt,
-    "the outcome is emitted after the handler returns and before the response leaves, so no path can skip it");
+    const emitCount = (src.match(/await emitEvent\(/g) ?? []).length;
+    ok(`P4:${tag}`, emitCount === 2,
+      `exactly two emits: one attempt, one outcome — ${emitCount}`);
 
-  const codes = [...src.matchAll(/failureCode: "([A-Z_]+)"/g)].map(m => m[1]);
-  ok("P6", codes.length >= 3 && new Set(codes).size === codes.length,
-    `each validation failure carries its own stable code rather than an HTTP status — [${codes.join(", ")}]`);
+    const callAt = src.indexOf(`await ${r.handler}(req, auth)`);
+    const lastEmitAt = src.lastIndexOf("await emitEvent(");
+    const returnResAt = src.lastIndexOf("return res;");
+    ok(`P5:${tag}`, callAt > 0 && lastEmitAt > callAt && returnResAt > lastEmitAt,
+      "the outcome is emitted after the handler returns and before the response leaves, so no path skips it");
 
-  ok("P7", /failureCode: result\.code/.test(src),
-    "an engine refusal reports the ENGINE's code, so a booking rule refusal is distinguishable from a validation one");
+    const codes = [...src.matchAll(/failureCode: "([A-Z_]+)"/g)].map(m => m[1]);
+    ok(`P6:${tag}`, codes.length >= 2 && new Set(codes).size === codes.length,
+      `each validation failure carries its own stable code — [${codes.join(", ")}]`);
 
-  // ── S · telemetry cannot decide the response ──────────────────────────────
-  // ⚠ THE RESULT IS NEVER CAPTURED, WHICH IS STRONGER THAN "NEVER BRANCHED ON" AND ACTUALLY CHECKABLE.
-  //
-  // A first version looked for an emit result being assigned and then used in a condition within eighty
-  // characters. The emit call on this route is a hundred and ten characters long, so the pattern could
-  // never reach the `if` that followed it — the break-test planted exactly that code and the pin stayed
-  // green. A distance heuristic is not an invariant. This route has no legitimate use for the result at
-  // all, so the honest rule is that it may not hold one: with nothing captured, there is nothing to
-  // branch on, and no regex has to be clever.
-  const capturesResult = /=\s*await\s+emitEvent|if\s*\(\s*await\s+emitEvent|\(await\s+emitEvent[^)]*\)\s*\./.test(src);
-  ok("S1", !capturesResult,
-    "⚠ the emit result is never captured, so a telemetry failure cannot turn a successful booking into an error");
+    ok(`P7:${tag}`, /failureCode: result\.code/.test(src),
+      "an engine refusal reports the ENGINE's code, so it is distinguishable from a validation failure");
 
-  ok("S2", /await emitEvent\(auth\.caller\.admin/.test(src),
-    "the emitter uses the caller's own admin client rather than opening a second connection on a hot path");
+    // ⚠ THE RESULT IS NEVER CAPTURED, WHICH IS STRONGER THAN "NEVER BRANCHED ON" AND ACTUALLY CHECKABLE.
+    // A first version looked for an emit result assigned and then used in a condition within eighty
+    // characters. The emit call is a hundred and ten characters long, so the pattern could never reach
+    // the `if` that followed — the break-test planted exactly that code and the pin stayed GREEN. A
+    // distance heuristic is not an invariant. These routes have no legitimate use for the result at all,
+    // so the rule is that they may not hold one: nothing captured, nothing to branch on.
+    const captures = /=\s*await\s+emitEvent|if\s*\(\s*await\s+emitEvent/.test(src);
+    ok(`S1:${tag}`, !captures,
+      "⚠ the emit result is never captured, so a telemetry failure cannot fail the request");
+
+    ok(`S2:${tag}`, /await emitEvent\(auth\.caller\.admin/.test(src),
+      "the emitter uses the caller's own admin client rather than opening a second connection on a hot path");
+
+    // ⚠ POSITION CHECKS RUN INSIDE THE POST HANDLER, NOT OVER THE WHOLE FILE, and it took two wrong
+    // pins to get here. The first compared indexOf("emitEvent") against the guard — and the first
+    // occurrence of that name is the IMPORT at line three, above everything. The second compared the
+    // emit CALL against indexOf("isDenied") — and the first of those belongs to the GET handler near
+    // the top, so an emit planted above POST's guard still measured as "after a guard" and the
+    // break-test passed while the plant sat there. Both were the same error: an anchor that matches
+    // somewhere other than the region being reasoned about. `post` is that region.
+    const post = src.slice(src.indexOf("export async function POST"), src.indexOf(`async function ${r.handler}`));
+    const firstEmitCall = post.indexOf("await emitEvent(");
+    const guardAt = post.indexOf("isDenied(auth)) return auth");
+    ok(`S3:${tag}`, post.length > 0 && guardAt >= 0 && firstEmitCall > guardAt,
+      "nothing is emitted before POST's own capability guard, so an unauthorized caller cannot write telemetry");
+  }
 
   const emitSrc = readFileSync("src/lib/mos/event.ts", "utf8");
-  ok("S3", /catch \(err\)/.test(emitSrc) && /return \{ ok: false/.test(emitSrc),
-    "control: emitEvent catches and returns rather than throwing — S1 relies on it never rejecting");
+  ok("S4", /catch \(err\)/.test(emitSrc) && /return \{ ok: false/.test(emitSrc),
+    "control: emitEvent catches and returns rather than throwing — every S1 relies on it never rejecting");
 
-  // ── L · a real pair aggregates through the catalogue ──────────────────────
+  // ── L · a real pair aggregates through the catalogue ─────────────────────
   const created = await admin.from("practice_workspace").insert({
     name: "MOS phase 3 acceptance fixture", owner_person_id: FIXTURE_OWNER,
     country: "ZZ", timezone: "UTC",
   }).select("id").limit(1);
+
   if (created.error || !created.data?.[0]?.id) {
     ok("L", false, `could not create the fixture — ${String(created.error?.message).slice(0, 80)}`);
   } else {
@@ -130,23 +165,34 @@ async function main() {
       await emitEvent(admin, { ...fbase, eventName: "practice.booking.started", outcome: "started" });
       await emitEvent(admin, { ...fbase, eventName: "practice.booking.failed", outcome: "failure", failureCode: "SLOT_TAKEN", durationMs: 44 });
 
+      // the second journey, on its single-name three-outcome shape
+      const encCorr = newCorrelationId();
+      const ebase = { practiceId: fixtureId, correlationId: encCorr, component: "encounter", eventName: "practice.encounter.started" } as const;
+      await emitEvent(admin, { ...ebase, outcome: "started" });
+      await emitEvent(admin, { ...ebase, outcome: "success", durationMs: 96 });
+
       const since = new Date(Date.now() - 3_600_000).toISOString();
-      const counts = await journeyOutcomes(admin, "patient_booking", since);
-      ok("L1", counts !== null && counts.attempts >= 2 && counts.successes >= 1 && counts.failures >= 1,
-        `⚠ Patient Booking now reports ATTEMPTS, SUCCESSES AND FAILURES — ${counts?.attempts} attempted, ${counts?.successes} succeeded, ${counts?.failures} failed`);
+      const booking = await journeyOutcomes(admin, "patient_booking", since);
+      ok("L1", booking !== null && booking.attempts >= 2 && booking.successes >= 1 && booking.failures >= 1,
+        `⚠ Patient Booking reports ATTEMPTS, SUCCESSES AND FAILURES — ${booking?.attempts} attempted, ${booking?.successes} succeeded, ${booking?.failures} failed`);
+
+      const encounter = await journeyOutcomes(admin, "start_encounter", since);
+      ok("L2", encounter !== null && encounter.attempts >= 1 && encounter.successes >= 1,
+        `⚠ Start Encounter reports them too, from ONE event name — ${encounter?.attempts} attempted, ${encounter?.successes} succeeded`);
 
       const jv = await admin.from("mos_journey_event")
-        .select("journey_name, event_name, outcome, failure_code, correlation_id")
-        .eq("correlation_id", failCorr);
+        .select("journey_name, failure_code, correlation_id").eq("correlation_id", failCorr);
       const jrows = (jv.error ? [] : jv.data) as { journey_name: string; failure_code: string | null }[];
-      ok("L2", jrows.length === 2 && jrows.every(r => r.journey_name === "Patient Booking"),
-        "both halves of one attempt resolve to the same journey through the catalogue, joined by their correlation id");
+      ok("L3", jrows.length === 2 && jrows.every(r => r.journey_name === "Patient Booking"),
+        "both halves of one attempt resolve to the same journey through the catalogue, joined by correlation id");
 
-      ok("L3", jrows.some(r => r.failure_code === "SLOT_TAKEN"),
+      ok("L4", jrows.some(r => r.failure_code === "SLOT_TAKEN"),
         "the failure reaches the journey view with its stable code, so a rate can be broken down by cause");
 
-      ok("L4", counts !== null && counts.attempts >= counts.successes + counts.failures,
-        "control: outcomes never exceed attempts — the pairing holds in the data, not only in the source");
+      ok("L5", booking !== null && encounter !== null
+          && booking.attempts >= booking.successes + booking.failures
+          && encounter.attempts >= encounter.successes + encounter.failures,
+        "control: on both journeys outcomes never exceed attempts — the pairing holds in the DATA, not only in the source");
     } finally {
       await dropFixture();
     }
