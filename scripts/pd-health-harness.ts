@@ -196,9 +196,25 @@ ok("J1", CRITICAL_JOURNEYS.length === 8,
 
 const wf = readFileSync("src/app/super-admin/pd/health/workflows/page.tsx", "utf8");
 const overview = readFileSync("src/app/super-admin/pd/health/page.tsx", "utf8");
-ok("J2", wf.includes("CRITICAL_JOURNEYS") && overview.includes("CRITICAL_JOURNEYS")
-      && !/const JOURNEYS\s*=/.test(wf) && !/const JOURNEYS\s*=/.test(overview),
-  "⚠ both surfaces IMPORT the journey list and neither retypes one — §7's event contract keys on journey_name, so two surfaces naming a journey differently could never be aggregated");
+// ⚠ THE INVARIANT IS "NOBODY AUTHORS A JOURNEY LIST", NOT "EVERYBODY IMPORTS THIS CONSTANT".
+//
+// This pin originally required both surfaces to import CRITICAL_JOURNEYS, and it went red the day
+// Workflow Health started reading journeys from mos_journey — from the DATABASE, which is a stronger
+// source than the TypeScript mirror, not a weaker one. The pin had encoded the mechanism instead of the
+// rule it was protecting. Loosening it to green would have been wrong; so would keeping it and forcing
+// the page back onto the constant. What matters is that no surface types a journey name of its own,
+// because §7's event contract keys on journey_name and two spellings can never be aggregated.
+//
+// Two sanctioned sources: the TypeScript mirror (which phase 2's B1b pins equal to the database), or the
+// database itself. Anything else is a third list.
+const authorsOwnList = (src: string) =>
+  /const\s+JOURNEYS\s*=/.test(src) || /"Sign in to Practice"|"Save Encounter"|"Patient Booking"/.test(src);
+const sanctionedSource = (src: string) =>
+  src.includes("CRITICAL_JOURNEYS") || src.includes("loadJourneyHealth");
+
+ok("J2", !authorsOwnList(wf) && !authorsOwnList(overview)
+      && sanctionedSource(wf) && sanctionedSource(overview),
+  "⚠ neither surface authors a journey list — each takes one from the TypeScript mirror or from the database, and §7's contract keys on journey_name so two spellings could never be aggregated");
 
 ok("J3", CRITICAL_JOURNEYS.every(j => j.outcome.length > 20),
   "every journey carries §6's minimum measurable outcome, which is what a build would start from");

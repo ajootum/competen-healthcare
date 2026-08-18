@@ -41,8 +41,17 @@ export const EVENT_NAMES = [
   "practice.booking.started", "practice.booking.created", "practice.booking.failed", "practice.booking.cancelled",
   "practice.encounter.started", "practice.encounter.save_attempted", "practice.encounter.saved",
   "practice.encounter.save_failed", "practice.encounter.completed",
+  // ⚠ THE THREE `.attempted` NAMES EXIST BECAUSE §6's CATALOGUE IS NOT UNIFORM. Some of its entries name
+  // an ACT (encounter.started, booking.started) and carry all three outcomes on one name; others name a
+  // RESULT (followup.created, document.issued, invoice.generated) and cannot — "created, with outcome
+  // started" is a sentence nobody should have to reconcile. Without an attempt event those three
+  // journeys could record what succeeded and never how often it was tried, which is the missing
+  // denominator this substrate exists to supply. Added deliberately by migration 314.
+  "practice.followup.attempted",
   "practice.followup.created", "practice.followup.failed", "practice.followup.completed",
+  "practice.document.issue_attempted",
   "practice.document.generated", "practice.document.issued", "practice.document.issue_failed",
+  "practice.invoice.generate_attempted",
   "practice.invoice.generated", "practice.invoice.generate_failed",
   "practice.sync.started", "practice.sync.completed", "practice.sync.failed", "practice.sync.conflict_detected",
   "practice.communication.queued", "practice.communication.sent", "practice.communication.delivered",

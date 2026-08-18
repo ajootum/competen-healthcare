@@ -484,6 +484,69 @@ export function attentionSignals(h: HealthPayload): AttentionSignal[] {
   return out;
 }
 
+/**
+ * CPR-PD-008 §8D / CPR-CORE-MOS-001 §7 — the eight critical journeys, from the event substrate.
+ *
+ * ⚠ THE ATTEMPT IS THE DENOMINATOR AND NOTHING ELSE IS. `started` counts what was tried; success and
+ * failure count how those tries ended. Counting every event of a journey would inflate the base with the
+ * outcomes of the same attempt and produce a rate that looks like a measurement and means nothing.
+ *
+ * ⚠ AND A JOURNEY WITH NO ATTEMPTS IS UNMEASURED, NOT HEALTHY. Six of the eight emit nothing today. They
+ * return null rather than zero, because zero attempts and no instrumentation render identically on a
+ * screen and only one of them is a fact about the product.
+ */
+export type JourneyHealth = {
+  key: string;
+  name: string;
+  outcomeReq: string;
+  order: number;
+  /** null when the journey emits nothing at all — never 0, which would read as "nobody tried". */
+  attempts: number | null;
+  successes: number;
+  failures: number;
+  /** 95th percentile of the outcome events that carried a duration. */
+  p95: number | null;
+  topFailure: { code: string; n: number } | null;
+};
+
+export async function loadJourneyHealth(admin: Admin, windowDays = WINDOW_DAYS): Promise<JourneyHealth[] | null> {
+  const db: Admin = admin;
+  const since = new Date(Date.now() - windowDays * 86_400_000).toISOString();
+
+  const jr = await db.from("mos_journey").select("key, name, outcome_req, sort_order").order("sort_order");
+  if (jr.error || !Array.isArray(jr.data)) return null;
+  const journeys = jr.data as { key: string; name: string; outcome_req: string; sort_order: number }[];
+
+  const ev = await db.from("mos_journey_event")
+    .select("journey_key, outcome, duration_ms, failure_code")
+    .gte("occurred_at", since).limit(1000);
+  const rows = (ev.error || !Array.isArray(ev.data) ? [] : ev.data) as
+    { journey_key: string; outcome: string; duration_ms: number | null; failure_code: string | null }[];
+
+  return journeys.map(j => {
+    const mine = rows.filter(r => r.journey_key === j.key);
+    const attempts = mine.filter(r => r.outcome === "started").length;
+    const failures = mine.filter(r => r.outcome === "failure" || r.outcome === "timeout");
+    const byCode = failures.reduce<Record<string, number>>((acc, r) => {
+      const k = r.failure_code ?? "(uncoded)";
+      acc[k] = (acc[k] ?? 0) + 1;
+      return acc;
+    }, {});
+    const top = Object.entries(byCode).sort((a, b) => b[1] - a[1])[0];
+    return {
+      key: j.key,
+      name: j.name,
+      outcomeReq: j.outcome_req,
+      order: j.sort_order,
+      attempts: mine.length === 0 ? null : attempts,
+      successes: mine.filter(r => r.outcome === "success").length,
+      failures: failures.length,
+      p95: p95(mine.map(r => r.duration_ms).filter((v): v is number => typeof v === "number")),
+      topFailure: top ? { code: top[0], n: top[1] } : null,
+    };
+  });
+}
+
 /** §5's freshness envelope for a payload read at request time. */
 export function freshnessOf(h: HealthPayload): Freshness {
   const end = new Date(h.readAt);
