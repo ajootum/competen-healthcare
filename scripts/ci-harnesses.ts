@@ -56,6 +56,8 @@ const INCLUDED = [
   "practice-responsive-harness.ts",
   "practice-taxonomy-harness.ts",
   "pui-charts-harness.ts",
+  // ADR-008. Reads only src/**, counts in-process, no ambient dependency -- CI-safe by construction.
+  "role-authorization-ratchet-harness.ts",
   "pui-colour-harness.ts",
   "pui-tokens-harness.ts",
   "sidebar-active-harness.ts",

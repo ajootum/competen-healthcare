@@ -41,6 +41,7 @@ wish, not a record.
 | [ADR-005](./ADR-005-hfe-design-language.md) | HFE Design Language | Accepted |
 | [ADR-006](./ADR-006-database-and-rls-governance.md) | Database & RLS Governance | Accepted |
 | [ADR-007](./ADR-007-specification-traceability.md) | Specification Traceability | Accepted |
+| [ADR-008](./ADR-008-role-authorization-migration.md) | Role names are not authorization primitives (PLAT-GOV-001 §14) | Accepted |
 
 Initial set published under COMP-ENG-001 §5, 2026-08-18. Each ADR below was written by reading the actual
 code, migrations, and harnesses cited in it — not reconstructed from memory of what the decision was
