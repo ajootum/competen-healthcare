@@ -98,8 +98,46 @@ audit structures blindly; §12's five event types (`account.suspended`, `account
 3. **Two decisions are needed before implementation**, and both are the owner's:
    - Where do `invited` and `left` go, given §10? (Recommendation: out of identity lifecycle entirely,
      onto membership — they are unused, so this is free today.)
-   - Does the transition trail extend `audit_log` or get its own table? (§5 says inventory first; the
-     inventory says `audit_log` exists and is general-purpose.)
+   - Does the transition trail extend `audit_log` or get its own table? **Checked, and the answer is a
+     dedicated table** — see below.
+
+## The transition trail: `audit_log` cannot carry §12
+
+`audit_log` (migration 040) is:
+
+```
+id, actor_id, actor_name, action, entity_type, entity_id, entity_name,
+hospital_id, old_value jsonb, new_value jsonb, created_at
+```
+
+Mapped against §12's required minimum payload — *subject, actor, time, reason, previous state, new
+state, correlation ID*:
+
+| §12 field | `audit_log` | |
+|---|---|---|
+| actor | `actor_id` | ✓ |
+| time | `created_at` | ✓ |
+| subject | `entity_id` + `entity_type` | ⚠ polymorphic — a bare uuid with a type string, the shape this repo has deliberately moved away from in favour of typed-parent CHECKs |
+| previous state | `old_value` jsonb | untyped |
+| new state | `new_value` jsonb | untyped |
+| **reason** | — | **no column** |
+| **correlation ID** | — | **no column** |
+
+**Three of seven have no home**, and two more are untyped JSON. §5's instruction not to duplicate
+governed audit structures is satisfied by *checking* — the check says this structure cannot express the
+requirement.
+
+Decisive point: §3 calls for an **immutable transition audit**, and §7 requires that a transition never
+report success while authoritative state and enforcement diverge. Neither is expressible in a generic
+row. A dedicated table can carry a `CHECK` that previous and new state are both present, an append-only
+trigger with the `pg_trigger_depth() > 1` cascade allowance this repo already uses, and typed columns
+for `reason` and `correlation_id`. That is the "make a wrong state unrepresentable rather than merely
+forbidden" preference in `CLAUDE.md`, applied to audit.
+
+`audit_log` also carries `hospital_id references hospitals(id)` — an estate-shaped column that means
+nothing for an identity-level lifecycle event.
+
+**Recommendation: dedicated table.** `audit_log` continues to serve general estate auditing.
 
 **Nothing has been implemented.** Per §18 this report is the gate, and steps 3-10 wait on the two
 decisions above and on the staging environment COMP-ENG-002 has yet to produce.
