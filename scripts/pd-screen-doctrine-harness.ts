@@ -148,8 +148,8 @@ function importMask(src: string): boolean[] {
  * ⚠ FLAT BAN WHERE THE DOCTRINE HAS BEEN APPLIED, RATCHET EVERYWHERE ELSE — the shape
  * practice-responsive-harness already uses for the wall-clock rule, and for the same reason.
  *
- * Configuration and Releases have been built or reworked against docs/CPR-PD-SCREEN-DOCTRINE.md and
- * carry a real <Explain>/<Cite> pair, so zero is the only acceptable number there. Practices,
+ * Configuration, Releases and Health have been built or reworked against docs/CPR-PD-SCREEN-DOCTRINE.md
+ * and each carries a real <Explain>/<Cite> pair, so zero is the only acceptable number there. Practices,
  * Practitioners and Operations were built earlier, and their component files have NO disclosure
  * component at all — which is precisely why their citations ended up in visible prose. Fixing them
  * means giving those modules a disclosure, which is a refactor and not this harness's business.
@@ -159,7 +159,7 @@ function importMask(src: string): boolean[] {
  * a doctrine module. What the ratchet buys is that the harness ships GREEN and honest instead of
  * shipping red and being ignored, and the number in this file is the debt, in writing.
  */
-const DOCTRINE_MODULES = ["configuration", "releases"];
+const DOCTRINE_MODULES = ["configuration", "releases", "health"];
 const LEGACY_VISIBLE_BASELINE = 16;
 
 function moduleOf(file: string): string {

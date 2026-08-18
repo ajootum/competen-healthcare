@@ -54,7 +54,7 @@ export type PdMetric = {
    * module divides cleanly: the capability CATALOGUE is real code that ships with the product, and
    * every RELEASE, ROLLOUT and READINESS object PD-012 names is absent from this schema.
    */
-  module: "intelligence" | "adoption" | "commercial" | "mission" | "configuration" | "releases";
+  module: "intelligence" | "adoption" | "commercial" | "mission" | "configuration" | "releases" | "health";
   displayName: string;
   /** Exact business meaning -- what a reader may take this number to claim. */
   definition: string;
@@ -1043,6 +1043,307 @@ export const PD_METRICS: PdMetric[] = [
       + "gate exists inside the Practice product, where the activation rows and the permission grants "
       + "both live.",
     spec: "PD-012 §10, §11",
+  },
+  // ══════════════════════════════════════════════════════════════════════════════════════════════
+  // CPR-PD-008 — PRODUCT HEALTH.
+  //
+  // ⚠ THE MODULE SPLITS ON ONE LINE, AND IT IS NOT THE ONE THE SPEC DRAWS. PD-008 asks for
+  // availability, Apdex, P95 latency and error rate across Competen Practice. None of those is
+  // recorded anywhere. What IS recorded is the health of the platform's own machinery — AI calls, job
+  // runs and platform events — which is genuinely observed, genuinely useful, and genuinely NOT the
+  // same claim. Every real metric below is therefore scoped in its own definition to the machinery it
+  // measures, so no reader can take "AI availability" for "Practice availability".
+  //
+  // ⚠ AND TWO OF THE ABSENCES ARE REFUSALS, NOT GAPS. practice_sync_transaction and the practice
+  // message tables EXIST and are written every day; this plane may not read them. Saying "no data"
+  // about a table full of rows would be the more comfortable sentence and the false one.
+  {
+    metricId: "hlt.ai_requests", module: "health",
+    displayName: "AI requests recorded",
+    definition:
+      "Rows in the platform's AI request log. This is the AI service's traffic across the platform, "
+      + "not Competen Practice's — the log carries tenant_id, and a Practice has none.",
+    producer: "real", source: "plat_ai_requests",
+    spec: "PD-008H",
+  },
+  {
+    metricId: "hlt.ai_failures", module: "health",
+    displayName: "AI requests that failed",
+    definition:
+      "AI requests recorded with status 'error'. ⚠ A REFUSAL IS NOT COUNTED HERE — the column's "
+      + "vocabulary is ('ok','refusal','error','not_configured'), and 'refusal' is the guardrail "
+      + "declining a request, which is the safety machinery working rather than failing. A failure here "
+      + "is the AI call itself erroring, and it is not a practitioner-visible outage either.",
+    producer: "real", source: "plat_ai_requests.status = 'error'",
+    spec: "PD-008H",
+  },
+  {
+    metricId: "hlt.ai_latency_p95", module: "health",
+    displayName: "AI latency, 95th percentile",
+    definition:
+      "The 95th percentile of recorded AI round-trip latency in milliseconds. ⚠ This is the LATENCY OF "
+      + "AN AI CALL and never the latency of a Practice page — PD-008B's P95 is about the product's own "
+      + "responsiveness and has no producer.",
+    producer: "real", source: "plat_ai_requests.latency_ms",
+    spec: "PD-008H",
+  },
+  {
+    metricId: "hlt.ai_providers", module: "health",
+    displayName: "AI providers in use",
+    definition: "Distinct providers appearing in the AI request log, which is what a fallback would move between.",
+    producer: "real", source: "plat_ai_requests.provider",
+    spec: "PD-008H",
+  },
+  {
+    metricId: "hlt.job_runs", module: "health",
+    displayName: "Job runs recorded",
+    definition:
+      "Rows in the platform job-run log. These are the scheduled and triggered background jobs the "
+      + "platform runs; several serve Practice, and the log does not say which.",
+    producer: "real", source: "plat_job_runs",
+    spec: "PD-008A",
+  },
+  {
+    metricId: "hlt.job_failures", module: "health",
+    displayName: "Job runs that failed",
+    definition:
+      "Job runs whose recorded status is a failure. This is the closest thing in the schema to an "
+      + "observed component failure, and it covers background work only — never a request path.",
+    producer: "real", source: "plat_job_runs.status and .error",
+    spec: "PD-008A",
+  },
+  {
+    metricId: "hlt.job_duration_p95", module: "health",
+    displayName: "Job duration, 95th percentile",
+    definition:
+      "The 95th percentile of recorded job run duration in milliseconds, over runs that finished. A "
+      + "run still in flight has no duration and is excluded rather than counted as zero.",
+    producer: "real", source: "plat_job_runs.duration_ms",
+    spec: "PD-008A",
+  },
+  {
+    metricId: "hlt.jobs_tracked", module: "health",
+    displayName: "Distinct jobs tracked",
+    definition: "How many named jobs have ever reported a run — the component inventory this module can actually see.",
+    producer: "real", source: "plat_job_runs.job_key",
+    spec: "PD-008A",
+  },
+  {
+    metricId: "hlt.platform_events", module: "health",
+    displayName: "Platform events recorded",
+    definition: "Rows in the platform event log, which carries a severity and a type on every row.",
+    producer: "real", source: "plat_platform_events",
+    spec: "PD-008C",
+  },
+  {
+    metricId: "hlt.events_critical", module: "health",
+    displayName: "Critical platform events",
+    definition:
+      "Platform events recorded at critical severity. ⚠ These are PLATFORM events; an event here is not "
+      + "an incident, has no owner and no lifecycle, and PD-009's incident estate is a different object.",
+    producer: "real", source: "plat_platform_events.severity = 'critical'",
+    spec: "PD-008C",
+  },
+  {
+    metricId: "hlt.events_warning", module: "health",
+    displayName: "Warning platform events",
+    definition:
+      "Platform events recorded at warning severity. ⚠ SHOWN BESIDE CRITICAL RATHER THAN FOLDED INTO IT. "
+      + "The column's vocabulary is ('info','warning','critical') and holds no 'high'; an earlier version "
+      + "of this module counted \"high and critical\", which can only ever total the criticals, and "
+      + "rendered a reassuring zero while warnings sat unmentioned next to it.",
+    producer: "real", source: "plat_platform_events.severity = 'warning'",
+    spec: "PD-008C",
+  },
+  {
+    metricId: "hlt.ai_refusals", module: "health",
+    displayName: "AI requests refused by the guardrail",
+    definition:
+      "AI requests recorded with status 'refusal'. This is the guardrail declining, and it is a measure "
+      + "of the safety machinery working — never a fault count.",
+    producer: "real", source: "plat_ai_requests.status = 'refusal'",
+    spec: "PD-008H",
+  },
+  {
+    metricId: "hlt.job_running", module: "health",
+    displayName: "Job runs still in flight",
+    definition:
+      "Runs recorded as 'running'. Shown because a run in flight is neither a success nor a failure, and "
+      + "a screen that counts only the other two silently loses them.",
+    producer: "real", source: "plat_job_runs.status = 'running'",
+    spec: "PD-008A",
+  },
+  {
+    metricId: "hlt.deployments_window", module: "health",
+    displayName: "Deployments in the window",
+    definition:
+      "Deployments recorded in the period being read, offered as the change context a degradation "
+      + "would be correlated against. It is a count of releases, never a cause.",
+    producer: "real", source: "plat_deployments.released_at",
+    spec: "PD-008J",
+  },
+  {
+    metricId: "hlt.ai_failure_share", module: "health",
+    displayName: "Share of AI requests that failed",
+    definition:
+      "Failed AI requests over all recorded AI requests, in the same window. Rendered only because "
+      + "both halves are counted from the same complete log, and labelled with its denominator.",
+    producer: "derivable", source: "plat_ai_requests",
+    numerator: "AI requests with a failure status",
+    denominator: "all AI requests recorded in the window",
+    spec: "PD-008H",
+  },
+  {
+    metricId: "hlt.job_failure_share", module: "health",
+    displayName: "Share of job runs that failed",
+    definition:
+      "Failed job runs over all recorded job runs, in the same window, from one complete log.",
+    producer: "derivable", source: "plat_job_runs",
+    numerator: "job runs with a failure status",
+    denominator: "all job runs recorded in the window",
+    spec: "PD-008A",
+  },
+
+  // ── the absences ──────────────────────────────────────────────────────────────────────────────
+  {
+    metricId: "hlt.availability", module: "health",
+    displayName: "Practice availability",
+    definition: "The share of time Competen Practice was serving requests successfully — PD-008B's headline objective.",
+    producer: "absent", source: null,
+    missing:
+      "⚠ NOTHING MEASURES WHETHER COMPETEN PRACTICE WAS UP. There is no uptime probe, no health-check "
+      + "record, no request log and no synthetic monitor anywhere in this schema, so there is no "
+      + "numerator and no denominator to divide. An availability figure here would be a number chosen "
+      + "rather than a number observed. plat_job_runs proves BACKGROUND WORK ran; it says nothing about "
+      + "whether a practitioner could open the Planner.",
+    numerator: "time serving successfully", denominator: "time in the period",
+    spec: "PD-008B",
+  },
+  {
+    metricId: "hlt.apdex", module: "health",
+    displayName: "Apdex",
+    definition: "The satisfied/tolerating/frustrated ratio against a stated latency threshold.",
+    producer: "absent", source: null,
+    missing:
+      "Apdex requires per-request latency for the product's own requests and a declared threshold. "
+      + "Neither exists. plat_ai_requests.latency_ms is the latency of a call to an AI provider, which "
+      + "is a different population from the requests a practitioner waits on.",
+    spec: "PD-008B",
+  },
+  {
+    metricId: "hlt.request_latency_p95", module: "health",
+    displayName: "Practice request latency, 95th percentile",
+    definition: "The 95th percentile of the time a practitioner waits for Competen Practice to respond.",
+    producer: "absent", source: null,
+    missing:
+      "No request timing is recorded for Competen Practice. The only latency column in the schema "
+      + "belongs to the AI request log and measures a provider call, not a page or an API route.",
+    spec: "PD-008B",
+  },
+  {
+    metricId: "hlt.error_rate", module: "health",
+    displayName: "Practice error rate",
+    definition: "Failed product operations over all product operations, in a period.",
+    producer: "absent", source: null,
+    missing:
+      "⚠ THE DENOMINATOR IS THE MISSING HALF, NOT THE NUMERATOR. Errors surface in several logs; the "
+      + "count of operations ATTEMPTED is recorded nowhere, so no rate can be formed. A count of errors "
+      + "without it is a tally, and PD-008C asks for a rate and a trend.",
+    numerator: "failed operations", denominator: "all operations attempted",
+    spec: "PD-008C",
+  },
+  {
+    metricId: "hlt.journey_health", module: "health",
+    displayName: "Critical journey health",
+    definition:
+      "The standing of each critical practitioner journey — sign-in, Practice open, Planner, booking, "
+      + "encounter save and sign, follow-up, document generation, invoice issue.",
+    producer: "absent", source: null,
+    missing:
+      "⚠ THIS IS THE ONE THE SPEC LEADS WITH AND THE ONE FURTHEST FROM EXISTING. It needs either a "
+      + "synthetic monitor walking each journey on a schedule, or per-step instrumentation on the real "
+      + "journeys. There is no synthetic runner in this codebase and no step-level timing on any "
+      + "Practice route. The journeys are named here because naming them is what a build would start "
+      + "from, not because any of them is measured.",
+    spec: "PD-008D",
+  },
+  {
+    metricId: "hlt.degradations", module: "health",
+    displayName: "Current degradations",
+    definition: "Open degradations with their scope, severity and owner.",
+    producer: "absent", source: null,
+    missing:
+      "A degradation is a stateful object with an owner, a scope and a lifecycle, and no such record "
+      + "exists for Competen Practice. plat_platform_events carries a severity but no owner, no scope "
+      + "and no open/closed state — it is a log line, not a degradation.",
+    spec: "PD-008 §2",
+  },
+  {
+    metricId: "hlt.slo", module: "health",
+    displayName: "Performance objectives",
+    definition: "The declared objectives health is judged against, and standing versus each.",
+    producer: "absent", source: null,
+    missing:
+      "No objective is declared anywhere in the product — no target availability, no latency budget, no "
+      + "error budget. ⚠ Standing against an objective cannot be shown by inventing the objective; a "
+      + "target a reader has not agreed is not a target.",
+    spec: "PD-008B",
+  },
+  {
+    metricId: "hlt.integrations", module: "health",
+    displayName: "Integration and dependency health",
+    definition: "The health of external and internal dependencies Competen Practice relies on.",
+    producer: "absent", source: null,
+    missing:
+      "No dependency register exists and no dependency is probed. The AI provider is the single "
+      + "external dependency with any recorded signal at all, and that signal lives under AI Health.",
+    spec: "PD-008F",
+  },
+  {
+    metricId: "hlt.security_signals", module: "health",
+    displayName: "Product-health security signals",
+    definition: "Security signals relevant to product health — authentication failure spikes, lockouts, anomalous access.",
+    producer: "absent", source: null,
+    missing:
+      "⚠ AND THIS ABSENCE IS PARTLY DELIBERATE. PD-008I is explicit that this must not replace the "
+      + "security operations function. There is no Practice-scoped security signal series to read here, "
+      + "and the estate's security surfaces are a different plane with a different audience.",
+    spec: "PD-008I",
+  },
+  {
+    metricId: "hlt.health_history", module: "health",
+    displayName: "Health over time",
+    definition: "Historical health state, past degradations and objective trends.",
+    producer: "absent", source: null,
+    missing:
+      "History is a series of past health STATES, and no health state has ever been computed or "
+      + "stored, so there is nothing to look back over. The event, job and AI logs are timestamped and "
+      + "can be trended individually — that is what History shows instead, and it says so.",
+    spec: "PD-008J",
+  },
+  {
+    metricId: "hlt.sync_health", module: "health",
+    displayName: "Sync and offline transaction health",
+    definition: "Outstanding sync transactions, their age, and failures in the offline outbox.",
+    producer: "absent", source: null,
+    missing:
+      "⚠ A REFUSED READ, NOT A MISSING ONE — and the difference matters. practice_sync_transaction "
+      + "EXISTS and Competen Practice writes it every time a device syncs. It is not on the practice "
+      + "plane's allowlist, so this plane may not read it. Widening that allowlist is an owner "
+      + "decision, and the honest sentence is that the rows are there and this screen is not permitted "
+      + "to count them.",
+    spec: "PD-008E",
+  },
+  {
+    metricId: "hlt.communications_delivery", module: "health",
+    displayName: "Message delivery health",
+    definition: "Email, SMS, WhatsApp and push delivery success, failure and latency.",
+    producer: "absent", source: null,
+    missing:
+      "⚠ ALSO A REFUSED READ. practice_message, practice_message_channel and practice_notification "
+      + "exist and carry delivery state; none is on the practice plane's allowlist. The delivery facts "
+      + "are recorded — this plane is not permitted to read them.",
+    spec: "PD-008G",
   },
 ];
 
