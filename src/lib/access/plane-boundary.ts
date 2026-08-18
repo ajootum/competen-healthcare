@@ -109,15 +109,48 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
   },
   {
     table: "practice_membership",
-    columns: ["workspace_id"],
+    columns: ["workspace_id", "user_id", "role_code", "status", "joined_at", "created_at"],
     count: true,
-    why: "counted, never listed. The tenancy key is all the count needs and all it may have.",
+    why:
+      "⚠ WIDENED FROM COUNTED-NEVER-LISTED, 2026-08-18, BY OWNER DECISION FOR CPR-PD-004. This read " +
+      "`['workspace_id'] -- counted, never listed`, and that sentence and the Practitioners module are " +
+      "a direct contradiction: PD-004 prescribes a landlord-side roster of the people using Competen " +
+      "Practice, and a roster is a list. The specification was commissioned knowing what it shows; a " +
+      "Product Director who cannot see practitioners is not one. So the boundary moved rather than the " +
+      "module being quietly reduced to a number. " +
+      "⚠ WHAT THIS ADMITS IS A WORKING RELATIONSHIP, NOT A CLINICAL ONE. Who holds a seat, in which " +
+      "practice, under what role, in what state, since when. That is employment-shaped information " +
+      "about a professional using a product, and it is the same class the HQ appointments board " +
+      "already shows about platform staff. " +
+      "⚠ WHAT IT STILL REFUSES, AND THE REFUSALS ARE THE POINT: no email (D1 -- the owner's NAME is the " +
+      "reasoned lookup, and the roster follows it), no clinical column, and nothing about what the " +
+      "person did to a patient. `practice_patient`, `practice_appointment` and `practice_encounter` " +
+      "below are untouched at workspace_id and must stay there -- the widening is one table wide, and " +
+      "listing WHO WORKS HERE has never implied listing WHOM THEY SAW.",
   },
   {
     table: "practice_appointment",
     columns: ["workspace_id"],
     count: true,
     why: "counted, never listed. ⚠ TENANCY COLUMN ONLY — a patient's appointment time is not operational telemetry.",
+  },
+  {
+    table: "practice_session",
+    columns: ["user_id"],
+    count: true,
+    why:
+      "⚠ ONE COLUMN, ADDED 2026-08-18 FOR CPR-PD-004's 'seen in the last 30 days'. This is a sign-in " +
+      "session, not a clinical session -- see practice-sessions.ts, which is the practitioner's WORKING " +
+      "day and is a different table. " +
+      "⚠ THE WINDOW AND THE REVOCATION ARE FILTERS, NEVER SELECTS. `last_seen_at` and `revoked_at` " +
+      "narrow the query; neither is read back, so no timestamp and no device ever leaves the database " +
+      "for this plane. What crosses is a set of user ids that had a live session inside the window -- " +
+      "the minimum that can answer the question, and one bit per person rather than a history. " +
+      "⚠ AND THE COLUMN IS AN UPDATE, WHICH IS WHY THE ANSWER IS THREE-VALUED AND NOT A METRIC. " +
+      "security.ts:342 overwrites last_seen_at in place, so this can say 'seen in the window', 'not " +
+      "seen', or 'no session ever recorded' -- and cannot say activity days, sessions per week or any " +
+      "engagement score. PD-004 asks for those; the roster states that they have no source rather than " +
+      "deriving them from the one bit this grant permits.",
   },
   {
     table: "practice_patient",
@@ -188,7 +221,13 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
   },
   {
     table: "practice_practitioner_identity",
-    columns: ["practitioner_number", "number_format_version"],
+    // ⚠ `user_id` ADDED 2026-08-18 AS A JOIN KEY AND NOTHING ELSE (CPR-PD-004). The roster shows a
+    // practitioner NUMBER beside a name it already holds from profiles, and without this column the two
+    // cannot be matched. It carries no information of its own that the caller does not already have --
+    // it is the same identifier the membership row is keyed by. The "NO PROFILE FIELDS" rule below is
+    // UNCHANGED and still binding: handle, display_name, discovery and the licence-verification columns
+    // stay outside this plane, which is why the roster shows no profession or specialty.
+    columns: ["practitioner_number", "number_format_version", "user_id"],
     count: true,
     why:
       "⚠ NO PROFILE FIELDS. `handle`, `display_name`, `discovery` and the licence-verification columns are " +
