@@ -30,7 +30,7 @@ import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { resolveWorkspaceContext, type WorkspaceContext } from "../src/lib/practice/access";
-import { purgeWorkspacesOwnedBy } from "./_cleanup";
+import { purgeWorkspacesOwnedBy, cleanupOnKill } from "./_cleanup";
 import {
   ensureCoreLibrary, ensurePlatformCatalogue, createDefinition, createPack, setPackItem, CORE_LIBRARY,
 } from "../src/lib/practice/parameters";
@@ -496,4 +496,10 @@ function report() {
   process.exit(fails.length ? 1 : 0);
 }
 
+// ⚠ TEARDOWN ON A KILL, NOT ONLY ON A THROW. The catch below covers a run that FAILS; it does not
+// cover one that is KILLED, which in this environment is the ordinary case -- a command timeout, an
+// agent watchdog, a stopped task. Six abandoned Practice workspaces accumulated that way and the
+// landlord Mission Control counted every one of them as a real practice. Best effort: SIGKILL cannot
+// be caught, and scripts/estate-hygiene-harness.ts is the backstop for what still gets through.
+cleanupOnKill(cleanup);
 main().catch(async e => { console.error(e); await cleanup(); process.exit(1); });

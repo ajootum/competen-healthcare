@@ -34,6 +34,7 @@ import { evidenceFromTask, EVIDENCE_TASK_TYPES } from "../src/lib/hww/evidence";
 import { assessCompetencyCurrency, DECISION_COLUMNS } from "../src/lib/operations/competency-currency";
 import { outstandingForShift } from "../src/lib/operations/shift-closeout";
 import { latestPerAssessor } from "../src/lib/engines/scoring";
+import { cleanupOnKill } from "./_cleanup";
 loadEnvConfig(process.cwd());
 
 const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
@@ -505,4 +506,10 @@ async function main() {
   if (fail) process.exit(1);
 }
 
+// ⚠ TEARDOWN ON A KILL, NOT ONLY ON A THROW. The catch below covers a run that FAILS; it does not
+// cover one that is KILLED, which in this environment is the ordinary case -- a command timeout, an
+// agent watchdog, a stopped task. Six abandoned Practice workspaces accumulated that way and the
+// landlord Mission Control counted every one of them as a real practice. Best effort: SIGKILL cannot
+// be caught, and scripts/estate-hygiene-harness.ts is the backstop for what still gets through.
+cleanupOnKill(cleanup);
 main().catch(async e => { console.error(e); await cleanup(); process.exit(1); });

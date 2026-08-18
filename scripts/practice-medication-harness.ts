@@ -66,7 +66,7 @@ import {
   REFUSES, MEDICATION_BOUNDARY, MEDICATION_NOT_CURRENT_REASON,
 } from "../src/lib/practice/patient-workspace-constants";
 import { PRACTICE_NAV } from "../src/lib/practice/navigation";
-import { purgeWorkspacesOwnedBy } from "./_cleanup";
+import { purgeWorkspacesOwnedBy, cleanupOnKill } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
 
@@ -784,4 +784,10 @@ async function main() {
   if (fails.length) { fails.forEach(f => console.log(`  - ${f}`)); process.exit(1); }
 }
 
+// ⚠ TEARDOWN ON A KILL, NOT ONLY ON A THROW. The catch below covers a run that FAILS; it does not
+// cover one that is KILLED, which in this environment is the ordinary case -- a command timeout, an
+// agent watchdog, a stopped task. Six abandoned Practice workspaces accumulated that way and the
+// landlord Mission Control counted every one of them as a real practice. Best effort: SIGKILL cannot
+// be caught, and scripts/estate-hygiene-harness.ts is the backstop for what still gets through.
+cleanupOnKill(cleanup);
 main().catch(async e => { console.error(e); await cleanup(); process.exit(1); });

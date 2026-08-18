@@ -197,7 +197,7 @@ export default async function PdMissionControl({
     <div data-wide className="space-y-3">
 
       {/* ── A. CONTEXT HEADER (§2 A, §13) ───────────────────────────────────────────────────────── */}
-      <header className={`${CARD} p-4`}>
+      <header className={`${CARD} px-4 py-3`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Competen Practice</p>
@@ -210,15 +210,18 @@ export default async function PdMissionControl({
           {/* ⚠ THE FRESHNESS NOTE STAYS VISIBLE. §2 A names data freshness as part of the context header
               and the sentence is one line, not a paragraph — it was never the density problem, so it is
               not one of the things that moved behind a disclosure. */}
-          <div className="text-right">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Last updated</p>
-            <p className="text-[12px] tabular-nums text-gray-700">{utcStamp(m.freshness.generatedAt)}</p>
-            <p className="mt-0.5 max-w-[18rem] text-[10px] leading-tight text-gray-400">{m.freshness.note}</p>
+          {/* ⚠ ONE LINE, NOT THREE STACKED. §2 A requires data freshness in the context header; it never
+              required a column. The note that explains it is one hover/expand away rather than always
+              occupying two lines of the fold. */}
+          <div className="flex items-center gap-2 text-right">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Updated</span>
+            <span className="text-[12px] tabular-nums text-gray-700">{utcStamp(m.freshness.generatedAt)}</span>
+            <ExplainDot label="What this timestamp means">{m.freshness.note}</ExplainDot>
           </div>
         </div>
 
         {/* §13: global product context is fixed to Practice; the market scope is the one selector. */}
-        <nav aria-label="Market scope" className="mt-3 flex flex-wrap items-center gap-1.5">
+        <nav aria-label="Market scope" className="mt-2 flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] font-semibold text-gray-500">Scope</span>
           {[null, ...m.scope.markets].map(opt => {
             const active = m.scope.market === opt;
@@ -248,7 +251,7 @@ export default async function PdMissionControl({
         )}
 
         {contexts.length > 0 && (
-          <div className="mt-3">
+          <div className="mt-2">
             <GovernanceContextSwitcher
               contexts={contexts.map(c => ({
                 appointmentId: c.appointmentId,

@@ -257,7 +257,7 @@ export default function ProductDirectorSidebar({
 
       <main
         id="main-content"
-        className={`max-w-6xl px-4 py-8 transition-[margin-left] duration-200 ease-out motion-reduce:transition-none md:px-6 ${geometry.content}`}
+        className={`max-w-6xl px-4 pb-8 pt-3 transition-[margin-left] duration-200 ease-out motion-reduce:transition-none md:px-6 ${geometry.content}`}
       >
         {children}
       </main>

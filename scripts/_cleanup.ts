@@ -158,3 +158,87 @@ export async function purgeWorkspacesOwnedBy(
 
   return result;
 }
+
+/**
+ * The uuid range every harness fixture user is minted from: `00000000-0000-4000-8000-…`.
+ *
+ * ⚠ THIS IS A CONVENTION, AND IT IS RELIABLE ONLY BECAUSE REAL IDS CANNOT COLLIDE WITH IT. Supabase
+ * mints v4 uuids, which are random in all 122 free bits; an all-zeros first group with a fixed 4000-8000
+ * middle is not something the generator produces. Every fixture in scripts/ is hand-written to this
+ * shape. If a fixture is ever created with a random uuid instead, it becomes invisible to the sweep
+ * below and will accumulate silently -- so keep minting them here.
+ */
+export const FIXTURE_OWNER_PREFIX = "00000000-";
+
+export const isFixtureOwner = (id: string | null | undefined): boolean =>
+  typeof id === "string" && id.startsWith(FIXTURE_OWNER_PREFIX);
+
+/**
+ * ⚠ RUN CLEANUP WHEN THE PROCESS IS KILLED, NOT ONLY WHEN IT THROWS (2026-08-18).
+ *
+ * THE DEFECT THIS EXISTS FOR. Seventy-nine harnesses end with
+ * `main().catch(async e => { await cleanup(); process.exit(1) })` and NONE of them handled a signal.
+ * That covers a run that FAILS and misses a run that is KILLED -- and killing is the ordinary case in
+ * this environment: a command timeout, an agent watchdog, a stopped task. Six abandoned Practice
+ * workspaces accumulated across three separate dates that way, and the landlord Mission Control counted
+ * every one of them as a real practice, overstating the estate sevenfold.
+ *
+ * ⚠ BEST EFFORT, AND HONEST ABOUT IT. SIGKILL cannot be caught by anything, and a hard kill on Windows
+ * often arrives as one. This catches the polite kinds -- SIGINT, SIGTERM, SIGHUP -- which is what a
+ * timeout and a Ctrl-C send first. It reduces the leak; it cannot close it. The sweep below is the
+ * backstop for what still gets through, and estate-hygiene-harness is what makes the leak visible.
+ *
+ * The handler runs ONCE (a second signal during teardown exits immediately, so a hung cleanup can still
+ * be escaped) and always exits non-zero, because a killed run did not pass.
+ */
+export function cleanupOnKill(cleanup: () => Promise<void>): void {
+  let tearingDown = false;
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+    process.on(signal, () => {
+      if (tearingDown) process.exit(130);
+      tearingDown = true;
+      console.error(`\n  ${signal} received -- tearing down fixtures before exit.`);
+      cleanup()
+        .catch(e => console.error("  teardown failed:", e instanceof Error ? e.message : String(e)))
+        .finally(() => process.exit(130));
+    });
+  }
+}
+
+/**
+ * Purge EVERY fixture-owned Practice workspace that no longer holds anything.
+ *
+ * ⚠ THE BACKSTOP, NOT THE FIX. A harness cleans up after itself; this cleans up after the ones that
+ * could not. It is deliberately conservative -- a workspace qualifies only when its owner is in the
+ * fixture range AND it holds no patients AND no appointments -- so a real practice cannot be caught by
+ * it even if somebody one day names a real owner badly.
+ *
+ * Returns what it removed and what it could not. A workspace with lifecycle transitions cannot be
+ * deleted at all (migration 247 makes them append-only), and that is reported rather than forced --
+ * archiving is the estate's own answer to that one.
+ */
+export async function purgeAbandonedFixtures(
+  admin: { from: (t: string) => any },  // eslint-disable-line @typescript-eslint/no-explicit-any
+): Promise<{ examined: number; purged: PurgeResult | null; skipped: string[] }> {
+  const { data: ws, error } = await admin.from("practice_workspace")
+    .select("id, name, owner_person_id");
+  if (error || !ws) return { examined: 0, purged: null, skipped: [`estate unreadable: ${error?.message}`] };
+
+  const skipped: string[] = [];
+  const owners = new Set<string>();
+  for (const w of ws as { id: string; name: string; owner_person_id: string }[]) {
+    if (!isFixtureOwner(w.owner_person_id)) continue;
+    const { count: patients } = await admin.from("practice_patient")
+      .select("id", { count: "exact", head: true }).eq("workspace_id", w.id);
+    const { count: appts } = await admin.from("practice_appointment")
+      .select("id", { count: "exact", head: true }).eq("workspace_id", w.id);
+    if (patients === 0 && appts === 0) owners.add(w.owner_person_id);
+    else skipped.push(`${w.name} holds ${patients} patient(s) and ${appts} booking(s) -- left alone`);
+  }
+
+  return {
+    examined: (ws as unknown[]).length,
+    purged: owners.size ? await purgeWorkspacesOwnedBy(admin, [...owners]) : null,
+    skipped,
+  };
+}
