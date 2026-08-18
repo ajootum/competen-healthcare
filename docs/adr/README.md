@@ -46,6 +46,7 @@ wish, not a record.
 | [ADR-010](./ADR-010-email-verification.md) | Production accounts require verified email addresses | Accepted |
 | [ADR-011](./ADR-011-clinical-session-policy.md) | Clinical session policy - 10-minute lock, 30-minute logout | Accepted |
 | [ADR-012](./ADR-012-security-architecture.md) | The actual security architecture - three layers, not RLS-enforced RBAC | Accepted |
+| [ADR-013](./ADR-013-auth-module-boundary.md) | src/lib/auth/ is a bounded internal module, not a package | Accepted |
 
 Initial set published under COMP-ENG-001 §5, 2026-08-18. Each ADR below was written by reading the actual
 code, migrations, and harnesses cited in it — not reconstructed from memory of what the decision was
