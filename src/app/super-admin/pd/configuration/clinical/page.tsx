@@ -1,7 +1,7 @@
 import { requireHqCapability } from "@/lib/hq/context";
 import { domain, LADDER, refusalFor, SAFETY_LABEL } from "@/lib/hq/pd-configuration";
 import {
-  ConfigHeader, Panel, Warn, Explain, DomainSections, RungSummary, NoReadNote, NotThisModule,
+  ConfigHeader, Panel, Warn, Explain, Cite, DomainSections, RungSummary, NoReadNote, NotThisModule,
 } from "../_components/config-ui";
 
 // CPR-PD-011 §8 — CLINICAL CONFIGURATION.
@@ -50,7 +50,7 @@ export default async function Page() {
         <p>
           §8 requires clinical-safety-sensitive configuration to carry an explicit safety classification
           and approval rules, and requires medication and dose thresholds to be versioned and traceable.
-          The classification VOCABULARY exists (migration 092 constrains it to nine values). No clinical
+          The classification VOCABULARY exists — the database constrains it to nine values. No clinical
           setting is a configuration definition, so not one of them carries a classification; no
           definition anywhere carries an approval class; and there is no approval record to write a
           decision into.{" "}
@@ -62,7 +62,7 @@ export default async function Page() {
       </Warn>
 
       <Panel title="The safety vocabulary that already exists (§4 Sensitivity)"
-        note="configuration_registry_objects.safety_classification, migration 092:24. Nine values, constrained by the database — the four marked critical are the ones §8's approval rules would attach to.">
+        note="Nine values, constrained by the database on every configuration definition — the four marked critical are the ones §8's approval rules would attach to.">
         <ul className="grid gap-1.5 text-[12px] sm:grid-cols-2">
           {Object.entries(SAFETY_LABEL).map(([key, label]) => (
             <li key={key} className="flex items-baseline gap-2">
@@ -80,6 +80,7 @@ export default async function Page() {
           clinical-safety-critical classification could be applied today and would grant nothing: nothing
           would consult it before a change, because nothing consults a classification at all.
         </Explain>
+        <Cite>configuration_registry_objects.safety_classification, constrained at migration 092:24.</Cite>
       </Panel>
 
       <Panel title="The two rules §8 makes that this build must never break"

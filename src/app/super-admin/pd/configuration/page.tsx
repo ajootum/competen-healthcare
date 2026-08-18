@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadPdConfiguration, DOMAINS, LIFECYCLE, SAFETY_LABEL } from "@/lib/hq/pd-configuration";
 import {
-  ConfigHeader, Stat, Panel, Absent, Warn, ModuleLink, Ladder, Explain,
+  ConfigHeader, Stat, Panel, AbsentList, Warn, ModuleLink, Ladder, Explain,
   WritesAndApprovals, ReadFailures, ReadStamp,
 } from "./_components/config-ui";
 
@@ -49,6 +49,47 @@ export default async function Page() {
         spec="CPR-PD-011 §3, §6, §16"
       />
 
+      {/* ── THE HEADLINE FINDING, AND IT IS FIRST ────────────────────────────────────────────────
+          ⚠ EVERYTHING BELOW THIS BANNER IS ELABORATION OF IT. A Product Director learns one thing on
+          this page — the engine is real and Practice is not yet its subject — and the eight tiles, the
+          ladder and every domain link are that sentence in more detail. It used to sit under two rows
+          of tiles, which made the reader assemble the finding from evidence instead of being told it
+          and then shown why. The migration numbers that prove it are in the disclosure, not the claim:
+          PD-001 §3 puts implementation detail in Technical Operations, not on this screen. */}
+      {cfg.registry.practiceDefinitions.state === "value" && cfg.registry.practiceDefinitions.value === 0 && (
+        <Warn title="The configuration engine is real. Competen Practice is not yet its subject.">
+          <p>
+            Three configuration estates exist here and are populated: a definition registry carrying
+            allowed scopes, safety classification, override policy, dependencies and owner; an override
+            store with draft, publish, version snapshots and a change trail; and a change-set lifecycle
+            whose states line up almost exactly with §16.{" "}
+            <span className="font-semibold">None of them holds a Competen Practice setting.</span> The
+            registry is seeded from the in-code workspace catalogue, which describes the estate
+            workspaces — Unit Manager, Shift Supervisor, the Personal Workspace — and names Practice
+            nowhere. So every figure below is true and is about the estate&apos;s configuration, not
+            Practice&apos;s.
+          </p>
+          <Explain summary="The three estates, and where each one is defined">
+            <ul className="flex flex-col gap-0.5">
+              <li>
+                <span className="font-semibold">Definition registry</span> —{" "}
+                <span className="font-mono text-[10px]">configuration_registry_objects</span>, migration 092.
+                Seeded from <span className="font-mono text-[10px]">WORKSPACE_CATALOG</span> at{" "}
+                <span className="font-mono text-[10px]">src/lib/config/registry.ts:77</span>.
+              </li>
+              <li>
+                <span className="font-semibold">Override store</span> —{" "}
+                <span className="font-mono text-[10px]">workspace_config_overrides / _versions / _audit</span>, migration 076.
+              </li>
+              <li>
+                <span className="font-semibold">Change sets</span> —{" "}
+                <span className="font-mono text-[10px]">configuration_releases / _events</span>, migration 099.
+              </li>
+            </ul>
+          </Explain>
+        </Warn>
+      )}
+
       {/* ⚠ TONE IS CONDITIONAL ON THE VALUE, NOT ON THE TILE. Colour is granted only to a real value —
           `Stat` enforces that structurally — but a fixed `tone` would still paint a healthy number red
           the day the number became healthy. A count of high-risk settings is a fact, not a warning,
@@ -85,43 +126,17 @@ export default async function Page() {
 
       <ReadFailures problems={cfg.problems} />
 
-      {/* ── THE HEADLINE FINDING ─────────────────────────────────────────────────────────────── */}
-      {cfg.registry.practiceDefinitions.state === "value" && cfg.registry.practiceDefinitions.value === 0 && (
-        <Warn title="The configuration engine is real. Competen Practice is not yet its subject.">
-          <p>
-            Three configuration estates exist here and are populated: a definition registry whose columns
-            already carry allowed scopes, safety classification, override policy, dependencies and owner
-            (migration 092); an override store with draft, publish, version snapshot and change audit
-            (076); and a change-set lifecycle whose states line up almost exactly with §16 (099).
-            <span className="font-semibold"> None of them holds a Competen Practice setting.</span> The
-            registry is seeded from the in-code workspace catalogue, which describes the estate
-            workspaces — Unit Manager, Shift Supervisor, the Personal Workspace — and names Practice
-            nowhere.
-          </p>
-          <p className="mt-1.5">
-            So the figures above are true and they are about the estate&apos;s configuration, not
-            Practice&apos;s. Every domain page in this module says which of its settings exist, where
-            they live today, and why this plane cannot read them.
-          </p>
-        </Warn>
-      )}
-
-      {/* ── THE LADDER ───────────────────────────────────────────────────────────────────────── */}
+      {/* ── THE LADDER, AS A TABLE ───────────────────────────────────────────────────────────── */}
       <Panel
-        title="The configuration hierarchy (§3), and which rungs resolve today"
-        note={`${rungsResolving} of ${cfg.ladder.length} rungs resolve; ${rungsRefused} cannot be resolved at all. Each verdict is a statement about the schema — a check constraint, a foreign key, a switch statement — read at the line named.`}>
+        title="The configuration hierarchy (§3), and which levels resolve today"
+        note={`${rungsResolving} of ${cfg.ladder.length} levels resolve; ${rungsRefused} cannot be resolved at all. Each verdict is a statement about the schema — a check constraint, a foreign key, a branch that does not exist — and each row's disclosure carries the full verdict and the line it was read at.`}>
         <Ladder rungs={cfg.ladder} />
-        <div className="mt-3 rounded-lg border border-gray-200 bg-[var(--cmp-surface-neutral)] p-3">
-          <p className="text-[12px] font-bold text-gray-800">What the engine can already do, and it is not small</p>
-          <p className="mt-1 text-[12px] leading-relaxed text-gray-700">
-            <span className="font-mono text-[11px]">resolveRuntime()</span> returns an effective value
-            together with a <span className="font-mono text-[11px]">trace</span> array naming every
-            contributing layer and its scope reference — which is §5&apos;s &quot;expose effective value
-            plus source scope&quot; already answered, not pending. What it resolves along is the estate
-            ladder rather than the product&apos;s, so the machinery is built and pointed at the wrong
-            six levels.
-          </p>
-        </div>
+        <p className="mt-2.5 text-[12px] leading-snug text-gray-700">
+          <span className="font-semibold text-gray-900">The machinery is built and pointed at the wrong six levels.</span>{" "}
+          The resolver already returns an effective value together with every contributing layer and its
+          scope — which is §5&apos;s &quot;expose effective value plus source scope&quot; answered rather
+          than pending. What it resolves along is the estate&apos;s hierarchy, not the product&apos;s.
+        </p>
       </Panel>
 
       {/* ── NEEDS ATTENTION ──────────────────────────────────────────────────────────────────── */}
@@ -143,7 +158,10 @@ export default async function Page() {
                     {a.tone === "critical" ? "Critical" : a.tone === "warning" ? "Warning" : "For information"}
                   </span>
                   <p className="mt-0.5 font-semibold text-gray-900">{a.label}</p>
-                  <p className="text-gray-600">{a.detail}</p>
+                  <p className="leading-snug text-gray-600">{a.detail}</p>
+                  {/* ⚠ The citation is how the claim gets checked, so it is kept — behind the
+                      disclosure, not in the sentence a director reads. */}
+                  {a.cite && <Explain summary="Where to check this">{a.cite}</Explain>}
                 </li>
               ))}
             </ul>
@@ -151,10 +169,8 @@ export default async function Page() {
         </Panel>
 
         <Panel title="Not shown, and why"
-          note="§6 also asks for drift, expired temporary overrides, outstanding approvals, markets configured and affected-Practice previews. Each is refused by the metric registry, which holds the reason once so eleven screens cannot each invent one.">
-          <div className="flex flex-col gap-2">
-            {cfg.refusals.map(r => <Absent key={r.label} what={r.label} why={r.why} />)}
-          </div>
+          note="§6 also asks for drift, expired temporary overrides, outstanding approvals, markets configured and affected-Practice previews. Each is refused by the metric registry, which holds the reason once so eleven screens cannot each invent one — open a row for the reason it gives.">
+          <AbsentList items={cfg.refusals} />
         </Panel>
       </div>
 
@@ -239,7 +255,7 @@ export default async function Page() {
         </Panel>
 
         <Panel title="Sensitivity mix (§4)"
-          note="safety_classification, the nine-value vocabulary migration 092 already constrains. This is the attribute §8 depends on for clinical-safety approval rules.">
+          note="Safety classification — the nine-value vocabulary the database already constrains on every definition. This is the attribute §8 depends on for clinical-safety approval rules.">
           {cfg.registry.bySafety.length === 0 ? (
             <p className="text-[12px] text-gray-500">No definition carries a safety classification in the rows this page read.</p>
           ) : (

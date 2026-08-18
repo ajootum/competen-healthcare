@@ -104,6 +104,51 @@ export function Explain({ summary, children }: { summary: string; children: Reac
   );
 }
 
+/**
+ * ⚠ THE ONE PLACE A MIGRATION NUMBER, FILE OR LINE MAY APPEAR ON THESE PAGES.
+ *
+ * PD-001 §3 and the PD screen doctrine both say the same thing: raw implementation detail must not
+ * dominate a Product Director surface — it belongs in Technical Operations and Diagnostics. But
+ * deleting a citation would make a verdict something a reader has to TRUST, and these verdicts are
+ * only worth reading because they can be checked. So the visible sentence states the fact in the
+ * product's own language and the exact reference goes here, one click away, where a developer or an
+ * auditor looks for it.
+ *
+ * Rule of thumb the module follows: a table or column NAME may be visible — it is the answer to
+ * "where does this setting live", which is a Product Director's question. A migration number or a
+ * file:line is not; it is the answer to "prove it".
+ */
+export function Cite({ children }: { children: React.ReactNode }) {
+  return (
+    <Explain summary="Where to check this">
+      <span className="font-mono text-[10px] break-words text-gray-500">{children}</span>
+    </Explain>
+  );
+}
+
+/**
+ * Several facts this surface does NOT have, as a tight list. Never "coming soon".
+ *
+ * ⚠ THE SAME REFUSAL, AT A DENSITY A LIST CAN CARRY. Five dashed cards of full prose is four screens
+ * of a reader being told the same shape of thing five times. The NAME of the missing fact is the row;
+ * the registry's sentence — which is the part that must never be softened or dropped — is one click
+ * away on the row itself. Use `Absent` when there is exactly one, where a card is the right weight.
+ */
+export function AbsentList({ items }: { items: { label: string; why: string }[] }) {
+  return (
+    <ul className="flex flex-col">
+      {items.map(i => (
+        <li key={i.label} className="border-b border-gray-100 py-1.5 first:pt-0 last:border-0 last:pb-0">
+          <p className="text-[12px] font-semibold text-gray-800">
+            {i.label} <span className="font-normal text-gray-400">— not shown</span>
+          </p>
+          <Explain summary="Why this is not shown">{i.why}</Explain>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** A fact this surface does NOT have, with the reason named. Never "coming soon". */
 export function Absent({ what, why }: { what: string; why: string }) {
   return (
@@ -141,6 +186,13 @@ export function ModuleLink({ href, label, summary }: { href: string; label: stri
 // that a market override is a thing this product does — and nothing in this system can write one, read
 // one or evaluate one. So each rung carries its verdict, and the two rungs that have no scope at all
 // are rendered as refusals rather than as empty rows waiting for data.
+//
+// ⚠ AND IT IS A TABLE, NOT SIX CARDS OF PROSE. Every verdict here is true and none of them is what a
+// Product Director reads first: they learn ONE thing on this page — the engine does not yet serve
+// Practice — and six full-width paragraphs made them read it six times. So the row carries the level,
+// its status with its word beside the dot, and ONE short line in the product's language. The full
+// verdict, §3's intent wording and the exact migration and line sit behind the row's own disclosure,
+// which is where a developer or an auditor should find them and where PD-001 §3 says they belong.
 
 const STATE_STYLE: Record<string, { dot: string; text: string }> = {
   resolves: { dot: "bg-[var(--cmp-text-success)]", text: "text-[var(--cmp-text-success)]" },
@@ -151,66 +203,108 @@ const STATE_STYLE: Record<string, { dot: string; text: string }> = {
 
 export function Ladder({ rungs }: { rungs: LadderRung[] }) {
   return (
-    <ol className="flex flex-col gap-2">
-      {rungs.map((r, i) => {
-        const s = STATE_STYLE[r.state];
-        return (
-          <li key={r.level} className="rounded-lg border border-gray-200 bg-white p-3">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <span className="font-mono text-[11px] text-gray-400">{i + 1}</span>
-              <span className="text-[13px] font-bold text-gray-900">{r.level}</span>
-              {/* ⚠ NEVER COLOUR ALONE — the dot always travels with its word. */}
-              <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${s.text}`}>
-                <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${s.dot}`} />
-                {RUNG_STATE_LABEL[r.state]}
-              </span>
-            </div>
-            <p className="mt-0.5 text-[12px] text-gray-600">{r.intent}</p>
-            <p className="mt-1 text-[12px] leading-relaxed text-gray-800">{r.verdict}</p>
-            {r.engine && (
-              <Explain summary="What implements this rung">
-                <span className="font-mono text-[11px] break-words">{r.engine}</span>
-              </Explain>
-            )}
-          </li>
-        );
-      })}
-    </ol>
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[560px] border-collapse text-[12px]">
+        <thead>
+          <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+            <th className="w-[26%] py-1.5 pr-3 font-semibold">Level (§3)</th>
+            <th className="w-[24%] py-1.5 pr-3 font-semibold">Does it resolve</th>
+            <th className="py-1.5 font-semibold">What that means here</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rungs.map((r, i) => {
+            const s = STATE_STYLE[r.state];
+            return (
+              <tr key={r.level} className="border-b border-gray-100 align-top">
+                <td className="py-2 pr-3">
+                  <span className="font-mono text-[10px] text-gray-400">{i + 1}</span>{" "}
+                  <span className="text-[12px] font-bold text-gray-900">{r.level}</span>
+                </td>
+                {/* ⚠ NEVER COLOUR ALONE — the dot always travels with its word. */}
+                <td className="py-2 pr-3">
+                  <span className={`inline-flex items-baseline gap-1.5 text-[11px] font-semibold leading-snug ${s.text}`}>
+                    <span aria-hidden className={`relative top-[3px] inline-block h-2 w-2 shrink-0 rounded-full ${s.dot}`} />
+                    {RUNG_STATE_LABEL[r.state]}
+                  </span>
+                </td>
+                <td className="py-2 leading-snug text-gray-700">
+                  {r.reason}
+                  <Explain summary="The full verdict, and where to check it">
+                    <p className="text-gray-500">
+                      <span className="font-semibold text-gray-700">§3 asks this level to do:</span> {r.intent}
+                    </p>
+                    <p className="mt-1 text-gray-700">{r.verdict}</p>
+                    {r.engine && (
+                      <p className="mt-1 text-gray-700">
+                        <span className="font-semibold">What implements it:</span> {r.engine}
+                      </p>
+                    )}
+                    {r.citation && (
+                      <p className="mt-1 font-mono text-[10px] break-words text-gray-500">{r.citation}</p>
+                    )}
+                  </Explain>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
 // ── WHERE A DOMAIN'S SETTINGS ACTUALLY LIVE ──────────────────────────────────────────────────────────
 
+/**
+ * ⚠ THE MIGRATION AND LINE ARE UNDER THE TABLE, NOT UNDER EVERY ROW.
+ *
+ * The store's NAME and whether this plane may read it are the whole of the answer at a Product
+ * Director's altitude — "where does the booking horizon live" is answered by `practice_booking_rule`
+ * and "refused". The exact migration and line are how the claim gets CHECKED, which is a different
+ * job for a different reader, so they go in one disclosure beneath the table. Deleting them would
+ * make the page unverifiable; printing them beside every row made it a schema dump.
+ */
 export function Stores({ stores }: { stores: DomainStore[] }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[560px] border-collapse text-[12px]">
-        <thead>
-          <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
-            <th className="py-1.5 pr-3 font-semibold">Store</th>
-            <th className="py-1.5 pr-3 font-semibold">What it holds</th>
-            <th className="py-1.5 font-semibold">Readable here</th>
-          </tr>
-        </thead>
-        <tbody>
-          {stores.map(s => (
-            <tr key={s.table} className="border-b border-gray-100 align-top">
-              <td className="py-2 pr-3">
-                <span className="font-mono text-[11px] text-gray-800">{s.table}</span>
-                <span className="block font-mono text-[10px] text-gray-400">migration {s.migration}</span>
-              </td>
-              <td className="py-2 pr-3 leading-relaxed text-gray-700">{s.holds}</td>
-              <td className="py-2 whitespace-nowrap">
-                <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${s.readable ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-critical)]"}`}>
-                  <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${s.readable ? "bg-[var(--cmp-text-success)]" : "bg-[var(--cmp-text-critical)]"}`} />
-                  {s.readable ? "Yes" : "Refused"}
-                </span>
-              </td>
+    <>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] border-collapse text-[12px]">
+          <thead>
+            <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+              <th className="py-1.5 pr-3 font-semibold">Store</th>
+              <th className="py-1.5 pr-3 font-semibold">What it holds</th>
+              <th className="py-1.5 font-semibold">Readable here</th>
             </tr>
+          </thead>
+          <tbody>
+            {stores.map(s => (
+              <tr key={s.table} className="border-b border-gray-100 align-top">
+                <td className="py-2 pr-3">
+                  <span className="font-mono text-[11px] text-gray-800">{s.table}</span>
+                </td>
+                <td className="py-2 pr-3 leading-snug text-gray-700">{s.holds}</td>
+                <td className="py-2 whitespace-nowrap">
+                  <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${s.readable ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-critical)]"}`}>
+                    <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${s.readable ? "bg-[var(--cmp-text-success)]" : "bg-[var(--cmp-text-critical)]"}`} />
+                    {s.readable ? "Yes" : "Refused"}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Explain summary="Where to check each of these in the schema">
+        <ul className="mt-1 flex flex-col gap-0.5 font-mono text-[10px] text-gray-500">
+          {stores.map(s => (
+            <li key={s.table}>
+              {s.table} — migration {s.migration}{s.cite ? `, ${s.cite}` : ""}
+            </li>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </ul>
+      </Explain>
+    </>
   );
 }
 
@@ -280,7 +374,7 @@ export function WritesAndApprovals({ canManage, canApprove }: { canManage: boole
   return (
     <Panel
       title="Changing a setting: what this page does, and what it deliberately does not"
-      note="PD-011 §17 maker-checker, §25 segregation of duties, migration 311.">
+      note="PD-011 §17 maker-checker, §25 segregation of duties.">
       <ul className="flex flex-col gap-2 text-[12px] leading-relaxed text-gray-700">
         <li>
           <span className="font-semibold text-gray-900">This page is read-only, and that is a design decision.</span>{" "}
@@ -293,7 +387,7 @@ export function WritesAndApprovals({ canManage, canApprove }: { canManage: boole
         <li>
           <span className="font-semibold text-gray-900">A high-risk change is proposed here and approved elsewhere.</span>{" "}
           <span className="font-mono text-[11px]">hq.practice.change.approve</span> is the checker half
-          and is deliberately NOT granted to the Product Director (migration 311). You{" "}
+          and is deliberately NOT granted to the Product Director. You{" "}
           {canApprove ? "hold it, which is unusual for this role — check the appointment that granted it" : "do not hold it, which is correct for this role"}.
           Until both halves have somewhere to record a decision, an approve button here would be an
           affordance with no counterparty.
@@ -315,6 +409,11 @@ export function WritesAndApprovals({ canManage, canApprove }: { canManage: boole
           because this engine cannot address a Practice.
         </li>
       </ul>
+      <Cite>
+        Migration 311 creates hq.practice.configuration.manage and withholds hq.practice.change.approve
+        from the Product Director. PD-011 §29 names configuration_change_set, configuration_approval and
+        configuration_activation; only the change set exists, as configuration_releases (migration 099).
+      </Cite>
     </Panel>
   );
 }
@@ -341,13 +440,14 @@ export function ReadFailures({ problems }: { problems: string[] }) {
  * Seven of these pages make no database call, because every store their domain owns is on the Practice
  * plane. Printing "Read at 14:32 UTC" on such a page would be a freshness claim about a read that never
  * happened — the same class of defect as a zero standing in for an unreadable count. So they say what
- * they are: statements about the schema, each verifiable at the migration and line named above.
+ * they are: statements about the schema, each verifiable at the migration and line the stores
+ * disclosure names.
  */
 export function NoReadNote({ why }: { why: string }) {
   return (
     <p className="text-[11px] leading-relaxed text-gray-400">
       ⚠ This page makes no database read, so it carries no freshness stamp. {why} Everything on it is a
-      statement about the schema, checkable at the migration and line named beside each store.
+      statement about the schema, checkable at the migration and line listed under the stores above.
     </p>
   );
 }
@@ -384,7 +484,7 @@ export function DomainSections({ domain, refusalWhy }: { domain: ConfigDomain; r
       </Panel>
 
       <Panel title="Where these settings live today"
-        note="Named at the migration and line so a reader can go and look, rather than being told a capability is missing when the rows are right there.">
+        note="Every store named, so a reader who asks where a setting lives is answered rather than told a capability is missing when the rows are right there. The migration and line that prove each one are behind the disclosure below.">
         <Stores stores={domain.stores} />
       </Panel>
 

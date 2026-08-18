@@ -79,9 +79,24 @@ export type LadderRung = {
   /** PD-011 §3's INTENT column, in its own words. */
   intent: string;
   state: RungState;
-  /** What in the engine implements it, or null when nothing does. */
+  /**
+   * ⚠ THE ONE VISIBLE LINE, AND IT IS IN THE PRODUCT'S LANGUAGE ON PURPOSE.
+   *
+   * The compact ladder shows this and nothing else. PD-001 §3 and the PD screen doctrine both forbid
+   * implementation detail from dominating a Product Director surface, so no migration number, file or
+   * line may appear here — they go in `citation`, which only a disclosure body renders.
+   */
+  reason: string;
+  /** What in the engine implements it, in plain words, or null when nothing does. */
   engine: string | null;
+  /** The full verdict, still in the product's language. Behind the per-rung disclosure. */
   verdict: string;
+  /**
+   * ⚠ THE FORENSIC CITATION — migration, file and line. DISCLOSURE BODIES ONLY, never a visible
+   * sentence. These are not decoration and must not be deleted: they are why a reader can check a
+   * verdict rather than trust it. They are simply not what a director reads first.
+   */
+  citation: string | null;
 };
 
 export const RUNG_STATE_LABEL: Record<RungState, string> = {
@@ -96,72 +111,109 @@ export const LADDER: LadderRung[] = [
     level: "Platform-enforced rule",
     intent: "Non-overridable Competen-wide constraint, security/safety/platform invariant.",
     state: "resolves",
-    engine: "configuration_registry_objects.override_policy = 'none' + scope_type 'platform' (migrations 092:22-26, 076:20-21)",
+    reason:
+      "The level works. What it enforces is the ESTATE's invariants — no Competen Practice setting is "
+      + "registered here yet, so no Practice invariant is expressed by it.",
+    engine: "The definition registry's override policy, plus the engine's platform scope.",
     verdict:
-      "The engine has this rung. Every registry object declares an override policy, `none` means no "
-      + "lower scope may set a value, and the resolver's base layer is the registry default that "
-      + "nothing below it can remove (runtime.ts:19-21). ⚠ What it enforces is the ESTATE's invariants: "
-      + "no Competen Practice object is registered, so no Practice invariant is expressed here yet.",
+      "The engine has this level. Every configuration definition declares an override policy; where "
+      + "that policy is \"none\", no lower level may set a value, and the resolver starts from a base "
+      + "the levels beneath it cannot remove. ⚠ What it enforces is the ESTATE's invariants: no "
+      + "Competen Practice object is registered, so no Practice invariant is expressed here yet.",
+    citation:
+      "configuration_registry_objects.override_policy = 'none' with scope_type 'platform' "
+      + "(migrations 092:22-26 and 076:20-21); the resolver's base layer at src/lib/config/runtime.ts:19-21.",
   },
   {
     level: "Product default",
     intent: "Default behavior for Competen Practice.",
     state: "partial",
-    engine: "configuration_registry_objects.default_enabled, seeded as the `platform_default` trace layer (runtime.ts:19-21)",
+    reason:
+      "A product default can say on or off and nothing else. There is no typed default, so it cannot "
+      + "say \"30 minutes\", \"UGX\" or \"three attempts\".",
+    engine: "The definition registry's default-enabled flag, seeded as the platform-default layer of the resolver's trace.",
     verdict:
-      "Resolves as a BOOLEAN and nothing more. The base value the resolver starts from is "
-      + "`{ enabled: default_enabled }`, so a product default can say on or off and cannot say "
-      + "\"30 minutes\", \"UGX\" or \"three attempts\". PD-011 §4 requires a Data type and a typed "
-      + "Default on every definition; configuration_registry_objects has neither column, and no "
-      + "validation column either. A typed default has nowhere to live.",
+      "Resolves as a BOOLEAN and nothing more. The base value the resolver starts from is an enabled "
+      + "flag, so a product default can say on or off and cannot say \"30 minutes\", \"UGX\" or \"three "
+      + "attempts\". PD-011 §4 requires a data type and a typed default on every definition; the "
+      + "registry has neither, and carries no validation rule either. A typed default has nowhere to live.",
+    citation:
+      "configuration_registry_objects.default_enabled; the base layer is built at "
+      + "src/lib/config/runtime.ts:19-21. Neither a data-type nor a validation column exists on that table.",
   },
   {
     level: "Market override",
     intent: "Approved country/market-specific behavior.",
     state: "no-scope",
+    reason:
+      "There is no market layer to configure. The engine's scope list has six levels and market is not "
+      + "one of them, so no market override can be written, evaluated or counted.",
     engine: null,
     verdict:
-      "⚠ CANNOT BE RESOLVED. `market` is not a legal value of workspace_config_overrides.scope_type — "
-      + "migration 076:20-21 constrains it to exactly platform, tenant, hospital, unit, role and user — "
-      + "and applies() (workspace-config.ts:16-24) has no branch that could match one. So no market "
-      + "override has ever been written, none can be written, and none could be evaluated if it "
-      + "somehow were. Market & Localization shows the markets that EXIST, which is a property of the "
-      + "practices, and says plainly that it is not a configured layer.",
+      "⚠ CANNOT BE RESOLVED. The engine recognises exactly six scopes — platform, tenant, hospital, "
+      + "unit, role and user — and market is not among them, neither in the constraint the database "
+      + "enforces nor in the code that decides which overrides apply. So no market override has ever "
+      + "been written, none can be written, and none could be evaluated if it somehow were. Market & "
+      + "Localization shows the markets that EXIST, which is a property of the practices, and says "
+      + "plainly that it is not a configured layer.",
+    citation:
+      "workspace_config_overrides.scope_type is constrained to those six by migration 076:20-21, and "
+      + "applies() at src/lib/config/workspace-config.ts:16-24 has no branch that could match a market.",
   },
   {
     level: "Plan / segment override",
     intent: "Approved plan or governed segment behavior.",
     state: "no-scope",
+    reason:
+      "Neither plan nor segment is one of the six scopes — and plan membership sits on the Practice "
+      + "plane, so even the audience of a plan override could not be resolved here.",
     engine: null,
     verdict:
-      "⚠ CANNOT BE RESOLVED, for the same reason and one more. `plan` and `segment` are not values of "
-      + "the scope enum. And plan membership is held in practice_entitlement, a Practice-plane table "
-      + "this plane may not read, so even the audience of a plan override could not be resolved here.",
+      "⚠ CANNOT BE RESOLVED, for the same reason and one more. Plan and segment are not among the "
+      + "engine's six scopes. And plan membership is held on the Practice plane, in a table this plane "
+      + "may not read, so even the audience of a plan override could not be resolved here.",
+    citation:
+      "practice_entitlement holds plan membership and is deliberately absent from the platform-plane "
+      + "allowlist in src/lib/access/plane-boundary.ts.",
   },
   {
     level: "Practice configuration",
     intent: "Tenant-level setting where explicitly delegated.",
     state: "wrong-subject",
-    engine: "workspace_config_overrides.scope_type 'tenant' / 'hospital' — hospital_id references hospitals(id) (076:18)",
+    reason:
+      "The engine's two tenancy levels address hospitals. A Practice is not a hospital and carries no "
+      + "tenant id, so it cannot be the subject of an override at all.",
+    engine: "The override store's tenant and hospital scopes, which key on a hospital record.",
     verdict:
-      "⚠ CANNOT BE RESOLVED. The engine's two tenancy rungs are `tenant` and `hospital`, and the store "
-      + "keys on hospitals(id). A Competen Practice workspace is not a hospital and carries no tenant "
-      + "id — the two-gate split (COMP-ARCH-PSA-001) makes Practice a separate product — so a Practice "
-      + "cannot be the subject of an override row at all. Its settings genuinely exist, in "
-      + "practice_configuration (191:101) and about twenty domain tables, and are governed by the "
-      + "Practice product itself rather than by this engine. Reconciling the two is schema work, not a "
-      + "rendering exercise.",
+      "⚠ CANNOT BE RESOLVED. The engine's two tenancy levels are tenant and hospital, and the override "
+      + "store keys on a hospital. A Competen Practice workspace is not a hospital and carries no "
+      + "tenant id — the two-gate split makes Practice a separate product — so a Practice cannot be "
+      + "the subject of an override row at all. Its settings genuinely exist, in the Practice "
+      + "product's own configuration table and about twenty domain tables, and are governed by that "
+      + "product rather than by this engine. Reconciling the two is schema work, not a rendering "
+      + "exercise.",
+    citation:
+      "workspace_config_overrides.hospital_id references hospitals(id) at migration 076:18. The "
+      + "Practice's own settings are in practice_configuration, migration 191:101. The two-gate split "
+      + "is COMP-ARCH-PSA-001.",
   },
   {
     level: "Practitioner preference",
     intent: "Individual preference only where explicitly safe and allowed.",
     state: "wrong-subject",
-    engine: "workspace_config_overrides.scope_type 'user', matched on ctx.userId (workspace-config.ts:22)",
+    reason:
+      "The level itself resolves, but there is nothing for a Practice practitioner to hold a "
+      + "preference ABOUT, because no Practice setting is a configuration definition.",
+    engine: "The override store's user scope, matched on the signed-in user.",
     verdict:
-      "The LAYER resolves — `user` is a legal scope and applies() matches it — but there is nothing for "
-      + "a Practice practitioner to hold a preference ABOUT, because no Practice setting is a registry "
-      + "object. The practitioner preferences that are actually stored today live in "
-      + "practice_user_preference (205:41), on the Practice plane, outside what this plane may read.",
+      "The LEVEL resolves — user is a legal scope and the engine matches it — but there is nothing for "
+      + "a Practice practitioner to hold a preference ABOUT, because no Practice setting is a "
+      + "configuration definition. The practitioner preferences that are actually stored today live on "
+      + "the Practice plane, outside what this plane may read.",
+    citation:
+      "workspace_config_overrides.scope_type 'user', matched on ctx.userId at "
+      + "src/lib/config/workspace-config.ts:22. The stored preferences are in practice_user_preference, "
+      + "migration 205:41.",
   },
 ];
 
@@ -174,7 +226,16 @@ export const LADDER: LadderRung[] = [
 
 export type DomainStore = {
   table: string;
+  /**
+   * ⚠ THE CITATION, AND THE `Stores` TABLE RENDERS IT BEHIND A DISCLOSURE RATHER THAN UNDER THE NAME.
+   *
+   * A reader who wants to go and check the claim gets an exact line. A Product Director reading "where
+   * do the booking rules live" gets the table's name and whether this plane may read it, which is the
+   * whole of the answer at their altitude. PD-001 §3: implementation detail must not dominate.
+   */
   migration: string;
+  /** A second source reference, where the store's row is written somewhere worth naming. */
+  cite?: string;
   holds: string;
   /** True only for tables the platform-plane allowlist admits. */
   readable: boolean;
@@ -399,7 +460,7 @@ export const DOMAINS: ConfigDomain[] = [
       { table: "configuration_registry_audit", migration: "092:47", holds: "definition changes: created / updated / synced / published / deprecated / retired.", readable: true },
       { table: "configuration_release_events", migration: "099:31", holds: "change-set transitions with actor.", readable: true },
       { table: "practice_identifier_format_history", migration: "220:63", holds: "every version of the practitioner-number shape, with the reason it changed.", readable: true },
-      { table: "practice_audit_event", migration: "191:219", holds: "⚠ where a Practice's OWN configuration changes are audited (configuration.ts:241). Deliberately absent from the platform-plane allowlist: its payloads carry clinical detail.", readable: false },
+      { table: "practice_audit_event", migration: "191:219", cite: "written from src/lib/practice/configuration.ts:241", holds: "⚠ where a Practice's OWN configuration changes are audited. Deliberately absent from the platform-plane allowlist: its payloads carry clinical detail.", readable: false },
     ],
   },
 ];
@@ -428,7 +489,13 @@ const namesPractice = (o: any) => /practice/i.test(String(o?.object_key ?? "")) 
 
 // ── OVERVIEW PAYLOAD ─────────────────────────────────────────────────────────────────────────────────
 
-export type Attention = { label: string; detail: string; tone: "critical" | "warning" | "neutral" };
+export type Attention = {
+  label: string;
+  detail: string;
+  tone: "critical" | "warning" | "neutral";
+  /** ⚠ Where the claim can be checked. Disclosure body only — never the visible detail line. */
+  cite?: string;
+};
 
 /**
  * ⚠ THREE STATES, AND CONFLATING THE LAST TWO IS THE FAILURE THIS TYPE EXISTS TO PREVENT.
@@ -642,10 +709,11 @@ export async function loadPdConfiguration(admin: Admin): Promise<PdConfiguration
       label: "No Competen Practice setting is a configuration definition",
       detail:
         `${total === null ? "The" : total.toLocaleString()} definitions are registered and none of them `
-        + "names Competen Practice. The registry is seeded from WORKSPACE_CATALOG (registry.ts:77), "
-        + "which catalogues the estate workspaces — Unit Manager, Shift Supervisor, the Personal "
-        + "Workspace. Until a Practice setting is registered there is nothing here to classify, "
-        + "nothing to approve and nothing to resolve, whatever else this page can count.",
+        + "names Competen Practice. The registry is seeded from the in-code workspace catalogue, which "
+        + "describes the estate's workspaces — Unit Manager, Shift Supervisor, the Personal Workspace. "
+        + "Until a Practice setting is registered there is nothing here to classify, nothing to approve "
+        + "and nothing to resolve, whatever else this page can count.",
+      cite: "The catalogue the registry is seeded from is WORKSPACE_CATALOG, at src/lib/config/registry.ts:77.",
     });
   }
   if ((at(changeSets.failed) ?? 0) > 0) {

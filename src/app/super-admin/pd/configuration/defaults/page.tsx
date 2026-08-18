@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadPracticeDefaults, domain, LADDER, refusalFor } from "@/lib/hq/pd-configuration";
 import {
-  ConfigHeader, Panel, Explain, Warn, DomainSections, RungSummary, ReadFailures, ReadStamp, NotThisModule,
+  ConfigHeader, Panel, Explain, Cite, Warn, DomainSections, RungSummary, ReadFailures, ReadStamp, NotThisModule,
 } from "../_components/config-ui";
 
 // CPR-PD-011 §7 — PRACTICE DEFAULTS.
@@ -48,18 +48,16 @@ export default async function Page() {
       {/* ── THE ONE LIVE PRODUCT DEFAULT ─────────────────────────────────────────────────────── */}
       <Panel
         title="Practitioner number format — a live, governed product default"
-        note="practice_identifier_format (migration 220:39). Platform-owned, one row, no subject — which is why the whole row is readable from this plane and nothing else on this page is.">
+        note="Platform-owned, one row, no subject — which is why the whole of practice_identifier_format is readable from this plane and nothing else on this page is.">
         {!formatMeasured ? (
           <Warn title="The shape below is code, not configuration">
             <p>
               {d.formatRows === null
                 ? "The stored format row could not be read."
                 : "The format table answered and holds no row."}{" "}
-              What is shown is the built-in default from{" "}
-              <span className="font-mono text-[11px]">identifier-format.ts</span>, which the reader
-              returns when the table cannot answer. It matches migration 220&apos;s seed exactly — so it
-              is probably right — but nobody measured it, and this page will not present a fallback as a
-              reading.
+              What is shown is the built-in default in code, which the reader returns when the table
+              cannot answer. It matches the seeded shape exactly — so it is probably right — but nobody
+              measured it, and this page will not present a fallback as a reading.
             </p>
           </Warn>
         ) : (
@@ -93,11 +91,12 @@ export default async function Page() {
           operator has to retype an acknowledgement phrase — deliberately not &quot;yes&quot; — before
           the change is accepted, and the engine refuses a change that would strand the sequence.
         </Explain>
+        <Cite>practice_identifier_format, migration 220:39. The built-in fallback is at src/lib/practice/identifier-format.ts:115-120.</Cite>
       </Panel>
 
       {/* ── VERSION HISTORY OF THAT DEFAULT ──────────────────────────────────────────────────── */}
       <Panel title="How that default has changed (§22)"
-        note="practice_identifier_format_history (220:63) — the effective-dated value history §4 asks for, existing for exactly one setting.">
+        note="practice_identifier_format_history — the effective-dated value history §4 asks for, existing for exactly one setting in the whole product.">
         {d.history.length === 0 ? (
           <p className="text-[12px] text-gray-500">
             {d.historyRead
@@ -130,6 +129,7 @@ export default async function Page() {
             </table>
           </div>
         )}
+        <Cite>practice_identifier_format_history, migration 220:63.</Cite>
       </Panel>
 
       {/* ── THE PROVISIONING-TIME DEFAULTS THAT ARE COUNTABLE ────────────────────────────────── */}

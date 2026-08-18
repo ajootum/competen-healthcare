@@ -4,7 +4,7 @@ import { requireHqCapability } from "@/lib/hq/context";
 import { loadConfigMarkets, domain, LADDER, refusalFor } from "@/lib/hq/pd-configuration";
 import { absenceSentence } from "@/lib/hq/pd-metric-registry";
 import {
-  ConfigHeader, Panel, Absent, Warn, Explain, DomainSections, RungSummary,
+  ConfigHeader, Panel, Absent, Warn, Explain, Cite, DomainSections, RungSummary,
   ReadFailures, ReadStamp, NotThisModule,
 } from "../_components/config-ui";
 
@@ -46,17 +46,20 @@ export default async function Page() {
       <Warn title="No market override exists, and none could">
         <p>
           §14 asks for approved, effective-dated, market-specific behaviour with deterministic fallback.
-          The override store constrains <span className="font-mono text-[11px]">scope_type</span> to
-          exactly platform, tenant, hospital, unit, role and user (migration 076:20-21).{" "}
+          The configuration engine recognises exactly six scopes — platform, tenant, hospital, unit, role
+          and user.{" "}
           <span className="font-semibold">
-            `market` is not one of them, so nothing can write a market override and nothing could
-            evaluate one.
+            Market is not one of them, so nothing can write a market override and nothing could evaluate
+            one.
           </span>{" "}
-          Everything below is the market a practice IS in — read from{" "}
-          <span className="font-mono text-[11px]">practice_workspace.country</span> and{" "}
-          <span className="font-mono text-[11px]">.timezone</span> — which is a fact about the estate and
-          not a configured layer.
+          Everything below is the market a practice IS in — its country and timezone — which is a fact
+          about the estate and not a configured layer.
         </p>
+        <Cite>
+          workspace_config_overrides.scope_type is constrained to those six by migration 076:20-21, and
+          applies() at src/lib/config/workspace-config.ts:16-24 has no branch that could match a market.
+          The estate figures below are read from practice_workspace.country and .timezone.
+        </Cite>
       </Warn>
 
       <div className="grid gap-4 lg:grid-cols-2">

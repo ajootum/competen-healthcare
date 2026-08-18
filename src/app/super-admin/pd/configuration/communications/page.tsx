@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireHqCapability } from "@/lib/hq/context";
 import { domain, LADDER, refusalFor } from "@/lib/hq/pd-configuration";
 import {
-  ConfigHeader, Panel, Warn, Explain, DomainSections, RungSummary, NoReadNote, NotThisModule,
+  ConfigHeader, Panel, Warn, Explain, Cite, DomainSections, RungSummary, NoReadNote, NotThisModule,
 } from "../_components/config-ui";
 
 // CPR-PD-011 §12 — COMMUNICATIONS.
@@ -53,7 +53,7 @@ export default async function Page() {
       </Warn>
 
       <Panel title="The channels this product actually has"
-        note="practice_message_channel.kind is constrained by migration 224:40-63 to exactly two values.">
+        note="The channel list is constrained by the database to exactly two values. That is not a shortlist of what has been switched on — it is the whole vocabulary the product has.">
         <ul className="flex flex-col gap-2 text-[12px] leading-relaxed text-gray-700">
           <li>
             <span className="font-semibold text-gray-900">SMS</span> and{" "}
@@ -75,6 +75,7 @@ export default async function Page() {
           configuration or as delivery telemetry would produce a WhatsApp channel that this product has
           never had.
         </Explain>
+        <Cite>practice_message_channel.kind, constrained at migration 224:40-63.</Cite>
       </Panel>
 
       <Panel title="Handed over is not delivered, and the code already says so"
