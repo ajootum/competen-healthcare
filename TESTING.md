@@ -13,7 +13,7 @@ review looking covered.
 |---|---|---|---|
 | Unit | Vitest | Does this function do what it claims, in isolation? | **CI, every push/PR, blocking** |
 | Smoke | Playwright | Does the app boot and serve its critical routes? | **Not yet wired.** Installed (`@playwright/test`), zero spec/config files exist. Deferred — see below. |
-| Acceptance | 212 scripts under `scripts/*-harness.ts` | Does a specific, spec-derived invariant hold against the real system — a constraint, a boundary, a governance rule proven by a write that fails? | **Local only, run by a person with real credentials.** See `docs/HARNESS-INVENTORY.md`. |
+| Acceptance | 212 scripts under `scripts/*-harness.ts` | Does a specific, spec-derived invariant hold against the real system — a constraint, a boundary, a governance rule proven by a write that fails? | **22 in CI, blocking** (`scripts/ci-harnesses.ts`). The other 190 are local-only, run by a person with real credentials. See `docs/HARNESS-INVENTORY.md`. |
 
 ## Unit tests (Vitest) — CI, blocking
 
@@ -47,9 +47,28 @@ config is the easy part once the list exists.
 **Full inventory, classification method, and every caveat: `docs/HARNESS-INVENTORY.md`.** Summary, not a
 substitute for reading it:
 
-- **212 scripts.** 32 need no database at all (`pure/local`) and are theoretically CI-safe today, pending
-  a pass to confirm each runs cleanly and deterministically outside a developer's machine — not yet done,
-  not claimed as done.
+- **212 scripts.** 32 need no database at all (`pure/local`). **That pass has now been done** (2026-08-18):
+  every one of the 32 was run twice with a scrubbed environment, and **22 are in CI as a blocking job**.
+
+  ⚠ **`pure/local` did not mean `CI-safe`, and the gap was not small.** Ten of the 32 do not belong in CI:
+
+  - **Six are RED on real, pre-existing defects** the pass discovered rather than introduced: three
+    clinical timestamps rendered with no explicit locale (`clock-format`); three `aria-modal` surfaces
+    that never trap or restore keyboard focus, plus a shared dialog that doesn't wrap Tab and a
+    destructive dialog that doesn't focus CANCEL first (`pui-a11y`, `pui-components`); sign out rendered
+    in the super-admin sidebar (`pui-header`); stray text in the collapsed icon rail (`umw-nav`); and
+    `security-headers`, which also needs a built and started server.
+  - **Four would have reported green for a reason unrelated to what they check**: `practice-bundle` skips
+    to PEND without a build and still exits 0; `practice-outbox-durability` needs a dev server and Chrome,
+    and only passed screening because a dev server happened to be running; `pui-migration` compares a
+    working-tree diff, and a clean checkout has none; `sso` fetches live Supabase, loading `.env.local`
+    via `loadEnvConfig` — which is how it survived an `env -u` scrub and reported real data.
+
+  Wiring all 32 in on the strength of the tier label would have produced a pipeline born red **and** four
+  checks that pass while proving nothing. `scripts/ci-harnesses.ts` records every exclusion with its
+  reason, prints them on every run, and fails if a newly added `pure/local` harness lands in neither list.
+  The six red ones are tracked bugs, not disappeared ones — fixing each and moving it into `INCLUDED` is
+  the intended end state.
 - **180 touch the one live Supabase project this repo has.** There is no staging project. Per this repo's
   existing CI design (`ci.yml`'s own header: *"the database harnesses authenticate with the service-role
   key, and that key does not belong in GitHub"*) and per COMP-ENG-001 §7 (*"never run acceptance harnesses
@@ -75,6 +94,7 @@ anything touching a broad or security-relevant surface.
 2. **No secret shipped, no new high/critical unallowlisted dependency** — CI `security` job, always.
 3. **Any migration touched passes house rules** — CI `migrations` job, on migration changes.
 4. **Unit tests pass** — CI `test` job, always.
+   **And the 22 credential-free harnesses pass** — CI `harnesses` job, always.
 5. **Any harness whose invariant the change could affect has been re-run locally**, and the result is
    stated, not assumed. If unsure whether a harness applies, `docs/HARNESS-INVENTORY.md`'s spec-ref
    column is the fastest way to find one by the spec ID you're implementing against.

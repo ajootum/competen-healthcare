@@ -82,12 +82,34 @@ hww-gaps-harness.ts
 hww-instruments-harness.ts
 ```
 
-## What CI can run today without any change
+## What CI runs today
 
-The **32 pure/local** harnesses need no credentials and no live database — they are candidates for a CI
-job today, subject to actually running each one and confirming it's deterministic (this inventory
-doesn't run them; it only confirms none of them import a Supabase client). That verification is tracked
-as follow-up work in `TESTING.md`, not claimed as done here.
+**22 of the 32 pure/local harnesses run in CI as a blocking job** (`scripts/ci-harnesses.ts`, wired into
+`.github/workflows/ci.yml`). The verification this section previously deferred was carried out on
+2026-08-18: each of the 32 was run twice with a scrubbed environment and its exit code and summary line
+compared.
+
+⚠ **The `pure/local` tier is not a CI-safety verdict, and this inventory should not be read as one.**
+Ten of the 32 were excluded, for two distinct reasons:
+
+- **Six are RED on real, pre-existing defects** (`clock-format`, `pui-a11y`, `pui-components`,
+  `pui-header`, `umw-nav`, `security-headers`). Including them would have made the gate born red. Each
+  defect is named in `scripts/ci-harnesses.ts` so it stays a tracked bug.
+- **Four would report green in CI for a reason unrelated to what they check** (`practice-bundle`,
+  `practice-outbox-durability`, `pui-migration`, `sso`) — a missing build, a missing dev server, a
+  missing working-tree diff, and a live network call respectively.
+
+⚠ **Two of those exclusions expose blind spots in this inventory's own classifier**, both worth knowing
+before trusting a tier label here:
+
+- `sso-harness` reaches the live Supabase estate by **raw `fetch`**, and loads credentials from
+  `.env.local` via `loadEnvConfig`. The classifier tiers on `@supabase/supabase-js` imports, so it saw
+  none and called the harness `pure/local`. A tier of `pure/local` means "imports no Supabase client",
+  which is not the same as "touches no database".
+- `practice-outbox-durability` and `practice-bundle` both **exited 0 during screening because of ambient
+  state on the machine** — a dev server that happened to be running, and a `.next` directory it had
+  populated. Neither exists on a clean checkout. Running a harness successfully on a developer's machine
+  is not evidence it will do anything meaningful elsewhere.
 
 The **180 privileged-live** harnesses stay local-only, per COMP-ENG-001 §7 and this repo's existing CI
 workflow: *"the database harnesses authenticate with the service-role key, and that key does not belong
