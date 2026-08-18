@@ -56,12 +56,30 @@ const viewBody = (name: string): string | null =>
 const objectExists = (t: string) =>
   new RegExp(`create table (?:if not exists )?${t}\\b`, "i").test(migrations) || viewBody(t) !== null;
 
+/**
+ * Can this object name a Practice?
+ *
+ * ⚠ TWO SHAPES COUNT, AND ONLY ONE OF THEM EXISTED WHEN THIS WAS WRITTEN. A direct `practice_id` or
+ * `workspace_id` column is the obvious one. The other is the TYPED SUBJECT the phase 1 model
+ * established — `subject_type` keyed to the canonical vocabulary plus `subject_id` — which is how every
+ * management-plane record built from phase 4 onward scopes itself, precisely because an incident may be
+ * about a market or a service rather than a Practice.
+ *
+ * The narrow definition reported mos_incident as not Practice-aware, which would have been a fair
+ * reading in a world where a subject column did not exist. It does, so this is the third time this file
+ * has had to learn that the estate is wider than the shape it was first taught.
+ */
 const isPracticeAware = (t: string) => {
   const c = columnsOf(t);
-  if (c.length > 0) return c.includes("practice_id") || c.includes("workspace_id");
+  const namesPractice = (cols: string[]) =>
+    cols.includes("practice_id") || cols.includes("workspace_id")
+    || (cols.includes("subject_type") && cols.includes("subject_id"));
+  if (c.length > 0) return namesPractice(c);
   // a view has no column list to read, so its Practice-awareness is whether it SELECTS one
   const body = viewBody(t);
-  return body !== null && /\bpractice_id\b|\bworkspace_id\b/.test(body);
+  if (body === null) return false;
+  return /\bpractice_id\b|\bworkspace_id\b/.test(body)
+    || (/\bsubject_type\b/.test(body) && /\bsubject_id\b/.test(body));
 };
 
 // ── parse the matrix rows ───────────────────────────────────────────────────
@@ -104,11 +122,11 @@ ok("M3", named.length >= 15,
 // ── every Practice-aware verdict matches the schema ─────────────────────────
 const wrongYes = rows.filter(r => r.verdict.includes("yes") && r.tables.length > 0 && !r.tables.some(isPracticeAware));
 ok("M4", wrongYes.length === 0,
-  `every "Practice-aware: YES" row names a table carrying practice_id or workspace_id${wrongYes.length ? " — wrong: " + wrongYes.map(r => r.cells[0]).join(", ") : ""}`);
+  `every "Practice-aware: YES" row names an object that can address a Practice, by column or by typed subject${wrongYes.length ? " — wrong: " + wrongYes.map(r => r.cells[0]).join(", ") : ""}`);
 
 const wrongNo = rows.filter(r => r.verdict === "no" && r.tables.length > 0 && r.tables.every(isPracticeAware));
 ok("M5", wrongNo.length === 0,
-  `every "Practice-aware: no" row names only tables WITHOUT practice_id or workspace_id${wrongNo.length ? " — wrong: " + wrongNo.map(r => r.cells[0]).join(", ") : ""}`);
+  `every "Practice-aware: no" row names only objects that CANNOT address a Practice${wrongNo.length ? " — wrong: " + wrongNo.map(r => r.cells[0]).join(", ") : ""}`);
 
 const yesRows = rows.filter(r => r.verdict.includes("yes"));
 ok("M6", yesRows.length >= 5 && rows.filter(r => r.verdict === "no").length >= 10,
