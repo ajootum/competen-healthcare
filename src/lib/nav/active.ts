@@ -34,3 +34,32 @@ export function pathMatches(href: string, pathname: string, exact: boolean): boo
   const path = href.split("?")[0];
   return exact ? pathname === path : pathname === path || pathname.startsWith(path + "/");
 }
+
+export type RowTone = "active" | "section" | "idle";
+
+/**
+ * What treatment a PARENT row takes, given where the reader is.
+ *
+ * ⚠ THE CASE THIS EXISTS FOR: every expandable group in the Product Director sidebar repeats its own href
+ * as its first child -- "Configuration Overview" IS /pd/configuration. On that page the parent matches
+ * exactly AND a child matches, so a rule of "self wins" paints the parent and the child with the SAME
+ * full fill: two identical pills on eight screens, which is precisely the ambiguity the `section` tone
+ * was introduced to prevent. The owner read it off the screen before any harness did.
+ *
+ * Expanded, the child row is the one that represents the page and the parent yields to it. Collapsed to
+ * the rail the child is not rendered at all, so the parent keeps the full treatment: it is then the only
+ * row that could carry it, and yielding would leave the workspace showing nothing at all.
+ */
+export function parentTone(a: {
+  selfActive: boolean;
+  childActive: boolean;
+  /** does one of this item's children point at the item's own href? */
+  selfIsAChild: boolean;
+  rail: boolean;
+  expanded: boolean;
+}): RowTone {
+  if (a.rail) return a.selfActive || a.childActive ? "active" : "idle";
+  if (a.expanded && a.selfIsAChild && a.selfActive) return "section";
+  if (a.selfActive) return "active";
+  return a.childActive ? "section" : "idle";
+}

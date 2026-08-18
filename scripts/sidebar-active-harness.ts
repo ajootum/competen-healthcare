@@ -20,7 +20,8 @@ import { readFileSync } from "node:fs";
 // ⚠ IMPORTED, NOT RE-IMPLEMENTED. The first version of this harness had its own copy of both rules and
 // therefore stayed green under every break applied to the real component. These are the functions the
 // sidebar actually runs.
-import { parentHrefs, pathMatches } from "../src/lib/nav/active";
+import { parentHrefs, pathMatches, parentTone } from "../src/lib/nav/active";
+import { PD_NAV } from "../src/app/super-admin/_components/pd-nav";
 // ⚠ IMPORTED SINCE CP-HQ-NAV-001, WHERE THE TABLES MOVED OUT OF THE COMPONENT. This harness used to regex
 // them out of WorkspaceSidebar.tsx, and when they moved to nav-tables.ts the regex matched nothing -- which
 // C1/C2/C3 caught immediately and loudly. That is exactly what those count controls are for, and it is the
@@ -105,6 +106,36 @@ ok("C7", negative.size === 0,
   "⚠ /a/ai is NOT the parent of /a/ai-gateway -- the parent test matches on a segment boundary, and a bare prefix would wrongly make it one");
 ok("C8", positive.has("/a/ai") && positive.size === 1,
   "control: /a/ai IS the parent of /a/ai/models -- C7 is a real boundary, not a function that has stopped finding parents");
+
+// ── PD PARENT TONE (CPR-PD-001 s4) ──────────────────────────────────────────
+// ⚠ THE OWNER FOUND THIS ON SCREEN, NOT A HARNESS: on /pd/configuration the group row and its
+// "Configuration Overview" child wore the SAME full fill. Every one of the eight expandable PD groups
+// repeats its own href as its first child, so selfActive and childActive are both true there and the
+// old "self wins" rule painted two identical pills across eight screens.
+const PD_SELF_AS_CHILD = PD_NAV.flatMap(g => g.items)
+  .filter(i => (i.children ?? []).some(c => c.href === i.href));
+
+ok("T1", PD_SELF_AS_CHILD.length > 0,
+  `control: ${PD_SELF_AS_CHILD.length} PD groups repeat their own href as a child -- if this ever reads 0 the tone rule below is testing a shape that no longer exists`);
+
+const expandedOnOwnOverview = parentTone({ selfActive: true, childActive: true, selfIsAChild: true, rail: false, expanded: true });
+ok("T2", expandedOnOwnOverview === "section",
+  "expanded, on a group's own overview: the PARENT yields to the child and takes `section`, so exactly one row wears the full fill");
+
+ok("T3", parentTone({ selfActive: true, childActive: true, selfIsAChild: true, rail: true, expanded: true }) === "active",
+  "in the RAIL the parent keeps `active` -- the child is not rendered there, so yielding would leave the workspace showing nowhere at all");
+
+ok("T4", parentTone({ selfActive: true, childActive: false, selfIsAChild: false, rail: false, expanded: true }) === "active",
+  "a leaf-ish parent with no self-as-child still takes `active` when it IS the page -- the yield is narrow, not a general demotion");
+
+ok("T5", parentTone({ selfActive: false, childActive: true, selfIsAChild: true, rail: false, expanded: true }) === "section",
+  "on a genuine CHILD page the parent takes `section`, which is the behaviour that already worked and must not regress");
+
+ok("T6", parentTone({ selfActive: false, childActive: false, selfIsAChild: true, rail: false, expanded: false }) === "idle",
+  "control: an unrelated group is `idle` -- the rule is not returning a non-idle tone for everything");
+
+ok("T7", parentTone({ selfActive: true, childActive: true, selfIsAChild: true, rail: false, expanded: false }) === "active",
+  "COLLAPSED (group shut) on its own overview the parent keeps `active` -- the child row is not on screen to carry it");
 
 console.log(`\n${fail === 0 ? "ALL GREEN" : "RED"}  ${pass} passed, ${fail} failed`);
 if (failures.length) { console.log("\nFAILURES:"); failures.forEach(f => console.log("  " + f)); }

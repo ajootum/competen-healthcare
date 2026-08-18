@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { parentHrefs, pathMatches } from "@/lib/nav/active";
+import { parentHrefs, pathMatches, parentTone, type RowTone } from "@/lib/nav/active";
 import { useModalFocus } from "@/components/ui/use-modal-focus";
 import type { WorkspaceLink } from "@/lib/roles";
 import { PD_NAV, PD_HOME, PD_ALL_HREFS } from "./pd-nav";
@@ -433,10 +433,20 @@ function PdSidebarBody({
                 // the parent is the ONLY row on screen, so it takes the full active treatment; expanded,
                 // the child carries "page" and the parent carries "section", which is how two lit rows
                 // still say exactly where you are.
-                const tone: RowTone = selfActive ? "active"
-                  : childActive ? (rail ? "active" : "section")
-                  : "idle";
                 const expanded = openGroups[item.href] ?? (selfActive || childActive);
+                // ⚠ EVERY EXPANDABLE GROUP REPEATS ITS OWN HREF AS ITS FIRST CHILD -- "Configuration
+                // Overview" IS /pd/configuration, and all eight groups are built that way. On that page
+                // selfActive and childActive are therefore BOTH true, the parent took "active", and the
+                // reader got two identical full-fill pills: exactly the ambiguity the section tone was
+                // written to prevent, on eight screens.
+                //
+                // Expanded, the child row is the one that represents the page, so the parent yields to
+                // it and takes "section". Collapsed to the rail the child is not on screen at all, so
+                // the parent keeps the full treatment -- it is the only row that could carry it.
+                const selfIsAChild = children.some(c => c.href === item.href);
+                const tone: RowTone = parentTone({ selfActive, childActive, selfIsAChild, rail, expanded });
+                // the parent stops claiming the page exactly when it stops being painted as it
+                const yieldToChild = selfActive && tone !== "active";
                 const panelId = `pd-children-${item.href.replace(/\W+/g, "-")}`;
 
                 return (
@@ -457,7 +467,11 @@ function PdSidebarBody({
                         href={item.href}
                         // s8: "clicking the label must still have a predictable destination" -- every
                         // parent routes to its own overview, and the disclosure is an extra, not the way in.
-                        aria-current={selfActive ? "page" : undefined}
+                        // ⚠ AND THE SAME YIELD APPLIES TO THE ACCESSIBLE ANSWER, NOT ONLY THE PAINT. Two
+                        // rows carrying aria-current="page" tells a screen-reader user the workspace is
+                        // in two places at once, which is worse than the visual duplication because
+                        // there is no layout to disambiguate it.
+                        aria-current={selfActive && !yieldToChild ? "page" : undefined}
                         // The complete name, always, whatever CSS is drawing (s4).
                         aria-label={tone === "section" ? `${item.label} (current section)` : item.label}
                         title={item.label}
@@ -572,7 +586,6 @@ function PdSidebarBody({
   );
 }
 
-type RowTone = "active" | "section" | "idle";
 
 const ROW_TONE: Record<RowTone, string> = {
   active: "bg-[var(--pd-shell-active)] font-semibold text-[var(--pd-shell-ink)]",
