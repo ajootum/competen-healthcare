@@ -118,6 +118,14 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-no-database-reachable-in-ci
+      # ⚠ A PLACEHOLDER STRING, NOT A KEY, AND NOT A SECRET. createAdminClient() (src/lib/supabase/
+      # server.ts) passes process.env.SUPABASE_SERVICE_ROLE_KEY straight to createClient(), which throws
+      # "supabaseKey is required" on undefined -- so with the variable ABSENT the app crashes at client
+      # CONSTRUCTION and every route touching it 500s, before any network call is attempted. That is what
+      # reddened this job twice: / passed (it never builds an admin client) while /practice and
+      # /practice/home failed. Any non-empty string fixes it; this one points nowhere and grants nothing.
+      # A real service-role key must never appear here -- owner ruling, 2026-08-19.
+      SUPABASE_SERVICE_ROLE_KEY: placeholder-not-a-key-grants-nothing
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -129,20 +137,21 @@ jobs:
       - run: npm ci
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-      # ⚠ DIAGNOSTIC, NOT CEREMONY. The first CI run of this job failed while the identical suite passed
-      # from a genuinely cold start on the author's Windows machine, and job logs are not readable
-      # without repo-admin rights -- so this prints the one thing that distinguishes the leading
-      # hypothesis (localhost resolving to ::1 while next dev listens on IPv4) from every other cause.
-      # Remove it once this job has been green for a while.
-      - name: Which address answers
+      # ⚠ DIAGNOSTIC, NOT CEREMONY. Job logs are not readable without repo-admin rights, so when this job
+      # goes red the status alone says nothing. Printing the HTTP STATUS of each smoke route separates
+      # the classes that actually occur: 200 means the route serves and any failure is an assertion; 500
+      # means the app crashed serving it (the missing-env class above); a connection refusal means the
+      # server never came up at all. Remove once this job has been green for a while.
+      - name: Route status before the suite
         run: |
           npm run dev &
-          for i in $(seq 1 60); do
-            if curl -sf -o /dev/null http://127.0.0.1:3000; then echo "127.0.0.1:3000 ANSWERS after ${i}s"; break; fi
+          for i in $(seq 1 90); do
+            if curl -sf -o /dev/null http://127.0.0.1:3000; then echo "server up after ${i}s"; break; fi
             sleep 1
           done
-          curl -sf -o /dev/null http://localhost:3000 && echo "localhost:3000 ANSWERS" || echo "localhost:3000 DOES NOT ANSWER  <-- the IPv6 hypothesis"
-          node -e "require('dns').lookup('localhost',{all:true},(e,a)=>console.log('localhost resolves to',JSON.stringify(a)))"
+          for p in / /practice /practice/home; do
+            echo "$p -> HTTP $(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3000$p")"
+          done
           pkill -f "next dev" || true
       - name: Smoke suite
         run: npx playwright test
