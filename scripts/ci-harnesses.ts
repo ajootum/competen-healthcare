@@ -37,6 +37,9 @@ const INCLUDED = [
   "access-doors-harness.ts",
   "access-scanner-harness.ts",
   "attendance-harness.ts",
+  // Reads only src/** and security/*.json, counts in-process. Its drift control is the reason it is
+  // here rather than run occasionally: an unclassified guard helper makes gated routes look open.
+  "auth-boundary-harness.ts",
   "clock-format-harness.ts",
   "cpr040-design-system-harness.ts",
   "hww-cnci-harness.ts",
