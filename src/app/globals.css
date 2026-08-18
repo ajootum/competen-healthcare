@@ -424,14 +424,35 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
 
    Contrast is against --pd-shell: the dim ink is ~7:1 and the bright ink ~14:1, so the AA floor holds
    for the idle state as well as the active one. Raise with design when PD-001 is next revised. */
+/* ⚠ RE-GROUNDED AGAINST THE APPROVED DESIGN, 2026-08-18. The first pass painted the whole shell in
+   mid-crimson (#4C0519) and read far more saturated than the comps. In the approved design the ground
+   is NEAR-BLACK with a warm cast and crimson is the ACTIVE state only — an accent, not a field. That
+   is the same distinction s9 is making when it forbids colour-as-meaning: a sidebar entirely in the
+   product's signal colour has nothing left to signal WITH, which is why the active row here reads as
+   an event against a quiet ground rather than as a slightly different red.
+
+   ⚠ AND THE DIM INK STOPPED BEING PINK. Section headings and idle labels were #E8A9B6, which tinted
+   every unselected row toward the accent; the comps hold them neutral so the eye goes to the one row
+   that is lit. Contrast against the new ground is HIGHER than before, not lower — white ink is ~18:1
+   and the neutral dim ink ~8:1, both comfortably past the AA floor the previous note set.
+
+   ⚠ MATCHED BY EYE FROM THE COMP, not sampled from it — the design arrived as an image and these are
+   read relationships (dark ground, crimson accent, neutral secondary ink), not measured values. If the
+   brand has exact hexes, they belong here and this comment should say so instead. */
 :root {
-  --pd-shell: #4C0519;          /* the sidebar ground */
-  --pd-shell-deep: #2E0310;     /* one step darker: the flyout, and the footer's ground */
-  --pd-shell-hover: #641226;    /* hover / focus fill */
-  --pd-shell-active: #7F1D33;   /* the active destination's fill */
-  --pd-shell-line: #7A2337;     /* hairlines and the active marker, on the crimson ground */
-  --pd-shell-ink: #FFE4E9;      /* label ink */
-  --pd-shell-ink-dim: #E8A9B6;  /* idle label and section-heading ink */
+  --pd-shell: #1C0B10;          /* the sidebar ground: near-black, warm */
+  --pd-shell-deep: #120609;     /* one step darker: the flyout, and the footer's ground */
+  --pd-shell-hover: #2E1219;    /* hover / focus fill: a lift, not a colour change */
+  /* ⚠ RAISED FROM #9F1239 AFTER MEASURING, NOT AFTER LOOKING. Against the new near-black ground the
+     first crimson gave the active row only 2.37:1 — under WCAG 1.4.11's 3:1 for indicating the state
+     of a UI component. The row was never colour-ALONE (it carries aria-current and a weight change,
+     which is what PD-001 s9 requires), but "not colour alone" and "the colour is discernible" are two
+     different rules and only one of them was met. #C21F4A measures 3.25:1 against the ground and
+     5.85:1 for white text on it, and is still crimson rather than the error red s9 warns about. */
+  --pd-shell-active: #C21F4A;   /* the active destination's fill -- the ONE crimson surface */
+  --pd-shell-line: #3A1620;     /* hairlines and the active marker */
+  --pd-shell-ink: #FFFFFF;      /* label ink */
+  --pd-shell-ink-dim: #B9A7AC;  /* idle label and section-heading ink: neutral, not tinted */
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════════

@@ -184,6 +184,20 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   /**
+   * ⚠ MOVED OFF THE SIGN-OUT BUTTON, 2026-08-18. Next's dev indicator defaults to `bottom-left`
+   * (node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/devIndicators.md),
+   * which is exactly where every sidebar in this estate puts its identity block and sign-out control.
+   * The owner read the overlap as a rendering defect in the new Product Director sidebar and reported
+   * it as one — a reasonable reading, since it looks like a stray avatar sitting on top of "Sign out".
+   *
+   * ⚠ MOVED RATHER THAN HIDDEN. `devIndicators: false` would also remove the route/compile context it
+   * carries, and this session has already lost time to a dev-only artifact being mistaken for a product
+   * fault (a stale Turbopack cache replaying a fixed compile error). The indicator earns its place; it
+   * just should not sit on a control.
+   */
+  devIndicators: { position: "bottom-right" },
+
+  /**
    * ⚠ VERIFICATION BUILDS MUST NOT SHARE `.next` WITH THE DEV SERVER — THIS HAS COST THE OWNER TWO
    * SITTINGS.
    *

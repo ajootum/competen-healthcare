@@ -5,9 +5,10 @@ import { loadMissionControl } from "@/lib/super-admin/mission-control";
 import MissionControlHeader from "./_mc/MissionControlHeader";
 import ComposedMissionControl from "./_mc/ComposedMissionControl";
 import MissionProfilePreview from "./_mc/MissionProfilePreview";
-import { resolveMissionProfile, resolveMissionProfileByCode, listMissionProfiles } from "@/lib/hq/mission-profile";
+import { resolveMissionProfile, resolveMissionProfileByCode, listMissionProfiles, type MissionComposition } from "@/lib/hq/mission-profile";
 import EnterpriseExplorer from "./_mc/EnterpriseExplorer";
 import Sparkline from "./_mc/Sparkline";
+import PdMissionControl from "./_mc/pd/PdMissionControl";
 
 export const dynamic = "force-dynamic";
 
@@ -61,8 +62,22 @@ function Panel({ title, href, linkLabel, children, className = "" }: { title: st
 
 const TONE_TEXT: Record<string, string> = { amber: "text-[var(--cmp-text-warning)]", orange: "text-[var(--cmp-text-warning)]", rose: "text-[var(--cmp-text-error)]", red: "text-[var(--cmp-text-critical)]", violet: "text-violet-600", teal: "text-teal-600", indigo: "text-indigo-600" };
 
-export default async function MissionControl({ searchParams }: { searchParams: Promise<{ preview?: string }> }) {
-  const { preview } = await searchParams;
+/**
+ * ⚠ THE SAME TEST THE LAYOUT USES TO CHOOSE THE SIDEBAR, WRITTEN ONCE AND ASKED TWICE.
+ *
+ * src/app/super-admin/layout.tsx computes `isProductDirector` from exactly these two fields. If this page
+ * disagreed with it, a Practice Product Director would get the Practice sidebar around the platform
+ * estate dashboard, or the HQ sidebar around a Practice cockpit — and the second is the worse one,
+ * because it looks deliberate.
+ *
+ * ⚠ AND IT MATCHES ON THE PRODUCT LINE, NEVER ON A POSITION CODE (PLAT-GOV-MC-001 §10). A second Practice
+ * position appointed next year resolves to the same profile and lands here with no change to this file.
+ */
+const isPracticeProductLine = (c: MissionComposition) =>
+  c.profile.governanceLevel === "product" && c.profile.productLineCode === "practice";
+
+export default async function MissionControl({ searchParams }: { searchParams: Promise<{ preview?: string; market?: string }> }) {
+  const { preview, market } = await searchParams;
   // ⚠ THE CAPABILITY, NOT THE ROLE -- AND THIS PAGE WAS WHY THE FIRST REAL APPOINTMENT DID NOTHING.
   //
   // The layout admits an HQ appointee. This page then read `roles` and redirected anyone without the
@@ -95,7 +110,31 @@ export default async function MissionControl({ searchParams }: { searchParams: P
     isOwner: ctx.isOwner, positions: ctx.positions, capabilities: ctx.capabilities,
   });
   if (!ctx.isOwner && (composition.profile.governanceLevel === "product" || composition.state !== "resolved"))
-    return (
+    // ── CPR-PD-002: THE PRACTICE PRODUCT DIRECTOR GETS A COCKPIT, NOT A WIDGET WALL ────────────────
+    //
+    // ⚠ ONE BRANCH INSIDE THE EXISTING ONE, AND THAT NESTING IS DELIBERATE. The condition above is the
+    // ownership-first test that stops a registry failure from taking an owner's Mission Control away;
+    // it is pinned by scripts/mission-profile-harness.ts (F4) for that reason and must not be
+    // rewritten to fold a third clause into it. Everybody who reached this line before still reaches
+    // ComposedMissionControl — the other product lines, and every fallback state, byte for byte.
+    //
+    // ⚠ AND THE FALLBACK STATES STAY WITH THE COMPOSED SHELL ON PURPOSE. `state !== "resolved"` means
+    // the registry could not be read or nothing matched; the composed shell says so in plain words. A
+    // Practice cockpit rendered off an unresolved composition would be asserting a governance context
+    // that did not actually resolve — isPracticeProductLine is false for the minimal profile, so that
+    // cannot happen here.
+    return isPracticeProductLine(composition) ? (
+      <PdMissionControl
+        admin={admin}
+        market={market ?? null}
+        composition={composition}
+        viewerName={ctx.fullName}
+        contexts={ctx.availableContexts}
+        activeContextId={ctx.activeContext?.appointmentId ?? null}
+        contextDefaulted={ctx.contextDefaulted}
+        previewCode={null}
+      />
+    ) : (
       <ComposedMissionControl
         composition={composition}
         admin={admin}
@@ -125,8 +164,22 @@ export default async function MissionControl({ searchParams }: { searchParams: P
     const previewed = await resolveMissionProfileByCode(admin, preview, {
       isOwner: true, positions: [], capabilities: [],
     });
+    // The Practice profile previews as the cockpit it actually composes. Acceptance criterion 1 is that
+    // "the same shell renders materially different dashboards" — a preview that showed the Practice
+    // profile as a widget grid the position no longer sees would be previewing something nobody gets.
     if (previewed)
-      return (
+      return isPracticeProductLine(previewed) ? (
+        <PdMissionControl
+          admin={admin}
+          market={market ?? null}
+          composition={previewed}
+          viewerName={ctx.fullName}
+          contexts={[]}
+          activeContextId={null}
+          contextDefaulted={false}
+          previewCode={previewed.profile.code}
+        />
+      ) : (
         <ComposedMissionControl
           composition={previewed}
           admin={admin}
