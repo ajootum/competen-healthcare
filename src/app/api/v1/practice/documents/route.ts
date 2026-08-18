@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
+import { emitEvent } from "@/lib/mos/event";
 import { listDocuments, createDocument } from "@/lib/practice/documentation";
 
 // GET  /api/v1/practice/documents?patientId=&encounterId=&status= -- CPR-130 document list.
@@ -19,13 +20,46 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ documents, correlationId: auth.caller.traceId });
 }
 
+// CPR-CORE-MOS-001 phase 3 — Issue Document, the fourth instrumented critical journey.
+//
+// ⚠ SAME WRAPPER, SAME REASON. The body is unchanged and moved into makeDocument, which cannot return a
+// bare response at all, so a return added later cannot escape the attempt/outcome pairing.
+//
+// ⚠ THE ATTEMPT EVENT IS practice.document.issue_attempted, ADDED BY MIGRATION 314. §6 gives this domain
+// only result-shaped names — generated, issued, issue_failed — and none of them can carry an attempt
+// without saying something untrue about itself.
 export async function POST(req: NextRequest) {
   const auth = await requirePracticeContext("document.author");
   if (isDenied(auth)) return auth;
 
+  const startedAt = Date.now();
+  const base = {
+    practiceId: auth.ctx.workspaceId,
+    practitionerId: auth.caller.userId,
+    correlationId: auth.caller.traceId,
+    component: "documents",
+  } as const;
+
+  await emitEvent(auth.caller.admin, { ...base, eventName: "practice.document.issue_attempted", outcome: "started" });
+
+  const { res, failureCode } = await makeDocument(req, auth);
+
+  await emitEvent(auth.caller.admin, failureCode === null
+    ? { ...base, eventName: "practice.document.issued", outcome: "success", durationMs: Date.now() - startedAt }
+    : { ...base, eventName: "practice.document.issue_failed", outcome: "failure", failureCode, durationMs: Date.now() - startedAt });
+
+  return res;
+}
+
+/** The original handler, unchanged except that every return names its failure code. */
+async function makeDocument(
+  req: NextRequest,
+  auth: Extract<Awaited<ReturnType<typeof requirePracticeContext>>, { ctx: unknown }>,
+): Promise<{ res: NextResponse; failureCode: string | null }> {
+
   let body: Record<string, unknown>;
-  try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
-  if (!body.patientId) return NextResponse.json({ error: "patientId is required" }, { status: 400 });
+  try { body = await req.json(); } catch { return { res: NextResponse.json({ error: "invalid JSON" }, { status: 400 }), failureCode: "INVALID_JSON" }; }
+  if (!body.patientId) return { res: NextResponse.json({ error: "patientId is required" }, { status: 400 }), failureCode: "MISSING_PATIENT" };
 
   const result = await createDocument(auth.caller.admin, {
     workspaceId: auth.ctx.workspaceId,
@@ -39,6 +73,6 @@ export async function POST(req: NextRequest) {
     composeFrom: body.composeFrom === true,
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
-  if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
-  return NextResponse.json({ document: result.data, correlationId: auth.caller.traceId }, { status: 201 });
+  if (!result.ok) return { res: NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status }), failureCode: result.code };
+  return { res: NextResponse.json({ document: result.data, correlationId: auth.caller.traceId }, { status: 201 }), failureCode: null };
 }

@@ -42,6 +42,8 @@ const ok = (id: string, cond: boolean, msg: string) => {
 
 const FIXTURE_OWNER = `${FIXTURE_OWNER_PREFIX}0000-4000-8000-000000000313`;
 let fixtureId: string | null = null;
+// remembered separately, because dropFixture clears fixtureId and Z2 still needs to ask about that practice
+let fixturePracticeId: string | null = null;
 
 async function dropFixture() {
   if (!fixtureId) return;
@@ -110,6 +112,7 @@ async function main() {
     process.exit(1);
   }
   fixtureId = created.data[0].id as string;
+  fixturePracticeId = fixtureId;
 
   try {
     // ── B2 · emit, read back, and join through the catalogue ─────────────────
@@ -217,10 +220,17 @@ async function main() {
   ok("Z1", !leftoverWs.error && (leftoverWs.data ?? []).length === 0,
     "control: the fixture workspace left nothing behind");
 
-  const leftoverEv = await admin.from("mos_event").select("event_id").eq("component", "encounter").limit(1000);
+  // ⚠ SCOPED TO THE FIXTURE'S PRACTICE, NOT TO A COMPONENT NAME — and this pin was wrong until the
+  // product caught up with it. It originally asserted that NO event with component "encounter" existed
+  // after the fixture was dropped, which held only while nothing real emitted. The moment the encounters
+  // route was instrumented, the live estate produced encounter events legitimately and this control
+  // failed while everything it was guarding was correct. A control must describe the thing it owns.
+  const leftoverEv = fixturePracticeId
+    ? await admin.from("mos_event").select("event_id").eq("practice_id", fixturePracticeId).limit(1000)
+    : { error: null, data: [] as { event_id: string }[] };
   const orphaned = (leftoverEv.error ? [] : leftoverEv.data) as { event_id: string }[];
   ok("Z2", orphaned.length === 0,
-    `control: the fixture's events cascaded away with it — ${orphaned.length} encounter events remain`);
+    `control: the fixture's own events cascaded away with it — ${orphaned.length} remain for that practice`);
 
   ok("Z3", OUTCOMES.length === 5,
     `control: §5's outcome vocabulary is five values including "started" — without it no attempt is countable`);

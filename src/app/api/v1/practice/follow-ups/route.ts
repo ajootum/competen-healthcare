@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
+import { emitEvent } from "@/lib/mos/event";
 import { listFollowUps, createFollowUp, followUpBoard, followUpWorkspace, listIntervals } from "@/lib/practice/follow-ups";
 
 // GET  /api/v1/practice/follow-ups?patientId=&status=&board=1 -- CPR-140's obligations.
@@ -53,13 +54,47 @@ export async function GET(req: NextRequest) {
   });
 }
 
+// CPR-CORE-MOS-001 phase 3 — Create Follow-up, the third instrumented critical journey.
+//
+// ⚠ SAME WRAPPER, SAME REASON. The body is unchanged and moved into makeFollowUp, which cannot return a
+// bare response at all, so a return added later cannot escape the attempt/outcome pairing.
+//
+// ⚠ AND THIS JOURNEY NEEDED A NEW EVENT NAME TO HAVE A DENOMINATOR AT ALL. §6's catalogue gives
+// follow-up only result-shaped names — created, failed, completed — and "created, with outcome started"
+// is a sentence nobody should have to reconcile. practice.followup.attempted was added deliberately by
+// migration 314 so what was TRIED can be counted, not only what succeeded.
 export async function POST(req: NextRequest) {
   const auth = await requirePracticeContext("followup.manage");
   if (isDenied(auth)) return auth;
 
+  const startedAt = Date.now();
+  const base = {
+    practiceId: auth.ctx.workspaceId,
+    practitionerId: auth.caller.userId,
+    correlationId: auth.caller.traceId,
+    component: "follow_up",
+  } as const;
+
+  await emitEvent(auth.caller.admin, { ...base, eventName: "practice.followup.attempted", outcome: "started" });
+
+  const { res, failureCode } = await makeFollowUp(req, auth);
+
+  await emitEvent(auth.caller.admin, failureCode === null
+    ? { ...base, eventName: "practice.followup.created", outcome: "success", durationMs: Date.now() - startedAt }
+    : { ...base, eventName: "practice.followup.failed", outcome: "failure", failureCode, durationMs: Date.now() - startedAt });
+
+  return res;
+}
+
+/** The original handler, unchanged except that every return names its failure code. */
+async function makeFollowUp(
+  req: NextRequest,
+  auth: Extract<Awaited<ReturnType<typeof requirePracticeContext>>, { ctx: unknown }>,
+): Promise<{ res: NextResponse; failureCode: string | null }> {
+
   let body: Record<string, unknown>;
-  try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
-  if (!body.patientId) return NextResponse.json({ error: "patientId is required" }, { status: 400 });
+  try { body = await req.json(); } catch { return { res: NextResponse.json({ error: "invalid JSON" }, { status: 400 }), failureCode: "INVALID_JSON" }; }
+  if (!body.patientId) return { res: NextResponse.json({ error: "patientId is required" }, { status: 400 }), failureCode: "MISSING_PATIENT" };
 
   const result = await createFollowUp(auth.caller.admin, {
     workspaceId: auth.ctx.workspaceId,
@@ -89,6 +124,6 @@ export async function POST(req: NextRequest) {
     instructions: body.instructions ? String(body.instructions) : undefined,
     actorId: auth.caller.userId, correlationId: auth.caller.traceId,
   });
-  if (!result.ok) return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
-  return NextResponse.json({ followUp: result.data, correlationId: auth.caller.traceId }, { status: 201 });
+  if (!result.ok) return { res: NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status }), failureCode: result.code };
+  return { res: NextResponse.json({ followUp: result.data, correlationId: auth.caller.traceId }, { status: 201 }), failureCode: null };
 }

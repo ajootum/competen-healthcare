@@ -59,6 +59,18 @@ const INSTRUMENTED = [
     handler: "startEncounter",
     attempt: "practice.encounter.started",
   },
+  {
+    journey: "create_follow_up",
+    route: "src/app/api/v1/practice/follow-ups/route.ts",
+    handler: "makeFollowUp",
+    attempt: "practice.followup.attempted",
+  },
+  {
+    journey: "issue_document",
+    route: "src/app/api/v1/practice/documents/route.ts",
+    handler: "makeDocument",
+    attempt: "practice.document.issue_attempted",
+  },
 ] as const;
 
 const FIXTURE_OWNER = `${FIXTURE_OWNER_PREFIX}0000-4000-8000-000000000314`;
