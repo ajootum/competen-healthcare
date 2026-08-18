@@ -99,8 +99,44 @@ access_review_items_read`, `sod_rules :: sod_rules_read` (all mig 166)
 **Buildable without a decision:**
 4. Extend measurement to policy *bodies* (§7 asks for it; the current tool explicitly declines it). A
    normalised comparison — or a semantic assertion per policy — is the missing evidence.
-5. Functions, triggers and storage policies (§4) are **not yet measured at all**; `plat_rls_registry()`
-   covers policies only. `scripts/function-drift-audit.ts` exists and should be folded into this gate.
+5. ~~Functions unmeasured~~ — **now measured, see below.** Triggers and storage policies remain
+   unmeasured; §4 requires both.
+
+## Functions (§4) — measured, and they change the canonicalisation plan
+
+`npx tsx scripts/function-drift-audit.ts`, reading deployed bodies via `plat_function_registry()`
+(migration 168):
+
+> 65 signature(s) intended, 4 intentionally dropped · 65 deployed in `public` ·
+> **65 of 65 intended signatures match the database**
+
+Bodies are clean. But three loose-script drops target functions that are **still deployed**:
+
+| Function | Dropped by | State |
+|---|---|---|
+| `current_user_is_super_admin()` | `fix-super-admin-rls-recursion.sql:16` | **still deployed** |
+| `current_user_is_hospital_admin_for(uuid)` | `fix-super-admin-rls-recursion.sql:18` | **still deployed** |
+| `handle_new_user()` | `reset.sql:6` | still deployed |
+
+⚠ **This is a partial application, and the mechanism matters.** The same loose script's *policy* drops
+**did** take effect (its three `profiles` policies are measurably MISSING); its *function* drops did
+**not**. The reason is visible in the repo: migration `005` creates both functions, and migrations `006`,
+`007` and others define policies whose `USING` clause **calls `current_user_is_super_admin()`**. A bare
+`DROP FUNCTION` against a function live policies depend on is refused by Postgres. So the script ran, its
+policy drops succeeded, and its function drops were rejected by dependency.
+
+**Consequence for §6, and it is a dangerous one:** a canonicalisation migration that faithfully replayed
+this script would try to drop two functions that many policies depend on. It would either fail — or, if
+someone reached for `CASCADE` to make it apply cleanly, **silently destroy every policy calling them.**
+
+**Those two functions are load-bearing; the script's intent to drop them was never achieved and must not
+be encoded forward.** Precisely the case §6 means when it forbids concealing unexpected state behind
+indiscriminate `IF EXISTS`, and §5 when it says do not guess.
+
+⚠ **Method note, since §9 is about provenance.** A first pass concluded the audit had *misattributed*
+these drops, because a grep for `drop function` found nothing in that file — the file uses uppercase
+`DROP FUNCTION`. The reproducible tool was right; the ad-hoc search was wrong. That is §9's rule in
+miniature.
 
 **Not started, and correctly so:** §12 steps 5-12. No canonicalisation migration should be written until
 items 1-3 are answered — writing one now would encode a guess as schema.
