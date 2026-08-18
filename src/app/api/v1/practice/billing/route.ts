@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
+import { emitEvent } from "@/lib/mos/event";
 import {
   listFees, saveFee, saveFeeOverride, createCharge, createDraftInvoice, issueInvoice,
   voidInvoice, recordPayment, recordAdjustment, paymentsOverview, listInvoices, getInvoice,
@@ -116,13 +117,34 @@ export async function POST(req: NextRequest) {
       });
       return respond(result, caller.traceId, 201);
     }
+    // ── CPR-CORE-MOS-001 phase 3 — Generate Invoice, the sixth instrumented critical journey ───────
+    //
+    // ⚠ THE WRAPPER GOES ROUND ONE CASE OF A TEN-ACTION SWITCH. This route guards once at the top and
+    // then dispatches; only this branch is a critical journey, so only this branch emits. The other
+    // nine are billing actions rather than journeys and instrumenting them here would put nine more
+    // event streams into a table nobody asked to aggregate.
+    //
+    // ⚠ AND THE ATTEMPT IS EMITTED BEFORE THE ARRAY CHECK, DELIBERATELY. A caller who sends the wrong
+    // shape HAS attempted to generate an invoice, and a denominator that excluded malformed attempts
+    // would quietly flatter the success rate exactly when a client was sending rubbish.
     case "createDraftInvoice": {
-      if (!Array.isArray(body.chargeIds)) return bad("chargeIds must be an array");
-      const result = await createDraftInvoice(caller.admin, ctx, {
-        chargeIds: body.chargeIds.map((s: any) => String(s)),
-        payerKind: body.payerKind, payerLabel: body.payerLabel ?? null, dueDate: body.dueDate ?? null, ...actor,
-      });
-      return respond(result, caller.traceId, 201);
+      const startedAt = Date.now();
+      const base = {
+        practiceId: ctx.workspaceId,
+        practitionerId: caller.userId,
+        correlationId: caller.traceId,
+        component: "billing",
+      } as const;
+
+      await emitEvent(caller.admin, { ...base, eventName: "practice.invoice.generate_attempted", outcome: "started" });
+
+      const { res, failureCode } = await generateInvoice(caller, ctx, body, actor);
+
+      await emitEvent(caller.admin, failureCode === null
+        ? { ...base, eventName: "practice.invoice.generated", outcome: "success", durationMs: Date.now() - startedAt }
+        : { ...base, eventName: "practice.invoice.generate_failed", outcome: "failure", failureCode, durationMs: Date.now() - startedAt });
+
+      return res;
     }
     case "issueInvoice": {
       const result = await issueInvoice(caller.admin, ctx, {
@@ -192,4 +214,24 @@ function respond(result: any, correlationId: string, okStatus = 200) {
   if (!result.ok)
     return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
   return NextResponse.json({ ...result.data, correlationId }, { status: okStatus });
+}
+
+/**
+ * The draft-invoice body, unchanged, moved out so the case above can pair its attempt with exactly one
+ * outcome. Every return names its failure code; none returns a response the pairing cannot see.
+ */
+async function generateInvoice(
+  caller: { admin: any; userId: string; traceId: string },
+  ctx: any,
+  body: Record<string, any>,
+  actor: { actorId: string; correlationId: string },
+): Promise<{ res: NextResponse; failureCode: string | null }> {
+  if (!Array.isArray(body.chargeIds)) {
+    return { res: bad("chargeIds must be an array"), failureCode: "CHARGE_IDS_NOT_ARRAY" };
+  }
+  const result = await createDraftInvoice(caller.admin, ctx, {
+    chargeIds: body.chargeIds.map((s: any) => String(s)),
+    payerKind: body.payerKind, payerLabel: body.payerLabel ?? null, dueDate: body.dueDate ?? null, ...actor,
+  });
+  return { res: respond(result, caller.traceId, 201), failureCode: result.ok ? null : result.code };
 }

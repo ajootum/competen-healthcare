@@ -81,6 +81,15 @@ const INSTRUMENTED = [
     attempt: "practice.encounter.save_attempted",
     method: "PATCH",
   },
+  {
+    // ⚠ ONE CASE OF A TEN-ACTION SWITCH. Only this branch is a critical journey; the other nine are
+    // billing actions, and instrumenting them here would put nine more event streams into a table
+    // nobody asked to aggregate.
+    journey: "generate_invoice",
+    route: "src/app/api/v1/practice/billing/route.ts",
+    handler: "generateInvoice",
+    attempt: "practice.invoice.generate_attempted",
+  },
 ] as const;
 
 const FIXTURE_OWNER = `${FIXTURE_OWNER_PREFIX}0000-4000-8000-000000000314`;
@@ -106,9 +115,14 @@ async function main() {
     const inner = src.slice(src.indexOf(`async function ${r.handler}`));
     const tag = r.journey;
 
-    const bare = (inner.match(/return NextResponse\./g) ?? []).length;
-    ok(`P1:${tag}`, bare === 0,
-      `no return inside ${r.handler} escapes the pairing — ${bare} bare NextResponse returns`);
+    // ⚠ EVERY RETURN MUST BE THE PAIRED SHAPE, NOT MERELY "NOT NextResponse.json". The first version
+    // counted bare NextResponse returns, which is only the same thing while every route builds its
+    // responses inline. The billing route returns through bad() and respond() helpers, so that pin
+    // would have passed over a handler with no pairing in it at all. What the invariant actually says
+    // is that the handler returns { res, failureCode } and nothing else.
+    const escapes = (inner.match(/\breturn (?!\{)/g) ?? []).length;
+    ok(`P1:${tag}`, escapes === 0,
+      `every return inside ${r.handler} carries its failure code — ${escapes} escape the paired shape`);
 
     const wrapped = (inner.match(/return \{ res:/g) ?? []).length;
     ok(`P2:${tag}`, wrapped >= 2,
@@ -136,7 +150,7 @@ async function main() {
     ok(`P6:${tag}`, new Set(codes).size === codes.length,
       `no two validation failures share a code — [${codes.join(", ") || "none, all failures come from the engine"}]`);
 
-    ok(`P7:${tag}`, /failureCode: result\.code/.test(src),
+    ok(`P7:${tag}`, /failureCode:[^,}\n]*result\.code/.test(src),
       "an engine refusal reports the ENGINE's code, so it is distinguishable from a validation failure");
 
     // ⚠ THE RESULT IS NEVER CAPTURED, WHICH IS STRONGER THAN "NEVER BRANCHED ON" AND ACTUALLY CHECKABLE.
@@ -149,7 +163,13 @@ async function main() {
     ok(`S1:${tag}`, !captures,
       "⚠ the emit result is never captured, so a telemetry failure cannot fail the request");
 
-    ok(`S2:${tag}`, /await emitEvent\(auth\.caller\.admin/.test(src),
+    // ⚠ EITHER SPELLING OF THE SAME CLIENT. The billing route destructures `const { caller } = auth`,
+    // so it passes caller.admin where the others pass auth.caller.admin — the identical connection,
+    // reached differently. Requiring one spelling made the pin a style rule; what it must actually
+    // forbid is opening a SECOND client on a request path, which the second half checks.
+    const usesRequestClient = /await emitEvent\((?:auth\.)?caller\.admin/.test(src);
+    const opensOwnClient = /emitEvent\(\s*createAdminClient/.test(src);
+    ok(`S2:${tag}`, usesRequestClient && !opensOwnClient,
       "the emitter uses the caller's own admin client rather than opening a second connection on a hot path");
 
     // ⚠ POSITION CHECKS RUN INSIDE THE POST HANDLER, NOT OVER THE WHOLE FILE, and it took two wrong
