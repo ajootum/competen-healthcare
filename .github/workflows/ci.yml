@@ -1,5 +1,5 @@
 # CI (COMP-SEC-001 "Developer Security Standards" -- the smallest real increment, per the
-# conformance map). Five jobs, each a distinct red light.
+# conformance map). Six jobs, each a distinct red light.
 #
 # ⚠ NO SECRETS, BY DESIGN. The database harnesses authenticate with the service-role key, and that
 # key does not belong in GitHub. They run locally against the live database, as they always have;
@@ -104,6 +104,42 @@ jobs:
       # neither list -- otherwise a harness written later is silently absent from CI forever.
       - name: Credential-free acceptance harnesses
         run: npx tsx scripts/ci-harnesses.ts
+
+  smoke:
+    name: Playwright smoke (credential-free journeys)
+    runs-on: ubuntu-latest
+    # ⚠ THESE ARE DELIBERATELY NON-FUNCTIONAL PLACEHOLDERS, NOT SECRETS AND NOT A STAGING DATABASE.
+    # The app reads them at boot; pointing them at a closed port means every data read fails closed,
+    # which is exactly what this job is proving survives. Verified locally 2026-08-18 with these same
+    # values: the three journeys pass and the app logs "could not read launch flag -- treating it as
+    # OFF" instead of throwing. What this job proves is that the app BOOTS, SERVES its public routes
+    # and DENIES a protected one -- not that any data renders. Data-dependent journeys are the four
+    # credential-gated ones, which skip here by design (see e2e/README.md).
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:9
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-no-database-reachable-in-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # ⚠ FULL `npm ci` HERE, UNLIKE EVERY OTHER JOB. The others skip postinstalls because they never
+      # run the app; this one starts a real Next dev server, which wants sharp built.
+      - run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Smoke suite
+        run: npx playwright test
+      # The report is the diagnosis when a smoke journey fails; a failed run with no artifact means
+      # re-running locally and hoping it reproduces.
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
 
   migrations:
     name: Migration house rules (changed files)

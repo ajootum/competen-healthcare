@@ -62,19 +62,40 @@ rule).
 Until then, `e2e/helpers/synthetic-practitioner.ts`'s `requireSyntheticPractitioner()` makes journeys 3-6
 report **skipped**, with that reason printed, every run — never a false pass, never a silent omission.
 
-## Why this isn't wired into CI yet
+## What runs in CI
 
-Three journeys (1, 2, 7) are CI-safe today — no secrets, no external state, deterministic. The other four
+**Journeys 1, 2 and 7 run on every push and PR** as the `smoke` job in `.github/workflows/ci.yml`.
+Journeys 3-6 skip there, exactly as they do locally, until the synthetic identity above exists.
+
+⚠ **CI runs the app with no database reachable, on purpose.** The job sets
+`NEXT_PUBLIC_SUPABASE_URL` to a closed port and the anon key to a placeholder — not secrets, not a
+staging database. Every data read therefore fails closed, and the app logs
+`could not read launch flag ... treating it as OFF` rather than throwing. So what the CI smoke job
+proves is that the app **boots, serves its public routes, and denies a protected one**. It does not
+prove that any data renders; that is what the credential-gated journeys are for.
+
+⚠ **This forced a real correction to journey 7, worth knowing before editing it.** The original
+assertion checked that the sign-in page's *form heading* was visible. But `/practice/sign-in` is
+flag-gated on `practice_sign_in`, read from the database — so with no database the page renders its
+"Sign-in is not open yet" panel instead, and the test went red **while the security control it exists
+to protect was working perfectly**. The assertion now checks the redirect and the `return_to`
+round-trip, which is the control; which panel the sign-in page then shows is product state, not
+security, and belongs to journey 3.
+
+## Why the other four aren't wired into CI yet
+
+Journeys 1, 2 and 7 are in CI (above). The other four
 can't run in CI until the synthetic identity above exists somewhere CI can reach it (this repo has one
 Supabase project, no staging — see `docs/HARNESS-INVENTORY.md`'s "Environment reality" section for the
 same constraint affecting the acceptance harnesses). Making four of seven owner-approved journeys
 permanently skip in a required CI check is worse than not gating on them yet: a green check that's
 structurally incapable of catching a regression in those four paths is a false signal, not a safety net.
 
-**Recommendation:** provision the synthetic identity (a decision for the repo owner — who it is, what
-workspace it belongs to, how its credentials reach CI as secrets) before adding a CI job. Once that
-exists, wiring `npx playwright test` into `.github/workflows/ci.yml` as a fifth job is mechanical — see
-`TESTING.md` for the pattern the `test` (Vitest) job already follows.
+**Status:** the owner approved wiring the credential-free subset on 2026-08-18, and it is now the
+`smoke` job. Adding the remaining four needs `SMOKE_PRACTITIONER_EMAIL` and
+`SMOKE_PRACTITIONER_PASSWORD` as GitHub secrets **and** a Supabase URL/anon key the CI runner can
+actually reach — the placeholder values above deliberately cannot connect, so setting the two smoke
+secrets alone would not be enough.
 
 ## A real local-execution finding, already fixed
 
