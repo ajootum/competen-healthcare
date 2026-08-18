@@ -171,9 +171,26 @@ ok("D1", refusalKits.length > 0,
 // ⚠ A RATCHET, NOT A BAN. §17 wants ONE standard missing-evidence pattern and there are three today.
 // Consolidating them is a refactor the matrix names as a build action; what must not happen meanwhile is
 // a FOURTH appearing because a new module copied the pattern again.
+/**
+ * ⚠ THE SHARED KIT IS THE ANSWER, NOT A FOURTH VIOLATION — and this pin said otherwise until it did.
+ *
+ * §17 asks for ONE standard missing-evidence pattern. The pin counted every file defining one, so
+ * creating the shared file to consolidate onto made the count 4 and turned the fix red. That is the pin
+ * encoding a mechanism instead of the rule beneath it, for the second time in this build.
+ *
+ * The rule is that no MODULE invents its own. `pd/_components/evidence.tsx` is the shared one and is
+ * excluded; the ratchet counts what is left in module folders, may fall and may never rise. Three legacy
+ * kits remain — Configuration and Releases are byte-identical to each other, Health differs by one prop
+ * — and each is a mechanical migration whose only risk is doing it carelessly.
+ */
+const SHARED_KIT = "src/app/super-admin/pd/_components/evidence.tsx";
+ok("D1b", refusalKits.some(f => f.replace(/\\/g, "/").endsWith("_components/evidence.tsx")),
+  "the ONE shared missing-evidence pattern exists for a new module to take rather than copy");
+
+const moduleKits = refusalKits.filter(f => !f.replace(/\\/g, "/").endsWith(SHARED_KIT.replace("src/app/super-admin/pd/", "")));
 const REFUSAL_KIT_BASELINE = 3;
-ok("D2", refusalKits.length <= REFUSAL_KIT_BASELINE,
-  `§17 asks for one standard missing-evidence pattern; there are ${refusalKits.length} (ratchet at ${REFUSAL_KIT_BASELINE}, may fall, never rise) — ${refusalKits.map(f => f.split("/").pop()).join(", ")}`);
+ok("D2", moduleKits.length <= REFUSAL_KIT_BASELINE,
+  `§17 asks for one standard missing-evidence pattern; there are ${moduleKits.length} module-local (ratchet at ${REFUSAL_KIT_BASELINE}, may fall, never rise) — ${moduleKits.map(f => f.split("/").pop()).join(", ")}`);
 
 // ── the matrix records its own corrections ──────────────────────────────────
 ok("C1", /Corrected:/.test(doc) && (doc.match(/⚠ \*\*Corrected/g) ?? []).length >= 2,
