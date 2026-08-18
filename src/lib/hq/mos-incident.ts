@@ -13,14 +13,53 @@
 // must never let a reader mistake one for the other.
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 
-export type IncidentSeverity = "informational" | "degraded" | "major" | "critical";
-export type IncidentStatus = "open" | "acknowledged" | "investigating" | "monitoring" | "resolved";
+/**
+ * CPR-PD-009 §6's severity model, as machine codes.
+ *
+ * ⚠ THE LABEL IS NOT THE IDENTIFIER. "SEV-1 Critical" is what a reader sees; sev1 is what the row
+ * holds. Storing the label would put a display decision in the database and make it untranslatable.
+ */
+export type IncidentSeverity = "sev1" | "sev2" | "sev3" | "sev4" | "informational";
 
-export const INCIDENT_SEVERITIES: IncidentSeverity[] = ["informational", "degraded", "major", "critical"];
-export const INCIDENT_STATUSES: IncidentStatus[] = ["open", "acknowledged", "investigating", "monitoring", "resolved"];
+/**
+ * CPR-PD-009 §5's eight-state lifecycle.
+ *
+ * ⚠ MIGRATION 315 IMPLEMENTED A FIVE-STATE LIST FROM MOS-001 §8, WHICH WAS A SKETCH OF A FIELD RATHER
+ * THAN THE OPERATING MODEL. §5 is the model, and MOS-001 §19 says the Product Director specifications
+ * govern. The distinction that was being lost matters most: INVESTIGATING is "we are looking" and
+ * MITIGATING is "we are doing something", which is the question a commander is asked repeatedly.
+ */
+export type IncidentStatus =
+  | "detected" | "declared" | "investigating" | "mitigating"
+  | "monitoring" | "resolved" | "post_incident" | "closed";
+
+export const INCIDENT_SEVERITIES: IncidentSeverity[] = ["sev1", "sev2", "sev3", "sev4", "informational"];
+export const INCIDENT_STATUSES: IncidentStatus[] = [
+  "detected", "declared", "investigating", "mitigating", "monitoring", "resolved", "post_incident", "closed",
+];
+
+/** §6's display names, kept out of the database so they stay a view concern. */
+export const SEVERITY_LABEL: Record<IncidentSeverity, string> = {
+  sev1: "SEV-1 Critical",
+  sev2: "SEV-2 High",
+  sev3: "SEV-3 Moderate",
+  sev4: "SEV-4 Low",
+  informational: "Informational",
+};
+
+export const STATUS_LABEL: Record<IncidentStatus, string> = {
+  detected: "Detected", declared: "Declared", investigating: "Investigating",
+  mitigating: "Mitigating", monitoring: "Monitoring", resolved: "Resolved",
+  post_incident: "Post-incident", closed: "Closed",
+};
+
+/** ⚠ AN INCIDENT PAST RESOLVED IS NOT OPEN. §5 continues into post-incident and closed, and neither is
+ *  something a commander is still working. The view already excludes only 'resolved', so these two are
+ *  filtered here as well rather than appearing on Needs Attention forever. */
+export const TERMINAL_STATUSES: IncidentStatus[] = ["resolved", "post_incident", "closed"];
 
 /** Severity order for ranking Needs Attention. §9 asks for ranked signals, and this is the ranking. */
-const SEVERITY_RANK: Record<string, number> = { critical: 0, major: 1, degraded: 2, informational: 3 };
+const SEVERITY_RANK: Record<string, number> = { sev1: 0, sev2: 1, sev3: 2, sev4: 3, informational: 4 };
 
 export type OpenIncident = {
   incidentId: string;
@@ -85,7 +124,9 @@ export async function loadOpenIncidents(admin: Admin): Promise<OpenIncident[] | 
   const res = await admin.from("mos_incident_open")
     .select("incident_id, title, severity, status, started_at, subject_type, subject_id, subject_label, journey_key, journey_name, component, affected_scope, impact_note, owner_name, evidence_correlation_id, change_ref, detection");
   if (res.error || !Array.isArray(res.data)) return null;
-  return (res.data as Row[]).map(toIncident).sort((a, b) =>
+  return (res.data as Row[]).map(toIncident)
+    .filter(i => !TERMINAL_STATUSES.includes(i.status))
+    .sort((a, b) =>
     (SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])
     || (new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()));
 }
@@ -126,7 +167,7 @@ export async function incidentHistory(admin: Admin, incidentId: string): Promise
 
 /** How many incidents are open at each severity — the Needs Attention headline. */
 export function severityTally(incidents: OpenIncident[]) {
-  const t: Record<IncidentSeverity, number> = { critical: 0, major: 0, degraded: 0, informational: 0 };
+  const t: Record<IncidentSeverity, number> = { sev1: 0, sev2: 0, sev3: 0, sev4: 0, informational: 0 };
   for (const i of incidents) t[i.severity]++;
   return t;
 }

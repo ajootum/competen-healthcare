@@ -100,32 +100,32 @@ async function main() {
     // ── S · scope is a canonical subject, journey is one of the eight ───────
     const badSubject = await mustReject("mos_incident", {
       subject_type: "definitely_not_a_subject", subject_id: fixtureId,
-      title: "bad subject", severity: "major",
+      title: "bad subject", severity: "sev2",
     });
     ok("S1", badSubject.rejected,
       `an incident cannot name a scope outside the §3 vocabulary — ${badSubject.message}`);
 
     const badJourney = await mustReject("mos_incident", {
       subject_type: "practice", subject_id: fixtureId, journey_key: "not_a_journey",
-      title: "bad journey", severity: "major",
+      title: "bad journey", severity: "sev2",
     });
     ok("S2", badJourney.rejected,
       `an incident cannot blame a journey outside the §7 eight — ${badJourney.message}`);
 
     const noSubjectId = await mustReject("mos_incident", {
-      subject_type: "practice", title: "practice-scoped with no practice", severity: "major",
+      subject_type: "practice", title: "practice-scoped with no practice", severity: "sev2",
     });
     ok("S3", noSubjectId.rejected,
       `a practice-scoped incident must say WHICH practice — ${noSubjectId.message}`);
 
     const resolvedNoTime = await mustReject("mos_incident", {
-      subject_type: "product", title: "resolved with no resolution time", severity: "degraded", status: "resolved",
+      subject_type: "product", title: "resolved with no resolution time", severity: "sev3", status: "resolved",
     });
     ok("S4", resolvedNoTime.rejected,
       `a resolved incident must carry its resolution time — ${resolvedNoTime.message}`);
 
     const endsBeforeStart = await mustReject("mos_incident", {
-      subject_type: "product", title: "ends before it began", severity: "degraded", status: "resolved",
+      subject_type: "product", title: "ends before it began", severity: "sev3", status: "resolved",
       started_at: new Date().toISOString(), resolved_at: new Date(Date.now() - 60_000).toISOString(),
     });
     ok("S5", endsBeforeStart.rejected,
@@ -144,7 +144,7 @@ async function main() {
 
     const ins = await admin.from("mos_incident").insert({
       subject_type: "practice", subject_id: fixtureId,
-      title: "Bookings failing for one practice", severity: "major", status: "investigating",
+      title: "Bookings failing for one practice", severity: "sev2", status: "investigating",
       journey_key: "patient_booking", component: "scheduling",
       affected_scope: "One practice, booking only",
       impact_note: "Counted from the event thread rather than frozen here",
@@ -157,7 +157,7 @@ async function main() {
 
     const open = await loadOpenIncidents(admin);
     const mine = (open ?? []).find(i => i.incidentId === incidentId);
-    ok("I2", !!mine && mine.status === "investigating" && mine.severity === "major",
+    ok("I2", !!mine && mine.status === "investigating" && mine.severity === "sev2",
       "it reads back through the open-incident view, unresolved and ranked");
 
     ok("I3", mine?.journeyName === "Patient Booking",
@@ -208,11 +208,11 @@ async function main() {
     });
     ok("V1", badSeverity.rejected, `a severity outside §9's four is refused — ${badSeverity.message}`);
 
-    ok("V2", INCIDENT_SEVERITIES.length === 4 && INCIDENT_STATUSES.length === 5,
-      "control: the TypeScript vocabularies are the four severities and five statuses §8 and §9 name");
+    ok("V2", INCIDENT_SEVERITIES.length === 5 && INCIDENT_STATUSES.length === 8,
+      "control: the TypeScript vocabularies are §6's five severities and §5's eight lifecycle states");
 
     const tally = severityTally(open ?? []);
-    ok("V3", tally.major >= 1,
+    ok("V3", tally.sev2 >= 1,
       `the severity tally counts what is open — ${JSON.stringify(tally)}`);
   } finally {
     await cleanup();

@@ -175,6 +175,15 @@ export type AttentionSignal = {
    * other would have a Director chasing an owner who does not exist.
    */
   kind: "incident" | "derived";
+  /**
+   * ⚠ AN INCIDENT'S GRADE IS NOT A HEALTH STATE, AND FLATTENING IT LOSES THE GRADE. §6 grades an
+   * INCIDENT from SEV-1 to SEV-4; §4 grades the PRODUCT from healthy to critical. They answer different
+   * questions, and SEV-3 and SEV-4 both land on "degraded" because §4 has no rung between them — so a
+   * badge alone cannot tell those two apart. The health state below stays for the colour and the word;
+   * this carries what the incident was actually graded, and is null on a derived signal, which has no
+   * grade at all because nobody graded it.
+   */
+  severityLabel: string | null;
   signalId: string;
   title: string;
   severity: HealthState;

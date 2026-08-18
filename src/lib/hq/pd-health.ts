@@ -1,12 +1,29 @@
 import { mayRender, absenceSentence } from "@/lib/hq/pd-metric-registry";
-import type { OpenIncident } from "@/lib/hq/mos-incident";
+import { SEVERITY_LABEL, type OpenIncident, type IncidentSeverity } from "@/lib/hq/mos-incident";
+
 import {
-  healthStateFor, type Domain, type Coverage, type AttentionSignal, type Freshness,
+  healthStateFor, type Domain, type Coverage, type AttentionSignal, type Freshness, type HealthState,
 } from "@/lib/hq/pd-health-model";
 
 // The spec's vocabulary is re-exported from here so a page has ONE import for the module rather than
 // having to know which half of it a symbol lives in.
 export * from "@/lib/hq/pd-health-model";
+
+/**
+ * CPR-PD-009 §6 severity to CPR-PD-008 §4 health state, for the badge only.
+ *
+ * ⚠ IT IS LOSSY ON PURPOSE, AND THE LOSS IS RECORDED RATHER THAN HIDDEN. SEV-3 and SEV-4 are different
+ * responses to different impacts, and both read "Degraded" as a product state because §4 has no rung
+ * between them. The grade itself travels beside this on severityLabel, so nothing on screen has to
+ * infer which of the two it was looking at.
+ */
+const INCIDENT_HEALTH_STATE: Record<IncidentSeverity, HealthState> = {
+  sev1: "critical",
+  sev2: "major",
+  sev3: "degraded",
+  sev4: "degraded",
+  informational: "degraded",
+};
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 // CPR-PD-008 — PRODUCT HEALTH, the loader.
@@ -459,7 +476,9 @@ export function attentionSignals(h: HealthPayload, incidents?: OpenIncident[] | 
       kind: "incident",
       signalId: i.incidentId,
       title: i.title,
-      severity: i.severity === "informational" ? "degraded" : i.severity,
+      // an explicit display mapping, written out so it is a decision rather than a coincidence of names
+      severity: INCIDENT_HEALTH_STATE[i.severity] ?? "degraded",
+      severityLabel: SEVERITY_LABEL[i.severity] ?? null,
       startedAt: i.startedAt,
       status: i.status,
       scope: i.affectedScope
@@ -480,6 +499,7 @@ export function attentionSignals(h: HealthPayload, incidents?: OpenIncident[] | 
   if (h.ai.failures.state === "value" && h.ai.failures.value > 0) {
     out.push({
       kind: "derived" as const,
+      severityLabel: null,
       status: null,
       signalId: "derived.ai_errors",
       title: `${h.ai.failures.value} AI request${h.ai.failures.value === 1 ? "" : "s"} errored`,
@@ -498,6 +518,7 @@ export function attentionSignals(h: HealthPayload, incidents?: OpenIncident[] | 
   if (h.events.warning.state === "value" && h.events.warning.value > 0) {
     out.push({
       kind: "derived" as const,
+      severityLabel: null,
       status: null,
       signalId: "derived.platform_warnings",
       title: `${h.events.warning.value} platform event${h.events.warning.value === 1 ? "" : "s"} at warning severity`,
@@ -514,6 +535,7 @@ export function attentionSignals(h: HealthPayload, incidents?: OpenIncident[] | 
   if (h.jobs.failures.state === "value" && h.jobs.failures.value > 0) {
     out.push({
       kind: "derived" as const,
+      severityLabel: null,
       status: null,
       signalId: "derived.job_failures",
       title: `${h.jobs.failures.value} background job run${h.jobs.failures.value === 1 ? "" : "s"} failed`,

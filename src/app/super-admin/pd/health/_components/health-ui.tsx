@@ -397,6 +397,12 @@ export function NeedsAttention({ signals }: { signals: AttentionSignal[] }) {
                     <span className="rounded border border-teal-300 bg-teal-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-teal-800">
                       Incident
                     </span>
+                    {/* ⚠ THE GRADE, BECAUSE THE BADGE CANNOT CARRY IT. §6 grades an incident SEV-1 to
+                        SEV-4 and §4 grades the product healthy to critical — SEV-3 and SEV-4 both read
+                        "Degraded" as a product state, so the badge alone cannot tell them apart. */}
+                    {s.severityLabel && (
+                      <span className="font-mono text-[10.5px] font-semibold text-gray-700">{s.severityLabel}</span>
+                    )}
                     {s.status && <span className="text-[10.5px] font-semibold text-gray-600">{s.status}</span>}
                     {s.startedAt && (
                       <span className="font-mono text-[10.5px] text-gray-500">
