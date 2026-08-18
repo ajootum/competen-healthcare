@@ -54,7 +54,7 @@ export type PdMetric = {
    * module divides cleanly: the capability CATALOGUE is real code that ships with the product, and
    * every RELEASE, ROLLOUT and READINESS object PD-012 names is absent from this schema.
    */
-  module: "intelligence" | "adoption" | "commercial" | "mission" | "configuration" | "releases" | "health";
+  module: "intelligence" | "adoption" | "commercial" | "mission" | "configuration" | "releases" | "health" | "support";
   displayName: string;
   /** Exact business meaning -- what a reader may take this number to claim. */
   definition: string;
@@ -1344,6 +1344,141 @@ export const PD_METRICS: PdMetric[] = [
       + "exist and carry delivery state; none is on the practice plane's allowlist. The delivery facts "
       + "are recorded — this plane is not permitted to read them.",
     spec: "PD-008G",
+  },
+  // ══════════════════════════════════════════════════════════════════════════════════════════════
+  // CPR-PD-009 — SUPPORT & INCIDENTS.
+  //
+  // ⚠ THIS MODULE IS HALF-GROUNDED, AND THE HALVES ARE CLEANLY SEPARATED. Incidents are real: phase 4
+  // built a Practice-native model, scoped by foreign key to the canonical subjects and the eight
+  // journeys. Everything ELSE s1 names — support cases, problems, postmortems, corrective actions,
+  // escalations — has no store of any kind. They are not unwritten queries over empty tables; there is
+  // no table to be empty.
+  //
+  // ⚠ AND s1's LAST LINE IS A CONSTRAINT ON THIS REGISTRY, not just on the screens: "Do not treat
+  // individual clinical concerns or patient records as product support data." No metric here counts a
+  // patient, and none ever may.
+  {
+    metricId: "sup.incidents_open", module: "support",
+    displayName: "Open incidents",
+    definition:
+      "Incidents not yet resolved, closed or in post-incident. §5's lifecycle continues past RESOLVED, "
+      + "so the three terminal states are excluded rather than only 'resolved'.",
+    producer: "real", source: "mos_incident via mos_incident_open",
+    spec: "PD-009 §3",
+  },
+  {
+    metricId: "sup.incidents_sev1", module: "support",
+    displayName: "SEV-1 and SEV-2 open",
+    definition:
+      "Open incidents graded SEV-1 Critical or SEV-2 High — §3's headline posture figure. ⚠ A grade is "
+      + "a RESPONSE INTENT, not an error count: §6 says severity considers impact, scope, criticality, "
+      + "duration, workaround and data risk, and a person sets it.",
+    producer: "real", source: "mos_incident.severity in (sev1, sev2)",
+    spec: "PD-009 §3",
+  },
+  {
+    metricId: "sup.incidents_unowned", module: "support",
+    displayName: "Open incidents with no owner",
+    definition:
+      "Open incidents carrying no owner name. §3 asks for unowned items by name, because an incident "
+      + "nobody holds is the one that stays open.",
+    producer: "real", source: "mos_incident.owner_name is null",
+    spec: "PD-009 §3",
+  },
+  {
+    metricId: "sup.incidents_no_commander", module: "support",
+    displayName: "Major incidents without a commander",
+    definition:
+      "SEV-1 or SEV-2 incidents past DETECTED with no owner. §3 lists this first among Needs Attention "
+      + "triggers, and §7 makes the commander a required field of the command header.",
+    producer: "real", source: "mos_incident, severity and owner_name together",
+    spec: "PD-009 §3",
+  },
+  {
+    metricId: "sup.incident_age", module: "support",
+    displayName: "Age of the oldest open incident",
+    definition:
+      "Hours since the oldest unresolved incident started. Shown because an incident's age is the one "
+      + "figure that worsens by itself while nobody acts.",
+    producer: "real", source: "mos_incident.started_at",
+    spec: "PD-009 §3",
+  },
+  {
+    metricId: "sup.cases_open", module: "support",
+    displayName: "Open support cases",
+    definition: "Practitioner or Practice-reported cases in a non-terminal state — §4's case estate.",
+    producer: "absent", source: null,
+    missing:
+      "⚠ NO SUPPORT CASE RECORD EXISTS ANYWHERE IN THIS SCHEMA. §4 defines a case with a stable id, a "
+      + "reporter, a category, a priority, an SLA state and a linked incident — none of those columns "
+      + "exists because the table does not. plat_support_tickets is the closest shape and keys on "
+      + "tenant_id, which a Practice cannot be. This is a model to build, not a query to write.",
+    spec: "PD-009 §4",
+  },
+  {
+    metricId: "sup.first_response", module: "support",
+    displayName: "Median first response",
+    definition: "The median time from a case being raised to its first human response — §3's support pulse.",
+    producer: "absent", source: null,
+    missing:
+      "It needs a case record and a response event, and neither exists. ⚠ AND A RESPONSE TARGET TOO: §3 "
+      + "asks for breached response targets, and no target is configured anywhere, so even with the "
+      + "times there would be nothing to breach.",
+    numerator: "time to first response", denominator: "cases with a response",
+    spec: "PD-009 §3",
+  },
+  {
+    metricId: "sup.escalations", module: "support",
+    displayName: "Open escalations",
+    definition: "Overdue, high-impact, blocked or cross-team escalations — §2's escalation estate.",
+    producer: "absent", source: null,
+    missing:
+      "No escalation record exists. An escalation is a stateful object with a reason, a target and a "
+      + "deadline; nothing in this schema carries any of the three.",
+    spec: "PD-009 §2",
+  },
+  {
+    metricId: "sup.problems", module: "support",
+    displayName: "Open problems",
+    definition: "Recurring or systemic causes under investigation, each linking one or more incidents.",
+    producer: "absent", source: null,
+    missing:
+      "No problem record exists. §1 defines a problem as the underlying cause that GENERATES incidents, "
+      + "so it cannot be derived from the incidents it explains — the direction of the relationship is "
+      + "the wrong way round for inference.",
+    spec: "PD-009 §2",
+  },
+  {
+    metricId: "sup.postmortems", module: "support",
+    displayName: "Postmortems outstanding",
+    definition: "Qualifying incidents whose postmortem is not complete — §5's POST-INCIDENT obligation.",
+    producer: "absent", source: null,
+    missing:
+      "No postmortem record exists, and no rule says which incidents qualify. §5 says closure cannot "
+      + "silently bypass a required postmortem; with neither the record nor the rule, this cannot yet "
+      + "be counted or enforced.",
+    spec: "PD-009 §2",
+  },
+  {
+    metricId: "sup.corrective_actions", module: "support",
+    displayName: "Overdue corrective actions",
+    definition: "Actions arising from incidents, problems or postmortems that are past their due date.",
+    producer: "absent", source: null,
+    missing:
+      "No corrective action record exists. §2 requires an owner and a due date on each, which is exactly "
+      + "what makes them countable as overdue — and exactly what has nowhere to live.",
+    spec: "PD-009 §2",
+  },
+  {
+    metricId: "sup.resolution_time", module: "support",
+    displayName: "Median incident resolution time",
+    definition:
+      "Median hours from an incident starting to reaching a terminal state, over incidents that reached "
+      + "one in the window.",
+    producer: "derivable", source: "mos_incident.started_at and .resolved_at",
+    numerator: "hours from start to resolution",
+    denominator: "incidents that reached a terminal state in the window",
+    spec: "PD-009 §11",
   },
 ];
 
