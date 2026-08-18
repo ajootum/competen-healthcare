@@ -37,6 +37,7 @@ const INCLUDED = [
   "access-doors-harness.ts",
   "access-scanner-harness.ts",
   "attendance-harness.ts",
+  "clock-format-harness.ts",
   "cpr040-design-system-harness.ts",
   "hww-cnci-harness.ts",
   "mos-gap-matrix-harness.ts",
@@ -79,14 +80,6 @@ type Exclusion = { file: string; reason: string };
  * Fixing the defect and moving the entry into INCLUDED is the intended end state for all six.
  */
 const EXCLUDED: Exclusion[] = [
-  {
-    file: "clock-format-harness.ts",
-    reason:
-      "RED ON A REAL DEFECT (11 passed, 1 failed). Three call sites render a clinical timestamp with "
-      + "`new Date(x).toLocaleString()` and no explicit locale, so the rendered time depends on the "
-      + "server's locale: booking-requests/RequestQueueBoard.tsx (twice) and patients/import/"
-      + "ImportClient.tsx. Fix the three call sites, then move this entry into INCLUDED.",
-  },
   {
     file: "pui-header-harness.ts",
     reason:

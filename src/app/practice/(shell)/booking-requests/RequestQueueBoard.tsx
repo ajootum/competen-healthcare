@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 // it here would pull that whole graph into the browser bundle -- it type-checks, it lints, it passes
 // every harness, and it kills the page at runtime. That is exactly how the Follow-ups board died.
 import { HANDLED_OUTCOMES, type QueuedRequest } from "@/lib/practice/booking-request-constants";
+import { formatDateTime } from "@/lib/datetime";
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // ⚠ THE MARK IS THE FIRST THING ON EVERY ROW, AND IT IS NOT A SUBTLE ONE.
@@ -91,7 +92,7 @@ export default function RequestQueueBoard({ requests, listIncomplete, includeHan
 
             <dl className="mt-2 grid gap-x-4 gap-y-1 text-[12px] text-gray-700 sm:grid-cols-2">
               <div><dt className="inline font-semibold">Asked for: </dt>
-                <dd className="inline">{new Date(r.requestedStart).toLocaleString()} ({r.requestedMinutes} min)</dd></div>
+                <dd className="inline">{formatDateTime(r.requestedStart)} ({r.requestedMinutes} min)</dd></div>
               <div><dt className="inline font-semibold">Kind: </dt>
                 <dd className="inline">{r.appointmentType.replace(/_/g, " ")}</dd></div>
               {r.contactPhone && <div><dt className="inline font-semibold">Phone: </dt><dd className="inline">{r.contactPhone}</dd></div>}
@@ -118,7 +119,7 @@ export default function RequestQueueBoard({ requests, listIncomplete, includeHan
 
             {r.handledAt ? (
               <p className="mt-2 text-[11.5px] text-gray-500">
-                Closed {new Date(r.handledAt).toLocaleString()}
+                Closed {formatDateTime(r.handledAt)}
                 {r.handledOutcome ? ` — ${HANDLED_OUTCOMES.find(o => o.code === r.handledOutcome)?.label ?? r.handledOutcome}` : ""}
                 {r.handledNote ? `. ${r.handledNote}` : ""}
               </p>

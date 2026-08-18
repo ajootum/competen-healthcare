@@ -5,6 +5,7 @@ import {
   outboxNeedingAttention, outboxRecordLabel, outboxRetryByHand, outboxSendOrder, outboxSummary,
   OUTBOX_UNRESOLVED, type OutboxRecord,
 } from "@/lib/practice/outbox-model";
+import { formatDateTime } from "@/lib/datetime";
 import { outboxExport, outboxLoad, outboxSave } from "@/lib/practice/outbox-store";
 import { uploadOutbox, uploadSentence } from "@/lib/practice/sync-uploader";
 import {
@@ -370,7 +371,7 @@ export default function SyncCentre() {
             </p>
             <p className="mt-0.5 text-[11px] text-gray-500">
               {ledger.lastReceivedAt
-                ? `Last received ${new Date(ledger.lastReceivedAt).toLocaleString()}.`
+                ? `Last received ${formatDateTime(ledger.lastReceivedAt)}.`
                 : "Nothing has ever been received from a device."}
             </p>
             {ledger.syncableEntityTypes.length === 0 && (

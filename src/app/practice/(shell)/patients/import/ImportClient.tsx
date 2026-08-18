@@ -15,6 +15,7 @@ import Link from "next/link";
 // same constant the server parses with, so the two cannot drift apart.
 
 import { IMPORT_TEMPLATE_HEADER } from "@/lib/practice/import-columns";
+import { formatDateTime } from "@/lib/datetime";
 
 const CARD = "rounded-xl border border-gray-200 bg-white";
 
@@ -280,7 +281,7 @@ export default function ImportClient() {
               <tbody>
                 {runs.map(r => (
                   <tr key={r.id} className="border-b border-gray-100">
-                    <td className="py-1.5 pr-3 text-gray-600">{new Date(r.created_at).toLocaleString()}</td>
+                    <td className="py-1.5 pr-3 text-gray-600">{formatDateTime(r.created_at)}</td>
                     <td className="py-1.5 pr-3 text-gray-800">{r.file_name ?? "—"}</td>
                     <td className="py-1.5 pr-3">{r.row_count}</td>
                     <td className="py-1.5 pr-3">{r.registered_count}</td>
