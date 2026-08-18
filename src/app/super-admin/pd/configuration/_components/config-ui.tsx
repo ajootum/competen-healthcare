@@ -419,6 +419,223 @@ export function WritesAndApprovals({ canManage, canApprove }: { canManage: boole
 }
 
 /** Reads that did not complete, in the reader's words. Never swallowed, never rendered as zero. */
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-PD-011 §6 / §27 — THE OVERVIEW'S COMMAND-SURFACE SHAPES.
+//
+// ⚠ THE APPROVED COMP'S SHAPES, NEVER ITS NUMBERS. The design shows 126 active definitions of 134, six
+// hierarchy levels resolving at 100/100/92/88/85/0%, and ten domains at 58–100% coverage. Every one of
+// those slots is filled here from what the engine actually reports. Where the comp draws a percentage
+// this product cannot form, the slot renders the state instead — a level that CANNOT resolve is a fact,
+// and "85% resolvable" would be a number with no denominator behind it.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+const SAFETY_TONE: Record<string, string> = {
+  clinical_safety_critical: "var(--cmp-color-error)",
+  clinical_safety_relevant: "var(--cmp-color-warning)",
+  clinical_support: "#0D9488",
+  operational: "#2563EB",
+  administrative: "#64748B",
+  non_clinical: "#94A3B8",
+};
+const SAFETY_LABEL: Record<string, string> = {
+  clinical_safety_critical: "Clinical-safety critical",
+  clinical_safety_relevant: "Clinical-safety relevant",
+  clinical_support: "Clinical support",
+  operational: "Operational",
+  administrative: "Administrative",
+  non_clinical: "Non-clinical",
+};
+const pretty = (k: string) => SAFETY_LABEL[k] ?? k.replace(/_/g, " ");
+
+/**
+ * §4's safety classification, as the comp's donut.
+ *
+ * ⚠ THE ONLY GENUINELY COMPLETE DISTRIBUTION ON THIS SCREEN, which is why it earns the chart. Every
+ * definition carries a classification and the constraint makes it mandatory, so the segments sum to the
+ * registry total exactly — no "other", no rounding, nothing unclassified hiding in the middle.
+ */
+export function RiskDonut({ slices, total }: { slices: { key: string; n: number }[]; total: number | null }) {
+  if (total === null || total === 0 || slices.length === 0) {
+    return (
+      <p className="text-[12px] leading-relaxed text-gray-600">
+        The registry could not be read, so no distribution can be drawn. That is not an empty registry.
+      </p>
+    );
+  }
+  const R = 52, C = 2 * Math.PI * R;
+  // ⚠ OFFSETS PRECOMPUTED, NOT ACCUMULATED INSIDE map(). A `let offset` mutated during the render pass
+  // is what React's immutability rule forbids, and it is the kind of thing a production build happily
+  // compiles while eslint refuses it — the build passed on the first attempt and the lint did not.
+  const arcs = slices.reduce<{ key: string; n: number; len: number; offset: number }[]>((acc, s) => {
+    const prev = acc[acc.length - 1];
+    const len = (s.n / total) * C;
+    return [...acc, { key: s.key, n: s.n, len, offset: prev ? prev.offset + prev.len : 0 }];
+  }, []);
+  return (
+    <div className="flex flex-wrap items-center gap-5">
+      <svg viewBox="0 0 130 130" className="h-[130px] w-[130px] shrink-0" role="img"
+        aria-label={`Definitions by safety classification: ${slices.map(s => `${pretty(s.key)} ${s.n}`).join(", ")}`}>
+        <g transform="rotate(-90 65 65)">
+          {arcs.map(a => (
+            <circle key={a.key} cx="65" cy="65" r={R} fill="none"
+              stroke={SAFETY_TONE[a.key] ?? "#94A3B8"} strokeWidth="16"
+              strokeDasharray={`${a.len} ${C - a.len}`} strokeDashoffset={-a.offset} />
+          ))}
+        </g>
+        <text x="65" y="62" textAnchor="middle" className="fill-gray-900 text-[20px] font-bold">{total}</text>
+        <text x="65" y="76" textAnchor="middle" className="fill-gray-400 text-[9px] font-semibold uppercase tracking-wider">Total</text>
+      </svg>
+      {/* ⚠ NEVER COLOUR ALONE — every segment is named and counted beside the chart. */}
+      <ul className="min-w-[190px] flex-1 flex flex-col gap-1">
+        {slices.map(s => (
+          <li key={s.key} className="flex items-center gap-2 text-[11.5px]">
+            <span aria-hidden className="h-2 w-2 shrink-0 rounded-full" style={{ background: SAFETY_TONE[s.key] ?? "#94A3B8" }} />
+            <span className="min-w-0 flex-1 truncate text-gray-700">{pretty(s.key)}</span>
+            <span className="shrink-0 tabular-nums font-semibold text-gray-900">{s.n}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * §3's six levels as the comp's numbered rail.
+ *
+ * ⚠ THE COMP PUTS A "RESOLUTION HEALTH" PERCENTAGE UNDER EACH LEVEL AND THERE IS NO SUCH FRACTION.
+ * A level either resolves, resolves partially, or cannot be resolved at all — that is a property of the
+ * SCHEMA, not a score out of the settings at that level. "85% resolvable" would need a count of
+ * resolvable settings over a count of settings, and five of the six levels hold no settings whatever.
+ * The state is the honest occupant of that slot, and it is the more decision-useful one.
+ */
+const RUNG_TONE: Record<string, string> = {
+  resolves: "bg-teal-500",
+  partial: "bg-amber-500",
+  "wrong-subject": "bg-[var(--cmp-color-error)]",
+  "no-scope": "bg-[var(--cmp-color-error)]",
+};
+
+export function HierarchyRail({ rungs }: { rungs: LadderRung[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <ol className="flex gap-2 pb-1" style={{ minWidth: "min-content" }}>
+        {rungs.map((r, i) => (
+          <li key={r.level} className="flex w-[176px] shrink-0 flex-col rounded-lg border border-gray-200 bg-white px-3 py-2.5">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 text-[10px] font-bold text-gray-500">
+              {i + 1}
+            </span>
+            <span className="mt-1.5 text-[12px] font-semibold leading-snug text-gray-900">{r.level}</span>
+            <span className="mt-1 text-[10.5px] leading-snug text-gray-500">{r.intent}</span>
+            <span aria-hidden className={`mt-2 h-1 w-full rounded-full ${RUNG_TONE[r.state] ?? "bg-gray-300"}`} />
+            <span className="mt-1.5 text-[10.5px] font-semibold text-gray-600">{RUNG_STATE_LABEL[r.state]}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/**
+ * Per-domain coverage, as the comp's bar list.
+ *
+ * ⚠ AND THE LABEL IS THE WHOLE POINT: THIS MEASURES WHAT THIS PLANE MAY READ, NOT HOW CONFIGURED A
+ * DOMAIN IS. The comp's "Configuration coverage — how complete is our configuration across domains"
+ * implies the second, and this product cannot answer it: no domain has a count of settings it OUGHT to
+ * have. Both halves of what IS shown are real — stores the allowlist admits, over stores the domain
+ * uses — so the bar is a measurement rather than an impression, provided it is named correctly.
+ */
+export function DomainCoverage({ domains }: { domains: { key: string; title: string; href: string; stores: { readable: boolean }[] }[] }) {
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {domains.map(d => {
+        const total = d.stores.length;
+        const readable = d.stores.filter(s => s.readable).length;
+        const pct = total === 0 ? 0 : (readable / total) * 100;
+        return (
+          <li key={d.key}>
+            <Link href={d.href} className="group flex items-center gap-2.5">
+              <span className="w-[150px] shrink-0 truncate text-[11.5px] text-gray-700 group-hover:text-gray-900">{d.title}</span>
+              <span aria-hidden className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-200">
+                <span className={`block h-full rounded-full ${readable === total && total > 0 ? "bg-teal-500" : readable === 0 ? "bg-[var(--cmp-color-error)]" : "bg-amber-500"}`}
+                  style={{ width: `${Math.max(pct, total === 0 ? 0 : 3)}%` }} />
+              </span>
+              <span className="w-[52px] shrink-0 text-right text-[11px] tabular-nums text-gray-600">
+                {readable}/{total}
+              </span>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** §6's recent changes, in the comp's table shape. §6 wants actor, setting, scope, values, time, status. */
+export function ChangesTable({ rows }: {
+  rows: { key: string; name: string; channel: string | null; rollout: string | null; status: string; objects: number; at: string | null }[];
+}) {
+  if (rows.length === 0) {
+    return (
+      <p className="text-[12px] leading-relaxed text-gray-600">
+        The change-set store answered and holds no rows. ⚠ A measured empty table, not an unreadable one:
+        nobody has grouped a configuration edit into a named change set, so there is no recent change to
+        list rather than a list that failed to load.
+      </p>
+    );
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-[12px]">
+        <thead>
+          <tr className="border-b border-gray-200 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">
+            <th className="py-1.5 pr-3">Change set</th>
+            <th className="py-1.5 pr-3">Included</th>
+            <th className="py-1.5 pr-3">Mode</th>
+            <th className="py-1.5 pr-3">Status</th>
+            <th className="py-1.5">When</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={r.key} className="border-b border-gray-100 last:border-0">
+              <td className="py-1.5 pr-3 font-medium text-gray-800">{r.name || r.key}</td>
+              <td className="py-1.5 pr-3 tabular-nums text-gray-600">{r.objects}</td>
+              <td className="py-1.5 pr-3 text-gray-600">{r.rollout ?? "—"}</td>
+              <td className="py-1.5 pr-3 text-gray-700">{r.status}</td>
+              <td className="py-1.5 font-mono text-[11px] text-gray-500">{r.at ? new Date(r.at).toISOString().slice(0, 10) : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
+        §6 asks each row to carry the actor, the scope and the previous and new effective value. The
+        change-set store holds none of those — it records the set, not the per-key diff — so the columns
+        that exist are shown and the ones that do not are named here rather than left blank.
+      </p>
+    </div>
+  );
+}
+
+/** The footer strip: what this module is, and the one sentence a reader should leave with. */
+export function ConfigFooter({ at }: { at: string }) {
+  return (
+    <footer className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5">
+        <p className="text-[11px] leading-relaxed text-gray-600">
+          Configuration is data that decides how Competen Practice behaves. This module governs that data;
+          whether a capability EXISTS is Releases &amp; Capabilities, and whether it is healthy at runtime
+          is Product Health.
+        </p>
+        <p className="shrink-0 font-mono text-[10.5px] text-gray-400">CPR-PD-011 · Configuration Overview</p>
+      </div>
+      <p className="mt-1.5 text-[10.5px] text-gray-500">
+        All times GMT · read at request time and cached nowhere, so this page does not poll and nothing on
+        it is stale · counted at {new Date(at).toISOString().replace("T", " ").slice(0, 16)}
+      </p>
+    </footer>
+  );
+}
+
 export function ReadFailures({ problems }: { problems: string[] }) {
   if (problems.length === 0) return null;
   return (
