@@ -38,9 +38,30 @@ const FIXTURE_OWNER = `${FIXTURE_OWNER_PREFIX}0000-4000-8000-000000000315`;
 let fixtureId: string | null = null;
 let incidentId: string | null = null;
 
+/**
+ * ⚠ THE DELETE'S ERROR IS READ, AND IT DID NOT USED TO BE.
+ *
+ * This function issued the delete and moved on. Migration 315's append-only trigger refused every
+ * incident that had a lifecycle row, the refusal was discarded, and five acceptance runs left five
+ * incidents behind while the harness reported clean. They were only noticed because the Product Health
+ * screen showed five identical incidents against a practice that no longer exists.
+ *
+ * A cleanup that cannot fail loudly is not a cleanup. Migration 316 makes the cascade work; this makes
+ * the next failure visible instead of silent.
+ */
+let cleanupError: string | null = null;
+
 async function cleanup() {
-  if (incidentId) { await admin.from("mos_incident").delete().eq("incident_id", incidentId); incidentId = null; }
-  if (fixtureId) { await admin.from("practice_workspace").delete().eq("id", fixtureId); fixtureId = null; }
+  if (incidentId) {
+    const del = await admin.from("mos_incident").delete().eq("incident_id", incidentId);
+    if (del.error) cleanupError = String(del.error.message).slice(0, 90);
+    else incidentId = null;
+  }
+  if (fixtureId) {
+    const del = await admin.from("practice_workspace").delete().eq("id", fixtureId);
+    if (del.error) cleanupError = String(del.error.message).slice(0, 90);
+    else fixtureId = null;
+  }
 }
 cleanupOnKill(cleanup);
 
@@ -199,7 +220,19 @@ async function main() {
 
   const leftover = await admin.from("practice_workspace").select("id").eq("owner_person_id", FIXTURE_OWNER);
   ok("Z1", !leftover.error && (leftover.data ?? []).length === 0,
-    "control: the fixture practice and its incident cascaded away");
+    "control: the fixture practice is gone");
+
+  // ⚠ AND THE INCIDENT IS CHECKED SEPARATELY, BECAUSE IT DOES NOT CASCADE WITH THE PRACTICE.
+  // subject_id is TEXT, not a foreign key - deliberately, because a subject may be a market or a service
+  // rather than a practice. So removing the workspace leaves the incident standing, and a control that
+  // only looked at workspaces reported clean while five incidents accumulated.
+  const orphanTitle = await admin.from("mos_incident").select("incident_id")
+    .eq("title", "Bookings failing for one practice");
+  ok("Z2", !orphanTitle.error && (orphanTitle.data ?? []).length === 0,
+    `control: no acceptance incident is left in the estate — ${(orphanTitle.data ?? []).length} found`);
+
+  ok("Z3", cleanupError === null,
+    `control: the cleanup itself reported no error — ${cleanupError ?? "clean"}`);
 
   console.log(`\n${failures.length === 0 ? "ALL GREEN" : "RED"}  ${pass} passed, ${failures.length} failed\n`);
   if (failures.length) { failures.forEach(f => console.log("  " + f)); process.exit(1); }
