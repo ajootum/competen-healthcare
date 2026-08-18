@@ -167,6 +167,14 @@ export const CRITICAL_JOURNEYS = [
  * would have to add.
  */
 export type AttentionSignal = {
+  /**
+   * ⚠ THE ONE FIELD A READER MUST NEVER HAVE TO INFER. An INCIDENT is a stateful record somebody opened
+   * and will close: it has a status, an owner, a first observation and something to acknowledge. A
+   * DERIVED signal is a count over a log at request time: it has none of those and never will, however
+   * alarming the number is. Both belong on this panel, and a panel that let one be mistaken for the
+   * other would have a Director chasing an owner who does not exist.
+   */
+  kind: "incident" | "derived";
   signalId: string;
   title: string;
   severity: HealthState;
@@ -176,8 +184,12 @@ export type AttentionSignal = {
   impact: string;
   evidence: string;
   actionRoute: { label: string; href: string };
-  /** §9 fields with no producer in this schema, named on the signal itself. */
+  /** §9's lifecycle status. Null on a derived signal, which has no lifecycle to have one. */
+  status: string | null;
+  /** §9 fields with no producer for THIS signal, named on the signal itself. Empty for an incident. */
   missingFields: string[];
+  /** Where the evidence for this signal can be counted, when there is a thread to follow. */
+  correlationId?: string | null;
 };
 
 /** §5's freshness envelope, carried with the payload rather than implied by the render time. */

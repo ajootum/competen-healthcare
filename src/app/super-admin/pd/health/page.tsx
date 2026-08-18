@@ -5,6 +5,7 @@ import {
   HEALTH_HEADLINE, HEALTH_HEADLINE_BODY,
   healthDomains, attentionSignals, freshnessOf, overallHealth, coverageTally, loadJourneyHealth,
 } from "@/lib/hq/pd-health";
+import { loadOpenIncidents } from "@/lib/hq/mos-incident";
 import {
   HealthHeader, Panel, Stat, Duration, Share, SampleNote, AbsentList, PlaneRefusal,
   SubmoduleGrid, ReadFailures, Explain, Cite,
@@ -33,12 +34,14 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   await requireHqCapability("hq.practice.health.view");
   const admin = await createAdminClient();
-  const [h, journeys] = await Promise.all([loadPdHealth(admin), loadJourneyHealth(admin)]);
+  const [h, journeys, incidents] = await Promise.all([
+    loadPdHealth(admin), loadJourneyHealth(admin), loadOpenIncidents(admin),
+  ]);
 
   const domains = healthDomains(h, journeys);
   const overall = overallHealth(domains);
   const tally = coverageTally(domains);
-  const signals = attentionSignals(h);
+  const signals = attentionSignals(h, incidents);
   const freshness = freshnessOf(h);
 
   return (

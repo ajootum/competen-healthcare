@@ -232,5 +232,34 @@ ok("C2", overview.indexOf("<OverallHealth") < drawerAt && overview.indexOf("<Nee
       && overview.indexOf("<JourneyRail") < drawerAt,
   "§12: the first viewport answers its three questions — is Practice healthy, what needs attention, are the critical journeys working — before any commentary");
 
+// ── NEEDS ATTENTION: an incident and a derived signal must not be confusable ──
+// ⚠ THE PANEL CARRIES TWO KINDS OF THING AND ONLY ONE OF THEM CAN BE ACTED ON. An incident is a record
+// somebody opened, owns and will close. A derived signal is a count over a log at request time — no
+// lifecycle, no owner, nothing to acknowledge, however alarming the number. A reader who took one for
+// the other would go looking for an owner who does not exist, so the kind is rendered, not inferred.
+const loaderSrc = readFileSync("src/lib/hq/pd-health.ts", "utf8");
+const modelSrc = readFileSync("src/lib/hq/pd-health-model.ts", "utf8");
+const uiSrc = readFileSync("src/app/super-admin/pd/health/_components/health-ui.tsx", "utf8");
+
+ok("NA1", /kind:\s*"incident"\s*\|\s*"derived"/.test(modelSrc),
+  "every attention signal declares which kind it is — the type makes it impossible to omit");
+
+const derivedBlocks = (loaderSrc.match(/kind: "derived" as const/g) ?? []).length;
+const derivedIds = (loaderSrc.match(/signalId: "derived\./g) ?? []).length;
+ok("NA2", derivedIds > 0 && derivedBlocks === derivedIds,
+  `every derived signal declares itself derived — ${derivedBlocks} of ${derivedIds}`);
+
+ok("NA3", /kind: "incident"/.test(loaderSrc) && /missingFields: \[\],/.test(loaderSrc),
+  "an incident signal carries no missing-field list, because §9's fields are all filled for it");
+
+ok("NA4", /status: null,/.test(loaderSrc),
+  "⚠ a derived signal carries status null rather than a plausible-looking one — it has no lifecycle to have a status");
+
+ok("NA5", uiSrc.includes(">\n                      Incident\n") || /Incident\s*<\/span>/.test(uiSrc),
+  "the panel renders the word Incident on a stateful record");
+
+ok("NA6", /Derived signal\s*</.test(uiSrc),
+  "and the words Derived signal on a count, so the two are told apart by reading rather than by guessing");
+
 console.log(`\n${failures.length === 0 ? "ALL GREEN" : "RED"}  ${pass} passed, ${failures.length} failed\n`);
 if (failures.length) { failures.forEach(f => console.log("  " + f)); process.exit(1); }

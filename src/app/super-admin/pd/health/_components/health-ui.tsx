@@ -373,9 +373,10 @@ export function NeedsAttention({ signals }: { signals: AttentionSignal[] }) {
       </div>
       {signals.length === 0 ? (
         <p className="mt-2 text-[12px] leading-relaxed text-gray-600">
-          Nothing in the readable logs is above zero. ⚠ That is not &ldquo;no degradations&rdquo; — no
-          degradation record exists in this product, so this panel can only ever surface what a log
-          happens to show.
+          No incident is open, and nothing in the readable logs is above zero. ⚠ Those are two different
+          statements: an incident is a record somebody opened and will close, and a derived signal is a
+          count over a log at request time. This panel shows both, and an empty panel means neither
+          found anything — not that nothing is wrong.
         </p>
       ) : (
         <ul className="mt-2 flex flex-col divide-y divide-gray-100">
@@ -385,25 +386,58 @@ export function NeedsAttention({ signals }: { signals: AttentionSignal[] }) {
                 <p className="text-[12.5px] font-semibold text-gray-900">{s.title}</p>
                 <StateBadge state={s.severity} />
               </div>
+
+              {/* ⚠ THE KIND IS SHOWN, NOT LEFT TO BE INFERRED. An incident carries a status, an owner
+                  and a first observation; a derived signal is a count over a log and has none of them,
+                  however alarming its number. A reader who mistook one for the other would go looking
+                  for an owner who does not exist. */}
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                {s.kind === "incident" ? (
+                  <>
+                    <span className="rounded border border-teal-300 bg-teal-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-teal-800">
+                      Incident
+                    </span>
+                    {s.status && <span className="text-[10.5px] font-semibold text-gray-600">{s.status}</span>}
+                    {s.startedAt && (
+                      <span className="font-mono text-[10.5px] text-gray-500">
+                        since {new Date(s.startedAt).toISOString().replace("T", " ").slice(0, 16)} GMT
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="rounded border border-gray-300 bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-600">
+                    Derived signal
+                  </span>
+                )}
+              </div>
+
               <p className="mt-1 text-[11.5px] leading-relaxed text-gray-600">{s.scope}</p>
               <p className="mt-0.5 text-[11.5px] text-gray-600">Impact: {s.impact}</p>
               <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                 <Link href={s.actionRoute.href} className="text-[11px] font-semibold text-teal-700 hover:underline">
                   {s.actionRoute.label} →
                 </Link>
-                <span className="text-[10.5px] text-gray-400">
-                  no {s.missingFields.join(", no ")}
-                </span>
+                {s.missingFields.length > 0 && (
+                  <span className="text-[10.5px] text-gray-400">
+                    no {s.missingFields.join(", no ")}
+                  </span>
+                )}
               </div>
             </li>
           ))}
         </ul>
       )}
-      <Explain summary="Why none of these has a start time, an owner or a status">
-        §9 asks for all three, and a signal here is DERIVED at request time by counting a log. It has no
-        lifecycle, so no status; nobody has ever been assigned one, so no owner; and a count over a window
-        has no first-observation. A real degradation record — one row per degradation, opened when it
-        starts and closed when it resolves — is what would fill those columns, and it does not exist.
+      <Explain summary="Why a derived signal has no start time, owner or status — and an incident does">
+        §9 asks for all three. A signal marked <span className="font-semibold">Derived</span> is counted
+        from a log at request time: it has no lifecycle, so no status; nobody was ever assigned it, so no
+        owner; and a count over a window has no first observation. A signal marked{" "}
+        <span className="font-semibold">Incident</span> is a stateful record — opened, owned,
+        acknowledged and closed — so it carries all three, and its impact is counted from the event
+        thread it names rather than frozen when somebody typed it.
+        <span className="mt-1 block">
+          ⚠ The distinction is shown rather than left to be inferred, because a reader who took a derived
+          count for an incident would go looking for an owner who does not exist.
+        </span>
       </Explain>
     </section>
   );

@@ -1,4 +1,5 @@
 import { mayRender, absenceSentence } from "@/lib/hq/pd-metric-registry";
+import type { OpenIncident } from "@/lib/hq/mos-incident";
 import {
   healthStateFor, type Domain, type Coverage, type AttentionSignal, type Freshness,
 } from "@/lib/hq/pd-health-model";
@@ -446,12 +447,40 @@ export function healthDomains(h: HealthPayload, journeys?: JourneyHealth[] | nul
  * no owner, because nobody has ever been assigned one; no quantified practice impact, because no log
  * records which practices a failure touched.
  */
-export function attentionSignals(h: HealthPayload): AttentionSignal[] {
+export function attentionSignals(h: HealthPayload, incidents?: OpenIncident[] | null): AttentionSignal[] {
   const out: AttentionSignal[] = [];
+
+  // ⚠ REAL INCIDENTS FIRST, AND NOT BECAUSE THEY ARE MORE URGENT. A derived signal is a count over a log
+  // and can be alarming without anybody having decided it matters; an incident is a record somebody
+  // opened, owns and will close. Ranking a stateful record below a tally would have a Director working
+  // the panel from the bottom. Within each kind, severity then age decides.
+  for (const i of incidents ?? []) {
+    out.push({
+      kind: "incident",
+      signalId: i.incidentId,
+      title: i.title,
+      severity: i.severity === "informational" ? "degraded" : i.severity,
+      startedAt: i.startedAt,
+      status: i.status,
+      scope: i.affectedScope
+        ?? (i.subjectLabel ? `${i.subjectType}: ${i.subjectLabel}` : i.subjectType),
+      // ⚠ THE SENTENCE THE RESPONDER WROTE, NOT A NUMBER THIS FUNCTION INVENTED. The count lives in the
+      // event store and is computed against a window when a screen asks for it.
+      impact: i.impactNote ?? "not stated on the incident",
+      evidence: i.journeyName
+        ? `${i.journeyName}${i.component ? " · " + i.component : ""}`
+        : (i.component ?? "no journey or component named"),
+      actionRoute: { label: "Workflow Health", href: "/super-admin/pd/health/workflows" },
+      missingFields: [],
+      correlationId: i.evidenceCorrelationId,
+    });
+  }
   const MISSING = ["status", "owner", "quantified practice impact"];
 
   if (h.ai.failures.state === "value" && h.ai.failures.value > 0) {
     out.push({
+      kind: "derived" as const,
+      status: null,
       signalId: "derived.ai_errors",
       title: `${h.ai.failures.value} AI request${h.ai.failures.value === 1 ? "" : "s"} errored`,
       severity: "degraded",
@@ -468,6 +497,8 @@ export function attentionSignals(h: HealthPayload): AttentionSignal[] {
 
   if (h.events.warning.state === "value" && h.events.warning.value > 0) {
     out.push({
+      kind: "derived" as const,
+      status: null,
       signalId: "derived.platform_warnings",
       title: `${h.events.warning.value} platform event${h.events.warning.value === 1 ? "" : "s"} at warning severity`,
       severity: "degraded",
@@ -482,6 +513,8 @@ export function attentionSignals(h: HealthPayload): AttentionSignal[] {
 
   if (h.jobs.failures.state === "value" && h.jobs.failures.value > 0) {
     out.push({
+      kind: "derived" as const,
+      status: null,
       signalId: "derived.job_failures",
       title: `${h.jobs.failures.value} background job run${h.jobs.failures.value === 1 ? "" : "s"} failed`,
       severity: "degraded",
