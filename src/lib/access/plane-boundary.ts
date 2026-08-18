@@ -183,6 +183,23 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
         + "practitioner clinical record — the landlord's own incident, support and subject registers. "
         + "See the block comment above for why this was invisible to the boundary until 2026-08-18.",
     })),
+  // ⚠ THE PD-003 PROJECTIONS. CPR-PD-003 Operationalisation §4: "PD-003 must not scan appointments and
+  // encounters on each page load. Activity is a management-plane PROJECTION." The register reads these
+  // two rows per practice instead of the event store, and §14 is why the shape matters: a projection
+  // carries observed_at, so the surface can say HOW FRESH an answer is. A live query cannot — it only
+  // knows it just ran, which is the claim that hides a refresher that stopped weeks ago.
+  //
+  // Neither holds clinical content: an activity row is a timestamp, a type and a count, and a health row
+  // is one of six states with its reason and a drill-through reference.
+  ...(["pd_practice_activity", "pd_practice_health"] as const).map(table => ({
+    table,
+    columns: "*" as const,
+    count: true,
+    why:
+      "PD-003 management-plane projection. Landlord-authored summary state about a practice — a "
+      + "timestamp, a type, a count, a health state and its reason. Holds no clinical content, and "
+      + "carries observed_at so the register can state its own freshness rather than implying it is live.",
+  })),
   {
     table: "mos_event",
     columns: ["practice_id", "journey_key", "event_name", "outcome", "occurred_at", "duration_ms"],

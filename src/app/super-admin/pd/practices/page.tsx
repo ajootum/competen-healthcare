@@ -304,21 +304,26 @@ export default async function Page(
 
                       <td className="py-1.5 pr-3 text-right"><BandCell band={r.membershipBand} /></td>
 
-                      {/* ACTIVITY — MEASURED since the event store gained a practice key. */}
+                      {/* ACTIVITY — read from the §4 projection, never scanned here. */}
                       <td className="py-1.5 pr-3 text-right">
-                        {r.activity30d === null ? (
-                          <span className="text-[10.5px] italic text-gray-400" title="The event store could not be read. That is not zero activity.">
-                            unreadable
+                        {r.activity === null ? (
+                          <span
+                            className="cursor-help text-[10.5px] italic text-gray-300 underline decoration-dotted underline-offset-2"
+                            title="Not Measured. No activity projection exists for this practice — which is different from the practice having done nothing, and different again from the projection being unreadable."
+                          >
+                            not measured
                           </span>
-                        ) : r.activity30d.attempts === 0 ? (
-                          <span className="text-gray-300" title="The event store was read and this practice ran nothing in 30 days. A measured zero.">0</span>
                         ) : (
-                          <span className="tabular-nums text-gray-900" title={`${r.activity30d.journeys} journey(s), ${r.activity30d.failures} failed`}>
-                            {r.activity30d.attempts}
-                            {r.activity30d.failures > 0 && (
-                              <span className="ml-1 text-[10.5px] text-[var(--cmp-text-warning)]">
-                                {r.activity30d.failures} failed
-                              </span>
+                          <span
+                            className="cursor-help tabular-nums text-gray-900"
+                            title={`Observed ${new Date(r.activity.observedAt).toISOString().slice(0, 16).replace("T", " ")} GMT${
+                              r.activity.classification ? ` · ${r.activity.classification}` : " · no published classification definition"}`}
+                          >
+                            {r.activity.lastAt
+                              ? new Date(r.activity.lastAt).toISOString().slice(0, 10)
+                              : <span className="text-gray-300">none</span>}
+                            {r.activity.windowCount !== null && (
+                              <span className="ml-1 text-[10.5px] text-gray-500">{r.activity.windowCount}</span>
                             )}
                           </span>
                         )}
@@ -330,8 +335,29 @@ export default async function Page(
                       {/* ADOPTION — the one absence a governance decision could remove today. */}
                       <td className="py-1.5 pr-3 text-right"><DarkCell reason="adoption" /></td>
 
-                      {/* HEALTH — §4: missing or unreadable evidence must never resolve to Healthy. */}
-                      <td className="py-1.5 pr-3"><DarkCell reason="health" /></td>
+                      {/* HEALTH — read from PD-008's projection. §6: never labelled here. */}
+                      <td className="py-1.5 pr-3">
+                        {r.health === null || r.health.state === "unknown" ? (
+                          <span
+                            className="cursor-help text-[10.5px] italic text-gray-300 underline decoration-dotted underline-offset-2"
+                            title={r.health === null
+                              ? "Not Measured. PD-008 has projected no health state for this practice. §6: PD-003 consumes a health projection and never computes one, so there is nothing here to fall back on."
+                              : `Unknown. ${r.health.reason ?? "No evidence-based reason recorded."}`}
+                          >
+                            {r.health === null ? "not measured" : "unknown"}
+                          </span>
+                        ) : (
+                          <span
+                            className={`cursor-help rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                              r.health.state === "healthy"
+                                ? "bg-teal-50 text-teal-800"
+                                : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}
+                            title={`${r.health.reason ?? ""} · observed ${new Date(r.health.observedAt).toISOString().slice(0, 16).replace("T", " ")} GMT`}
+                          >
+                            {r.health.state.replace(/_/g, " ")}
+                          </span>
+                        )}
+                      </td>
 
                       <td className="py-1.5 pr-3">
                         {r.attention.length === 0

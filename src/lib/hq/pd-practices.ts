@@ -121,17 +121,43 @@ export type EstateRow = {
   handle: string | null;
 
   /**
-   * §3's ACTIVITY column, MEASURED rather than invented.
+   * §4's ACTIVITY, read from the projection.
    *
-   * ⚠ THIS COLUMN USED TO SAY A "recent activity" CLASSIFICATION WOULD HAVE TO BE INVENTED. That was
-   * true: appointments and encounters are held to their tenancy column on this plane, so no timestamp
-   * was readable. The event store closed it — mos_event carries a practice_id, a journey, an outcome
-   * and a duration, and cannot carry clinical content by construction.
+   * ⚠ THIS WAS BRIEFLY A LIVE SCAN OF THE EVENT STORE ON EVERY PAGE LOAD, AND THE OPERATIONALISATION
+   * SPECIFICATION CORRECTED IT. §4: "PD-003 must not scan appointments and encounters on each page
+   * load. Activity is a management-plane PROJECTION." §14 gives the reason a live read cannot satisfy:
+   * every projection must expose freshness "sufficient to prevent stale state being presented as
+   * current". A projection knows WHEN IT WAS OBSERVED. A live query only knows that it just ran, which
+   * is a different claim and the one that hides a refresher that stopped.
    *
-   * So this counts what the practice DID, never what it was about. Null means the store could not be
-   * read; a zero here means the store was read and this practice ran nothing.
+   * ⚠ `classification` IS NULL UNTIL A DEFINITION IS PUBLISHED. §4: "do not invent 'recent activity'
+   * thresholds. Any classification must be defined and versioned." The projection's foreign key makes
+   * an invented one unstorable, so this field being null is the schema holding rather than a gap.
+   *
+   * null here = no projected row at all, which renders Not Measured.
    */
-  activity30d: { attempts: number; failures: number; journeys: number } | null;
+  activity: {
+    lastAt: string | null;
+    lastType: string | null;
+    windowCount: number | null;
+    classification: string | null;
+    observedAt: string;
+  } | null;
+
+  /**
+   * §6's HEALTH, read from PD-008's projection and never computed here.
+   *
+   * ⚠ §6: "PD-003 must not create a second health methodology … never independently labels a Practice
+   * Healthy." So this loader READS a state and has no branch that produces one. The projection defaults
+   * to `unknown`, which is where the absence of evidence sits — the default is what every row gets
+   * before anybody thinks about it, and `healthy` there would be a reassurance nobody authored.
+   */
+  health: {
+    state: string;
+    reason: string | null;
+    observedAt: string;
+    evidenceRef: string | null;
+  } | null;
 };
 
 export type EstateSort = "attention" | "created_desc" | "created_asc" | "name" | "lifecycle";
@@ -341,7 +367,7 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
 
   // ── Owner names (D1), membership bands (D2), failed sagas ────────────────────────────────────────
   const ownerIds = [...new Set(rows.map(r => r.owner_person_id).filter(Boolean))];
-  const [peopleRes, memberCounts, failedRes, marketRes, activityRes] = await Promise.all([
+  const [peopleRes, memberCounts, failedRes, marketRes, activityRes, healthRes] = await Promise.all([
     ownerIds.length
       // ⚠ `email` IS NOT SELECTED, not selected-and-dropped. What is not fetched cannot be spread into
       // a payload by a later edit.
@@ -353,14 +379,15 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
     admin.from("provisioning_request").select("id, workspace_id, status").eq("status", "FAILED").limit(500),
     // Filter options, read from the data rather than hard-coded, so a new market appears on its own.
     admin.from("practice_workspace").select("country").range(0, 999),
-    // §3's activity, over the last 30 days. ⚠ Scoped to the page's practices rather than the estate:
-    // this is a per-row column, and reading every event ever emitted to fill six cells would be a table
-    // scan pretending to be a lookup.
-    admin.from("mos_event")
-      .select("practice_id, journey_key, outcome")
-      .in("practice_id", wsIds)
-      .gte("occurred_at", new Date(Date.now() - 30 * 86_400_000).toISOString())
-      .limit(5000),
+    // §4's activity PROJECTION, and §6's health projection. Two indexed lookups by primary key over the
+    // page's practices — not a scan, and each row carries its own observed_at so the register can say
+    // how fresh the answer is rather than implying it is live.
+    admin.from("pd_practice_activity")
+      .select("practice_id, last_meaningful_activity_at, last_activity_type, activity_window_count, classification, observed_at")
+      .in("practice_id", wsIds),
+    admin.from("pd_practice_health")
+      .select("practice_id, health_state, health_reason, observed_at, evidence_ref")
+      .in("practice_id", wsIds),
   ]);
 
   if (peopleRes.error) problems.push(`owner names: ${peopleRes.error.message}`);
@@ -386,24 +413,20 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
   // rather than collapsing to zero. "This practice did nothing" and "nobody could tell" are the two
   // readings this whole module exists to keep apart, and an aggregation is the easiest place to lose
   // the distinction — an empty Map and an unreadable one look identical to a `.get()`.
-  if (activityRes.error) problems.push(`activity: ${activityRes.error.message}`);
-  const activityByWs = activityRes.error
-    ? null
-    : new Map<string, { attempts: number; failures: number; journeys: Set<string> }>();
-  if (activityByWs) {
-    const events = (activityRes.data ?? []) as {
-      practice_id: string | null; journey_key: string | null; outcome: string;
-    }[];
-    for (const e of events) {
-      if (!e.practice_id) continue;
-      const cur = activityByWs.get(e.practice_id)
-        ?? { attempts: 0, failures: 0, journeys: new Set<string>() };
-      cur.attempts += 1;
-      if (e.outcome === "failure" || e.outcome === "timeout") cur.failures += 1;
-      if (e.journey_key) cur.journeys.add(e.journey_key);
-      activityByWs.set(e.practice_id, cur);
-    }
-  }
+  // ⚠ AN UNREADABLE PROJECTION AND AN UNPROJECTED PRACTICE ARE DIFFERENT, AND BOTH ARE DIFFERENT FROM
+  // ZERO ACTIVITY. The map is null when the read failed; a practice missing FROM the map has no
+  // projected row, which renders Not Measured. Neither is "this practice did nothing".
+  if (activityRes.error) problems.push(`activity projection: ${activityRes.error.message}`);
+  const activityByWs = activityRes.error ? null : new Map(
+    ((activityRes.data ?? []) as Record<string, unknown>[])
+      .map(a => [String(a.practice_id), a] as const),
+  );
+
+  if (healthRes.error) problems.push(`health projection: ${healthRes.error.message}`);
+  const healthByWs = healthRes.error ? null : new Map(
+    ((healthRes.data ?? []) as Record<string, unknown>[])
+      .map(h => [String(h.practice_id), h] as const),
+  );
 
   if (marketRes.error) problems.push(`markets: ${marketRes.error.message}`);
   const marketRows = (marketRes.data ?? []) as { country: string }[];
@@ -418,13 +441,29 @@ export async function loadPracticeEstate(admin: Admin, query: EstateQuery = {}):
       // exact figure in the payload, where anyone can read it.
       membershipBand: memberCounts === null ? null : bandOf(memberCounts[r.id] ?? 0),
       handle: (r as unknown as { practice_handle: string | null }).practice_handle ?? null,
-      activity30d: activityByWs === null
-        ? null
-        : {
-            attempts: activityByWs.get(r.id)?.attempts ?? 0,
-            failures: activityByWs.get(r.id)?.failures ?? 0,
-            journeys: activityByWs.get(r.id)?.journeys.size ?? 0,
-          },
+      activity: (() => {
+        const a = activityByWs?.get(r.id);
+        return a
+          ? {
+              lastAt: (a.last_meaningful_activity_at as string | null) ?? null,
+              lastType: (a.last_activity_type as string | null) ?? null,
+              windowCount: (a.activity_window_count as number | null) ?? null,
+              classification: (a.classification as string | null) ?? null,
+              observedAt: String(a.observed_at),
+            }
+          : null;
+      })(),
+      health: (() => {
+        const h = healthByWs?.get(r.id);
+        return h
+          ? {
+              state: String(h.health_state),
+              reason: (h.health_reason as string | null) ?? null,
+              observedAt: String(h.observed_at),
+              evidenceRef: (h.evidence_ref as string | null) ?? null,
+            }
+          : null;
+      })(),
       attention: [
         ...lifecycleAttention(r.status),
         ...(failedByWs.has(r.id) ? [{

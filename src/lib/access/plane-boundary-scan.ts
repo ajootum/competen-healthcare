@@ -84,7 +84,7 @@ export type ModuleFacts = {
  * anything new in the same commit that introduces it. A prefix is the cheapest possible table
  * classifier and it goes wrong the first time the plane grows a second family.
  */
-export const PLANE_TABLE_PREFIXES = ["practice_", "mos_"] as const;
+export const PLANE_TABLE_PREFIXES = ["practice_", "mos_", "pd_"] as const;
 
 const matchesPrefix = (table: string, prefix: string | readonly string[]): boolean =>
   typeof prefix === "string" ? table.startsWith(prefix) : prefix.some(p => table.startsWith(p));
