@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { matchHqDestinations, type HqDestination } from "@/lib/hq/search-catalogue";
 
 // COMP-HQ-ACCESS-001 s15 -- "Search HQ / Go to..." for people who live in this console.
@@ -26,6 +27,7 @@ export default function HqSearchLauncher({ destinations }: { destinations: HqDes
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
 
   const results = matchHqDestinations(destinations, query);
 
@@ -53,12 +55,15 @@ export default function HqSearchLauncher({ destinations }: { destinations: HqDes
    * render, and which this file's ESLint reports as an error. It was never linted when it shipped.
    *
    * Clearing on CLOSE is not synchronisation, it is what closing MEANS, so it belongs on the actions
-   * that close. The effect keeps only the part that really is synchronising React with an external
-   * system -- moving focus into the DOM when the panel appears.
+   * that close.
+   *
+   * ⚠ AND THE HAND-ROLLED FOCUS MOVE IS NOW THE SHARED HOOK. Moving focus in was only one of the three
+   * things aria-modal="true" promises. This panel trapped nothing: with the palette open, Tab walked
+   * out into the HQ shell behind an opaque overlay, and closing it left focus at the top of the
+   * document rather than on the control that opened it. useModalFocus does all three, and lands on the
+   * search input for free because it is the first focusable in the panel.
    */
-  useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
+  useModalFocus(open, panel, close);
 
   const go = (href: string) => { close(); router.push(href); };
 
@@ -77,7 +82,7 @@ export default function HqSearchLauncher({ destinations }: { destinations: HqDes
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/50" onClick={close} aria-hidden />
-      <div role="dialog" aria-modal="true" aria-label="Search HQ"
+      <div ref={panel} role="dialog" aria-modal="true" aria-label="Search HQ" tabIndex={-1}
         className="fixed left-1/2 top-24 z-50 w-[min(36rem,92vw)] -translate-x-1/2 rounded-2xl border border-white/10 bg-[#101a24] p-3 shadow-2xl">
         <input ref={inputRef} value={query}
           onChange={e => { setQuery(e.target.value); setCursor(0); }}

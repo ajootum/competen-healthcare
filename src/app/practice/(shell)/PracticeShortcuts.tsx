@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { SHORTCUTS } from "@/lib/practice/preference-constants";
 
 // CPR-360 keyboard shortcuts. Real ones, bound to routes that exist.
@@ -19,6 +20,16 @@ const SEQUENCE_WINDOW_MS = 900;
 export default function PracticeShortcuts() {
   const router = useRouter();
   const [help, setHelp] = useState(false);
+  const panel = useRef<HTMLDivElement>(null);
+
+  // The help sheet declares aria-modal="true", which tells assistive technology the page behind is
+  // inert. Without a trap that is a promise the dialog does not keep: Tab walked straight out into the
+  // shell underneath the overlay. The hook moves focus in, wraps Tab at both ends, and returns focus to
+  // whatever was focused when "?" was pressed.
+  //
+  // The global handler below ALSO closes on Escape. Both paths call setHelp(false) and that is
+  // deliberate rather than redundant: the global one still has to clear a pending "g" sequence.
+  useModalFocus(help, panel, () => setHelp(false));
 
   useEffect(() => {
     let pending = "";
@@ -55,10 +66,13 @@ export default function PracticeShortcuts() {
   if (!help) return null;
 
   return (
+    // ⚠ THE DIALOG SEMANTICS BELONG ON THE PANEL, NOT THE SCRIM. They used to sit on this full-screen
+    // backdrop, which declared the entire viewport -- overlay included -- to be the dialog. The panel is
+    // the dialog; the scrim is a click target that dismisses it.
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="dialog" aria-modal="true" aria-label="Keyboard shortcuts"
       onClick={() => setHelp(false)}>
-      <div className="max-w-md w-full rounded-xl bg-white p-4 shadow-lg" onClick={e => e.stopPropagation()}>
+      <div ref={panel} role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" tabIndex={-1}
+        className="max-w-md w-full rounded-xl bg-white p-4 shadow-lg" onClick={e => e.stopPropagation()}>
         <h2 className="text-[13px] font-bold text-gray-900">Keyboard shortcuts</h2>
         <ul className="mt-2 flex flex-col">
           {SHORTCUTS.map(([keys, label]) => (

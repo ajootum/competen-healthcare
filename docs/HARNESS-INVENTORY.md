@@ -84,7 +84,9 @@ hww-instruments-harness.ts
 
 ## What CI runs today
 
-**22 of the 32 pure/local harnesses run in CI as a blocking job** (`scripts/ci-harnesses.ts`, wired into
+**25 of the 33 pure/local harnesses run in CI as a blocking job** (22 at the first pass, plus the
+ADR-008 role ratchet, plus `pui-a11y` and `pui-components` once their underlying defects were fixed on
+2026-08-19 — see `TESTING.md` for what each of those two actually turned out to be) (`scripts/ci-harnesses.ts`, wired into
 `.github/workflows/ci.yml`). The verification this section previously deferred was carried out on
 2026-08-18: each of the 32 was run twice with a scrubbed environment and its exit code and summary line
 compared.
@@ -92,9 +94,10 @@ compared.
 ⚠ **The `pure/local` tier is not a CI-safety verdict, and this inventory should not be read as one.**
 Ten of the 32 were excluded, for two distinct reasons:
 
-- **Six are RED on real, pre-existing defects** (`clock-format`, `pui-a11y`, `pui-components`,
+- **Six were RED on real, pre-existing defects** (`clock-format`, `pui-a11y`, `pui-components`,
   `pui-header`, `umw-nav`, `security-headers`). Including them would have made the gate born red. Each
-  defect is named in `scripts/ci-harnesses.ts` so it stays a tracked bug.
+  remaining defect is named in `scripts/ci-harnesses.ts` so it stays a tracked bug. `pui-a11y` and
+  `pui-components` have since been fixed and moved into CI.
 - **Four would report green in CI for a reason unrelated to what they check** (`practice-bundle`,
   `practice-outbox-durability`, `pui-migration`, `sso`) — a missing build, a missing dev server, a
   missing working-tree diff, and a live network call respectively.

@@ -55,7 +55,13 @@ const INCLUDED = [
   "practice-planner-freeze-harness.ts",
   "practice-responsive-harness.ts",
   "practice-taxonomy-harness.ts",
+  // Both were RED and are now green -- and for opposite reasons, which is the point of the note in
+  // EXCLUDED's place: pui-a11y found two genuinely unprotected modal surfaces (plus a third whose
+  // hand-rolled trap was inert), while pui-components was itself stale, pinned to where the focus code
+  // used to live before it moved into use-modal-focus.ts.
+  "pui-a11y-harness.ts",
   "pui-charts-harness.ts",
+  "pui-components-harness.ts",
   // ADR-008. Reads only src/**, counts in-process, no ambient dependency -- CI-safe by construction.
   "role-authorization-ratchet-harness.ts",
   "pui-colour-harness.ts",
@@ -80,20 +86,6 @@ const EXCLUDED: Exclusion[] = [
       + "`new Date(x).toLocaleString()` and no explicit locale, so the rendered time depends on the "
       + "server's locale: booking-requests/RequestQueueBoard.tsx (twice) and patients/import/"
       + "ImportClient.tsx. Fix the three call sites, then move this entry into INCLUDED.",
-  },
-  {
-    file: "pui-a11y-harness.ts",
-    reason:
-      "RED ON A REAL DEFECT (55/56). Three aria-modal surfaces never call useModalFocus, so keyboard "
-      + "focus is neither trapped nor restored: practice/(shell)/PracticeSessionGuard.tsx, "
-      + "practice/(shell)/PracticeShortcuts.tsx, super-admin/_components/HqSearchLauncher.tsx.",
-  },
-  {
-    file: "pui-components-harness.ts",
-    reason:
-      "RED ON A REAL DEFECT, same family as pui-a11y above. The shared dialog and drawer do not restore "
-      + "focus on close, do not wrap Tab at both ends, and a destructive dialog does not focus CANCEL "
-      + "first — so a stray Enter is not safe. Likely one fix closes both this and pui-a11y.",
   },
   {
     file: "pui-header-harness.ts",

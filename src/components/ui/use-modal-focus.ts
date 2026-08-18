@@ -29,9 +29,21 @@ export function useModalFocus(
   open: boolean,
   panel: RefObject<HTMLElement | null>,
   onDismiss: () => void,
-  opts: { /** Skip the leading element -- e.g. focus Cancel rather than a close X. */ initialIndex?: number } = {},
+  opts: {
+    /** Skip the leading element -- e.g. focus Cancel rather than a close X. */
+    initialIndex?: number;
+    /**
+     * ⚠ FOR THE LOCK SCREEN, AND ESSENTIALLY NOTHING ELSE. A cover that a keypress dismisses is a
+     * screensaver, so PracticeSessionGuard cannot take the Escape behaviour every other dialog wants.
+     * It still needs the other two parts, and needs them badly: its own hand-rolled trap was bound to
+     * the panel's onKeyDown, so it only engaged once focus was ALREADY inside -- and nothing moved
+     * focus in. A keyboard user locked out mid-record kept focus on the record underneath and went on
+     * Tabbing through the very thing the cover exists to hide.
+     */
+    dismissOnEscape?: boolean;
+  } = {},
 ) {
-  const { initialIndex = 0 } = opts;
+  const { initialIndex = 0, dismissOnEscape = true } = opts;
 
   useEffect(() => {
     if (!open) return;
@@ -52,7 +64,7 @@ export function useModalFocus(
     (initial ?? panel.current)?.focus();
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); onDismiss(); return; }
+      if (e.key === "Escape" && dismissOnEscape) { e.preventDefault(); onDismiss(); return; }
       if (e.key !== "Tab") return;
       const f = focusables();
       if (!f.length) { e.preventDefault(); return; }
@@ -70,5 +82,5 @@ export function useModalFocus(
       // Guard against restoring to something React has since unmounted.
       if (restore?.isConnected) restore.focus();
     };
-  }, [open, panel, onDismiss, initialIndex]);
+  }, [open, panel, onDismiss, initialIndex, dismissOnEscape]);
 }

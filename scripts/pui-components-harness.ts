@@ -28,6 +28,14 @@ async function main() {
   const primitives = read("primitives.tsx");
   const clinical = read("clinical.tsx");
   const interactive = read("interactive.tsx");
+  // ⚠ THE FOCUS BEHAVIOUR MOVED, AND THIS HARNESS DID NOT FOLLOW IT (corrected 2026-08-19). Three checks
+  // below used to grep interactive.tsx for `restore.current?.focus()`, `first.focus()` and
+  // `focusables()[0]?.focus()`. Those lines are real, but they live in use-modal-focus.ts now: the
+  // implementation was lifted out of ConfirmDialog so Modal and Drawer could stop hand-rolling it. The
+  // components were CORRECT and this harness was RED -- pinned to where the code used to be rather than
+  // to what it does. Read both files, assert the behaviour where it lives, and separately assert that
+  // each modal surface still consumes it, which is the part that actually stops regressing.
+  const modalFocus = fs.readFileSync(path.join(process.cwd(), "src", "components", "ui", "use-modal-focus.ts"), "utf8");
   const all = `${primitives}\n${clinical}\n${interactive}`;
 
   // ── 1. Server/client split is deliberate ──
@@ -93,11 +101,27 @@ async function main() {
     "error and critical alerts use role=alert; calmer tones use role=status");
   check(interactive.includes('aria-modal="true"'), "dialog and drawer are modal dialogs");
   check(interactive.includes('aria-labelledby="cmp-dialog-title"'), "the dialog is labelled by its own heading");
-  check(interactive.includes("restore.current?.focus()"), "dialog and drawer restore focus on close");
+  check(/restore(\.current)?(\?)?\.focus\(\)/.test(modalFocus), "the modal focus hook restores focus on close");
   // The trap is written as a guard clause (`if (e.key !== "Tab") return`), so match on the wrap-around
   // behaviour that actually constitutes trapping rather than on one spelling of the key test.
-  check(/e\.key !== "Tab"|e\.key === "Tab"/.test(interactive) && interactive.includes("last.focus()") && interactive.includes("first.focus()"),
-    "the dialog traps Tab focus (wraps at both ends)");
+  check(/e\.key !== "Tab"|e\.key === "Tab"/.test(modalFocus) && modalFocus.includes("last.focus()") && modalFocus.includes("first.focus()"),
+    "the modal focus hook traps Tab (wraps at both ends)");
+  // ⚠ AND THE PART THAT ACTUALLY REGRESSES. A correct hook nobody calls protects nothing -- which is
+  // exactly what pui-a11y caught on three surfaces the same day. Every modal surface in this file must
+  // consume it, so deleting a call is what goes red rather than only editing the hook.
+  check((interactive.match(/useModalFocus\s*\(/g) ?? []).length >= 3,
+    "Modal, ConfirmDialog and Drawer each consume the shared focus hook",
+    `${(interactive.match(/useModalFocus\s*\(/g) ?? []).length} call(s)`);
+  // ⚠ COUNTED WITH COMMENTS STRIPPED, AND THE FIRST DRAFT OF THIS LINE DID NOT DO THAT. It compared raw
+  // occurrences and went red at 5 vs 3 -- because `aria-modal` is discussed twice in this file's own
+  // header prose. A count that includes the commentary about a thing is not a count of the thing, which
+  // is the same failure that made five routes look capability-gated on the estate plane. Strip first.
+  const code = interactive.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  const modalSurfaces = (code.match(/aria-modal="true"/g) ?? []).length;
+  const hookCalls = (code.match(/useModalFocus\s*\(/g) ?? []).length;
+  check(modalSurfaces === hookCalls,
+    "every aria-modal surface here has exactly one focus-hook call -- no surface makes the promise without keeping it",
+    `${modalSurfaces} aria-modal surface(s), ${hookCalls} hook call(s)`);
   check(interactive.includes('role="tablist"') && interactive.includes('role="tabpanel"'), "Tabs implement the ARIA tabs pattern");
   check(/ArrowRight/.test(interactive) && /ArrowLeft/.test(interactive), "Tabs support arrow-key roving focus");
   check(/tabIndex={on \? 0 : -1}/.test(interactive), "only the active tab is in the tab order");
@@ -115,8 +139,19 @@ async function main() {
     "the critical toast's dismiss control is labelled Acknowledge, not Dismiss");
 
   // ── 9. Destructive confirmation defaults to the safe option ──
-  check(interactive.includes("focusables()[0]?.focus()") && interactive.includes("Focus the CANCEL control first"),
-    "a destructive dialog focuses CANCEL first, so a stray Enter is safe");
+  // ⚠ REWRITTEN FROM A COMMENT MATCH TO THE MECHANISM (2026-08-19). This asserted the literal string
+  // "Focus the CANCEL control first" -- a needle that matched its own explanatory comment, so deleting
+  // the safety behaviour while keeping the sentence would have stayed green. What actually makes a stray
+  // Enter safe is two facts together: the hook focuses the FIRST focusable, and ConfirmDialog renders
+  // Cancel BEFORE Confirm. Assert both, and assert the ordering by position rather than by prose.
+  const confirmBody = interactive.slice(interactive.indexOf("export function ConfirmDialog"));
+  const cancelAt = confirmBody.indexOf("onClick={onCancel}");
+  const confirmAt = confirmBody.indexOf("onClick={onConfirm}");
+  check(/focusables\(\)\[initialIndex\]\s*\?\?\s*focusables\(\)\[0\]/.test(modalFocus) || /focusables\(\)\[0\]/.test(modalFocus),
+    "the hook lands on the first focusable by default");
+  check(cancelAt > -1 && confirmAt > -1 && cancelAt < confirmAt,
+    "a destructive dialog focuses CANCEL first, so a stray Enter is safe",
+    cancelAt > -1 && confirmAt > -1 ? `cancel at ${cancelAt}, confirm at ${confirmAt}` : "one of the two controls was not found");
 
   console.log(`\n${pass}/${pass + fail} checks passed.`);
   process.exit(fail ? 1 : 0);

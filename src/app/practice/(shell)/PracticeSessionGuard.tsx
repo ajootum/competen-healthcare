@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { createClient } from "@/lib/supabase/client";
 import {
   idleDecision, shouldHeartbeat, SESSION_ACTIVITY_EVENTS, SESSION_PREVIEW_EVENT,
@@ -348,14 +349,16 @@ function LockScreen({ cause, preview, onClosePreview, onUnlocked }: {
 
   // Keep Tab inside the panel. Not a convenience: without it a keyboard user walks straight into the
   // patient record underneath and reads out the thing the cover exists to hide.
-  const trap = (e: React.KeyboardEvent) => {
-    if (e.key !== "Tab" || !panel.current) return;
-    const focusable = panel.current.querySelectorAll<HTMLElement>("input, button");
-    if (focusable.length === 0) return;
-    const firstEl = focusable[0], lastEl = focusable[focusable.length - 1];
-    if (e.shiftKey && document.activeElement === firstEl) { e.preventDefault(); lastEl.focus(); }
-    else if (!e.shiftKey && document.activeElement === lastEl) { e.preventDefault(); firstEl.focus(); }
-  };
+  //
+  // ⚠ THIS WAS HAND-ROLLED AND THE HAND-ROLLED VERSION WAS INERT IN THE CASE THAT MATTERS. It bound the
+  // trap to the panel's own onKeyDown, so it only ran once focus was ALREADY inside the panel -- and
+  // nothing ever moved focus in. Somebody locked out mid-record kept focus on the record, where the
+  // panel's handler never fires, and went on Tabbing through exactly what the cover exists to hide.
+  // The shared hook listens on the document and moves focus in first, which is what closes that hole.
+  //
+  // Escape stays disabled, which is why the hook grew the option rather than this file keeping its own
+  // copy: a lock screen a keypress dismisses is a screensaver. onDismiss is therefore never called.
+  useModalFocus(true, panel, () => {}, { dismissOnEscape: false });
 
   async function unlock(e: React.FormEvent) {
     e.preventDefault();
@@ -382,7 +385,7 @@ function LockScreen({ cause, preview, onClosePreview, onUnlocked }: {
   const titleId = "practice-lock-title";
   return (
     <div
-      role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={trap}
+      role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}
       className="fixed inset-0 z-[100] flex items-center justify-center bg-[var(--cp-shell)] p-6"
     >
       <div ref={panel} className="w-full max-w-md rounded-2xl bg-white p-7">

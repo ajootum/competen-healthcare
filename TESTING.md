@@ -13,7 +13,7 @@ review looking covered.
 |---|---|---|---|
 | Unit | Vitest | Does this function do what it claims, in isolation? | **CI, every push/PR, blocking** |
 | Smoke | Playwright | Does the app boot and serve its critical routes? | **Not yet wired.** Installed (`@playwright/test`), zero spec/config files exist. Deferred — see below. |
-| Acceptance | 212 scripts under `scripts/*-harness.ts` | Does a specific, spec-derived invariant hold against the real system — a constraint, a boundary, a governance rule proven by a write that fails? | **22 in CI, blocking** (`scripts/ci-harnesses.ts`). The other 190 are local-only, run by a person with real credentials. See `docs/HARNESS-INVENTORY.md`. |
+| Acceptance | 213 scripts under `scripts/*-harness.ts` | Does a specific, spec-derived invariant hold against the real system — a constraint, a boundary, a governance rule proven by a write that fails? | **25 in CI, blocking** (`scripts/ci-harnesses.ts`). The other 188 are local-only, run by a person with real credentials. See `docs/HARNESS-INVENTORY.md`. |
 
 ## Unit tests (Vitest) — CI, blocking
 
@@ -52,12 +52,11 @@ substitute for reading it:
 
   ⚠ **`pure/local` did not mean `CI-safe`, and the gap was not small.** Ten of the 32 do not belong in CI:
 
-  - **Six are RED on real, pre-existing defects** the pass discovered rather than introduced: three
-    clinical timestamps rendered with no explicit locale (`clock-format`); three `aria-modal` surfaces
-    that never trap or restore keyboard focus, plus a shared dialog that doesn't wrap Tab and a
-    destructive dialog that doesn't focus CANCEL first (`pui-a11y`, `pui-components`); sign out rendered
-    in the super-admin sidebar (`pui-header`); stray text in the collapsed icon rail (`umw-nav`); and
-    `security-headers`, which also needs a built and started server.
+  - **Six were RED on real, pre-existing defects** the pass discovered rather than introduced. **Two are
+    now fixed and in CI** (see below); the rest remain excluded with the defect named: three clinical
+    timestamps rendered with no explicit locale (`clock-format`); sign out rendered in the super-admin
+    sidebar (`pui-header`); stray text in the collapsed icon rail (`umw-nav`); and `security-headers`,
+    which also needs a built and started server.
   - **Four would have reported green for a reason unrelated to what they check**: `practice-bundle` skips
     to PEND without a build and still exits 0; `practice-outbox-durability` needs a dev server and Chrome,
     and only passed screening because a dev server happened to be running; `pui-migration` compares a
@@ -65,7 +64,24 @@ substitute for reading it:
     via `loadEnvConfig` — which is how it survived an `env -u` scrub and reported real data.
 
   Wiring all 32 in on the strength of the tier label would have produced a pipeline born red **and** four
-  checks that pass while proving nothing. `scripts/ci-harnesses.ts` records every exclusion with its
+  checks that pass while proving nothing.
+
+  **`pui-a11y` and `pui-components` are now fixed and in CI (2026-08-19) — and they were red for opposite
+  reasons, which is why both had to be read rather than assumed:**
+
+  - **`pui-a11y` was right.** Two surfaces declared `aria-modal="true"` while Tab walked out behind the
+    overlay (`PracticeShortcuts`, `HqSearchLauncher`), and a third — the lock screen — had a hand-rolled
+    trap bound to its own panel's `onKeyDown`, so it **only engaged once focus was already inside, and
+    nothing moved focus in**. Somebody locked out mid-record kept focus on the record. All three now use
+    `useModalFocus`; the hook gained a `dismissOnEscape` option so the lock screen keeps its no-Escape
+    semantics instead of keeping its own broken copy.
+  - **`pui-components` was itself stale.** It asserted that the focus implementation lived in
+    `interactive.tsx`, but a refactor had moved it into `use-modal-focus.ts` — the components were
+    correct and the harness was pinned to where the code used to be. Its checks now assert the behaviour
+    where it lives *and* that every modal surface still consumes it, which is the part that actually
+    regresses. One check also matched its own explanatory comment (`"Focus the CANCEL control first"`)
+    and now asserts the mechanism instead: the hook focuses the first focusable, and Cancel is rendered
+    before Confirm, verified by source position. `scripts/ci-harnesses.ts` records every exclusion with its
   reason, prints them on every run, and fails if a newly added `pure/local` harness lands in neither list.
   The six red ones are tracked bugs, not disappeared ones — fixing each and moving it into `INCLUDED` is
   the intended end state.
