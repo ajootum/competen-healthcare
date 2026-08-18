@@ -79,7 +79,12 @@ function disclosureMask(src: string): boolean[] {
  * touching the loader at all. Pin 4 checks every render site of every carrier field, so this mask is
  * trusted only for as long as that pin holds.
  */
-const CARRIER_FIELDS = ["citation", "cite", "evidence", "migration"];
+// ⚠ "evidence" WAS ON THIS LIST AND SHOULD NEVER HAVE BEEN. It looked like a citation carrier and is
+// not: pd-mission.ts uses `evidence:` for plain-English sentences that render VISIBLY, so listing it here
+// granted forgiveness to a field a reader cannot avoid — the exact opposite of what this harness is for.
+// Product Health then collided with it from the other side, using `evidence` for a Figure. A carrier is a
+// field whose contents reach the reader only behind a <details>, and only these three qualify.
+const CARRIER_FIELDS = ["citation", "cite", "migration"];
 
 /**
  * Blank the VALUE of any carrier field written inline, so the line can still be scanned for what is

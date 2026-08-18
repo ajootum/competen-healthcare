@@ -1,4 +1,11 @@
 import { mayRender, absenceSentence } from "@/lib/hq/pd-metric-registry";
+import {
+  healthStateFor, type Domain, type Coverage, type AttentionSignal, type Freshness,
+} from "@/lib/hq/pd-health-model";
+
+// The spec's vocabulary is re-exported from here so a page has ONE import for the module rather than
+// having to know which half of it a symbol lives in.
+export * from "@/lib/hq/pd-health-model";
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 // CPR-PD-008 — PRODUCT HEALTH, the loader.
@@ -361,6 +368,132 @@ export const HEALTH_SUBMODULES = [
  */
 export const HEALTH_HEADLINE =
   "The platform's own machinery is instrumented. Competen Practice is not.";
+
+/**
+ * CPR-PD-008 §3 region B — the nine health domains, each with its §11 coverage and its §4 state.
+ *
+ * ⚠ EVERY OBJECTIVE ARGUMENT BELOW IS `null`, AND THAT IS THE FINDING RATHER THAN A PLACEHOLDER. §4
+ * defines Healthy as evidence MEETING a defined objective; this product declares no target availability,
+ * no latency budget and no error budget. So even the three fully instrumented domains resolve to
+ * Unknown, and the screen says why. The day an objective is configured, it is passed here and the
+ * domain starts resolving — no view changes.
+ *
+ * ⚠ AND GATING IS SET FROM §5, NOT FROM WHAT HAPPENS TO BE MEASURED. Critical journeys and availability
+ * gate. Both are unmeasured, so the overall state is Unknown — which is the correct answer to "is
+ * Practice dependable?" and the one a coloured average would have hidden.
+ */
+export function healthDomains(h: HealthPayload): Domain[] {
+  const d = (
+    key: string, label: string, question: string, href: string,
+    coverage: Coverage, evidence: Figure | null, evidenceLabel: string | null, gating: boolean,
+    fallbackWhy: string,
+  ): Domain => {
+    const { state, why } = healthStateFor(evidence, null);
+    return {
+      key, label, question, href, coverage, evidence, evidenceLabel, gating,
+      state,
+      why: coverage === "measured" || coverage === "partial" ? why : fallbackWhy,
+    };
+  };
+
+  return [
+    d("availability", "Availability", "Can practitioners reach the product?", "/super-admin/pd/health/availability",
+      "absent", null, null, true, absenceSentence("hlt.availability")),
+    d("performance", "Performance (P95)", "Can they use it at acceptable speed?", "/super-admin/pd/health/availability",
+      "absent", null, null, false, absenceSentence("hlt.request_latency_p95")),
+    d("errors", "Error rate", "What is failing, at what rate?", "/super-admin/pd/health/errors",
+      "partial", h.ai.failureShare, "share of AI requests that errored — not a product error rate", false,
+      absenceSentence("hlt.error_rate")),
+    d("workflows", "Workflow Health", "Can practitioners complete critical journeys?", "/super-admin/pd/health/workflows",
+      "absent", null, null, true, absenceSentence("hlt.journey_health")),
+    d("data_sync", "Data & Sync", "Are writes, sync and the offline queue healthy?", "/super-admin/pd/health/data-sync",
+      "refused", null, null, false, absenceSentence("hlt.sync_health")),
+    d("integrations", "Integrations", "Are external dependencies working?", "/super-admin/pd/health/integrations",
+      "partial", h.ai.requests, "AI provider calls — the only dependency with a call log", false,
+      absenceSentence("hlt.integrations")),
+    d("communications", "Communications", "Are messages being delivered?", "/super-admin/pd/health/communications",
+      "refused", null, null, false, absenceSentence("hlt.communications_delivery")),
+    d("ai", "AI Health", "Are AI services available and timely?", "/super-admin/pd/health/ai",
+      "measured", h.ai.latencyP95, "95th percentile AI round trip, in milliseconds", false, ""),
+    d("security", "Security Signals", "Any material product-security signals?", "/super-admin/pd/health/security-signals",
+      "absent", null, null, false, absenceSentence("hlt.security_signals")),
+  ];
+}
+
+/**
+ * §9's ranked signals, DERIVED from the logs this plane can read.
+ *
+ * ⚠ A DERIVED SIGNAL IS NOT A DEGRADATION RECORD, AND THE PANEL SAYS SO ON EVERY ROW. Each carries the
+ * §9 fields it can fill and names the ones it cannot: no status, because nothing here has a lifecycle;
+ * no owner, because nobody has ever been assigned one; no quantified practice impact, because no log
+ * records which practices a failure touched.
+ */
+export function attentionSignals(h: HealthPayload): AttentionSignal[] {
+  const out: AttentionSignal[] = [];
+  const MISSING = ["status", "owner", "quantified practice impact"];
+
+  if (h.ai.failures.state === "value" && h.ai.failures.value > 0) {
+    out.push({
+      signalId: "derived.ai_errors",
+      title: `${h.ai.failures.value} AI request${h.ai.failures.value === 1 ? "" : "s"} errored`,
+      severity: "degraded",
+      startedAt: null,
+      scope: "The AI service across the platform. The log carries a tenant, and a Practice has none, so this cannot be narrowed to a practice.",
+      impact: h.ai.failureShare.state === "value"
+        ? `${(h.ai.failureShare.value * 100).toFixed(1)}% of AI requests in the window`
+        : "not quantifiable — the share could not be computed",
+      evidence: "The platform AI request log, counted over the module window.",
+      actionRoute: { label: "AI Health", href: "/super-admin/pd/health/ai" },
+      missingFields: MISSING,
+    });
+  }
+
+  if (h.events.warning.state === "value" && h.events.warning.value > 0) {
+    out.push({
+      signalId: "derived.platform_warnings",
+      title: `${h.events.warning.value} platform event${h.events.warning.value === 1 ? "" : "s"} at warning severity`,
+      severity: "degraded",
+      startedAt: null,
+      scope: "The platform event log. Events carry a type and a severity, and no journey or component.",
+      impact: "not quantifiable — an event is a log line, not an affected session count",
+      evidence: "The platform event log, counted over the module window.",
+      actionRoute: { label: "Errors & Failures", href: "/super-admin/pd/health/errors" },
+      missingFields: MISSING,
+    });
+  }
+
+  if (h.jobs.failures.state === "value" && h.jobs.failures.value > 0) {
+    out.push({
+      signalId: "derived.job_failures",
+      title: `${h.jobs.failures.value} background job run${h.jobs.failures.value === 1 ? "" : "s"} failed`,
+      severity: "degraded",
+      startedAt: null,
+      scope: "Background components only. §8 is explicit that job success is not availability.",
+      impact: "not quantifiable — no job run records which practices its work served",
+      evidence: "The platform job-run log, counted over the module window.",
+      actionRoute: { label: "Services & Components", href: "/super-admin/pd/health/services" },
+      missingFields: MISSING,
+    });
+  }
+
+  return out;
+}
+
+/** §5's freshness envelope for a payload read at request time. */
+export function freshnessOf(h: HealthPayload): Freshness {
+  const end = new Date(h.readAt);
+  const start = new Date(end.getTime() - h.windowDays * 86_400_000);
+  return {
+    observedAt: h.readAt,
+    windowStart: start.toISOString(),
+    windowEnd: end.toISOString(),
+    // ⚠ THIS PAGE IS READ AT REQUEST TIME AND CACHES NOTHING, so the observation is always current and
+    // never stale. The threshold is declared anyway because §5 requires every signal to carry one, and
+    // because the day any of this is cached or snapshotted the field is already here to be honoured.
+    thresholdMinutes: 5,
+    stale: false,
+  };
+}
 
 export const HEALTH_HEADLINE_BODY =
   "AI calls, background job runs and platform events are recorded and are counted here honestly. What "

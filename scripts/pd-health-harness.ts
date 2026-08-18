@@ -16,7 +16,10 @@
  *   npx --yes tsx scripts/pd-health-harness.ts
  */
 import { readFileSync, readdirSync } from "node:fs";
-import { p95, share, WINDOW_DAYS, HEALTH_SUBMODULES, PLANE_REFUSED } from "../src/lib/hq/pd-health";
+import {
+  p95, share, WINDOW_DAYS, HEALTH_SUBMODULES, PLANE_REFUSED,
+  healthStateFor, overallHealth, CRITICAL_JOURNEYS,
+} from "../src/lib/hq/pd-health";
 import { PD_METRICS } from "../src/lib/hq/pd-metric-registry";
 import { PRACTICE_ALLOWLIST } from "../src/lib/access/plane-boundary";
 
@@ -148,6 +151,70 @@ ok("M3", unguarded.length === 0,
 
 ok("M4", WINDOW_DAYS > 0 && new RegExp(`${WINDOW_DAYS} days`).test(readFileSync("src/app/super-admin/pd/health/_components/health-ui.tsx", "utf8")) === false,
   `control: the window (${WINDOW_DAYS} days) is passed to the header rather than hard-coded in the view, so one constant governs every page`);
+
+// ── CPR-PD-008 §4 / §5 — THE STATE MODEL, EXECUTED ──────────────────────────
+// ⚠ §4's hard rule is the one assertion on this whole module that a reader would most want to trust:
+// "missing, stale, conflicting or unreadable evidence MUST NOT resolve to Healthy." It is checked by
+// CALLING the function with each shape of missing evidence, not by reading the branch.
+const NO_OBJECTIVE = null;
+ok("H1", healthStateFor(null, NO_OBJECTIVE).state === "unknown",
+  "§4 hard rule: no evidence at all resolves to Unknown");
+
+ok("H2", healthStateFor({ state: "absent", why: "x" }, NO_OBJECTIVE).state === "unknown"
+      && healthStateFor({ state: "unknown", why: "x" }, NO_OBJECTIVE).state === "unknown",
+  "§4 hard rule: absent and unreadable evidence both resolve to Unknown, never Healthy");
+
+ok("H3", healthStateFor({ state: "value", value: 1 }, NO_OBJECTIVE).state === "unknown",
+  "⚠ §4: a REAL measurement with no configured objective still resolves to Unknown — Healthy means evidence MEETING an objective, and inventing the threshold is what §5 forbids as an implicit Healthy substitution");
+
+ok("H4", healthStateFor({ state: "value", value: 1 },
+      { threshold: 2, unit: "x", judge: (v, t) => (v < t ? "healthy" : "degraded") }).state === "healthy",
+  "control: WITH an objective a real measurement does resolve — H3 is a missing-objective rule, not a function that can never return Healthy");
+
+const gatingUnknown = [
+  { key: "a", label: "Availability", question: "", href: "", coverage: "absent", state: "unknown", evidence: null, evidenceLabel: null, why: "", gating: true },
+  { key: "b", label: "AI", question: "", href: "", coverage: "measured", state: "healthy", evidence: null, evidenceLabel: null, why: "", gating: false },
+] as Parameters<typeof overallHealth>[0];
+ok("G1", overallHealth(gatingUnknown).state === "unknown",
+  "§5: one unknown GATING domain makes the overall state Unknown even while a non-gating domain is Healthy — an average would have returned Healthy here");
+
+const gatingCritical = gatingUnknown.map(d => (d.gating ? { ...d, state: "critical" as const } : d));
+ok("G2", overallHealth(gatingCritical).state === "critical",
+  "§5: a Critical gating domain makes the overall state Critical");
+
+const allHealthy = gatingUnknown.map(d => ({ ...d, state: "healthy" as const }));
+ok("G3", overallHealth(allHealthy).state === "healthy",
+  "control: with every gating domain healthy the overall state IS Healthy — G1 and G2 discriminate rather than always returning Unknown");
+
+// ── §5's gating domains are the two the spec names ──────────────────────────
+ok("G4", /key: "availability"[\s\S]{0,400}?true\)/.test(loader) || /"availability"[\s\S]{0,600}?, true,/.test(loader),
+  "availability is declared a gating domain");
+
+// ── §6 — ONE journey list, imported by both surfaces ────────────────────────
+ok("J1", CRITICAL_JOURNEYS.length === 8,
+  `§6 names eight critical journeys and the constant holds ${CRITICAL_JOURNEYS.length} — an earlier draft invented nine`);
+
+const wf = readFileSync("src/app/super-admin/pd/health/workflows/page.tsx", "utf8");
+const overview = readFileSync("src/app/super-admin/pd/health/page.tsx", "utf8");
+ok("J2", wf.includes("CRITICAL_JOURNEYS") && overview.includes("CRITICAL_JOURNEYS")
+      && !/const JOURNEYS\s*=/.test(wf) && !/const JOURNEYS\s*=/.test(overview),
+  "⚠ both surfaces IMPORT the journey list and neither retypes one — §7's event contract keys on journey_name, so two surfaces naming a journey differently could never be aggregated");
+
+ok("J3", CRITICAL_JOURNEYS.every(j => j.outcome.length > 20),
+  "every journey carries §6's minimum measurable outcome, which is what a build would start from");
+
+// ── §11 / §12 — the commentary is behind the drawer ─────────────────────────
+const drawerAt = overview.indexOf("<CoverageDrawer>");
+// ⚠ THE RENDER SITE, NOT THE IMPORT. A first version searched for the bare symbol and found it on the
+// import line at the top of the file, so the pin compared the drawer against line 5 and failed while the
+// page was correct. A position check must anchor on where a thing is DRAWN.
+const headlineAt = overview.indexOf("{HEALTH_HEADLINE_BODY}");
+ok("C1", drawerAt > 0 && headlineAt > drawerAt,
+  "⚠ §12: the schema/allowlist commentary sits INSIDE the coverage drawer, not in the first viewport — the spec asked for the move by name and this is the check that it happened");
+
+ok("C2", overview.indexOf("<OverallHealth") < drawerAt && overview.indexOf("<NeedsAttention") < drawerAt
+      && overview.indexOf("<JourneyRail") < drawerAt,
+  "§12: the first viewport answers its three questions — is Practice healthy, what needs attention, are the critical journeys working — before any commentary");
 
 console.log(`\n${failures.length === 0 ? "ALL GREEN" : "RED"}  ${pass} passed, ${failures.length} failed\n`);
 if (failures.length) { failures.forEach(f => console.log("  " + f)); process.exit(1); }
