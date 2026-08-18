@@ -70,7 +70,38 @@ function DarkCell({ reason }: { reason: keyof typeof DARK | string }) {
 
 function BandCell({ band }: { band: Band }) {
   if (band === null) return <span className="text-[11px] italic text-[var(--cmp-text-warning)]">not readable</span>;
-  return <span className="tabular-nums text-gray-700">{band}</span>;
+  // ⚠ A FIGURE THAT MEANS SOMETHING CARRIES THE WEIGHT OF ONE. Rendering every cell at the same grey is
+  // what turns a scan-in-ten-seconds table into one read word by word — the recorded colour lesson,
+  // raised by the owner three times now, and a LEGIBILITY failure rather than a decorative one.
+  return <span className="font-semibold tabular-nums text-gray-900">{band}</span>;
+}
+
+/**
+ * The practice's initials, as the comp leads each row with.
+ *
+ * ⚠ THE HUE IS DERIVED FROM THE NAME AND CARRIES NO MEANING, WHICH IS WHY IT IS SAFE. §18's rule is
+ * never to encode state in colour alone; this encodes IDENTITY, so that a row a reader has seen before
+ * is recognisable at a glance without the colour claiming anything about how the practice is doing.
+ * State colour on this row belongs to lifecycle, health and attention, and those all print their word.
+ */
+const AVATAR_TONES = [
+  "bg-teal-100 text-teal-800", "bg-sky-100 text-sky-800", "bg-violet-100 text-violet-800",
+  "bg-amber-100 text-amber-800", "bg-rose-100 text-rose-800", "bg-emerald-100 text-emerald-800",
+];
+
+function PracticeAvatar({ name }: { name: string }) {
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("") || "?";
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return (
+    <span
+      aria-hidden
+      className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[10.5px] font-bold ${
+        AVATAR_TONES[hash % AVATAR_TONES.length]}`}
+    >
+      {initials}
+    </span>
+  );
 }
 
 function LifecycleBadge({ status }: { status: string }) {
@@ -263,7 +294,7 @@ export default async function Page(
                       arrives it renders. Nothing here has to be switched on, and — the half that
                       actually bites — nobody has to remember to delete a refusal that has come true.
                       Three of these were already stale when this was rewritten. */}
-                  <tr className="text-left text-[10px] uppercase tracking-wide text-gray-400">
+                  <tr className="border-b border-gray-200 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">
                     <th scope="col" className="py-1 pr-3">Practice</th>
                     <th scope="col" className="py-1 pr-3">Owner / handle</th>
                     <th scope="col" className="py-1 pr-3">Market</th>
@@ -280,13 +311,19 @@ export default async function Page(
                 </thead>
                 <tbody>
                   {estate.rows.map(r => (
-                    <tr key={r.id} className="border-t border-gray-100 align-top">
-                      <td className="py-1.5 pr-3">
-                        <Link href={practiceHref(r.id)} className="font-semibold text-gray-900 underline">
-                          {r.name}
-                        </Link>
-                        <span className="ml-1.5 text-[10px] text-gray-400">
-                          {r.type === "managed_practice" ? "managed" : "individual"}
+                    <tr key={r.id} className="border-t border-gray-100 align-middle transition-colors hover:bg-gray-50">
+                      <td className="py-2 pr-3">
+                        <span className="flex items-center gap-2">
+                          <PracticeAvatar name={r.name} />
+                          <span className="min-w-0">
+                            <Link href={practiceHref(r.id)}
+                              className="block truncate font-semibold text-gray-900 hover:text-teal-700 hover:underline">
+                              {r.name}
+                            </Link>
+                            <span className="block text-[10px] text-gray-500">
+                              {r.country} · {r.type === "managed_practice" ? "managed" : "individual"}
+                            </span>
+                          </span>
                         </span>
                       </td>
                       {/* ⚠ D1: the owner's NAME. Their email is not in this payload to fall back to. */}
