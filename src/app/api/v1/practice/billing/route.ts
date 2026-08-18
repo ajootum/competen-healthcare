@@ -128,7 +128,6 @@ export async function POST(req: NextRequest) {
     // shape HAS attempted to generate an invoice, and a denominator that excluded malformed attempts
     // would quietly flatter the success rate exactly when a client was sending rubbish.
     case "createDraftInvoice": {
-      const startedAt = Date.now();
       const base = {
         practiceId: ctx.workspaceId,
         practitionerId: caller.userId,
@@ -137,6 +136,13 @@ export async function POST(req: NextRequest) {
       } as const;
 
       await emitEvent(caller.admin, { ...base, eventName: "practice.invoice.generate_attempted", outcome: "started" });
+
+      // ⚠ THE CLOCK STARTS AFTER THE ATTEMPT EMIT, AND IT DID NOT USED TO. With it above, every
+      // journey's duration included the round trip that RECORDED the attempt - a validation failure
+      // returning immediately reported 440ms, almost all of it telemetry. The instrumentation was
+      // measuring itself and inflating the latency of the journeys it exists to observe. Only running
+      // the screen showed it: the numbers were plausible, and wrong.
+      const startedAt = Date.now();
 
       const { res, failureCode } = await generateInvoice(caller, ctx, body, actor);
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type {
-  Figure, Sample, HealthState, Coverage, Domain, AttentionSignal, Freshness,
+  Figure, Sample, HealthState, Coverage, Domain, AttentionSignal, Freshness, JourneyHealth,
 } from "@/lib/hq/pd-health";
 import { HEALTH_STATE_LABEL, COVERAGE_LABEL } from "@/lib/hq/pd-health";
 
@@ -417,20 +417,56 @@ export function NeedsAttention({ signals }: { signals: AttentionSignal[] }) {
  * what its minimum measurable outcome would be instead. Eight cards reading "no attempts recorded" is a
  * far more useful screen than eight cards absent, because it says exactly what instrumenting costs.
  */
-export function JourneyRail({ journeys }: { journeys: readonly { key: string; name: string; outcome: string }[] }) {
+export function JourneyRail({ journeys }: { journeys: readonly JourneyHealth[] }) {
   return (
     <div className="overflow-x-auto">
       <div className="flex gap-2 pb-1" style={{ minWidth: "min-content" }}>
-        {journeys.map(j => (
-          <div key={j.key} className="flex w-[210px] shrink-0 flex-col rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-            <p className="text-[12px] font-semibold text-gray-900">{j.name}</p>
-            <p className="mt-1.5 text-[17px] font-bold leading-none text-gray-400">— / —</p>
-            <p className="mt-1 text-[10.5px] text-gray-500">no attempts recorded</p>
-            <div className="mt-2 h-1 w-full rounded-full bg-gray-200" />
-            <p className="mt-2 text-[10.5px] leading-snug text-gray-500">{j.outcome}</p>
-            <span className="mt-2"><StateBadge state="unknown" /></span>
-          </div>
-        ))}
+        {journeys.map(j => {
+          const measured = j.attempts !== null;
+          const rate = measured && j.attempts! > 0 ? (j.successes / j.attempts!) * 100 : null;
+          return (
+            <div key={j.key} className="flex w-[210px] shrink-0 flex-col rounded-lg border border-gray-200 bg-white px-3 py-2.5">
+              <p className="text-[12px] font-semibold text-gray-900">{j.name}</p>
+
+              {measured ? (
+                <>
+                  <p className="mt-1.5 text-[17px] font-bold leading-none tracking-tight text-gray-900 tabular-nums">
+                    {j.successes} / {j.attempts}
+                  </p>
+                  <p className="mt-1 text-[10.5px] text-gray-500">
+                    succeeded of attempted{rate !== null ? ` · ${rate.toFixed(0)}%` : ""}
+                  </p>
+                  {/* ⚠ THE BAR IS THE RATE, AND IT IS DRAWN ONLY WHEN THERE IS A RATE. An empty track under
+                      an unmeasured journey would read as nought per cent, which is the one reading that is
+                      certainly wrong. */}
+                  <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-gray-200">
+                    <div className="h-full rounded-full bg-teal-500" style={{ width: `${rate ?? 0}%` }} />
+                  </div>
+                  <p className="mt-2 text-[10.5px] leading-snug text-gray-500">
+                    {j.failures > 0
+                      ? <>{j.failures} failed{j.topFailure ? <> · <span className="font-mono text-[10px]">{j.topFailure.code}</span></> : null}</>
+                      : "no failures recorded"}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-1.5 text-[17px] font-bold leading-none text-gray-400">— / —</p>
+                  <p className="mt-1 text-[10.5px] text-gray-500">not instrumented</p>
+                  <div className="mt-2 h-1 w-full rounded-full bg-gray-200" />
+                  <p className="mt-2 text-[10.5px] leading-snug text-gray-500">{j.outcomeReq}</p>
+                </>
+              )}
+
+              {/* ⚠ BOTH READ UNKNOWN, AND A MEASURED ONE IS NOT ALLOWED TO READ BETTER. §4 defines a
+                  health state against a configured objective, and no journey has one — so a 100%
+                  success rate still cannot be called Healthy without inventing the target it passed.
+                  A first draft of this card gave measured journeys "Degraded", which asserts a state
+                  from a number rather than from an objective. The COVERAGE difference is carried by
+                  the figures and the words above, which is where it belongs. */}
+              <span className="mt-2"><StateBadge state="unknown" /></span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

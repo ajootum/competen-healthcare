@@ -42,10 +42,26 @@ function columnsOf(table: string): string[] {
     .map(l => /^\s+([a-z_]+)\s+/.exec(l)?.[1])
     .filter((c): c is string => !!c && !["constraint", "primary", "unique", "check", "foreign"].includes(c));
 }
-const tableExists = (t: string) => new RegExp(`create table (?:if not exists )?${t}\\b`, "i").test(migrations);
+/**
+ * ⚠ A VIEW IS AN OBJECT THE MATRIX MAY NAME, AND THIS ONLY UNDERSTOOD TABLES.
+ *
+ * The matrix cited mos_journey_event — the join from an event to its journey, which phase 2 created as a
+ * VIEW precisely so the mapping could not drift. Both helpers here looked only for `create table`, so a
+ * correct citation was reported as a missing table and a correct Practice-aware verdict was reported as
+ * wrong. The harness was describing a narrower world than the one the matrix documents.
+ */
+const viewBody = (name: string): string | null =>
+  new RegExp(`create (?:or replace )?view ${name}\\b([\\s\\S]*?);`, "i").exec(migrations)?.[1] ?? null;
+
+const objectExists = (t: string) =>
+  new RegExp(`create table (?:if not exists )?${t}\\b`, "i").test(migrations) || viewBody(t) !== null;
+
 const isPracticeAware = (t: string) => {
   const c = columnsOf(t);
-  return c.includes("practice_id") || c.includes("workspace_id");
+  if (c.length > 0) return c.includes("practice_id") || c.includes("workspace_id");
+  // a view has no column list to read, so its Practice-awareness is whether it SELECTS one
+  const body = viewBody(t);
+  return body !== null && /\bpractice_id\b|\bworkspace_id\b/.test(body);
 };
 
 // ── parse the matrix rows ───────────────────────────────────────────────────
@@ -78,9 +94,9 @@ ok("M1", rows.every(r => r.cells.every(c => c.length > 0)),
 
 // ── every named table exists ────────────────────────────────────────────────
 const named = [...new Set(rows.flatMap(r => r.tables))];
-const ghosts = named.filter(t => !tableExists(t));
+const ghosts = named.filter(t => !objectExists(t));
 ok("M2", ghosts.length === 0,
-  `every table the matrix names exists in the migrations (${named.length} distinct)${ghosts.length ? " — missing: " + ghosts.join(", ") : ""}`);
+  `every table or view the matrix names exists in the migrations (${named.length} distinct)${ghosts.length ? " — missing: " + ghosts.join(", ") : ""}`);
 
 ok("M3", named.length >= 15,
   `control: ${named.length} distinct tables were extracted — a regex that stopped matching would empty M2`);

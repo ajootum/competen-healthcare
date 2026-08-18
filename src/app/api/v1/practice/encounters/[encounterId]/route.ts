@@ -46,7 +46,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ en
     const auth = await requirePracticeContext("encounter.edit");
     if (isDenied(auth)) return auth;
 
-    const startedAt = Date.now();
     const base = {
       practiceId: auth.ctx.workspaceId,
       practitionerId: auth.caller.userId,
@@ -55,6 +54,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ en
     } as const;
 
     await emitEvent(auth.caller.admin, { ...base, eventName: "practice.encounter.save_attempted", outcome: "started" });
+
+    // ⚠ THE CLOCK STARTS AFTER THE ATTEMPT EMIT, AND IT DID NOT USED TO. With it above, every
+    // journey's duration included the round trip that RECORDED the attempt - a validation failure
+    // returning immediately reported 440ms, almost all of it telemetry. The instrumentation was
+    // measuring itself and inflating the latency of the journeys it exists to observe. Only running
+    // the screen showed it: the numbers were plausible, and wrong.
+    const startedAt = Date.now();
 
     const { res, failureCode } = await saveEncounterNote(encounterId, body, auth);
 

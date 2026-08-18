@@ -387,7 +387,18 @@ export const HEALTH_HEADLINE =
  * gate. Both are unmeasured, so the overall state is Unknown — which is the correct answer to "is
  * Practice dependable?" and the one a coloured average would have hidden.
  */
-export function healthDomains(h: HealthPayload): Domain[] {
+export function healthDomains(h: HealthPayload, journeys?: JourneyHealth[] | null): Domain[] {
+  // ⚠ WORKFLOW HEALTH IS THE ONE DOMAIN THAT MOVED, and it moved on COVERAGE, not on health. Six of the
+  // eight journeys now emit, so the evidence is partial rather than absent. The STATE stays unknown
+  // because §4 needs an objective and none is configured — a journey succeeding every time still cannot
+  // be called Healthy against a threshold nobody agreed.
+  const measured = (journeys ?? []).filter(j => j.attempts !== null).length;
+  const journeyCoverage: Coverage = journeys === null || journeys === undefined
+    ? "absent"
+    : measured === 0 ? "absent" : measured < journeys.length ? "partial" : "measured";
+  const journeyEvidence: Figure | null = measured > 0
+    ? { state: "value", value: measured }
+    : null;
   const d = (
     key: string, label: string, question: string, href: string,
     coverage: Coverage, evidence: Figure | null, evidenceLabel: string | null, gating: boolean,
@@ -410,7 +421,9 @@ export function healthDomains(h: HealthPayload): Domain[] {
       "partial", h.ai.failureShare, "share of AI requests that errored — not a product error rate", false,
       absenceSentence("hlt.error_rate")),
     d("workflows", "Workflow Health", "Can practitioners complete critical journeys?", "/super-admin/pd/health/workflows",
-      "absent", null, null, true, absenceSentence("hlt.journey_health")),
+      journeyCoverage, journeyEvidence,
+      journeys ? `of ${journeys.length} critical journeys instrumented` : null,
+      true, absenceSentence("hlt.journey_health")),
     d("data_sync", "Data & Sync", "Are writes, sync and the offline queue healthy?", "/super-admin/pd/health/data-sync",
       "refused", null, null, false, absenceSentence("hlt.sync_health")),
     d("integrations", "Integrations", "Are external dependencies working?", "/super-admin/pd/health/integrations",

@@ -183,6 +183,20 @@ async function main() {
     const post = src.slice(src.indexOf(`export async function ${method}`), src.indexOf(`async function ${r.handler}`));
     const firstEmitCall = post.indexOf("await emitEvent(");
     const guardAt = post.indexOf("isDenied(auth)) return auth");
+    // ⚠ THE CLOCK MUST START AFTER THE ATTEMPT EMIT, AND THIS PIN EXISTS BECAUSE IT DID NOT.
+    //
+    // Every route originally set startedAt above the attempt emit, so every journey's duration included
+    // the round trip that RECORDED the attempt. A validation failure returning immediately reported
+    // 440ms — almost all of it telemetry. The instrumentation was measuring itself, and inflating the
+    // latency of the journeys it exists to observe.
+    //
+    // Nothing in the source looked wrong; the numbers were plausible. It took opening the screen and
+    // asking why a missing-field rejection took nearly half a second.
+    const clockAt = src.indexOf("const startedAt = Date.now();");
+    const attemptEmitAt = src.indexOf('outcome: "started"');
+    ok(`T1:${tag}`, clockAt > 0 && attemptEmitAt > 0 && clockAt > attemptEmitAt,
+      "⚠ the duration clock starts AFTER the attempt is recorded, so a journey's latency is the journey and not the telemetry");
+
     ok(`S3:${tag}`, post.length > 0 && guardAt >= 0 && firstEmitCall > guardAt,
       `nothing is emitted before ${method}'s own capability guard, so an unauthorized caller cannot write telemetry`);
   }

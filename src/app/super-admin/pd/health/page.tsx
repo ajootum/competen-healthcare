@@ -3,7 +3,7 @@ import { requireHqCapability } from "@/lib/hq/context";
 import {
   loadPdHealth, HEALTH_SUBMODULES, HEALTH_REFUSALS, PLANE_REFUSED,
   HEALTH_HEADLINE, HEALTH_HEADLINE_BODY,
-  healthDomains, attentionSignals, freshnessOf, overallHealth, coverageTally, CRITICAL_JOURNEYS,
+  healthDomains, attentionSignals, freshnessOf, overallHealth, coverageTally, loadJourneyHealth,
 } from "@/lib/hq/pd-health";
 import {
   HealthHeader, Panel, Stat, Duration, Share, SampleNote, AbsentList, PlaneRefusal,
@@ -33,9 +33,9 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   await requireHqCapability("hq.practice.health.view");
   const admin = await createAdminClient();
-  const h = await loadPdHealth(admin);
+  const [h, journeys] = await Promise.all([loadPdHealth(admin), loadJourneyHealth(admin)]);
 
-  const domains = healthDomains(h);
+  const domains = healthDomains(h, journeys);
   const overall = overallHealth(domains);
   const tally = coverageTally(domains);
   const signals = attentionSignals(h);
@@ -87,12 +87,13 @@ export default async function Page() {
         title="Critical journeys"
         note="CPR-PD-008 §6. Workflow Health is the primary product-health differentiator, and it is the module's largest gap."
       >
-        <JourneyRail journeys={CRITICAL_JOURNEYS} />
+        <JourneyRail journeys={journeys ?? []} />
         <p className="mt-3 text-[11.5px] leading-relaxed text-gray-600">
-          ⚠ Every card is empty because no journey emits a start, completion or failure event. §12
-          requires a success count over an attempt count for a workflow rate; there is neither, so each
-          card names the minimum outcome §6 asks it to record instead. The gap is instrumentation, not a
-          query nobody wrote.
+          A card showing figures emits an attempt and exactly one outcome, so its rate divides successes
+          by attempts rather than being inferred from a failure count. A card reading &ldquo;not
+          instrumented&rdquo; emits nothing at all and names the minimum outcome §6 asks it to record —
+          that gap is instrumentation, not a query nobody wrote. ⚠ Every card still reads Unknown as a
+          STATE, measured or not, because §4 judges health against an objective and none is configured.
         </p>
       </Panel>
 

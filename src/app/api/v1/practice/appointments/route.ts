@@ -42,7 +42,6 @@ export async function POST(req: NextRequest) {
   const auth = await requirePracticeContext("appointment.manage");
   if (isDenied(auth)) return auth;
 
-  const startedAt = Date.now();
   const correlationId = auth.caller.traceId;
   const base = {
     practiceId: auth.ctx.workspaceId,
@@ -52,6 +51,13 @@ export async function POST(req: NextRequest) {
   } as const;
 
   await emitEvent(auth.caller.admin, { ...base, eventName: "practice.booking.started", outcome: "started" });
+
+  // ⚠ THE CLOCK STARTS AFTER THE ATTEMPT EMIT, AND IT DID NOT USED TO. With it above, every journey's
+  // duration included the round trip that RECORDED the attempt — a validation failure that returns
+  // immediately was reporting 440ms, almost all of it telemetry. The instrumentation was measuring
+  // itself and inflating the latency of the very journeys it exists to observe. Only running the screen
+  // showed it: the numbers were plausible, and wrong.
+  const startedAt = Date.now();
 
   const { res, failureCode } = await createAppointment(req, auth);
 
