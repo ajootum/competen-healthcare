@@ -167,14 +167,81 @@ export default async function Page() {
       {/* ── §6's control assurance, refused at source ────────────────────────────────────────────── */}
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-[13px] font-bold text-gray-900">Control assurance (§6)</h2>
-        <div className="mt-2 rounded-lg border border-dashed border-gray-300 bg-[var(--cmp-surface-neutral)] px-3 py-2.5">
-          <p className="text-[12px] font-bold text-gray-700">No control record exists yet.</p>
-          <p className="mt-1 max-w-4xl text-[11.5px] leading-relaxed text-gray-700">
-            So there is no assurance figure here — not a percentage, and not a count. When controls
-            exist this card shows <span className="font-semibold">assessed of total</span> with the
-            not-tested named separately, never a single effectiveness percentage.
+        {g.controls === null ? (
+          <p className="mt-2 text-[12px] leading-relaxed text-[var(--cmp-text-warning)]">
+            ⚠ The control store could not be read. That is not zero controls, and nothing below it is a
+            measurement.
           </p>
-          <Explain summary="Why no percentage will appear here even once controls exist">
+        ) : (
+          <>
+            {/* ⚠ THE OWNER'S CARD SHAPE: a count and its denominator, with the untested named beside it
+                rather than folded into it. Never a single effectiveness percentage. */}
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg border border-gray-200 px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Assessed</p>
+                <p className="mt-0.5 text-[20px] font-bold leading-none tabular-nums text-gray-900">
+                  {g.controls.assurance.assessed}
+                  <span className="ml-1 text-[13px] font-medium text-gray-400">/ {g.controls.assurance.total}</span>
+                </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-gray-500">Both axes answered.</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Not tested</p>
+                <p className={`mt-0.5 text-[20px] font-bold leading-none tabular-nums ${
+                  g.controls.assurance.notTested > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>
+                  {g.controls.assurance.notTested}
+                </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-gray-500">Never Effective.</p>
+              </div>
+              <div className="rounded-lg border border-gray-200 px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Not assessed (design)</p>
+                <p className="mt-0.5 text-[20px] font-bold leading-none tabular-nums text-gray-900">
+                  {g.controls.assurance.notAssessedDesign}
+                </p>
+              </div>
+              <div className="rounded-lg border border-gray-200 px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Test overdue</p>
+                <p className={`mt-0.5 text-[20px] font-bold leading-none tabular-nums ${
+                  g.controls.testOverdue > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>
+                  {g.controls.testOverdue}
+                </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
+                  Over the {g.controls.rows.length - g.controls.withoutDueDate} carrying a due date.
+                </p>
+              </div>
+            </div>
+
+            {g.controls.rows.length === 0 && (
+              <p className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[11.5px] leading-relaxed text-gray-600">
+                No control has been recorded. The store was read and holds none — a measured zero. ⚠ An
+                empty control catalogue is not an absence of risk; it is an absence of assurance.
+              </p>
+            )}
+
+            <div className="mt-3 grid gap-4 lg:grid-cols-2">
+              {[
+                { title: "Design effectiveness", note: "Would this control work if it ran as described?", items: g.controls.assurance.design },
+                { title: "Operating effectiveness", note: "Did it actually run, and did it work?", items: g.controls.assurance.operating },
+              ].map(col => (
+                <div key={col.title}>
+                  <p className="text-[11.5px] font-semibold text-gray-800">{col.title}</p>
+                  <p className="text-[11px] leading-relaxed text-gray-500">{col.note}</p>
+                  <ul className="mt-1.5 flex flex-col gap-1">
+                    {col.items.map(i => (
+                      <li key={i.value} className="flex items-center justify-between gap-2 text-[11.5px]">
+                        <span className="text-gray-700">{i.label}</span>
+                        <span className="tabular-nums font-semibold text-gray-900">{i.n}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="mt-3">
+          <Explain summary="Why no single effectiveness percentage appears, now that there is real data">
             §6 keeps design effectiveness and operating effectiveness as two separate judgements: a
             control can be well designed and never once executed. One blended number answers neither
             question and hides the untested inside its denominator, and §22 is explicit that a control

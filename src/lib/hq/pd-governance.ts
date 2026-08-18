@@ -2,6 +2,7 @@ import {
   posture, trend, POSTURE_NOT_DETERMINED_LABEL,
   type RiskMethodology, type PostureState,
 } from "@/lib/hq/gov-evidence";
+import { loadControls, type ControlsRead } from "@/lib/hq/gov-control";
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 // CPR-PD-010 §3 — GOVERNANCE OVERVIEW, the loader.
@@ -11,15 +12,21 @@ import {
 //   NOT DETERMINABLE  the risk register is real and readable; posture cannot be stated because no
 //                     methodology is published. Fixing it is a governance act, not a build.
 //   MEASURED ZERO     the risk store was read and holds no rows. Somebody looked and found none.
-//   NO RECORD TYPE    controls, obligations, decisions, exceptions and evidence have no table yet.
+//   NO RECORD TYPE    obligations, decisions, exceptions, evidence and reviews have no table yet.
 //                     Nobody has looked, because there is nowhere to look.
+//
+// ⚠ CONTROLS MOVED FROM THE THIRD CATEGORY TO THE SECOND WHEN migration 322 LANDED, and this comment
+// was edited in the same commit. A header describing an absence that has since been closed is how a
+// reader learns to distrust the ones that are still true.
 //
 // A screen that renders all three as "0" tells a Director the product is well governed. It is not
 // governed at all yet, and those are opposite conclusions from identical pixels.
 //
-// ⚠ AND CONTROL ASSURANCE IS DELIBERATELY NOT COMPUTED HERE. controlAssurance([]) would happily return
-// a tidy 0/0 with zero not-tested — a measured-looking answer over a table that does not exist. The
-// function is correct and calling it would be the lie, so this loader refuses at the source instead.
+// ⚠ CONTROL ASSURANCE IS COUNTED NOW, AND IT WAS REFUSED HERE UNTIL migration 322 EXISTED. While there
+// was no control table, controlAssurance([]) would have returned a tidy 0-of-0 with zero not-tested — a
+// measured-LOOKING answer over a store that did not exist. The function was correct and calling it would
+// have been the lie. Now the store is real, the count is real, and the aggregate percentage is STILL
+// refused — because that refusal was never about missing data.
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,10 +42,6 @@ export type GovAbsence = { label: string; why: string; spec: string };
  * Director reading this needs to know which of these is a sprint and which is a governance decision.
  */
 export const GOV_MISSING: GovAbsence[] = [
-  {
-    label: "Control", spec: "§6",
-    why: "No control record exists. §6 requires design effectiveness and operating effectiveness as separate judgements, with a test history behind each — so a control is a record with two assessment axes, not a checkbox.",
-  },
   {
     label: "Obligation", spec: "§10",
     why: "No obligation register exists. §10 requires source, applicability, owner, evidence links, review frequency and a compliance state that distinguishes Not Assessed from Not Applicable.",
@@ -64,6 +67,7 @@ export const GOV_MISSING: GovAbsence[] = [
 export type GovernanceOverview = Awaited<ReturnType<typeof loadGovernanceOverview>>;
 
 export async function loadGovernanceOverview(admin: Admin) {
+  const controls: ControlsRead = await loadControls(admin);
   const [methodRes, riskRes, assessRes, actionRes] = await Promise.all([
     admin.from("gov_risk_methodology")
       .select("methodology_id, version, name, aggregation_rule, status, published_at, effective_from, effective_to")
@@ -173,6 +177,16 @@ export async function loadGovernanceOverview(admin: Admin) {
        */
       doneUnverified: actions.filter(a => a.state === "done" && !a.verified_by_assessment_id).length,
     },
+
+    /**
+     * s6 control assurance. NOW REAL — migration 322 gave controls a store, so this is counted rather
+     * than refused. null means the store could not be read, which is not the same as no controls.
+     *
+     * ⚠ AND STILL NO AGGREGATE PERCENTAGE, now that there IS a store and real tests behind it. The
+     * refusal was never about the data being absent — it is about design and operating effectiveness
+     * being two judgements that no single number can carry.
+     */
+    controls,
 
     missing: GOV_MISSING,
   };
