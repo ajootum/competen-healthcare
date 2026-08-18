@@ -68,9 +68,36 @@ Columns are §16's seven, in its order.
 
 | Requirement | Existing service/table | Practice-aware? | Gap | Required schema/service/event | Build action | Acceptance evidence |
 |---|---|---|---|---|---|---|
-| §2 product risk register | `gov_risks` (**0 rows**, `hospital_id`) | no | ⚠ **Corrected:** first written as "built and populated for hospitals". It is **empty**. Wrong subject *and* no data | Product/Practice governance subject on risk records | §9: reuse `gov_*` only if semantics generalise; the schema is a good model to copy | A risk owned at Competen Practice product scope |
-| §2 controls & assurance | `gov_controls` (**0 rows**) | no | Same | Subject-scoped control records | As above | A control tested against product scope |
-| §2 obligations | `gov_obligations` (**0 rows**) | no | Same | Subject-scoped obligation records | As above | An obligation with a due date at product scope |
+| §2 product risk register | `gov_risks` (**0 rows**, `hospital_id`) | partly | ⚠ **Corrected twice.** First written as "built and populated for hospitals" — it is **empty**. Then as "wrong subject" — also not right: `hospital_id` is nullable and the schema comments `null = platform-wide`, so a product scope IS expressible, just **untyped**. `NULL` cannot separate "the platform" from "Competen Practice the product" from "a market" | Typed subject from the phase 1 registry | ⚠ See the substrate decision below — the semantics generalise but the **tenancy does not** | A risk owned at Competen Practice product scope |
+| §2 controls & assurance | `gov_controls` (**0 rows**) | partly | Same shape: 3-type/6-frequency control with a 4-value effectiveness scale, linked to a risk. Nothing in it is hospital-specific except `hospital_id` | Typed subject | As above | A control tested against product scope |
+| §2 obligations | `gov_obligations` (**0 rows**) | partly | Same shape: source authority, domain, review frequency, expiry, waiver justification | Typed subject | As above | An obligation with a due date at product scope |
+
+#### Substrate decision — separate product-scoped tables, NOT an extension of `gov_*`
+
+`gov_risks` is a **good** schema. A 5x5 likelihood/impact matrix with residual scoring, an ISO-style
+treatment vocabulary (`avoid`/`reduce`/`transfer`/`accept`/`monitor`/`escalate`) and a review date are
+subject-agnostic — they would describe a product risk as well as a hospital one. By MOS-001 §9's test,
+the *semantics* generalise. This is the opposite of `op_incidents`, which carried `patient_id` and would
+have meant something different in every other column.
+
+**The tenancy is what does not generalise, and it is a security argument rather than a modelling one.**
+`gov_*` belongs to the hospital/enterprise product line. Putting Competen Practice's own product risks
+in the same table as a customer hospital's clinical risks leaves them separated by a nullable
+`hospital_id` — one forgotten filter and a customer reads the vendor's risk register, or the vendor's
+governance review shows a customer's clinical risks. That is the tenant-scoping bug class this repo has
+already closed twice (migrations 167 and 186), reintroduced deliberately.
+
+So PD-010 follows the PD-009 precedent recorded two rows above: its own product-scoped records, subject
+-typed against the phase 1 registry, with `gov_*` untouched. All five `gov_*` tables hold **0 rows**, so
+nothing is migrated, nothing is backfilled, and nothing existing changes.
+
+⚠ **BLOCKED ON THE SPECIFICATION, DELIBERATELY.** The subject scoping and the append-only trail are
+spec-independent and settled by the above. The *vocabularies* are not: the risk scale, what makes a
+control effective, who may accept a risk and at what threshold, and what a governance review decides
+are all things CPR-PD-010 states and none of them can be inferred from the §2 submodule list. Migration
+315 was built from MOS-001 §8's sketch of the incident model instead of PD-009 §5's real one and needed
+317 to correct it. A governance vocabulary guessed wrong is worse than an incident one guessed wrong,
+because the invented scale silently becomes the policy.
 | §2 decisions & approvals | `plat_approval_requests` (0 rows) | no | No subject scope at all | Typed subject on approvals | Extend with `subject_type`/`subject_id` | An approval routed by subject and capability |
 | §25 segregation of duties | `hq_capability` + migration 311 | n/a | **Already correct.** `change.approve` is withheld from the Director by design | — | none | Maker and checker are different positions |
 
