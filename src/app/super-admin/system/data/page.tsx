@@ -4,6 +4,7 @@ import Link from "next/link";
 import { loadDataProtection } from "@/lib/super-admin/sys-data";
 import RecoveryConsole from "./RecoveryConsole";
 import { requireHqCapability } from "@/lib/hq/context";
+import { RPO_TARGET_MINUTES, RTO_TARGET_MINUTES, formatObjective } from "@/lib/super-admin/recovery-objectives";
 
 export const dynamic = "force-dynamic";
 
@@ -106,15 +107,30 @@ export default async function DataProtectionRecovery() {
         {/* RPO / RTO */}
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">RPO / RTO <span className="text-[10px] text-gray-400">latest DR test</span></h2>
+          {/* ⚠ THE TARGET FALLS BACK TO THE COMMITTED OBJECTIVE, THE ACTUAL NEVER DOES. A target is
+              policy and is known before any test runs (owner decision 2026-08-19); an actual is a
+              measurement and is honestly absent until a rehearsal has produced one. Showing an em dash
+              in the target slot read as "nobody has decided", which stopped being true. */}
           <div className="grid grid-cols-2 gap-3">
-            {[["RPO", d.rpo], ["RTO", d.rto]].map(([l, o]: any) => (
+            {[["RPO", d.rpo, RPO_TARGET_MINUTES], ["RTO", d.rto, RTO_TARGET_MINUTES]].map(([l, o, committed]: any) => (
               <div key={l} className="rounded-lg border border-gray-100 p-3 text-center">
                 <p className="text-2xl font-bold text-gray-900 tabular-nums">{o.actual != null ? `${o.actual}m` : "—"}</p>
                 <p className="text-[10px] text-gray-500">{l} actual</p>
-                <p className="text-[9px] text-gray-400 mt-1">target {o.target != null ? `${o.target}m` : "—"}</p>
+                <p className="text-[9px] text-gray-400 mt-1">
+                  target {formatObjective(o.target ?? committed)}
+                  {o.target == null && <span className="ml-1 text-gray-300">(committed)</span>}
+                </p>
               </div>
             ))}
           </div>
+          {d.rpo.actual == null && d.rto.actual == null && (
+            // Not a warning styled as an error: it is a true statement about where this product is.
+            <p className="mt-2 text-[10px] leading-relaxed text-[var(--cmp-text-warning)]">
+              No restore has been rehearsed, so these targets are objectives rather than demonstrated
+              capabilities. Until one runs, backup conformance is a claim about the platform provider,
+              not about this product&apos;s recoverability.
+            </p>
+          )}
           <div className="mt-3 pt-2 border-t border-gray-50 space-y-1 text-xs">
             <div className="flex justify-between"><span className="text-gray-500">Last DR test</span><span className="text-gray-700">{relTime(d.drStats.last?.completed_at ?? d.drStats.last?.created_at)}</span></div>
             <div className="flex justify-between"><span className="text-gray-500">Last backup verify</span><span className="text-gray-700">{relTime(d.drStats.lastBackupVerify?.completed_at ?? d.drStats.lastBackupVerify?.created_at)}</span></div>

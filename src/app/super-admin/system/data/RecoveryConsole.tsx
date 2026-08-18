@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { RPO_TARGET_MINUTES, RTO_TARGET_MINUTES } from "@/lib/super-admin/recovery-objectives";
 
 // Data Protection & Recovery console (SYS-001.5) — real in-place resilience
 // actions via /api/system/recovery. Log Event schedules a DR test / restore
@@ -30,7 +31,16 @@ export default function RecoveryConsole({ openEvents }: { openEvents: Picker[] }
   const [tab, setTab] = useState<TabKey>("log");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ k: "ok" | "err"; t: string } | null>(null);
-  const [form, setForm] = useState<any>({});
+  // ⚠ PREFILLED WITH THE COMMITTED OBJECTIVES, NOT LEFT BLANK WITH A PLACEHOLDER. These fields used to
+  // show "15" and "120" as placeholder text -- arbitrary hints matching no agreed target, and stricter
+  // than what the business has actually committed to. A blank target field means an exercise can be
+  // logged against whatever number the person running it happens to type, which makes "target vs actual"
+  // unfalsifiable after the fact. The values are still editable: a scoped drill may legitimately hold
+  // itself to something tighter, and that is then a deliberate entry rather than an accident.
+  const [form, setForm] = useState<any>({
+    rpo_target_min: RPO_TARGET_MINUTES,
+    rto_target_min: RTO_TARGET_MINUTES,
+  });
   const set = (k: string) => (e: any) => setForm((f: any) => ({ ...f, [k]: e.target.value }));
   const toast = (k: "ok" | "err", t: string) => { setMsg({ k, t }); setTimeout(() => setMsg(null), 5000); };
   const switchTab = (k: TabKey) => { setTab(k); setForm({}); setMsg(null); };
@@ -82,8 +92,8 @@ export default function RecoveryConsole({ openEvents }: { openEvents: Picker[] }
             <div><label className={label}>Event type</label><select value={form.kind ?? "dr_test"} onChange={set("kind")} className={input}>{Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
             <div><label className={label}>Title *</label><input value={form.title ?? ""} onChange={set("title")} className={input} placeholder="e.g. Q3 full-platform restore drill" /></div>
             <div className="sm:col-span-2"><label className={label}>Scope</label><input value={form.scope ?? ""} onChange={set("scope")} className={input} placeholder="Service / dataset / tenant in scope" /></div>
-            <div><label className={label}>RPO target (min)</label><input type="number" value={form.rpo_target_min ?? ""} onChange={set("rpo_target_min")} className={input} placeholder="15" /></div>
-            <div><label className={label}>RTO target (min)</label><input type="number" value={form.rto_target_min ?? ""} onChange={set("rto_target_min")} className={input} placeholder="120" /></div>
+            <div><label className={label}>RPO target (min)</label><input type="number" value={form.rpo_target_min ?? ""} onChange={set("rpo_target_min")} className={input} /></div>
+            <div><label className={label}>RTO target (min)</label><input type="number" value={form.rto_target_min ?? ""} onChange={set("rto_target_min")} className={input} /></div>
             {needsReason && (
               <div className="sm:col-span-2"><label className={label}>Reason / authorization *</label><textarea value={form.reason ?? ""} onChange={set("reason")} rows={2} className={input} placeholder="Why this restore/privacy action, on whose authority, and any legal/clinical retention constraints" /></div>
             )}

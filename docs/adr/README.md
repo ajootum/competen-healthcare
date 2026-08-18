@@ -42,6 +42,9 @@ wish, not a record.
 | [ADR-006](./ADR-006-database-and-rls-governance.md) | Database & RLS Governance | Accepted |
 | [ADR-007](./ADR-007-specification-traceability.md) | Specification Traceability | Accepted |
 | [ADR-008](./ADR-008-role-authorization-migration.md) | Role names are not authorization primitives (PLAT-GOV-001 §14) | Accepted |
+| [ADR-009](./ADR-009-recovery-objectives.md) | Initial recovery objectives - RPO 24h, RTO 8h | Accepted |
+| [ADR-010](./ADR-010-email-verification.md) | Production accounts require verified email addresses | Accepted |
+| [ADR-011](./ADR-011-clinical-session-policy.md) | Clinical session policy - 10-minute lock, 30-minute logout | Accepted |
 
 Initial set published under COMP-ENG-001 §5, 2026-08-18. Each ADR below was written by reading the actual
 code, migrations, and harnesses cited in it — not reconstructed from memory of what the decision was
