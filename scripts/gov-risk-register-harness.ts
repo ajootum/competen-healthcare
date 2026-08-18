@@ -173,13 +173,40 @@ async function main() {
     const del = await admin.from("gov_risk_assessment").delete().eq("assessment_id", assessmentId);
     ok("A3", !!del.error, `and a direct DELETE is refused — ${String(del.error?.message ?? "ACCEPTED").slice(0, 55)}`);
 
-    // a second methodology cannot be effective over the same window
-    const clash = await mustReject("gov_risk_methodology", {
-      version: 9002, name: `${FIXTURE} clash`, status: "published",
-      published_at: new Date().toISOString(), published_by: "harness", effective_from: new Date().toISOString(),
-    }, "methodology_id");
-    ok("C7", clash.rejected,
-      `⚠ s5: two methodologies cannot be effective at once — a risk would have two scores and no answer — ${clash.message}`);
+    // A second methodology cannot be effective over the same window.
+    //
+    // ⚠ THE FIRST VERSION OF C7 PASSED FOR THE WRONG REASON, AND ITS OWN OUTPUT SAID SO. It inserted the
+    // clash already-published with no scales, so the PUBLISH GUARD refused it first and the
+    // single-effective guard was never reached — a green assertion about a rule that had not run.
+    // Recorded rule: a passing refusal assertion says a refusal happened, not WHICH rule caused it.
+    //
+    // So the clash is now built to be publishable — scales, a band, everything the publish guard wants —
+    // and refused only by the overlap. The message is matched, not merely the failure.
+    const clashDraft = await admin.from("gov_risk_methodology").insert({
+      version: 9002, name: `${FIXTURE} clash`, status: "draft",
+    }).select("methodology_id").limit(1);
+    const clashId = clashDraft.data?.[0]?.methodology_id ?? null;
+    if (clashId) {
+      for (const [dim, ord, code] of [["likelihood", 1, "rare"], ["likelihood", 2, "likely"],
+        ["impact", 1, "minor"], ["impact", 2, "major"]] as const) {
+        await admin.from("gov_risk_scale").insert({
+          methodology_id: clashId, dimension: dim, ordinal: ord, code,
+          label: code, definition: `Published definition of ${code}.`,
+        });
+      }
+      await admin.from("gov_posture_band").insert({
+        methodology_id: clashId, code: "moderate", label: "Moderate", definition: "A band.",
+      });
+      const clashPublish = await admin.from("gov_risk_methodology")
+        .update({ status: "published", published_at: new Date().toISOString(), published_by: "harness", effective_from: new Date().toISOString() })
+        .eq("methodology_id", clashId);
+      const msg = String(clashPublish.error?.message ?? "ACCEPTED");
+      ok("C7", !!clashPublish.error && /already effective over that window/.test(msg),
+        `⚠ s5: two methodologies cannot be effective at once — and the refusal is the OVERLAP rule, matched by message — ${msg.slice(0, 60)}`);
+      await admin.from("gov_risk_methodology").delete().eq("methodology_id", clashId);
+    } else {
+      ok("C7", false, `could not build a publishable clash — ${String(clashDraft.error?.message).slice(0, 60)}`);
+    }
 
     // an action may not claim a verification without being done
     const badAction = await mustReject("gov_risk_action", {
