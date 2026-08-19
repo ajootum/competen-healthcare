@@ -1,5 +1,10 @@
--- APPLY THIS FILE WHOLE. It defines a function body, so a statement-splitting runner would cut it in
--- half. Paste the entire file into the Supabase SQL editor and Run once.
+-- APPLY THIS FILE WHOLE, AND ONLY TO A FRESH DATABASE. It defines a function body, so a
+-- statement-splitting runner would cut it in half.
+--
+-- !!!! DO NOT PASTE THIS INTO THE PRODUCTION SQL EDITOR. On 2026-08-19 that happened and it reverted
+-- !!!! two objects migration 249 had hardened -- see 335-restore-249-after-baseline-overwrite.sql.
+-- !!!! Run it only through scripts/apply-migrations.ts, which refuses to target production.
+-- !!!! The guard below is the second line of defence and will abort on any built database.
 --
 -- Migration 001: canonical baseline (COMP-ENG-002F)
 --
@@ -70,6 +75,25 @@
 --
 -- Proof reference: the clean-build test that produced this, and the fidelity manifest that must pass
 -- after it, are scripts/apply-migrations.ts and scripts/fidelity-manifest.ts.
+
+-- ---- REFUSE TO RUN ON A DATABASE THAT IS NOT FRESH -------------------------------------------
+-- profile_authority_unchanged is created by migration 249 and by nothing else, so its presence proves
+-- the chain has already been applied here. Postgres has no RAISE outside plpgsql and this repo bans
+-- do-blocks, so the abort is a cast to integer of a message the CASE produces. THE CASE MUST SIT
+-- INSIDE THE CAST. Written the other way round, as a cast of a literal inside a CASE branch, the
+-- planner constant-folds that cast before execution and the file aborts on EVERY database including a
+-- fresh one. That is not hypothetical -- it is what the first version of this guard did, and the
+-- break-test caught it. The whole file runs in one transaction, so aborting here leaves nothing behind.
+
+select cast(
+  case
+    when exists (
+      select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'public' and p.proname = 'profile_authority_unchanged'
+    )
+    then 'MIGRATION 001 REFUSES TO RUN - this database is NOT fresh, it already has later migrations applied'
+    else '0'
+  end as integer);
 
 -- ---- Foundational tables ----------------------------------------------------------------------
 
