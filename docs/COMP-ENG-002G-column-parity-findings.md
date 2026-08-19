@@ -84,3 +84,56 @@ classification are now done; nothing has been changed.
 
 ⚠ **None of these should be resolved by changing production to match a build that was wrong.** The
 build is wrong in 30 of the 32 cases.
+
+---
+
+## Resolved, 2026-08-19 — migration 338 applied to both projects
+
+```
+production: 663 tables, 7885 columns
+staging   : 663 tables, 7885 columns
+EXACT     : 7885
+PASS
+```
+
+⚠ **`security/column-parity-allowlist.json` is EMPTY.** Nothing was excused. The gate passed on merit,
+not by exemption — which is the only kind of pass worth having from a control whose entire job is to
+refuse unexplained drift.
+
+### The sequence, and what each step proved
+
+| | |
+|---|---|
+| 32 differences on first run | table parity was already perfect at 663/663 — columns still differed |
+| 338 dry-run on staging, rolled back | 32 → 2, and the 2 were exactly the production-side statements |
+| 338 applied to staging | 7859 → 7885 columns, differences 32 → 2 |
+| 338 applied to production | 7884 → 7885, differences 2 → **0** |
+
+The prediction made from the rolled-back dry run matched the outcome exactly, on both sides.
+
+### Regression checks after changing production
+
+| Check | Result |
+|---|---|
+| Fidelity manifest, production | PASS |
+| Fidelity manifest, staging | PASS |
+| Harness suite | 27/27, coverage control accounts for all 34 |
+
+Function counts read 68 with 11 SECURITY DEFINER on both sides, up from 67/10 — that is migration 337
+adding `plat_column_registry()`, not drift.
+
+### §11 Definition of Done
+
+| Item | |
+|---|---|
+| Version-controlled production-versus-staging column diff exists | done |
+| Unknown column drift fails or is reviewed | done — and the allowlist is empty |
+| Intentional differences narrowly documented | none needed |
+| Column parity permanent in the fidelity system | done — cross-referenced from the manifest, which states why the split exists |
+| Deterministic synthetic practitioner + Practice fixture | **outstanding** |
+| Fixture reaches Practice workspace without diversion | **outstanding** |
+| Journeys 3-6 pass locally, then blocking in CI | **outstanding** |
+
+⚠ **Still not reproduced anywhere: `ON DELETE` / `ON UPDATE` actions.** No foreign-key registry exists,
+so 188a and 338 both declare `references` without them. This gap has now been hit twice and a
+`plat_fk_registry()` would close it — the ninth registry, and the same shape as the other eight.
