@@ -132,6 +132,45 @@ async function main() {
     }
   }
 
+  /**
+   * ── GATE 1: platform membership ────────────────────────────────────────────────────────────────
+   *
+   * !! THE HQ APPOINTMENT ALONE IS NOT ENOUGH, and finding that out was the point of running this.
+   * The first version provisioned the appointment, the resolver confirmed 20 capabilities, and every
+   * /super-admin route still redirected to /practice/no-account. src/app/super-admin/layout.tsx calls
+   * admitToEstate BEFORE any capability is consulted, and this account had no platform_membership row.
+   *
+   * That is COMP-ARCH-PSA-001's two-gate split doing exactly what it says: gate 1 asks whether a person
+   * belongs to Competen Platform at all, gate 2 asks what they may do there. A fixture that satisfies
+   * only the second is a fixture that cannot open the product.
+   *
+   * !! MEMBERSHIP, NOT super_admin. The break-glass short-circuit in admitToEstate would also admit this
+   * account, and using it would make every screenshot evidence of what an OWNER sees rather than what a
+   * Product Director sees -- which is the distinction PD-014 section 9 exists to protect. An explicit
+   * membership row is the mechanism the product actually intends.
+   */
+  console.log("\nGATE 1 - PLATFORM MEMBERSHIP");
+  const { data: pm } = await admin.from("platform_membership")
+    .select("id, status").eq("user_id", user.id).maybeSingle();
+  if (pm && (pm as any).status === "active") {
+    ok("an active platform membership exists");
+  } else if (VERIFY_ONLY) {
+    bad("no active platform membership - /super-admin would redirect to the no-account page");
+  } else if (pm) {
+    const { error } = await admin.from("platform_membership")
+      .update({ status: "active" }).eq("id", (pm as any).id);
+    if (error) bad(`could not activate the membership: ${error.message}`); else ok("membership set to active");
+  } else {
+    const { error } = await admin.from("platform_membership").insert({
+      // migration 279 CHECKs source against four values. admin_grant is the honest one: a platform
+      // operator granted this membership deliberately, which is exactly what this script is.
+      user_id: user.id, status: "active", source: "admin_grant",
+      note: "CPR-PD-014 section 14 synthetic HQ operator. Staging only.",
+    });
+    if (error) bad(`could not create the platform membership: ${error.message}`);
+    else ok("platform membership created, status active");
+  }
+
   // ── The office and position must already exist. This fixture appoints; it does not create rights. ──
   console.log("\nOFFICE AND POSITION");
   const { data: office } = await admin.from("ogs_offices")

@@ -53,10 +53,10 @@ to NEW, each turn it red), and the Practice 360 boundary (planting a patient lin
 endpoint has never been exercised. Both need a database that can be written to and rolled back —
 staging, whose Postgres port is currently refusing TLS. Neither is a claim this record makes.
 
-⚠ **No screenshots.** §14 asks for them in healthy and exception states. Every route returns 307 to
-sign-in under its capability guard, and no synthetic HQ identity exists to authenticate as — the
-synthetic practitioner provisioned for COMP-ENG-002G is deliberately a Practice user with no HQ
-position. Producing them needs an authenticated operator session.
+**Screenshots are now produced.** All five surfaces at 1440px in `docs/evidence/cpr-pd-014/`, captured
+as a synthetic Practice Product Director against staging. §14 asks for healthy and exception states and
+staging carries both: a practice stalled at 0/6, a launch gate with four outstanding controls, a failing
+automatic check, alongside an ACTIVE/HEALTHY workspace. See "The fixture, and what it exposed" below.
 
 ## §7 C — the guided provisioning console
 
@@ -122,6 +122,47 @@ script against staging and not a CI harness — supabase-js speaks HTTP, not tra
 cannot be rolled back. The membership assertion is there because capability and membership
 duplication is a failure this estate has actually had.
 
+## The fixture, and what it exposed
+
+§14 needed an authenticated HQ session. `scripts/provision-staging-hq-fixture.ts` creates one on
+staging — an RFC 2606 address that can never be a real mailbox, appointed to `practice_product_director`,
+guarded by the same production predicate the smoke fixture uses so it refuses any other target. It exists
+so that nobody signs in to production for a screenshot.
+
+### ⚠ A capability alone does not open /super-admin
+
+The first version appointed the fixture, the resolver confirmed all 20 capabilities, and **every route
+still redirected to `/practice/no-account`**. `src/app/super-admin/layout.tsx` calls `admitToEstate`
+before any capability is consulted, so the account also needed an active `platform_membership` row.
+
+That is COMP-ARCH-PSA-001's two-gate split doing exactly what it says — gate 1 asks whether a person
+belongs to Competen Platform at all, gate 2 asks what they may do there. An identity satisfying only the
+second holds every permission the product defines and cannot open the door. It is written up in the
+capability matrix because the appointment is the half that looks finished.
+
+The membership is an explicit row, not the `super_admin` break-glass short-circuit, which would also have
+admitted the account and would have made every screenshot evidence of what an OWNER sees rather than what
+a Product Director sees — the distinction §9 exists to protect.
+
+### ⚠ And the capture tool reported five screenshots of the refusal
+
+It counted files. Five identical pictures of `/practice/no-account`, announced as delivery evidence. It
+now asserts the landed path against the requested one and exits non-zero on a mismatch, so a redirect is a
+failure rather than an artefact.
+
+A second artefact was fixed the same way. Playwright's `fullPage` capture composites a `position: fixed`
+element against beyond-viewport content differently, so the PD sidebar landed on top of the page beside
+it and three of five images read "ovisioning & Onboarding". Measured live, the h1 starts at x=264 and the
+sidebar ends at x=240 on exactly those pages — **the product was correct and the evidence invented a
+layout defect**, which is worse than no evidence because the reader cannot tell it from a real one. The
+viewport is now grown to the document so nothing is ever beyond it.
+
 ## Outstanding
 
-- **§14** delivery evidence: screenshots, and the capability matrix as a document.
+Nothing. §14 delivery evidence is complete: screenshots in `docs/evidence/cpr-pd-014/`, and the
+capability matrix at `docs/CPR-PD-014-CAPABILITY-MATRIX.md`.
+
+Two findings were recorded rather than fixed, both in the matrix §6: there is no read-only Product
+Operations access (one position holds the five screens and both writes), and the provision and flag
+controls are enforced at the API but not conditioned in the UI. The second is invisible only because of
+the first, and both turn on a decision about separating the grants.
