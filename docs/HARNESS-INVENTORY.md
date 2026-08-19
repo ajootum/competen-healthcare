@@ -182,6 +182,7 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `pd-capability-matrix-harness.ts` | CPR-PD-014 BUILD 2 -- THE CAPABILITY MATRIX, AS IT ACTUALLY EXISTS IN THE DATABASE. | privileged-live | CPR-PD-014 | read-only | n/a | no |
 | `pd-health-harness.ts` | CPR-PD-008 PRODUCT HEALTH HARNESS. | pure/local | CPR-PD-008 | read-only | n/a | no |
 | `pd-nav-harness.ts` | CPR-PD-001 — THE PRACTICE PRODUCT DIRECTOR NAVIGATION FREEZE. | pure/local | CPR-PD-001 | read-only | n/a | no |
+| `pd-browser-sweep.ts` | CPR-PD-013 §9/§13 — renders all 86 PD destinations as a signed-in Product Director and fails on a redirect, a missing heading, a console error, a 5xx or horizontal scroll. Needs a running dev server and the staging HQ fixture, so it is a **proof script, not a CI harness**. | privileged-live + browser | CPR-PD-013 | read-only | n/a | no |
 | `pd-screen-doctrine-harness.ts` | PD SCREEN DOCTRINE HARNESS — the countable rule out of docs/CPR-PD-SCREEN-DOCTRINE.md §2. | pure/local | CPR-PD-SCREEN-DOCTRINE | read-only | n/a | no |
 | `plane-boundary-harness.ts` | plane-boundary-harness — the platform plane may see THAT a practice is used, not WHAT is in it. | pure/local | PLAT-OVERSIGHT-SURVEY-001, CPR-PD-014 | read-only | n/a | no |
 | `platform-flag-gate-harness.ts` | Platform feature-flag harness -- LCP-001 s9, migration 042. | privileged-live | — | insert/delete | yes | no |

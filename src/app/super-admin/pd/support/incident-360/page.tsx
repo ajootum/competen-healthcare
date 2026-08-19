@@ -144,7 +144,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
         </Explain>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         {/* ── §7 Impact ─────────────────────────────────────────────────────────────────────── */}
         <Panel title="Impact (§7)" note="Counted from the event thread this incident names, when the page is opened.">
           {c.impact === null ? (

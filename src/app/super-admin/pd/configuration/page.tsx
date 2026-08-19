@@ -65,7 +65,15 @@ export default async function Page() {
       <ReadFailures problems={cfg.problems} />
 
       {/* ── the hierarchy and the risk mix ─────────────────────────────────────────────────────── */}
-      <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
+      {/* ⚠ minmax(0,…) AND NOT A BARE `fr`, FOUND BY THE §13 BROWSER PASS. This page was the only one of
+          86 to scroll sideways at 1440, by 194px. An ARBITRARY Tailwind track — grid-cols-[1.5fr_1fr] —
+          emits the CSS literally, and a bare `1fr` is `minmax(auto, 1fr)`: the column may not shrink
+          below its content's min-content width, so the `min-w-[560px]` table inside pushed the whole
+          grid past the viewport. Tailwind's NUMBERED utilities (grid-cols-3) already use minmax(0,1fr),
+          which is why this only ever bites arbitrary values.
+          Six such grids existed across the PD tree and none was guarded; the other five had no child
+          wide enough to expose it yet. All six are now explicit. */}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <Panel
           title="Configuration hierarchy (§3), and which levels resolve today"
           note="Six levels. Each card carries what the level is for and whether the engine can resolve a value at it."
@@ -90,7 +98,7 @@ export default async function Page() {
       </div>
 
       {/* ── what needs attention, and how much of the estate this plane can see ────────────────── */}
-      <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Panel
           title="Needs attention (§6)"
           note="Measured exceptions only. Two of §6's triggers cannot appear here at all and are listed under what is not shown."
@@ -137,7 +145,7 @@ export default async function Page() {
       </div>
 
       {/* ── what is changing (§6 "Recent changes", §18 change sets) ────────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <Panel
           title="Recent changes (§6) and the change sets behind them (§18)"
           note="Every configuration edit grouped into a named set, newest first."

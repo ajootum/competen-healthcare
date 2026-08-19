@@ -73,7 +73,7 @@ export default async function Page() {
         <Stat label="Oldest open" f={s.posture.oldestHours} unit="h" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         {/* ── §3's Needs Attention, restricted to triggers that can fire ─────────────────────── */}
         <Panel
           title="Needs attention (§3)"
