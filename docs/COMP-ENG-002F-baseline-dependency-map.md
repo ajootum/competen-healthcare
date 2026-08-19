@@ -204,3 +204,50 @@ rolled back.
 ⚠ Function counts are **not** comparable across those two instruments — production's 67 comes from
 `plat_function_registry()`, which migration 170 made exclude extension functions, while the dry-run
 count was raw `pg_proc`. Not drift, a units mismatch.
+
+---
+
+## Clean build COMPLETE, 2026-08-19 — and the fourth class
+
+**All 335 migrations applied to an empty Supabase project.** COMP-ENG-002E §11 step 7 is done.
+
+### Pre-flight against production, same instruments both sides
+
+The registry functions were called on staging over SQL and on production over PostgREST, so the units
+are identical rather than merely similar.
+
+| | staging | production | |
+|---|---|---|---|
+| tables | 663 | 663 | match |
+| policies | 318 | 318 | match |
+| functions | 67 | 67 | match |
+| SECURITY DEFINER | 10 | 10 | match |
+| secdef without pinned search_path | 0 | 0 | match |
+| triggers | 45 | 45 | match |
+| tables with RLS disabled | 0 | 0 | match |
+
+25 policy names differ in each direction. **Checked, not assumed: all 25 are exactly the approved
+aliases** in `security/legacy-name-divergence.json`, so the manifest's name check passes.
+
+### ⚠ The fourth class: storage buckets, created by no migration
+
+Staging finished the build with **zero buckets**. Production has three. **No migration has ever created
+one** — they were made by hand in the dashboard, and 334 only `update`s them, which on a fresh project
+matches zero rows and is silently a no-op.
+
+**Every count any instrument was watching matched production, and the entire storage estate was
+absent.** That is the sharpest lesson of this arc: seven matching totals proved nothing about a
+dimension nothing was counting.
+
+Migration 336 creates all three with the measured posture, `on conflict (id) do nothing` so it is a
+no-op on production. It creates **no** storage policies — the approved posture is server-mediated with
+none (002D §5). Verified on staging in a transaction and rolled back, including a second run to prove
+idempotency.
+
+### The four classes of hidden bootstrap, in the order they were found
+
+1. **Nine foundational tables** — in `schema.sql` only. Found by 002 failing.
+2. **One function and seven policies** — in loose `supabase/*.sql` only. Found by 006 failing.
+3. **Eleven tables and two columns** — in **no repository file at all**. Found by 189 and 280 failing.
+4. **Three storage buckets** — in no repository file, and **no migration would ever have failed**.
+   Found only because the manifest checks a dimension the chain does not exercise.
