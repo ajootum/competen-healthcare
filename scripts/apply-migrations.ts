@@ -100,7 +100,41 @@ const files = readdirSync(MIGRATIONS)
 
 async function main() {
   const client = new Client({ connectionString: dbUrl!, ssl: { rejectUnauthorized: false } });
-  await client.connect();
+
+  /**
+   * ⚠ ECONNRESET HERE IS ALMOST NEVER THE DATABASE. Observed 2026-08-19: the staging project was
+   * serving HTTPS normally (its REST endpoint answered 401, which is a live project declining an
+   * unauthenticated request) while every TLS connection to the pooler on 5432 was reset. A plaintext
+   * connection to the same host and port succeeded, which places the fault in the TLS handshake and
+   * therefore locally -- this machine has a recorded history of a security product intercepting TLS.
+   *
+   * !! THERE IS DELIBERATELY NO PLAINTEXT FALLBACK. It would work, and it would put the database
+   * password on the wire unencrypted on every run, which is a worse outcome than a migration that
+   * refuses to start.
+   */
+  try {
+    await client.connect();
+  } catch (err) {
+    const e = err as { code?: string; message?: string };
+    if (e.code === "ECONNRESET" || /ECONNRESET|EPROTO|handshake/i.test(e.message ?? "")) {
+      console.error(`
+⛔ The TLS connection to the database was reset before it opened.
+`);
+      console.error(`   This usually means TLS on port 5432 is being interrupted on THIS MACHINE --`);
+      console.error(`   a firewall, VPN or antivirus with HTTPS/SSL scanning enabled -- not that the`);
+      console.error(`   project is down. Check it independently:
+`);
+      console.error(`     curl -s -o NUL -w "%{http_code}" https://<ref>.supabase.co/rest/v1/
+`);
+      console.error(`   A 401 there means the project is up and only the database port is affected.
+`);
+      console.error(`   Until it is resolved, apply a migration through the Supabase SQL editor for the`);
+      console.error(`   CORRECT project instead -- and confirm the project ref before pasting.
+`);
+      process.exit(1);
+    }
+    throw err;
+  }
 
   console.log(`\nApplying ${files.length} migration(s) via node-postgres`);
   console.log(`(production is ${prodRef} — guard passed)\n`);
