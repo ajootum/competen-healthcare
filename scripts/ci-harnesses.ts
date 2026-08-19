@@ -34,6 +34,9 @@ const ROOT = join(import.meta.dirname, "..");
  * a clean checkout rather than skipped.
  */
 const INCLUDED = [
+  // COMP-ENG-002H Track A: next.config.ts and playwright.config.ts must agree about the dev origin.
+  // Pure static read of two config files, so it belongs in the no-credential subset.
+  "dev-origin-harness.ts",
   "access-doors-harness.ts",
   "access-scanner-harness.ts",
   "attendance-harness.ts",

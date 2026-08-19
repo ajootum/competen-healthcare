@@ -184,6 +184,38 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   /**
+   * COMP-ENG-002H Track A — the browser-403 root cause, and its narrowest possible fix.
+   *
+   * ⚠ NEXT'S CONTROL WAS WORKING CORRECTLY. THE HOST WAS THE PROBLEM, NOT THE RULE. Next 16 blocks
+   * cross-origin requests to dev-only assets by default, allowing only the hostname the server was
+   * initialised with — `localhost`
+   * (node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/allowedDevOrigins.md).
+   *
+   * Measured against the running dev server, 2026-08-19, on the same chunk:
+   *
+   *     curl, no Origin header            200
+   *     Origin: http://localhost:3000     200
+   *     Origin: http://127.0.0.1:3000     403   <- the whole defect
+   *     Origin: http://evil.example       403   <- the control doing its job
+   *
+   * The browser sends `Origin` on the crossorigin script tags Next emits; curl does not, which is the
+   * entire browser-versus-curl discrepancy. Hitting the dev server on 127.0.0.1 therefore had a Next
+   * runtime chunk refused, React never hydrated, and the sign-in form was inert markup that fell
+   * through to a native GET submit.
+   *
+   * ⚠ 127.0.0.1 IS PINNED ON PURPOSE ELSEWHERE, so the fix belongs here rather than there.
+   * playwright.config.ts uses the literal address because on Linux `localhost` can resolve to ::1 while
+   * `next dev` listens on IPv4 — a failure that cannot reproduce on this Windows machine and therefore
+   * reached CI once already. Switching the suite back to `localhost` would trade this defect for that
+   * one.
+   *
+   * ⚠ THE LOOPBACK ADDRESS ONLY, AND DEV ONLY. This does not weaken the boundary: it names the same
+   * machine the server is already listening on, `allowedDevOrigins` has no effect on a production
+   * build, and a foreign origin is still refused — re-verified after the change.
+   */
+  allowedDevOrigins: ["127.0.0.1"],
+
+  /**
    * ⚠ MOVED OFF THE SIGN-OUT BUTTON, 2026-08-18. Next's dev indicator defaults to `bottom-left`
    * (node_modules/next/dist/docs/01-app/03-api-reference/05-config/01-next-config-js/devIndicators.md),
    * which is exactly where every sidebar in this estate puts its identity block and sign-out control.
