@@ -19,6 +19,7 @@
  */
 import nextEnv from "@next/env";
 import { spawn } from "node:child_process";
+import { join } from "node:path";
 
 const { loadEnvConfig } = nextEnv;
 loadEnvConfig(process.cwd());
@@ -49,14 +50,21 @@ if (prodRef && stagingRef === prodRef) {
 }
 
 const passthrough = process.argv.slice(2);
-const args = ["playwright", "test", ...(passthrough.length ? passthrough : ["e2e/smoke"]), "--workers=1"];
+// Same reason as dev-staging.mjs: Node refuses to spawn npx.cmd without a shell (EINVAL), and
+// shell: true would put credential-adjacent arguments back through shell quoting. The local CLI is a
+// plain JS file, so it runs under this Node directly.
+const playwrightCli = join(process.cwd(), "node_modules", "@playwright", "test", "cli.js");
+const args = [playwrightCli, "test", ...(passthrough.length ? passthrough : ["e2e/smoke"]), "--workers=1"];
 
 console.log(`\nSmoke against STAGING (${stagingRef}). Production is ${prodRef ?? "unknown"} and is not used.\n`);
 
-const child = spawn(process.platform === "win32" ? "npx.cmd" : "npx", args, {
+const child = spawn(process.execPath, args, {
   stdio: "inherit",
   env: {
     ...process.env,
+    // Pinned to the staging server dev-staging.mjs starts. Defaulting to 3000 pointed the suite at the
+    // ordinary production-facing dev server whenever staging had fallen back to another port.
+    PLAYWRIGHT_BASE_URL: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3100",
     NEXT_PUBLIC_SUPABASE_URL: url,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: anon,
     SUPABASE_SERVICE_ROLE_KEY: service,

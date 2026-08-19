@@ -81,11 +81,103 @@ export function requireSyntheticPractitioner(): { email: string; password: strin
  * signInWithPassword — src/app/practice/sign-in/SignInForm.tsx). Returns once the app has navigated
  * away from the sign-in page, which is the observable signal a login succeeded.
  */
+/**
+ * Block any request to the production Supabase project, at the network layer, before it is sent.
+ *
+ * ⚠ THE ENV GUARD ALONE IS NOT ENOUGH, and finding out why was instructive. assertNotProduction()
+ * reads the TEST PROCESS's environment. The app under test is a separate server with its own
+ * environment, and on 2026-08-19 the two disagreed: staging fell back to port 3001 because the
+ * ordinary production-facing dev server held 3000, while the suite still pointed at 3000. Every check
+ * would have passed while the browser signed in to production.
+ *
+ * Playwright intercepts before dispatch, so an aborted request never leaves the machine — the password
+ * is not sent and then regretted, it is not sent. That is the difference between a check and a control.
+ */
+export async function blockProductionTraffic(page: Page): Promise<{ violation: () => string | null }> {
+  let hit: string | null = null;
+  /**
+   * ⚠ TWO WAYS THIS SILENTLY DID NOTHING, BOTH FOUND BY BREAK-TESTING IT.
+   *
+   * 1. `page.route()` RETURNS A PROMISE, and the first version discarded it with `void`. The
+   *    interceptor was not guaranteed to be registered before the page navigated, so requests went out
+   *    unblocked while `violation()` still read clean. A control that reports "no violation" because it
+   *    was never installed is worse than no control: it produces a green result as evidence.
+   *
+   * 2. A GLOB DOES NOT MATCH A HOST. `**\/*.supabase.co/**` looks correct and matches nothing —
+   *    Playwright's glob is path-oriented, and the project id lives in the HOST here. A RegExp against
+   *    the whole URL is the only reliable form.
+   */
+  await page.route(/^https:\/\/[a-z0-9]+\.supabase\.co\//, async route => {
+    const host = new URL(route.request().url()).host;
+    if (host.startsWith(`${PRODUCTION_REF}.`)) {
+      hit ??= host;
+      await route.abort("blockedbyclient");
+      return;
+    }
+    await route.continue();
+  });
+  return { violation: () => hit };
+}
+
 export async function signInAsSyntheticPractitioner(page: Page): Promise<void> {
   const { email, password } = requireSyntheticPractitioner();
+  const guard = await blockProductionTraffic(page);
   await page.goto("/practice/sign-in");
+  const early = guard.violation();
+  if (early) {
+    throw new Error(
+      `The app under test talks to PRODUCTION (${early}). The request was blocked before it was sent,\n`
+      + `  so no credential left this machine — but the server on ${process.env.PLAYWRIGHT_BASE_URL ?? "the base URL"}\n`
+      + `  is not the staging one. Start it with "npm run dev:staging" (port 3100) and re-run.`,
+    );
+  }
+  /**
+   * ⚠ WAIT FOR HYDRATION, OR THE CLICK IS A NATIVE FORM SUBMIT. SignInForm is a client component whose
+   * handler calls supabase.auth.signInWithPassword. Playwright clicks the moment the button is
+   * actionable, which in dev mode can precede hydration — React has not attached onSubmit yet, so the
+   * browser performs the DEFAULT form submission instead. Measured on 2026-08-19: the page contacted
+   * only 127.0.0.1 and made no Supabase request at all, with no error shown. The test then failed on a
+   * navigation timeout that said nothing about the cause.
+   *
+   * networkidle is the honest signal here: this page's dev bundle is still streaming while the button
+   * is already clickable.
+   */
+  await page.waitForLoadState("networkidle");
+  /**
+   * ⚠ networkidle IS NOT A HYDRATION SIGNAL, and believing it was cost a diagnosis. React attaches its
+   * fiber and props to the DOM node when it hydrates, so their presence on the <form> is the actual
+   * fact we need — not a proxy for it.
+   *
+   * Without this the click lands on un-hydrated markup and the browser performs the DEFAULT form
+   * submission. Measured on 2026-08-19: the URL became "/practice/sign-in?" — the bare "?" is the
+   * signature of a native GET submit — the button still read "Sign in" rather than "Signing in…", and
+   * no Supabase request was made at all. The test then failed on a navigation timeout that described
+   * none of that.
+   */
+  await page.waitForFunction(() => {
+    const f = document.querySelector("form");
+    return !!f && Object.keys(f).some(k => k.startsWith("__react"));
+  }, undefined, { timeout: 20_000 });
   await page.getByLabel(/email/i).fill(email);
   await page.getByLabel(/password/i).fill(password);
   await page.getByRole("button", { name: /sign in/i }).click();
-  await page.waitForURL(url => !url.pathname.startsWith("/practice/sign-in"), { timeout: 15_000 });
+  /**
+   * ⚠ THE VIOLATION IS CHECKED WHEN THE WAIT FAILS, NOT IMMEDIATELY AFTER THE CLICK. The auth call is
+   * asynchronous: reading the flag straight after clicking read it before the request existed, so a
+   * production-pointed run reported a bare 15s navigation timeout and buried the actual cause. A
+   * misconfiguration that presents as a timeout is a misconfiguration nobody diagnoses.
+   */
+  try {
+    await page.waitForURL(url => !url.pathname.startsWith("/practice/sign-in"), { timeout: 15_000 });
+  } catch (err) {
+    const onSubmit = guard.violation();
+    if (onSubmit) {
+      throw new Error(
+        `Sign-in attempted to reach PRODUCTION (${onSubmit}). It was BLOCKED before dispatch, so the\n`
+        + `  password was never transmitted — but the server under test is not the staging one.\n`
+        + `  Start it with "npm run dev:staging" (port 3100) and run "npm run smoke:staging".`,
+      );
+    }
+    throw err;
+  }
 }
