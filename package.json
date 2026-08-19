@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "dev:staging": "node scripts/dev-staging.mjs"
+    "dev:staging": "node scripts/dev-staging.mjs",
+    "smoke:staging": "node scripts/smoke-staging.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",
