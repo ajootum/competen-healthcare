@@ -66,6 +66,9 @@ export async function POST(req: NextRequest) {
   const { data: created, error: insErr } = await c.admin.from("provisioning_request").insert({
     idempotency_key: idempotencyKey, request_type: payload.source === "pilot" ? "pilot" : "individual",
     actor_user_id: c.userId, target_user_id: targetUserId, payload_hash: hash, correlation_id: correlationId,
+    // CPR-PD-014 section 8.3: the payload is STORED, not only hashed, so an authorised retry can resume
+    // this run faithfully. A hash proves two requests were the same and cannot rebuild either.
+    payload,
   }).select("id, status, workspace_id").single();
 
   let request = created;

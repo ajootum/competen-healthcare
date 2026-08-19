@@ -172,6 +172,8 @@ export async function POST(req: NextRequest) {
   const { data: created, error: insErr } = await admin.from("provisioning_request").insert({
     idempotency_key: idempotencyKey, request_type: "individual",
     actor_user_id: userId, target_user_id: userId, payload_hash: payloadHash(payload), correlation_id: traceId,
+    // CPR-PD-014 section 8.3, same reason as the operator route: stored so a retry can resume it.
+    payload,
   }).select("id, status, workspace_id").single();
 
   let request = created;
