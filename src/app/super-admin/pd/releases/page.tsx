@@ -205,7 +205,7 @@ export default async function Page() {
             table, not an unreadable one — so this module cannot name a current production version.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
             <table className="w-full min-w-[640px] border-collapse text-[12px]">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">

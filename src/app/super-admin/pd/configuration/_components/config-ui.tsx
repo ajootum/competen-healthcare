@@ -34,7 +34,7 @@ export function ConfigHeader({ title, purpose, spec, children }: {
       </div>
       <h1 className="mt-0.5 text-2xl font-bold text-gray-900">{title}</h1>
       <p className="mt-1 max-w-3xl text-sm text-gray-600">{purpose}</p>
-      <p className="mt-1 font-mono text-[11px] text-gray-400">{spec}</p>
+      <p className="mt-1 font-mono text-[11px] text-gray-500">{spec}</p>
       {children}
     </div>
   );
@@ -203,7 +203,7 @@ const STATE_STYLE: Record<string, { dot: string; text: string }> = {
 
 export function Ladder({ rungs }: { rungs: LadderRung[] }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <table className="w-full min-w-[560px] border-collapse text-[12px]">
         <thead>
           <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
@@ -268,7 +268,7 @@ export function Ladder({ rungs }: { rungs: LadderRung[] }) {
 export function Stores({ stores }: { stores: DomainStore[] }) {
   return (
     <>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
         <table className="w-full min-w-[560px] border-collapse text-[12px]">
           <thead>
             <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
@@ -517,7 +517,7 @@ const RUNG_TONE: Record<string, string> = {
 
 export function HierarchyRail({ rungs }: { rungs: LadderRung[] }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <ol className="flex gap-2 pb-1" style={{ minWidth: "min-content" }}>
         {rungs.map((r, i) => (
           <li key={r.level} className="flex w-[176px] shrink-0 flex-col rounded-lg border border-gray-200 bg-white px-3 py-2.5">
@@ -584,7 +584,7 @@ export function ChangesTable({ rows }: {
     );
   }
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <table className="w-full text-[12px]">
         <thead>
           <tr className="border-b border-gray-200 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">
@@ -671,7 +671,7 @@ export function NoReadNote({ why }: { why: string }) {
 
 export function ReadStamp({ at, note }: { at: string; note?: string }) {
   return (
-    <p className="text-[11px] text-gray-400">
+    <p className="text-[11px] text-gray-500">
       Read at {at.slice(0, 16).replace("T", " ")} UTC.{" "}
       {note ?? "Every figure on this page is counted from the live database at request time; none is cached, projected or sampled."}
     </p>

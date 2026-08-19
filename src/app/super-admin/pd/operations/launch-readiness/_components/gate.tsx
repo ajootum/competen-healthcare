@@ -173,7 +173,7 @@ export function AttestationRows({ items, attestations, recordingUnavailableReaso
 
   return (
     <>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
         <table className="w-full min-w-[44rem] text-left text-[12px]">
           <thead>
             <tr className="border-b border-gray-200 text-[11px] uppercase tracking-wide text-gray-500">

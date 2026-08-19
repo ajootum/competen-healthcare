@@ -156,7 +156,7 @@ export default async function Page({
           they are in. Identity resolves from the central Competen identity model; this screen keeps no
           second store of its own.
         </p>
-        <p className="mt-1 font-mono text-[11px] text-gray-400">CPR-PD-004 §2–§4 · the estate only</p>
+        <p className="mt-1 font-mono text-[11px] text-gray-500">CPR-PD-004 §2–§4 · the estate only</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-xl border border-gray-200 bg-[var(--cmp-surface-neutral)] px-4 py-2.5 text-[12px]">

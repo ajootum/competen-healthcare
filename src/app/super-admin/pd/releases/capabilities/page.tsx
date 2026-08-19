@@ -80,7 +80,7 @@ export default async function Page() {
       <Panel
         title="The twelve capabilities (§3)"
         note="Each row is the specification's own vocabulary. `Needs` is the transitive requirement closure, computed by the exported rule rather than restated here; `Breaks if withdrawn` is everything that would be left standing on nothing.">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
           <table className="w-full min-w-[860px] border-collapse text-[12px]">
             <thead>
               <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">

@@ -114,7 +114,7 @@ export default async function Page() {
                   <span className="font-mono text-[11px] text-[var(--cmp-text-critical)]">
                     {f.failedStepErrorCode ?? f.requestErrorCode ?? "no error code recorded"}
                   </span>
-                  <span className="ml-auto font-mono text-[11px] text-gray-400">
+                  <span className="ml-auto font-mono text-[11px] text-gray-500">
                     {String(f.createdAt).slice(0, 16).replace("T", " ")}
                   </span>
                 </div>
@@ -208,7 +208,7 @@ export default async function Page() {
                       running <span className="font-mono font-semibold">{o.runningStep}</span>
                     </span>
                   )}
-                  <span className="ml-auto font-mono text-[11px] text-gray-400">
+                  <span className="ml-auto font-mono text-[11px] text-gray-500">
                     {String(o.createdAt).slice(0, 16).replace("T", " ")}
                   </span>
                 </div>
@@ -260,7 +260,7 @@ export default async function Page() {
 
       <TechnicalOpsLink for="Provisioning a pilot workspace, and the idempotency key that makes a double click safe, are on" />
 
-      <p className="text-[11px] text-gray-400">
+      <p className="text-[11px] text-gray-500">
         Read at {ops.generatedAt.slice(0, 16).replace("T", " ")} UTC. No patient name, note or diagnosis is
         read into this page.
       </p>

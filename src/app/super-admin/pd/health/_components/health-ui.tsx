@@ -459,7 +459,7 @@ export function NeedsAttention({ signals }: { signals: AttentionSignal[] }) {
  */
 export function JourneyRail({ journeys }: { journeys: readonly JourneyHealth[] }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <div className="flex gap-2 pb-1" style={{ minWidth: "min-content" }}>
         {journeys.map(j => {
           const measured = j.attempts !== null;

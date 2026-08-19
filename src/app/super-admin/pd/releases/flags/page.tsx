@@ -160,7 +160,7 @@ export default async function Page() {
             The catalogue answered and holds no rows — a measured empty table.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
             <table className="w-full min-w-[720px] border-collapse text-[12px]">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
@@ -218,7 +218,7 @@ export default async function Page() {
       {/* ── §8's CANONICAL RECORD, SCORED ────────────────────────────────────────────────────────── */}
       <Panel title="What §8 asks a flag record to carry"
         note={`Ten fields, scored separately for each flag system because they are different tables with different columns. ${governed} are carried by at least one of them.`}>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
           <table className="w-full min-w-[720px] border-collapse text-[12px]">
             <thead>
               <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">

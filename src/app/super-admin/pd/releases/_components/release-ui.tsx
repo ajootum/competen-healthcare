@@ -43,7 +43,7 @@ export function ReleaseHeader({ title, purpose, spec, children }: {
       </div>
       <h1 className="mt-0.5 text-2xl font-bold text-gray-900">{title}</h1>
       <p className="mt-1 max-w-3xl text-sm text-gray-600">{purpose}</p>
-      <p className="mt-1 font-mono text-[11px] text-gray-400">{spec}</p>
+      <p className="mt-1 font-mono text-[11px] text-gray-500">{spec}</p>
       {children}
     </div>
   );
@@ -231,7 +231,7 @@ function HeldChip({ held, label }: { held: Held; label: string }) {
 
 export function StateModel({ rows, holdLabel }: { rows: StateRow[]; holdLabel: string }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <table className="w-full min-w-[640px] border-collapse text-[12px]">
         <thead>
           <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
@@ -319,7 +319,7 @@ export function Pipeline({ stages }: { stages: RolloutStage[] }) {
         return (
           <li key={s.stage} className="rounded-lg border border-gray-200 bg-white p-3">
             <div className="flex flex-wrap items-baseline gap-2">
-              <span className="font-mono text-[11px] text-gray-400">{i + 1}</span>
+              <span className="font-mono text-[11px] text-gray-500">{i + 1}</span>
               <span className="text-[13px] font-bold text-gray-900">{s.stage}</span>
               {/* ⚠ NEVER COLOUR ALONE — the dot always travels with its word. */}
               <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${st.text}`}>
@@ -352,7 +352,7 @@ const GATE_STYLE: Record<string, { dot: string; text: string }> = {
 
 export function Gates({ gates }: { gates: ReadinessGate[] }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <table className="w-full min-w-[720px] border-collapse text-[12px]">
         <thead>
           <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
@@ -401,7 +401,7 @@ export function Conditions({ conditions }: { conditions: ResolverCondition[] }) 
         return (
           <li key={c.condition} className="rounded-lg border border-gray-200 bg-white p-3">
             <div className="flex flex-wrap items-baseline gap-2">
-              <span className="font-mono text-[11px] text-gray-400">{i + 1}</span>
+              <span className="font-mono text-[11px] text-gray-500">{i + 1}</span>
               <span className="text-[13px] font-bold text-gray-900">{c.condition}</span>
               <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${st.text}`}>
                 <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${st.dot}`} />
@@ -426,7 +426,7 @@ export function Lifecycle({ states }: { states: LifecycleState[] }) {
       {states.map((l, i) => (
         <li key={l.state} className="rounded-lg border border-gray-200 bg-white p-2.5">
           <div className="flex flex-wrap items-baseline gap-2">
-            <span className="font-mono text-[11px] text-gray-400">{i + 1}</span>
+            <span className="font-mono text-[11px] text-gray-500">{i + 1}</span>
             <span className="text-[12px] font-bold text-gray-900">{l.state}</span>
             <Verdict ok={l.represented !== null} yes="Representable" no="Nothing can hold this state" />
           </div>
@@ -442,7 +442,7 @@ export function Lifecycle({ states }: { states: LifecycleState[] }) {
 
 export function ObjectTable({ objects }: { objects: TechnicalObject[] }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <table className="w-full min-w-[560px] border-collapse text-[12px]">
         <thead>
           <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
@@ -467,7 +467,7 @@ export function ObjectTable({ objects }: { objects: TechnicalObject[] }) {
 
 export function AttributeTable({ rows }: { rows: AttributeRow[] }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <table className="w-full min-w-[640px] border-collapse text-[12px]">
         <thead>
           <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
@@ -494,7 +494,7 @@ export function AttributeTable({ rows }: { rows: AttributeRow[] }) {
 
 export function MigrationTable({ rows }: { rows: MigrationRow[] }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <table className="w-full min-w-[720px] border-collapse text-[12px]">
         <thead>
           <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
@@ -570,7 +570,7 @@ export function ReadFailures({ problems }: { problems: string[] }) {
 
 export function ReadStamp({ at, note }: { at: string; note?: string }) {
   return (
-    <p className="text-[11px] text-gray-400">
+    <p className="text-[11px] text-gray-500">
       Read at {at.slice(0, 16).replace("T", " ")} UTC.{" "}
       {note ?? "Every figure on this page is counted from the live database at request time; none is cached, projected or sampled."}
     </p>

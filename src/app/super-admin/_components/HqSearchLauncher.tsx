@@ -67,14 +67,19 @@ export default function HqSearchLauncher({ destinations }: { destinations: HqDes
 
   const go = (href: string) => { close(); router.push(href); };
 
+  // ⚠ THIS WAS STYLED FOR A DARK HEADER AND RENDERS ON A WHITE ONE. `border-white/15` is invisible
+  // against white, `bg-white/5` is white, and `text-gray-300` measured 1.4:1 — so the one control that
+  // searches the whole of HQ was very nearly invisible on every screen that carries it. Found by axe in
+  // the CPR-PD-013 §12 pass; GlobalHeader's root is `bg-white border-b border-gray-200`, which is what
+  // these values should always have been answering to. Light-surface tokens now, at AA for their sizes.
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)}
         aria-label="Search HQ. Keyboard shortcut Control or Command K"
-        className="flex min-h-[36px] items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-3 text-[12.5px] text-gray-300 hover:bg-white/10">
+        className="flex min-h-[36px] items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-[12.5px] text-gray-700 hover:bg-gray-100">
         <span aria-hidden>🔎</span>
         <span>Search HQ</span>
-        <span aria-hidden className="ml-1 rounded border border-white/15 px-1 text-[10px] text-gray-400">⌘K</span>
+        <span aria-hidden className="ml-1 rounded border border-gray-300 px-1 text-[10px] text-gray-600">⌘K</span>
       </button>
     );
   }

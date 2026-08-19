@@ -164,6 +164,13 @@ body {
 }
 .cmp-skip-link:focus { top: var(--cmp-space-8); }
 
+/* ⚠ 44px MINIMUM, MEASURED AT 37px BY THE CPR-PD-013 §12 PASS. The rule below exempts dense data grids
+   by making 44px opt-in via data-touch-target — and the skip link had quietly inherited that exemption
+   despite being the FIRST thing a keyboard or switch user reaches. It is the one control on the page
+   whose whole purpose is assistive, so it does not get to be the small one. Padding alone left it at 37;
+   min-height is what guarantees the box. */
+.cmp-skip-link { min-height: 44px; display: inline-flex; align-items: center; }
+
 /* 2.5.5 — pointer targets are at least 44x44px. Opt in with data-touch-target
    so dense clinical data grids, which WCAG exempts, are not forced to it. */
 [data-touch-target] {

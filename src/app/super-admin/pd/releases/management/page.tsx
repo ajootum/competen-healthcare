@@ -119,7 +119,7 @@ export default async function Page() {
             gate has a release to gate.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
             <table className="w-full min-w-[820px] border-collapse text-[12px]">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
@@ -173,7 +173,7 @@ export default async function Page() {
       {/* ── §6's FIELD TABLE, SCORED ─────────────────────────────────────────────────────────────── */}
       <Panel title="What §6 asks a release record to carry"
         note="Thirteen fields, each scored against what plat_deployments actually holds. This is the distance between a changelog and a governed release object.">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
           <table className="w-full min-w-[720px] border-collapse text-[12px]">
             <thead>
               <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
@@ -215,7 +215,7 @@ export default async function Page() {
             change set — a measured empty table, not an unreadable one.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
             <table className="w-full min-w-[640px] border-collapse text-[12px]">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">

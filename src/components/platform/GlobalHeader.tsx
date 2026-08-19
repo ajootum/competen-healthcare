@@ -147,7 +147,11 @@ export default function GlobalHeader({
               style={{ background: "var(--cmp-color-primary)" }} aria-hidden>C</span>
             <span className="min-w-0 hidden sm:block text-left">
               <span className="block text-gray-900 font-semibold text-sm leading-tight truncate">Competen</span>
-              <span className="block text-gray-400 text-[10px] leading-tight truncate">
+              {/* ⚠ gray-600, NOT gray-400. At 10px on white, #99a1af measures 2.6:1 — under AA's 4.5:1
+                  for text this size — and this line is the ONLY thing naming which workspace you are in
+                  on a phone. It is also the control this session widened into the mobile workspace
+                  switcher, so it went from hard to read to hard to read AND load-bearing. */}
+              <span className="block text-gray-600 text-[10px] leading-tight truncate">
                 {workspaceTitle} <span aria-hidden>▾</span>
               </span>
             </span>
@@ -163,7 +167,7 @@ export default function GlobalHeader({
               style={{ background: "var(--cmp-color-primary)" }} aria-hidden>C</span>
             <span className="min-w-0 hidden sm:block">
               <span className="block text-gray-900 font-semibold text-sm leading-tight truncate">Competen</span>
-              <span className="block text-gray-400 text-[10px] leading-tight truncate">{workspaceTitle}</span>
+              <span className="block text-gray-600 text-[10px] leading-tight truncate">{workspaceTitle}</span>
             </span>
           </Link>
         )}
@@ -173,7 +177,7 @@ export default function GlobalHeader({
             style={{ background: "var(--cmp-color-primary)" }} aria-hidden>C</span>
           <span className="min-w-0">
             <span className="block text-gray-900 font-semibold text-sm leading-tight truncate">Competen</span>
-            <span className="block text-gray-400 text-[10px] leading-tight truncate">{workspaceTitle}</span>
+            <span className="block text-gray-600 text-[10px] leading-tight truncate">{workspaceTitle}</span>
           </span>
         </Link>
 
@@ -292,7 +296,7 @@ export default function GlobalHeader({
             style={{ background: "var(--cmp-color-primary-dark)" }} aria-hidden>{initials}</span>
           <span className="hidden xl:block text-left min-w-0">
             <span className="block text-[12px] font-medium text-gray-900 leading-tight truncate max-w-[8rem]">{user.name}</span>
-            <span className="block text-[10px] text-gray-400 leading-tight truncate max-w-[8rem]">{user.roleLabel}</span>
+            <span className="block text-[10px] text-gray-500 leading-tight truncate max-w-[8rem]">{user.roleLabel}</span>
           </span>
           <span className="text-gray-400 text-xs" aria-hidden>▾</span>
           <span className="cmp-sr-only">Account menu for {user.name}</span>

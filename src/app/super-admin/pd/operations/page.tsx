@@ -149,7 +149,7 @@ export default async function Page() {
         </div>
       </Panel>
 
-      <p className="text-[11px] text-gray-400">
+      <p className="text-[11px] text-gray-500">
         Read at {ops.generatedAt.slice(0, 16).replace("T", " ")} UTC. Every figure on this page is counted
         from the live database at request time; none is cached, projected or sampled.
       </p>

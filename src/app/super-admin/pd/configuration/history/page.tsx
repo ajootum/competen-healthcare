@@ -57,7 +57,7 @@ export default async function Page() {
       {/* ── WHICH TRAILS ANSWERED. Printed FIRST, because an empty timeline is two facts. ─────── */}
       <Panel title="The trails behind this timeline"
         note="Five stores, five subjects. A trail that did not answer is named here rather than quietly contributing nothing.">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
           <table className="w-full min-w-[560px] border-collapse text-[12px]">
             <thead>
               <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">

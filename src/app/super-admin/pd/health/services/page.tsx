@@ -76,7 +76,7 @@ export default async function Page() {
             No job runs were readable in this window. That is not the same as no job runs.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="border-b border-gray-200 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">

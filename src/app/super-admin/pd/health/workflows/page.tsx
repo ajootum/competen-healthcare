@@ -77,7 +77,7 @@ export default async function Page() {
         title="The eight critical journeys"
         note="CPR-PD-008 §6, with the minimum measurable outcome each must record. Order is the specification's."
       >
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
           <table className="w-full text-[12px]">
             <thead>
               <tr className="border-b border-gray-200 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">

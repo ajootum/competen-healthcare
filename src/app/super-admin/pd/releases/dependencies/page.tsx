@@ -76,7 +76,7 @@ export default async function Page() {
       {/* ── THE HALF THAT WORKS ──────────────────────────────────────────────────────────────────── */}
       <Panel title="The capability dependency graph (§15)"
         note="Two kinds of dependency, kept apart on purpose: a capability that must be ACTIVE, and a configuration artefact that must be SET UP. Collapsing them would lose a distinction a practitioner needs — 'Calendar is off' and 'you have entered no location' are different problems with different fixes.">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
           <table className="w-full min-w-[760px] border-collapse text-[12px]">
             <thead>
               <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">

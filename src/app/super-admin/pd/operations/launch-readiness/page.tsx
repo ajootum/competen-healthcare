@@ -134,7 +134,7 @@ export default async function Page() {
 
       <TechnicalOpsLink for="Flipping a flag changes what the public site does, so the toggle and its confirmation stay on" />
 
-      <p className="text-[11px] text-gray-400">
+      <p className="text-[11px] text-gray-500">
         Read at {ops.generatedAt.slice(0, 16).replace("T", " ")} UTC. Automatic controls are evaluated
         against the live database on every load.
       </p>

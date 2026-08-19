@@ -189,7 +189,7 @@ export default async function Page() {
               : "No Practice workspace has been provisioned. That is a measured zero, not a missing figure."}
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wide text-gray-400">
@@ -273,7 +273,7 @@ export default async function Page() {
                 ))}
               </tbody>
             </table>
-            <p className="mt-2 text-[11px] text-gray-400">
+            <p className="mt-2 text-[11px] text-gray-500">
               Bands are 0, 1-9, 10-99 and 100+. They are computed on the server, so the exact figure is not
               in this page&apos;s payload and cannot be recovered from it.
             </p>
@@ -321,7 +321,7 @@ export default async function Page() {
 
       <TechnicalOpsLink for="The same register, alongside the provisioning form and the launch toggles, is on" />
 
-      <p className="text-[11px] text-gray-400">
+      <p className="text-[11px] text-gray-500">
         Read at {ops.generatedAt.slice(0, 16).replace("T", " ")} UTC.
       </p>
     </div>

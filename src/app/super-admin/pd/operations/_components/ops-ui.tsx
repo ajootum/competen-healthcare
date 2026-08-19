@@ -21,13 +21,19 @@ export function OpsHeader({ title, purpose, spec, children }: {
 }) {
   return (
     <div>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
-        <Link href="/super-admin/pd/operations" className="hover:text-teal-700">Product Operations</Link>
+      {/* ⚠ THE CRUMB IS A NAVIGATION CONTROL AND WAS 16px TALL. WCAG 2.2 AA (2.5.8) sets a 24px floor
+          for anything that is not inline text in a sentence, and a breadcrumb link is a target somebody
+          aims at, not prose. globals.css keeps 44px opt-in via data-touch-target so dense grids are not
+          forced to it — this only needs the AA floor, which `inline-flex` + min-height gives without
+          changing the row's look. */}
+      <div className="flex items-center gap-2 text-xs text-gray-600">
+        <Link href="/super-admin/pd/operations"
+          className="inline-flex min-h-[24px] items-center hover:text-teal-700">Product Operations</Link>
         <span>/</span><span className="text-gray-600">{title}</span>
       </div>
       <h1 className="mt-0.5 text-2xl font-bold text-gray-900">{title}</h1>
       <p className="mt-1 max-w-3xl text-sm text-gray-600">{purpose}</p>
-      <p className="mt-1 font-mono text-[11px] text-gray-400">{spec}</p>
+      <p className="mt-1 font-mono text-[11px] text-gray-500">{spec}</p>
       {children}
     </div>
   );
@@ -50,7 +56,7 @@ export function Stat({ label, value, scope, unreadable, tone }: {
           : "text-gray-900";
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <p className="text-[10px] uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="text-[10px] uppercase tracking-wide text-gray-500">{label}</p>
       {value === null ? (
         <p className="mt-1 text-[12px] leading-relaxed text-[var(--cmp-text-warning)]">
           {unreadable ?? "This could not be read. It is not zero."}
