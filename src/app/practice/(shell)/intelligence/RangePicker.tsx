@@ -32,13 +32,24 @@ export default function RangePicker({ fromDay, toDay, days }: {
   const [from, setFrom] = useState(fromDay);
   const [to, setTo] = useState(toDay);
 
-  const tab = params.get("tab");
-  const cohortBy = params.get("cohortBy");
 
+  // ── CPR-PI-001 v2 s5/s19: CHANGING THE PERIOD CHANGES THE PERIOD, AND NOTHING ELSE ────────────────
+  //
+  // ⚠ THIS REBUILT THE QUERY STRING FROM SCRATCH AND CARRIED TWO KEYS. The page reads nine -- tab,
+  // days/from/to, cohortBy, cohort, segment, q, sessionId -- so moving the window silently dropped the
+  // open saved cohort, the patient segment, the question typed into Ask Practice and the assistant
+  // session id. The patient list reverted to All patients with no notice, which is precisely the class
+  // this file's own comment below warns about: invisible in review because the default looks correct.
+  //
+  // ⚠ AND IT IS AN ALLOW-NOTHING LIST NOW, NOT AN ALLOW-LIST. An allow-list of keys to carry has to be
+  // updated by whoever adds the tenth parameter, and they will not know it exists. Preserving the whole
+  // query string and REPLACING only what this control owns cannot go stale: a new filter is carried
+  // because nothing had to remember it.
   const go = (extra: Record<string, string>) => {
-    const next = new URLSearchParams();
-    if (tab) next.set("tab", tab);
-    if (cohortBy) next.set("cohortBy", cohortBy);
+    const next = new URLSearchParams(params.toString());
+    // The three range keys are this control's own, and the two forms are mutually exclusive -- a stale
+    // `days` left beside a new `from`/`to` would have the page resolving a period nobody asked for.
+    for (const k of ["days", "from", "to"]) next.delete(k);
     for (const [k, v] of Object.entries(extra)) next.set(k, v);
     try { window.localStorage.setItem(RANGE_MEMORY_KEY, JSON.stringify(extra)); } catch { /* private mode */ }
     router.push(`/practice/intelligence?${next.toString()}`);

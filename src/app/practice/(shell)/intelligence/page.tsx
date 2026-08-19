@@ -22,7 +22,7 @@ import PriorityStrip from "./PriorityStrip";
 import AssistantArea from "./AssistantArea";
 import AskPracticeArea from "./AskPracticeArea";
 import ReportsV2Area from "./ReportsV2Area";
-import { askPractice } from "@/lib/practice/ask-practice";
+import { askPractice, ASK_EXAMPLES } from "@/lib/practice/ask-practice";
 import { CARD } from "./Ui";
 import {
   BriefArea, ActivityPanel, TrendsPanel, PatientsArea, CohortsArea,
@@ -96,6 +96,17 @@ export default async function IntelligencePage({ searchParams }: {
   if (custom) { carried.set("from", sp.from!); carried.set("to", sp.to!); }
   else if (days) carried.set("days", String(days));
   if (isCohortDimension(sp.cohortBy)) carried.set("cohortBy", sp.cohortBy);
+  // ⚠ v2 s5: "preserve date/cohort/FILTER state while moving among Intelligence screens". The range and
+  // the cohort DIMENSION were carried; the two things that actually narrow the population -- the saved
+  // cohort and the patient segment -- were not, so a tab change quietly widened the page back to every
+  // patient. They are filters in v2's sense and they travel.
+  //
+  // ⚠ `q` AND `sessionId` DELIBERATELY DO NOT TRAVEL, unlike in RangePicker next door. A question typed
+  // into Ask Practice and an assistant session belong to that destination; carrying them onto Patterns
+  // would put a stale question in a URL that has nowhere to render it. Changing the PERIOD keeps them
+  // because you are still standing on the same screen; changing the SCREEN does not.
+  if (sp.cohort) carried.set("cohort", sp.cohort);
+  if (sp.segment) carried.set("segment", sp.segment);
 
   const tabHref = (key: IntelligenceTabKey) => {
     const p = new URLSearchParams(carried);
@@ -341,6 +352,40 @@ export default async function IntelligencePage({ searchParams }: {
                   correlationId: crypto.randomUUID(),
                 })}
               />
+            )}
+            {/* ⚠ v2 s13 STAGE 1, AND IT WAS NOWHERE. The question shapes existed only inside the
+                REFUSAL, so the only way to find out what Ask Practice answers was to ask it something
+                it could not. The parser grounds six intents and returns "unknown" for everything else,
+                which makes an unguided first question most likely to be refused -- and a tool that
+                refuses your first three questions is one you stop opening.
+
+                Shown on the empty state only. Once a question has been asked the answer is the thing
+                to read, and AskPracticeArea keeps the same list in its own refusal for the case that
+                still needs it. They are LINKS, not sample text: the shape is one click from being the
+                question, which is the difference between telling somebody what works and showing them. */}
+            {!(sp.q && sp.q.trim().length >= 3) && (
+              <div className={CARD}>
+                <h2 className="text-[13px] font-semibold text-gray-900">What Ask Practice can answer</h2>
+                <p className="mt-0.5 text-[11.5px] text-gray-600">
+                  These are the question shapes it grounds in your records. Anything else is refused
+                  rather than guessed, so it is worth starting from one of these and refining it.
+                </p>
+                <ul className="mt-2 flex flex-wrap gap-1.5">
+                  {ASK_EXAMPLES.map(e => {
+                    const p = new URLSearchParams(carried);
+                    p.set("tab", "assistant");
+                    p.set("q", e.question);
+                    return (
+                      <li key={e.intent}>
+                        <Link href={`/practice/intelligence?${p.toString()}`}
+                          className="inline-flex rounded-lg border border-sky-200 bg-sky-50/60 px-2.5 py-1 text-[11.5px] font-semibold text-sky-800 hover:border-sky-400 hover:bg-sky-100 max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:text-[12.5px]">
+                          {e.question}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             )}
             <AssistantArea admin={admin} ctx={shell.ctx} sessionId={sp.sessionId} question={sp.q} />
           </div>

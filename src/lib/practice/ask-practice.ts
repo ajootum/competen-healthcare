@@ -48,13 +48,28 @@ export type AskAnswer = {
   recent: { question: string; askedAt: string }[];
 };
 
-const EXAMPLES = [
-  "How many patients did I see this month?",
-  "Show patients overdue for follow-up",
-  "What are my top 5 diagnoses?",
-  "Which investigations do I order most?",
-  "How much did I receive this month?",
+/**
+ * The question shapes this parser can actually ground -- ONE PER INTENT, and that is the invariant.
+ *
+ * ⚠ EXPORTED AND RENDERED SINCE CPR-PD-013. It used to be private and appeared ONLY inside the refusal
+ * sentence, so the only way to learn what Ask Practice answers was to ask it something it could not.
+ * parseAskIntent routes six intents and returns "unknown" for everything else, so a practitioner's
+ * first questions were most likely all refused by a field that never said what it understood.
+ *
+ * ⚠ AND IT WAS FIVE FOR SIX. `consultations` had no example, so the one shape nobody would guess from
+ * the others was the one not shown. If a seventh intent is added, add its example here -- the list is
+ * the user-facing contract for what the parser understands, not a sample of it.
+ */
+export const ASK_EXAMPLES: { intent: Exclude<Intent, "unknown">; question: string }[] = [
+  { intent: "patients_seen", question: "How many patients did I see this month?" },
+  { intent: "consultations", question: "How many consultations did I do last month?" },
+  { intent: "overdue_followups", question: "Show patients overdue for follow-up" },
+  { intent: "top_conditions", question: "What are my top 5 diagnoses?" },
+  { intent: "investigations", question: "Which investigations do I order most?" },
+  { intent: "financial", question: "How much did I receive this month?" },
 ];
+
+const EXAMPLES = ASK_EXAMPLES.map(e => e.question);
 
 /** "last 30 days" / "this month" / "last month" / "this year" -- else the range the page already holds. */
 export function parseAskPeriod(question: string, todayDate: string, fallback: { fromDay: string; toDay: string }): {
@@ -85,7 +100,13 @@ type Intent = "financial" | "overdue_followups" | "top_conditions" | "investigat
 export function parseAskIntent(question: string): Intent {
   const q = question.toLowerCase();
   // Money first: "how many invoices were paid" must not fall through to the consultation counter.
-  if (/(charge|charged|collect|received|revenue|invoice|paid|owe|owed|money|settle)/.test(q)) return "financial";
+  // ⚠ `receiv`, NOT `received`. The published example is "How much did I receive this month?" and the
+  // pattern only held the past tense, so Ask Practice SUGGESTED a question it then refused -- found the
+  // first time the examples were asserted against the parser rather than merely rendered. Stems, not
+  // conjugations: `charge` already covers charged, `collect` covers collected, and `receiv` now covers
+  // receive/received/receiving. (This routes the INTENT only -- collected and received stay separate
+  // figures in the answer, per CPR-PAY.)
+  if (/(charge|collect|receiv|revenue|invoice|paid|owe|owed|money|settle)/.test(q)) return "financial";
   if (/(overdue|not\s+(yet\s+)?returned|missed).*(follow|review)|follow.?up.*(overdue|not\s+returned|missed)/.test(q)) return "overdue_followups";
   if (/(top|most\s+common|commonest|frequent).*(diagnos|condition)|diagnos(es|is)\b.*top/.test(q)) return "top_conditions";
   if (/investigation|(test|lab)s?\s+(do\s+)?i\s+order|order\s+most/.test(q)) return "investigations";

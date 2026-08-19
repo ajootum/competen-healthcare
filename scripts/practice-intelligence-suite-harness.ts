@@ -26,6 +26,8 @@
  */
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
+import fs from "node:fs";
+import path from "node:path";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { registerPatient } from "../src/lib/practice/patients";
 import { launchEncounter, transitionEncounter, recordDiagnosis } from "../src/lib/practice/encounters";
@@ -37,10 +39,11 @@ import {
   type IntelModule, type PatientAttentionData, type PathwayIntelligenceData,
 } from "../src/lib/practice/intelligence";
 import {
-  findRates, INTELLIGENCE_TABS, REFUSED_PATIENT_STATES, PRIORITY_SWATCH,
+  findRates, INTELLIGENCE_TABS, INTELLIGENCE_TAB_STRIP, REFUSED_PATIENT_STATES, PRIORITY_SWATCH,
   INACTIVE_AFTER_DAYS, LOST_TO_FOLLOW_UP_AFTER_DAYS, isIntelligenceTab,
 } from "../src/lib/practice/intelligence-constants";
 import { assistantGrounding, CONTEXT_KINDS } from "../src/lib/practice/ai-assistant";
+import { ASK_EXAMPLES, parseAskIntent } from "../src/lib/practice/ask-practice";
 import { PRACTICE_NAV } from "../src/lib/practice/navigation";
 import { practiceToday, dueDateFrom } from "../src/lib/practice/practice-time";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
@@ -160,13 +163,30 @@ async function main() {
     JSON.stringify(findRates({ ratesComputed: 0.82 })));
 
   // ══ B. TABS ARE TABS ══════════════════════════════════════════════════════════════════════════════
-  console.log("\n── s4: nine internal tabs, and NOT nine sidebar entries ──");
-  ok("s6's nine areas exist, in s6's order, Overview first",
-    INTELLIGENCE_TABS.length === 9 && INTELLIGENCE_TABS[0].key === "overview" &&
-    INTELLIGENCE_TABS.map(t => t.key).join(",") ===
-      "overview,brief,patients,cohorts,clinical,pathways,performance,reports,assistant",
+  console.log("\n── v2 s3: the strip is v2's destinations, and NOT sidebar entries ──");
+  // ⚠ THIS ASSERTED v1's NINE AND WENT STALE THE DAY v2 SHIPPED. It pinned INTELLIGENCE_TABS to
+  // "overview,brief,patients,cohorts,clinical,pathways,performance,reports,assistant" -- and the v2
+  // rebuild made that array a SUPERSET of twelve keys (followups, patterns and financial were added)
+  // while moving the navigation to INTELLIGENCE_TAB_STRIP. It has been red-if-run ever since, unseen,
+  // because every PI harness is privileged-live and none of them runs in CI.
+  //
+  // ⚠ AND THE WARNING WAS ALREADY WRITTEN ON THE NEXT LINE. "NAMING THE KEYS, NOT COUNTING THEM" sat
+  // under an assertion that pinned both a count AND a whole-order string of the wrong constant. The
+  // lesson survived as a comment while the assertion under it did the opposite.
+  //
+  // So: the STRIP is what v2 s3 governs, and it is asserted by name and order. INTELLIGENCE_TABS is a
+  // superset by design -- v2 s3 removes brief/cohorts/pathways from the strip while keeping their keys
+  // valid so old bookmarks still land -- so it is asserted for what it must CONTAIN, never for length.
+  ok("v2 s3: the strip is v2's destinations, in v2's order, Overview first",
+    INTELLIGENCE_TAB_STRIP.join(",") ===
+      "overview,patients,clinical,followups,patterns,financial,performance,reports,assistant",
+    INTELLIGENCE_TAB_STRIP.join(","));
+  ok("v2 s3: brief, cohorts and pathways LEFT THE STRIP but their keys stay valid, so old links still land",
+    !["brief", "cohorts", "pathways"].some(k => INTELLIGENCE_TAB_STRIP.includes(k as never)) &&
+    ["brief", "cohorts", "pathways"].every(k => isIntelligenceTab(k)),
     INTELLIGENCE_TABS.map(t => t.key).join(","));
-  // ⚠ NAMING THE KEYS, NOT COUNTING THEM. Three count-assertions went stale in this codebase this week.
+  ok("CONTROL: every strip key is a real tab, so the strip cannot name a destination that does not exist",
+    INTELLIGENCE_TAB_STRIP.every(k => INTELLIGENCE_TABS.some(t => t.key === k)));
   const navHrefs = PRACTICE_NAV.map(n => n.href);
   ok("NO TAB HAS BECOME A SIDEBAR ENTRY: nothing in the nav is a child route or a tab query of the workspace",
     !navHrefs.some(h => h.startsWith("/practice/intelligence/")) &&
@@ -174,10 +194,27 @@ async function main() {
     navHrefs.filter(h => h.includes("intelligence")).join(","));
   ok("CONTROL: the workspace itself IS in the nav, so the test above is not passing because the route is absent",
     navHrefs.includes("/practice/intelligence"));
-  ok("s3's re-homing holds: assistant, case memory, reflection and portfolio are PARENTED under it, not top level",
-    ["/practice/assistant", "/practice/cases", "/practice/reflection", "/practice/portfolio"]
-      .every(h => PRACTICE_NAV.find(n => n.href === h)?.parent === "/practice/intelligence"),
-    PRACTICE_NAV.filter(n => n.parent === "/practice/intelligence").map(n => n.href).join(","));
+  // ⚠ THIS ASSERTED ONE IMPLEMENTATION OF THE RULE AND THE RULE OUTLIVED IT. It required the four
+  // routes to carry `parent: "/practice/intelligence"`. CPR-HFE-001 v1.1 then froze an eleven-item
+  // sidebar and took them out of PRACTICE_NAV altogether -- a stronger form of the same requirement,
+  // recorded in navigation.ts's own words at the /practice/assistant line. The assertion went red for
+  // a change that satisfied it more completely than the shape it was pinned to.
+  //
+  // So it now asserts v1 s15's ACTUAL criterion ("the separate Practice Assistant sidebar item is
+  // removed") and the half that keeps the removal honest: removed from the sidebar is not deleted.
+  const REHOMED = ["/practice/assistant", "/practice/cases", "/practice/reflection", "/practice/portfolio"];
+  ok("v1 s15: none of assistant, case memory, reflection or portfolio is a TOP-LEVEL sidebar item",
+    REHOMED.every(h => {
+      const n = PRACTICE_NAV.find(x => x.href === h);
+      return !n || (!n.primary && !!n.parent);
+    }),
+    REHOMED.map(h => {
+      const n = PRACTICE_NAV.find(x => x.href === h);
+      return `${h}=${!n ? "absent" : n.primary ? "PRIMARY" : `child of ${n.parent}`}`;
+    }).join(", "));
+  ok("CONTROL: and every one of those routes still EXISTS, so this is removal from the nav rather than deletion",
+    REHOMED.every(h => fs.existsSync(path.join(process.cwd(), "src/app/practice/(shell)", h.replace("/practice/", ""), "page.tsx"))),
+    REHOMED.filter(h => !fs.existsSync(path.join(process.cwd(), "src/app/practice/(shell)", h.replace("/practice/", ""), "page.tsx"))).join(","));
   ok("every tab's swatch key resolves -- a mismatch here compiles and renders a real figure in dead grey",
     INTELLIGENCE_TABS.every(t => typeof t.swatch === "string" && t.swatch.length > 0) &&
     isIntelligenceTab("overview") && !isIntelligenceTab("dashboard"));
@@ -185,6 +222,27 @@ async function main() {
     PRIORITY_KEYS.length === 5 && PRIORITY_KEYS.every(k => !!PRIORITY_SWATCH[k]) &&
     Object.keys(PRIORITY_SWATCH).length === 5,
     `${PRIORITY_KEYS.join(",")} vs ${Object.keys(PRIORITY_SWATCH).join(",")}`);
+
+  // ══ B2. ASK PRACTICE'S PUBLISHED QUESTION SHAPES ══════════════════════════════════════════════════
+  //
+  // v2 s13 stage 1. The shapes are now rendered on the Ask tab's empty state, which turns them from
+  // documentation into a PROMISE: every one is a link that fires the question. So the assertion is not
+  // that the list is non-empty -- it is that each entry actually reaches the intent it claims, and that
+  // no intent is missing from the list.
+  //
+  // ⚠ THE FIRST HALF IS THE ONE THAT MATTERS. A regex tightened in parseAskIntent would otherwise leave
+  // a chip on screen that routes to "unknown" and answers its own advertised question with a refusal.
+  const askRouted = ASK_EXAMPLES.map(e => ({ ...e, got: parseAskIntent(e.question) }));
+  const misrouted = askRouted.filter(e => e.got !== e.intent);
+  ok("v2 s13: every published question shape actually parses to the intent it claims",
+    misrouted.length === 0,
+    misrouted.map(e => `"${e.question}" -> ${e.got}, not ${e.intent}`).join("; "));
+  const INTENTS = ["financial", "overdue_followups", "top_conditions", "investigations", "patients_seen", "consultations"];
+  const uncovered = INTENTS.filter(i => !ASK_EXAMPLES.some(e => e.intent === i));
+  ok("v2 s13: every intent the parser grounds has a published example, so the list is the contract and not a sample",
+    uncovered.length === 0, uncovered.join(","));
+  ok("CONTROL: a question outside every shape routes to unknown, so the parser is not matching everything",
+    parseAskIntent("what is the weather like in the waiting room") === "unknown");
 
   // ══ C. THE FIXTURE ════════════════════════════════════════════════════════════════════════════════
   const wsA = await provision(OWNER, "HARNESS PI A (synthetic)", "a");
