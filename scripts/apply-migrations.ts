@@ -70,7 +70,10 @@ let applied = 0;
 for (const f of files) {
   process.stdout.write(`  ${f} ... `);
   try {
-    execFileSync("npx", ["supabase", "db", "query", "--project-ref", target, "--file", join(MIGRATIONS, f)],
+    // ⚠ --linked IS REQUIRED ALONGSIDE --project-ref. The CLI refuses --project-ref on its own:
+    // "only applies when targeting the linked project; use it with --linked". --linked selects the
+    // Management API path (rather than --local or --db-url), and --project-ref says which project.
+    execFileSync("npx", ["supabase", "db", "query", "--linked", "--project-ref", target, "--file", join(MIGRATIONS, f)],
       { cwd: ROOT, stdio: "pipe", encoding: "utf8", shell: process.platform === "win32" });
     console.log("ok");
     applied++;
