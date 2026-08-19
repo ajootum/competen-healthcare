@@ -132,17 +132,14 @@ export async function signInAsSyntheticPractitioner(page: Page): Promise<void> {
     );
   }
   /**
-   * ⚠ WAIT FOR HYDRATION, OR THE CLICK IS A NATIVE FORM SUBMIT. SignInForm is a client component whose
-   * handler calls supabase.auth.signInWithPassword. Playwright clicks the moment the button is
-   * actionable, which in dev mode can precede hydration — React has not attached onSubmit yet, so the
-   * browser performs the DEFAULT form submission instead. Measured on 2026-08-19: the page contacted
-   * only 127.0.0.1 and made no Supabase request at all, with no error shown. The test then failed on a
-   * navigation timeout that said nothing about the cause.
+   * ⚠ NO waitForLoadState("networkidle") HERE. It was added while chasing a hydration failure and is
+   * actively harmful on a real app: this page opens a long-lived connection to Supabase, so the network
+   * never goes idle and the wait consumes the entire per-test budget. Measured: every authenticated
+   * journey burned its full 60s and failed, on a build where sign-in demonstrably works.
    *
-   * networkidle is the honest signal here: this page's dev bundle is still streaming while the button
-   * is already clickable.
+   * Hydration is handled by the retry loop below instead, which watches for the EFFECT rather than
+   * guessing at readiness.
    */
-  await page.waitForLoadState("networkidle");
   /**
    * ⚠ networkidle IS NOT A HYDRATION SIGNAL, and believing it was cost a diagnosis. React attaches its
    * fiber and props to the DOM node when it hydrates, so their presence on the <form> is the actual
@@ -187,13 +184,28 @@ export async function signInAsSyntheticPractitioner(page: Page): Promise<void> {
   // Budgeted against the 60s per-test timeout: 4 x (7s wait + 1.5s settle) leaves room for page load.
   const ATTEMPTS = 4;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    /**
+     * ⚠ A SETTLE BEFORE TYPING, MEASURED NOT GUESSED. Clicking the instant the button is actionable
+     * lands on un-hydrated markup and performs a native GET submit, which RELOADS the page - so every
+     * retry meets a freshly un-hydrated page and the loop can never converge. A manual probe that
+     * paused ~2.5s before typing signed in first time, so that is the pause.
+     */
+    await page.waitForTimeout(attempt === 1 ? 2_500 : 1_500);
     await emailBox.fill(email);
     await passwordBox.fill(password);
     await submitBtn.click();
     try {
-      await page.waitForURL(u => !u.pathname.startsWith("/practice/sign-in"), { timeout: 7_000 });
+      await page.waitForURL(u => !u.pathname.startsWith("/practice/sign-in"), { timeout: 20_000 });
       return;
     } catch (err) {
+      /**
+       * ⚠ CHECK WHETHER WE ALREADY LEFT BEFORE RETRYING. The shell that follows a successful sign-in is
+       * server-rendered and can take longer to arrive than the wait allows. When that happened the loop
+       * retried on a page that had ALREADY signed in, and sat waiting for an email field that no longer
+       * existed until the test timed out — reporting "locator.fill timed out" for a sign-in that had
+       * actually worked. Re-reading the URL first turns that into the success it is.
+       */
+      if (!new URL(page.url()).pathname.startsWith("/practice/sign-in")) return;
       const violation = guard.violation();
       if (violation) {
         throw new Error(
