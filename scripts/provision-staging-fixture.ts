@@ -65,6 +65,34 @@ const url = process.env.STAGING_SUPABASE_URL ?? null;
 const key = process.env.STAGING_SERVICE_ROLE_KEY ?? null;
 const password = process.env.SMOKE_PRACTITIONER_PASSWORD ?? null;
 
+/**
+ * ⚠ REFUSE A PLACEHOLDER, BECAUSE THEY GET PASTED. On 2026-08-19 the literal string "<a strong secret>"
+ * — written by me as an illustration — was pasted into the shell and this script cheerfully created a
+ * real account with it. That was the THIRD placeholder of the day used verbatim, after an invented
+ * pooler region and the service-role key.
+ *
+ * The lesson is not "write clearer placeholders". A tool that accepts an obviously fake secret and
+ * reports success has no business being trusted with the real one.
+ */
+function assertRealSecret(pw: string): void {
+  const problems: string[] = [];
+  if (/[<>]/.test(pw)) problems.push("contains < or >, which means it is still a placeholder");
+  if (pw.length < 16) problems.push(`is ${pw.length} characters, and the fixture requires at least 16`);
+  if (/^(password|secret|changeme|test|a strong secret)/i.test(pw.trim())) problems.push("is a well-known placeholder string");
+  if (problems.length) {
+    die("SMOKE_PRACTITIONER_PASSWORD is not a real secret.", [
+      ...problems.map(p => `It ${p}.`),
+      "",
+      "Invent one — it is the password for a synthetic account that does not exist anywhere else.",
+      "Nothing looks it up and nothing else uses it. A random 24+ character string is ideal:",
+      "",
+      "  -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 28 | % {[char]$_})",
+      "",
+      "Put it in .env.local as SMOKE_PRACTITIONER_PASSWORD=... so Playwright reads the same value.",
+    ]);
+  }
+}
+
 function die(msg: string, extra: string[] = []): never {
   console.error(`\n⛔ ${msg}\n`);
   for (const l of extra) console.error(`   ${l}`);
@@ -98,6 +126,8 @@ if (targetRef === prodRef) {
     "§10: no test may mutate production, and no synthetic fixture belongs there.",
   ]);
 }
+
+if (password) assertRealSecret(password);
 
 const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 
@@ -192,7 +222,21 @@ async function main() {
   console.log("\nPRACTICE");
   let access = await resolvePracticeAccess(admin, userId);
 
-  if (access.workspaces.length === 0) {
+  /**
+   * ⚠ A WORKSPACE EXISTING IS NOT A WORKSPACE FINISHED, and the first version of this script treated
+   * them as the same thing. An interrupted run on 2026-08-19 left a workspace at PROVISIONING with its
+   * memberships already written, and because `workspaces.length` was 1 the next run took the "reused
+   * existing" path, skipped the engine entirely, and left it stuck there forever.
+   *
+   * runProvisioning is resumable by design — its ledger is keyed on (request_id, step_code) and each
+   * step checks for its own output before writing — so the correct response to an unfinished workspace
+   * is to run it AGAIN with that workspace id, not to step around it.
+   */
+  const unfinished = access.workspaces.length === 1
+    && !["ACTIVE", "ONBOARDING"].includes(access.workspaces[0].status);
+  if (unfinished) console.log(`  note  workspace is ${access.workspaces[0].status} — an unfinished run, resuming it`);
+
+  if (access.workspaces.length === 0 || unfinished) {
     if (VERIFY_ONLY) { bad("no Practice workspace — run without --verify to provision one"); return report(); }
     const { data: req, error: reqErr } = await admin.from("provisioning_request").insert({
       idempotency_key: IDEMPOTENCY_KEY, request_type: "pilot",
@@ -209,7 +253,12 @@ async function main() {
     if (!requestId) die(`could not create or find the provisioning request: ${reqErr?.message ?? "unknown"}`);
 
     const run = await runProvisioning(admin,
-      { id: requestId, target_user_id: userId, correlation_id: CORRELATION, workspace_id: null }, payload);
+      {
+        id: requestId, target_user_id: userId, correlation_id: CORRELATION,
+        // Resuming: hand the engine the workspace it already made, so it continues that one rather
+        // than starting a second and leaving the fixture with two (which is a chooser diversion).
+        workspace_id: unfinished ? access.workspaces[0].id : null,
+      }, payload);
     if (!run.ok || !run.workspaceId) {
       die(`provisioning failed at ${run.failedStep ?? "?"} (${run.errorCode ?? "?"})`, [run.detail ?? ""]);
     }
@@ -253,9 +302,19 @@ async function main() {
     const { error: actErr } = await admin.from("practice_workspace")
       .update({ status: "ACTIVE", updated_at: new Date().toISOString() })
       .eq("id", ws.id).eq("status", "ONBOARDING");
+    /**
+     * ⚠ NO ERROR IS NOT THE SAME AS A ROW CHANGED. This update is guarded on status = ONBOARDING, so
+     * against a workspace in any other state it matches nothing, returns no error, and the first
+     * version of this script printed "activated" for it. That is precisely the trap migration 334 fell
+     * into with `update storage.buckets` on a fresh project — a no-op reading as success.
+     *
+     * So the OUTCOME is read back rather than the absence of an error believed.
+     */
     if (actErr) bad(`could not activate the workspace: ${actErr.message}`);
-    else ok(`onboarding completed and workspace activated (${catalog.length} catalog step(s))`);
     access = await resolvePracticeAccess(admin, userId);
+    const nowStatus = access.workspaces[0]?.status;
+    if (nowStatus === "ACTIVE") ok(`onboarding completed and workspace activated (${catalog.length} catalog step(s))`);
+    else bad(`workspace is still ${nowStatus} after the activation update — it matched no row`);
   } else {
     ok("workspace is ACTIVE — no onboarding diversion");
   }
