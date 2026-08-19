@@ -30,7 +30,8 @@
 -- Nine foundational tables, none of which any numbered migration creates:
 --   profiles, hospitals, courses, course_enrollments, competencies,
 --   nurse_competencies, questions, quiz_attempts, cpd_logs
--- RLS enabled on all nine. Seven policies (the four omitted below are excluded).
+-- RLS enabled on all nine. FOURTEEN policies and one RLS helper function -- the six omitted below are
+-- excluded.
 -- handle_new_user() and the on_auth_user_created trigger.
 --
 -- Collision review (COMP-ENG-002F section 9.2): NONE. No numbered migration creates any of the nine.
@@ -42,8 +43,8 @@
 --
 -- ============================ POLICIES DELIBERATELY OMITTED ============================
 --
--- schema.sql declares eleven. Four are NOT created here. Each was checked against live production
--- before being omitted, and each is measurably absent there:
+-- The loose files declare twenty across them. SIX are NOT created here. Each was checked against live
+-- production before being omitted, and each is measurably absent there:
 --
 --   profiles :: "Users see own profile"
 --       RETIRED RECURSION LINEAGE. Dropped by supabase/fix-super-admin-rls-recursion.sql because
@@ -60,6 +61,15 @@
 --
 --   competencies :: "Anyone can view competencies"
 --       SUPERSEDED. Production carries competencies_read instead.
+--
+--   profiles :: "Users insert own profile"
+--       DELIBERATELY CLOSED by migration 250, which shut the profile insert door. Recreating it here
+--       would reopen in a clean build the exact hole 250 was written to close.
+--
+--   profiles :: "Admins view hospital nurses"
+--       RETIRED RECURSION LINEAGE, same class as "Users see own profile" above. Declared in both
+--       rls-updates.sql and fix-rls-recursion.sql, absent from production, and the second of the two
+--       remaining MISSING policies in the reconciliation.
 --
 -- ============================ LATER MIGRATIONS THAT EXTEND THIS ============================
 --
@@ -239,6 +249,86 @@ create policy "Users manage own CPD" on cpd_logs for all using (auth.uid() = use
 
 drop policy if exists "Users manage own attempts" on quiz_attempts;
 create policy "Users manage own attempts" on quiz_attempts for all using (auth.uid() = user_id);
+
+-- ---- The hidden bootstrap the loose fix scripts left behind -------------------------------------
+--
+-- FOUND EMPIRICALLY, 2026-08-19. With the nine tables in place the clean build reached
+-- 006-org-hierarchy.sql and died on current_user_is_hospital_admin_for. A repository-wide scan then
+-- showed the full extent rather than one more symptom: ONE function and THIRTEEN policies are declared
+-- only in unnumbered files under supabase/, and by no numbered migration at all.
+--
+-- SEVEN of the thirteen are live in production and are created below. The other six are measurably
+-- absent and stay omitted -- they are the omission table above.
+--
+-- Written as drop-then-create. The loose originals use do-blocks with an exception handler for
+-- duplicate_object, which this repository bans because the owner runner splits on semicolons.
+--
+-- 252 pins this helper search_path later. It is pinned here too, in the order production carries it,
+-- so a clean build never holds an unpinned SECURITY DEFINER function even briefly. The body is
+-- production live text, unqualified profiles included -- the pinned search_path is what resolves it.
+
+create or replace function public.current_user_is_hospital_admin_for(target_hospital_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = pg_catalog, public
+as $HELPER$
+  select exists (
+    select 1 from profiles
+    where id = auth.uid()
+      and role = 'hospital_admin'
+      and hospital_id = target_hospital_id
+  );
+$HELPER$;
+
+drop policy if exists "users_read_own_profile" on profiles;
+create policy "users_read_own_profile" on profiles for select using (auth.uid() = id);
+
+drop policy if exists "Users insert own competencies" on nurse_competencies;
+create policy "Users insert own competencies" on nurse_competencies for insert with check (auth.uid() = user_id);
+
+drop policy if exists "Users update own competencies" on nurse_competencies;
+create policy "Users update own competencies" on nurse_competencies for update using (auth.uid() = user_id);
+
+drop policy if exists "Authenticated users view hospitals" on hospitals;
+create policy "Authenticated users view hospitals" on hospitals for select using (auth.role() = 'authenticated');
+
+drop policy if exists "Admins view hospital nurse competencies" on nurse_competencies;
+create policy "Admins view hospital nurse competencies"
+  on nurse_competencies for select
+  using (
+    auth.uid() = user_id
+    or exists (
+      select 1 from profiles nurse
+      where nurse.id = nurse_competencies.user_id
+        and current_user_is_hospital_admin_for(nurse.hospital_id)
+    )
+  );
+
+drop policy if exists "Admins view hospital CPD logs" on cpd_logs;
+create policy "Admins view hospital CPD logs"
+  on cpd_logs for select
+  using (
+    auth.uid() = user_id
+    or exists (
+      select 1 from profiles nurse
+      where nurse.id = cpd_logs.user_id
+        and current_user_is_hospital_admin_for(nurse.hospital_id)
+    )
+  );
+
+drop policy if exists "Admins view hospital enrollments" on course_enrollments;
+create policy "Admins view hospital enrollments"
+  on course_enrollments for select
+  using (
+    auth.uid() = user_id
+    or exists (
+      select 1 from profiles nurse
+      where nurse.id = course_enrollments.user_id
+        and current_user_is_hospital_admin_for(nurse.hospital_id)
+    )
+  );
 
 -- ---- Signup trigger ----------------------------------------------------------------------------
 -- !! NO NUMBERED MIGRATION CREATES on_auth_user_created -- only schema.sql ever did, which is why it

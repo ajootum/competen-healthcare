@@ -105,3 +105,45 @@ it has already been wrong once in this same investigation.
 | Fresh database / fidelity / conformance / staging | ❌ downstream of the baseline |
 
 **No baseline SQL written**, per §13.
+
+---
+
+## Addendum, 2026-08-19 — the second hidden bootstrap, found by the clean build
+
+With the nine tables in place the chain reached **006-org-hierarchy.sql** and died on
+`current_user_is_hospital_admin_for(uuid)`. Rather than patch the one symptom, the repository was
+scanned for every object declared **only** in an unnumbered `supabase/*.sql` file:
+
+| | Declared by numbered migrations | Declared **only** in loose files |
+|---|---|---|
+| Functions | 67 | **1** |
+| Policies | 195 | **13** |
+| Tables | 655 | 0 |
+
+⚠ The first search found **no declaration at all** for the function, because the pattern omitted the
+`public.` qualifier — **the same mistake made twice earlier in this arc**, on `handle_new_user` and on
+the policy column pin. Qualifier-agnostic search found it in `fix-rls-recursion.sql`.
+
+### Of the thirteen, seven are live in production and are now in the baseline
+
+`profiles::users_read_own_profile`, `nurse_competencies::Users insert own competencies`,
+`nurse_competencies::Users update own competencies`,
+`nurse_competencies::Admins view hospital nurse competencies`,
+`cpd_logs::Admins view hospital CPD logs`, `course_enrollments::Admins view hospital enrollments`,
+`hospitals::Authenticated users view hospitals` — plus the helper function, pinned as production carries
+it (`pg_catalog, public`).
+
+### Six are measurably absent and stay omitted
+
+The four already recorded above, plus two the scan added:
+
+- `profiles::Users insert own profile` — **deliberately closed by migration 250.** Recreating it would
+  reopen in a clean build the exact door 250 was written to shut.
+- `profiles::Admins view hospital nurses` — retired recursion lineage, the second remaining MISSING.
+
+### Verification
+
+001 was applied to staging inside a transaction and rolled back: it executes cleanly against the
+already-partly-built state, creates the function and all seven policies, and leaves staging untouched.
+`--only` was added to the runner so a baseline that gains objects after the chain has passed it can be
+re-applied without tearing down the environment and destroying the evidence.

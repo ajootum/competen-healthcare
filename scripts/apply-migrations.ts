@@ -27,6 +27,7 @@
  *   Put the SESSION pooler string (port 5432) in .env.local as STAGING_DB_URL, then:
  *     npx tsx scripts/apply-migrations.ts
  *     npx tsx scripts/apply-migrations.ts --from 200      resume after a failure
+ *     npx tsx scripts/apply-migrations.ts --only 001      re-apply one file (it is idempotent)
  */
 import { loadEnvConfig } from "@next/env";
 import { readdirSync, readFileSync } from "node:fs";
@@ -40,6 +41,15 @@ const MIGRATIONS = join(ROOT, "supabase", "migrations");
 
 const fromArg = process.argv.indexOf("--from");
 const from = fromArg >= 0 ? Number(process.argv[fromArg + 1] ?? "0") : 0;
+
+/**
+ * --only NNN applies exactly one migration. It exists because a baseline can gain objects AFTER the
+ * chain has already moved past it, and the alternative -- tearing down the whole environment to replay
+ * from zero -- destroys the very evidence the clean-build test is producing. Every statement in 001 is
+ * idempotent, so re-running it alone is safe.
+ */
+const onlyArg = process.argv.indexOf("--only");
+const only = onlyArg >= 0 ? (process.argv[onlyArg + 1] ?? "") : null;
 
 const dbUrl = process.env.STAGING_DB_URL ?? null;
 
@@ -86,7 +96,7 @@ if (/:6543\//.test(dbUrl)) {
 const files = readdirSync(MIGRATIONS)
   .filter(f => f.endsWith(".sql"))
   .sort()
-  .filter(f => Number(f.slice(0, 3)) >= from);
+  .filter(f => (only ? f.startsWith(only) : Number(f.slice(0, 3)) >= from));
 
 async function main() {
   const client = new Client({ connectionString: dbUrl!, ssl: { rejectUnauthorized: false } });
