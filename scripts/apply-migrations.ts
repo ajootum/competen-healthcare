@@ -51,6 +51,26 @@ const from = Number(arg("from") ?? "0");
  */
 const dbUrl = process.env.STAGING_DB_URL ?? null;
 
+/**
+ * ⚠ VALIDATE THE SHAPE BEFORE HANDING IT TO THE CLI, because the failure mode is genuinely confusing.
+ *
+ * A stale shell variable BEATS .env.local -- loadEnvConfig does not overwrite a value already in the
+ * environment. So a mistyped `$env:STAGING_DB_URL` set once in a terminal silently overrides the file
+ * for the life of that window, and the only symptom is the CLI reporting "failed to parse connection
+ * string: <whatever the junk was>" against the first migration. That reads like a migration problem
+ * and is not one. Catch it here, name it, and say how to clear it.
+ */
+if (dbUrl && !/^postgres(ql)?:\/\/\S+@\S+\/\S+/.test(dbUrl)) {
+  const masked = dbUrl.replace(/:[^:@]*@/, ":****@").slice(0, 80);
+  console.error(`\n⛔ STAGING_DB_URL is not a Postgres connection string.\n`);
+  console.error(`   got: ${masked}`);
+  console.error(`   want: postgresql://postgres.<ref>:<password>@<host>.pooler.supabase.com:5432/postgres\n`);
+  console.error(`   ⚠ A SHELL VARIABLE OVERRIDES .env.local. If you set one earlier in this window,`);
+  console.error(`     the file is being ignored. Clear it and re-run:\n`);
+  console.error(`       Remove-Item Env:STAGING_DB_URL -ErrorAction SilentlyContinue\n`);
+  process.exit(1);
+}
+
 if (!target && !dbUrl) {
   console.error("\nusage:");
   console.error("  $env:STAGING_DB_URL = '<session pooler connection string>'   # preferred");
