@@ -90,11 +90,38 @@ export default function PracticeOpsConsole({ callerId, callerName, initial }: {
   }
 
   async function toggleFlag(flag: string, enabled: boolean) {
-    if (enabled && !confirm(`Turn ${FLAG_LABEL[flag]} ON? This changes what the PUBLIC site does.`)) return;
+    /**
+     * ⚠ CONFIRMATION ON BOTH DIRECTIONS NOW, AND A REASON FOR THE PUBLIC-FACING ONES.
+     *
+     * CPR-PD-014 §7.2 B: "Public-impacting changes require confirmation showing consequences before
+     * execution", and a reason is "required for consequential changes". Confirming only the ON
+     * direction was the older reading — but turning sign-in OFF takes a working front door away from
+     * people mid-session, which is every bit as consequential as opening it.
+     *
+     * The reason is not decoration and not validated only here: the API returns 400 without one, so a
+     * caller that skips this prompt is refused rather than silently recording a blank. That is the
+     * difference between a form convention and a rule.
+     */
+    const PUBLIC_IMPACTING = ["practice_sign_in", "practice_public_signup"];
+    const direction = enabled ? "ON" : "OFF";
+    if (!confirm(`Turn ${FLAG_LABEL[flag]} ${direction}? This changes what the PUBLIC site does.`)) return;
+
+    let reason = "";
+    if (PUBLIC_IMPACTING.includes(flag)) {
+      reason = (prompt(
+        `Why are you turning ${FLAG_LABEL[flag]} ${direction}?\n\n`
+        + "This is recorded in the audit trail alongside the before and after values.",
+      ) ?? "").trim();
+      if (reason.length < 8) {
+        setNotice({ kind: "err", text: "A reason of at least 8 characters is required for this flag. Nothing was changed." });
+        return;
+      }
+    }
+
     setBusy(true); setNotice(null);
     const res = await fetch("/api/v1/practice/flags", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ flag, enabled }),
+      body: JSON.stringify({ flag, enabled, reason }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { setNotice({ kind: "err", text: data?.error ?? "That did not work." }); setBusy(false); return; }

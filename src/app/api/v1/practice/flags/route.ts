@@ -41,12 +41,34 @@ export async function PATCH(req: NextRequest) {
   const gate = await hqApiGate(["hq.practice.flags.manage"]);
   if (isHqRefusal(gate)) return gate;
 
-  let body: { flag?: string; enabled?: boolean };
+  let body: { flag?: string; enabled?: boolean; reason?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
 
   const flag = String(body.flag ?? "");
   if (!FLAGS[flag]) return NextResponse.json({ error: `flag must be one of: ${Object.keys(FLAGS).join(", ")}` }, { status: 400 });
   if (typeof body.enabled !== "boolean") return NextResponse.json({ error: "enabled must be true or false" }, { status: 400 });
+
+  /**
+   * ⚠ A REASON IS REQUIRED FOR A CHANGE THE PUBLIC CAN SEE. CPR-PD-014 §7.2 B: "Reason/change reference
+   * — Required for consequential changes."
+   *
+   * The two public-facing flags are the consequential ones: sign-in decides whether a stranger can reach
+   * a credential form, and public signup decides whether they can create an account. Pilot provisioning
+   * changes only what an operator may do, so it is not gated on prose.
+   *
+   * ⚠ ENFORCED HERE RATHER THAN IN THE CONSOLE. A required field in a form is a convention; a 400 is a
+   * rule. The audit row is the reason this matters — without it the trail records that somebody flipped
+   * the public site and not why, which is exactly the question asked afterwards.
+   */
+  const PUBLIC_IMPACTING = ["practice_sign_in", "practice_public_signup"];
+  const reason = typeof body.reason === "string" ? body.reason.trim() : "";
+  if (PUBLIC_IMPACTING.includes(flag) && reason.length < 8) {
+    return NextResponse.json({
+      error: "This flag changes what the public site does, so a reason is required (at least 8 characters). "
+        + "It is recorded in the audit trail with the before and after values.",
+      flag,
+    }, { status: 400 });
+  }
 
   const { data: before } = await c.admin.from("practice_platform_flags").select("enabled").eq("flag", flag).maybeSingle();
   if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -57,7 +79,10 @@ export async function PATCH(req: NextRequest) {
 
   await audit(c.admin, {
     actorId: c.userId, eventType: "practice.launch_flag_changed",
-    payload: { flag, from: before.enabled, to: body.enabled }, correlationId: c.traceId,
+    // §7.2 B: "Every change writes an audit event with before/after value, actor, time and reason."
+    // Actor and time come from the audit helper itself; the other three are here.
+    payload: { flag, from: before.enabled, to: body.enabled, reason: reason || null },
+    correlationId: c.traceId,
   });
 
   return NextResponse.json({
