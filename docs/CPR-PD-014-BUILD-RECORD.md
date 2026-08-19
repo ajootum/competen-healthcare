@@ -80,6 +80,48 @@ identifiers page selected role and roles from profiles and used neither. That se
 §9 violation found on Technical Operations, except it read ONLY the authorization columns, so the
 query was removed entirely rather than narrowed.
 
+## Both unproven controls are now proven — and one was wrong
+
+The ISP change restored the staging database port, so the two controls this record listed as
+unexercised were exercised.
+
+### The append-only ledger holds
+
+Against staging, inside a transaction that rolled back: a row appends, an `UPDATE` is refused, a
+hand-written `DELETE` is refused, both with the intended message.
+
+### ⚠ But the same test found a real defect in the read
+
+Appending a `SUPERSEDED` row over an `ATTESTED` one and asking
+`plat_pd_launch_attestation_current` which verdict stood returned **ATTESTED**.
+
+`now()` in PostgreSQL is **transaction** time, so two attestations recorded in one transaction carry
+an identical `attested_at`, and `distinct on … order by attested_at desc` resolves that tie
+arbitrarily. The ledger recorded both rows perfectly; the READ of it was undefined.
+
+This is not a test-only edge. A supersession appended in the same request as the attestation it
+replaces is the ordinary case, and any batch correction ties too. **Migration 343** adds a monotonic
+`seq` and orders on it — a sequence answers "which row was appended later" without reference to any
+clock, which is the actual question. Verified on staging: identical timestamps, correct verdict.
+
+**Reading the migration would not have found this.** It took appending two rows and asking.
+
+### The retry endpoint is idempotent
+
+| Assertion | |
+|---|---|
+| Unauthenticated `POST` | **401**, refused before touching anything |
+| Run 1 | created exactly one workspace |
+| Retry | created **no** additional workspace |
+| Retry | continued the **same** workspace |
+| Memberships | not duplicated (`practice_owner`, `practitioner`) |
+
+`scripts/pd-retry-idempotency-proof.ts` drives the engine with exactly what the POST handler passes,
+so what is proven is the endpoint path rather than a re-implementation. It writes, so it is a proof
+script against staging and not a CI harness — supabase-js speaks HTTP, not transactions, so this
+cannot be rolled back. The membership assertion is there because capability and membership
+duplication is a failure this estate has actually had.
+
 ## Outstanding
 
 - **§14** delivery evidence: screenshots, and the capability matrix as a document.
