@@ -321,7 +321,18 @@ async function main() {
     .map(m => m[1]);
   ok("3-1. the seeded option labels were read out of the migration (not invented here)",
     seededOptionLabels.length > 30, `${seededOptionLabels.length}`);
-  const leakedIntoTreatment = seededOptionLabels.filter(l => treatSrc.includes(l));
+  // ⚠ WORD-BOUNDED, NOT `includes`, AND THIS ASSERTION WAS RED ON MAIN BECAUSE IT WAS NOT.
+  // A naked substring test turns every seeded label into a substring hunt: the label "Other" matched
+  // the state variable `durationOther`, so the harness reported a clinical-vocabulary leak against a
+  // camelCase identifier. Seven survivors of the comment-stripping, every one of them `durationOther`.
+  //
+  // The requirement is that a CLINICAL WORD appears in the component, and a word has boundaries. A
+  // boundary either side keeps "Tablet" inside a rendered sentence a leak -- which it is -- while
+  // leaving alone an identifier that merely ENDS in a label. Labels are escaped first because this
+  // seed contains regex metacharacters.
+  const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const asWord = (label: string) => new RegExp(`\\b${escapeRe(label)}\\b`);
+  const leakedIntoTreatment = seededOptionLabels.filter(l => asWord(l).test(treatSrc));
   ok("3-2. NOT ONE seeded clinical option label appears in TreatmentCapture.tsx",
     leakedIntoTreatment.length === 0, leakedIntoTreatment.slice(0, 5).join(", "));
   ok("3-3. CONTROL: the same scan DOES find those labels in the migration (the scan works)",
@@ -330,7 +341,8 @@ async function main() {
   const seededInvestigationNames = [...mig.matchAll(/\('(?:LAB|RAD|CAR|NEU|RESP|OTH)-[A-Z0-9-]+', '([^']+)'/g)].map(m => m[1]);
   ok("3-4. the seeded investigation names were read out of the migration",
     seededInvestigationNames.length > 50, `${seededInvestigationNames.length}`);
-  const leakedIntoInv = seededInvestigationNames.filter(n => invSrc.includes(n));
+  // Same shape and same reason as 3-2 above.
+  const leakedIntoInv = seededInvestigationNames.filter(n => asWord(n).test(invSrc));
   ok("3-5. NOT ONE seeded investigation name appears in InvestigationCapture.tsx",
     leakedIntoInv.length === 0, leakedIntoInv.slice(0, 5).join(", "));
 

@@ -14,7 +14,7 @@ import {
   TREATMENT_REFUSALS, QUICK_ADD_NOT_A_RECOMMENDATION, TEMPLATES_ARE_REVALIDATED,
   CUSTOM_WORDING_PRESERVED, OTHER_OPTION_CODE, treatmentShape, BATCH_BOUNDARY,
   SAFETY_VERDICT_CHIP, SAFETY_VERDICT_MARK, ALLERGY_UNRESOLVED_ASK, NKDA_IS_SOMETHING_SOMEBODY_SAID,
-  treatmentBand, TREATMENT_SUBTYPE,
+  treatmentBand, TREATMENT_SUBTYPE, TREATMENT_STATUSES,
 } from "@/lib/practice/treatment-capture-constants";
 import {
   ALLERGY_SEVERITIES, ALLERGY_CERTAINTIES, BLOOD_GROUPS, type SafetyLine,
@@ -276,6 +276,34 @@ export default function TreatmentCapture(props: {
     if (body) { setNotice({ kind: "ok", text: "Treatment corrected." }); router.refresh(); }
   };
 
+  // ── CPR-PD-013 s5: the treatment's own state, controllable where it is displayed ─────────────────
+  //
+  // ⚠ THE WHOLE WRITE PATH ALREADY EXISTED AND NOTHING COULD REACH IT. updateEncounterTreatment
+  // validated `status` against migration 194's set and the route forwarded it; there was simply no
+  // control on any screen, so every recorded treatment stayed at its inserted status for ever while the
+  // badge beside it faithfully displayed that fact. s4's STATE_EXPOSURE_DEFECT exactly: the state was
+  // visible and not controllable.
+  //
+  // ⚠ NO TRANSITION MATRIX, AND THAT IS A DEPARTURE FROM s5's LETTER STATED ON PURPOSE. s5 asks that
+  // invalid transitions be disallowed in UI and server. This is a CORRECTION path, not a lifecycle:
+  // the engine's own audit event is `practice.treatment_corrected`, and it refuses outright once the
+  // encounter is signed. Inside an unsigned encounter a practitioner who mis-set `completed` must be
+  // able to set it back to `planned` -- forbidding that would make a mis-click unfixable before signing
+  // and push the correction into an amendment after it. There is no dispatch, no result and no external
+  // actor that advances this column, so there is no ordering for a matrix to protect. The real boundary
+  // is the signature, and the server enforces it.
+  const setTreatmentStatus = async (t: { id: string; label: string }, status: string) => {
+    const body = await post("/api/v1/practice/treatment-capture", {
+      action: "correct", treatmentId: t.id, status,
+    });
+    // s5: immediate state feedback, naming the treatment and the state it is now in -- "Saved" would
+    // leave the practitioner reading the row back to find out what they just did.
+    if (body) {
+      setNotice({ kind: "ok", text: `"${t.label}" is now ${status.replace(/_/g, " ")}.` });
+      router.refresh();
+    }
+  };
+
   // ⚠ CONFIRMED BY NAME, s19: "Require appropriate confirmation". A one-tap delete on a prescription is
   // an accident waiting to be blamed on the person who made it.
   // ── CP-UI-TABLE-001 s5's TREATMENT COLUMNS, s6's SECOND LINE ────────────────────────────────────
@@ -331,8 +359,30 @@ export default function TreatmentCapture(props: {
       } },
     { key: "freq", label: "Frequency / duration",
       render: t => [t.frequency, t.duration].filter(Boolean).join(" · ") || <span className="text-gray-400">&mdash;</span> },
+    // ⚠ THE STATE AND ITS CONTROL ARE THE SAME CELL (CPR-PD-013 s10: "display state and action together
+    // when the state is legitimately controllable from that context"). Putting the status in one column
+    // and a way to change it behind the row's ⋮ would be the hunt s10's next rule forbids.
+    //
+    // A real <select>, for the reason PickSelect below already gives: keyboard-operable, type-ahead
+    // searchable and announced by a screen reader with no work. Where the encounter is signed or the
+    // capability absent, the badge renders exactly as before -- the control is omitted rather than
+    // disabled, which is this codebase's standing choice for an action a person cannot take.
     { key: "status", label: "Status", priority: "status",
-      render: t => <Badge tone={treatmentBand(t.status).struck ? "muted" : "neutral"}>{t.status}</Badge> },
+      render: t => editable
+        ? (
+          <select value={t.status} disabled={busy}
+            aria-label={`Status of ${t.label}`} data-step="treatment-status"
+            onChange={e => setTreatmentStatus(t, e.target.value)}
+            className={`rounded-lg border px-1.5 py-0.5 text-[11.5px] font-semibold outline-none focus:ring-2 focus:ring-[var(--cp-primary)]/20 disabled:opacity-50 max-md:min-h-[var(--cp-touch)] ${
+              treatmentBand(t.status).struck
+                ? "border-gray-200 bg-gray-50 text-gray-500"
+                : "border-gray-200 bg-white text-gray-800"}`}>
+            {TREATMENT_STATUSES.map(s => (
+              <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+            ))}
+          </select>
+        )
+        : <Badge tone={treatmentBand(t.status).struck ? "muted" : "neutral"}>{t.status}</Badge> },
     // ⚠ CP-TREAT-002 s7, AND THIS IS THE HONESTY FIX ON THIS TAB: "Do not falsely present medication
     // safety checks as having been performed for non-medication treatment types." The allergy line was
     // drawn on EVERY row, so a wound dressing and a low-salt diet each carried "no known allergies" as

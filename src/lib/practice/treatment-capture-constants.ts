@@ -265,6 +265,16 @@ export const SAFETY_VERDICT_MARK: Record<SafetyVerdict, string> = {
  * ⚠ AN UNRECOGNISED STATUS FALLS TO THE WEAKEST BAND, NEVER COMPLETED. Values are practice_treatment's
  * (migration 194): planned, in_progress, completed, cancelled.
  */
+/**
+ * practice_treatment's OWN status set, from migration 194's CHECK.
+ *
+ * ⚠ IT LIVES HERE, NOT IN THE ENGINE, BECAUSE THE SCREEN NEEDS IT TOO. CPR-PD-013 s5's status control
+ * renders one option per value, and importing the list from treatment-capture.ts would have pulled a
+ * server engine -- Supabase client and all -- into a client bundle. A type-only import is erased; a
+ * value import is not. The engine imports it back from here so there is still exactly one list.
+ */
+export const TREATMENT_STATUSES = ["planned", "in_progress", "completed", "cancelled"];
+
 export function treatmentBand(status: string): { edge: string; dashed: boolean; struck: boolean } {
   switch (status) {
     case "completed":

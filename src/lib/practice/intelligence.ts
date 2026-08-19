@@ -1230,9 +1230,13 @@ export async function patientIntelligence(
  * investigation, advice, referral, monitoring -- and that is a clinical intention, not a request that was
  * dispatched anywhere. Three specific things make it unusable as an orders read model:
  *
- *   1. ITS LIFECYCLE IS NEVER WRITTEN. status is planned/in_progress/completed/cancelled, and nothing in
- *      this product updates it after insert. Every row is 'planned' forever. A "completion rate" over it
- *      would read 0 of everything for reasons that have nothing to do with any patient.
+ *   1. ITS LIFECYCLE IS PRACTITIONER-ASSERTED, NOT DISPATCH-DRIVEN. status is
+ *      planned/in_progress/completed/cancelled and IS writable -- updateEncounterTreatment sets it and
+ *      the practitioner drives it from the encounter. ⚠ THIS CLAUSE PREVIOUSLY READ "never written after
+ *      insert" AND WAS CORRECTED (CPR-PD-013 s6) once the write path existed: a refusal that outlives its
+ *      own reason is how a real store goes unread for months, which the referral note above already
+ *      records happening once. But a status a person types is not a status a dispatch advances -- nothing
+ *      external ever moves it -- so it still cannot answer "what have I asked for that has not come back".
  *   2. IT HAS NO RECIPIENT AND NO DISPATCH. There is no lab, no destination, no sent_at. "Turnaround" has
  *      no first timestamp to start from.
  *   3. RESULTS DO NOT LINK BACK. practice_incoming_document (migration 200) registers lab_result and
@@ -1244,13 +1248,19 @@ export async function patientIntelligence(
  * would be the exact failure this codebase cares most about: a chart that is populated, plausible, and
  * answering a different question from the one on its heading.
  *
- * WHAT WOULD MAKE IT REAL: an order store with a recipient and a dispatch timestamp, a status written by
- * something, and a result linkage on practice_incoming_document. That is a migration and an engine, which
- * is CPR-V5-003 scope for somebody, and it is not scope this read-only workspace can invent.
+ * WHAT WOULD MAKE IT REAL: an order store with a recipient and a dispatch timestamp, a status advanced by
+ * the dispatch rather than by the author, and a result linkage on practice_incoming_document. That is a
+ * migration and an engine, which is CPR-V5-003 scope for somebody, and it is not scope this read-only
+ * workspace can invent.
+ *
+ * ⚠ NOTHING RENDERS THIS MODULE. `modules.orders` is read by no screen and no report template -- verified
+ * across src/ -- so the sentence below is documentation that happens to be typed as a refusal, not copy a
+ * user reads. It is kept accurate anyway: the day somebody mounts the tile, the first thing they will do
+ * is trust it.
  */
 export function ordersIntelligence(): IntelModule<never> {
   return intelUnavailable("orders_intelligence", "Orders Intelligence",
-    "There is no orders store in this product. No practice_order table exists in any migration, no orders engine exists in src/lib/practice, and no orders capability exists in practice_role_capabilities. practice_treatment (migration 194) is the nearest table and records clinical INTENT rather than orders: its status column is never written after insert, it has no recipient or dispatch timestamp, and practice_incoming_document (migration 200) carries no reference back to the request that produced a result. Nothing here can be counted without answering a different question from the one on the heading.",
+    "There is no orders store in this product. No practice_order table exists in any migration, no orders engine exists in src/lib/practice, and no orders capability exists in practice_role_capabilities. practice_treatment (migration 194) is the nearest table and records clinical INTENT rather than orders: its status is set by the practitioner who recorded the treatment rather than advanced by any dispatch, it has no recipient or dispatch timestamp, and practice_incoming_document (migration 200) carries no reference back to the request that produced a result. Nothing here can be counted without answering a different question from the one on the heading.",
     ["(none -- no store exists)"]);
 }
 

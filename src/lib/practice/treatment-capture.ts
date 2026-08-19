@@ -7,7 +7,7 @@ import { doseWithUnit } from "@/lib/practice/medication-constants";
 import {
   TREATMENT_FIELD_KEYS, TREATMENT_BOUNDARY, TREATMENT_REFUSALS, TREATMENT_CONFIG_ABSENT_NOTICE,
   OTHER_OPTION_CODE, treatmentShape, MAX_PENDING_TREATMENTS,
-  TREATMENT_SUBTYPE, composeSubtypeSummary,
+  TREATMENT_SUBTYPE, composeSubtypeSummary, TREATMENT_STATUSES,
   type TreatmentFieldKey,
 } from "@/lib/practice/treatment-capture-constants";
 
@@ -47,11 +47,15 @@ export const TREATMENT_TABLES = {
 } as const;
 
 /**
- * practice_treatment's OWN status set, from migration 194. Named here so the correction path validates
- * against it rather than coercing -- an unrecognised value becoming `completed` would assert that a
- * course of treatment finished because a string failed to match.
+ * practice_treatment's OWN status set, from migration 194, OWNED BY treatment-capture-constants.ts and
+ * re-exported here so the correction path validates against it rather than coercing -- an unrecognised
+ * value becoming `completed` would assert that a course of treatment finished because a string failed
+ * to match. It moved out of this file so the screen's status control could read it without importing a
+ * server engine into the browser (CPR-PD-013 s5).
  */
-export const TREATMENT_STATUSES = ["planned", "in_progress", "completed", "cancelled"];
+// ⚠ IMPORTED ABOVE AND RE-EXPORTED HERE, not `export ... from`. A bare re-export forwards the name
+// without binding it in this module's own scope, so the two uses further down would not resolve.
+export { TREATMENT_STATUSES };
 
 export const CAP_TREATMENT_RECORD = "treatment.record";
 export const CAP_TREATMENT_CONFIGURE = "treatment.configure";
@@ -913,8 +917,10 @@ export async function updateEncounterTreatment(admin: any, ctx: WorkspaceContext
 
   // ⚠ THE WORKSPACE FILTER IS THE TENANT BOUNDARY. service_role bypasses RLS, so a treatment id from
   // another practice would otherwise be writable by anyone who could guess it.
+  // `status` is selected so the audit below can record what the state was BEFORE, not merely that it
+  // changed -- see the audit call at the end of this function.
   const { data: row, error: readErr } = await admin.from("practice_treatment")
-    .select("id, encounter_id, workspace_id")
+    .select("id, encounter_id, workspace_id, status")
     .eq("id", args.treatmentId).eq("workspace_id", ctx.workspaceId).maybeSingle();
   if (readErr) return fail(503, "READ_FAILED", `that treatment could not be read: ${readErr.message}`);
   if (!row) return fail(404, "NOT_FOUND", "Not found");
@@ -949,9 +955,17 @@ export async function updateEncounterTreatment(admin: any, ctx: WorkspaceContext
     .update(patch).eq("id", row.id).eq("workspace_id", ctx.workspaceId);
   if (error) return fail(422, "REFUSED_BY_DATABASE", error.message);
 
+  // ⚠ A STATE CHANGE RECORDS THE STATE, NOT JUST THE COLUMN NAME (CPR-PD-013 s5, "audit the change
+  // where governance requires it"). `changed: ["status"]` says a clinical state moved and leaves the
+  // trail unable to answer which way -- so an auditor reading "this treatment was cancelled" has to
+  // guess whether the correction did that or undid it. The from/to pair is added ONLY when status is in
+  // the patch, so every other correction's payload is byte-for-byte what it was.
   await audit(admin, {
     workspaceId: ctx.workspaceId, actorId: args.actorId, eventType: "practice.treatment_corrected",
-    payload: { treatmentId: row.id, encounterId: row.encounter_id, changed: Object.keys(patch) },
+    payload: {
+      treatmentId: row.id, encounterId: row.encounter_id, changed: Object.keys(patch),
+      ...(patch.status === undefined ? {} : { statusFrom: row.status, statusTo: patch.status }),
+    },
     correlationId: args.correlationId,
   });
   return { ok: true, data: { id: row.id as string } };
