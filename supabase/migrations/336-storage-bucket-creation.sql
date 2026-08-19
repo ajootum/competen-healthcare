@@ -23,7 +23,7 @@
 --
 -- !! NOT `do update`. On production all three rows exist, so this file must be a no-op there, and a
 -- migration that rewrites live bucket configuration to values an agent measured is exactly the shape of
--- change that went wrong earlier in this arc -- see COMP-ENG-002G. Existing buckets keep whatever
+-- change that went wrong earlier in this arc -- see COMP-ENG-002-RECORD-001. Existing buckets keep whatever
 -- configuration they have.
 --
 -- CONFIGURATION FOR avatars AND practice-attachments THEREFORE REMAINS 334's JOB, not this file's. This
