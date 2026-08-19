@@ -82,3 +82,36 @@ back, leaving zero public functions behind.
    rule says how to apply; it does not say *where*, and I let the *how* imply the *where*.
 3. **The break-test earned its place again.** A guard I had reasoned about carefully was wrong, and only
    running it revealed that.
+
+## Verification after 335 was applied
+
+Read-only, against production, immediately after. A migration reporting "Success" is not the same as a
+migration that achieved its intent.
+
+| Check | Result |
+|---|---|
+| `handle_new_user` role clamp | ✅ restored |
+| `handle_new_user` `exception when others` | ✅ restored |
+| writes `public.profiles`, `on conflict do update` | ✅ both |
+| SECURITY DEFINER, `search_path=public, pg_catalog` | ✅ |
+| `Users update own profile` `with check` | ✅ present, calls `profile_authority_unchanged` |
+| All **12** authority columns pinned | ✅ |
+| `authenticated` table-level UPDATE on `profiles` | ✅ still false |
+| Estate policy total | ✅ 318, unchanged |
+
+⚠ One measurement artifact worth recording: the column-count probe first reported **0 of 12 pinned**.
+Postgres strips the table qualifier when it stores a policy expression, so a regex looking for
+`profiles.role` matches nothing while `role` is right there. **The pin was intact and the instrument was
+wrong** — the same class as reading `body` instead of `src` earlier in this incident.
+
+### Fidelity manifest against production: PASS
+
+```
+663 tables, all RLS enabled          25 legacy aliases, all matched
+67 functions, 10 SECURITY DEFINER, all pinned
+45 triggers, none disabled           2 buckets match approved posture
+0 storage policies (approved server-mediated posture)
+PASS -- target reproduces the approved security semantics
+```
+
+This is now the **production side of the comparison** the staging clean build has to reproduce.
