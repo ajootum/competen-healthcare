@@ -91,8 +91,16 @@ export default function GlobalHeader({
   const userBtn = useRef<HTMLButtonElement>(null);
   const wsBtn = useRef<HTMLButtonElement>(null);
   const unitBtn = useRef<HTMLButtonElement>(null);
+  /**
+   * The mobile switcher is a SECOND trigger for the same `menu === "workspace"` state, so it needs its
+   * own dismiss wiring: useDismiss closes on an outside click, and it treats its trigger as inside. With
+   * one shared ref the other trigger counts as outside, and pressing it would close the menu in the same
+   * gesture that opened it — the classic "the button does nothing" bug.
+   */
+  const wsMobileBtn = useRef<HTMLButtonElement>(null);
   const userPanel = useDismiss(menu === "user", close, userBtn);
   const wsPanel = useDismiss(menu === "workspace", close, wsBtn);
+  const wsMobilePanel = useDismiss(menu === "workspace", close, wsMobileBtn);
   const unitPanel = useDismiss(menu === "unit", close, unitBtn);
 
   const activeUnit = units.find(u => u.id === activeUnitId) ?? null;
@@ -113,14 +121,78 @@ export default function GlobalHeader({
       <ShortcutBinder />
       {/* ── Left: toggle + logo + workspace title ── */}
       {showSidebarToggle && <SidebarToggle variant="header" />}
-      <Link href={workspaceHref} className="flex items-center gap-2 min-w-0 shrink-0">
-        <span className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0"
-          style={{ background: "var(--cmp-color-primary)" }} aria-hidden>C</span>
-        <span className="min-w-0 hidden sm:block">
-          <span className="block text-gray-900 font-semibold text-sm leading-tight truncate">Competen</span>
-          <span className="block text-gray-400 text-[10px] leading-tight truncate">{workspaceTitle}</span>
-        </span>
-      </Link>
+
+      {/*
+        ⚠ BELOW `md` THIS CLUSTER IS THE WORKSPACE SWITCHER, NOT A LINK — reported from a real device,
+        2026-08-19: "unable to see the menu to change from personal workspace to the other workspaces".
+        The control was not missing. It was in the avatar menu, behind a picture of the person, while the
+        header showed the words "Personal Workspace" with no affordance at all. Somebody looking for a
+        workspace switcher reads the workspace name first, and that is what this now answers.
+
+        ⚠ THE WHOLE CLUSTER, NOT THE TITLE ALONE. The title block is `hidden sm:block`, so on the
+        narrowest screens there would be nothing to press. The logo is always rendered, so the button
+        wraps both and the trigger cannot disappear underneath its own breakpoint.
+
+        At `md` and above it stays a Link to the workspace home, because the chip on the right already
+        carries the switcher there and two triggers for one menu on one screen is a coin toss for the
+        reader.
+      */}
+      <div className="relative shrink-0">
+        {workspaces.length > 0 ? (
+          <button ref={wsMobileBtn} type="button" data-touch-target
+            aria-haspopup="menu" aria-expanded={menu === "workspace"} aria-label={`Switch workspace, currently ${workspaceTitle}`}
+            onClick={() => setMenu(m => (m === "workspace" ? null : "workspace"))}
+            className="md:hidden flex items-center gap-2 min-w-0 rounded-lg px-1 py-0.5 hover:bg-gray-50">
+            <span className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0"
+              style={{ background: "var(--cmp-color-primary)" }} aria-hidden>C</span>
+            <span className="min-w-0 hidden sm:block text-left">
+              <span className="block text-gray-900 font-semibold text-sm leading-tight truncate">Competen</span>
+              <span className="block text-gray-400 text-[10px] leading-tight truncate">
+                {workspaceTitle} <span aria-hidden>▾</span>
+              </span>
+            </span>
+            {/* Below `sm` the words are gone, so the caret rides beside the logo — otherwise the only
+                thing on screen is a logo that happens to be tappable, which is no affordance at all. */}
+            <span className="sm:hidden text-gray-400 text-[10px]" aria-hidden>▾</span>
+          </button>
+        ) : (
+          // No workspace to switch to. A menu offering one destination is a control that does nothing,
+          // so the link behaviour is kept.
+          <Link href={workspaceHref} className="md:hidden flex items-center gap-2 min-w-0">
+            <span className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0"
+              style={{ background: "var(--cmp-color-primary)" }} aria-hidden>C</span>
+            <span className="min-w-0 hidden sm:block">
+              <span className="block text-gray-900 font-semibold text-sm leading-tight truncate">Competen</span>
+              <span className="block text-gray-400 text-[10px] leading-tight truncate">{workspaceTitle}</span>
+            </span>
+          </Link>
+        )}
+
+        <Link href={workspaceHref} className="hidden md:flex items-center gap-2 min-w-0 shrink-0">
+          <span className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0"
+            style={{ background: "var(--cmp-color-primary)" }} aria-hidden>C</span>
+          <span className="min-w-0">
+            <span className="block text-gray-900 font-semibold text-sm leading-tight truncate">Competen</span>
+            <span className="block text-gray-400 text-[10px] leading-tight truncate">{workspaceTitle}</span>
+          </span>
+        </Link>
+
+        {/* The same menu the desktop chip opens, anchored under this trigger and shown only below `md`. */}
+        {menu === "workspace" && workspaces.length > 0 && (
+          <div ref={wsMobilePanel} role="menu" aria-label="Switch workspace"
+            className={`${PANEL} md:hidden left-0`}>
+            <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">Switch workspace</p>
+            {workspaces.map(w => (
+              <Link key={w.href} href={w.href} role="menuitem" onClick={close}
+                className="flex items-center gap-2.5 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50">
+                <span className="w-4 text-center" aria-hidden>{w.icon ?? "▸"}</span>
+                <span className="flex-1 truncate">{w.label}</span>
+                {w.current && <span className="text-teal-600" aria-label="current">✓</span>}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* ── Centre: page title + breadcrumbs ── */}
       <div className="flex-1 min-w-0 hidden lg:block pl-4">
