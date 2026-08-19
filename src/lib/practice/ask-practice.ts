@@ -250,7 +250,12 @@ export async function askPractice(admin: any, ctx: WorkspaceContext, args: {
       answered = false;
       sentence = "That count could not be read. This is not a zero.";
     } else {
-      const figureRegistryId = intent === "patients_seen" ? "pi.avg_visits_per_patient" : "pi.consultations_trend";
+      // ⚠ EACH FIGURE'S OWN DEFINITION. These pointed at pi.avg_visits_per_patient and
+      // pi.consultations_trend -- the nearest registry entries rather than the right ones, because
+      // neither metric had an entry until now. A Patients-seen count rendered above "Definitions:
+      // Average visits per patient", and a period total cited a daily series. Registered properly in
+      // intelligence-registry.ts; see the note above those two entries.
+      const figureRegistryId = intent === "patients_seen" ? "pi.patients_seen" : "pi.consultations_completed";
       registry = [figureRegistryId];
       // ⚠ THE RATIO IS ITS OWN FIGURE, NEVER FUSED INTO THE SENTENCE. The metric counts
       // COMPLETED/SIGNED/AMENDED consultations; the visits-per-patient ratio counts all launched

@@ -2,6 +2,8 @@ import Link from "next/link";
 import type { IntelligenceSuite } from "@/lib/practice/intelligence";
 import type { PiV2Extras } from "@/lib/practice/pi-v2";
 import type { ConditionalZones } from "@/lib/practice/pi-conditional";
+// Type-only: the reads happen on the page, so this component stays a pure renderer.
+import type { treatmentsRecorded, investigationsOrdered } from "@/lib/practice/report-engine";
 import CohortSaveControl from "./CohortSaveControl";
 import { SEGMENT_REGISTRY } from "@/lib/practice/segment-registry";
 import { metricById } from "@/lib/practice/intelligence-registry";
@@ -539,11 +541,25 @@ export function PatientV2Area({ suite, extras, segments, cohort, activeSegment, 
 
 // ══ 3. CLINICAL INTELLIGENCE (v2 s8) ════════════════════════════════════════════════════════════════
 
-export function ClinicalV2Area({ suite, zones }: { suite: Suite; zones: ConditionalZones }) {
+/** v2 s8's two Required-Now datasets, read by the page from the engines the reports already use. */
+export type ClinicalV2Reads = {
+  treatments: Awaited<ReturnType<typeof treatmentsRecorded>>;
+  investigations: Awaited<ReturnType<typeof investigationsOrdered>>;
+};
+
+export function ClinicalV2Area({ suite, zones, clinical }: {
+  suite: Suite; zones: ConditionalZones; clinical: ClinicalV2Reads;
+}) {
   const p = suite.workspace.modules.patients;
   const c = suite.workspace.modules.clinicalActivity;
   const proc = suite.workspace.modules.procedures;
   const o = suite.workspace.modules.overview;
+  // ⚠ BOUND TO CONSTS, NOT READ THROUGH `clinical.` AT EACH USE. TypeScript discards the narrowing of
+  // a PROPERTY ACCESS inside a callback -- the object could in principle change between the check and
+  // the call -- so `tx.total` inside a .map() does not see the ok:true branch. A const
+  // cannot be reassigned, so the narrowing survives into every callback below.
+  const tx = clinical.treatments;
+  const inv = clinical.investigations;
   const diagnoses: any = p.available ? (p.data as any).diagnoses : null;
   const rows: any[] = (diagnoses?.rows ?? []) as any[];
   const totalRecords: number | null = diagnoses?.total ?? null;
@@ -614,6 +630,96 @@ export function ClinicalV2Area({ suite, zones }: { suite: Suite; zones: Conditio
           )}
         </section>
       </div>
+
+      {/* ── v2 s8's TREATMENTS AND INVESTIGATIONS, which this screen did not have ─────────────────
+          Both are Required-Now in v2 s8 and both were reachable ONLY through a report template or an
+          Ask Practice question -- `pi.treatments_recorded` had two consumers, both in the report path,
+          and nothing rendered `ask.investigations_ordered` at all. The engines and the registry entries
+          already existed; the Clinical screen simply never asked for them.
+
+          Counts and denominators, labels as typed. No rate is drawn over either: a "top treatment"
+          percentage would be a share of an unbounded label space nobody normalises. */}
+      <div className="grid gap-3 md:grid-cols-2">
+        <section className={CARD}>
+          <h3 className="text-[13px] font-bold text-gray-900">Treatments recorded</h3>
+          <p className="mt-0.5 text-[10px] text-gray-500">
+            What was DECIDED in the period &mdash; an intention, never an administration record.
+          </p>
+          {!tx.ok ? (
+            <p className="mt-1 text-[12px] text-gray-600">
+              Treatments could not be read ({tx.detail}). That is not a zero.
+            </p>
+          ) : tx.total === 0 ? (
+            <p className="mt-1 text-[12px] text-gray-500">No treatments recorded in this period.</p>
+          ) : (
+            <>
+              <ul className="mt-1 flex flex-col gap-0.5">
+                {tx.byType.map(r => (
+                  <li key={r.label} className="flex items-baseline gap-2 text-[12px]">
+                    <span className="text-gray-800">{String(r.label).replace(/_/g, " ")}</span>
+                    <span className="ml-auto tabular-nums text-gray-900">{r.total}</span>
+                    <span className="text-[11px] text-gray-500">of {tx.total}</span>
+                  </li>
+                ))}
+              </ul>
+              {tx.byLabel.length > 0 && (
+                <>
+                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">Most recorded</p>
+                  <ul className="mt-1 flex flex-col gap-0.5">
+                    {tx.byLabel.slice(0, 8).map(r => (
+                      <li key={r.label} className="flex items-baseline gap-2 text-[12px]">
+                        <span className="truncate text-gray-800">{r.label}</span>
+                        <span className="ml-auto tabular-nums text-gray-900">{r.total}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              <p className="mt-1.5 text-[10px] text-gray-400">
+                {metricById("pi.treatments_recorded")?.displayName ?? "Treatments recorded"}
+                {tx.truncated
+                  ? " · read capped at 1000 rows, so these counts are a floor rather than a total"
+                  : " · labels as typed, so two spellings are two rows"}
+              </p>
+            </>
+          )}
+        </section>
+
+        <section className={CARD}>
+          <h3 className="text-[13px] font-bold text-gray-900">Investigations ordered</h3>
+          <p className="mt-0.5 text-[10px] text-gray-500">
+            Requested in the period, and how many have been reviewed since.
+          </p>
+          {!inv.ok ? (
+            <p className="mt-1 text-[12px] text-gray-600">
+              Investigations could not be read ({inv.detail}). That is not a zero.
+            </p>
+          ) : inv.total === 0 ? (
+            <p className="mt-1 text-[12px] text-gray-500">No investigations requested in this period.</p>
+          ) : (
+            <>
+              <ul className="mt-1 flex flex-col gap-0.5">
+                {inv.rows.slice(0, 10).map(r => (
+                  <li key={r.label} className="flex items-baseline gap-2 text-[12px]">
+                    <span className="truncate text-gray-800">{r.label}</span>
+                    <span className="ml-auto tabular-nums text-gray-900">{r.total}</span>
+                    {/* ⚠ REVIEWED IS A COUNT BESIDE ITS DENOMINATOR, NOT A COMPLETION RATE. An
+                        unreviewed investigation may be one whose result has not arrived, so a
+                        percentage here would read as a performance figure for waiting. */}
+                    <span className="text-[11px] text-gray-500">{r.reviewed} reviewed</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-[10px] text-gray-400">
+                {inv.total} requested in the period
+                {inv.truncated ? " · read capped at 1000 rows, so this is a floor" : ""}
+                {" · "}an investigation with no result recorded is not evidence that none arrived
+              </p>
+            </>
+          )}
+        </section>
+      </div>
+
       {/* ── s8's CONDITIONAL ZONES, both gates met -- see pi-conditional.ts's header. ───────────── */}
       <div className="grid gap-3 md:grid-cols-2">
         <section className={CARD}>

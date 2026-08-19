@@ -73,6 +73,41 @@ export type GeneratedReport = {
  * Investigations grouped by label with the reviewed share -- the ONE aggregate no screen owns, shared
  * with Ask Practice so the two can never disagree (registry: ask.investigations_ordered).
  */
+/**
+ * Treatments recorded in the period, by type and by label. `pi.treatments_recorded`.
+ *
+ * ⚠ EXTRACTED FROM THE REPORT BRANCH RATHER THAN COPIED BESIDE IT (CPR-PD-013, closing v2 s8). This
+ * read lived inline in the `treatments_medications` template and nothing else could reach it, which is
+ * why the Clinical screen had no Treatments panel while a report could produce one. Writing a second
+ * read for the screen is how command-centre.ts and session.ts came to disagree about "overdue" on two
+ * screens a click apart, each right against itself -- so the report branch below now calls THIS, and
+ * the screen calls it too. One owner, one definition, and v2 s24's "reports share definitions with the
+ * screens" is true by construction instead of by inspection.
+ *
+ * A ROW IS AN INTENTION, NOT AN ADMINISTRATION. The registry entry says so and so does every note this
+ * feeds: practice_treatment records what the practitioner DECIDED.
+ */
+export async function treatmentsRecorded(admin: any, ctx: WorkspaceContext, period: Period): Promise<
+  | { ok: true; byType: { label: string; total: number }[]; byLabel: { label: string; total: number }[]; total: number; truncated: boolean }
+  | { ok: false; detail: string }
+> {
+  const { data, error } = await admin.from("practice_treatment")
+    .select("treatment_type, label").eq("workspace_id", ctx.workspaceId)
+    .gte("created_at", period.fromIso).lt("created_at", period.toIso).limit(1000);
+  // ⚠ A FAILED READ IS NOT AN EMPTY PRACTICE. The registry's own nullHandling clause for this metric.
+  if (error) return { ok: false, detail: error.message };
+  const rows = (data ?? []) as any[];
+  const byType = new Map<string, number>();
+  const byLabel = new Map<string, number>();
+  for (const r of rows) {
+    byType.set(r.treatment_type, (byType.get(r.treatment_type) ?? 0) + 1);
+    byLabel.set(r.label, (byLabel.get(r.label) ?? 0) + 1);
+  }
+  const sorted = (m: Map<string, number>) =>
+    [...m.entries()].map(([label, total]) => ({ label, total })).sort((a, b) => b.total - a.total);
+  return { ok: true, byType: sorted(byType), byLabel: sorted(byLabel), total: rows.length, truncated: rows.length >= 1000 };
+}
+
 export async function investigationsOrdered(admin: any, ctx: WorkspaceContext, period: Period): Promise<
   | { ok: true; rows: { label: string; total: number; reviewed: number }[]; total: number; truncated: boolean }
   | { ok: false; detail: string }
@@ -185,28 +220,21 @@ export async function generateReport(admin: any, ctx: WorkspaceContext, args: {
       note: `${d.total} records, ${d.distinctLabels} distinct labels, ${d.coded} carrying a code. As typed -- nothing forces a terminology, so no tidy total is invented.${d.truncated ? " List truncated to the top rows." : ""}`,
     }];
   } else if (tpl.id === "treatments_medications") {
-    const { data, error } = await admin.from("practice_treatment")
-      .select("treatment_type, label").eq("workspace_id", ctx.workspaceId)
-      .gte("created_at", period.fromIso).lt("created_at", period.toIso).limit(1000);
-    if (error) sections = [refusedSection("Treatments", { reason: `could not be read: ${error.message}` })];
+    // The same engine the Clinical screen renders -- see treatmentsRecorded's header for why this
+    // stopped being an inline read.
+    const t = await treatmentsRecorded(admin, ctx, period);
+    if (!t.ok) sections = [refusedSection("Treatments", { reason: `could not be read: ${t.detail}` })];
     else {
-      const rows = (data ?? []) as any[];
-      const byType = new Map<string, number>();
-      const byLabel = new Map<string, number>();
-      for (const r of rows) {
-        byType.set(r.treatment_type, (byType.get(r.treatment_type) ?? 0) + 1);
-        byLabel.set(r.label, (byLabel.get(r.label) ?? 0) + 1);
-      }
       sections = [
         {
           title: "By type", columns: ["Type", "Count", "Of"],
-          rows: [...byType.entries()].sort((a, b) => b[1] - a[1]).map(([t, n]) => [t, n, rows.length]),
+          rows: t.byType.map(r => [r.label, r.total, t.total]),
           note: "A treatment row is what the practitioner DECIDED -- an intention, never an administration record.",
         },
         {
           title: "Most recorded", columns: ["Label", "Count", "Of"],
-          rows: [...byLabel.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).map(([l, n]) => [l, n, rows.length]),
-          note: rows.length >= 1000 ? "Read capped at 1000 rows -- the counts above are a floor, not a total." : undefined,
+          rows: t.byLabel.slice(0, 15).map(r => [r.label, r.total, t.total]),
+          note: t.truncated ? "Read capped at 1000 rows -- the counts above are a floor, not a total." : undefined,
         },
       ];
     }

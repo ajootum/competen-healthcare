@@ -23,6 +23,7 @@ import AssistantArea from "./AssistantArea";
 import AskPracticeArea from "./AskPracticeArea";
 import ReportsV2Area from "./ReportsV2Area";
 import { askPractice, ASK_EXAMPLES } from "@/lib/practice/ask-practice";
+import { treatmentsRecorded, investigationsOrdered } from "@/lib/practice/report-engine";
 import { CARD } from "./Ui";
 import {
   BriefArea, ActivityPanel, TrendsPanel, PatientsArea, CohortsArea,
@@ -326,7 +327,12 @@ export default async function IntelligencePage({ searchParams }: {
         {tab === "clinical" && (
           <ClinicalV2Area suite={suite} zones={await conditionalZones(admin, shell.ctx, {
             fromIso: suite.range.period.fromIso, toIso: suite.range.period.toIso,
-          })} />
+          })} clinical={{
+            // v2 s8's Treatments and Investigations panels. Both call the engines the report templates
+            // call, so the screen and a generated report cannot disagree about the same period.
+            treatments: await treatmentsRecorded(admin, shell.ctx, suite.range.period),
+            investigations: await investigationsOrdered(admin, shell.ctx, suite.range.period),
+          }} />
         )}
         {tab === "patterns" && (
           <PatternsV2Area suite={suite} patterns={await patternsConditionals(admin, shell.ctx, {

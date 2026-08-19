@@ -154,6 +154,36 @@ METRIC_REGISTRY.push(
     nullHandling: "Unreadable diagnoses render as unavailable.",
     drillthrough: "/practice/intelligence?tab=clinical", releaseState: "required", owner: "CPR-PI-001 v2 s8/s15",
   },
+  // ── TWO ENTRIES ADDED BECAUSE A FIGURE WAS CITING SOMEBODY ELSE'S DEFINITION (CPR-PD-013) ────────
+  //
+  // ⚠ FOUND BY LOOKING AT THE RENDERED SCREEN, NOT BY READING THE CODE. Ask Practice answers "how many
+  // patients did I see" from metrics.patients_seen, and v2 s14 requires every figure to carry a
+  // registry id -- but no entry existed for it, so ask-practice.ts reached for the nearest one and
+  // labelled the figure `pi.avg_visits_per_patient`. The screen then printed a Patients-seen count
+  // above the words "Definitions: Average visits per patient", which is a worse failure than an
+  // unregistered figure: it does not omit the definition, it asserts the wrong one.
+  //
+  // Both are members of the metrics.ts family that s14 does not otherwise cover. These two are
+  // registered because Ask Practice publishes them AS registry-backed figures; the other eleven are
+  // still outside the registry and that remains open.
+  {
+    metricId: "pi.patients_seen", version: 1, displayName: "Patients seen",
+    definition: "Distinct practice_encounter.patient_id over encounters in the period whose status is COMPLETED, SIGNED or AMENDED. A person seen twice counts once. Open and cancelled encounters are excluded, so this is who was actually seen rather than who was booked.",
+    sourceDomains: ["encounter", "patient"],
+    numerator: "distinct patients on completed encounters", denominator: "not a proportion -- a count",
+    timeField: "practice_encounter.started_at", comparisonRule: "preceding_equal_period",
+    nullHandling: "An unreadable encounter table is unavailable, never zero patients.",
+    drillthrough: "/practice/encounters", releaseState: "required", owner: "CPR-PI-001 v2 s6/s13",
+  },
+  {
+    metricId: "pi.consultations_completed", version: 1, displayName: "Consultations completed",
+    definition: "Encounters in the period whose status is COMPLETED, SIGNED or AMENDED, counted as records rather than people -- one patient seen three times is three. The period count, NOT the daily series that pi.consultations_trend describes.",
+    sourceDomains: ["encounter"],
+    numerator: "completed encounters", denominator: "not a proportion -- a count",
+    timeField: "practice_encounter.started_at", comparisonRule: "preceding_equal_period",
+    nullHandling: "An unreadable encounter table is unavailable, never zero consultations.",
+    drillthrough: "/practice/encounters", releaseState: "required", owner: "CPR-PI-001 v2 s6/s13",
+  },
   {
     metricId: "pi.consultations_trend", version: 1, displayName: "Consultations over time",
     definition: "Daily encounter counts in the practice's calendar, from the ONE shared trend (encounterTrend) -- never a second bucketing that can disagree with it.",
