@@ -133,20 +133,22 @@ async function main() {
   ok(`CONTROL: axe actually ran on all ${SAMPLE.length} screens`, sampled === SAMPLE.length, `${sampled}`);
 
   /**
-   * ⚠ ONE RULE IS RATCHETED, NAMED, AND NOT CALLED PASSING.
+   * ⚠ THE RATCHET IS NOW EMPTY, AND THAT IS THE POINT OF RECORDING IT HERE RATHER THAN DELETING IT.
    *
-   * `color-contrast` has ONE systemic cause: `text-gray-400` (#99a1af) as secondary text on white
-   * measures 2.6:1, under AA's 4.5:1. It is 212 occurrences across 45 files in the PD tree — a design
-   * TOKEN decision, not a defect to fix as a side effect of an accessibility pass, and PUI-001 governs
-   * colour. The recommendation is gray-400 → gray-500 (#6a7282, 4.83:1) wherever it renders TEXT on a
-   * light surface, leaving borders, markers and icons alone; the sites already fixed by hand this pass
-   * were the load-bearing ones (an invisible search control, the workspace identity, a breadcrumb).
+   * It carried `color-contrast: 200` while the sweep stood at 157 nodes on 9 screens — one systemic
+   * cause, `text-gray-400` (#99a1af) as secondary text on white at 2.6:1 against AA's 4.5:1. The owner
+   * took the decision, the sweep ran (gray-400 → gray-500 for text on light surfaces, gray-300 → 500,
+   * and the gray-100 chips to gray-600), and the count is zero across all ten screens.
    *
-   * The ratchet exists so this script stays USABLE. A permanently-red control is one nobody runs, and
-   * the whole point of the §12 pass was that unrun checks hide real regressions. Any NEW serious rule
-   * fails immediately; contrast fails if it grows materially beyond what is recorded here.
+   * An EMPTY ratchet is a flat ban: any serious or critical rule now fails immediately. It stays
+   * declared so the next person adding an exemption has to write the reason beside it, which is what
+   * kept the last one honest — and so a re-appearing rule cannot be quietly re-admitted as "known".
+   *
+   * ⚠ WHAT WAS DELIBERATELY LEFT: `marker:` bullets, one `placeholder:` (a different rule with a
+   * different threshold), and an `aria-hidden` decorative arrow. None carries information, and WCAG
+   * requires no contrast for any of them. Sweeping them would have been churn dressed as compliance.
    */
-  const RATCHET: Record<string, number> = { "color-contrast": 200 };
+  const RATCHET: Record<string, number> = {};
   const unexpected = serious.filter(([id]) => !(id in RATCHET));
   const worsened = serious.filter(([id, v]) => id in RATCHET && v.count > RATCHET[id]);
   ok("no NEW serious or critical accessibility rule across the sample",

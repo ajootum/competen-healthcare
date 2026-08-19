@@ -30,7 +30,7 @@ const STATUS_TONE: Record<AttestationStatus, string> = {
   ATTESTED: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
   REJECTED: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
   EXPIRED: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
-  SUPERSEDED: "bg-gray-100 text-gray-500",
+  SUPERSEDED: "bg-gray-100 text-gray-600",
   AWAITING: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
 };
 
@@ -192,7 +192,7 @@ export function AttestationRows({ items, attestations, recordingUnavailableReaso
                 <tr key={i.id} className="border-b border-gray-100 last:border-0">
                   <td className="py-2 pr-3">
                     <span className="font-medium text-gray-900">{i.label}</span>
-                    <span className="ml-1.5 font-mono text-[10px] text-gray-400">{i.id}</span>
+                    <span className="ml-1.5 font-mono text-[10px] text-gray-500">{i.id}</span>
                   </td>
                   <td className="py-2 pr-3">
                     <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${STATUS_TONE[status]}`}>
@@ -219,7 +219,7 @@ export function AttestationRows({ items, attestations, recordingUnavailableReaso
           : <>No attestation has been recorded against any build yet, so every control above is awaiting one.</>}
       </p>
       {recordingUnavailableReason && (
-        <p className="mt-1 text-[11px] text-gray-400">{recordingUnavailableReason}</p>
+        <p className="mt-1 text-[11px] text-gray-500">{recordingUnavailableReason}</p>
       )}
     </>
   );
@@ -241,11 +241,11 @@ export function LadderCompact({ rungs, nextTransition, blockerCount }: {
       <ol className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]">
         {rungs.map((r, n) => (
           <li key={r.label} className="flex items-center gap-1.5">
-            <span className={r.on ? "text-[var(--cmp-text-success)]" : "text-gray-400"} aria-hidden>
+            <span className={r.on ? "text-[var(--cmp-text-success)]" : "text-gray-500"} aria-hidden>
               {r.on ? "✓" : "○"}
             </span>
             <span className={r.on ? "font-medium text-gray-800" : "text-gray-500"}>{r.label}</span>
-            <span className="font-mono text-[10px] text-gray-400">{r.on ? "ON" : "OFF"}</span>
+            <span className="font-mono text-[10px] text-gray-500">{r.on ? "ON" : "OFF"}</span>
             {n < rungs.length - 1 && <span className="ml-1 text-gray-300" aria-hidden>&rarr;</span>}
           </li>
         ))}

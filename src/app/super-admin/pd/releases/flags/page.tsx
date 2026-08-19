@@ -111,13 +111,13 @@ export default async function Page() {
             return (
               <li key={f} className="rounded-lg border border-gray-200 bg-white p-3">
                 <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="font-mono text-[11px] text-gray-400">{i + 1}</span>
+                  <span className="font-mono text-[11px] text-gray-500">{i + 1}</span>
                   <span className="text-[13px] font-bold text-gray-900">{FLAG_LABEL[f] ?? f}</span>
                   <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${!row ? "text-gray-500" : on ? "text-[var(--cmp-text-warning)]" : "text-gray-700"}`}>
                     <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${!row ? "bg-gray-400" : on ? "bg-[var(--cmp-color-warning)]" : "bg-gray-300"}`} />
                     {!row ? "No row for this flag" : on ? "ON" : "OFF"}
                   </span>
-                  <span className="font-mono text-[10px] text-gray-400">{f}</span>
+                  <span className="font-mono text-[10px] text-gray-500">{f}</span>
                 </div>
                 <p className="mt-1 text-[12px] leading-relaxed text-gray-800">{FLAG_CONSEQUENCE[f]}</p>
                 {row?.note && <p className="mt-0.5 text-[11px] text-gray-500">{row.note}</p>}
@@ -163,7 +163,7 @@ export default async function Page() {
           <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
             <table className="w-full min-w-[720px] border-collapse text-[12px]">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+                <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
                   <th scope="col" className="py-1.5 pr-3 font-semibold">Flag</th>
                   <th scope="col" className="py-1.5 pr-3 font-semibold">Product</th>
                   <th scope="col" className="py-1.5 pr-3 font-semibold">Default</th>
@@ -183,7 +183,7 @@ export default async function Page() {
                     </td>
                     <td className="py-2 text-gray-700">
                       {f.assignments.length === 0
-                        ? <span className="text-gray-400">no assignment — the default decides</span>
+                        ? <span className="text-gray-500">no assignment — the default decides</span>
                         : f.assignments.map((a, i) => (
                           <span key={`${a.scopeType}-${a.scopeRef ?? "global"}-${i}`} className="mr-2 inline-block whitespace-nowrap">
                             {a.scopeType}
@@ -221,7 +221,7 @@ export default async function Page() {
         <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
           <table className="w-full min-w-[720px] border-collapse text-[12px]">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+              <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
                 <th scope="col" className="py-1.5 pr-3 font-semibold">Field (§8)</th>
                 <th scope="col" className="py-1.5 pr-3 font-semibold">Practice launch flag</th>
                 <th scope="col" className="py-1.5 pr-3 font-semibold">Estate flag</th>

@@ -42,7 +42,7 @@ export default async function Page() {
           { label: "Risk acceptances", v: acceptances.length, note: "Accepting a specific measured residual." },
         ].map(s => (
           <div key={s.label} className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{s.label}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{s.label}</p>
             <p className={`mt-0.5 text-[22px] font-bold leading-none tabular-nums ${
               s.warn && s.v > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>
               {rows === null ? "—" : s.v}

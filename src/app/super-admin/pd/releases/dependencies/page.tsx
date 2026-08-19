@@ -79,7 +79,7 @@ export default async function Page() {
         <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
           <table className="w-full min-w-[760px] border-collapse text-[12px]">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+              <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
                 <th scope="col" className="py-1.5 pr-3 font-semibold">Capability</th>
                 <th scope="col" className="py-1.5 pr-3 font-semibold">Needs active</th>
                 <th scope="col" className="py-1.5 pr-3 font-semibold">Needs configured</th>
@@ -91,16 +91,16 @@ export default async function Page() {
                 <tr key={n.def.id} className="border-b border-gray-100 align-top">
                   <th scope="row" className="py-2 pr-3 text-left font-bold text-gray-900">{n.def.displayName}</th>
                   <td className="py-2 pr-3 text-gray-700">
-                    {n.closure.length === 0 ? <span className="text-gray-400">nothing</span> : n.closure.join(", ")}
+                    {n.closure.length === 0 ? <span className="text-gray-500">nothing</span> : n.closure.join(", ")}
                   </td>
                   <td className="py-2 pr-3 text-gray-700">
                     {n.def.requiresSetup.length === 0
-                      ? <span className="text-gray-400">nothing</span>
+                      ? <span className="text-gray-500">nothing</span>
                       : n.def.requiresSetup.map(s => SETUP_LABELS[s]).join(", ")}
                   </td>
                   <td className="py-2 text-gray-700">
                     {n.dependents.length === 0
-                      ? <span className="text-gray-400">nothing depends on it</span>
+                      ? <span className="text-gray-500">nothing depends on it</span>
                       : `${n.dependents.length} capabilit${n.dependents.length === 1 ? "y" : "ies"} — ${n.dependents.join(", ")}`}
                   </td>
                 </tr>

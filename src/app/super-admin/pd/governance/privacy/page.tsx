@@ -32,7 +32,7 @@ export default async function Page() {
   return (
     <div className="flex flex-col gap-4">
       <header className="mb-1 border-b border-gray-200 pb-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Governance &amp; Risk</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Governance &amp; Risk</p>
         <h1 className="mt-0.5 text-[22px] font-bold leading-tight tracking-tight text-gray-900">Privacy &amp; Data Governance</h1>
         <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-gray-600">
           What Competen Practice holds, for what purpose, how long it is kept and how it is shared.
@@ -89,13 +89,13 @@ export default async function Page() {
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {inv.byCategory.filter(c => c.tables > 0).map(c => (
                 <div key={c.category} className="rounded-lg border border-amber-200 bg-white px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{c.label}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{c.label}</p>
                   <p className="mt-0.5 text-[20px] font-bold leading-none tabular-nums text-gray-900">{c.tables}</p>
                   <p className="mt-1 truncate font-mono text-[10px] text-gray-500">{c.sample.slice(0, 2).join(", ")}</p>
                 </div>
               ))}
               <div className="rounded-lg border border-[var(--cmp-color-warning)] bg-white px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Unclassified</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Unclassified</p>
                 <p className="mt-0.5 text-[20px] font-bold leading-none tabular-nums text-[var(--cmp-text-warning)]">
                   {inv.unclassified}
                 </p>

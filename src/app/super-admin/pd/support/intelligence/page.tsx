@@ -79,10 +79,10 @@ export default async function Page() {
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Median incident resolution</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Median incident resolution</p>
           {medianResolution === null ? (
             <>
-              <p className="mt-0.5 text-[13px] font-semibold text-gray-400">No incident has resolved</p>
+              <p className="mt-0.5 text-[13px] font-semibold text-gray-500">No incident has resolved</p>
               <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
                 ⚠ Not &ldquo;0h&rdquo;. A median over nothing is not zero.
               </p>
@@ -90,7 +90,7 @@ export default async function Page() {
           ) : (
             <>
               <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">
-                {medianResolution}<span className="ml-1 text-[12px] font-medium text-gray-400">h</span>
+                {medianResolution}<span className="ml-1 text-[12px] font-medium text-gray-500">h</span>
               </p>
               <p className="mt-1 text-[11px] text-gray-500">
                 over {resolved.length} incident{resolved.length === 1 ? "" : "s"} that reached a terminal state
@@ -100,13 +100,13 @@ export default async function Page() {
         </div>
 
         <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Median first response</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Median first response</p>
           {medianResponse === null ? (
-            <p className="mt-0.5 text-[13px] font-semibold text-gray-400">No case has been answered</p>
+            <p className="mt-0.5 text-[13px] font-semibold text-gray-500">No case has been answered</p>
           ) : (
             <>
               <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">
-                {medianResponse}<span className="ml-1 text-[12px] font-medium text-gray-400">h</span>
+                {medianResponse}<span className="ml-1 text-[12px] font-medium text-gray-500">h</span>
               </p>
               <p className="mt-1 text-[11px] text-gray-500">over {answered.length} answered</p>
             </>
@@ -115,7 +115,7 @@ export default async function Page() {
         </div>
 
         <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Action effectiveness recorded</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Action effectiveness recorded</p>
           <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">
             {withEffectiveness.length}
           </p>
@@ -126,7 +126,7 @@ export default async function Page() {
         </div>
 
         <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Recurrence rate</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Recurrence rate</p>
           <AbsentValue why={absenceSentence("sup.postmortems_outstanding")} />
         </div>
       </div>

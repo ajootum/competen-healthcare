@@ -60,7 +60,7 @@ export default async function PracticeOperations() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/platform-ops" className="hover:text-teal-700">Platform Operations</Link>
           <span>/</span><span className="text-gray-600">Competen Practice</span>
         </div>
@@ -92,14 +92,14 @@ export default async function PracticeOperations() {
                   s.status === "OPERATIONAL" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
                     : s.status === "DEGRADED" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"
                       : s.status === "DOWN" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"
-                        : "bg-gray-100 text-gray-500"}`}>
+                        : "bg-gray-100 text-gray-600"}`}>
                   {s.status}
                 </span>
                 <span className="text-[12px] font-medium text-gray-800">{s.name}</span>
               </div>
               {/* §7.2: every status shows last verified time and check source. */}
               <p className="mt-1 text-[11px] leading-snug text-gray-500">{s.source}</p>
-              <p className="mt-0.5 font-mono text-[10px] text-gray-400">
+              <p className="mt-0.5 font-mono text-[10px] text-gray-500">
                 checked {s.checkedAt.slice(11, 16)} UTC
               </p>
             </li>
@@ -128,21 +128,21 @@ export default async function PracticeOperations() {
       <div className="rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
           <div>
-            <p className="text-[10px] uppercase tracking-wide text-gray-400">Current launch state (IAM-001 §14.1)</p>
+            <p className="text-[10px] uppercase tracking-wide text-gray-500">Current launch state (IAM-001 §14.1)</p>
             <p className="text-xl font-bold text-gray-900">{ops.launch.state}</p>
             <p className="text-[12px] text-gray-500">{ops.launch.detail}</p>
           </div>
           <div className="flex gap-3 text-right">
             <div>
-              <p className="text-[10px] uppercase tracking-wide text-gray-400">Gate</p>
+              <p className="text-[10px] uppercase tracking-wide text-gray-500">Gate</p>
               <p className="text-xl font-bold tabular-nums text-gray-900">{passed}/{gate.length}</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wide text-gray-400">Failing</p>
+              <p className="text-[10px] uppercase tracking-wide text-gray-500">Failing</p>
               <p className={`text-xl font-bold tabular-nums ${failed ? "text-[var(--cmp-text-critical)]" : "text-gray-300"}`}>{failed}</p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wide text-gray-400">Workspaces</p>
+              <p className="text-[10px] uppercase tracking-wide text-gray-500">Workspaces</p>
               <p className="text-xl font-bold tabular-nums text-gray-900">{ops.workspaces.length}</p>
             </div>
           </div>
@@ -179,7 +179,7 @@ export default async function PracticeOperations() {
                       <td className="py-2 pr-3">
                         <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${ops.flags[f]
                           ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
-                          : "bg-gray-100 text-gray-500"}`}>{ops.flags[f] ? "ON" : "OFF"}</span>
+                          : "bg-gray-100 text-gray-600"}`}>{ops.flags[f] ? "ON" : "OFF"}</span>
                       </td>
                       {/* §10: a control never changed has no row, and says so rather than showing a date. */}
                       <td className="py-2 pr-3 text-gray-600">
@@ -189,7 +189,7 @@ export default async function PracticeOperations() {
                         {h?.actorId ? `${h.actorId.slice(0, 8)}…` : "—"}
                       </td>
                       <td className="py-2 text-gray-600">
-                        {h ? (h.reason ?? <span className="text-gray-400">Not recorded at the time</span>) : "—"}
+                        {h ? (h.reason ?? <span className="text-gray-500">Not recorded at the time</span>) : "—"}
                       </td>
                     </tr>
                   );

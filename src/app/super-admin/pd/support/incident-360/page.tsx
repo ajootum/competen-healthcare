@@ -117,22 +117,22 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Commander</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Commander</p>
             <p className={`mt-0.5 text-[12.5px] ${i.ownerName ? "font-semibold text-gray-900" : "font-semibold text-[var(--cmp-text-warning)]"}`}>
               {i.ownerName ?? "none — §7 requires one"}
             </p>
           </div>
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Subject</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Subject</p>
             <p className="mt-0.5 text-[12.5px] text-gray-800">{i.subjectLabel ?? i.subjectType}</p>
           </div>
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Journey</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Journey</p>
             <p className="mt-0.5 text-[12.5px] text-gray-800">{i.journeyName ?? "none named"}</p>
           </div>
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Next update due</p>
-            <p className="mt-0.5 text-[12.5px] font-semibold text-gray-400">no cadence configured</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Next update due</p>
+            <p className="mt-0.5 text-[12.5px] font-semibold text-gray-500">no cadence configured</p>
           </div>
         </div>
         <Explain summary="Why §7's technical owner and product owner are not shown">
@@ -158,7 +158,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
               <div className="grid gap-2 sm:grid-cols-3">
                 {[["Events on the thread", c.impact.events], ["Failed", c.impact.failures], ["Practices touched", c.impact.practices]].map(([l, v]) => (
                   <div key={String(l)} className="rounded-lg border border-gray-200 px-3 py-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{l}</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{l}</p>
                     <p className="mt-0.5 text-[20px] font-bold leading-none tabular-nums text-gray-900">{v}</p>
                   </div>
                 ))}
@@ -321,7 +321,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
             </p>
             <p className="mt-1.5 text-[11.5px] leading-relaxed">
               <span className="font-semibold text-gray-700">Root cause: </span>
-              <span className={c.postmortem.rootCause ? "text-gray-900" : "text-gray-400"}>
+              <span className={c.postmortem.rootCause ? "text-gray-900" : "text-gray-500"}>
                 {c.postmortem.rootCause ?? "not confirmed"}
               </span>
             </p>

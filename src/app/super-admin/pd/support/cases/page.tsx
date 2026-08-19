@@ -56,22 +56,22 @@ export default async function Page() {
         <>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Open cases</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Open cases</p>
               <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{open.length}</p>
               <p className="mt-1 text-[11px] text-gray-500">of {rows.length} recorded</p>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Unowned and open</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Unowned and open</p>
               <p className={`mt-0.5 text-[22px] font-bold leading-none tabular-nums ${
                 open.filter(c => !c.ownerName).length > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>
                 {open.filter(c => !c.ownerName).length}
               </p>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Median first response</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Median first response</p>
               {medianResponse === null ? (
                 <>
-                  <p className="mt-0.5 text-[13px] font-semibold text-gray-400">No case has been answered</p>
+                  <p className="mt-0.5 text-[13px] font-semibold text-gray-500">No case has been answered</p>
                   <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
                     ⚠ Not &ldquo;0h&rdquo;. A median over nothing is not zero — that would render the
                     fastest support in the world for a queue nobody has replied to.
@@ -80,7 +80,7 @@ export default async function Page() {
               ) : (
                 <>
                   <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">
-                    {medianResponse}<span className="ml-1 text-[12px] font-medium text-gray-400">h</span>
+                    {medianResponse}<span className="ml-1 text-[12px] font-medium text-gray-500">h</span>
                   </p>
                   <p className="mt-1 text-[11px] text-gray-500">
                     over {answered.length} case{answered.length === 1 ? "" : "s"} with a response recorded
@@ -90,7 +90,7 @@ export default async function Page() {
               <Caveat metric="sup.first_response" />
             </div>
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Past their response target</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Past their response target</p>
               <AbsentValue why={absenceSentence("sup.response_target")} />
             </div>
           </div>

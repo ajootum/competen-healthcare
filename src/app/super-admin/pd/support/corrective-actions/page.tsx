@@ -55,12 +55,12 @@ export default async function Page() {
         <>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Open actions</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Open actions</p>
               <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{open.length}</p>
               <p className="mt-1 text-[11px] text-gray-500">of {rows.length} recorded</p>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Overdue</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Overdue</p>
               <p className={`mt-0.5 text-[22px] font-bold leading-none tabular-nums ${
                 overdue.length > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>
                 {overdue.length}
@@ -68,7 +68,7 @@ export default async function Page() {
               <Caveat metric="sup.corrective_actions" />
             </div>
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Closed as accepted risk</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Closed as accepted risk</p>
               <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{acceptedRisk.length}</p>
               <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
                 Shown apart from &ldquo;done&rdquo;. Each names an authority and a rationale, or the
@@ -76,7 +76,7 @@ export default async function Page() {
               </p>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Open with no due date</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Open with no due date</p>
               <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{openNoDue.length}</p>
               <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
                 ⚠ Invisible to the overdue count for ever. §14 forces a due date on P1 and P2, so none

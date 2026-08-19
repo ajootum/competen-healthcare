@@ -54,12 +54,12 @@ export default async function Page() {
         <>
           <div className="grid gap-2 sm:grid-cols-3">
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Open escalations</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Open escalations</p>
               <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{open.length}</p>
               <p className="mt-1 text-[11px] text-gray-500">of {rows.length} recorded</p>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Past their due time</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Past their due time</p>
               <p className={`mt-0.5 text-[22px] font-bold leading-none tabular-nums ${
                 overdue.length > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>
                 {overdue.length}
@@ -70,7 +70,7 @@ export default async function Page() {
               </p>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Open with no due time</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Open with no due time</p>
               <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{openNoDue.length}</p>
               <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
                 ⚠ These can never appear as overdue. Not a fault of the count — a gap in the record.

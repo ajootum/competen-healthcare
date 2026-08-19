@@ -60,7 +60,7 @@ const DARK: Record<string, string> = {
 function DarkCell({ reason }: { reason: keyof typeof DARK | string }) {
   return (
     <span
-      className="cursor-help text-[10.5px] italic text-gray-300 underline decoration-dotted underline-offset-2"
+      className="cursor-help text-[10.5px] italic text-gray-500 underline decoration-dotted underline-offset-2"
       title={DARK[reason] ?? "No producer."}
     >
       no producer
@@ -162,7 +162,7 @@ export default async function Page(
     <div className="space-y-4">
       {/* ── Header (s2): title, scope, total, freshness ─────────────────────────────────────────── */}
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Practice Product Director</p>
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Practice Product Director</p>
         <h1 className="mt-0.5 text-2xl font-bold text-gray-900">Practices</h1>
         <p className="mt-1 max-w-3xl text-sm text-gray-600">
           The authoritative landlord-side register of every Competen Practice workspace, and the way into
@@ -178,7 +178,7 @@ export default async function Page(
               {estate.attentionTotal !== null && estate.attentionTotal > 0 && <> · <span className="font-semibold text-[var(--cmp-text-critical)]">{estate.attentionTotal.toLocaleString()}</span> in an exception state</>}
             </>}
         </p>
-        <p className="mt-0.5 font-mono text-[11px] text-gray-400">
+        <p className="mt-0.5 font-mono text-[11px] text-gray-500">
           CPR-PD-003 §2–§4 · read at {estate.generatedAt.replace("T", " ").slice(0, 19)}Z
         </p>
       </div>
@@ -328,9 +328,9 @@ export default async function Page(
                       </td>
                       {/* ⚠ D1: the owner's NAME. Their email is not in this payload to fall back to. */}
                       <td className="py-1.5 pr-3 text-gray-600">
-                        {r.ownerName ?? <span className="italic text-gray-400">name not readable</span>}
+                        {r.ownerName ?? <span className="italic text-gray-500">name not readable</span>}
                         {r.handle && (
-                          <span className="ml-1.5 font-mono text-[10.5px] text-gray-400">@{r.handle}</span>
+                          <span className="ml-1.5 font-mono text-[10.5px] text-gray-500">@{r.handle}</span>
                         )}
                       </td>
                       <td className="py-1.5 pr-3 font-mono text-gray-600">{r.country}</td>
@@ -345,7 +345,7 @@ export default async function Page(
                       <td className="py-1.5 pr-3 text-right">
                         {r.activity === null ? (
                           <span
-                            className="cursor-help text-[10.5px] italic text-gray-300 underline decoration-dotted underline-offset-2"
+                            className="cursor-help text-[10.5px] italic text-gray-500 underline decoration-dotted underline-offset-2"
                             title="Not Measured. No activity projection exists for this practice — which is different from the practice having done nothing, and different again from the projection being unreadable."
                           >
                             not measured
@@ -358,7 +358,7 @@ export default async function Page(
                           >
                             {r.activity.lastAt
                               ? new Date(r.activity.lastAt).toISOString().slice(0, 10)
-                              : <span className="text-gray-300">none</span>}
+                              : <span className="text-gray-500">none</span>}
                             {r.activity.windowCount !== null && (
                               <span className="ml-1 text-[10.5px] text-gray-500">{r.activity.windowCount}</span>
                             )}
@@ -376,7 +376,7 @@ export default async function Page(
                       <td className="py-1.5 pr-3">
                         {r.health === null || r.health.state === "unknown" ? (
                           <span
-                            className="cursor-help text-[10.5px] italic text-gray-300 underline decoration-dotted underline-offset-2"
+                            className="cursor-help text-[10.5px] italic text-gray-500 underline decoration-dotted underline-offset-2"
                             title={r.health === null
                               ? "Not Measured. PD-008 has projected no health state for this practice. §6: PD-003 consumes a health projection and never computes one, so there is nothing here to fall back on."
                               : `Unknown. ${r.health.reason ?? "No evidence-based reason recorded."}`}
@@ -398,7 +398,7 @@ export default async function Page(
 
                       <td className="py-1.5 pr-3">
                         {r.attention.length === 0
-                          ? <span className="text-gray-300">none</span>
+                          ? <span className="text-gray-500">none</span>
                           : r.attention.map((a, i) => (
                             <span key={i} className={`mr-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold ${
                               a.severity === "critical"
@@ -406,7 +406,7 @@ export default async function Page(
                                 : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{a.label}</span>
                           ))}
                       </td>
-                      <td className="py-1.5 font-mono text-gray-400">{String(r.created_at).slice(0, 10)}</td>
+                      <td className="py-1.5 font-mono text-gray-500">{String(r.created_at).slice(0, 10)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -417,11 +417,11 @@ export default async function Page(
             <div className="mt-3 flex items-center gap-3 text-[12px] text-gray-600">
               {page > 1
                 ? <Link href={keep({ page: String(page - 1) })} className="font-semibold underline">← Previous</Link>
-                : <span className="text-gray-300">← Previous</span>}
+                : <span className="text-gray-500">← Previous</span>}
               <span>Page {page}{estate.matchTotal !== null && ` of ${lastPage}`}</span>
               {page < lastPage
                 ? <Link href={keep({ page: String(page + 1) })} className="font-semibold underline">Next →</Link>
-                : <span className="text-gray-300">Next →</span>}
+                : <span className="text-gray-500">Next →</span>}
             </div>
           </>
         )}

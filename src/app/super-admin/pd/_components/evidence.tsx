@@ -71,7 +71,7 @@ export function AbsentList({ items, inline = false }: {
         {items.map(i => (
           <li key={i.label} className="py-2 first:pt-0 last:pb-0">
             <p className="text-[12px] font-semibold text-gray-800">
-              {i.label} <span className="font-normal text-gray-400">— not measured</span>
+              {i.label} <span className="font-normal text-gray-500">— not measured</span>
             </p>
             <p className="mt-0.5 text-[11.5px] leading-relaxed text-gray-600">{i.why}</p>
           </li>
@@ -84,7 +84,7 @@ export function AbsentList({ items, inline = false }: {
       {items.map(i => (
         <li key={i.label} className="border-b border-gray-100 py-1.5 first:pt-0 last:border-0 last:pb-0">
           <p className="text-[12px] font-semibold text-gray-800">
-            {i.label} <span className="font-normal text-gray-400">— not shown</span>
+            {i.label} <span className="font-normal text-gray-500">— not shown</span>
           </p>
           <Explain summary="Why this is not shown">{i.why}</Explain>
         </li>

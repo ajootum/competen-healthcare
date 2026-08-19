@@ -47,11 +47,11 @@ export default async function Page() {
         <>
           <div className="grid gap-2 sm:grid-cols-3">
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Postmortems written</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Postmortems written</p>
               <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{rows.length}</p>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">With a confirmed root cause</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">With a confirmed root cause</p>
               <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">
                 {rows.filter(p => p.hasConfirmedCause).length}
               </p>
@@ -60,7 +60,7 @@ export default async function Page() {
               </p>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Postmortems outstanding</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Postmortems outstanding</p>
               <AbsentValue why={absenceSentence("sup.postmortems_outstanding")} />
             </div>
           </div>
@@ -84,20 +84,20 @@ export default async function Page() {
 
                     <div className="mt-2 flex flex-col gap-1.5">
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Confirmed root cause</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Confirmed root cause</p>
                         <p className={`text-[12px] leading-relaxed ${
-                          p.rootCause ? "font-semibold text-gray-900" : "text-gray-400"}`}>
+                          p.rootCause ? "font-semibold text-gray-900" : "text-gray-500"}`}>
                           {p.rootCause ?? "none confirmed"}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Contributing factors</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Contributing factors</p>
                         <p className="text-[12px] leading-relaxed text-gray-700">
                           {p.contributingFactors ?? "none recorded"}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Open hypotheses</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Open hypotheses</p>
                         <p className="text-[12px] italic leading-relaxed text-gray-600">
                           {p.openHypotheses ?? "none left open"}
                         </p>

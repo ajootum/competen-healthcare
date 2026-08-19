@@ -32,7 +32,7 @@ export default async function Page() {
       <header className="mb-1 border-b border-gray-200 pb-3">
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Governance &amp; Risk</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Governance &amp; Risk</p>
             <h1 className="mt-0.5 text-[22px] font-bold leading-tight tracking-tight text-gray-900">Governance Overview</h1>
             <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-gray-600">
               Assurance, risk oversight and accountable decisions for Competen Practice.
@@ -103,14 +103,14 @@ export default async function Page() {
           { label: "Review overdue", v: g.register.reviewOverdue, tone: true },
         ].map(s => (
           <div key={s.label} className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{s.label}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{s.label}</p>
             {g.register.readable ? (
               <p className={`mt-0.5 text-[22px] font-bold leading-none tabular-nums ${
                 s.tone && s.v > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>
                 {s.v}
               </p>
             ) : (
-              <p className="mt-0.5 text-[13px] font-semibold text-gray-400">Could not be read</p>
+              <p className="mt-0.5 text-[13px] font-semibold text-gray-500">Could not be read</p>
             )}
           </div>
         ))}
@@ -178,15 +178,15 @@ export default async function Page() {
                 rather than folded into it. Never a single effectiveness percentage. */}
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-lg border border-gray-200 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Assessed</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Assessed</p>
                 <p className="mt-0.5 text-[20px] font-bold leading-none tabular-nums text-gray-900">
                   {g.controls.assurance.assessed}
-                  <span className="ml-1 text-[13px] font-medium text-gray-400">/ {g.controls.assurance.total}</span>
+                  <span className="ml-1 text-[13px] font-medium text-gray-500">/ {g.controls.assurance.total}</span>
                 </p>
                 <p className="mt-1 text-[11px] leading-relaxed text-gray-500">Both axes answered.</p>
               </div>
               <div className="rounded-lg border border-gray-200 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Not tested</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Not tested</p>
                 <p className={`mt-0.5 text-[20px] font-bold leading-none tabular-nums ${
                   g.controls.assurance.notTested > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>
                   {g.controls.assurance.notTested}
@@ -194,13 +194,13 @@ export default async function Page() {
                 <p className="mt-1 text-[11px] leading-relaxed text-gray-500">Never Effective.</p>
               </div>
               <div className="rounded-lg border border-gray-200 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Not assessed (design)</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Not assessed (design)</p>
                 <p className="mt-0.5 text-[20px] font-bold leading-none tabular-nums text-gray-900">
                   {g.controls.assurance.notAssessedDesign}
                 </p>
               </div>
               <div className="rounded-lg border border-gray-200 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Test overdue</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Test overdue</p>
                 <p className={`mt-0.5 text-[20px] font-bold leading-none tabular-nums ${
                   g.controls.testOverdue > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>
                   {g.controls.testOverdue}
@@ -263,7 +263,7 @@ export default async function Page() {
             { label: "Done, never reassessed", v: g.actions.doneUnverified },
           ].map(s => (
             <div key={s.label} className="rounded-lg border border-gray-200 px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{s.label}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{s.label}</p>
               <p className="mt-0.5 text-[20px] font-bold leading-none tabular-nums text-gray-900">{s.v}</p>
             </div>
           ))}

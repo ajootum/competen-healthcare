@@ -192,7 +192,7 @@ export default async function Page() {
           <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
             <table className="w-full text-[12px]">
               <thead>
-                <tr className="text-left text-[10px] uppercase tracking-wide text-gray-400">
+                <tr className="text-left text-[10px] uppercase tracking-wide text-gray-500">
                   <th className="py-1 pr-3">Practice</th>
                   <th className="py-1 pr-3">Owner</th>
                   <th className="py-1 pr-3">State</th>
@@ -222,11 +222,11 @@ export default async function Page() {
                         the join found nobody the cell says so rather than showing a dash, which would
                         read as "this practice has no owner". */}
                     <td className="py-1.5 pr-3 text-gray-600">
-                      {w.ownerName ?? <span className="text-gray-400">not named in profiles</span>}
+                      {w.ownerName ?? <span className="text-gray-500">not named in profiles</span>}
                     </td>
                     <td className="py-1.5 pr-3">
                       <span title={STATUS_NOTE[w.status] ?? w.status}
-                        className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${STATUS_TONE[w.status] ?? "bg-gray-100 text-gray-500"}`}>
+                        className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${STATUS_TONE[w.status] ?? "bg-gray-100 text-gray-600"}`}>
                         {w.status}
                       </span>
                     </td>
@@ -235,7 +235,7 @@ export default async function Page() {
                     <td className="py-1.5 pr-3">
                       {(() => {
                         const v = healthOf.get(w.id);
-                        if (!v) return <span className="text-gray-400">—</span>;
+                        if (!v) return <span className="text-gray-500">—</span>;
                         const tone: Record<HealthState, string> = {
                           HEALTHY: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
                           NEW: "bg-gray-100 text-gray-600",
@@ -263,12 +263,12 @@ export default async function Page() {
                     <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.appointments ?? "0"}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.patients ?? "0"}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.encounters ?? "0"}</td>
-                    <td className={`py-1.5 pr-3 text-right tabular-nums font-semibold ${(w.counts.signed ?? "0") !== "0" ? "text-[var(--cmp-text-success)]" : "text-gray-300"}`}>
+                    <td className={`py-1.5 pr-3 text-right tabular-nums font-semibold ${(w.counts.signed ?? "0") !== "0" ? "text-[var(--cmp-text-success)]" : "text-gray-500"}`}>
                       {w.counts.signed ?? "0"}
                     </td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.invoices ?? "0"}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.payments ?? "0"}</td>
-                    <td className="py-1.5 font-mono text-gray-400">{String(w.created_at).slice(0, 10)}</td>
+                    <td className="py-1.5 font-mono text-gray-500">{String(w.created_at).slice(0, 10)}</td>
                   </tr>
                 ))}
               </tbody>

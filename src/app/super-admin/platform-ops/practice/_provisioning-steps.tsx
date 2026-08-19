@@ -41,10 +41,10 @@ export function Stepper({ step }: { step: number }) {
             <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
               state === "done" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
                 : state === "current" ? "bg-teal-700 text-white"
-                  : "bg-gray-100 text-gray-400"}`}>
+                  : "bg-gray-100 text-gray-600"}`}>
               {state === "done" ? "✓" : n}
             </span>
-            <span className={`text-[11px] ${state === "todo" ? "text-gray-400" : "text-gray-700 font-medium"}`}>
+            <span className={`text-[11px] ${state === "todo" ? "text-gray-500" : "text-gray-700 font-medium"}`}>
               {label}
             </span>
             {n < STEPS.length && <span className="ml-1 text-gray-300" aria-hidden>&rarr;</span>}
@@ -85,7 +85,7 @@ export function StepFindAccount({ query, setQuery, results, onSearch, onPick, on
       </div>
       {results !== null && (
         results.length === 0
-          ? <p className="mt-2 text-[11px] text-gray-400">No match in the measured scope.</p>
+          ? <p className="mt-2 text-[11px] text-gray-500">No match in the measured scope.</p>
           : (
             <ul className="mt-2 flex flex-col gap-1">
               {results.map(r => (
@@ -98,7 +98,7 @@ export function StepFindAccount({ query, setQuery, results, onSearch, onPick, on
                     })}
                     className="w-full rounded-lg border border-gray-100 px-3 py-1.5 text-left text-[12px] hover:bg-gray-50">
                     <span className="text-gray-800">{r.name}</span>
-                    {r.email && <span className="ml-1.5 text-gray-400">{r.email}</span>}
+                    {r.email && <span className="ml-1.5 text-gray-500">{r.email}</span>}
                     {r.existingPracticeStatus && (
                       <span className="ml-1.5 rounded bg-[var(--cmp-surface-warning)] px-1 py-0.5 text-[9px] font-bold text-[var(--cmp-text-warning)]">
                         already has a Practice ({r.existingPracticeStatus})
@@ -145,7 +145,7 @@ export function StepVerify({ target }: { target: ProvTarget }) {
       </div>
       {/* §10: an absence is stated as an absence. The search reads workspaces not in CLOSED or FAILED,
           so a closed practice does not block a new one and is not silently counted as one either. */}
-      <p className="mt-2 text-[11px] text-gray-400">
+      <p className="mt-2 text-[11px] text-gray-500">
         Ownership is read from practices that are not CLOSED or FAILED.
       </p>
     </div>

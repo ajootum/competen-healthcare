@@ -41,12 +41,12 @@ export default function PdNotBuilt({ name, spec, purpose, willShow, absence }: P
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
           Practice Product Director
         </p>
         <h1 className="mt-0.5 text-2xl font-bold text-gray-900">{name}</h1>
         <p className="mt-1 max-w-3xl text-sm text-gray-600">{purpose}</p>
-        <p className="mt-1 font-mono text-[11px] text-gray-400">{spec}</p>
+        <p className="mt-1 font-mono text-[11px] text-gray-500">{spec}</p>
       </div>
 
       <div className="max-w-3xl rounded-xl border border-gray-200 bg-[var(--cmp-surface-neutral)] p-4">

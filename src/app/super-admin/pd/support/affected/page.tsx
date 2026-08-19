@@ -114,21 +114,21 @@ export default async function Page() {
 
       <div className="grid gap-2 sm:grid-cols-3">
         <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Practices named</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Practices named</p>
           <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{rows.length}</p>
           <p className="mt-1 text-[11px] text-gray-500">by an open incident or a case</p>
         </div>
         <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Estate-wide incidents</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Estate-wide incidents</p>
           <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{estateWide.length}</p>
           <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
             ⚠ Scoped to the product or a market, so they affect every practice and appear on no row below.
           </p>
         </div>
         <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Open escalations</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Open escalations</p>
           {unscopedEscalations === null ? (
-            <p className="mt-0.5 text-[15px] font-bold leading-none text-gray-400">Not known</p>
+            <p className="mt-0.5 text-[15px] font-bold leading-none text-gray-500">Not known</p>
           ) : (
             <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{unscopedEscalations}</p>
           )}
@@ -154,7 +154,7 @@ export default async function Page() {
                   <p className="text-[12.5px] font-semibold text-gray-900">
                     {label.get(r.practiceId) ?? "Practice not in the subject registry"}
                   </p>
-                  <p className="font-mono text-[10.5px] text-gray-400">{r.practiceId.slice(0, 8)}</p>
+                  <p className="font-mono text-[10.5px] text-gray-500">{r.practiceId.slice(0, 8)}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-4">
                   <span className="text-[11.5px] text-gray-700">

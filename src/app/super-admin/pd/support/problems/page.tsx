@@ -49,12 +49,12 @@ export default async function Page() {
         <>
           <div className="grid gap-2 sm:grid-cols-3">
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Open problems</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Open problems</p>
               <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{open.length}</p>
               <p className="mt-1 text-[11px] text-gray-500">of {rows.length} recorded</p>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Cause confirmed</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Cause confirmed</p>
               <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">
                 {rows.filter(p => p.confirmedCause !== null).length}
               </p>
@@ -63,7 +63,7 @@ export default async function Page() {
               </p>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Open and unowned</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Open and unowned</p>
               <p className={`mt-0.5 text-[22px] font-bold leading-none tabular-nums ${
                 open.filter(p => !p.ownerName).length > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>
                 {open.filter(p => !p.ownerName).length}
@@ -105,15 +105,15 @@ export default async function Page() {
 
                       <div className="mt-2 flex flex-col gap-1.5">
                         <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Suspected cause</p>
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Suspected cause</p>
                           <p className="text-[12px] italic leading-relaxed text-gray-600">
                             {p.suspectedCause ?? "none recorded"}
                           </p>
                         </div>
                         <div>
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Confirmed cause</p>
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Confirmed cause</p>
                           <p className={`text-[12px] leading-relaxed ${
-                            p.confirmedCause ? "font-semibold text-gray-900" : "text-gray-400"}`}>
+                            p.confirmedCause ? "font-semibold text-gray-900" : "text-gray-500"}`}>
                             {p.confirmedCause ?? "not confirmed"}
                           </p>
                         </div>

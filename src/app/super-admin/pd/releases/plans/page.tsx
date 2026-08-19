@@ -104,7 +104,7 @@ export default async function Page() {
               <li key={x.code}
                 className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[12px]">
                 <span className="font-semibold text-gray-900">{x.name}</span>
-                <span className="ml-2 font-mono text-[10px] text-gray-400">{x.code}</span>
+                <span className="ml-2 font-mono text-[10px] text-gray-500">{x.code}</span>
                 {!x.active && <span className="ml-2 text-[11px] font-semibold text-gray-500">inactive</span>}
               </li>
             ))}

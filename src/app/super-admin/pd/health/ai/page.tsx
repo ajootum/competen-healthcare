@@ -85,7 +85,7 @@ export default async function Page() {
           <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
             <table className="w-full text-[12px]">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                <tr className="border-b border-gray-200 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500">
                   <th className="py-1.5 pr-3">Operation</th>
                   <th className="py-1.5 pr-3 text-right">Requests</th>
                   <th className="py-1.5 text-right">Not completed</th>
@@ -96,7 +96,7 @@ export default async function Page() {
                   <tr key={o.operation} className="border-b border-gray-100 last:border-0">
                     <td className="py-1.5 pr-3 font-medium text-gray-800">{o.operation}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{o.n.toLocaleString("en-GB")}</td>
-                    <td className={`py-1.5 text-right tabular-nums ${o.failed > 0 ? "font-semibold text-[var(--cmp-text-warning)]" : "text-gray-400"}`}>
+                    <td className={`py-1.5 text-right tabular-nums ${o.failed > 0 ? "font-semibold text-[var(--cmp-text-warning)]" : "text-gray-500"}`}>
                       {o.failed.toLocaleString("en-GB")}
                     </td>
                   </tr>

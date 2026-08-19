@@ -42,7 +42,7 @@ export function HealthHeader({ title, spec, purpose, readAt, windowDays }: {
     <header className="mb-4 border-b border-gray-200 pb-3">
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Product Health</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Product Health</p>
           <h1 className="mt-0.5 text-[22px] font-bold leading-tight tracking-tight text-gray-900">{title}</h1>
           <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-gray-600">{purpose}</p>
         </div>
@@ -51,8 +51,8 @@ export function HealthHeader({ title, spec, purpose, readAt, windowDays }: {
           <p className="font-mono text-[11px] text-gray-500">
             {new Date(readAt).toISOString().replace("T", " ").slice(0, 16)} GMT
           </p>
-          <p className="text-[11px] text-gray-400">counted over the last {windowDays} days</p>
-          <p className="mt-0.5 font-mono text-[10px] text-gray-400">{spec}</p>
+          <p className="text-[11px] text-gray-500">counted over the last {windowDays} days</p>
+          <p className="mt-0.5 font-mono text-[10px] text-gray-500">{spec}</p>
         </div>
       </div>
     </header>
@@ -80,15 +80,15 @@ export function Stat({ label, f, unit, explain }: {
 }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{label}</p>
       {f.state === "value" ? (
         <p className="mt-0.5 text-[22px] font-bold leading-none tracking-tight text-gray-900 tabular-nums">
           {f.value.toLocaleString("en-GB")}
-          {unit && <span className="ml-1 text-[12px] font-medium text-gray-400">{unit}</span>}
+          {unit && <span className="ml-1 text-[12px] font-medium text-gray-500">{unit}</span>}
         </p>
       ) : (
         <>
-          <p className="mt-0.5 text-[13px] font-semibold text-gray-400">
+          <p className="mt-0.5 text-[13px] font-semibold text-gray-500">
             {f.state === "unknown" ? "Could not be read" : "Not measured"}
           </p>
           <p className="mt-1 text-[11px] leading-relaxed text-gray-500">{f.why}</p>
@@ -106,7 +106,7 @@ export function Duration({ label, f, explain }: { label: string; f: Figure; expl
   const text = ms >= 1000 ? `${(ms / 1000).toFixed(ms >= 10_000 ? 1 : 2)}s` : `${Math.round(ms)}ms`;
   return (
     <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{label}</p>
       <p className="mt-0.5 text-[22px] font-bold leading-none tracking-tight text-gray-900 tabular-nums">{text}</p>
       {explain}
     </div>
@@ -123,9 +123,9 @@ export function Share({ label, f, of }: { label: string; f: Figure; of: string }
   if (f.state !== "value") return <Stat label={label} f={f} />;
   return (
     <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{label}</p>
       <p className="mt-0.5 text-[22px] font-bold leading-none tracking-tight text-gray-900 tabular-nums">
-        {(f.value * 100).toFixed(1)}<span className="ml-0.5 text-[12px] font-medium text-gray-400">%</span>
+        {(f.value * 100).toFixed(1)}<span className="ml-0.5 text-[12px] font-medium text-gray-500">%</span>
       </p>
       <p className="mt-1 text-[11px] text-gray-500">of {of}</p>
     </div>
@@ -149,7 +149,7 @@ export function SampleNote({ sample, what }: { sample: Sample; what: string }) {
 export function Absent({ label, why }: { label: string; why: string }) {
   return (
     <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5">
-      <p className="text-[12px] font-semibold text-gray-700">{label} <span className="font-normal text-gray-400">— not measured</span></p>
+      <p className="text-[12px] font-semibold text-gray-700">{label} <span className="font-normal text-gray-500">— not measured</span></p>
       <p className="mt-1 text-[11.5px] leading-relaxed text-gray-600">{why}</p>
     </div>
   );
@@ -160,7 +160,7 @@ export function AbsentList({ items }: { items: { label: string; why: string }[] 
     <ul className="flex flex-col divide-y divide-gray-100">
       {items.map(i => (
         <li key={i.label} className="py-2 first:pt-0 last:pb-0">
-          <p className="text-[12px] font-semibold text-gray-800">{i.label} <span className="font-normal text-gray-400">— not measured</span></p>
+          <p className="text-[12px] font-semibold text-gray-800">{i.label} <span className="font-normal text-gray-500">— not measured</span></p>
           <p className="mt-0.5 text-[11.5px] leading-relaxed text-gray-600">{i.why}</p>
         </li>
       ))}
@@ -220,7 +220,7 @@ export function SubmoduleGrid({ items }: { items: readonly { key: string; label:
           className="flex items-start justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2.5 transition-colors hover:border-gray-300 hover:bg-gray-50">
           <span className="min-w-0">
             <span className="block text-[12.5px] font-semibold text-gray-900">{s.label} →</span>
-            <span className="mt-0.5 block font-mono text-[10px] text-gray-400">{s.spec}</span>
+            <span className="mt-0.5 block font-mono text-[10px] text-gray-500">{s.spec}</span>
           </span>
           <StateChip state={s.state} />
         </Link>
@@ -314,7 +314,7 @@ export function OverallHealth({ overall, tally, gatingCount, freshness, windowDa
         {([["measured", tally.measured], ["partial", tally.partial], ["refused", tally.refused], ["absent", tally.absent]] as const).map(([k, n]) => (
           <div key={k} className="rounded-lg border border-gray-200 px-2.5 py-2">
             <p className="text-[20px] font-bold leading-none tabular-nums text-gray-900">{n}</p>
-            <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">{COVERAGE_LABEL[k]}</p>
+            <p className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500">{COVERAGE_LABEL[k]}</p>
           </div>
         ))}
       </div>
@@ -355,7 +355,7 @@ export function DomainTile({ d }: { d: Domain }) {
             : d.evidence.value.toLocaleString("en-GB")}
         </span>
       ) : (
-        <span className="mt-1 text-[13px] font-semibold text-gray-400">No value</span>
+        <span className="mt-1 text-[13px] font-semibold text-gray-500">No value</span>
       )}
       {d.evidenceLabel && <span className="mt-0.5 text-[10.5px] leading-snug text-gray-500">{d.evidenceLabel}</span>}
       <span className="mt-2"><StateBadge state={d.state} /></span>
@@ -369,7 +369,7 @@ export function NeedsAttention({ signals }: { signals: AttentionSignal[] }) {
     <section className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-[13px] font-bold text-gray-900">Needs Attention</h2>
-        <span className="text-[11px] font-semibold text-gray-400 tabular-nums">{signals.length}</span>
+        <span className="text-[11px] font-semibold text-gray-500 tabular-nums">{signals.length}</span>
       </div>
       {signals.length === 0 ? (
         <p className="mt-2 text-[12px] leading-relaxed text-gray-600">
@@ -424,7 +424,7 @@ export function NeedsAttention({ signals }: { signals: AttentionSignal[] }) {
                   {s.actionRoute.label} →
                 </Link>
                 {s.missingFields.length > 0 && (
-                  <span className="text-[10.5px] text-gray-400">
+                  <span className="text-[10.5px] text-gray-500">
                     no {s.missingFields.join(", no ")}
                   </span>
                 )}
@@ -490,7 +490,7 @@ export function JourneyRail({ journeys }: { journeys: readonly JourneyHealth[] }
                 </>
               ) : (
                 <>
-                  <p className="mt-1.5 text-[17px] font-bold leading-none text-gray-400">— / —</p>
+                  <p className="mt-1.5 text-[17px] font-bold leading-none text-gray-500">— / —</p>
                   <p className="mt-1 text-[10.5px] text-gray-500">not instrumented</p>
                   <div className="mt-2 h-1 w-full rounded-full bg-gray-200" />
                   <p className="mt-2 text-[10.5px] leading-snug text-gray-500">{j.outcomeReq}</p>
@@ -531,7 +531,7 @@ export function RecentChanges({ rows, windowDays }: {
             <li key={`${r.version}-${i}`} className="flex items-baseline justify-between gap-2 py-1.5 first:pt-0">
               <span className="text-[12px] font-medium text-gray-800">{r.version ?? "—"}</span>
               <span className="text-[11px] text-gray-500">{r.channel ?? "—"} · {r.status ?? "—"}</span>
-              <span className="font-mono text-[10.5px] text-gray-400">
+              <span className="font-mono text-[10.5px] text-gray-500">
                 {r.released_at ? new Date(r.released_at).toISOString().slice(0, 10) : "—"}
               </span>
             </li>
@@ -557,7 +557,7 @@ export function FooterMeta({ freshness, windowDays }: { freshness: Freshness; wi
           Support &amp; Incidents — which is not built yet, so there is currently no route to hand a
           signal to.
         </p>
-        <p className="shrink-0 font-mono text-[10.5px] text-gray-400">CPR-PD-008 · Health Overview</p>
+        <p className="shrink-0 font-mono text-[10.5px] text-gray-500">CPR-PD-008 · Health Overview</p>
       </div>
       <p className="mt-1.5 text-[10.5px] text-gray-500">
         All times GMT · window {windowDays} days, ending{" "}

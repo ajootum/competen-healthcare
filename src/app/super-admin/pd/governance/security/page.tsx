@@ -40,7 +40,7 @@ export default async function Page() {
   return (
     <div className="flex flex-col gap-4">
       <header className="mb-1 border-b border-gray-200 pb-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Governance &amp; Risk</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Governance &amp; Risk</p>
         <h1 className="mt-0.5 text-[22px] font-bold leading-tight tracking-tight text-gray-900">Security Governance</h1>
         <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-gray-600">
           Product security posture, assurance and significant security governance — reviewed, not monitored.
@@ -64,7 +64,7 @@ export default async function Page() {
               return (
                 <li key={code} className="rounded-lg border border-gray-200 px-3 py-2">
                   <p className="text-[12px] font-semibold text-gray-900">{label}</p>
-                  <p className={`mt-0.5 text-[11.5px] ${r ? "text-gray-700" : "font-semibold text-gray-400"}`}>
+                  <p className={`mt-0.5 text-[11.5px] ${r ? "text-gray-700" : "font-semibold text-gray-500"}`}>
                     {r ? String(r.posture) : "Not assessed"}
                   </p>
                   {r?.reviewed_by ? (

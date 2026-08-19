@@ -80,7 +80,7 @@ export default async function Page() {
         <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
           <table className="w-full text-[12px]">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">
+              <tr className="border-b border-gray-200 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500">
                 <th className="py-1.5 pr-3">Journey</th>
                 <th className="py-1.5 pr-3 text-right">Attempts</th>
                 <th className="py-1.5 pr-3 text-right">Succeeded</th>
@@ -100,19 +100,19 @@ export default async function Page() {
                       <span className="mt-0.5 block text-[10.5px] leading-snug text-gray-500">{j.outcomeReq}</span>
                     </td>
                     {j.attempts === null ? (
-                      <td className="py-2 pr-3 text-[11.5px] text-gray-400" colSpan={5}>
+                      <td className="py-2 pr-3 text-[11.5px] text-gray-500" colSpan={5}>
                         not instrumented — this journey emits no attempt, so it has no denominator
                       </td>
                     ) : (
                       <>
                         <td className="py-2 pr-3 text-right tabular-nums text-gray-800">{j.attempts}</td>
                         <td className="py-2 pr-3 text-right tabular-nums text-gray-700">{j.successes}</td>
-                        <td className={`py-2 pr-3 text-right tabular-nums ${j.failures > 0 ? "font-semibold text-[var(--cmp-text-warning)]" : "text-gray-400"}`}>
+                        <td className={`py-2 pr-3 text-right tabular-nums ${j.failures > 0 ? "font-semibold text-[var(--cmp-text-warning)]" : "text-gray-500"}`}>
                           {j.failures}
                         </td>
                         <td className="py-2 pr-3 text-right tabular-nums font-semibold text-gray-900">{rate ?? "—"}</td>
                         <td className="py-2 pr-3 text-right tabular-nums text-gray-700">
-                          {j.p95 === null ? <span className="text-gray-400">no timed event</span>
+                          {j.p95 === null ? <span className="text-gray-500">no timed event</span>
                             : j.p95 >= 1000 ? `${(j.p95 / 1000).toFixed(2)}s` : `${Math.round(j.p95)}ms`}
                         </td>
                       </>

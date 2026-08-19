@@ -135,7 +135,7 @@ export default async function Page() {
             return (
               <li key={f} className="rounded-lg border border-gray-200 bg-white p-3">
                 <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="font-mono text-[11px] text-gray-400">{i + 1}</span>
+                  <span className="font-mono text-[11px] text-gray-500">{i + 1}</span>
                   <span className="font-mono text-[12px] font-bold text-gray-900">{f}</span>
                   <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${!row ? "text-gray-500" : on ? "text-[var(--cmp-text-warning)]" : "text-gray-700"}`}>
                     <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${!row ? "bg-gray-400" : on ? "bg-[var(--cmp-color-warning)]" : "bg-gray-300"}`} />

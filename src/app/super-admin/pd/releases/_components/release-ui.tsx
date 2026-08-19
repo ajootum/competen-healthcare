@@ -37,7 +37,7 @@ export function ReleaseHeader({ title, purpose, spec, children }: {
 }) {
   return (
     <div>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/pd/releases" className="hover:text-teal-700">Releases &amp; Capabilities</Link>
         <span>/</span><span className="text-gray-600">{title}</span>
       </div>
@@ -63,7 +63,7 @@ export function Stat({ label, figure, scope, tone }: {
           : "text-gray-900";
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <p className="text-[10px] uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="text-[10px] uppercase tracking-wide text-gray-500">{label}</p>
       {figure.state === "value" ? (
         <>
           <p className={`text-2xl font-bold tabular-nums ${toneClass}`}>{figure.value.toLocaleString()}</p>
@@ -87,7 +87,7 @@ export function Stat({ label, figure, scope, tone }: {
 export function Fact({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <p className="text-[10px] uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="text-[10px] uppercase tracking-wide text-gray-500">{label}</p>
       <p className="text-xl font-bold text-gray-900">{value}</p>
       {note && <p className="text-[11px] leading-snug text-gray-500">{note}</p>}
     </div>
@@ -155,7 +155,7 @@ export function AbsentList({ items }: { items: { label: string; why: string }[] 
       {items.map(i => (
         <li key={i.label} className="border-b border-gray-100 py-1.5 first:pt-0 last:border-0 last:pb-0">
           <p className="text-[12px] font-semibold text-gray-800">
-            {i.label} <span className="font-normal text-gray-400">— not shown</span>
+            {i.label} <span className="font-normal text-gray-500">— not shown</span>
           </p>
           <Explain summary="Why this is not shown">{i.why}</Explain>
         </li>
@@ -234,7 +234,7 @@ export function StateModel({ rows, holdLabel }: { rows: StateRow[]; holdLabel: s
     <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <table className="w-full min-w-[640px] border-collapse text-[12px]">
         <thead>
-          <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+          <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
             <th scope="col" className="py-1.5 pr-3 font-semibold">State</th>
             <th scope="col" className="py-1.5 pr-3 font-semibold">Meaning</th>
             <th scope="col" className="py-1.5 font-semibold">{holdLabel}</th>
@@ -355,7 +355,7 @@ export function Gates({ gates }: { gates: ReadinessGate[] }) {
     <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <table className="w-full min-w-[720px] border-collapse text-[12px]">
         <thead>
-          <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+          <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
             <th scope="col" className="py-1.5 pr-3 font-semibold">Gate</th>
             <th scope="col" className="py-1.5 pr-3 font-semibold">Minimum question (§7)</th>
             <th scope="col" className="py-1.5 font-semibold">What this plane can evidence</th>
@@ -445,7 +445,7 @@ export function ObjectTable({ objects }: { objects: TechnicalObject[] }) {
     <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <table className="w-full min-w-[560px] border-collapse text-[12px]">
         <thead>
-          <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+          <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
             <th scope="col" className="py-1.5 pr-3 font-semibold">Object (§25)</th>
             <th scope="col" className="py-1.5 pr-3 font-semibold">Exists</th>
             <th scope="col" className="py-1.5 font-semibold">Where, or why not</th>
@@ -470,7 +470,7 @@ export function AttributeTable({ rows }: { rows: AttributeRow[] }) {
     <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <table className="w-full min-w-[640px] border-collapse text-[12px]">
         <thead>
-          <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+          <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
             <th scope="col" className="py-1.5 pr-3 font-semibold">Attribute (§3)</th>
             <th scope="col" className="py-1.5 pr-3 font-semibold">Requirement</th>
             <th scope="col" className="py-1.5 pr-3 font-semibold">Carried</th>
@@ -497,7 +497,7 @@ export function MigrationTable({ rows }: { rows: MigrationRow[] }) {
     <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <table className="w-full min-w-[720px] border-collapse text-[12px]">
         <thead>
-          <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+          <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
             <th scope="col" className="py-1.5 pr-3 font-semibold">Current control</th>
             <th scope="col" className="py-1.5 pr-3 font-semibold">Exists</th>
             <th scope="col" className="py-1.5 pr-3 font-semibold">Target model (§19)</th>
@@ -585,7 +585,7 @@ export function ReadStamp({ at, note }: { at: string; note?: string }) {
  */
 export function NoReadNote({ why }: { why: string }) {
   return (
-    <p className="text-[11px] leading-relaxed text-gray-400">
+    <p className="text-[11px] leading-relaxed text-gray-500">
       ⚠ This page makes no database read, so it carries no freshness stamp. {why} Everything on it is a
       statement about the schema or about code that ships with the product, checkable at the file,
       migration and line named beside each claim.

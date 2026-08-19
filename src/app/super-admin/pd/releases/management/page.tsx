@@ -122,7 +122,7 @@ export default async function Page() {
           <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
             <table className="w-full min-w-[820px] border-collapse text-[12px]">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+                <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
                   <th scope="col" className="py-1.5 pr-3 font-semibold">Version</th>
                   <th scope="col" className="py-1.5 pr-3 font-semibold">Channel</th>
                   <th scope="col" className="py-1.5 pr-3 font-semibold">Status</th>
@@ -139,15 +139,15 @@ export default async function Page() {
                     <td className="py-2 pr-3 text-gray-700">{row.channel}</td>
                     <td className="py-2 pr-3 font-semibold text-gray-900">{row.status}</td>
                     <td className="py-2 pr-3 whitespace-nowrap text-gray-700">
-                      {row.releasedAt ? String(row.releasedAt).slice(0, 10) : <span className="text-gray-400">not recorded</span>}
+                      {row.releasedAt ? String(row.releasedAt).slice(0, 10) : <span className="text-gray-500">not recorded</span>}
                     </td>
                     <td className="py-2 pr-3 whitespace-nowrap text-gray-700">{String(row.createdAt).slice(0, 10)}</td>
                     <td className="py-2 pr-3 font-mono text-[10px] text-gray-500">
                       {row.buildNumber || row.gitCommit
                         ? [row.buildNumber, row.gitCommit ? row.gitCommit.slice(0, 8) : null].filter(Boolean).join(" · ")
-                        : <span className="text-gray-400">not recorded</span>}
+                        : <span className="text-gray-500">not recorded</span>}
                     </td>
-                    <td className="py-2 leading-relaxed text-gray-600">{row.notes || <span className="text-gray-400">no note</span>}</td>
+                    <td className="py-2 leading-relaxed text-gray-600">{row.notes || <span className="text-gray-500">no note</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -176,7 +176,7 @@ export default async function Page() {
         <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
           <table className="w-full min-w-[720px] border-collapse text-[12px]">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+              <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
                 <th scope="col" className="py-1.5 pr-3 font-semibold">Field (§6)</th>
                 <th scope="col" className="py-1.5 pr-3 font-semibold">Requirement</th>
                 <th scope="col" className="py-1.5 pr-3 font-semibold">Carried</th>
@@ -218,7 +218,7 @@ export default async function Page() {
           <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
             <table className="w-full min-w-[640px] border-collapse text-[12px]">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+                <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
                   <th scope="col" className="py-1.5 pr-3 font-semibold">Change set</th>
                   <th scope="col" className="py-1.5 pr-3 font-semibold">Channel</th>
                   <th scope="col" className="py-1.5 pr-3 font-semibold">Rollout mode</th>
@@ -231,7 +231,7 @@ export default async function Page() {
                   <tr key={c.key} className="border-b border-gray-100 align-top">
                     <th scope="row" className="py-2 pr-3 text-left">
                       <span className="block font-semibold text-gray-900">{c.name}</span>
-                      <span className="block font-mono text-[10px] font-normal text-gray-400">{c.key}</span>
+                      <span className="block font-mono text-[10px] font-normal text-gray-500">{c.key}</span>
                     </th>
                     <td className="py-2 pr-3 text-gray-700">{c.channel}</td>
                     <td className="py-2 pr-3 text-gray-700">

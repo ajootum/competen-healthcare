@@ -79,7 +79,7 @@ function AbsentTab({ title, spec, wouldShow, reason }: { title: string; spec: st
     <div className="max-w-3xl space-y-3">
       <div>
         <h2 className="text-[15px] font-bold text-gray-900">{title}</h2>
-        <p className="mt-0.5 font-mono text-[11px] text-gray-400">{spec}</p>
+        <p className="mt-0.5 font-mono text-[11px] text-gray-500">{spec}</p>
       </div>
       <div className="rounded-xl border border-gray-200 bg-[var(--cmp-surface-neutral)] p-4">
         <p className="text-[13px] font-bold text-gray-900">This tab is not populated, and it is not empty.</p>
@@ -129,19 +129,19 @@ export default async function Page({
     <div className="space-y-4">
       {/* ── Identity (§7) ────────────────────────────────────────────────────────────────────────── */}
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
           <Link href={backHref} className="underline">Practices</Link> · Practice 360
         </p>
         <h1 className="mt-0.5 text-2xl font-bold text-gray-900">{p.workspace.name}</h1>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-gray-600">
           <span>
-            <span className="text-gray-400">Owner </span>
-            {p.ownerName ?? <span className="italic text-gray-400">name not readable</span>}
+            <span className="text-gray-500">Owner </span>
+            {p.ownerName ?? <span className="italic text-gray-500">name not readable</span>}
           </span>
-          <span><span className="text-gray-400">Market </span><span className="font-mono">{p.workspace.country}</span></span>
-          <span><span className="text-gray-400">Timezone </span><span className="font-mono">{p.workspace.timezone}</span></span>
-          <span><span className="text-gray-400">Type </span>{p.workspace.type === "managed_practice" ? "Managed practice" : "Individual practice"}</span>
-          <span><span className="text-gray-400">Created </span><span className="font-mono">{String(p.workspace.created_at).slice(0, 10)}</span></span>
+          <span><span className="text-gray-500">Market </span><span className="font-mono">{p.workspace.country}</span></span>
+          <span><span className="text-gray-500">Timezone </span><span className="font-mono">{p.workspace.timezone}</span></span>
+          <span><span className="text-gray-500">Type </span>{p.workspace.type === "managed_practice" ? "Managed practice" : "Individual practice"}</span>
+          <span><span className="text-gray-500">Created </span><span className="font-mono">{String(p.workspace.created_at).slice(0, 10)}</span></span>
         </div>
         <p className="mt-1 text-[12px] text-gray-600">
           <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
@@ -151,7 +151,7 @@ export default async function Page({
                   : "bg-gray-100 text-gray-600"}`}>{p.workspace.status}</span>
           <span className="ml-2 text-gray-600">{LIFECYCLE_MEANING[p.workspace.status] ?? "Lifecycle state as recorded by Product Operations."}</span>
         </p>
-        <p className="mt-1 font-mono text-[11px] text-gray-400">
+        <p className="mt-1 font-mono text-[11px] text-gray-500">
           CPR-PD-003 §6 · read at {p.generatedAt.replace("T", " ").slice(0, 19)}Z
         </p>
       </div>
@@ -290,7 +290,7 @@ export default async function Page({
         <div className="max-w-3xl space-y-3">
           <div>
             <h2 className="text-[15px] font-bold text-gray-900">Practitioners</h2>
-            <p className="mt-0.5 font-mono text-[11px] text-gray-400">CPR-PD-003 §9</p>
+            <p className="mt-0.5 font-mono text-[11px] text-gray-500">CPR-PD-003 §9</p>
           </div>
           <section className="rounded-xl border border-gray-200 bg-white p-4">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Membership rows</p>
@@ -432,7 +432,7 @@ export default async function Page({
         <div className="max-w-4xl space-y-3">
           <div>
             <h2 className="text-[15px] font-bold text-gray-900">Security &amp; Audit</h2>
-            <p className="mt-0.5 font-mono text-[11px] text-gray-400">CPR-PD-003 §14</p>
+            <p className="mt-0.5 font-mono text-[11px] text-gray-500">CPR-PD-003 §14</p>
           </div>
 
           <section className="rounded-xl border border-gray-200 bg-white p-4">
@@ -460,17 +460,17 @@ export default async function Page({
                             : "bg-gray-100 text-gray-600"}`}>{r.status}</span>
                       <span className="font-semibold text-gray-900">{r.requestType}</span>
                       <span className="text-gray-500">
-                        requested by {r.actorName ?? <span className="italic text-gray-400">name not readable</span>}
-                        {" "}for {r.targetName ?? <span className="italic text-gray-400">name not readable</span>}
+                        requested by {r.actorName ?? <span className="italic text-gray-500">name not readable</span>}
+                        {" "}for {r.targetName ?? <span className="italic text-gray-500">name not readable</span>}
                       </span>
-                      <span className="font-mono text-gray-400">{String(r.createdAt).replace("T", " ").slice(0, 16)}</span>
+                      <span className="font-mono text-gray-500">{String(r.createdAt).replace("T", " ").slice(0, 16)}</span>
                       {r.errorCode && <span className="font-mono text-[var(--cmp-text-critical)]">{r.errorCode}</span>}
                     </div>
                     {r.steps.length > 0 && (
                       <div className="mt-2 overflow-x-auto">
                         <table className="w-full text-[11px]">
                           <thead>
-                            <tr className="text-left text-[10px] uppercase tracking-wide text-gray-400">
+                            <tr className="text-left text-[10px] uppercase tracking-wide text-gray-500">
                               <th scope="col" className="py-1 pr-3">Step</th>
                               <th scope="col" className="py-1 pr-3">Status</th>
                               <th scope="col" className="py-1 pr-3">Started</th>
@@ -485,8 +485,8 @@ export default async function Page({
                                 <td className={`py-1 pr-3 font-semibold ${
                                   s.status === "succeeded" ? "text-[var(--cmp-text-success)]"
                                     : s.status === "failed" ? "text-[var(--cmp-text-critical)]" : "text-gray-500"}`}>{s.status}</td>
-                                <td className="py-1 pr-3 font-mono text-gray-400">{s.startedAt ? String(s.startedAt).replace("T", " ").slice(0, 16) : ""}</td>
-                                <td className="py-1 pr-3 font-mono text-gray-400">{s.completedAt ? String(s.completedAt).replace("T", " ").slice(0, 16) : ""}</td>
+                                <td className="py-1 pr-3 font-mono text-gray-500">{s.startedAt ? String(s.startedAt).replace("T", " ").slice(0, 16) : ""}</td>
+                                <td className="py-1 pr-3 font-mono text-gray-500">{s.completedAt ? String(s.completedAt).replace("T", " ").slice(0, 16) : ""}</td>
                                 <td className="py-1 font-mono text-[var(--cmp-text-critical)]">{s.errorCode ?? ""}</td>
                               </tr>
                             ))}

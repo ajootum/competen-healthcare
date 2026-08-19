@@ -61,7 +61,7 @@ export function HealthCards({ h }: { h: ProvisioningHealth }) {
 
       <div className={card}>
         <p className={label}>Provisioning duration</p>
-        <p className={`${value} ${h.duration.p50Seconds === null ? "text-[15px] font-semibold text-gray-400" : "text-gray-900"}`}>
+        <p className={`${value} ${h.duration.p50Seconds === null ? "text-[15px] font-semibold text-gray-500" : "text-gray-900"}`}>
           {h.duration.p50Seconds === null ? "Not yet measured" : secs(h.duration.p50Seconds)}
         </p>
         <p className={scope}>
@@ -108,7 +108,7 @@ export function LifecycleStrip({ h, workspaceCounts }: {
             className="flex-1 min-w-[8.5rem] rounded-lg border border-gray-100 bg-gray-50/60 px-2.5 py-2">
             <p className="text-[11px] font-medium text-gray-600">{s.label}</p>
             {s.count === null
-              ? <p className="mt-0.5 text-[11px] italic text-gray-400">Unavailable</p>
+              ? <p className="mt-0.5 text-[11px] italic text-gray-500">Unavailable</p>
               : <p className="mt-0.5 text-lg font-bold tabular-nums text-gray-900">{s.count}</p>}
           </li>
         ))}
@@ -184,7 +184,7 @@ export function OnboardingRegister({ rows, stallHours, unavailable, unavailableR
             return (
               <tr key={r.practiceId} className="border-b border-gray-100 last:border-0">
                 <td className="py-2 pr-3 font-medium text-gray-900">
-                  {r.practiceName ?? <span className="italic text-gray-400">Name not in scope</span>}
+                  {r.practiceName ?? <span className="italic text-gray-500">Name not in scope</span>}
                 </td>
                 <td className="py-2 pr-3">
                   <div className="flex items-center gap-2">
@@ -201,7 +201,7 @@ export function OnboardingRegister({ rows, stallHours, unavailable, unavailableR
                 </td>
                 <td className="py-2 pr-3">
                   <span className="text-gray-800">{stageLabel(r.stage)}</span>
-                  {r.stage && <span className="ml-1.5 font-mono text-[10px] text-gray-400">{r.stage}</span>}
+                  {r.stage && <span className="ml-1.5 font-mono text-[10px] text-gray-500">{r.stage}</span>}
                 </td>
                 <td className="py-2 pr-3 text-gray-600">{ago(r.lastProgressAt)}</td>
                 <td className="py-2">
@@ -216,7 +216,7 @@ export function OnboardingRegister({ rows, stallHours, unavailable, unavailableR
                       STALLED
                     </span>
                   ) : (
-                    <span className="text-[11px] text-gray-400">—</span>
+                    <span className="text-[11px] text-gray-500">—</span>
                   )}
                 </td>
               </tr>

@@ -131,7 +131,7 @@ export default async function Page() {
             return (
               <li key={f} className="rounded-lg border border-gray-200 bg-white p-3">
                 <div className="flex flex-wrap items-baseline gap-2">
-                  <span className="font-mono text-[11px] text-gray-400">{i + 1}</span>
+                  <span className="font-mono text-[11px] text-gray-500">{i + 1}</span>
                   <span className="text-[13px] font-bold text-gray-900">{FLAG_LABEL[f] ?? f}</span>
                   {/* ⚠ NEVER COLOUR ALONE — the dot always travels with its word, and the word for a
                       flag we could not find is neither "on" nor "off". */}
@@ -139,7 +139,7 @@ export default async function Page() {
                     <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${!row ? "bg-gray-400" : on ? "bg-[var(--cmp-color-warning)]" : "bg-gray-300"}`} />
                     {!row ? "No row for this flag" : on ? "ON" : "OFF"}
                   </span>
-                  <span className="font-mono text-[10px] text-gray-400">{f}</span>
+                  <span className="font-mono text-[10px] text-gray-500">{f}</span>
                 </div>
                 <p className="mt-1 text-[12px] leading-relaxed text-gray-800">{FLAG_CONSEQUENCE[f]}</p>
                 {row?.note && <p className="mt-0.5 text-[11px] text-gray-500">{row.note}</p>}
@@ -208,7 +208,7 @@ export default async function Page() {
           <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
             <table className="w-full min-w-[640px] border-collapse text-[12px]">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+                <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
                   <th scope="col" className="py-1.5 pr-3 font-semibold">Version</th>
                   <th scope="col" className="py-1.5 pr-3 font-semibold">Channel</th>
                   <th scope="col" className="py-1.5 pr-3 font-semibold">Status</th>

@@ -69,7 +69,7 @@ export default async function Page() {
               ["Version", `v${fmt.version}${fmt.locked ? " · locked" : ""}`],
             ].map(([k, v]) => (
               <div key={k} className="rounded-xl border border-gray-200 bg-white p-4">
-                <p className="text-[10px] uppercase tracking-wide text-gray-400">{k}</p>
+                <p className="text-[10px] uppercase tracking-wide text-gray-500">{k}</p>
                 <p className="mt-1 text-xl font-bold text-gray-900">{v}</p>
               </div>
             ))}
@@ -107,7 +107,7 @@ export default async function Page() {
           <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
             <table className="w-full min-w-[520px] border-collapse text-[12px]">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+                <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
                   <th className="py-1.5 pr-3 font-semibold">Version</th>
                   <th className="py-1.5 pr-3 font-semibold">Shape</th>
                   <th className="py-1.5 pr-3 font-semibold">Reason</th>
@@ -137,7 +137,7 @@ export default async function Page() {
         note="Two of §7's stores permit a row count from this plane and nothing more. A count proves the catalogue is seeded; it says nothing about what is in it.">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-[10px] uppercase tracking-wide text-gray-400">Onboarding steps in the catalogue</p>
+            <p className="text-[10px] uppercase tracking-wide text-gray-500">Onboarding steps in the catalogue</p>
             {d.onboardingSteps === null ? (
               <p className="mt-1 text-[12px] text-[var(--cmp-text-warning)]">Could not be read. That is not an empty catalogue.</p>
             ) : (
@@ -148,7 +148,7 @@ export default async function Page() {
             )}
           </div>
           <div className="rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-[10px] uppercase tracking-wide text-gray-400">Plan codes available at provisioning</p>
+            <p className="text-[10px] uppercase tracking-wide text-gray-500">Plan codes available at provisioning</p>
             {d.plans === null ? (
               <p className="mt-1 text-[12px] text-[var(--cmp-text-warning)]">Could not be read. That is not zero plans.</p>
             ) : (

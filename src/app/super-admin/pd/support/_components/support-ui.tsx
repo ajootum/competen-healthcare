@@ -18,7 +18,7 @@ export function SupportHeader({ title, spec, purpose, readAt }: {
     <header className="mb-4 border-b border-gray-200 pb-3">
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Support &amp; Incidents</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Support &amp; Incidents</p>
           <h1 className="mt-0.5 text-[22px] font-bold leading-tight tracking-tight text-gray-900">{title}</h1>
           <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-gray-600">{purpose}</p>
         </div>
@@ -27,7 +27,7 @@ export function SupportHeader({ title, spec, purpose, readAt }: {
           <p className="font-mono text-[11px] text-gray-500">
             {new Date(readAt).toISOString().replace("T", " ").slice(0, 16)} GMT
           </p>
-          <p className="mt-0.5 font-mono text-[10px] text-gray-400">{spec}</p>
+          <p className="mt-0.5 font-mono text-[10px] text-gray-500">{spec}</p>
         </div>
       </div>
     </header>
@@ -50,16 +50,16 @@ export function Stat({ label, f, unit, tone }: {
 }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{label}</p>
       {f.state === "value" ? (
         <p className={`mt-0.5 text-[22px] font-bold leading-none tracking-tight tabular-nums ${
           tone === "warn" && f.value > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>
           {f.value.toLocaleString("en-GB")}
-          {unit && <span className="ml-1 text-[12px] font-medium text-gray-400">{unit}</span>}
+          {unit && <span className="ml-1 text-[12px] font-medium text-gray-500">{unit}</span>}
         </p>
       ) : (
         <>
-          <p className="mt-0.5 text-[13px] font-semibold text-gray-400">
+          <p className="mt-0.5 text-[13px] font-semibold text-gray-500">
             {f.state === "unknown" ? "Could not be read" : "No such record"}
           </p>
           <p className="mt-1 text-[11px] leading-relaxed text-gray-500">{f.why}</p>
@@ -111,7 +111,7 @@ export function SubmoduleGrid({ items }: {
           className="flex items-start justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2.5 transition-colors hover:border-gray-300 hover:bg-gray-50">
           <span className="min-w-0">
             <span className="block text-[12.5px] font-semibold text-gray-900">{s.label} →</span>
-            <span className="mt-0.5 block font-mono text-[10px] text-gray-400">{s.spec}</span>
+            <span className="mt-0.5 block font-mono text-[10px] text-gray-500">{s.spec}</span>
           </span>
           <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${TONE[s.state]}`}>
             {WORD[s.state]}
@@ -153,7 +153,7 @@ export function Caveat({ metric }: { metric: string }) {
 export function AbsentValue({ why }: { why: string }) {
   return (
     <>
-      <p className="mt-0.5 text-[13px] font-semibold text-gray-400">Not available</p>
+      <p className="mt-0.5 text-[13px] font-semibold text-gray-500">Not available</p>
       <p className="mt-1 text-[11px] leading-relaxed text-gray-500">{why}</p>
     </>
   );
@@ -239,9 +239,9 @@ export function Field({ label, value, warnWhenEmpty }: {
 }) {
   return (
     <div>
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{label}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{label}</p>
       <p className={`mt-0.5 text-[12.5px] leading-snug ${
-        value ? "text-gray-900" : warnWhenEmpty ? "font-semibold text-[var(--cmp-text-warning)]" : "text-gray-400"}`}>
+        value ? "text-gray-900" : warnWhenEmpty ? "font-semibold text-[var(--cmp-text-warning)]" : "text-gray-500"}`}>
         {value ?? "not recorded"}
       </p>
     </div>

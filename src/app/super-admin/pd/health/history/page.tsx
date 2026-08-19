@@ -64,7 +64,7 @@ export default async function Page() {
           <div className="mt-3 overflow-x-auto">
             <table className="w-full text-[12px]">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                <tr className="border-b border-gray-200 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500">
                   <th className="py-1.5 pr-3">Version</th>
                   <th className="py-1.5 pr-3">Channel</th>
                   <th className="py-1.5 pr-3">Status</th>

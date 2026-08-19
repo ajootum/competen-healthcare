@@ -48,7 +48,7 @@ function StepLedger({ steps }: { steps: OpsStep[] }) {
           // carry an error code — create_configuration records TAXONOMY_SEED_FAILED and still succeeds
           // on purpose — so the code is shown beside the status rather than instead of it.
           title={s.error_code ? `${s.status} · ${s.error_code}` : s.status}
-          className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${STEP_TONE[s.status] ?? "bg-gray-100 text-gray-500"}`}>
+          className={`rounded px-1.5 py-0.5 font-mono text-[10px] ${STEP_TONE[s.status] ?? "bg-gray-100 text-gray-600"}`}>
           {s.step_code}
           {s.error_code && s.status === "succeeded" && <span className="ml-1 opacity-70">⚠</span>}
         </span>

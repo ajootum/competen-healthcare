@@ -72,7 +72,7 @@ export default async function Page() {
         <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
           <table className="w-full min-w-[600px] border-collapse text-[12px]">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+              <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
                 <th className="py-1.5 pr-3 font-semibold">Setting</th>
                 <th className="py-1.5 pr-3 font-semibold">Governed</th>
                 <th className="py-1.5 font-semibold">Where the decision is made</th>

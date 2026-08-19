@@ -43,7 +43,7 @@ export default async function IdentifierFormats() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/platform-ops" className="hover:text-teal-700">Platform Operations</Link>
           <span>/</span>
           <Link href="/super-admin/platform-ops/practice" className="hover:text-teal-700">Competen Practice</Link>
@@ -129,7 +129,7 @@ export default async function IdentifierFormats() {
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-sm font-bold text-gray-900">Changes</h2>
         {history.length === 0 ? (
-          <p className="mt-2 text-xs text-gray-400">
+          <p className="mt-2 text-xs text-gray-500">
             The format has not been changed since it was seeded.
           </p>
         ) : (

@@ -31,7 +31,7 @@ export default async function Page() {
   return (
     <div className="flex flex-col gap-4">
       <header className="mb-1 border-b border-gray-200 pb-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Governance &amp; Risk</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Governance &amp; Risk</p>
         <h1 className="mt-0.5 text-[22px] font-bold leading-tight tracking-tight text-gray-900">Clinical Safety Governance</h1>
         <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-gray-600">
           Product features whose failure, misleading behaviour or automation could plausibly influence
@@ -103,7 +103,7 @@ export default async function Page() {
                       {i.present ? "mitigation present" : "marker not found"}
                     </span>
                   </div>
-                  <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">{i.category}</p>
+                  <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500">{i.category}</p>
                   <p className="mt-1.5 text-[11.5px] leading-relaxed text-gray-700">
                     <span className="font-semibold text-gray-800">Hazard:</span> {i.hazard}
                   </p>

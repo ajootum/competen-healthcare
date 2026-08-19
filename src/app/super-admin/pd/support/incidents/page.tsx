@@ -59,7 +59,7 @@ export default async function Page() {
           <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
             <table className="w-full text-[12px]">
               <thead>
-                <tr className="border-b border-gray-200 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                <tr className="border-b border-gray-200 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500">
                   <th className="py-1.5 pr-3">Incident</th>
                   <th className="py-1.5 pr-3">Severity</th>
                   <th className="py-1.5 pr-3">State</th>
@@ -84,7 +84,7 @@ export default async function Page() {
                     <td className="py-2 pr-3"><SeverityBadge label={SEVERITY_LABEL[i.severity]} /></td>
                     <td className="py-2 pr-3"><StatusChip label={STATUS_LABEL[i.status]} /></td>
                     <td className="py-2 pr-3 text-gray-700">{i.subjectLabel ?? i.subjectType}</td>
-                    <td className="py-2 pr-3 text-gray-700">{i.journeyName ?? <span className="text-gray-400">none named</span>}</td>
+                    <td className="py-2 pr-3 text-gray-700">{i.journeyName ?? <span className="text-gray-500">none named</span>}</td>
                     <td className={`py-2 pr-3 ${i.ownerName ? "text-gray-700" : "font-semibold text-[var(--cmp-text-warning)]"}`}>
                       {i.ownerName ?? "unowned"}
                     </td>

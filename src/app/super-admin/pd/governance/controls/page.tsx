@@ -35,7 +35,7 @@ export default async function Page() {
   return (
     <div className="flex flex-col gap-4">
       <header className="mb-1 border-b border-gray-200 pb-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Governance &amp; Risk</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Governance &amp; Risk</p>
         <h1 className="mt-0.5 text-[22px] font-bold leading-tight tracking-tight text-gray-900">Controls &amp; Assurance</h1>
         <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-gray-600">
           The control catalogue, its design and operating effectiveness, and the testing behind each.
@@ -53,19 +53,19 @@ export default async function Page() {
           <>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-lg border border-gray-200 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Registered controls</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Registered controls</p>
                 <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{read.assurance.total}</p>
               </div>
               <div className="rounded-lg border border-gray-200 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Assessed</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Assessed</p>
                 <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">
                   {read.assurance.assessed}
-                  <span className="ml-1 text-[13px] font-medium text-gray-400">/ {read.assurance.total}</span>
+                  <span className="ml-1 text-[13px] font-medium text-gray-500">/ {read.assurance.total}</span>
                 </p>
                 <p className="mt-1 text-[11px] text-gray-500">Both axes answered.</p>
               </div>
               <div className="rounded-lg border border-gray-200 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Not tested</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Not tested</p>
                 <p className={`mt-0.5 text-[22px] font-bold leading-none tabular-nums ${
                   read.assurance.notTested > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>
                   {read.assurance.notTested}
@@ -73,7 +73,7 @@ export default async function Page() {
                 <p className="mt-1 text-[11px] text-gray-500">Never Effective.</p>
               </div>
               <div className="rounded-lg border border-gray-200 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Test overdue</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Test overdue</p>
                 <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{read.testOverdue}</p>
               </div>
             </div>
@@ -159,7 +159,7 @@ export default async function Page() {
                 { label: "Acceptance harnesses", v: candidates.harnesses, note: "Detective — they look for the failure." },
               ].map(s => (
                 <div key={s.label} className="rounded-lg border border-amber-200 bg-white px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{s.label}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{s.label}</p>
                   <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{s.v}</p>
                   <p className="mt-1 text-[11px] leading-relaxed text-gray-500">{s.note}</p>
                 </div>

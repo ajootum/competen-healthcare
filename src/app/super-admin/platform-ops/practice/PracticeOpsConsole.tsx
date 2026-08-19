@@ -273,7 +273,7 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
                 </div>
                 <button type="button" disabled={busy} onClick={() => toggleFlag(f.flag, !f.enabled)}
                   className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold disabled:opacity-50 ${
-                    f.enabled ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>
+                    f.enabled ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-600"}`}>
                   {f.enabled ? "ON" : "OFF"}
                 </button>
               </li>
@@ -340,8 +340,8 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
               </button>
             </>
           )}
-          {step === 1 && !target && <span className="text-[11px] text-gray-400">Choose who the workspace is for.</span>}
-          {step === 3 && !form.displayName.trim() && <span className="text-[11px] text-gray-400">A practice name is required.</span>}
+          {step === 1 && !target && <span className="text-[11px] text-gray-500">Choose who the workspace is for.</span>}
+          {step === 3 && !form.displayName.trim() && <span className="text-[11px] text-gray-500">A practice name is required.</span>}
         </div>
       </section>
 
@@ -354,12 +354,12 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
           under the practitioner&apos;s ownership, and there is deliberately no way in from here.
         </p>
         {initial.workspaces.length === 0 ? (
-          <p className="mt-2 text-[12px] text-gray-400">None provisioned yet.</p>
+          <p className="mt-2 text-[12px] text-gray-500">None provisioned yet.</p>
         ) : (
           <div className="mt-2 overflow-x-auto">
             <table className="w-full text-[12px]">
               <thead>
-                <tr className="text-left text-[10px] uppercase tracking-wide text-gray-400">
+                <tr className="text-left text-[10px] uppercase tracking-wide text-gray-500">
                   <th className="py-1 pr-3">Practice</th><th className="py-1 pr-3">Owner</th>
                   <th className="py-1 pr-3">Status</th><th className="py-1 pr-3 text-right">Team</th>
                   <th className="py-1 pr-3 text-right">Appts</th><th className="py-1 pr-3 text-right">Patients</th>
@@ -380,7 +380,7 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
                       <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
                         w.status === "ACTIVE" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
                           : w.status === "ONBOARDING" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"
-                            : "bg-gray-100 text-gray-500"}`}>{w.status}</span>
+                            : "bg-gray-100 text-gray-600"}`}>{w.status}</span>
                     </td>
                     {/* ⚠ D2: BANDS, NOT NUMBERS. These arrive banded from the loader -- the exact figure
                         is never sent, so it cannot be read out of the payload either. "Is this practice
@@ -395,7 +395,7 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
                     <td className={`py-1.5 pr-3 text-right tabular-nums font-semibold ${(w.counts.signed ?? "0") !== "0" ? "text-[var(--cmp-text-success)]" : "text-gray-300"}`}>{w.counts.signed ?? "0"}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.invoices ?? "0"}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.payments ?? "0"}</td>
-                    <td className="py-1.5 font-mono text-gray-400">{String(w.created_at).slice(0, 10)}</td>
+                    <td className="py-1.5 font-mono text-gray-500">{String(w.created_at).slice(0, 10)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -412,7 +412,7 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
           must be legible — a saga you cannot see is just a hang.
         </p>
         {initial.requests.length === 0 ? (
-          <p className="mt-2 text-[12px] text-gray-400">No requests recorded.</p>
+          <p className="mt-2 text-[12px] text-gray-500">No requests recorded.</p>
         ) : (
           <ul className="mt-2 flex flex-col gap-2">
             {(initial.requests as any[]).map(r => (
@@ -425,9 +425,9 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
                   {/* D1 applies here too: a provisioning failure is identified by who it was for, not by
                       their address. The id remains as the last resort so a row is never nameless. */}
                   <span className="text-gray-800">{r.targetName ?? r.target_user_id}</span>
-                  <span className="text-gray-400">{r.request_type}</span>
+                  <span className="text-gray-500">{r.request_type}</span>
                   {r.error_code && <span className="text-[var(--cmp-text-critical)]">{r.error_code}</span>}
-                  <span className="ml-auto font-mono text-[11px] text-gray-400">{String(r.created_at).slice(0, 16).replace("T", " ")}</span>
+                  <span className="ml-auto font-mono text-[11px] text-gray-500">{String(r.created_at).slice(0, 16).replace("T", " ")}</span>
                   {/* Section 7.2 D: the action column. Offered only for a run that has somewhere left to
                       go -- a COMPLETED run has nothing to resume, and saying so by omission is clearer
                       than a disabled button. */}
@@ -445,7 +445,7 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
                         className={`rounded px-1.5 py-0.5 text-[10px] font-mono ${
                           s.status === "succeeded" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
                             : s.status === "failed" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"
-                              : "bg-gray-100 text-gray-500"}`}>
+                              : "bg-gray-100 text-gray-600"}`}>
                         {s.step_code}
                       </span>
                     ))}

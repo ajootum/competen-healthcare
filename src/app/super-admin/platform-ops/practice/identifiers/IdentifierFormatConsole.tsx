@@ -141,7 +141,7 @@ export default function IdentifierFormatConsole({ format, issued, acknowledgemen
       >
         {busy ? "Changing…" : "Change the format"}
       </button>
-      {unchanged && <span className="ml-2 text-xs text-gray-400">nothing has been altered yet</span>}
+      {unchanged && <span className="ml-2 text-xs text-gray-500">nothing has been altered yet</span>}
     </section>
   );
 }

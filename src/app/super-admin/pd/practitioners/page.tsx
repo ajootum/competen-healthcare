@@ -147,7 +147,7 @@ export default async function Page({
     <div data-wide className="space-y-4">
       {/* ── Header: scope, exact estate total, freshness (s2) ───────────────────────────────────── */}
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
           Practice Product Director
         </p>
         <h1 className="mt-0.5 text-2xl font-bold text-gray-900">Practitioners</h1>
@@ -190,7 +190,7 @@ export default async function Page({
 
       {/* ── Cohorts (s2) — only the three that resolve to a PERSON ──────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Cohorts</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Cohorts</span>
         {cohortLink(null, "Everyone")}
         {cohortLink("new", `New (joined in the last ${data.newWindowDays} days)`)}
         {cohortLink("invited", "Invited, not registered")}

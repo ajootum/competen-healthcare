@@ -60,7 +60,7 @@ export default async function Page() {
         <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
           <table className="w-full min-w-[560px] border-collapse text-[12px]">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+              <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
                 <th className="py-1.5 pr-3 font-semibold">Trail</th>
                 <th className="py-1.5 pr-3 font-semibold">Store</th>
                 <th className="py-1.5 font-semibold">Rows read</th>
@@ -130,7 +130,7 @@ export default async function Page() {
                   {e.scope && <span className="text-[11px] text-gray-500">at {e.scope}</span>}
                 </div>
                 {e.detail && <p className="mt-1 font-mono text-[11px] break-words text-gray-600">{e.detail}</p>}
-                <p className="mt-1 text-[11px] text-gray-400">
+                <p className="mt-1 text-[11px] text-gray-500">
                   {String(e.at).slice(0, 16).replace("T", " ")} UTC{e.actor ? ` · ${e.actor}` : " · actor not recorded"}
                 </p>
               </li>
@@ -160,7 +160,7 @@ export default async function Page() {
                   </span>
                 </div>
                 {v.note && <p className="mt-0.5 text-gray-600">{v.note}</p>}
-                <p className="mt-1 text-[11px] text-gray-400">
+                <p className="mt-1 text-[11px] text-gray-500">
                   {v.entries} setting(s) in the snapshot · {String(v.at).slice(0, 16).replace("T", " ")} UTC
                   {v.by ? ` · ${v.by}` : ""}
                 </p>

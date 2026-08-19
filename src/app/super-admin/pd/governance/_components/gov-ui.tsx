@@ -9,7 +9,7 @@ export { Explain, Cite, Absent, AbsentList, PlaneRefusal } from "../../_componen
 export function GovHeader({ title, purpose }: { title: string; purpose: string }) {
   return (
     <header className="mb-1 border-b border-gray-200 pb-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Governance &amp; Risk</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Governance &amp; Risk</p>
       <h1 className="mt-0.5 text-[22px] font-bold leading-tight tracking-tight text-gray-900">{title}</h1>
       <p className="mt-1 max-w-3xl text-[13px] leading-relaxed text-gray-600">{purpose}</p>
     </header>

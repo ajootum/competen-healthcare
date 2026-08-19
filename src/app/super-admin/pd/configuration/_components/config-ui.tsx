@@ -28,7 +28,7 @@ export function ConfigHeader({ title, purpose, spec, children }: {
 }) {
   return (
     <div>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/pd/configuration" className="hover:text-teal-700">Product Configuration</Link>
         <span>/</span><span className="text-gray-600">{title}</span>
       </div>
@@ -54,7 +54,7 @@ export function Stat({ label, figure, scope, tone }: {
           : "text-gray-900";
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <p className="text-[10px] uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="text-[10px] uppercase tracking-wide text-gray-500">{label}</p>
       {figure.state === "value" ? (
         <>
           <p className={`text-2xl font-bold tabular-nums ${toneClass}`}>{figure.value.toLocaleString()}</p>
@@ -140,7 +140,7 @@ export function AbsentList({ items }: { items: { label: string; why: string }[] 
       {items.map(i => (
         <li key={i.label} className="border-b border-gray-100 py-1.5 first:pt-0 last:border-0 last:pb-0">
           <p className="text-[12px] font-semibold text-gray-800">
-            {i.label} <span className="font-normal text-gray-400">— not shown</span>
+            {i.label} <span className="font-normal text-gray-500">— not shown</span>
           </p>
           <Explain summary="Why this is not shown">{i.why}</Explain>
         </li>
@@ -206,7 +206,7 @@ export function Ladder({ rungs }: { rungs: LadderRung[] }) {
     <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <table className="w-full min-w-[560px] border-collapse text-[12px]">
         <thead>
-          <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+          <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
             <th className="w-[26%] py-1.5 pr-3 font-semibold">Level (§3)</th>
             <th className="w-[24%] py-1.5 pr-3 font-semibold">Does it resolve</th>
             <th className="py-1.5 font-semibold">What that means here</th>
@@ -218,7 +218,7 @@ export function Ladder({ rungs }: { rungs: LadderRung[] }) {
             return (
               <tr key={r.level} className="border-b border-gray-100 align-top">
                 <td className="py-2 pr-3">
-                  <span className="font-mono text-[10px] text-gray-400">{i + 1}</span>{" "}
+                  <span className="font-mono text-[10px] text-gray-500">{i + 1}</span>{" "}
                   <span className="text-[12px] font-bold text-gray-900">{r.level}</span>
                 </td>
                 {/* ⚠ NEVER COLOUR ALONE — the dot always travels with its word. */}
@@ -271,7 +271,7 @@ export function Stores({ stores }: { stores: DomainStore[] }) {
       <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
         <table className="w-full min-w-[560px] border-collapse text-[12px]">
           <thead>
-            <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-400">
+            <tr className="border-b border-gray-200 text-left text-[10px] uppercase tracking-wide text-gray-500">
               <th className="py-1.5 pr-3 font-semibold">Store</th>
               <th className="py-1.5 pr-3 font-semibold">What it holds</th>
               <th className="py-1.5 font-semibold">Readable here</th>
@@ -587,7 +587,7 @@ export function ChangesTable({ rows }: {
     <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Scrollable table">
       <table className="w-full text-[12px]">
         <thead>
-          <tr className="border-b border-gray-200 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">
+          <tr className="border-b border-gray-200 text-left text-[10px] font-bold uppercase tracking-wider text-gray-500">
             <th className="py-1.5 pr-3">Change set</th>
             <th className="py-1.5 pr-3">Included</th>
             <th className="py-1.5 pr-3">Mode</th>
@@ -626,7 +626,7 @@ export function ConfigFooter({ at }: { at: string }) {
           whether a capability EXISTS is Releases &amp; Capabilities, and whether it is healthy at runtime
           is Product Health.
         </p>
-        <p className="shrink-0 font-mono text-[10.5px] text-gray-400">CPR-PD-011 · Configuration Overview</p>
+        <p className="shrink-0 font-mono text-[10.5px] text-gray-500">CPR-PD-011 · Configuration Overview</p>
       </div>
       <p className="mt-1.5 text-[10.5px] text-gray-500">
         All times GMT · read at request time and cached nowhere, so this page does not poll and nothing on
@@ -662,7 +662,7 @@ export function ReadFailures({ problems }: { problems: string[] }) {
  */
 export function NoReadNote({ why }: { why: string }) {
   return (
-    <p className="text-[11px] leading-relaxed text-gray-400">
+    <p className="text-[11px] leading-relaxed text-gray-500">
       ⚠ This page makes no database read, so it carries no freshness stamp. {why} Everything on it is a
       statement about the schema, checkable at the migration and line listed under the stores above.
     </p>
