@@ -36,6 +36,12 @@ export default async function Page() {
   if (incidents === null) problems.push("mos_incident: could not be read, so incidents are missing from every row below.");
   if (cases === null) problems.push("mos_support_case: could not be read, so cases are missing from every row below.");
   if (subjects === null) problems.push("mos_subject: the subject registry could not be read, so practices are identified by id rather than by name.");
+  // ⚠ THE FOURTH READ HAD NO NOTICE, AND ITS FAILURE RENDERED AS A CONFIDENT ZERO. Three loaders were
+  // checked for null here and escalations was not, while `(escalations?.rows ?? []).length` fed a 22px
+  // bold "Open escalations" figure. ReadResult is `{rows, truncated} | null`, so an unreadable
+  // mos_escalation displayed 0 open escalations -- which PD-009 §23 forbids in as many words:
+  // "Affected-scope Unknown is never displayed as zero."
+  if (escalations === null) problems.push("mos_escalation: could not be read, so the open-escalation count is not known rather than zero.");
 
   // Practice id → label, resolved through the phase 1 registry so a renamed practice is renamed here.
   const label = new Map<string, string>();
@@ -68,7 +74,12 @@ export default async function Page() {
   // Counted and stated rather than silently excluded, because "no practice affected" would otherwise
   // be the reading of an estate-wide outage.
   const estateWide = (incidents ?? []).filter(i => i.subjectType !== "practice");
-  const unscopedEscalations = (escalations?.rows ?? []).filter(e => e.isOpen).length;
+  // null, NOT 0, when the read failed -- the render below prints "Not known" for it. `?? []` collapses
+  // "I could not look" and "there are none" into the same number, and this figure is read by somebody
+  // deciding whether anything is escalated right now.
+  const unscopedEscalations = escalations === null
+    ? null
+    : escalations.rows.filter(e => e.isOpen).length;
 
   return (
     <div className="flex flex-col gap-4">
@@ -116,9 +127,15 @@ export default async function Page() {
         </div>
         <div className="rounded-lg border border-gray-200 bg-white px-3 py-2.5">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Open escalations</p>
-          <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{unscopedEscalations}</p>
+          {unscopedEscalations === null ? (
+            <p className="mt-0.5 text-[15px] font-bold leading-none text-gray-400">Not known</p>
+          ) : (
+            <p className="mt-0.5 text-[22px] font-bold leading-none tabular-nums text-gray-900">{unscopedEscalations}</p>
+          )}
           <p className="mt-1 text-[11px] leading-relaxed text-gray-500">
-            Escalations attach to an incident or a case, so their practice is whichever that names.
+            {unscopedEscalations === null
+              ? "The escalation register could not be read. That is not zero escalations."
+              : "Escalations attach to an incident or a case, so their practice is whichever that names."}
           </p>
         </div>
       </div>

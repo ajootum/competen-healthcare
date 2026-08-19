@@ -358,6 +358,36 @@ check("PD-013 §9. CONTROL — the dormant list is not a blanket exemption for e
   Object.keys(DORMANT_BY_DESIGN).length < writeCaps.length,
   `${Object.keys(DORMANT_BY_DESIGN).length} dormant of ${writeCaps.length} writes`);
 
+// ══ CPR-PD-013 §9: A READ THAT FAILED MUST NOT RENDER AS A ZERO ═══════════════════════════════════
+//
+// mos-support's ReadResult is `{ rows, truncated } | null`, so `read?.rows ?? []` turns an UNREADABLE
+// table into an empty one. The §9 pass found exactly one page doing that without saying so:
+// support/affected checked three loaders for null, rendered the fourth as `(escalations?.rows ??
+// []).length` in a 22px bold figure, and displayed 0 open escalations when the register could not be
+// read -- which PD-009 §23 forbids by name ("Affected-scope Unknown is never displayed as zero").
+//
+// The other six support pages already guarded. This pin keeps that true: a page that collapses a
+// nullable read with `?? []` must ALSO test that read for null somewhere, so the failure has a voice.
+const NULLABLE_MODULES = ["support", "governance", "configuration", "health"];
+const collapsers: string[] = [];
+for (const m of NULLABLE_MODULES) {
+  for (const f of walk(`src/app/super-admin/pd/${m}`, /\.tsx$/)) {
+    const src = blankComments(readFileSync(f, "utf8"));
+    // Collapses a possibly-null read into an array...
+    if (!/\?\.rows\s*\?\?\s*\[\]|\)\s*\?\?\s*\[\]/.test(src)) continue;
+    // ...without anywhere testing that read for null.
+    if (/===\s*null|!==\s*null/.test(src)) continue;
+    collapsers.push(f.replace("src/app/super-admin/pd/", ""));
+  }
+}
+check("PD-013 §9. no PD page turns an unreadable table into an empty one without saying so",
+  collapsers.length === 0,
+  collapsers.length ? `collapses a nullable read with no null guard: ${collapsers.join(", ")}` : "");
+check("PD-013 §9. CONTROL — the scan finds pages that DO collapse nullable reads, so it is not inert",
+  NULLABLE_MODULES.some(m => walk(`src/app/super-admin/pd/${m}`, /\.tsx$/)
+    .some(f => /\?\.rows\s*\?\?\s*\[\]/.test(blankComments(readFileSync(f, "utf8"))))),
+  "no file matched the collapse pattern at all — the detector is looking for the wrong shape");
+
 console.log(`\n  identifiers preserved in citation carriers: ${citedInPages + citedInLoaders}`);
 console.log(`  identifiers in visible text: ${pageOffenders.length + loaderOffenders.length}\n`);
 

@@ -124,13 +124,82 @@ drilling from the register rather than by a sidebar item. **NO GAP.**
 | Practices | 2 | built (avg 518 lines) | `practices.view` | NO GAP | — |
 | Practitioners | 1 | built (492 lines) | `practitioners.view` | NO GAP | — |
 | Releases & Capabilities | 12 | built (avg 243 lines) | `releases.view` | NO GAP — §4 above | — |
-| Support & Incidents | 11 | built (avg 183 lines) | `support.view` | not individually re-read | unassessed |
-| Governance & Risk | 11 | built (avg 169 lines) | `governance.view` | not individually re-read | unassessed |
-| Product Configuration | 11 | built (avg 151 lines) | `configuration.view` | not individually re-read | unassessed |
-| Product Health | 11 | built (avg 109 lines) | `health.view` | not individually re-read | unassessed |
+| Support & Incidents | 11 | built (avg 183 lines) | `support.view` | **one defect, fixed** — §6.1 | was high |
+| Governance & Risk | 11 | built (avg 169 lines) | `governance.view` | NO GAP — §6.2 | — |
+| Product Configuration | 11 | built (avg 151 lines) | `configuration.view` | NO GAP — §6.3 | — |
+| Product Health | 11 | built (avg 109 lines) | `health.view` | NO GAP — §6.4 | — |
 | Product Intelligence | 11 | **11 shells** | `intelligence.view` | NO GAP — §3 | — |
 | Commercial | 11 | **11 shells** | `commercial.view` | NO GAP — §3 | — |
 | Adoption & Growth | 1 | **1 shell** | `adoption.view` | NO GAP — §3 | — |
+
+## 6A. The four remaining modules, read against their governing specs
+
+Read against `CPR-PD-008` (Product Health), `CPR-PD-009` (Support & Incidents), `CPR-PD-010`
+(Governance & Risk) and `CPR-PD-011` (Product Configuration), extracted from the owner's originals.
+
+**Every one of the four builds all eleven of its spec's required submodules — 44 of 44, exact.** Each
+spec's §2 names eleven; each module ships eleven, with names that map one to one.
+
+### 6.1 Support & Incidents — ⚠ one real defect, fixed
+
+**`support/affected` displayed 0 open escalations when the escalation register could not be read.**
+
+The page loads four things and checks three of them for null, pushing a named problem for each. The
+fourth — `loadEscalations` — was collapsed with `(escalations?.rows ?? []).filter(…).length` and fed
+straight into a 22px bold figure. `ReadResult` is `{ rows, truncated } | null`, so an unreadable
+`mos_escalation` rendered a confident zero with no notice beside it.
+
+PD-009 §23 forbids this by name: *"Affected-scope Unknown is never displayed as zero."*
+
+**Gap class:** `MISLEADING_INTELLIGENCE`. **HFE severity: high** — the figure is read by somebody
+deciding whether anything is escalated right now, and zero is the most reassuring wrong answer
+available. **Fixed:** the count is `null` on failure, renders *"Not known"* with the reason, and the
+loader now has its own problem notice like the other three. **Acceptance test:** a structural pin in
+`pd-screen-doctrine-harness` — a page that collapses a nullable read with `?? []` must also test that
+read for null somewhere. Break-tested by reverting the fix.
+
+The other six Support pages that collapse a nullable read all guard it. This was a single omission,
+not a pattern.
+
+**Checked and NO GAP:** all 11 submodules present; *"escalation does not transfer incident
+ownership"* — the escalations page renders no owner column and quotes §9 as the reason, which is
+correct rather than a gap; Incident 360 carries §7's three roles.
+
+### 6.2 Governance & Risk — NO GAP
+
+- *"Not Tested is never represented as Effective"* — rendered literally as **"Never Effective"**, with
+  design and operating effectiveness kept as separate columns, and `aggregateEffectivenessPct` typed
+  `null` so no aggregate score is invented from untested controls.
+- *"Exceptions cannot silently remain active after expiry"* — the register carries `is_expired` and
+  `days_to_expiry`, and an **Expired** tile states *"Cannot silently remain in force."*
+
+### 6.3 Product Configuration — NO GAP
+
+The comps draw hierarchy levels resolving at *100/100/92/88/85%* and ten domains at *58–100% coverage*.
+**Every one of those percentages is refused**, with the reason recorded in place: *"85% resolvable"
+needs a count of settings that could resolve and there is no such denominator in the schema.*
+
+The one bar that remains is `aria-hidden` and the figure actually rendered beside it is `{readable}/{total}`
+— counts, not a rate. That is the honesty rule applied exactly.
+
+### 6.4 Product Health — NO GAP
+
+PD-008 §25: *"Overall health never renders Healthy when required telemetry is stale/unknown."* The
+overall state resolves to **Unknown**, and the loader states why: critical journeys and availability are
+the gating domains under §5, both are unmeasured, and *"a journey with no attempts is unmeasured, not
+healthy — they return null rather than zero, because zero attempts and no instrumentation render
+identically on a screen and only one of them is a fact about the product."*
+
+Workflow Health moved to *partial* coverage on evidence (six of eight journeys now emit) while keeping
+its state Unknown, because §4 needs an objective and none is configured. Coverage and health are kept as
+separate axes, which is the distinction the criterion is protecting.
+
+### 6.5 Loader hygiene across all four
+
+42 destructured reads in `src/lib/hq` were scanned for a discarded `error`. Seven discard it; **none of
+the seven is in these four modules** — they are the capability resolvers in `context.ts` and
+`governance-context.ts`, where an unreadable grant table yields no capabilities and therefore fails
+closed, plus two in `pd-provisioning-health.ts` (Product Operations, already covered).
 
 ## 7. Carried forward from CPR-PD-014 §6
 
@@ -148,10 +217,14 @@ Both remain open and both are the owner's decision, in this order:
 
 Stated plainly rather than left to look complete:
 
-- **Four modules were measured, not read line by line** — Support, Governance, Configuration and Health
-  (44 pages). Their guards, loaders, write surfaces and shell status are counted above and all four are
-  substantive; their *rendered claims* have not been checked sentence by sentence against their specs.
-  That is the remaining §9 work.
+- ~~Four modules were measured, not read line by line~~ — **done, see §6A.** All four were read against
+  their governing specs (PD-008, PD-009, PD-010, PD-011): 44 of 44 required submodules present, one real
+  defect found and fixed, three modules NO GAP on the criteria checked.
+  ⚠ **What §6A did NOT do:** it checked each spec's §2 submodule list and the mechanically checkable
+  acceptance criteria — the honesty ones, the ownership ones, the expiry ones. Criteria that need a
+  running system or a person (*"responsive/accessibility/collapsed-sidebar testing passes"*, *"synthetic
+  checks cannot create uncontrolled real patient records"*, *"recovery requires governed confirmation"*)
+  were **not** exercised. Those need the browser pass in the next bullet.
 - **No screen in this pass was opened in a browser.** The PD-014 §14 evidence run covered the five
   Product Operations surfaces; the other 81 have not been rendered as a signed-in Product Director.
 - **`platform-ops`'s other 42 pages are out of scope** — they belong to the Platform Operations module,
