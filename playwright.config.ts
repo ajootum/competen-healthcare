@@ -46,7 +46,9 @@ export default defineConfig({
    * page was closed underneath it, which surfaced as "Target page, context or browser has been closed"
    * — a message that describes the harness giving up, not the product.
    */
-  timeout: 60_000,
+  // Budgeted against the sign-in retry loop: 3 attempts x (20s wait + settle) plus a cold first
+  // compile. 60s was arithmetically too small for its own loop and produced a spurious red.
+  timeout: 120_000,
   reporter: [["list"], ["html", { open: "never", outputFolder: "playwright-report" }]],
 
   use: {

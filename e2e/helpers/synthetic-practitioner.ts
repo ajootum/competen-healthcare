@@ -1,4 +1,5 @@
 import { type Page, test } from "@playwright/test";
+import { PRODUCTION_REF, isProductionUrl, judgeTarget } from "../../scripts/production-guard";
 
 // COMP-ENG-001A §4 — the synthetic automation practitioner identity.
 //
@@ -20,7 +21,8 @@ import { type Page, test } from "@playwright/test";
  * against that cannot itself be misconfigured — deriving "which project is production" from the same
  * environment the test is trying to validate would be circular.
  */
-const PRODUCTION_REF = "rnnqhlrcgvsauigxwszl";
+// PRODUCTION_REF now lives in scripts/production-guard.ts, so the negative test in
+// scripts/production-guard-harness.ts exercises the SAME predicate this suite uses rather than a copy.
 
 /**
  * ⚠ THIS FAILS, IT DOES NOT SKIP. Skipping is right for "the fixture was never provisioned" — a
@@ -30,24 +32,24 @@ const PRODUCTION_REF = "rnnqhlrcgvsauigxwszl";
  * Supabase. A loud failure is the only correct outcome.
  */
 export function assertNotProduction(): void {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const ref = url.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? null;
-  if (ref === PRODUCTION_REF) {
+  // The verdict comes from the shared predicate, so scripts/production-guard-harness.ts proves THIS
+  // path rather than a second implementation that happens to look similar.
+  const verdict = judgeTarget(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  if (verdict.ok) return;
+  if (verdict.reason === "PRODUCTION") {
     throw new Error(
-      `REFUSING TO RUN AUTHENTICATED SMOKE AGAINST PRODUCTION (${ref}).\n`
+      `REFUSING TO RUN AUTHENTICATED SMOKE AGAINST PRODUCTION (${verdict.ref}).\n`
       + `  The app under test is configured for the production project, where no synthetic\n`
       + `  practitioner exists and none may be created.\n`
       + `  Start the dev server with "npm run dev:staging" so it points at the staging project,\n`
       + `  and run Playwright from that same shell.`,
     );
   }
-  if (!ref) {
-    throw new Error(
-      "Cannot identify the Supabase project the app is configured for — NEXT_PUBLIC_SUPABASE_URL is "
-      + "unset or malformed. Refusing rather than guessing, because the guess that matters is whether "
-      + "this is production.",
-    );
-  }
+  throw new Error(
+    "Cannot identify the Supabase project the app is configured for — NEXT_PUBLIC_SUPABASE_URL is "
+    + "unset or malformed. Refusing rather than guessing, because the guess that matters is whether "
+    + "this is production.",
+  );
 }
 
 export function syntheticPractitionerCredentials(): { email: string; password: string } | null {
@@ -125,9 +127,9 @@ export async function blockProductionTraffic(page: Page): Promise<{ violation: (
    *    the whole URL is the only reliable form.
    */
   await page.route(/^https:\/\/[a-z0-9]+\.supabase\.co\//, async route => {
-    const host = new URL(route.request().url()).host;
-    if (host.startsWith(`${PRODUCTION_REF}.`)) {
-      hit ??= host;
+    const requestUrl = route.request().url();
+    if (isProductionUrl(requestUrl)) {
+      hit ??= new URL(requestUrl).host;
       await route.abort("blockedbyclient");
       return;
     }
@@ -198,8 +200,8 @@ export async function signInAsSyntheticPractitioner(page: Page): Promise<void> {
   const emailBox = page.getByLabel(/email/i);
   const passwordBox = page.getByLabel(/password/i);
   const submitBtn = page.getByRole("button", { name: /sign in/i });
-  // Budgeted against the 60s per-test timeout: 4 x (7s wait + 1.5s settle) leaves room for page load.
-  const ATTEMPTS = 4;
+  // Three attempts fit the 120s budget with room for a cold compile: 3 x (20s wait + settle).
+  const ATTEMPTS = 3;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     /**
      * ⚠ A SETTLE BEFORE TYPING, MEASURED NOT GUESSED. Clicking the instant the button is actionable
@@ -212,7 +214,14 @@ export async function signInAsSyntheticPractitioner(page: Page): Promise<void> {
     await passwordBox.fill(password);
     await submitBtn.click();
     try {
-      await page.waitForURL(u => !u.pathname.startsWith("/practice/sign-in"), { timeout: 20_000 });
+      /**
+       * ⚠ waitUntil: "commit", NOT THE DEFAULT "load". The question this wait asks is "did we leave the
+       * sign-in page", and a committed navigation answers it. The default waits for the whole document
+       * to finish loading, and the Practice shell compiles on demand in dev mode and can exceed the
+       * budget — so a SUCCESSFUL sign-in timed out here, and the loop then retried against a page that
+       * had already navigated. Every test still waits for the specific content it asserts on.
+       */
+      await page.waitForURL(u => !u.pathname.startsWith("/practice/sign-in"), { timeout: 20_000, waitUntil: "commit" });
       return;
     } catch (err) {
       /**

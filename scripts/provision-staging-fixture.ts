@@ -45,6 +45,7 @@ import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { resolvePracticeAccess, resolveWorkspaceContext } from "../src/lib/practice/access";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
+import { judgeTarget } from "./production-guard";
 
 loadEnvConfig(process.cwd());
 
@@ -113,19 +114,25 @@ if (!url || !key) {
 }
 
 // ── Guard 1: the target must not be production ───────────────────────────────────────────────────
-const prodRef = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? null;
-const targetRef = url.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? null;
-if (!targetRef) die(`STAGING_SUPABASE_URL is not a Supabase project URL: ${url}`);
-if (!prodRef) {
-  die("Could not read the production ref from NEXT_PUBLIC_SUPABASE_URL, so the safety guard cannot run.", [
-    "Refusing rather than guessing which project this is.",
+/**
+ * ⚠ THE SHARED PREDICATE, NOT A LOCAL COPY. COMP-ENG-002H §5 requires the negative test to exercise
+ * "the same guard code path used by real smoke/provisioning automation", and it cannot do that while
+ * this script carries its own notion of what production is. judgeTarget also fails closed on a target
+ * it cannot identify — the state a half-configured environment produces.
+ */
+const verdict = judgeTarget(url);
+if (!verdict.ok) {
+  if (verdict.reason === "PRODUCTION") {
+    die(`REFUSING — STAGING_SUPABASE_URL points at PRODUCTION (${verdict.ref}).`, [
+      "No test may mutate production, and no synthetic fixture belongs there.",
+    ]);
+  }
+  die("STAGING_SUPABASE_URL does not identify a Supabase project, so this run cannot prove it is not production.", [
+    "Refusing rather than guessing.  want: https://<ref>.supabase.co",
   ]);
 }
-if (targetRef === prodRef) {
-  die(`REFUSING — STAGING_SUPABASE_URL points at PRODUCTION (${prodRef}).`, [
-    "§10: no test may mutate production, and no synthetic fixture belongs there.",
-  ]);
-}
+const targetRef = verdict.ref;
+const prodRef = judgeTarget(process.env.NEXT_PUBLIC_SUPABASE_URL).ref;
 
 if (password) assertRealSecret(password);
 
