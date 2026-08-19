@@ -5,6 +5,7 @@ import { loadPracticeOps, evaluateGate, FLAG_CONSEQUENCE, FLAG_ORDER } from "@/l
 import PracticeOpsConsole from "./PracticeOpsConsole";
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadServiceHealth } from "@/lib/hq/pd-service-health";
+import { loadFlagChangeHistory } from "@/lib/hq/pd-control-plane";
 
 // Practice Operations (CPR-IAM-001 s14 cutover, s14.1 launch ladder; CPR-PROV-001 s4 pilot pathway).
 //
@@ -36,11 +37,22 @@ export default async function PracticeOperations() {
    * something, and how a future edit starts branching on a value the product has retired.
    */
   const { data: profile } = await admin.from("profiles").select("full_name").eq("id", user.id).single();
-  await requireHqCapability("hq.practice.operations.view");
+  const hq = await requireHqCapability("hq.practice.operations.view");
+
+  /**
+   * CPR-PD-014 section 7.4: "A Product Director without the required control capability can inspect
+   * allowed facts but cannot execute privileged controls."
+   *
+   * !! THIS IS FOR DISPLAY, NOT FOR AUTHORISATION. Section 9 is explicit that client-side hiding is not
+   * authorisation, and the retry endpoint gates itself on the same capability independently. What this
+   * avoids is offering a control that would answer 403 to the person looking at it.
+   */
+  const canRetry = hq.isOwner || hq.capabilities.includes("hq.practice.provision.execute");
 
   const ops = await loadPracticeOps(admin);
   const gate = await evaluateGate(admin, ops);
   const serviceHealth = await loadServiceHealth(admin);
+  const flagHistory = await loadFlagChangeHistory(admin);
 
   const passed = gate.filter(g => g.state === "pass").length;
   const failed = gate.filter(g => g.state === "fail").length;
@@ -137,9 +149,61 @@ export default async function PracticeOperations() {
         </div>
       </div>
 
+      {/* ── CPR-PD-014 §7.2 B — control metadata. The toggles themselves stay in the console below;
+          this is the provenance §7.2 B asks for beside them: who changed each one, when, and why. */}
+      <section className="rounded-xl border border-gray-200 bg-white p-4">
+        <h2 className="text-[13px] font-bold text-gray-900">Launch control history</h2>
+        {flagHistory.unavailable ? (
+          <p className="mt-1 text-[11px] text-[var(--cmp-text-warning)]">
+            Change history is unavailable: {flagHistory.unavailableReason}. The toggles still work; what
+            is missing is the record of who last moved them.
+          </p>
+        ) : (
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full min-w-[38rem] text-left text-[12px]">
+              <thead>
+                <tr className="border-b border-gray-200 text-[11px] uppercase tracking-wide text-gray-500">
+                  <th className="pb-1.5 pr-3 font-semibold">Control</th>
+                  <th className="pb-1.5 pr-3 font-semibold">Now</th>
+                  <th className="pb-1.5 pr-3 font-semibold">Last changed</th>
+                  <th className="pb-1.5 pr-3 font-semibold">By</th>
+                  <th className="pb-1.5 font-semibold">Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {FLAG_ORDER.map(f => {
+                  const h = flagHistory.byFlag[f];
+                  return (
+                    <tr key={f} className="border-b border-gray-100 last:border-0">
+                      <td className="py-2 pr-3 font-mono text-[11px] text-gray-700">{f}</td>
+                      <td className="py-2 pr-3">
+                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${ops.flags[f]
+                          ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
+                          : "bg-gray-100 text-gray-500"}`}>{ops.flags[f] ? "ON" : "OFF"}</span>
+                      </td>
+                      {/* §10: a control never changed has no row, and says so rather than showing a date. */}
+                      <td className="py-2 pr-3 text-gray-600">
+                        {h ? String(h.changedAt).slice(0, 16).replace("T", " ") : "No recorded change"}
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-[11px] text-gray-500">
+                        {h?.actorId ? `${h.actorId.slice(0, 8)}…` : "—"}
+                      </td>
+                      <td className="py-2 text-gray-600">
+                        {h ? (h.reason ?? <span className="text-gray-400">Not recorded at the time</span>) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       <PracticeOpsConsole
         callerId={user.id}
         callerName={profile?.full_name ?? "me"}
+        canRetry={canRetry}
         initial={JSON.parse(JSON.stringify({ ...ops, gate }))}
       />
     </div>

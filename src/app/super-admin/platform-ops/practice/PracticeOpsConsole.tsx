@@ -38,8 +38,16 @@ const STATE_MARK: Record<string, string> = { pass: "✓", fail: "✗", pending: 
 
 const newKey = () => `ops-${Math.random().toString(36).slice(2, 10)}-${Math.random().toString(36).slice(2, 10)}`;
 
-export default function PracticeOpsConsole({ callerId, callerName, initial }: {
+export default function PracticeOpsConsole({ callerId, callerName, initial, canRetry }: {
   callerId: string; callerName: string; initial: any;
+  /**
+   * Whether this caller holds hq.practice.provision.execute, resolved on the SERVER.
+   *
+   * !! DISPLAY ONLY. CPR-PD-014 section 9: client-side hiding is not authorisation. The retry endpoint
+   * gates itself on the same capability, so a caller who reached this prop by other means still gets a
+   * 403. What it prevents is offering somebody a control that would refuse them.
+   */
+  canRetry: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err" | "warn"; text: string } | null>(null);
@@ -87,6 +95,40 @@ export default function PracticeOpsConsole({ callerId, callerName, initial }: {
     });
     setIdempotencyKey(newKey());
     setTimeout(reload, 1200);
+  }
+
+  /**
+   * CPR-PD-014 section 8.3 / section 7.2 D — resume a stalled or failed provisioning run.
+   *
+   * !! THE BUTTON EXISTS ONLY BECAUSE THE ENDPOINT DOES. Section 12 makes that the order:
+   * "Retry is real and idempotent before any retry UI is enabled." Until this build the honest option
+   * was a sentence explaining that no endpoint existed, and that sentence is what this replaces.
+   *
+   * !! AND THE RESULT IS READ BACK, NOT ASSUMED. Section 7.4: "The UI confirms the post-mutation state
+   * from a fresh read rather than assuming success." The endpoint returns the status it re-read from the
+   * database, and the page reloads so every panel reflects the same fresh state rather than one
+   * optimistically patched row.
+   */
+  async function retryRun(requestId: string, who: string) {
+    if (!confirm(
+      `Resume provisioning for ${who}?\n\n`
+      + "Each step re-checks its own resource before creating it, so a resumed run completes the "
+      + "remainder rather than duplicating what already exists. This is recorded in the audit trail.",
+    )) return;
+    setBusy(true); setNotice(null);
+    const res = await fetch(`/api/v1/practice/provisioning/${requestId}`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setNotice({ kind: "err", text: data?.error ?? `Retry failed (${res.status}).` });
+      setBusy(false); return;
+    }
+    setNotice({
+      kind: data.ok ? "ok" : "warn",
+      text: data.ok
+        ? `Run resumed and completed. Status is now ${data.status}.`
+        : `Run resumed but stopped again at ${data.failedStep ?? "an unrecorded step"} (${data.errorCode ?? "no code"}).`,
+    });
+    location.reload();
   }
 
   async function toggleFlag(flag: string, enabled: boolean) {
@@ -352,6 +394,15 @@ export default function PracticeOpsConsole({ callerId, callerName, initial }: {
                   <span className="text-gray-400">{r.request_type}</span>
                   {r.error_code && <span className="text-[var(--cmp-text-critical)]">{r.error_code}</span>}
                   <span className="ml-auto font-mono text-[11px] text-gray-400">{String(r.created_at).slice(0, 16).replace("T", " ")}</span>
+                  {/* Section 7.2 D: the action column. Offered only for a run that has somewhere left to
+                      go -- a COMPLETED run has nothing to resume, and saying so by omission is clearer
+                      than a disabled button. */}
+                  {canRetry && r.status !== "COMPLETED" && (
+                    <button type="button" disabled={busy} onClick={() => retryRun(r.id, r.targetName ?? r.target_user_id)}
+                      className="rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] font-semibold text-gray-700 hover:border-teal-600 hover:text-teal-700 disabled:opacity-50">
+                      Retry
+                    </button>
+                  )}
                 </div>
                 {r.steps.length > 0 && (
                   <div className="mt-1 flex gap-1 flex-wrap">
