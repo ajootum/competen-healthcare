@@ -144,8 +144,12 @@ export async function loadProvisioningHealth(admin: any): Promise<ProvisioningHe
   const { data: projRows, error: projErr } = await admin.rpc("plat_practice_onboarding_projection");
   if (projErr) {
     onboardingUnavailable = true;
+    // ⚠ NO MIGRATION NUMBER IN THIS SENTENCE. It is rendered to an operator, and
+    // CPR-PD-SCREEN-DOCTRINE counts an implementation identifier in visible loader text against a
+    // ratchet pointing downward. The substrate is migration 339; a developer finds that here, in a
+    // comment, rather than in the message an operator reads.
     onboardingUnavailableReason = /could not find the function/i.test(projErr.message)
-      ? "migration 339 has not been applied to this database"
+      ? "the onboarding projection is not present on this database"
       : `the onboarding projection could not be read: ${projErr.message.slice(0, 80)}`;
   } else {
     const rows = (projRows ?? []) as any[];

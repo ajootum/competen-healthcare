@@ -96,6 +96,17 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
     why: "the three launch flags. Platform-owned configuration; holds nothing about any practice.",
   },
   {
+    table: "pd_ops_config",
+    columns: ["config_key", "value_hours", "description"],
+    count: true,
+    why:
+      "CPR-PD-014 §4.5 thresholds -- how many hours without progress marks a practice STALLED, and how "
+      + "long a newly provisioned practice stays NEW. Platform-owned operational configuration created by "
+      + "migration 339: two rows keyed by a string, holding integers and their own descriptions. It "
+      + "names no practice and contains no tenant data, and it is read rather than hardcoded precisely "
+      + "so the threshold is not UI magic.",
+  },
+  {
     table: "practice_workspace",
     columns: [
       "id", "name", "type", "status", "owner_person_id", "country", "timezone",
@@ -337,6 +348,21 @@ export const PRACTICE_RPC_ALLOWLIST: readonly string[] = [
   // Returns the next integer of a sequence and nothing else. Called to refuse a format change that
   // would strand the numbering (identifier-format.ts:170).
   "practice_next_practitioner_sequence",
+
+  // CPR-PD-014 §8.1. Returns EXACTLY eight operational fields per workspace — practice_id, stage,
+  // steps_total, steps_completed, started_at, last_progress_at, completed_at, stalled_reason_code —
+  // and cannot return anything else, because the columns are fixed in the function's own RETURNS TABLE
+  // (migration 339).
+  //
+  // ⚠ IT EXISTS PRECISELY BECAUSE OF THE WARNING ABOVE. `practice_onboarding.step_data` holds
+  // practitioner-entered payloads, and this plane must never receive them. Reading the table directly
+  // would put a column rule on every caller for ever; a function that CANNOT select step_data moves the
+  // rule into the substrate, where forgetting it is not possible. That is why the answer to "an RPC
+  // hides its columns" here is a function whose columns are declared and auditable in one place.
+  //
+  // The catalogue it counts against is already allowlisted for row count only, which is all the
+  // denominator needs.
+  "plat_practice_onboarding_projection",
 ];
 
 // ── WHAT THIS RULE DOES NOT COVER, SAID PLAINLY ──────────────────────────────────────────────────────

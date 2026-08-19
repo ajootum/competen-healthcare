@@ -4,7 +4,11 @@ import {
   loadPdOperations, RESUME_PATH, DETAIL_ABSENCE, ATTEMPTS_ABSENCE, REQUEST_STATUSES,
   type OpsStep,
 } from "@/lib/hq/pd-operations";
-import { OpsHeader, Stat, Panel, Absent, Warn, TechnicalOpsLink } from "../_components/ops-ui";
+import { loadProvisioningHealth, sortOnboarding } from "@/lib/hq/pd-provisioning-health";
+import { OpsHeader, Panel, Absent, TechnicalOpsLink } from "../_components/ops-ui";
+import {
+  HealthCards, LifecycleStrip, OnboardingRegister, RecoveryModel,
+} from "./_components/provisioning-health";
 
 // CPR-PD-014 build 3 — PROVISIONING & ONBOARDING.
 //
@@ -55,11 +59,19 @@ function StepLedger({ steps }: { steps: OpsStep[] }) {
 
 export default async function Page() {
   await requireHqCapability("hq.practice.operations.view");
-  const ops = await loadPdOperations(createAdminClient());
+  const admin = createAdminClient();
+  // Two loaders, one page: loadPdOperations answers what the saga did, loadProvisioningHealth answers
+  // whether provisioned practices are progressing to operational use (CPR-PD-014 §4.1). They are read
+  // in parallel because neither depends on the other.
+  const [ops, health] = await Promise.all([loadPdOperations(admin), loadProvisioningHealth(admin)]);
 
-  const completed = ops.requestMix.find(m => m.status === "COMPLETED")?.count ?? 0;
-  const onboarding = ops.workspaces.filter(w => w.status === "ONBOARDING").length;
-  const activated = ops.workspaces.filter(w => w.status === "ACTIVE").length;
+  const workspaceCounts = {
+    provisioning: ops.workspaces.filter(w => w.status === "PROVISIONING").length,
+    onboarding: ops.workspaces.filter(w => w.status === "ONBOARDING").length,
+    active: ops.workspaces.filter(w => w.status === "ACTIVE").length,
+  };
+  const onboardingRows = sortOnboarding(health.onboarding);
+  const stalledCount = onboardingRows.filter(r => r.stalledReasonCode !== null).length;
 
   return (
     <div data-wide className="space-y-4">
@@ -69,22 +81,13 @@ export default async function Page() {
         spec="CPR-PD-014 build 3 · CPR-PROV-001 §7–§8"
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {/* ⚠ THE STATUS VOCABULARY IS UPPER CASE (migration 191's CHECK), AND A LOWER-CASE COMPARISON
-            MATCHES NOTHING SILENTLY. The Practice Mission Control queue widget excluded
-            "(succeeded,completed)" and therefore excluded nothing, drawing every finished request as
-            waiting. Every comparison on this page goes through REQUEST_STATUSES. */}
-        <Stat label="Completed runs" value={String(completed)}
-          scope={`of the ${ops.requestsRead} most recent provisioning requests`} tone="success" />
-        <Stat label="Failed runs" value={String(ops.failures.length)}
-          scope="requests at status FAILED, which is a stopped saga, not a slow one"
-          tone={ops.failures.length ? "critical" : "neutral"} />
-        <Stat label="Still open" value={String(ops.open.length)}
-          scope="neither COMPLETED, EXPIRED nor FAILED"
-          tone={ops.open.length ? "warning" : "neutral"} />
-        <Stat label="Practices in onboarding" value={String(onboarding)}
-          scope={`workspaces at ONBOARDING; ${activated} have reached ACTIVE, of the ${ops.estate.pageLength} most recent read`} />
-      </div>
+      {/* ⚠ THE STATUS VOCABULARY IS UPPER CASE (migration 191's CHECK), AND A LOWER-CASE COMPARISON
+          MATCHES NOTHING SILENTLY. The Practice Mission Control queue widget excluded
+          "(succeeded,completed)" and therefore excluded nothing, drawing every finished request as
+          waiting. Every comparison behind these cards goes through the same upper-case vocabulary. */}
+      <HealthCards h={health} />
+
+      <LifecycleStrip h={health} workspaceCounts={workspaceCounts} />
 
       {/* ── The failures ───────────────────────────────────────────────────────────────────────────── */}
       <Panel title="Failed runs"
@@ -163,19 +166,26 @@ export default async function Page() {
         )}
       </Panel>
 
-      {/* ── Resumability, stated rather than promised ──────────────────────────────────────────────── */}
-      <Warn title="There is no resume button, and that is not an omission on this page">
-        <p>
-          Provisioning is a resumable saga — every step re-checks its own resource before creating it, so
-          a re-run completes the remainder instead of duplicating the start. What does not exist is an
-          endpoint to trigger that:{" "}
-          <span className="font-mono">/api/v1/practice/provisioning/[requestId]</span> exports GET only,
-          and no surface in this product POSTs a retry. A button here would have to call something, and
-          the honest options were a control that does nothing or this sentence.
-        </p>
-        <p className="mt-1.5"><span className="font-semibold">To resume a failed run:</span> {RESUME_PATH}</p>
-        <p className="mt-1.5">{ATTEMPTS_ABSENCE}</p>
-      </Warn>
+      {/* ── §4.3 Practices currently onboarding ───────────────────────────────────────────────────── */}
+      <Panel title="Practices currently onboarding"
+        note={
+          health.onboardingUnavailable
+            ? "The onboarding projection is not readable on this database."
+            // ⚠ NO MIGRATION NUMBER IN VISIBLE TEXT. CPR-PD-SCREEN-DOCTRINE treats an implementation
+            // identifier as a PLACEMENT rule: it belongs in a citation carrier or a comment, not in the
+            // sentence an operator reads. The substrate is described in the file header instead.
+            : `Setup progress from the privacy-safe onboarding projection. Sorted needs-attention `
+              + `first, then oldest last-progress. ${stalledCount > 0
+                ? `${stalledCount} practice${stalledCount === 1 ? " has" : "s have"} made no progress for `
+                  + `more than ${health.stallHours ?? 24}h.`
+                : "No practice is stalled."}`
+        }>
+        <OnboardingRegister
+          rows={onboardingRows}
+          stallHours={health.stallHours}
+          unavailable={health.onboardingUnavailable}
+          unavailableReason={health.onboardingUnavailableReason} />
+      </Panel>
 
       {/* ── Open runs ─────────────────────────────────────────────────────────────────────────────── */}
       <Panel title="Open runs"
@@ -236,20 +246,17 @@ export default async function Page() {
         )}
       </Panel>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Absent
-          what="Why a run failed, in the database's own words"
-          why={DETAIL_ABSENCE} />
-        <Absent
-          what="How far each practice has got through onboarding"
-          why={
-            "Only the workspace status is visible here. The onboarding instance itself (practice_onboarding, " +
-            "and the six-step catalogue it walks) is not a table this plane may read: the platform-oversight " +
-            "allowlist grants practice tables for tenancy counts and operational status, not for a practitioner's " +
-            "progress through their own setup. Onboarding step detail belongs to the practice, and to Practices " +
-            "/ Practice 360 if it is ever brought onto this plane deliberately."
-          } />
-      </div>
+      {/* ── §4.4 The recovery model, as a disclosure rather than an essay ─────────────────────────── */}
+      <RecoveryModel resumePath={RESUME_PATH} attemptsAbsence={ATTEMPTS_ABSENCE} />
+
+      {/* ⚠ THE SECOND ABSENCE HERE IS GONE, AND ITS REMOVAL IS A CORRECTION. It said onboarding progress
+          "is not a table this plane may read". That was true when written and is no longer: migration 339
+          adds a projection that returns eight operational fields and CANNOT return step_data, so the
+          progress above is read within the boundary rather than around it. The register replaced the
+          apology. */}
+      <Absent
+        what="Why a run failed, in the database's own words"
+        why={DETAIL_ABSENCE} />
 
       <TechnicalOpsLink for="Provisioning a pilot workspace, and the idempotency key that makes a double click safe, are on" />
 
