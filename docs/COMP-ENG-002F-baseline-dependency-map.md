@@ -147,3 +147,60 @@ The four already recorded above, plus two the scan added:
 already-partly-built state, creates the function and all seven policies, and leaves staging untouched.
 `--only` was added to the runner so a baseline that gains objects after the chain has passed it can be
 re-applied without tearing down the environment and destroying the evidence.
+
+---
+
+## Addendum 2, 2026-08-19 — the third class: objects in NO repository file
+
+With the baseline complete the chain ran **006 to 188** unbroken (183 migrations) and stopped at
+189 on `relation "skills" does not exist`.
+
+`skills` is created by **no file in the repository at all** — not a numbered migration, not a loose
+script. Diffing production against every `create table` in the repo:
+
+| | |
+|---|---|
+| production public tables | 663 |
+| tables created somewhere in the repo | 666 |
+| **in production, created nowhere** | **11** |
+
+`certifications, content_approvals, cycle_assessors, department_frameworks, enrolments,
+framework_rules, framework_versions, lesson_progress, lessons, skills, subscriptions`
+
+All eleven hold **zero rows**. Seven have no application reference; four do — `content_approvals` (9
+files), `framework_versions` (4), `framework_rules` (2), `cycle_assessors` (1). **All eleven are
+created anyway**, on the same ruling already made for `competencies`: retiring tables is not what a
+reproducibility fix is for. The five policies they carry are already declared by 189 and 190, so 188a
+creates tables only.
+
+### Placed at 188a, not in the baseline
+
+Six carry foreign keys to `frameworks`, `departments` and `competency_cycles` — created by 003, 006 and
+009. At 001 those targets do not exist. 188a sits at the **last point before first use**, which also
+leaves the already-proven 006→188 sequence untouched.
+
+⚠ **Known, deliberate fidelity gap:** `ON DELETE`/`ON UPDATE` actions are not reproduced. The OpenAPI
+schema does not expose them and this estate has no foreign-key registry. Recorded rather than guessed.
+
+### And the same class at column level
+
+A dry run then found `280-mullen-corrective-migration.sql` writing `audit_log.notes`, a column no
+migration adds. Checking the whole table found **two** absent columns, `notes` and `organisation_id`.
+
+⚠ A first careless instrument said **four** — it compared against a hardcoded list of 040's columns.
+`tenant_id` is added by 040 and `trace_id` by 178. **Same failure mode as the `public.` qualifier: the
+list I measured against was wrong, not the estate.**
+
+### Result: the whole remaining chain now applies
+
+All **147** remaining migrations apply in order with no failures, verified inside a transaction and
+rolled back.
+
+| | staging (dry run) | production |
+|---|---|---|
+| tables | **663** | **663** |
+| policies | **318** | **318** |
+
+⚠ Function counts are **not** comparable across those two instruments — production's 67 comes from
+`plat_function_registry()`, which migration 170 made exclude extension functions, while the dry-run
+count was raw `pg_proc`. Not drift, a units mismatch.
