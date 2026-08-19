@@ -8,7 +8,7 @@ import {
   TRAVEL_BASIS_NOTE, WEEKDAY_NAME, WEEKDAY_SHORT, PLANNER_STATE_LABEL,
   APPOINTMENT_STATUSES_BOOKED, APPOINTMENT_STATUS_LABEL, APPOINTMENT_TYPE_LABEL,
   CAPACITY_BASIS_NOTE, SLOT_KIND_LABEL,
-  addDaysIso, daysBetweenIso, PERIOD_DAY_CAP,
+  addDaysIso, daysBetweenIso, PERIOD_DAY_CAP, DUPLICATE_DATE_CAP,
   appointmentOutcome, OUTCOME_LABEL, ENCOUNTER_RANK,
   type AppointmentOutcome, type PlannerPeriod,
 } from "@/lib/practice/planner-constants";
@@ -67,7 +67,7 @@ export {
   plannerPeriod, plannerPeriodLabel, shiftPlannerPeriod, quickPeriodTarget, isPlannerView,
   // The practice owner's "and what HAPPENED on that day". The rule is pure and lives with the other
   // screen-facing constants; see WHAT_HAPPENED_LIMITS for what this product cannot answer.
-  appointmentOutcome, OUTCOME_LABEL, WHAT_HAPPENED_LIMITS,
+  appointmentOutcome, OUTCOME_LABEL, WHAT_HAPPENED_LIMITS, DUPLICATE_DATE_CAP,
   type AppointmentOutcome,
   type PlannerView, type PlannerPeriod, type PlannerShowKey,
 } from "@/lib/practice/planner-constants";
@@ -1690,7 +1690,8 @@ export async function moveActivity(
 
 /** No practitioner copies a block onto more days than this in one gesture, and an unbounded list is a
  *  loop of writes a mistyped payload can start. */
-const DUPLICATE_DATE_CAP = 31;
+// Owned by planner-constants.ts so the Duplicate control can print the maximum it is working against.
+// The enforcement below is still the authority -- a client that ignored the number is refused here.
 
 /**
  * s5's Duplicate: copy a block onto one or more other dates.

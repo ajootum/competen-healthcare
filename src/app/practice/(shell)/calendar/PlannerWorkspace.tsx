@@ -95,6 +95,32 @@ export default function PlannerWorkspace({
     ? day.sessions.find(s => s.id === selectedSessionId) ?? null
     : null;
 
+  // ── CPR-PD-013 s7: DRAG A BLOCK ONTO ANOTHER DAY ────────────────────────────────────────────────
+  //
+  // ⚠ WHAT A PLANNER BLOCK CAN BE DRAGGED *TO* IS A DAY, NOT A TIME, and that follows from the screen
+  // rather than from preference. DayPlanner is a LIST of cards ordered by start time -- it has no
+  // pixels-per-minute geometry -- so dragging a card up or down would either mean nothing or mean an
+  // invented time. Timeline.tsx next door is the positioned surface and already drags appointments by
+  // time. The move this list can express honestly is the one the Move form spells out with a date
+  // field: the same block, a different day.
+  //
+  // ⚠ THE STATE LIVES HERE BECAUSE THE SOURCE AND THE TARGET ARE SIBLINGS. The card is inside
+  // DayPlanner and the seven days are inside WeekPanel; neither can see the other.
+  //
+  // ⚠ NOT OPTIMISTIC. s7 permits optimistic movement "only if failure can be safely rolled back with
+  // clear feedback" -- and a block that visibly jumps to Thursday before the server refuses it for a
+  // theatre clash has already told the practitioner something untrue about their week. The row goes
+  // busy, the engine decides, and its own words are rendered either way.
+  const [dragging, setDragging] = useState<{ id: string; title: string; fromDate: string } | null>(null);
+
+  async function dropOnDay(date: string): Promise<void> {
+    const d = dragging;
+    setDragging(null);
+    // Dropping a block back onto its own day is a cancelled gesture, not a refusal worth reporting.
+    if (!d || d.fromDate === date) return;
+    await run("move", { id: d.id, planDate: date }, d.id);
+  }
+
   async function run(action: string, body: Record<string, unknown>, subject: string): Promise<boolean> {
     setBusy(subject);
     setNotice(null);
@@ -166,6 +192,7 @@ export default function PlannerWorkspace({
     <DayPlanner
       day={day} week={range} canManage={canManage} locations={locations}
       busy={busy} notice={notice} run={run}
+      dragging={dragging} onDragActivity={setDragging}
       onAdd={() => openAdd({ planDate: day.date })}
       filters={filters} urlState={urlState} selectedSessionId={selectedSessionId}
     />
@@ -390,6 +417,7 @@ export default function PlannerWorkspace({
       {period.view === "week" ? (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)_330px]">
           <WeekPanel week={range} selectedDate={day.date} canManage={canManage}
+            dragging={dragging} onDropDay={dropOnDay}
             onAdd={date => openAdd({ planDate: date })} urlState={urlState} />
           {/* CPR-MOB-001 s8: "Week -- stacked day cards with activity/location/booked/free summary."
               My Week's cards above ARE that face, so below md Week mode is those cards and nothing

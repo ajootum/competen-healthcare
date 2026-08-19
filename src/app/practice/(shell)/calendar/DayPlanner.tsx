@@ -16,17 +16,25 @@ import ActivityActions from "./ActivityActions";
 // s3's CENTRE COLUMN -- the Daily Planner for whichever day the week panel has selected.
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// DRAG AND DROP (s5) IS NOT BUILT, AND IS NOT HALF-BUILT EITHER.
+// DRAG AND DROP (s5) MOVES A BLOCK TO ANOTHER DAY. It does not move it to another TIME.
 //
-// The engine behind it exists -- moveActivity() takes a date and a start minute and preserves the
-// duration exactly as a drag would -- and the appointment Timeline on this same route already drags
-// APPOINTMENTS. What is missing is the planner's own pointer surface: a block that follows the finger,
-// snaps back when the engine refuses, and reads its position from server-supplied minutes rather than
-// from the browser's clock. A dragging surface that silently leaves a block where it was dropped after
-// a refusal is worse than none, because the practitioner walks away believing the day moved.
+// ⚠ THIS BLOCK SAID "NOT BUILT" UNTIL CPR-PD-013 s7, AND THE REASON IT GAVE STILL DECIDES THE SHAPE.
+// It argued for a pointer surface where a block follows the finger and snaps back on refusal -- and
+// that is right for a POSITIONED surface, which is why Timeline.tsx on this same route drags
+// appointments against a pixels-per-minute geometry. This panel is a FLOW: blocks are drawn in clock
+// order with the gaps named, deliberately (see the note below), so there is no vertical geometry for a
+// drag to mean a time. Dragging a card up this list would either do nothing or invent a start.
 //
-// So every s5 action is here as an EXPLICIT CONTROL instead, which is one or two interactions (s10) and
-// tells the truth about what happened either way.
+// What it CAN mean here, honestly, is the move the Move form spells out with a date field: same block,
+// different day. So a planned block drags onto a day in My Week, and PlannerWorkspace owns the gesture
+// because the card and the days live in different components.
+//
+// ⚠ AND NOT OPTIMISTICALLY, which is the old note's real warning kept rather than discarded: nothing
+// moves on screen until the engine has accepted it, because a block that visibly lands on Thursday and
+// is then refused has already told the practitioner something untrue about their week.
+//
+// Every s5 action REMAINS an explicit control as well (s7 forbids drag being the only route, and
+// CPR-MOB-001 s8 makes taps the whole story below md). Drag is the shortcut, never the requirement.
 //
 // THE DAY IS A FLOW, NOT AN ABSOLUTE-POSITIONED RAIL. Blocks are drawn in clock order with the unspoken
 // -for time between them named. Absolute positioning would stack two overlapping blocks on top of one
@@ -35,6 +43,7 @@ import ActivityActions from "./ActivityActions";
 
 export default function DayPlanner({
   day, week, canManage, locations, busy, notice, run, onAdd, filters, urlState, selectedSessionId,
+  dragging, onDragActivity,
 }: {
   day: PlannerDay;
   week: PlannerWeek;
@@ -47,6 +56,9 @@ export default function DayPlanner({
   filters: PlannerFilters;
   urlState: PlannerUrlState;
   selectedSessionId: string | null;
+  /** CPR-PD-013 s7. Null unless a block is being dragged onto another day; owned by PlannerWorkspace. */
+  dragging: { id: string; title: string; fromDate: string } | null;
+  onDragActivity: (d: { id: string; title: string; fromDate: string } | null) => void;
 }) {
   // ── Walkthrough 2026-08-17 #13: "Can I have check-in in this screen and be able to start the
   // encounter?" -- the owner, looking at today's booking rows. Check-in was always this register's
@@ -116,6 +128,19 @@ export default function DayPlanner({
           </span>
         )}
       </div>
+
+      {/* ⚠ THE CAPABILITY IS SAID, NOT LEFT TO A CURSOR (CPR-PD-013 s7 + the walkthrough lesson that
+          REACHABLE IS NOT DISCOVERABLE). A grab cursor announces itself only to somebody who already
+          suspected they could drag, and this product has been reported as broken before over a control
+          nobody found. Shown only when there is something on this day that may actually move -- the
+          same `state === "planned"` predicate the cards use -- and it names the tap route beside it,
+          because below md the drag does not exist at all (CPR-MOB-001 s8). */}
+      {canManage && day.activities.some(a => a.state === "planned") && (
+        <p className="border-b border-gray-100 px-4 py-1.5 text-[11px] text-gray-500">
+          <span className="max-md:hidden">Drag a planned block onto a day in My Week to move it. </span>
+          Or use <strong className="font-semibold text-gray-600">Actions &rarr; Move</strong> on the block.
+        </p>
+      )}
 
       {day.unavailable ? (
         <p className="px-4 py-6 text-[13px] font-semibold text-rose-700">
@@ -377,6 +402,7 @@ export default function DayPlanner({
                   <ActivityBlock
                     activity={a} conflicted={conflicted.has(a.id)} canManage={canManage}
                     locations={locations} week={week} busy={busy} notice={notice} run={run}
+                    dragging={dragging} onDragActivity={onDragActivity}
                   />
                 </div>
               );
@@ -390,9 +416,15 @@ export default function DayPlanner({
             </button>
           )}
 
+          {/* ⚠ HALF OF THIS SENTENCE WENT STALE THE MOMENT s7 SHIPPED, and only half. Dragging a block
+              to another DAY now works; dragging it to another TIME still does not exist here, because
+              this panel is a flow rather than a positioned rail. Deleting the whole line would have
+              removed a true statement along with the false one -- the time limit is real and a
+              practitioner who tries it deserves to know why nothing happened. */}
           <p className="text-[11px] text-gray-400">
-            Blocks are moved with the Move control. Dragging a block to a new time is not built on this
-            screen yet.
+            Drag a block onto another day in My Week to move it there, or use the Move control for a
+            new date and time. Dragging a block to a different <em>time</em> is not built on this
+            screen &mdash; the day is a list here, not a timed rail.
           </p>
         </div>
       )}
@@ -400,10 +432,12 @@ export default function DayPlanner({
   );
 }
 
-function ActivityBlock({ activity: a, conflicted, canManage, locations, week, busy, notice, run }: {
+function ActivityBlock({ activity: a, conflicted, canManage, locations, week, busy, notice, run, dragging, onDragActivity }: {
   activity: PlannerActivity; conflicted: boolean; canManage: boolean;
   locations: LocationOption[]; week: PlannerWeek;
   busy: string | null; notice: Notice; run: RunAction;
+  dragging: { id: string; title: string; fromDate: string } | null;
+  onDragActivity: (d: { id: string; title: string; fromDate: string } | null) => void;
 }) {
   const tone = toneFor(a.activityType);
   const cancelled = a.state === "cancelled";
@@ -415,10 +449,41 @@ function ActivityBlock({ activity: a, conflicted, canManage, locations, week, bu
     ? `border-emerald-300 ring-1 ring-emerald-200 ${tone.soft}`
     : a.state === "done" ? "border-gray-200 bg-gray-50/70" : `border-gray-200 ${tone.soft}`;
 
+  // ── CPR-PD-013 s7: the draggable affordance, and ONLY where the engine would accept the move ──────
+  //
+  // ⚠ THE PREDICATE IS THE ENGINE'S OWN. planner.ts's guard({ needsPlanned: true }) refuses a cancelled
+  // block, a started one and a finished one -- "the plan is not rewritten to match what happened" -- so
+  // a block is draggable exactly when its state is `planned` and this practitioner may plan. s7 forbids
+  // drag on read-only, locked or historical blocks, and the way to keep that true as the engine changes
+  // is to derive it from the same condition rather than to list the states again here.
+  //
+  // ⚠ HTML5 DRAG, NOT POINTER CAPTURE. Timeline.tsx uses pointer events because it drags against a
+  // pixels-per-minute geometry and needs the live position every frame. This drops a card onto one of
+  // seven targets, where the browser's own drag gives the cursor, the drag image and the drop semantics
+  // for free. It is also inert on touch -- which matches CPR-MOB-001 s8 ("drag is optional, not
+  // required"), where the tap controls below ARE the mobile move story.
+  const draggable = canManage && a.state === "planned" && !busy;
+  const beingDragged = dragging?.id === a.id;
+
   return (
-    <article className={`flex gap-3 rounded-xl border px-3 py-2.5 ${conflicted
-      ? "border-rose-300 bg-rose-50/40"
-      : cancelled ? "border-gray-200 bg-gray-50" : stateEmphasis}`}>
+    <article
+      draggable={draggable}
+      onDragStart={draggable ? e => {
+        // The drag image is the card itself; the payload is for other applications, not for us --
+        // React state carries the block, because a dataTransfer read is only permitted on drop.
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", a.title);
+        onDragActivity({ id: a.id, title: a.title, fromDate: a.planDate });
+      } : undefined}
+      // ⚠ ALWAYS CLEARS, INCLUDING ON A CANCELLED DRAG. Escape, a drop on nothing, or a drop on the
+      // block's own day all end here; without this the week keeps highlighting targets for a gesture
+      // that finished.
+      onDragEnd={draggable ? () => onDragActivity(null) : undefined}
+      className={`flex gap-3 rounded-xl border px-3 py-2.5 ${conflicted
+        ? "border-rose-300 bg-rose-50/40"
+        : cancelled ? "border-gray-200 bg-gray-50" : stateEmphasis}
+        ${draggable ? "cursor-grab active:cursor-grabbing" : ""}
+        ${beingDragged ? "opacity-50 ring-2 ring-[var(--cp-primary)]" : ""}`}>
       <div className="w-12 shrink-0 pt-0.5 text-right">
         <p className={`text-[12px] font-bold tabular-nums ${cancelled ? "text-gray-400 line-through" : "text-gray-800"}`}>
           {hhmm(a.plannedStartMinute)}

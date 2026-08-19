@@ -23,11 +23,14 @@ const WEEK_ACTIVITY_MAX = 5;
 // THE CURRENT DAY IS EXPANDED BY DEFAULT (s4). The others collapse to their counts, which is enough to
 // see where the week is heavy without scrolling past seven open lists.
 
-export default function WeekPanel({ week, selectedDate, canManage, onAdd, urlState }: {
+export default function WeekPanel({ week, selectedDate, canManage, onAdd, urlState, dragging, onDropDay }: {
   week: PlannerWeek;
   selectedDate: string;
   canManage: boolean;
   onAdd: (date: string) => void;
+  /** CPR-PD-013 s7: the block being dragged out of the day canvas, or null. */
+  dragging?: { id: string; title: string; fromDate: string } | null;
+  onDropDay?: (date: string) => void;
   /** ⚠ Carried through every day link so choosing a day does not clear the filters or the view. */
   urlState: PlannerUrlState;
 }) {
@@ -54,6 +57,8 @@ export default function WeekPanel({ week, selectedDate, canManage, onAdd, urlSta
             onAdd={() => onAdd(day.date)}
             urlState={urlState}
             locationColors={week.locationColors}
+            dragging={dragging ?? null}
+            onDropDay={onDropDay}
           />
         ))}
       </div>
@@ -61,20 +66,45 @@ export default function WeekPanel({ week, selectedDate, canManage, onAdd, urlSta
   );
 }
 
-function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState, locationColors }: {
+function DayCard({ day, selected, open, onToggle, canManage, onAdd, urlState, locationColors, dragging, onDropDay }: {
   day: PlannerDay; selected: boolean; open: boolean; onToggle: () => void;
   canManage: boolean; onAdd: () => void; urlState: PlannerUrlState;
   locationColors: Record<string, string>;
+  dragging: { id: string; title: string; fromDate: string } | null;
+  onDropDay?: (date: string) => void;
 }) {
   const w = day.workload;
   const live = day.activities.filter(a => a.state !== "cancelled");
 
+  // ── CPR-PD-013 s7: this day as a drop target ─────────────────────────────────────────────────────
+  //
+  // ⚠ A DAY IS A TARGET ONLY WHILE A BLOCK IS ACTUALLY IN THE AIR, and never its own source day --
+  // highlighting the day a block already sits on would offer a move that does nothing. `isTarget` is
+  // false the rest of the time, so nothing on this panel changes for anybody not mid-drag.
+  const isTarget = !!dragging && !!onDropDay && dragging.fromDate !== day.date;
+  const [over, setOver] = useState(false);
+
   return (
     <section
+      // preventDefault on dragOver IS what makes an element a drop target -- without it the browser
+      // refuses every drop and the gesture dies silently on release.
+      onDragOver={isTarget ? e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOver(true); } : undefined}
+      onDragLeave={isTarget ? () => setOver(false) : undefined}
+      onDrop={isTarget ? e => { e.preventDefault(); setOver(false); onDropDay!(day.date); } : undefined}
       className={`rounded-xl border ${selected
         ? "border-[var(--cp-primary-border)] bg-[var(--cp-primary)]/[0.04] ring-1 ring-[var(--cp-primary)]/20"
-        : "border-gray-200 bg-white"}`}
+        : "border-gray-200 bg-white"}
+        ${isTarget ? "outline-dashed outline-1 outline-offset-2 outline-[var(--cp-primary)]/40" : ""}
+        ${over ? "ring-2 ring-[var(--cp-primary)] bg-[var(--cp-primary)]/[0.08]" : ""}`}
     >
+      {/* Names the move before it happens, on the day it would land -- s7's "validate destination ...
+          before commit" is the engine's job, and telling the practitioner what they are about to do is
+          this one's. */}
+      {over && dragging && (
+        <p className="border-b border-[var(--cp-primary-border)] px-3 py-1 text-[11px] font-semibold text-[var(--cp-primary-deep)]">
+          Move &ldquo;{dragging.title}&rdquo; here
+        </p>
+      )}
       {/* ⚠ TWO CONTROLS SIT HERE AND THEY DO DIFFERENT THINGS. The LINK reviews the day -- it drives the
           centre panel and the Day panel through ?date=. The CHEVRON only expands this row in place. Both
           already worked, and a practitioner driving the product asked whether reviewing another day was

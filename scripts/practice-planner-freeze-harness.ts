@@ -385,6 +385,50 @@ async function main() {
   ok("...and every time pattern in the folder actually ACCEPTS a time -- no pattern with eaten backslashes",
     brokenPatternFiles.length === 0, brokenPatternFiles.join(", "));
 
+  // ══ CPR-PD-013 s7/s8: DIRECT MANIPULATION, AND THE CEILING THAT WAS NOT A RULE ═══════════════════
+  //
+  // These are SOURCE pins because neither behaviour is visible to an engine test. duplicateActivity()
+  // accepted 31 dates throughout and its own assertions were green the whole time the screen offered
+  // six -- an engine tested only through itself cannot see a caller that under-uses it.
+  console.log("\n── CPR-PD-013: Duplicate's reach, and drag on a planned block ──");
+  const actionsC = stripComments(actions);
+  const dayPlannerC = stripComments(src("DayPlanner.tsx"));
+  const weekPanelC = stripComments(weekPanel);
+
+  // ⚠ SCOPED TO DuplicateForm's OWN BODY, and the first version of this pin was not. It scanned the
+  // whole file for `repeatDates` and `type="date"` -- and MoveForm has a date input, so half the pin
+  // passed no matter what Duplicate did; a break-test that renamed the const to `repeatDatesX` left it
+  // green too, because a substring match finds itself inside the longer name. Same shape as the
+  // treatment harness's "Other" matching `durationOther`, twice in one day.
+  const dupForm = (() => {
+    const start = actionsC.indexOf("function DuplicateForm");
+    if (start < 0) return "";
+    const next = actionsC.indexOf("\nfunction ", start + 1);
+    return actionsC.slice(start, next < 0 ? undefined : next);
+  })();
+  ok("s8. CONTROL: DuplicateForm's own body was located, so the pins below are not scanning the file",
+    dupForm.length > 400 && dupForm.includes("toDates"), `${dupForm.length} chars`);
+  ok("s8. Duplicate is no longer bounded by the loaded week: it offers a repeat AND a free date",
+    /\brepeatDates\b/.test(dupForm) && /type="date"/.test(dupForm),
+    "the six-date ceiling was week.days showing through the control");
+  ok("s8. ...and the control PRINTS the cap it is working against rather than silently stopping",
+    actionsC.includes("DUPLICATE_DATE_CAP") && /of \{DUPLICATE_DATE_CAP\}/.test(actionsC));
+  ok("s8. CONTROL: the cap has ONE definition, in planner-constants, and the engine imports it",
+    readFileSync("src/lib/practice/planner-constants.ts", "utf8").includes("export const DUPLICATE_DATE_CAP")
+    && !/const DUPLICATE_DATE_CAP\s*=/.test(readFileSync("src/lib/practice/planner.ts", "utf8")),
+    "a second copy in the engine is how a screen and a server disagree about a limit");
+
+  ok("s7. a block is draggable only when the ENGINE would accept the move (planned, and may plan)",
+    /draggable\s*=\s*canManage && a\.state === "planned"/.test(dayPlannerC),
+    "guard({needsPlanned:true}) refuses cancelled, started and finished blocks");
+  ok("s7. CONTROL: drag did NOT replace the tap route -- Move is still an offered action",
+    actionsC.includes("move: true") && actionsC.includes("MoveForm"),
+    "s7: 'without making drag the only interaction'");
+  ok("s7. a day accepts a drop only while a block is in the air, and never its own source day",
+    /dragging\.fromDate !== day\.date/.test(weekPanelC) && weekPanelC.includes("onDragOver"));
+  ok("s7. CONTROL: preventDefault is on dragOver, without which no drop can ever fire",
+    /onDragOver=\{isTarget \? e => \{ e\.preventDefault\(\)/.test(weekPanelC));
+
   report();
 }
 

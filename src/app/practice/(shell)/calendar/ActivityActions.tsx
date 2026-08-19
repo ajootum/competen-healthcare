@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import type { PlannerActivity, PlannerWeek } from "@/lib/practice/planner";
-import { PLANNER_ACTIONS } from "@/lib/practice/planner-constants";
+import { PLANNER_ACTIONS, DUPLICATE_DATE_CAP } from "@/lib/practice/planner-constants";
 import { TimeInput } from "@/components/ui/wall-clock";
 import { hhmm, minuteOfDay, shortDate, type LocationOption, type Notice, type RunAction } from "./planner-ui";
 
@@ -154,14 +154,66 @@ function MoveForm({ a, busy, go }: { a: PlannerActivity; busy: boolean; go: (act
   );
 }
 
+/** Add `n` days to an ISO date without touching a Date object's local timezone. */
+function addDays(iso: string, n: number): string {
+  const t = Date.parse(`${iso}T00:00:00Z`) + n * 86400000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+/**
+ * s5's Duplicate.
+ *
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ * ⚠ THIS OFFERED SIX DATES AGAINST AN ENGINE THAT ACCEPTS 31, and the six were not a rule -- they were
+ * whatever `week.days` happened to hold. Building a month of the same clinic meant five separate trips
+ * through the planner, each one a page of navigation to reach the same block again. Nothing in
+ * CPR-V5-005 asks for a one-week ceiling; the ceiling was the data source showing through the control.
+ *
+ * ⚠ AND THE FIX IS NOT 31 CHECKBOXES (CPR-PD-013 s8 says so in as many words). Three ways in, each
+ * matching a real intention:
+ *
+ *   THE WEEK, as before -- "also Wednesday and Friday" stays one tap per day and is unchanged.
+ *   A REPEAT -- "same weekday, next N weeks" is how a recurring clinic is actually described, and it
+ *     is the case the old control could not express at all.
+ *   A DATE -- one arbitrary date, for the cover shift that follows no pattern.
+ *
+ * ⚠ THE CAP IS SHOWN, NOT JUST ENFORCED. s8 asks for selected-count feedback and the effective
+ * maximum, and a control that silently stops adding is a control that looks broken. The engine remains
+ * the authority: it re-checks the cap, de-duplicates, and decides every date separately.
+ *
+ * ⚠ AND A BIG BATCH IS READ BACK BEFORE IT RUNS. s8's review summary. Past a handful the chips stop
+ * being scannable, so the dates are listed in order with their count -- copying a block onto twelve
+ * days is not something to discover afterwards from a toast.
+ * ────────────────────────────────────────────────────────────────────────────────────────────────────
+ */
 function DuplicateForm({ a, week, busy, go }: {
   a: PlannerActivity; week: PlannerWeek; busy: boolean; go: (action: string, body: Record<string, unknown>) => void;
 }) {
   const [dates, setDates] = useState<string[]>([]);
-  const toggle = (d: string) => setDates(v => v.includes(d) ? v.filter(x => x !== d) : [...v, d]);
+  const [oneOff, setOneOff] = useState("");
+  const [weeks, setWeeks] = useState(4);
+
+  const atCap = dates.length >= DUPLICATE_DATE_CAP;
+  // Never the source date, never a duplicate, never past the cap. The engine enforces all three too --
+  // this is so the control behaves, not so the rule is decided here.
+  const add = (incoming: string[]) => setDates(v => {
+    const next = [...v];
+    for (const d of incoming) {
+      if (d === a.planDate || next.includes(d) || next.length >= DUPLICATE_DATE_CAP) continue;
+      next.push(d);
+    }
+    return next.sort();
+  });
+  const toggle = (d: string) => setDates(v => v.includes(d) ? v.filter(x => x !== d) : [...v, d].sort());
+
+  // "Same weekday, next N weeks" -- from the block's own date, so the weekday is inherently right.
+  const repeatDates = Array.from({ length: weeks }, (_, i) => addDays(a.planDate, (i + 1) * 7));
+
   return (
     <div className="mt-2">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Copy to</p>
+
+      {/* 1. This week, unchanged. */}
       <div className="mt-1 flex flex-wrap gap-1.5">
         {week.days.filter(d => d.date !== a.planDate).map(d => (
           <label key={d.date}
@@ -172,11 +224,63 @@ function DuplicateForm({ a, week, busy, go }: {
             {d.weekdayShort} {shortDate(d.date)}
           </label>
         ))}
+      </div>
+
+      {/* 2. The repeat, and 3. any single date. */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] text-gray-500">Repeat weekly</span>
+        <select className={FIELD} value={weeks} disabled={busy}
+          aria-label="How many weeks to repeat for"
+          onChange={e => setWeeks(Number(e.target.value))}>
+          {[2, 3, 4, 6, 8, 12].map(n => <option key={n} value={n}>{n} weeks</option>)}
+        </select>
+        <button type="button" className={BTN} disabled={busy || atCap}
+          onClick={() => add(repeatDates)}>
+          Add {weeks} &times; {week.days.find(d => d.date === a.planDate)?.weekdayShort ?? "same weekday"}
+        </button>
+        <span className="text-gray-300">|</span>
+        <input type="date" className={FIELD} value={oneOff} disabled={busy}
+          aria-label="Copy to a specific date"
+          onChange={e => setOneOff(e.target.value)} />
+        <button type="button" className={BTN} disabled={busy || !oneOff || atCap}
+          onClick={() => { add([oneOff]); setOneOff(""); }}>
+          Add date
+        </button>
+      </div>
+
+      {/* The selection, its count and the maximum it is working against. */}
+      {dates.length > 0 && (
+        <div className="mt-1.5 rounded-lg border border-gray-200 bg-gray-50/60 px-2 py-1.5">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="text-[11px] font-semibold text-gray-700">
+              {dates.length} of {DUPLICATE_DATE_CAP} date{dates.length === 1 ? "" : "s"} selected
+            </span>
+            <button type="button" className="text-[10.5px] font-semibold text-gray-500 hover:text-gray-800 hover:underline"
+              disabled={busy} onClick={() => setDates([])}>
+              Clear
+            </button>
+            {atCap && (
+              <span className="text-[10.5px] text-[var(--cmp-text-critical)]">
+                That is the most one copy can reach. Copy these, then repeat for the rest.
+              </span>
+            )}
+          </div>
+          {/* s8's review summary: past a handful, chips stop being readable and the list is read back. */}
+          <p className="mt-1 text-[10.5px] leading-relaxed text-gray-600">
+            {dates.length > 5
+              ? <>Will copy onto: {dates.map(d => shortDate(d)).join(", ")}.</>
+              : <>{dates.map(d => shortDate(d)).join(", ")}</>}
+          </p>
+        </div>
+      )}
+
+      <div className="mt-1.5">
         <button type="button" disabled={busy || dates.length === 0} className={PRIMARY}
           onClick={() => go("duplicate", { toDates: dates })}>
           Copy to {dates.length} date{dates.length === 1 ? "" : "s"}
         </button>
       </div>
+
       <p className="mt-1 text-[11px] text-gray-400">
         Each date is decided on its own. A date that clashes is refused and named; the rest still copy.
       </p>

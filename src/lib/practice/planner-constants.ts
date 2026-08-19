@@ -144,6 +144,16 @@ import {
   type PeriodView, type PeriodRange,
 } from "@/lib/practice/period-range";
 
+/**
+ * The most dates one Duplicate may reach. CPR-V5-005 s5, enforced by duplicateActivity().
+ *
+ * ⚠ IT LIVES HERE SO THE SCREEN CAN SAY IT. The engine is the authority and still refuses anything
+ * over this, but the control has to show the effective maximum (CPR-PD-013 s8) and a client cannot
+ * import planner.ts to find out -- that would pull a server engine into the browser bundle. One
+ * number, imported by both.
+ */
+export const DUPLICATE_DATE_CAP = 31;
+
 /** The planner's names for the shared vocabulary. One definition, two spellings, no second copy. */
 export const PLANNER_VIEWS = PERIOD_VIEWS;
 export const PLANNER_VIEW_KEYS = PERIOD_VIEW_KEYS;
