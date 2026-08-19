@@ -323,9 +323,16 @@ export default async function ReportsPage({ searchParams }: {
                 thing that matters here: the sentence below is only useful if it is READ, and a
                 <details> nobody opens is how a not-built feature starts looking built. s14 says "may",
                 not "must". */}
+            {/* ⚠ THE SECOND HALF OF THIS SENTENCE PROMISED A CONTROL THAT DOES NOT EXIST. There is no
+                Run now button on this list and never has been. The FIRST half is true and was checked
+                rather than assumed: a Vercel cron does run scheduled reports daily, but it reads
+                `report_schedules` and links into /assessor -- a different product. Practice's own
+                `practice_scheduled_report` has no executor at all (markScheduleRun in
+                document-generation.ts has zero call sites), so a definition here really does sit
+                still. Describing a missing feature accurately is the whole job of this sentence. */}
             <p className="mt-0.5 text-[11px] text-[var(--cmp-text-critical)]">
-              Definitions only. Nothing runs these on its own yet &mdash; each one is a note to yourself
-              with a Run now button.
+              Definitions only. Nothing runs these on its own yet, and there is no way to run one on
+              demand &mdash; a schedule here is a note to yourself until an executor exists.
             </p>
             {board.schedules.length === 0 ? (
               <p className="mt-2 text-[12px] text-gray-400">None defined.</p>

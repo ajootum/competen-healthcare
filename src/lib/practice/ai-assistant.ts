@@ -174,8 +174,21 @@ export async function assistantSettings(admin: any, workspaceId: string) {
     // practice is treated as not having agreed to the current one.
     noticeCurrent: data?.ai_assistant_notice_version === AI_NOTICE_VERSION,
     // WHETHER A PROVIDER IS EVEN CONFIGURED, said plainly rather than shown as a green "Online" dot.
-    configured: status.configured,
+    //
+    // ⚠ canGenerate, NOT configured. A key for a provider whose client is not implemented made this
+    // TRUE, so the 503 below passed, generation then failed as not_configured, and the caller got a
+    // generic 502 while this panel displayed the provider and model as though they were live. What
+    // this field is asked for is "can the assistant answer", and only generation answers.
+    configured: status.canGenerate,
+    /** The key that is present, whether or not this build can generate with it. */
     provider: status.provider,
+    /**
+     * ⚠ NAMED SEPARATELY SO THE PANEL CAN SAY WHICH IS WRONG. A deployment with an OpenAI key is not
+     * "no provider configured" -- it has one and this build cannot drive it, which is a different fix
+     * (add an Anthropic key) from the empty case (add any key). Collapsing both into one boolean is how
+     * the false-live state read as working in the first place.
+     */
+    providerUsable: status.canGenerate,
     // The real model, not a product name. The comp says "Competen Clinical LLM v2.1"; there is no such
     // model and no bespoke clinical model anywhere in this product.
     model: status.models?.reasoning ?? null,
@@ -531,7 +544,13 @@ export async function runAssistant(admin: any, ctx: WorkspaceContext, args: {
       message: "what the assistant discloses has changed since this practice agreed to it, so it needs agreeing to again",
     };
   if (!settings.configured)
-    return { ok: false, status: 503, code: "AI_NOT_CONFIGURED", message: "no model provider is configured for this deployment" };
+    return {
+      ok: false, status: 503, code: "AI_NOT_CONFIGURED",
+      // The refusal names which of the two situations it is, because they have different fixes.
+      message: settings.provider
+        ? `a ${settings.provider} key is configured, but this build can only generate with Anthropic -- so the assistant cannot answer until an ANTHROPIC_API_KEY is set`
+        : "no model provider is configured for this deployment",
+    };
 
   const context = await buildContext(admin, ctx, args);
   // NO UNGROUNDED MODE. Without a record there is nothing to reorganise, and answering anyway would be

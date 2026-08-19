@@ -167,8 +167,14 @@ export default async function AssistantArea({ admin, ctx, sessionId, question }:
           <PanelHead panel="ai_insight" title="What is actually behind this" />
           <ul className="mt-2 flex flex-col">
             {[
-              ["Provider", settings.provider ?? "none configured"],
-              ["Model", settings.model ?? "none configured"],
+              // ⚠ THIS SAID "Provider: openai / Model: gpt-4o" ON A BUILD THAT CANNOT DRIVE OPENAI.
+              // The panel exists to say what is actually behind an answer, so a key that is present but
+              // unusable has to read as unusable -- otherwise the one place a practitioner goes to check
+              // is the place that reassures them.
+              ["Provider", !settings.provider ? "none configured"
+                : settings.providerUsable ? settings.provider
+                : `${settings.provider} (key present, but this build generates only with Anthropic)`],
+              ["Model", settings.providerUsable ? (settings.model ?? "none configured") : "none in use"],
               ["Enabled here", settings.enabled ? "yes" : "no"],
               ["Agreed on", settings.enabledAt ? String(settings.enabledAt).slice(0, 10) : "not agreed"],
             ].map(([k, v]) => (

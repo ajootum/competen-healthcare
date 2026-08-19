@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import RateAnswer from "./RateAnswer";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
@@ -158,6 +159,10 @@ export default async function AssistantPage({ searchParams }: {
                           {m.provider ? ` via ${m.provider}` : ""} &middot; nothing here is in the patient&rsquo;s
                           record unless you put it there
                         </p>
+                        {/* v1 s9 / PI-003 s8. The engine, the route, the column and the two counters
+                            all existed; this is the only piece that was missing, which is why both
+                            counters could only ever read 0. */}
+                        <RateAnswer messageId={m.id} helpful={m.helpful ?? null} />
                       </>
                     )}
                   </li>

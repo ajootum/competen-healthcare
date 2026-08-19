@@ -11,6 +11,23 @@ export type AiProvider = "anthropic" | "openai" | "gemini";
 export type AiStatus = {
   configured: boolean;
   provider: AiProvider | null;
+  /**
+   * ⚠ WHETHER TEXT GENERATION ACTUALLY WORKS, WHICH IS NOT THE SAME AS `configured`.
+   *
+   * `configured` means a provider key is present, and for EMBEDDINGS that is enough -- embed.ts really
+   * does implement all three (Voyage for anthropic, OpenAI, Gemini). GENERATION is Anthropic-only:
+   * client.ts returns null for any other provider.
+   *
+   * So with OPENAI_API_KEY set, `configured` was true, every 503 "not configured" gate PASSED, the
+   * client returned null, generation failed as not_configured, the caller got a generic 502 -- and the
+   * status panel displayed "Provider: openai / Model: gpt-4o" as though it were live. A confident false
+   * state is worse than a refusal, because the refusal names the thing to fix.
+   *
+   * ⚠ THIS IS NOT YET READ BY ALL 120 aiStatus CALL SITES. It is read by the generation paths this
+   * change touches; converting the rest is a sweep, not a side effect of one. A gate still testing
+   * `configured` is no worse than it was, and this field is what a correct one tests.
+   */
+  canGenerate: boolean;
   // Model tiers to use for different jobs (defaults tuned for Anthropic).
   models: { cheap: string; reasoning: string; heavy: string; embedding: string } | null;
 };
@@ -28,6 +45,8 @@ export function aiStatus(): AiStatus {
   if (anthropic) {
     return {
       configured: true,
+      // The only provider client.ts implements, so the only one that can generate.
+      canGenerate: true,
       provider: "anthropic",
       models: {
         cheap:     process.env.AI_MODEL_CHEAP     ?? "claude-haiku-4-5-20251001",
@@ -39,7 +58,7 @@ export function aiStatus(): AiStatus {
   }
   if (openai) {
     return {
-      configured: true, provider: "openai",
+      configured: true, provider: "openai", canGenerate: false,
       models: {
         cheap:     process.env.AI_MODEL_CHEAP     ?? "gpt-4o-mini",
         reasoning: process.env.AI_MODEL_REASONING ?? "gpt-4o",
@@ -50,7 +69,7 @@ export function aiStatus(): AiStatus {
   }
   if (gemini) {
     return {
-      configured: true, provider: "gemini",
+      configured: true, provider: "gemini", canGenerate: false,
       models: {
         cheap:     process.env.AI_MODEL_CHEAP     ?? "gemini-2.0-flash",
         reasoning: process.env.AI_MODEL_REASONING ?? "gemini-2.0-flash",
@@ -59,5 +78,5 @@ export function aiStatus(): AiStatus {
       },
     };
   }
-  return { configured: false, provider: null, models: null };
+  return { configured: false, provider: null, canGenerate: false, models: null };
 }

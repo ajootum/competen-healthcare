@@ -1,5 +1,6 @@
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { audit } from "@/lib/practice/audit";
+import { logAccess } from "@/lib/practice/privacy";
 import { intelRange, overviewIntelligence } from "@/lib/practice/intelligence";
 import { practiceToday } from "@/lib/practice/practice-time";
 import { diagnosisReport } from "@/lib/practice/reports";
@@ -274,6 +275,32 @@ export async function askPractice(admin: any, ctx: WorkspaceContext, args: {
   } else {
     answered = false;
     sentence = `That question cannot be grounded in this practice's records yet, so it is not answered rather than guessed. Try: ${EXAMPLES.map(e => `"${e}"`).join(", ")}.`;
+  }
+
+  // ── s13 stage 10 / s18: EVIDENCE ACCESS IS A READ OF A PATIENT RECORD, AND IT WAS NOT LOGGED ──────
+  //
+  // ⚠ THIS FILE DISCLOSED NAMED, LINKED PATIENTS AND CALLED logAccess ZERO TIMES. The overdue-follow-up
+  // evidence renders up to ten patients by display_name with an href straight into each record; the
+  // only access-log row written for the whole page was the suite-level "Practice Intelligence suite"
+  // one, which cannot answer the question an access review exists to ask -- who has seen this patient.
+  // The audit row below records the QUESTION; it does not record that names came back.
+  //
+  // Written only when identification actually happened: a caller without patient.view gets "A patient
+  // (name needs patient.view)" and has read nobody, so a row for them would be a false positive in the
+  // one log that must not have any.
+  //
+  // ⚠ ONE ROW NAMING THE COUNT, NOT ONE ROW PER PATIENT, and that is a real limitation rather than a
+  // preference. practice_access_log carries a patient_id column, so per-patient rows are the stronger
+  // form and the one an access review would rather have -- but logAccess inserts one row per call, and
+  // ten round trips on every question is a cost this path cannot carry. What is closed here is "no
+  // record at all"; narrowing it to per-patient is a batching change to logAccess, not done here.
+  if (evidence && evidence.identified && evidence.rows.length > 0) {
+    await logAccess(admin, {
+      workspaceId: ctx.workspaceId, actorId: args.actorId, subjectKind: "search", action: "view",
+      route: "/practice/intelligence?tab=assistant",
+      detail: `Ask Practice evidence: ${evidence.rows.length} identified patient record(s) disclosed answering a ${intent} question`,
+      correlationId: args.correlationId,
+    });
   }
 
   // s13 stage 10: the audit row IS the history store -- user, question, scope, domains, metric versions.

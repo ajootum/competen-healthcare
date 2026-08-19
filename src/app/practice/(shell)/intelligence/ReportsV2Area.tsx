@@ -215,8 +215,13 @@ export default async function ReportsV2Area({ admin, ctx, suite, fromDay, toDay 
                 precondition does not exist yet. A schedule that could not deliver would be theatre.
               </li>
               <li className="text-[11px] leading-relaxed text-gray-600">
-                <b>Custom templates.</b> The catalogue names a Custom category; authoring one does not
-                exist yet, and a menu entry that opens nothing would be worse than this sentence.
+                {/* ⚠ THIS CLAIMED THE CATALOGUE NAMES A Custom CATEGORY. It does not: REPORT_CATEGORIES
+                    holds clinical, patients, followups, operations, financial and portfolio, and no
+                    seventh. The sentence explaining why a feature is absent had itself invented a
+                    detail, which is the one thing an absence notice cannot afford to do. */}
+                <b>Custom templates.</b> There is no Custom category in the catalogue and no way to author
+                a template; both are v2 s12 and neither is built. A menu entry that opened nothing would
+                be worse than this sentence.
               </li>
             </ul>
           </section>

@@ -1,5 +1,6 @@
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { audit } from "@/lib/practice/audit";
+import { logAccess } from "@/lib/practice/privacy";
 import { practiceToday } from "@/lib/practice/practice-time";
 import {
   SEGMENT_REGISTRY, segmentById, isSegmentId, DEFAULT_NO_VISIT_DAYS, type SegmentDef,
@@ -202,6 +203,22 @@ export async function cohortPatients(admin: any, ctx: WorkspaceContext, args: {
         id, label: p?.display_name ?? "(name unavailable)",
         detail: p?.birth_date ? `born ${p.birth_date}` : "no date of birth recorded",
       };
+    });
+  }
+
+  // ⚠ THE AUDIT ROW BELOW IS NOT AN ACCESS LOG, AND THIS PATH HAD ONLY THE AUDIT ROW. A cohort read
+  // returns up to 200 patients by display_name and date of birth; practice.cohort_viewed records that
+  // a population was read, which is a different question from "whose names were seen" -- the one
+  // practice_access_log exists to answer and the one v2 s18 requires. Written only when the caller
+  // actually held patient.view, because an unidentified read disclosed nobody.
+  //
+  // One row naming the count rather than one per patient, for the same reason and with the same
+  // limitation recorded in ask-practice.ts: 200 logAccess calls is 200 round trips.
+  if (identified && rows.length > 0) {
+    await logAccess(admin, {
+      workspaceId: ctx.workspaceId, actorId: ctx.userId, subjectKind: "search", action: "view",
+      route: "/practice/intelligence?tab=cohorts",
+      detail: `Cohort membership: ${rows.length} identified patient record(s) disclosed`,
     });
   }
 
