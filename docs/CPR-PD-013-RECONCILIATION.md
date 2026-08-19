@@ -201,6 +201,35 @@ the seven is in these four modules** — they are the capability resolvers in `c
 `governance-context.ts`, where an unreadable grant table yields no capabilities and therefore fails
 closed, plus two in `pd-provisioning-health.ts` (Product Operations, already covered).
 
+## 6B. The browser pass
+
+`scripts/pd-browser-sweep.ts`, signed in as the synthetic Product Director against staging. The route
+list is read **from the nav**, so a destination added later is swept without anyone remembering.
+
+| | Result |
+|---|---|
+| Desktop 1440, all 86 destinations | **86/86 clean** — no redirect, no missing heading, no console error, no 5xx |
+| Tablet 1024 / mobile 390, six-screen sample | **clean** — no horizontal loss |
+| Defects found | **1**, fixed below |
+
+### 9.1 ⚠ `/pd/configuration` scrolled sideways by 194px — and five more grids were one wide child away
+
+The only page of 86 to overflow at 1440. The browser was asked to **name the overflowing box** rather
+than the cause being guessed: a Panel inside `grid-cols-[1.5fr_1fr]`.
+
+An **arbitrary** Tailwind track emits its CSS literally, and a bare `1fr` means `minmax(auto, 1fr)` — the
+column may not shrink below its content's min-content width. The `min-w-[560px]` table inside pushed the
+whole grid past the viewport. Tailwind's **numbered** utilities (`grid-cols-3`) already use
+`minmax(0,1fr)`, which is why this only ever bites arbitrary values.
+
+**Six such grids existed across the PD tree and none was guarded.** The other five had no child wide
+enough to expose it yet — latent, not absent.
+
+**Gap class:** `ACTIONABILITY/HFE_DEFECT`. **HFE severity: medium** — §12 asks for the supported
+breakpoints "without horizontal loss of critical controls". **Fixed:** all six tracks are now
+`minmax(0,…)` explicitly. Verified `scrollWidth` 1634 → 1440, and the full re-sweep reports no
+horizontal scroll on any screen.
+
 ## 7. Carried forward from CPR-PD-014 §6
 
 Both remain open and both are the owner's decision, in this order:
@@ -225,8 +254,19 @@ Stated plainly rather than left to look complete:
   running system or a person (*"responsive/accessibility/collapsed-sidebar testing passes"*, *"synthetic
   checks cannot create uncontrolled real patient records"*, *"recovery requires governed confirmation"*)
   were **not** exercised. Those need the browser pass in the next bullet.
-- **No screen in this pass was opened in a browser.** The PD-014 §14 evidence run covered the five
-  Product Operations surfaces; the other 81 have not been rendered as a signed-in Product Director.
+- ~~No screen in this pass was opened in a browser~~ — **done.** `scripts/pd-browser-sweep.ts` rendered
+  all **86/86** as the signed-in synthetic Product Director: no redirects, no missing headings, no
+  console errors, no 5xx. One defect found and fixed (horizontal scroll on `/pd/configuration`, §9.1
+  below). Re-run clean afterwards.
+  ⚠ **What the sweep does not prove.** It fails a screen on a redirect, an empty render, a runtime
+  error, a 5xx or horizontal scroll — and it *counts* a page's own "could not be read" vocabulary
+  without failing on it, because on a synthetic practice that is frequently the correct answer. **A
+  clean sweep means the screens work, not that they are populated.**
+  ⚠ **And it is one third of the responsive criterion.** All four specs ask that
+  *"responsive/accessibility/collapsed-sidebar testing passes"*. The sweep checks **no horizontal loss**
+  at 1440, 1024 and 390 — over a **six-screen sample** at the two smaller widths, not all 86. Collapsed
+  sidebar behaviour, touch-target sizing, keyboard traversal, focus order and contrast are **still
+  unexercised**. That is the honest remainder.
 - **`platform-ops`'s other 42 pages are out of scope** — they belong to the Platform Operations module,
   not the PD sidebar, and are reported here only because Technical Operations borrows one of them.
 - **Write-surface detection is structural**, matching `method: "POST" | "PATCH" | "PUT" | "DELETE"` and

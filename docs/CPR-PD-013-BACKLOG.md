@@ -63,6 +63,12 @@ Severity is §9's scale: consequence × frequency. **Status** is what the code d
 | 14 | **No read-only Product Operations access exists** — one position holds the five screens *and* both writes | `AUTHORITY_MISMATCH` | medium | ⚠ **OPEN — needs a decision.** Precedent: migration 264's CFO-vs-CEO |
 | 15 | **Provision and flag controls enforced at the API, not conditioned in the UI** | `ACTIONABILITY/HFE_DEFECT` | low today, medium after #14 | ⚠ **OPEN — blocked on #14.** Building it first ships a branch no identity can reach |
 
+### P4b — found by the browser pass
+
+| # | Finding | Class | Sev | Status |
+|---|---|---|---|---|
+| 20 | `/pd/configuration` **scrolled sideways by 194px** at 1440 — a bare `1fr` in an arbitrary Tailwind track is `minmax(auto, 1fr)`, so a `min-w-[560px]` table forced the grid past the viewport. **Five more PD grids had the same unguarded shape**, latent only because no child was wide enough yet | `ACTIONABILITY/HFE_DEFECT` | medium | **FIXED** — all six tracks `minmax(0,…)`; full re-sweep clean |
+
 ### P5 — controls that could not fail
 
 Not product defects. Listed because a harness that cannot fail is worse than no harness, and four were
@@ -116,8 +122,11 @@ Each verified absent from `src/` today, not merely edited at some point:
 1. **#14 → #15.** The read-only position, then the UI conditioning. This order is not preference: today
    no identity can exercise the refused branch, so conditioning built first cannot be tested.
 2. **#13.** Revoke `export.execute` and `licence.verify`, or record why a dormant grant is intended.
-3. **The browser pass.** 81 of the 86 PD screens have never been rendered as a signed-in Product
-   Director. Every acceptance criterion needing a running system or a person — responsive and
-   accessibility testing, *"synthetic checks cannot create uncontrolled real patient records"*,
-   *"recovery requires governed confirmation"* — is unexercised. This is the largest remaining unknown
-   in the whole arc, and no amount of static reading closes it.
+3. ~~The browser pass~~ — **done. 86/86 rendered clean**, one defect found and fixed (#20 below).
+   ⚠ **What it leaves open, precisely.** The sweep proves the screens *render and work*. It does not
+   prove they are *populated*, and it covers only the no-horizontal-loss third of
+   *"responsive/accessibility/collapsed-sidebar testing passes"* — over a six-screen sample at the two
+   smaller widths. **Collapsed-sidebar behaviour, touch targets, keyboard traversal, focus order and
+   contrast remain unexercised**, as do the criteria needing a person or a controlled environment
+   (*"synthetic checks cannot create uncontrolled real patient records"*, *"recovery requires governed
+   confirmation"*). Those are the real remainder, and they are smaller than what was closed.
