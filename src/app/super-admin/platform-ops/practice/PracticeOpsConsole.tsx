@@ -188,25 +188,55 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
       )}
 
       <div className="grid lg:grid-cols-2 gap-4">
-        {/* ── Gate ledger ─────────────────────────────────────────────── */}
+        {/* ── Gate: a pointer, not a second checklist ──────────────────────────────────────────── */}
+        {/*
+          ⚠ THE FULL CHECKLIST USED TO BE HERE AND ITS REMOVAL IS THE POINT. CPR-PD-014 §7.3: "Do not
+          repeat the full Launch Readiness checklist." Launch Readiness now presents the gate as a
+          DECISION — satisfied over total, the blockers named, automatic and human counted separately,
+          and human controls carrying owner, evidence and audit provenance. Rendering the same twelve
+          items here left two surfaces answering the same question, and the one with less context was
+          the one an operator happened to be looking at.
+
+          What stays is the summary a control-plane operator needs before touching a toggle: how many
+          controls are outstanding, and whether any automatic check is failing right now.
+        */}
         <section className="rounded-xl border border-gray-200 bg-white p-4">
-          <h2 className="text-[13px] font-bold text-gray-900">IAM-001 §14 cutover gate</h2>
-          <p className="mt-0.5 text-[11px] text-gray-500">
-            Auto items are evaluated against the live database on every load. Manual items are attested by
-            a person and are never turned green by this page.
-          </p>
-          <ul className="mt-2 flex flex-col gap-1.5">
-            {(initial.gate as any[]).map(g => (
-              <li key={g.id} className="flex gap-2 text-[12px]">
-                <span className={`shrink-0 font-bold ${STATE_TONE[g.state]}`}>{STATE_MARK[g.state]}</span>
-                <span className="flex-1">
-                  <span className="text-gray-800">{g.label}</span>
-                  {g.kind === "manual" && <span className="ml-1.5 rounded bg-gray-100 px-1 py-0.5 text-[9px] font-bold text-gray-500">MANUAL</span>}
-                  <span className="block text-[11px] text-gray-500">{g.detail}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+          <h2 className="text-[13px] font-bold text-gray-900">Cutover gate</h2>
+          {(() => {
+            const gate = (initial.gate as any[]) ?? [];
+            const failing = gate.filter(g => g.state === "fail");
+            const outstanding = gate.filter(g => g.state !== "pass").length;
+            return (
+              <>
+                <p className="mt-1 text-[12px] text-gray-700">
+                  <span className="font-bold tabular-nums">{gate.length - outstanding}/{gate.length}</span>{" "}
+                  controls satisfied.
+                  {failing.length > 0 && (
+                    <span className="ml-1 font-semibold text-[var(--cmp-text-critical)]">
+                      {failing.length} automatic check{failing.length === 1 ? "" : "s"} failing.
+                    </span>
+                  )}
+                </p>
+                {/* Only the FAILING items appear here, because a failing automatic check is a fact about
+                    the deployment an operator may be about to change. Passing and pending items belong
+                    to the observational screen. */}
+                {failing.length > 0 && (
+                  <ul className="mt-1.5 flex flex-col gap-1">
+                    {failing.map(g => (
+                      <li key={g.id} className="text-[11px] text-gray-600">
+                        <span className={`mr-1 font-bold ${STATE_TONE[g.state]}`}>{STATE_MARK[g.state]}</span>
+                        {g.label}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <a href="/super-admin/pd/operations/launch-readiness"
+                  className="mt-2 inline-block text-[11px] font-semibold text-teal-700 hover:underline">
+                  Launch Readiness — the full gate, blockers and attestations →
+                </a>
+              </>
+            );
+          })()}
         </section>
 
         {/* ── Launch ladder ───────────────────────────────────────────── */}
