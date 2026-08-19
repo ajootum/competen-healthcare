@@ -218,6 +218,37 @@ async function main() {
   if (platErr) console.log(`  note  platform_membership unreadable (${platErr.message.slice(0, 40)})`);
   else ok(`${(plat ?? []).length} active platform membership(s) — Practice is gate 2 and needs none`);
 
+  // ── The launch flag the sign-in page is gated on ───────────────────────────────────────────────
+  /**
+   * ⚠ WITHOUT THIS THERE IS NO FORM TO SIGN IN WITH. /practice/sign-in renders SignInForm only when
+   * practice_sign_in is on. On a clean staging build it is off, so the page returns no <form> at all —
+   * measured 2026-08-19, and it presented as four authenticated journeys timing out on a wait, which
+   * described nothing about the cause.
+   *
+   * §3 calls for "the minimum synthetic Practice/workspace state required to reach the intended
+   * Practice home", and a sign-in form is part of reaching it.
+   *
+   * !! practice_public_signup IS NOT TOUCHED, ON ANY TARGET. Signup being closed is a standing owner
+   * decision, and a fixture script is not the place to reopen it — not even on staging, where a
+   * difference from production would make the smoke suite prove something production does not do.
+   */
+  console.log("\nLAUNCH FLAGS");
+  const { data: flagRow } = await admin.from("practice_platform_flags")
+    .select("flag, enabled").eq("flag", "practice_sign_in").maybeSingle();
+  if ((flagRow as any)?.enabled === true) ok("practice_sign_in is on");
+  else if (VERIFY_ONLY) bad("practice_sign_in is off — the sign-in page renders no form");
+  else {
+    const { error: fErr } = await admin.from("practice_platform_flags")
+      .update({ enabled: true }).eq("flag", "practice_sign_in");
+    const { data: after } = await admin.from("practice_platform_flags")
+      .select("enabled").eq("flag", "practice_sign_in").maybeSingle();
+    if (fErr || (after as any)?.enabled !== true) bad(`could not enable practice_sign_in: ${fErr?.message ?? "still off after the update"}`);
+    else ok("practice_sign_in enabled on this staging project");
+  }
+  const { data: signupFlag } = await admin.from("practice_platform_flags")
+    .select("enabled").eq("flag", "practice_public_signup").maybeSingle();
+  ok(`practice_public_signup left at ${(signupFlag as any)?.enabled} — untouched by design`);
+
   // ── The Practice, through the real engine ──────────────────────────────────────────────────────
   console.log("\nPRACTICE");
   let access = await resolvePracticeAccess(admin, userId);

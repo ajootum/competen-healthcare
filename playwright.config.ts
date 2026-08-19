@@ -40,6 +40,13 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
+  /**
+   * ⚠ 30s (the default) IS LESS THAN THIS SUITE NEEDS. Signing in retries through a pre-hydration
+   * native submit, and a dev-mode cold compile precedes it. The retry loop outran the default and the
+   * page was closed underneath it, which surfaced as "Target page, context or browser has been closed"
+   * — a message that describes the harness giving up, not the product.
+   */
+  timeout: 60_000,
   reporter: [["list"], ["html", { open: "never", outputFolder: "playwright-report" }]],
 
   use: {
@@ -63,10 +70,26 @@ export default defineConfig({
   // fails to connect — a failure mode that cannot reproduce on this Windows dev machine, which is
   // exactly why it reached CI. Pinning the literal address removes the resolver from the equation on
   // both platforms.
+  /**
+   * ⚠ THE SERVER MUST COME UP ON THE PORT THE SUITE IS WATCHING. `command: "npm run dev"` always binds
+   * 3000, while `url` followed PLAYWRIGHT_BASE_URL — so pointing the suite at the staging port made
+   * Playwright start a server on 3000 and then wait forever on 3100. Next 16 also refuses a second dev
+   * server for the same directory, so the failure surfaced as "Another next dev server is already
+   * running" rather than as a port mismatch.
+   *
+   * The port is derived from the base URL, so the two can no longer disagree. `npm run smoke:staging`
+   * sets both the base URL and the staging environment, and this server inherits that environment —
+   * which is what makes a one-command staging run possible.
+   *
+   * ⚠ reuseExistingServer means an ALREADY-RUNNING server wins. That is convenient and it is also how
+   * a "staging" run can silently exercise a production-pointed server somebody left up, which is
+   * exactly what the network-level guard in e2e/helpers/synthetic-practitioner.ts exists to catch.
+   */
   webServer: {
-    command: "npm run dev",
+    command: `npm run dev -- -p ${new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000").port || "3000"}`,
     url: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000",
     reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    // Turbopack cold-compiles the first routes on demand; 60s was tight enough to fail on a cold start.
+    timeout: 120_000,
   },
 });

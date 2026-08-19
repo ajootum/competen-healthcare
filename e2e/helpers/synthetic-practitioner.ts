@@ -154,30 +154,64 @@ export async function signInAsSyntheticPractitioner(page: Page): Promise<void> {
    * no Supabase request was made at all. The test then failed on a navigation timeout that described
    * none of that.
    */
-  await page.waitForFunction(() => {
-    const f = document.querySelector("form");
-    return !!f && Object.keys(f).some(k => k.startsWith("__react"));
-  }, undefined, { timeout: 20_000 });
-  await page.getByLabel(/email/i).fill(email);
-  await page.getByLabel(/password/i).fill(password);
-  await page.getByRole("button", { name: /sign in/i }).click();
   /**
-   * ⚠ THE VIOLATION IS CHECKED WHEN THE WAIT FAILS, NOT IMMEDIATELY AFTER THE CLICK. The auth call is
-   * asynchronous: reading the flag straight after clicking read it before the request existed, so a
-   * production-pointed run reported a bare 15s navigation timeout and buried the actual cause. A
-   * misconfiguration that presents as a timeout is a misconfiguration nobody diagnoses.
+   * ⚠ NO FORM AND UN-HYDRATED FORM ARE DIFFERENT FAULTS, and one wait cannot describe both. On a clean
+   * staging build /practice/sign-in renders NO form at all, because SignInForm is gated on the
+   * practice_sign_in launch flag — measured 2026-08-19, four journeys timed out on a hydration wait
+   * that said nothing about a missing flag. The two are separated so the message names the real cause.
    */
-  try {
-    await page.waitForURL(url => !url.pathname.startsWith("/practice/sign-in"), { timeout: 15_000 });
-  } catch (err) {
-    const onSubmit = guard.violation();
-    if (onSubmit) {
-      throw new Error(
-        `Sign-in attempted to reach PRODUCTION (${onSubmit}). It was BLOCKED before dispatch, so the\n`
-        + `  password was never transmitted — but the server under test is not the staging one.\n`
-        + `  Start it with "npm run dev:staging" (port 3100) and run "npm run smoke:staging".`,
-      );
+  if (await page.locator("form").count() === 0) {
+    throw new Error(
+      `/practice/sign-in rendered NO form. SignInForm is gated on the practice_sign_in launch flag,\n`
+      + `  which is off by default on a clean build. Run "npx tsx scripts/provision-staging-fixture.ts",\n`
+      + `  which enables it on the staging project (and never touches practice_public_signup).`,
+    );
+  }
+  /**
+   * ⚠ HYDRATION IS DETECTED BEHAVIOURALLY, BECAUSE REACT 19 EXPOSES NO MARKER TO DETECT IT WITH. The
+   * previous version waited for `__reactFiber$`/`__reactProps$` on the form node. Measured on this
+   * stack: the form carries NO non-standard own properties at all, so that wait could only ever time
+   * out. React 18's internals are not React 19's, and a check written from memory of the older one is
+   * a check that always fails.
+   *
+   * So the effect is what is waited on, not the mechanism. Before hydration the click performs a native
+   * GET submit and we stay on /practice/sign-in; after it, the handler runs and navigates.
+   *
+   * ⚠ A REJECTED CREDENTIAL IS NOT RETRIED. The form shows "Sign-in failed" for bad credentials, and
+   * retrying that would turn a real authentication failure into a slow timeout with a misleading
+   * message — exactly the kind of assertion-weakening §5 forbids.
+   */
+  const emailBox = page.getByLabel(/email/i);
+  const passwordBox = page.getByLabel(/password/i);
+  const submitBtn = page.getByRole("button", { name: /sign in/i });
+  // Budgeted against the 60s per-test timeout: 4 x (7s wait + 1.5s settle) leaves room for page load.
+  const ATTEMPTS = 4;
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    await emailBox.fill(email);
+    await passwordBox.fill(password);
+    await submitBtn.click();
+    try {
+      await page.waitForURL(u => !u.pathname.startsWith("/practice/sign-in"), { timeout: 7_000 });
+      return;
+    } catch (err) {
+      const violation = guard.violation();
+      if (violation) {
+        throw new Error(
+          `Sign-in attempted to reach PRODUCTION (${violation}). It was BLOCKED before dispatch, so the\n`
+          + `  password was never transmitted — but the server under test is not the staging one.`,
+        );
+      }
+      if (await page.getByText(/sign-in failed/i).count() > 0) {
+        throw new Error(
+          `The application rejected the credentials. The account exists (the provisioner verified it),\n`
+          + `  so SMOKE_PRACTITIONER_PASSWORD does not match what the fixture was created with.\n`
+          + `  Re-run scripts/provision-staging-fixture.ts with the value you intend to use — it resets\n`
+          + `  the password on every run.`,
+        );
+      }
+      if (attempt === ATTEMPTS) throw err;
+      // Pre-hydration native submit: the page is still on sign-in, no handler ran. Let it hydrate.
+      await page.waitForTimeout(1_500);
     }
-    throw err;
   }
 }
