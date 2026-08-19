@@ -11,6 +11,45 @@ import { type Page, test } from "@playwright/test";
 // directly, read-only — see e2e/README.md). Every test that calls `requireSyntheticPractitioner()`
 // SKIPS with a clear reason rather than failing, so this suite tells the truth about its own
 // readiness instead of reporting red for a prerequisite nobody has provisioned yet.
+/**
+ * COMP-ENG-002G §4: "The authenticated smoke job must include an environment/project identity guard so
+ * it cannot accidentally target production."
+ *
+ * ⚠ NOT A SECRET. A Supabase project ref is shipped to every browser inside NEXT_PUBLIC_SUPABASE_URL;
+ * it is an address, not a credential. It is written down here so the guard has something to compare
+ * against that cannot itself be misconfigured — deriving "which project is production" from the same
+ * environment the test is trying to validate would be circular.
+ */
+const PRODUCTION_REF = "rnnqhlrcgvsauigxwszl";
+
+/**
+ * ⚠ THIS FAILS, IT DOES NOT SKIP. Skipping is right for "the fixture was never provisioned" — a
+ * documented gap. Pointing an authenticated test suite at production is not a gap, it is an accident in
+ * progress: the synthetic practitioner does not exist there, so the sign-in would fail anyway, and the
+ * standing instruction on this project is that authenticated smoke never connects to production
+ * Supabase. A loud failure is the only correct outcome.
+ */
+export function assertNotProduction(): void {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const ref = url.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? null;
+  if (ref === PRODUCTION_REF) {
+    throw new Error(
+      `REFUSING TO RUN AUTHENTICATED SMOKE AGAINST PRODUCTION (${ref}).\n`
+      + `  The app under test is configured for the production project, where no synthetic\n`
+      + `  practitioner exists and none may be created.\n`
+      + `  Start the dev server with "npm run dev:staging" so it points at the staging project,\n`
+      + `  and run Playwright from that same shell.`,
+    );
+  }
+  if (!ref) {
+    throw new Error(
+      "Cannot identify the Supabase project the app is configured for — NEXT_PUBLIC_SUPABASE_URL is "
+      + "unset or malformed. Refusing rather than guessing, because the guess that matters is whether "
+      + "this is production.",
+    );
+  }
+}
+
 export function syntheticPractitionerCredentials(): { email: string; password: string } | null {
   const email = process.env.SMOKE_PRACTITIONER_EMAIL;
   const password = process.env.SMOKE_PRACTITIONER_PASSWORD;
@@ -24,6 +63,9 @@ export function syntheticPractitionerCredentials(): { email: string; password: s
  * has to repeat the null-check.
  */
 export function requireSyntheticPractitioner(): { email: string; password: string } {
+  // Order matters: refuse production BEFORE deciding whether to skip. A production-pointed run with no
+  // credentials set would otherwise skip quietly and never surface the misconfiguration at all.
+  assertNotProduction();
   const creds = syntheticPractitionerCredentials();
   test.skip(
     creds === null,
