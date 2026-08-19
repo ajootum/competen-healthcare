@@ -9,7 +9,7 @@
 |---|---|---|
 | 1 | Provisioning & Onboarding + onboarding projection | **done** |
 | 2 | Launch Readiness + attestation ledger | **done** |
-| 3 | Technical Operations + retry/control hardening | **A, B, D + §8.3 done** · §7 C outstanding |
+| 3 | Technical Operations + retry/control hardening | **done** |
 | 4 | Practice Workspaces + health derivation / Practice 360 | **done** |
 | 5 | Regression pass against Operations Overview | **done — this section** |
 
@@ -58,8 +58,28 @@ sign-in under its capability guard, and no synthetic HQ identity exists to authe
 synthetic practitioner provisioned for COMP-ENG-002G is deliberately a Practice user with no HQ
 position. Producing them needs an authenticated operator session.
 
+## §7 C — the guided provisioning console
+
+Five steps replace the single form: find account, verify eligibility, configure, review, provision.
+
+**Step 2 is the one that earns the rewrite.** The old form let an operator type a practice name,
+market, timezone and profession for somebody who already owned a Practice, and told them at submit.
+The search endpoint already returned `existingPracticeStatus` on every result, so the information was
+present and simply arrived after the work.
+
+⚠ **It does not block.** §7.2 C says a duplicate-safe request returns the existing workspace rather
+than creating another, so one Practice per person stays enforced by the ENGINE. This flow states
+plainly what a request will do and leaves the API as the thing that decides. A client-side block would
+be a rule nobody can rely on and a second place to disagree.
+
+Step 5 keeps created versus replayed visible, which a success toast usually loses: both are a 200, and
+only one of them made a workspace. The page no longer reloads out from under the operator.
+
+Two unused reads went with it. The console kept a style constant orphaned by the move, and the
+identifiers page selected role and roles from profiles and used neither. That second one is the same
+§9 violation found on Technical Operations, except it read ONLY the authorization columns, so the
+query was removed entirely rather than narrowed.
+
 ## Outstanding
 
-- **§7 C** — the guided provisioning console: find account → verify eligibility → configure → review →
-  provision. The current form is the development-style single form §7.2 C asks to replace.
-- **§14** delivery evidence — screenshots, and the capability matrix as a document.
+- **§14** delivery evidence: screenshots, and the capability matrix as a document.

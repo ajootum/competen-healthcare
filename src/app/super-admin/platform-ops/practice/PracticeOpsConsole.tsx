@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { PRACTICE_TYPES, PROFESSIONS, LEGAL_VERSIONS } from "@/lib/practice/catalogs";
+import { LEGAL_VERSIONS } from "@/lib/practice/catalogs";
+import {
+  Stepper, StepFindAccount, StepVerify, StepConfigure, StepReview, StepResult,
+} from "./_provisioning-steps";
 
 // The operator console. Four panels: the gate ledger, the launch ladder, pilot provisioning, and the
 // record of what has been provisioned.
@@ -17,7 +20,7 @@ import { PRACTICE_TYPES, PROFESSIONS, LEGAL_VERSIONS } from "@/lib/practice/cata
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/10";
+// The field styling moved to _provisioning-steps.tsx with the form it dresses.
 
 const FLAG_LABEL: Record<string, string> = {
   practice_pilot_provisioning: "Pilot provisioning",
@@ -52,7 +55,18 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err" | "warn"; text: string } | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(newKey());
-  const [target, setTarget] = useState<{ id: string; name: string } | null>({ id: callerId, name: `${callerName} (you)` });
+  /**
+   * CPR-PD-014 §7.2 C — the guided operator flow, replacing the development-style single form.
+   *
+   * !! THE STEP IS STATE, NOT DECORATION. §7.2 C names five stages, and the one that earns its place is
+   * step 2: eligibility is checked BEFORE the operator fills in a practice name, timezone and market for
+   * somebody who already owns a Practice. The old form let them type all of it and learn at submit.
+   */
+  const [step, setStep] = useState(1);
+  const [target, setTarget] = useState<
+    { id: string; name: string; existingPracticeStatus: string | null } | null
+  >({ id: callerId, name: `${callerName} (you)`, existingPracticeStatus: null });
+  const [result, setResult] = useState<{ workspaceId: string; status: string; created: boolean; nextUrl: string } | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[] | null>(null);
   const [form, setForm] = useState({
@@ -89,12 +103,16 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
       });
       setBusy(false); return;
     }
-    setNotice({
-      kind: "ok",
-      text: `Workspace ${data.workspaceId} is ${data.status}. ${data.created ? "Created" : "Replayed the original result"}. The owner continues at ${data.nextUrl}.`,
+    // §7.2 C step 5: show the result. The reload is deliberately NOT immediate — the operator needs to
+    // read what happened, and a page that refreshes under them loses the one screen that says whether a
+    // workspace was created or an existing one returned.
+    setResult({
+      workspaceId: data.workspaceId, status: data.status,
+      created: !!data.created, nextUrl: data.nextUrl,
     });
+    setStep(5);
     setIdempotencyKey(newKey());
-    setTimeout(reload, 1200);
+    setBusy(false);
   }
 
   /**
@@ -264,83 +282,69 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
         </section>
       </div>
 
-      {/* ── Provision ─────────────────────────────────────────────────── */}
+      {/* ── CPR-PD-014 §7.2 C — guided provisioning ──────────────────────────────────────────── */}
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-[13px] font-bold text-gray-900">Provision a pilot workspace</h2>
         <p className="mt-0.5 text-[11px] text-gray-500">
-          PROV-001 §4 platform-assisted pilot. The person must already have a Competen account; this creates
-          their Practice, not their identity. One individual Practice per person — a second attempt returns
-          the first.
+          PROV-001 §4 platform-assisted pilot. One individual Practice per person, enforced by the
+          engine: a duplicate-safe request returns the first workspace rather than creating a second.
         </p>
 
-        <div className="mt-3 grid lg:grid-cols-2 gap-4">
-          <div>
-            <p className="text-[11px] font-semibold text-gray-600">Who is it for?</p>
-            <div className="mt-1 flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2">
-              <span className="text-[12px] text-gray-800">{target ? target.name : "nobody selected"}</span>
-              {target?.id !== callerId && (
-                <button type="button" onClick={() => setTarget({ id: callerId, name: `${callerName} (you)` })}
-                  className="ml-auto text-[11px] font-semibold text-teal-700 hover:underline">Use my account</button>
-              )}
-            </div>
-            <div className="mt-2 flex gap-2">
-              <input placeholder="Search name or email" value={query}
-                onChange={e => setQuery(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); search(); } }}
-                className={input} />
-              <button type="button" onClick={search} disabled={query.trim().length < 2}
-                className="shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                Find
-              </button>
-            </div>
-            {results !== null && (
-              results.length === 0 ? (
-                <p className="mt-2 text-[11px] text-gray-400">No match.</p>
-              ) : (
-                <ul className="mt-2 flex flex-col gap-1">
-                  {results.map(r => (
-                    <li key={r.id}>
-                      <button type="button" onClick={() => { setTarget({ id: r.id, name: `${r.name}${r.email ? ` · ${r.email}` : ""}` }); setResults(null); }}
-                        className="w-full rounded-lg border border-gray-100 px-3 py-1.5 text-left text-[12px] hover:bg-gray-50">
-                        <span className="text-gray-800">{r.name}</span>
-                        {r.email && <span className="ml-1.5 text-gray-400">{r.email}</span>}
-                        {r.existingPracticeStatus && (
-                          <span className="ml-1.5 rounded bg-[var(--cmp-surface-warning)] px-1 py-0.5 text-[9px] font-bold text-[var(--cmp-text-warning)]">
-                            already has a Practice ({r.existingPracticeStatus})
-                          </span>
-                        )}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )
-            )}
-          </div>
+        <Stepper step={step} />
 
-          <form className="grid grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); provision(); }}>
-            <input required placeholder="Practice name" value={form.displayName}
-              onChange={e => setForm(p => ({ ...p, displayName: e.target.value }))} className={`${input} col-span-2`} />
-            <select value={form.professionCode} onChange={e => setForm(p => ({ ...p, professionCode: e.target.value }))} className={input}>
-              {PROFESSIONS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-            </select>
-            <select value={form.defaultPracticeType} onChange={e => setForm(p => ({ ...p, defaultPracticeType: e.target.value }))} className={input}>
-              {PRACTICE_TYPES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-            </select>
-            <input required placeholder="Country (ISO-2)" maxLength={2} value={form.countryCode}
-              onChange={e => setForm(p => ({ ...p, countryCode: e.target.value.toUpperCase() }))} className={input} />
-            <input required placeholder="Timezone" value={form.timezone}
-              onChange={e => setForm(p => ({ ...p, timezone: e.target.value }))} className={input} />
-            <button type="submit" disabled={busy || !form.displayName.trim() || !target}
-              className="col-span-2 rounded-lg bg-teal-700 py-2 text-[12px] font-semibold text-white hover:bg-teal-800 disabled:opacity-50">
-              Provision
+        {step === 1 && (
+          <StepFindAccount
+            query={query} setQuery={setQuery} results={results}
+            onSearch={search}
+            onPick={t => { setTarget(t); setResults(null); }}
+            onUseSelf={() => { setTarget({ id: callerId, name: `${callerName} (you)`, existingPracticeStatus: null }); setResults(null); }}
+            target={target} />
+        )}
+        {step === 2 && target && <StepVerify target={target} />}
+        {step === 3 && <StepConfigure form={form} setForm={setForm} />}
+        {step === 4 && target && <StepReview target={target} form={form} idempotencyKey={idempotencyKey} />}
+        {step === 5 && result && <StepResult result={result} />}
+
+        {/* Navigation. Each step names what it needs before it will advance, rather than disabling a
+            button with no explanation. */}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {step > 1 && step < 5 && (
+            <button type="button" onClick={() => setStep(s => s - 1)} disabled={busy}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              Back
             </button>
-            <p className="col-span-2 text-[10px] text-gray-400">
-              Idempotency-Key <span className="font-mono">{idempotencyKey}</span> — reused until this
-              request succeeds, so a double click returns the first workspace instead of creating a second.
-            </p>
-          </form>
+          )}
+          {step < 4 && (
+            <button type="button" disabled={busy || (step === 1 && !target) || (step === 3 && !form.displayName.trim())}
+              onClick={() => setStep(s => s + 1)}
+              className="rounded-lg bg-teal-700 px-3 py-2 text-[12px] font-semibold text-white hover:bg-teal-800 disabled:opacity-50">
+              Continue
+            </button>
+          )}
+          {step === 4 && (
+            <button type="button" disabled={busy || !target || !form.displayName.trim()} onClick={provision}
+              className="rounded-lg bg-teal-700 px-3 py-2 text-[12px] font-semibold text-white hover:bg-teal-800 disabled:opacity-50">
+              {busy ? "Provisioning…" : "Provision"}
+            </button>
+          )}
+          {step === 5 && (
+            <>
+              <button type="button" onClick={reload}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+                Refresh this page
+              </button>
+              <button type="button"
+                onClick={() => { setStep(1); setResult(null); setForm(f => ({ ...f, displayName: "" })); setResults(null); setQuery(""); }}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+                Provision another
+              </button>
+            </>
+          )}
+          {step === 1 && !target && <span className="text-[11px] text-gray-400">Choose who the workspace is for.</span>}
+          {step === 3 && !form.displayName.trim() && <span className="text-[11px] text-gray-400">A practice name is required.</span>}
         </div>
       </section>
+
 
       {/* ── Workspaces ────────────────────────────────────────────────── */}
       <section className="rounded-xl border border-gray-200 bg-white p-4">

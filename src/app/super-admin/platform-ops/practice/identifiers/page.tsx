@@ -29,7 +29,11 @@ export default async function IdentifierFormats() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
+  /**
+   * The profiles read that used to be here selected role and roles and used NEITHER. CPR-PD-014 section
+   * 9 forbids profiles.role as an authorization input, and the real gate is requireHqCapability below.
+   * Removed rather than narrowed, because nothing on this page needs a profile at all.
+   */
   await requireHqCapability("hq.practice.operations.view");
 
   const [format, history] = await Promise.all([getFormat(admin), formatHistory(admin)]);
