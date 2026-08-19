@@ -72,10 +72,35 @@ async function main() {
   const registries = ["plat_rls_registry", "plat_function_attributes", "plat_trigger_registry", "plat_storage_policy_registry"];
   console.log("INSTRUMENTATION");
   const missingReg: string[] = [];
+  let credentialProblem = false;
   for (const fn of registries) {
     const { error } = await admin.rpc(fn).limit(1);
-    if (error) { missingReg.push(fn); fail(`${fn}() unreadable — ${error.message.slice(0, 60)}`); }
-    else pass(`${fn}()`);
+    if (error) {
+      // AN UNREADABLE REGISTRY HAS TWO VERY DIFFERENT CAUSES and the remedies are opposites. A bad key
+      // fails EVERY call identically, and reporting that as "the build is missing its measurement
+      // functions" sends the reader to re-apply migrations against a database that is already correct.
+      // This instrument did exactly that on 2026-08-19 and its advice was wrong.
+      if (/invalid api key|jwt|unauthorized|invalid claim|signature/i.test(error.message)) credentialProblem = true;
+      missingReg.push(fn);
+      fail(`${fn}() unreadable — ${error.message.slice(0, 60)}`);
+    } else pass(`${fn}()`);
+  }
+  if (credentialProblem) {
+    console.log(`
+⛔ THE TARGET REJECTED THE CREDENTIAL. This says nothing about the schema — every call`);
+    console.log(`  failed the same way, which is what a bad key looks like, not what a missing function`);
+    console.log(`  looks like (that names the function).
+`);
+    console.log(`  FIDELITY_SERVICE_ROLE_KEY must be the service_role key OF THE TARGET PROJECT:`);
+    console.log(`    ${URL_}`);
+    console.log(`  Settings -> API Keys -> service_role. It is a JWT: three dot-separated segments,`);
+    console.log(`  starts "eyJ", several hundred characters, no spaces and no ellipsis.`);
+    console.log(`
+  got: ${KEY ? `${KEY.slice(0, 12)}... (${KEY.length} chars, ${KEY.split(".").length} segment(s))` : "(empty)"}`);
+    console.log(`
+RED  ${failures} failure(s)
+`);
+    process.exit(1);
   }
   if (missingReg.length) {
     console.log(`\n⚠ The target is missing its own measurement functions, so fidelity CANNOT be assessed.`);
