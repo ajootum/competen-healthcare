@@ -1,6 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadPdOperations } from "@/lib/hq/pd-operations";
+import { loadProvisioningHealth } from "@/lib/hq/pd-provisioning-health";
+import { derivePracticeHealth, REASON_LABEL, type HealthState } from "@/lib/hq/pd-practice-health";
+import Link from "next/link";
 import { OpsHeader, Stat, Panel, Absent, Warn, TechnicalOpsLink, PAGE_SCOPE } from "../_components/ops-ui";
 
 // CPR-PD-014 build 3 — PRACTICE WORKSPACES, the landlord-side register.
@@ -37,7 +40,40 @@ const STATUS_TONE: Record<string, string> = {
 
 export default async function Page() {
   await requireHqCapability("hq.practice.operations.view");
-  const ops = await loadPdOperations(createAdminClient());
+  const admin = createAdminClient();
+  const [ops, provHealth] = await Promise.all([loadPdOperations(admin), loadProvisioningHealth(admin)]);
+
+  /**
+   * CPR-PD-014 section 5.4 — health, derived once per workspace by the pure function so the register and
+   * the KPI row cannot disagree about who needs attention.
+   *
+   * !! STATE AND HEALTH ARE SEPARATE (section 2, and section 5.6 makes it an acceptance test). A practice
+   * can be ACTIVE and ATTENTION at the same time, so the two are rendered in different columns from
+   * different fields rather than one badge doing both jobs.
+   */
+  const onboardingByWorkspace = new Map(provHealth.onboarding.map(o => [o.practiceId, o]));
+  const failedWorkspaces = new Set(ops.failures.map(f => f.workspaceId).filter(Boolean) as string[]);
+  const nowMs = Date.now();
+  const healthOf = new Map(ops.workspaces.map(w => {
+    const o = onboardingByWorkspace.get(w.id) ?? null;
+    return [w.id, derivePracticeHealth({
+      status: w.status,
+      createdAt: w.created_at,
+      ownerPersonId: w.owner_person_id,
+      hasFailedProvisioning: failedWorkspaces.has(w.id),
+      onboarding: o && {
+        stalledReasonCode: o.stalledReasonCode,
+        completedAt: o.completedAt,
+        stepsCompleted: o.stepsCompleted,
+        stepsTotal: o.stepsTotal,
+      },
+      activationWindowHours: provHealth.activationWindowHours,
+      now: nowMs,
+    })];
+  }));
+  const needsAttention = [...healthOf.values()]
+    .filter(v => v.state !== "HEALTHY" && v.state !== "NEW").length;
+  const onboardingCount = ops.workspaces.filter(w => w.status === "ONBOARDING").length;
 
   const n = ops.estate.pageLength;
   const total = ops.estate.total;
@@ -62,13 +98,18 @@ export default async function Page() {
           value={total === null ? null : total.toLocaleString()}
           scope="counted by the database, not by measuring the register below"
           unreadable="The practice count could not be read. That is not zero — the read error is listed below." />
-        <Stat label="Shown in the register" value={String(n)}
-          scope={total !== null && total > n ? `the ${n} most recent, of ${total.toLocaleString()}` : "every practice the register holds"} />
-        <Stat label="Reached ACTIVE"
+        {/* Section 5.2: "Shown in register" is no longer a primary KPI. It answered a question about the
+            page rather than about the estate, and it occupied a quarter of the row to do it. The page
+            size is still stated, below, where it qualifies the register it describes. */}
+        <Stat label="Active"
           value={String(ops.workspaces.filter(w => w.status === "ACTIVE").length)}
           scope={PAGE_SCOPE(n, total)} tone="success" />
-        <Stat label="Closed the clinical loop" value={String(closedLoop)}
-          scope={`hold at least one SIGNED or AMENDED encounter, ${PAGE_SCOPE(n, total)}`} />
+        <Stat label="Onboarding" value={String(onboardingCount)}
+          scope={`in setup, ${PAGE_SCOPE(n, total)}`}
+          tone={onboardingCount ? "warning" : "neutral"} />
+        <Stat label="Needs attention" value={String(needsAttention)}
+          scope="derived health is not HEALTHY or NEW. A new practice is not an exception."
+          tone={needsAttention ? "critical" : "neutral"} />
       </div>
 
       {ops.estate.pagePartial && (
@@ -154,7 +195,8 @@ export default async function Page() {
                 <tr className="text-left text-[10px] uppercase tracking-wide text-gray-400">
                   <th className="py-1 pr-3">Practice</th>
                   <th className="py-1 pr-3">Owner</th>
-                  <th className="py-1 pr-3">Status</th>
+                  <th className="py-1 pr-3">State</th>
+                  <th className="py-1 pr-3">Health</th>
                   <th className="py-1 pr-3">Market</th>
                   <th className="py-1 pr-3 text-right">Team</th>
                   <th className="py-1 pr-3 text-right">Appts</th>
@@ -169,7 +211,13 @@ export default async function Page() {
               <tbody>
                 {ops.workspaces.map(w => (
                   <tr key={w.id} className="border-t border-gray-100">
-                    <td className="py-1.5 pr-3 text-gray-900">{w.name}</td>
+                    {/* Section 5.5: the practice name opens the operational detail surface. */}
+                    <td className="py-1.5 pr-3">
+                      <Link href={`/super-admin/pd/practices/${w.id}`}
+                        className="font-medium text-gray-900 hover:text-teal-700 hover:underline">
+                        {w.name}
+                      </Link>
+                    </td>
                     {/* ⚠ D1: the owner's NAME. Their email is not in this payload to fall back to. When
                         the join found nobody the cell says so rather than showing a dash, which would
                         read as "this practice has no owner". */}
@@ -181,6 +229,31 @@ export default async function Page() {
                         className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${STATUS_TONE[w.status] ?? "bg-gray-100 text-gray-500"}`}>
                         {w.status}
                       </span>
+                    </td>
+                    {/* Section 5.4: "A health badge must expose its reason on hover/click." The title is
+                        the reason CODES turned into sentences, never a score. */}
+                    <td className="py-1.5 pr-3">
+                      {(() => {
+                        const v = healthOf.get(w.id);
+                        if (!v) return <span className="text-gray-400">—</span>;
+                        const tone: Record<HealthState, string> = {
+                          HEALTHY: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
+                          NEW: "bg-gray-100 text-gray-600",
+                          ATTENTION: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+                          STALLED: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+                          DEGRADED: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
+                          FAILED: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",
+                        };
+                        return (
+                          <span
+                            title={v.reasons.length
+                              ? v.reasons.map(r => REASON_LABEL[r]).join(" ")
+                              : "No condition requiring review applies."}
+                            className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${tone[v.state]}`}>
+                            {v.state}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="py-1.5 pr-3 text-gray-500">{w.country ?? "not set"}</td>
                     {/* ⚠ BANDS. And `signed` is compared against the STRING "0" rather than tested for

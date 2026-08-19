@@ -34,6 +34,9 @@ const ROOT = join(import.meta.dirname, "..");
  * a clean checkout rather than skipped.
  */
 const INCLUDED = [
+  // CPR-PD-014 section 5.4/8.4: the practice health derivation. Pure - every input including the
+  // clock is an argument - so it belongs in the no-credential subset and its boundaries are testable.
+  "pd-practice-health-harness.ts",
   // COMP-ENG-002H Track B: the production-target guard, proven against a simulated production
   // identity with no network. §5 requires it to be "version-controlled and permanently blocking".
   "production-guard-harness.ts",
