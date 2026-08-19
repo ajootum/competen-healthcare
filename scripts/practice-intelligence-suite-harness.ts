@@ -244,6 +244,41 @@ async function main() {
   ok("CONTROL: a question outside every shape routes to unknown, so the parser is not matching everything",
     parseAskIntent("what is the weather like in the waiting room") === "unknown");
 
+  // ══ CPR-PD-013 §13: the other corrections from this arc, pinned ═══════════════════════════════════
+  //
+  // Two behaviours whose regression would be SILENT: a dropped filter looks like a legitimately wider
+  // page, and a missing access-log row is invisible until somebody runs an access review.
+  const rangeSrc = fs.readFileSync("src/app/practice/(shell)/intelligence/RangePicker.tsx", "utf8");
+  // ⚠ SCOPED TO go()'s BODY. A whole-file test for `new URLSearchParams(params.toString())` passed a
+  // break-test that had genuinely reverted go() to an allow-list -- because the localStorage effect
+  // FURTHER DOWN builds a URLSearchParams the same way for an unrelated reason, and the needle found
+  // that one. Third instance of this shape today; the fix is the same one every time.
+  const goBody = (() => {
+    const start = rangeSrc.indexOf("const go = (extra");
+    if (start < 0) return "";
+    const end = rangeSrc.indexOf("\n  };", start);
+    return rangeSrc.slice(start, end < 0 ? start : end);
+  })();
+  ok("v2 s5/s19. CONTROL: go()'s own body was located, so the pin below is not scanning the file",
+    goBody.length > 150 && goBody.includes("router.push"), `${goBody.length} chars`);
+  ok("v2 s5/s19. changing the period preserves the whole query string, not an allow-list of keys",
+    /new URLSearchParams\(params\.toString\(\)\)/.test(goBody)
+    && /\["days", "from", "to"\]/.test(goBody),
+    "an allow-list has to be updated by whoever adds the tenth parameter, and they will not know it exists");
+  ok("v2 s5/s19. CONTROL: the range keys ARE still replaced, so the control still owns its own period",
+    /next\.delete\(k\)/.test(goBody));
+
+  const askSrc = fs.readFileSync("src/lib/practice/ask-practice.ts", "utf8");
+  ok("v2 s13/s18. disclosing named patients writes an access-log row",
+    /logAccess\(admin, \{/.test(askSrc) && /evidence\.identified/.test(askSrc),
+    "ask-practice rendered named, linked patients and called logAccess zero times");
+  ok("v2 s13/s18. ...and only when identification actually happened, so an unidentified read logs nothing",
+    /if \(evidence && evidence\.identified && evidence\.rows\.length > 0\)/.test(askSrc),
+    "a false positive in an access log is worse than a gap");
+  const cohortSrc = fs.readFileSync("src/lib/practice/cohort-engine.ts", "utf8");
+  ok("v2 s18. the cohort engine logs its own named-row disclosure too",
+    /logAccess\(admin, \{/.test(cohortSrc) && /identified && rows\.length > 0/.test(cohortSrc));
+
   // ══ C. THE FIXTURE ════════════════════════════════════════════════════════════════════════════════
   const wsA = await provision(OWNER, "HARNESS PI A (synthetic)", "a");
   const wsB = await provision(OTHER, "HARNESS PI B (synthetic)", "b");

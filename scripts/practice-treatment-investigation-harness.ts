@@ -346,6 +346,33 @@ async function main() {
   ok("3-5. NOT ONE seeded investigation name appears in InvestigationCapture.tsx",
     leakedIntoInv.length === 0, leakedIntoInv.slice(0, 5).join(", "));
 
+  // ══ CPR-PD-013 §5/§6: the corrections this arc made, pinned so they cannot silently revert ═══════
+  //
+  // §13 asks for "focused regression/acceptance tests for each corrected behavior". These are the two
+  // for the treatment tab.
+  // treatSrc is already comment-free -- src() strips them, which is why the leak pins above can trust it.
+  ok("PD-013 §5. the recorded-treatment row carries a STATUS CONTROL, not just a status badge",
+    /data-step="treatment-status"/.test(treatSrc) && /setTreatmentStatus\(/.test(treatSrc),
+    "the write path existed end to end and no screen could reach it");
+  // The control must sit inside the `editable ?` branch: a signed encounter renders the badge instead.
+  const beforeControl = treatSrc.slice(0, treatSrc.indexOf('data-step="treatment-status"'));
+  ok("PD-013 §5. ...and it is offered only where the encounter is still editable",
+    /editable\s*$|editable\s*\n\s*\?/.test(beforeControl.slice(-260)) || /editable\s*\?/.test(beforeControl.slice(-260)),
+    "a signed encounter must render the badge, never the control");
+  ok("PD-013 §5. CONTROL: the status list has ONE owner and the screen does not retype it",
+    treatSrc.includes("TREATMENT_STATUSES")
+    && raw("src/lib/practice/treatment-capture-constants.ts").includes("export const TREATMENT_STATUSES")
+    && !/\["planned",\s*"in_progress"/.test(treatSrc),
+    "a second list in the component is how a screen offers a status the CHECK rejects");
+
+  // §6: "Add a focused assertion where static/deterministic copy can be mechanically protected."
+  const intel = raw("src/lib/practice/intelligence.ts");
+  ok("PD-013 §6. the Orders Intelligence refusal no longer claims the status column is never written",
+    !intel.includes("its status column is never written after insert"),
+    "updateEncounterTreatment writes it and the route forwards it -- the clause was stale");
+  ok("PD-013 §6. CONTROL: the refusal itself still exists, so the pin is not passing on a deleted module",
+    intel.includes("There is no orders store in this product"));
+
   ok("3-6. the constants modules import NOTHING (so a client bundle stays clean)",
     !/^\s*import\s/m.test(raw("src/lib/practice/investigation-constants.ts"))
     && !/^\s*import\s/m.test(raw("src/lib/practice/treatment-capture-constants.ts")));
