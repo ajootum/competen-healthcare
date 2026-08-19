@@ -1,4 +1,18 @@
+import { loadEnvConfig } from "@next/env";
 import { defineConfig, devices } from "@playwright/test";
+
+/**
+ * ⚠ WITHOUT THIS, A PROVISIONED FIXTURE STILL REPORTS AS "NOT PROVISIONED". scripts/
+ * provision-staging-fixture.ts reads .env.local through loadEnvConfig, but Playwright does not load it
+ * at all — so SMOKE_PRACTITIONER_EMAIL/PASSWORD placed there would create the account and then leave
+ * requireSyntheticPractitioner() skipping every authenticated journey with a message saying no identity
+ * exists. A green run reporting a documented gap that had already been closed is worse than a red one.
+ *
+ * With this, .env.local is the single place both halves read, and the secret stays out of shell history.
+ * A real environment variable still wins: loadEnvConfig never overwrites a value already in process.env,
+ * which is what CI relies on.
+ */
+loadEnvConfig(process.cwd());
 
 // COMP-ENG-001A — the initial Playwright smoke framework.
 //
