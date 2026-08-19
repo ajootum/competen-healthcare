@@ -1,0 +1,23 @@
+{
+  "_doc": [
+    "COMP-ENG-002G §8 — the ONLY tolerated column differences between production and a canonical",
+    "staging build. scripts/column-parity.ts fails on anything not listed here.",
+    "",
+    "⚠ AN ENTRY IS A DECISION, NOT A SILENCER. §8: 'Do not normalize away meaningful type/default/",
+    "nullability differences' and 'never auto-equate'. Each entry names ONE table and ONE column —",
+    "there is deliberately no pattern or wildcard support, because a pattern would hide the next",
+    "difference nobody has looked at yet.",
+    "",
+    "status must be one of:",
+    "  INTENTIONAL_DIFFERENCE  the definitions differ and the difference is approved",
+    "  MISSING_IN_PRODUCTION   the build creates it and production does not yet — a pending promotion",
+    "  MISSING_IN_STAGING      production has it and the build deliberately does not create it",
+    "",
+    "⚠ MISSING_IN_STAGING IS THE DANGEROUS ONE and should almost never be used. §8 calls it 'normally",
+    "FAIL'. It means the repository cannot rebuild something production depends on — which is exactly",
+    "the class of gap that produced migrations 001, 188a and 336. Prefer fixing the migration.",
+    "",
+    "reason is a sentence a reader can act on. recordedOn is the date the decision was taken."
+  ],
+  "columns": []
+}

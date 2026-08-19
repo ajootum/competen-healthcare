@@ -25,6 +25,13 @@
  *   FIDELITY_SUPABASE_URL=... FIDELITY_SERVICE_ROLE_KEY=... npx tsx scripts/fidelity-manifest.ts
  * so a staging run needs no edit and no credential in the repository.
  *
+ * ⚠ COLUMNS ARE NOT CHECKED HERE, AND THAT IS A DELIBERATE SPLIT, NOT AN OMISSION. §4's fidelity
+ * hierarchy does not list them, and this arc proved that gap real: a clean build matched production on
+ * seven separate counts while audit_log was missing two columns. COMP-ENG-002G §7 closes it with
+ * scripts/column-parity.ts, which needs BOTH environments at once and so cannot live inside a manifest
+ * that measures one target. Run them together — this file proves a target is internally correct, that
+ * one proves two targets agree.
+ *
  * ⚠ It depends on the registry functions (172, 168, 250, 332, 333). A target that lacks them cannot be
  * measured, and that is reported as a FAILURE of the build rather than skipped -- a fresh environment
  * missing its own instrumentation is exactly the kind of incompleteness this gate exists to catch.
