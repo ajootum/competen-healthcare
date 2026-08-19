@@ -4,6 +4,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { loadPracticeOps, evaluateGate, FLAG_CONSEQUENCE, FLAG_ORDER } from "@/lib/practice/operations";
 import PracticeOpsConsole from "./PracticeOpsConsole";
 import { requireHqCapability } from "@/lib/hq/context";
+import { loadServiceHealth } from "@/lib/hq/pd-service-health";
 
 // Practice Operations (CPR-IAM-001 s14 cutover, s14.1 launch ladder; CPR-PROV-001 s4 pilot pathway).
 //
@@ -25,11 +26,21 @@ export default async function PracticeOperations() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
   const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("full_name, role, roles").eq("id", user.id).single();
+  /**
+   * ⚠ full_name ONLY. This selected `role, roles` as well and used NEITHER — the authorization on this
+   * page is requireHqCapability below, exactly as it should be. CPR-PD-014 §9: "Do not read
+   * profiles.role as a substitute for the capability model", and COMP-ARCH-PSA-001 makes profiles.role
+   * nullable precisely so it stops being the thing anybody reaches for.
+   *
+   * An unused select is not harmless here. It is how the next reader concludes the column still governs
+   * something, and how a future edit starts branching on a value the product has retired.
+   */
+  const { data: profile } = await admin.from("profiles").select("full_name").eq("id", user.id).single();
   await requireHqCapability("hq.practice.operations.view");
 
   const ops = await loadPracticeOps(admin);
   const gate = await evaluateGate(admin, ops);
+  const serviceHealth = await loadServiceHealth(admin);
 
   const passed = gate.filter(g => g.state === "pass").length;
   const failed = gate.filter(g => g.state === "fail").length;
@@ -52,6 +63,37 @@ export default async function PracticeOperations() {
           Practitioner number format →
         </Link>
       </div>
+
+      {/* ── CPR-PD-014 §7.2 A — environment & service health ────────────────────────────────────── */}
+      <section className="rounded-xl border border-gray-200 bg-white p-4">
+        <h2 className="text-[13px] font-bold text-gray-900">Environment &amp; service health</h2>
+        <p className="mt-0.5 text-[11px] text-gray-500">
+          Operational status for services that can actually be measured. UNKNOWN is used wherever only
+          configuration is visible, because a key being present says a deployment intends to send
+          something, not that the next attempt would succeed.
+        </p>
+        <ul className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {serviceHealth.map(s => (
+            <li key={s.name} className="rounded-lg border border-gray-100 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                  s.status === "OPERATIONAL" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
+                    : s.status === "DEGRADED" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"
+                      : s.status === "DOWN" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"
+                        : "bg-gray-100 text-gray-500"}`}>
+                  {s.status}
+                </span>
+                <span className="text-[12px] font-medium text-gray-800">{s.name}</span>
+              </div>
+              {/* §7.2: every status shows last verified time and check source. */}
+              <p className="mt-1 text-[11px] leading-snug text-gray-500">{s.source}</p>
+              <p className="mt-0.5 font-mono text-[10px] text-gray-400">
+                checked {s.checkedAt.slice(11, 16)} UTC
+              </p>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       {/* STANDING STATEMENT OF WHAT IS PUBLICLY LIVE. Not a toast: whoever opens this page sees it,
           including someone who did not flip the flag and does not know it moved. */}
