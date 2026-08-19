@@ -165,6 +165,77 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  smoke-authenticated:
+    name: Playwright smoke (authenticated journeys, staging)
+    runs-on: ubuntu-latest
+    # ⚠ STAGING ONLY, AND THE SUITE ITSELF ENFORCES IT. e2e/helpers/synthetic-practitioner.ts refuses to
+    # run when the app resolves to the production project ref, and additionally BLOCKS any request to it
+    # at the network layer before dispatch. Configuring this job with production values does not produce
+    # a wrong result, it produces a refusal.
+    #
+    # ⚠ MISSING CREDENTIALS FAIL THIS JOB, THEY DO NOT SKIP IT (§6). The same helper throws when CI is
+    # set and the smoke variables are absent. A required check that goes green by running nothing would
+    # stay green through a rotated secret or a renamed variable -- the exact regressions it exists for.
+    #
+    # ⚠ IT BUILDS AND RUNS THE REAL SERVER RATHER THAN next dev. Under next dev a Next runtime chunk is
+    # refused to the browser (403 to the browser, 200 to curl) and React never hydrates, so the sign-in
+    # form is inert markup and no authentication ever happens. Measured 2026-08-19, on two ports and on
+    # both production- and staging-pointed dev servers. A built server has neither problem.
+    env:
+      # The staging environment contract (§4). NEXT_PUBLIC_* are inlined into the client bundle at BUILD
+      # time, so they must be present for the build step, not only at run time.
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SERVICE_ROLE_KEY }}
+      SMOKE_PRACTITIONER_EMAIL: ${{ secrets.SMOKE_PRACTITIONER_EMAIL }}
+      SMOKE_PRACTITIONER_PASSWORD: ${{ secrets.SMOKE_PRACTITIONER_PASSWORD }}
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+      PLAYWRIGHT_WEB_SERVER_CMD: npm run start -- -p 3100
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # Full install, not --ignore-scripts: this job builds and runs the app, which wants sharp built.
+      - run: npm ci
+      - name: Refuse to run without the staging environment
+        # A build with an empty NEXT_PUBLIC_SUPABASE_URL bakes an unusable client into the bundle and
+        # then fails much later, in the browser, as a confusing sign-in error. Checking here names the
+        # cause. The values themselves are never echoed.
+        run: |
+          missing=""
+          [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] && missing="$missing STAGING_SUPABASE_URL"
+          [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ] && missing="$missing STAGING_ANON_KEY"
+          [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] && missing="$missing STAGING_SERVICE_ROLE_KEY"
+          [ -z "$SMOKE_PRACTITIONER_EMAIL" ] && missing="$missing SMOKE_PRACTITIONER_EMAIL"
+          [ -z "$SMOKE_PRACTITIONER_PASSWORD" ] && missing="$missing SMOKE_PRACTITIONER_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "Missing required repository secrets:$missing"
+            echo "This gate fails closed -- it does not skip. Set them for the STAGING project only."
+            exit 1
+          fi
+          echo "All five staging secrets are present."
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build (staging environment is inlined here)
+        run: npm run build
+      - name: Authenticated journeys
+        # Only the credential-gated journeys. The credential-free ones keep their own job against a
+        # deliberately unreachable database, which proves the app fails closed -- a different property,
+        # and §6 requires both to be retained.
+        run: npx playwright test e2e/smoke/04-practitioner-sign-in.spec.ts e2e/smoke/05-post-login-routing.spec.ts e2e/smoke/06-command-centre.spec.ts e2e/smoke/07-practice-planner.spec.ts
+      # ⚠ NO TRACE ARTIFACT FROM THIS JOB. playwright.config.ts sets trace: "off" under CI because a
+      # trace records fill() arguments, which would put the practitioner password into a downloadable
+      # artifact. The HTML report keeps screenshots, where a password input renders as dots.
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-authenticated
+          path: playwright-report/
+          retention-days: 7
+
   migrations:
     name: Migration house rules (changed files)
     runs-on: ubuntu-latest

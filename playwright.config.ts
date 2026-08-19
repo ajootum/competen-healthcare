@@ -53,7 +53,14 @@ export default defineConfig({
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000",
     // Evidence on failure only (§5: "capture useful failure evidence such as trace/screenshot only
     // through normal Playwright test artifacts; do not expose secrets in logs").
-    trace: "retain-on-failure",
+    /**
+     * ⚠ NO TRACE IN CI, AND THAT IS A SECURITY DECISION RATHER THAN A PERFORMANCE ONE. §4: "Do not
+     * expose secrets in traces, screenshots, logs or diagnostic output." A Playwright trace records the
+     * ARGUMENTS of every action, so fill(password) puts the synthetic practitioner secret into an
+     * artifact that any workflow-run viewer can download. Screenshots are kept: a password input renders
+     * as dots, so they leak nothing while still showing what the page looked like.
+     */
+    trace: process.env.CI ? "off" : "retain-on-failure",
     screenshot: "only-on-failure",
   },
 
@@ -86,7 +93,14 @@ export default defineConfig({
    * exactly what the network-level guard in e2e/helpers/synthetic-practitioner.ts exists to catch.
    */
   webServer: {
-    command: `npm run dev -- -p ${new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000").port || "3000"}`,
+    /**
+     * ⚠ OVERRIDABLE, BECAUSE next dev CANNOT SERVE THE AUTHENTICATED JOURNEYS. A Next runtime chunk is
+     * refused to the browser under next dev (403 to the browser, 200 to curl) and React never hydrates,
+     * so the sign-in form is inert markup. The authenticated CI job therefore builds and runs the real
+     * server, and sets this variable to do it.
+     */
+    command: process.env.PLAYWRIGHT_WEB_SERVER_CMD
+      ?? `npm run dev -- -p ${new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000").port || "3000"}`,
     url: process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000",
     reuseExistingServer: !process.env.CI,
     // Turbopack cold-compiles the first routes on demand; 60s was tight enough to fail on a cold start.

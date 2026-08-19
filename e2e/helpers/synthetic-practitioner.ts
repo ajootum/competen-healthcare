@@ -67,6 +67,23 @@ export function requireSyntheticPractitioner(): { email: string; password: strin
   // credentials set would otherwise skip quietly and never surface the misconfiguration at all.
   assertNotProduction();
   const creds = syntheticPractitionerCredentials();
+  /**
+   * ⚠ IN CI, MISSING CREDENTIALS FAIL — THEY DO NOT SKIP. COMP-ENG-002G §6: "After activation, missing
+   * required smoke credentials must fail closed rather than silently skip the journeys."
+   *
+   * Skipping is honest LOCALLY, where a developer may simply not have provisioned a fixture. In CI it
+   * is the opposite of honest: a required check that goes green because it quietly ran nothing is worse
+   * than no check, and it would stay green through the exact regression it exists to catch — a rotated
+   * secret, a renamed variable, a job that stopped passing its env through.
+   */
+  if (creds === null && process.env.CI) {
+    throw new Error(
+      "SMOKE_PRACTITIONER_EMAIL / SMOKE_PRACTITIONER_PASSWORD are not set in CI.\n"
+      + "  This job is a blocking gate for the authenticated journeys, so absent credentials are a\n"
+      + "  FAILURE, not a skip — a required check that passes by running nothing proves nothing.\n"
+      + "  Set them as repository secrets on the STAGING project only.",
+    );
+  }
   test.skip(
     creds === null,
     "SMOKE_PRACTITIONER_EMAIL / SMOKE_PRACTITIONER_PASSWORD are not set, or no synthetic automation "
