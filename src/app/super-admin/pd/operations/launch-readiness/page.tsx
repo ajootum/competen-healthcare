@@ -1,55 +1,97 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadPdOperations, SUPABASE_GATE_NOTE } from "@/lib/hq/pd-operations";
+import { loadLaunchAttestations, attestedCount } from "@/lib/hq/pd-launch-attestation";
 import { FLAG_CONSEQUENCE, FLAG_ORDER } from "@/lib/practice/operations";
-import { OpsHeader, Stat, Panel, Absent, Warn, TechnicalOpsLink } from "../_components/ops-ui";
+import { OpsHeader, Panel, Warn, TechnicalOpsLink } from "../_components/ops-ui";
+import {
+  GateDecision, Blockers, ControlGroup, AttestationRows, LadderCompact, ExternalGate,
+  GROUPS, HUMAN_GROUP,
+} from "./_components/gate";
 
-// CPR-PD-014 build 3 — LAUNCH READINESS.
+// CPR-PD-014 §6 — LAUNCH READINESS.
 //
-// ⚠ THE GUARD IS ON THE PAGE, NOT ONLY ON THE LAYOUT (CPR-PD-001 s7: "a hidden navigation item does
-// not constitute authorization"; Next's authentication guide: a layout check is not sufficient because
+// ⚠ THE GUARD IS ON THE PAGE, NOT ONLY ON THE LAYOUT (CPR-PD-001 §7: "a hidden navigation item does not
+// constitute authorization"; Next's authentication guide: a layout check is not sufficient because
 // layouts do not re-render on navigation). The await resolves before any JSX is returned, so an
 // unauthorized direct URL is redirected without rendering anything.
 //
-// ⚠ THE AUTO/MANUAL SPLIT IS THE WHOLE HONESTY OF THE GATE, so this page renders the two SEPARATELY
-// rather than as one list of ticks. An item a person has to attest — somebody signing in cold, a pilot
-// walkthrough — is never turned green by a page; the point of automating the rest is to shrink the human
-// set, not to disguise it. A single combined "9/12" would let the manual set disappear into a ratio.
+// ⚠ THE AUTO/MANUAL SPLIT IS THE WHOLE HONESTY OF THE GATE, and §6.7 makes it an acceptance test. An
+// item a person must attest — somebody signing in cold, a pilot walkthrough — is never turned green by a
+// page. A single combined ratio would let the manual set disappear into a number that looks nearly done.
 //
-// ⚠ READ-ONLY. The flag toggles live on Technical Operations (PD-001 s3 retains that page), and the
-// consequences below are imported from the same FLAG_CONSEQUENCE constant that page and the flags API
-// use, so the warning shown at the moment of a flip and the warning shown afterwards cannot diverge.
+// ⚠ READ-ONLY, BY §6.7: "No toggle exists on this screen if the action belongs to Technical Operations."
+// The flag toggles live there, and the consequence sentences below come from the same FLAG_CONSEQUENCE
+// constant that page and the flags API use, so the warning shown at the moment of a flip and the warning
+// shown afterwards cannot diverge.
 
 export const dynamic = "force-dynamic";
 
 const FLAG_LABEL: Record<string, string> = {
   practice_pilot_provisioning: "Pilot provisioning",
-  practice_sign_in: "Sign-in open",
+  practice_sign_in: "Sign-in",
   practice_public_signup: "Public signup",
 };
 
-const STATE_TONE: Record<string, string> = {
-  pass: "text-[var(--cmp-text-success)]",
-  fail: "text-[var(--cmp-text-critical)]",
-  pending: "text-[var(--cmp-text-warning)]",
-};
-const STATE_MARK: Record<string, string> = { pass: "✓", fail: "✗", pending: "•" };
-
 export default async function Page() {
   await requireHqCapability("hq.practice.operations.view");
-  const ops = await loadPdOperations(createAdminClient());
+  const admin = createAdminClient();
+  const [ops, attestations] = await Promise.all([
+    loadPdOperations(admin),
+    loadLaunchAttestations(admin),
+  ]);
 
   const auto = ops.gate.filter(g => g.kind === "auto");
   const manual = ops.gate.filter(g => g.kind === "manual");
   const publiclyLive = FLAG_ORDER.filter(f => ops.flags[f] && f !== "practice_pilot_provisioning");
 
+  // §6.2 — the gate numerator and denominator, and nothing derived from them beyond the bar.
+  const humanAttested = attestedCount(manual.map(m => m.id), attestations);
+  const satisfied = ops.gateSummary.autoPass + humanAttested;
+  const total = auto.length + manual.length;
+
+  // A blocker is an automatic check that is failing, or a human control not yet attested. Ordered
+  // automatic-first because those are actionable by a change rather than by a person's time.
+  const blockers = [
+    ...auto.filter(a => a.state !== "pass"),
+    ...manual.filter(m => attestedCount([m.id], attestations) === 0),
+  ];
+
+  // §6.5 — the ladder as a sequence, and the next rung that is off.
+  const rungs = FLAG_ORDER.map(f => ({ label: FLAG_LABEL[f] ?? f, on: !!ops.flags[f] }));
+  const nextOff = FLAG_ORDER.find(f => !ops.flags[f]);
+  const nextTransition = nextOff ? (FLAG_LABEL[nextOff] ?? nextOff) : null;
+
+  const grouped = GROUPS.map(g => ({ title: g.title, items: auto.filter(a => g.ids.includes(a.id)) }));
+  // ⚠ ANY AUTOMATIC CONTROL THE GROUPS DO NOT NAME STILL APPEARS. A control that quietly belonged to no
+  // group would vanish from the page while still counting toward the denominator, which is the shape of
+  // a gate that reads satisfied because something stopped being displayed.
+  const ungrouped = auto.filter(a => !GROUPS.some(g => g.ids.includes(a.id)));
+
   return (
     <div data-wide className="space-y-4">
       <OpsHeader
         title="Launch Readiness"
-        purpose="How far Competen Practice has climbed the launch ladder, and what the cutover gate still says is outstanding — with the checks a machine can run kept apart from the ones a person must attest."
-        spec="CPR-PD-014 build 3 · CPR-IAM-001 §14, §14.1"
+        purpose="Are the defined controls satisfied to move Competen Practice to the next launch state?"
+        spec="CPR-PD-014 §6 · CPR-IAM-001 §14, §14.1"
       />
+
+      {/* §6.2 — the decision, before any checklist. */}
+      <GateDecision
+        launchState={ops.launch.state}
+        satisfied={satisfied}
+        total={total}
+        blockers={blockers.map(b => b.label)}
+        autoPass={ops.gateSummary.autoPass}
+        autoTotal={auto.length}
+        humanAttested={humanAttested}
+        humanTotal={manual.length}
+        nextTransition={nextTransition}
+      />
+
+      <Blockers items={blockers} />
+
+      <LadderCompact rungs={rungs} nextTransition={nextTransition} blockerCount={blockers.length} />
 
       {/* STANDING STATEMENT OF WHAT IS PUBLICLY LIVE. Not a toast: whoever opens this page sees it,
           including someone who did not flip the flag and does not know it moved. */}
@@ -58,103 +100,43 @@ export default async function Page() {
           <ul className="flex flex-col gap-1">
             {publiclyLive.map(f => (
               <li key={f}>
-                <span className="font-mono font-semibold">{f}</span> — {FLAG_CONSEQUENCE[f]}
+                <span className="font-semibold">{FLAG_LABEL[f] ?? f}</span> — {FLAG_CONSEQUENCE[f]}
               </li>
             ))}
           </ul>
-          <p className="mt-1.5 text-[11px] text-gray-600">{SUPABASE_GATE_NOTE}</p>
         </Warn>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <p className="text-[10px] uppercase tracking-wide text-gray-400">Launch state (§14.1)</p>
-          <p className="text-xl font-bold text-gray-900">{ops.launch.state}</p>
-          <p className="text-[11px] leading-snug text-gray-500">{ops.launch.detail}</p>
-        </div>
-        {/* ⚠ THE AUTOMATIC AND MANUAL HALVES ARE COUNTED SEPARATELY. A combined ratio would let a gate
-            with every human step outstanding read as nearly complete. */}
-        <Stat label="Automatic checks passing"
-          value={`${ops.gateSummary.autoPass}/${ops.gateSummary.autoTotal}`}
-          scope="evaluated against the live database on every load"
-          tone={ops.gateSummary.fail ? "critical" : "success"} />
-        <Stat label="Automatic checks failing" value={String(ops.gateSummary.fail)}
-          scope="a red item here is a fact about the deployment, not an opinion"
-          tone={ops.gateSummary.fail ? "critical" : "neutral"} />
-        <Stat label="Human attestations outstanding"
-          value={`${ops.gateSummary.manualOutstanding}/${ops.gateSummary.manualTotal}`}
-          scope="never turned green by this page"
-          tone={ops.gateSummary.manualOutstanding ? "warning" : "success"} />
+      {/* §6.3 — grouped controls. A fully passing group is collapsed; one with a blocker opens. */}
+      <div className="grid gap-3 lg:grid-cols-2">
+        {grouped.map(g => <ControlGroup key={g.title} title={g.title} items={g.items} />)}
+        {ungrouped.length > 0 && (
+          <ControlGroup title="Other automatic controls" items={ungrouped} />
+        )}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel title="Automatically evaluated"
-          note="Each item carries how it is checked, because green means nothing if the check is a hard-coded true. These are re-evaluated against the database on every load and can go red.">
-          <ul className="flex flex-col gap-1.5">
-            {auto.map(g => (
-              <li key={g.id} className="flex gap-2 text-[12px]">
-                <span className={`shrink-0 font-bold ${STATE_TONE[g.state]}`}>{STATE_MARK[g.state]}</span>
-                <span className="flex-1">
-                  <span className="text-gray-800">{g.label}</span>
-                  <span className="block text-[11px] text-gray-500">{g.detail}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-
-        <Panel title="Attested by a person"
-          note="No automated check stands in for somebody using the product. These items are pending until a human says otherwise, and nothing on this page can move them.">
-          <ul className="flex flex-col gap-1.5">
-            {manual.map(g => (
-              <li key={g.id} className="flex gap-2 text-[12px]">
-                <span className={`shrink-0 font-bold ${STATE_TONE[g.state]}`}>{STATE_MARK[g.state]}</span>
-                <span className="flex-1">
-                  <span className="text-gray-800">{g.label}</span>
-                  <span className="ml-1.5 rounded bg-gray-100 px-1 py-0.5 text-[9px] font-bold text-gray-500">MANUAL</span>
-                  <span className="block text-[11px] text-gray-500">{g.detail}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      </div>
-
-      <Panel title="The launch ladder"
-        note="Three flags, in the order they are climbed. The launch state above is derived from them on every read rather than stored, so it cannot drift from what is actually on.">
-        <ul className="flex flex-col gap-2">
-          {ops.flagRows.map(f => (
-            <li key={f.flag} className="flex items-start gap-3 rounded-lg border border-gray-100 px-3 py-2">
-              <div className="flex-1">
-                <p className="text-[12px] font-semibold text-gray-900">{FLAG_LABEL[f.flag] ?? f.flag}</p>
-                <p className="font-mono text-[10px] text-gray-400">{f.flag}</p>
-                {f.note && <p className="text-[11px] text-gray-500">{f.note}</p>}
-                {/* One copy of what the flag makes true of the public site, imported rather than retyped. */}
-                {f.enabled && FLAG_CONSEQUENCE[f.flag] && (
-                  <p className="mt-1 text-[11px] text-[var(--cmp-text-warning)]">{FLAG_CONSEQUENCE[f.flag]}</p>
-                )}
-              </div>
-              <span className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold ${
-                f.enabled
-                  ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
-                  : "bg-gray-100 text-gray-500"}`}>
-                {f.enabled ? "ON" : "OFF"}
-              </span>
-            </li>
-          ))}
-        </ul>
-        <div className="mt-3">
-          <TechnicalOpsLink for="Flipping a flag changes what the public site does, so the toggle and its confirmation stay on" />
-        </div>
+      {/* §6.4 — human attestation, governed rather than prose. */}
+      <Panel title={HUMAN_GROUP}
+        note="Controls a person must attest. No page turns these green, and an attestation records who, holding what capability, against which build, with what evidence.">
+        <AttestationRows
+          items={manual}
+          attestations={attestations}
+          recordingUnavailableReason={
+            attestations.unavailable
+              ? null
+              : "Recording an attestation is not yet possible: the authorised write path is pending, and "
+                + "a button that cannot record one would be a control that does nothing."
+          } />
       </Panel>
 
-      <Absent
-        what="Whether account creation is actually open"
-        why={SUPABASE_GATE_NOTE + " The gate ledger's \"public signup is open\" line and the consequence sentences above are true of this product's own gates only; the fourth one has to be checked in the Supabase dashboard by a person."} />
+      {/* §6.6 — the project-level switch, as an external control rather than a footnote. */}
+      <ExternalGate note={SUPABASE_GATE_NOTE} />
+
+      <TechnicalOpsLink for="Flipping a flag changes what the public site does, so the toggle and its confirmation stay on" />
 
       <p className="text-[11px] text-gray-400">
-        Read at {ops.generatedAt.slice(0, 16).replace("T", " ")} UTC. The gate is re-evaluated on every
-        load; nothing on this page is a stored verdict.
+        Read at {ops.generatedAt.slice(0, 16).replace("T", " ")} UTC. Automatic controls are evaluated
+        against the live database on every load.
       </p>
     </div>
   );

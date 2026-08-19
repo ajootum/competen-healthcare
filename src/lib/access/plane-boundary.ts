@@ -96,6 +96,18 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
     why: "the three launch flags. Platform-owned configuration; holds nothing about any practice.",
   },
   {
+    table: "pd_launch_attestation",
+    columns: ["release_ref", "attested_at"],
+    count: true,
+    why:
+      "CPR-PD-014 §8.2, the human attestation ledger created by migration 340. Only these two columns "
+      + "are selected directly, and only to discover WHICH BUILD is under test -- the verdicts themselves "
+      + "come through plat_pd_launch_attestation_current(), whose returned columns are fixed in the "
+      + "function. It is platform governance about Competen Practice releases, not about any practice: "
+      + "no workspace id, no practitioner, no patient. attested_by is a uuid rather than a name, "
+      + "deliberately, so this table is not a second place a person's name can leak from.",
+  },
+  {
     table: "pd_ops_config",
     columns: ["config_key", "value_hours", "description"],
     count: true,
