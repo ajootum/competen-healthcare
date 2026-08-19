@@ -3,106 +3,83 @@
  * failure — COMP-ENG-002E §7.
  *
  * ⚠⚠ IT REFUSES TO RUN AGAINST PRODUCTION. The production project ref is read from .env.local and the
- * target is compared against it before anything executes. This script exists to build a clean staging
- * environment; pointed at production it would replay 329 migrations over a live estate. The guard is
- * not a convenience, it is the reason the script is safe to have in the repository at all.
+ * target connection string is checked against it before anything executes. This script replays 332
+ * migrations; pointed at production that would be catastrophic. The guard is why it is safe to keep in
+ * the repository at all.
  *
- * ⚠ IT STOPS AT THE FIRST FAILURE AND DOES NOT CONTINUE. §7: "If the clean build fails or produces
- * unexpected state, preserve and report the failure before remediation; failure is evidence." A runner
- * that skipped past errors would produce a half-built database that looks finished, which is precisely
- * the outcome the fidelity gate exists to prevent.
+ * ⚠ IT STOPS AT THE FIRST FAILURE. COMP-ENG-002E §7: "preserve and report the failure before
+ * remediation; failure is evidence." A runner that continued past an error would leave a half-built
+ * database that looks finished — the outcome the whole fidelity gate exists to prevent.
  *
- * PREFERRED ROUTE -- no access token, no CLI link, works on an IPv4-only network:
- *   $env:STAGING_DB_URL = "<session pooler connection string from Settings > Database>"
- *   npx tsx scripts/apply-migrations.ts
- *   npx tsx scripts/apply-migrations.ts --from 200      resume after a failure
+ * ⚠⚠ IT USES node-postgres DIRECTLY, NOT `supabase db query`, AND THAT IS NOT A PREFERENCE.
+ *
+ * The CLI sends a --file as a PREPARED statement, and Postgres refuses multi-statement input there:
+ * "cannot insert multiple commands into a prepared statement". Every migration in this repo is many
+ * statements, so the CLI route cannot work for any of them, in any pooler mode.
+ *
+ * The obvious workaround — split each file on `;` and send the pieces — is WRONG here and this
+ * codebase already knows why: `scripts/migration-house-rules.ts` exists partly because a
+ * semicolon-splitting runner cuts a plpgsql function body in half. Files carrying `$$ ... ; ... $$`
+ * would be silently mangled. node-postgres's simple query protocol (a `query(text)` with no parameter
+ * values) sends the file whole and lets Postgres parse it, which is exactly what the SQL editor does.
+ *
+ * SETUP — no access token, no CLI link, no IPv6:
+ *   Put the SESSION pooler string (port 5432) in .env.local as STAGING_DB_URL, then:
+ *     npx tsx scripts/apply-migrations.ts
+ *     npx tsx scripts/apply-migrations.ts --from 200      resume after a failure
  */
 import { loadEnvConfig } from "@next/env";
-import { execFileSync } from "node:child_process";
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { Client } from "pg";
 
 loadEnvConfig(process.cwd());
 
 const ROOT = join(import.meta.dirname, "..");
 const MIGRATIONS = join(ROOT, "supabase", "migrations");
 
-function arg(name: string): string | null {
-  const i = process.argv.indexOf(`--${name}`);
-  return i >= 0 ? process.argv[i + 1] ?? null : null;
-}
+const fromArg = process.argv.indexOf("--from");
+const from = fromArg >= 0 ? Number(process.argv[fromArg + 1] ?? "0") : 0;
 
-const target = arg("project-ref");
-const from = Number(arg("from") ?? "0");
-
-/**
- * ⚠ THE POOLER ROUTE, AND WHY IT IS PREFERRED.
- *
- * `--project-ref` needs `--linked`, and `supabase link` needs project-metadata read on the access
- * token plus a direct database connection — which Supabase serves over IPv6 only. On an IPv4-only
- * network that fails outright, and widening the token to fix it means granting a HIGH RISK
- * "Project Settings" scope purely so the CLI can read metadata it does not need to run SQL.
- *
- * STAGING_DB_URL avoids all of it: the pooler host is IPv4, the password authenticates the
- * connection, and no access token is involved. Fewer privileges, fewer moving parts.
- *
- * ⚠ IT IS READ FROM THE ENVIRONMENT, NEVER A FLAG. A connection string carries the database
- * password, and a flag would put it in shell history and in the process list.
- */
 const dbUrl = process.env.STAGING_DB_URL ?? null;
 
+if (!dbUrl) {
+  console.error("\nSTAGING_DB_URL is not set.\n");
+  console.error("  Add the SESSION pooler connection string (port 5432) to .env.local as one line:");
+  console.error("    STAGING_DB_URL=postgresql://postgres.<ref>:<password>@<host>.pooler.supabase.com:5432/postgres\n");
+  process.exit(1);
+}
+
 /**
- * ⚠ VALIDATE THE SHAPE BEFORE HANDING IT TO THE CLI, because the failure mode is genuinely confusing.
- *
- * A stale shell variable BEATS .env.local -- loadEnvConfig does not overwrite a value already in the
- * environment. So a mistyped `$env:STAGING_DB_URL` set once in a terminal silently overrides the file
- * for the life of that window, and the only symptom is the CLI reporting "failed to parse connection
- * string: <whatever the junk was>" against the first migration. That reads like a migration problem
- * and is not one. Catch it here, name it, and say how to clear it.
+ * ⚠ A STALE SHELL VARIABLE BEATS .env.local. loadEnvConfig does not overwrite a value already in the
+ * environment, so a mistyped `$env:STAGING_DB_URL` silently overrides the file for the life of that
+ * terminal — and the only symptom is a parse error against the FIRST migration, which reads like a
+ * problem with that migration and is not one.
  */
-if (dbUrl && !/^postgres(ql)?:\/\/\S+@\S+\/\S+/.test(dbUrl)) {
-  const masked = dbUrl.replace(/:[^:@]*@/, ":****@").slice(0, 80);
+if (!/^postgres(ql)?:\/\/\S+@\S+\/\S+/.test(dbUrl)) {
   console.error(`\n⛔ STAGING_DB_URL is not a Postgres connection string.\n`);
-  console.error(`   got: ${masked}`);
-  console.error(`   want: postgresql://postgres.<ref>:<password>@<host>.pooler.supabase.com:5432/postgres\n`);
-  console.error(`   ⚠ A SHELL VARIABLE OVERRIDES .env.local. If you set one earlier in this window,`);
-  console.error(`     the file is being ignored. Clear it and re-run:\n`);
+  console.error(`   got: ${dbUrl.replace(/:[^:@]*@/, ":****@").slice(0, 80)}\n`);
+  console.error(`   ⚠ A SHELL VARIABLE OVERRIDES .env.local. If you set one earlier in this window:`);
   console.error(`       Remove-Item Env:STAGING_DB_URL -ErrorAction SilentlyContinue\n`);
   process.exit(1);
 }
 
-if (!target && !dbUrl) {
-  console.error("\nusage:");
-  console.error("  $env:STAGING_DB_URL = '<session pooler connection string>'   # preferred");
-  console.error("  npx tsx scripts/apply-migrations.ts [--from NNN]\n");
-  console.error("  ...or, if the CLI is linked and the token can read project metadata:");
-  console.error("  npx tsx scripts/apply-migrations.ts --project-ref <STAGING_REF> [--from NNN]\n");
+// ── The production guard ─────────────────────────────────────────────────────────────────────────
+const prodRef = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "")
+  .match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? null;
+if (!prodRef) {
+  console.error("\n⚠ Could not read the production ref from NEXT_PUBLIC_SUPABASE_URL, so the safety");
+  console.error("  guard cannot run. Refusing rather than guessing.\n");
+  process.exit(1);
+}
+if (dbUrl.includes(prodRef)) {
+  console.error(`\n⛔ REFUSING TO RUN — STAGING_DB_URL points at PRODUCTION (${prodRef}).\n`);
   process.exit(1);
 }
 
-// ── The production guard ──────────────────────────────────────────────────────────────────────────
-const prodUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-const prodRef = prodUrl.match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? null;
-// The guard covers BOTH routes: a connection string embeds the project ref too, so a pooler URL
-// pointed at production is caught exactly like a --project-ref would be.
-if (prodRef && dbUrl && dbUrl.includes(prodRef)) {
-  console.error(`\n⛔ REFUSING TO RUN.\n`);
-  console.error(`   STAGING_DB_URL contains the PRODUCTION project ref (${prodRef}).`);
-  console.error(`   This script replays the whole migration chain and is only for a FRESH staging`);
-  console.error(`   project.\n`);
-  process.exit(1);
-}
-if (prodRef && target === prodRef) {
-  console.error(`\n⛔ REFUSING TO RUN.\n`);
-  console.error(`   --project-ref ${target} is the PRODUCTION project named in .env.local.`);
-  console.error(`   This script replays the whole migration chain and is only for a FRESH staging`);
-  console.error(`   project. Production migrations are applied by hand, one file at a time, by the`);
-  console.error(`   repository owner.\n`);
-  process.exit(1);
-}
-if (!prodRef) {
-  console.error("\n⚠ Could not determine the production project ref from NEXT_PUBLIC_SUPABASE_URL, so the");
-  console.error("  safety guard cannot run. Refusing rather than guessing.\n");
+if (/:6543\//.test(dbUrl)) {
+  console.error(`\n⛔ That is the TRANSACTION pooler (port 6543), which cannot run multi-statement SQL.`);
+  console.error(`   Use the SESSION pooler — same host, port 5432.\n`);
   process.exit(1);
 }
 
@@ -111,41 +88,46 @@ const files = readdirSync(MIGRATIONS)
   .sort()
   .filter(f => Number(f.slice(0, 3)) >= from);
 
-const route = dbUrl
-  ? ["--db-url", dbUrl]
-  : ["--linked", "--project-ref", target!];
+async function main() {
+  const client = new Client({ connectionString: dbUrl!, ssl: { rejectUnauthorized: false } });
+  await client.connect();
 
-console.log(`\nApplying ${files.length} migration(s)`);
-console.log(`route: ${dbUrl ? "STAGING_DB_URL (pooler)" : `--linked --project-ref ${target}`}`);
-console.log(`(production is ${prodRef} — guard passed)\n`);
+  console.log(`\nApplying ${files.length} migration(s) via node-postgres`);
+  console.log(`(production is ${prodRef} — guard passed)\n`);
 
-let applied = 0;
-for (const f of files) {
-  process.stdout.write(`  ${f} ... `);
-  try {
-    // ⚠ --linked IS REQUIRED ALONGSIDE --project-ref. The CLI refuses --project-ref on its own:
-    // "only applies when targeting the linked project; use it with --linked". --linked selects the
-    // Management API path (rather than --local or --db-url), and --project-ref says which project.
-    execFileSync("npx", ["supabase", "db", "query", ...route, "--file", join(MIGRATIONS, f)],
-      { cwd: ROOT, stdio: "pipe", encoding: "utf8", shell: process.platform === "win32" });
-    console.log("ok");
-    applied++;
-  } catch (err) {
-    const e = err as { stdout?: string; stderr?: string };
-    console.log("FAILED\n");
-    console.log("─".repeat(70));
-    console.log(`STOPPED AT: ${f}`);
-    console.log((e.stderr || e.stdout || String(err)).trim().slice(0, 2000));
-    console.log("─".repeat(70));
-    console.log(`\n${applied} migration(s) applied before this one.`);
-    console.log(`\n⚠ DO NOT REPAIR THIS IN THE DASHBOARD (COMP-ENG-002E §7). The failure is the`);
-    console.log(`  evidence the clean-build test exists to produce. Record it, fix the migration in`);
-    console.log(`  the repository, then resume with:`);
-    console.log(`\n      npx tsx scripts/apply-migrations.ts --from ${f.slice(0, 3)}\n`);
-    process.exit(1);
+  let applied = 0;
+  for (const f of files) {
+    process.stdout.write(`  ${f} ... `);
+    try {
+      // Simple query protocol: no parameter values, so the whole file is parsed by Postgres exactly
+      // as the SQL editor would parse it. Function bodies survive intact.
+      await client.query(readFileSync(join(MIGRATIONS, f), "utf8"));
+      console.log("ok");
+      applied++;
+    } catch (err) {
+      const e = err as { message?: string; position?: string; hint?: string };
+      console.log("FAILED\n");
+      console.log("─".repeat(70));
+      console.log(`STOPPED AT: ${f}`);
+      console.log(e.message ?? String(err));
+      if (e.hint) console.log(`HINT: ${e.hint}`);
+      console.log("─".repeat(70));
+      console.log(`\n${applied} migration(s) applied before this one.`);
+      console.log(`\n⚠ DO NOT REPAIR THIS IN THE DASHBOARD (COMP-ENG-002E §7). The failure is the`);
+      console.log(`  evidence the clean-build test exists to produce. Record it, fix the migration in`);
+      console.log(`  the repository, then resume with:`);
+      console.log(`\n      npx tsx scripts/apply-migrations.ts --from ${f.slice(0, 3)}\n`);
+      await client.end();
+      process.exit(1);
+    }
   }
+
+  await client.end();
+  console.log(`\n✓ All ${applied} migration(s) applied.`);
+  console.log(`\nNext: run the fidelity manifest with the staging URL and service-role key:`);
+  console.log(`  $env:FIDELITY_SUPABASE_URL = "https://<staging-ref>.supabase.co"`);
+  console.log(`  $env:FIDELITY_SERVICE_ROLE_KEY = "<staging service_role key>"`);
+  console.log(`  npx tsx scripts/fidelity-manifest.ts\n`);
 }
 
-console.log(`\n✓ All ${applied} migration(s) applied.`);
-console.log(`\nNext: npx tsx scripts/fidelity-manifest.ts  (with FIDELITY_SUPABASE_URL and`);
-console.log(`      FIDELITY_SERVICE_ROLE_KEY set to the staging project)\n`);
+main().catch(e => { console.error(e); process.exit(1); });
