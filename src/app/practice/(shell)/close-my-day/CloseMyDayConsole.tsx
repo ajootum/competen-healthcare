@@ -92,7 +92,7 @@ export default function CloseMyDayConsole({ rows, queueFailed, truncated, namesF
           <p className="text-xs text-gray-500 mt-1">
             This is not an empty day — nothing has been checked. Please try again.
           </p>
-          <p className="text-[11px] text-gray-400 mt-2 break-words">{queueFailed}</p>
+          <p className="text-[11px] text-gray-500 mt-2 break-words">{queueFailed}</p>
         </div>
       </div>
     );
@@ -120,7 +120,7 @@ export default function CloseMyDayConsole({ rows, queueFailed, truncated, namesF
         <div className={`${card} p-4`}>
           <p className="text-[11px] font-semibold text-gray-500">Deferred</p>
           <p className="text-3xl font-bold text-gray-900 tabular-nums mt-1">{deferred}</p>
-          <p className="text-[11px] text-gray-400 mt-1">Still open, with a reason</p>
+          <p className="text-[11px] text-gray-500 mt-1">Still open, with a reason</p>
         </div>
         <div className={`${card} p-4 flex flex-col justify-between`}>
           <p className="text-[11px] font-semibold text-gray-500">Finish</p>
@@ -132,7 +132,7 @@ export default function CloseMyDayConsole({ rows, queueFailed, truncated, namesF
             {busy === "__finish__" ? "Finishing…" : "Finish for today"}
           </button>
           {/* ⚠ SAYS WHAT IS LEFT. Finishing the session closes nothing. */}
-          <p className="text-[11px] text-gray-400 mt-2">Ends the session. Anything unresolved stays open.</p>
+          <p className="text-[11px] text-gray-500 mt-2">Ends the session. Anything unresolved stays open.</p>
         </div>
       </div>
 
@@ -172,8 +172,8 @@ export default function CloseMyDayConsole({ rows, queueFailed, truncated, namesF
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">
-                      <span className="text-gray-400 tabular-nums mr-2">{n + 1}</span>
-                      {i.patientName || <span className="text-gray-400 italic">name unavailable</span>}
+                      <span className="text-gray-500 tabular-nums mr-2">{n + 1}</span>
+                      {i.patientName || <span className="text-gray-500 italic">name unavailable</span>}
                     </p>
                     <p className="text-[11px] text-gray-500 mt-0.5">
                       {/* ⚠ SECTION 7 ON THE SCREEN. A one-tap shell and a consultation somebody worked

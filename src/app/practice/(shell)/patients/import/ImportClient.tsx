@@ -266,7 +266,7 @@ export default function ImportClient() {
         {runsFailed ? (
           <p className="mt-2 text-[12.5px] text-gray-500">The run ledger could not be read just now. This says nothing about whether imports exist.</p>
         ) : runs === null ? (
-          <p className="mt-2 text-[12.5px] text-gray-400">Loading…</p>
+          <p className="mt-2 text-[12.5px] text-gray-500">Loading…</p>
         ) : runs.length === 0 ? (
           <p className="mt-2 text-[12.5px] text-gray-500">No imports yet. Each import is recorded here with its per-row outcomes.</p>
         ) : (
