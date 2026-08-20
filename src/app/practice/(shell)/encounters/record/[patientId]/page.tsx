@@ -6,6 +6,7 @@ import { hasCapability } from "@/lib/practice/access";
 import {
   patientSnapshot, clinicalTimeline, journeyCounts,
   problemHistory, treatmentHistory, procedureHistory, outcomeHistory, followUpHistory,
+  crossFacilityCare,
 } from "@/lib/practice/longitudinal";
 import { referralHistory, investigationHistory } from "@/lib/practice/encounter-workspace";
 import { SAFETY_TONE, ENCOUNTER_STATUS_CHIP } from "@/lib/practice/encounter-workspace-constants";
@@ -70,7 +71,7 @@ export default async function PatientRecordPage({ params }: { params: Promise<{ 
     subjectId: patientId, patientId, route: "/practice/encounters/record/[patientId]",
   });
 
-  const [clock, timeline, counts, problems, treatments, procedures, outcomes, followUps, referrals, investigations] =
+  const [clock, timeline, counts, problems, treatments, procedures, outcomes, followUps, referrals, investigations, crossFacility] =
     await Promise.all([
       workspaceClock(admin, shell.ctx.workspaceId),
       clinicalTimeline(admin, shell.ctx, patientId, { limit: 60 }),
@@ -82,6 +83,7 @@ export default async function PatientRecordPage({ params }: { params: Promise<{ 
       followUpHistory(admin, shell.ctx, patientId),
       referralHistory(admin, shell.ctx, patientId),
       investigationHistory(admin, shell.ctx, patientId),
+      crossFacilityCare(admin, shell.ctx, patientId),
     ]);
 
   const p = snapshot.patient;
@@ -263,6 +265,83 @@ export default async function PatientRecordPage({ params }: { params: Promise<{ 
             </ul>
           </section>
         </div>
+
+        {/* ══ MIDDLE, ABOVE THE JOURNEY: SEEN AT MORE THAN ONE PLACE (CPR-OPT-001 D17) ══════════
+            ⚠ IT SITS ABOVE THE TIMELINE BECAUSE IT FRAMES IT. The journey below now carries a place
+            chip on every consultation; this says how many places there are before a reader starts
+            scanning them. Below the timeline it would be a summary of something already read.
+
+            ⚠⚠ AND IT DOES NOT JUDGE. No "conflict", no "check this", no amber. The engine deliberately
+            carries no severity and no flag so this cannot render one, and the copy holds the same line:
+            it states where care was recorded and stops. The practitioner has the training; the product
+            has the two sites nobody else can see. */}
+        {crossFacility.permitted && crossFacility.unavailable && (
+          <div className={CARD}>
+            <p className="text-[12px] text-rose-700">
+              <strong>Where this care happened could not be read.</strong> This is not a patient seen at
+              one place &mdash; it is a failed read, and the places below the timeline may be missing too.
+            </p>
+          </div>
+        )}
+
+        {/* ⚠ ONE PLACE IS NOT A STORY, so a single-site practice sees nothing here at all. That is what
+            multiSite is for, and it is the difference between a useful panel and a permanent empty box. */}
+        {crossFacility.multiSite && (
+          <section className={CARD}>
+            <h2 className="text-[13px] font-bold text-gray-900">
+              Seen at {crossFacility.places.length} places
+            </h2>
+            <p className="mt-0.5 text-[11px] text-gray-500">
+              What was recorded, and where. Nothing here is a statement about whether it agrees.
+            </p>
+            <ul className="mt-2.5 flex flex-col gap-2.5">
+              {crossFacility.places.map(place => (
+                <li key={place.facility} className="rounded-lg border border-gray-200 px-3 py-2">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="text-[12.5px] font-semibold text-gray-900">{place.facility}</span>
+                    <span className="font-mono text-[11px] text-gray-500 tabular-nums">
+                      {place.firstSeen === place.lastSeen
+                        ? place.firstSeen
+                        : `${place.firstSeen} → ${place.lastSeen}`}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-gray-500">
+                    {place.encounters} {place.encounters === 1 ? "consultation" : "consultations"}
+                  </p>
+                  {place.treatments.length > 0 && (
+                    <ul className="mt-1.5 flex flex-col gap-0.5">
+                      {place.treatments.map(t => (
+                        <li key={t.id} className="text-[11.5px] text-gray-700">
+                          {t.label}
+                          <span className="ml-1.5 font-mono text-[10.5px] text-gray-400 tabular-nums">{t.on}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            {/* ⚠ WHAT IS NOT ON THIS PANEL IS SAID ON IT. Grouping by place omits every consultation
+                with no facility recorded, and a panel showing two hospitals while silently dropping a
+                third of the record would be worse than no panel at all. */}
+            {(crossFacility.unplacedEncounters > 0 || crossFacility.unplacedTreatments > 0) && (
+              <p className="mt-2.5 border-t border-gray-100 pt-2 text-[11px] text-gray-500">
+                Not shown above:{" "}
+                {crossFacility.unplacedEncounters > 0 && (
+                  <>{crossFacility.unplacedEncounters}{" "}
+                  {crossFacility.unplacedEncounters === 1 ? "consultation" : "consultations"}</>
+                )}
+                {crossFacility.unplacedEncounters > 0 && crossFacility.unplacedTreatments > 0 && " and "}
+                {crossFacility.unplacedTreatments > 0 && (
+                  <>{crossFacility.unplacedTreatments}{" "}
+                  {crossFacility.unplacedTreatments === 1 ? "treatment" : "treatments"}</>
+                )}
+                {" "}with no place recorded.
+              </p>
+            )}
+          </section>
+        )}
 
         {/* ══ MIDDLE: THE JOURNEY ══════════════════════════════════════════════════════════════ */}
         <div className={CARD}>

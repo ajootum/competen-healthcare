@@ -615,6 +615,28 @@ async function main() {
     crossDenied.permitted === false && crossDenied.unavailable === false,
     JSON.stringify(crossDenied));
 
+  // ⚠ AND A SCREEN ACTUALLY READS IT. The engine carrying a payload proves nothing about the page a
+  // practitioner looks at -- that gap is the defect this session has now found four times, most
+  // recently on the duplicate-candidate list. Checked as SOURCE because the patient record renders
+  // only behind a signed-in practice session this harness has no way to mint.
+  const recordPage = readFileSync(join(process.cwd(),
+    "src", "app", "practice", "(shell)", "encounters", "record", "[patientId]", "page.tsx"), "utf8");
+  ok("tl-X8. the patient record loads crossFacilityCare and renders it only when multiSite",
+    /crossFacilityCare\(admin, shell\.ctx, patientId\)/.test(recordPage)
+    && /crossFacility\.multiSite &&/.test(recordPage),
+    "the panel is not wired, or renders for a single-site patient");
+  // ⚠ THE COPY MUST NOT JUDGE EITHER. tl-X4 holds the payload to that; a screen can still write the
+  // sentence the engine refused to carry, and this is what stops it.
+  ok("tl-X9. ⚠⚠ and the PANEL COPY judges no more than the payload does",
+    !/conflict|discrepan|mismatch|check this|attention|warning/i.test(
+      (recordPage.match(/Seen at \{crossFacility[\s\S]{0,2600}?<\/section>/) ?? [""])[0]),
+    "the panel renders a judgement the engine deliberately does not make");
+  // ⚠ AND THE FAILED-READ BRANCH IS ON THE PAGE. Without it a broken place read renders as nothing at
+  // all, which is what a single-site patient sees -- the exact confusion tl-X6 exists to prevent.
+  ok("tl-X10. the page distinguishes a failed place read from a single-site patient",
+    /crossFacility.permitted && crossFacility.unavailable/.test(recordPage),
+    "a failed read would render as an absent panel");
+
   await cleanup();
   const { count: left } = await admin.from("practice_patient_milestone")
     .select("*", { count: "exact", head: true }).eq("patient_id", patient);
