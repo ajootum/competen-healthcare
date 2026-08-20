@@ -32,6 +32,9 @@ import { recordDiagnosis, recordTreatment } from "../src/lib/practice/encounters
 import { recordInvestigation, recordReferral } from "../src/lib/practice/encounter-workspace";
 import { resolvePeriod } from "../src/lib/practice/reports";
 import { METRIC_REGISTRY, metricById } from "../src/lib/practice/intelligence-registry";
+
+/** The banned shape, as a literal, so 4-12-control proves the detector can still see it. */
+const SAMPLE_UTC_SLICE = 'Date.parse(String(f.closed_at).slice(0, 10) + "T00:00:00Z")';
 import { INTELLIGENCE_TAB_STRIP, INTELLIGENCE_TABS, isIntelligenceTab } from "../src/lib/practice/intelligence-constants";
 import { practiceToday } from "../src/lib/practice/practice-time";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
@@ -130,7 +133,7 @@ async function main() {
   const refFix = await recordReferral(admin, { workspaceId: ws, encounterId: e3.data.id, referredTo: "Respiratory clinic", reason: "poor control", ...base });
   if (!t1.ok || !t2.ok || !invFix.ok || !refFix.ok) { ok("conditional-zone fixtures record", false); return report(); }
 
-  const extras = await piV2Extras(admin, ctx, { fromDay: dayShift(-30), toDay: today, todayDate: today });
+  const extras = await piV2Extras(admin, ctx, { fromDay: dayShift(-30), toDay: today, todayDate: today, timezone: "Africa/Kampala" });
   ok("3-1. the extras compute", extras.available, extras.unavailableReason ?? "");
   if (!extras.available || !extras.data) return report();
   const rec = extras.data.recency;
@@ -164,7 +167,7 @@ async function main() {
     JSON.stringify(liEnc ?? li));
 
   // ── 3b. THE CONDITIONAL ZONES (v2 s7/s8/s9), against the fixtures above ───
-  const zones = await conditionalZones(admin, ctx, { fromIso: liRange.period.fromIso, toIso: liRange.period.toIso });
+  const zones = await conditionalZones(admin, ctx, { fromIso: liRange.period.fromIso, toIso: liRange.period.toIso, timezone: "Africa/Kampala" });
   ok("3-6. investigations awaiting: the unanswered request is a backlog row, nothing-back vs linked split",
     zones.available && zones.data!.investigationsAwaiting.nothingBack === 1
       && zones.data!.investigationsAwaiting.linkedNotReviewed === 0
@@ -260,6 +263,40 @@ async function main() {
     metricById("pi.medication_invented") === null);
   ok("4-7. the page renders the strip FROM the strip constant, so declaration order cannot reorder it",
     pageSrc.includes("INTELLIGENCE_TAB_STRIP.map(k => INTELLIGENCE_TABS.find(t => t.key === k)!)"));
+
+  // ── 4-14. A UTC DAY IS NOT A PRACTICE DAY ─────────────────────────────────────────────────────
+  //
+  // ⚠ NUMBERED 4-14 BECAUSE 4-12 AND 4-13 WERE BOTH ALREADY TAKEN -- by the s8 and s10 zone assertions
+  // below. Two assertions sharing one number is how a failure report names the wrong thing, and I hit
+  // it twice in a row here, which is its own small argument for reading the file before numbering.
+  //
+  // ⚠⚠ 3-4 AND 3-6 WENT RED OVERNIGHT AND THE FIXTURE WAS NOT THE PROBLEM. Both were green in a sweep
+  // run the previous afternoon and failed the same evening at 21:28 UTC -- inside the three-hour
+  // window where Kampala (UTC+3) is already on the next day. pi-v2 subtracted the UTC day of closed_at
+  // from the PRACTICE day in due_on, so every median-days-to-follow-up figure read ONE DAY SHORT, and
+  // pi-conditional reported an oldestRequestedDay the practice had already finished.
+  //
+  // ⚠ THE DIRECTION IS WHY IT SURVIVED: the median read LOWER, so a practice was told it follows up
+  // faster than it does. A figure that errs toward good news is the one least likely to be questioned
+  // by the person reading it.
+  //
+  // The engines now take a timezone and convert through practiceToday. This pins the CONVERSION,
+  // because the compiler cannot: passing the argument and then ignoring it type-checks perfectly.
+  const piV2Src = readFileSync(join(process.cwd(), "src", "lib", "practice", "pi-v2.ts"), "utf8");
+  const condSrc = readFileSync(join(process.cwd(), "src", "lib", "practice", "pi-conditional.ts"), "utf8");
+  const utcSliceShape = /String\((?:f|e)\.[a-z_]+_at\)\.slice\(0, 10\)/;
+  ok("4-14. ⚠ pi-v2 turns an instant into a day through the PRACTICE timezone, never by slicing UTC",
+    !utcSliceShape.test(piV2Src)
+    && (piV2Src.match(/practiceToday\(range\.timezone/g) ?? []).length >= 2,
+    "a timestamp is being sliced to a UTC day again");
+  ok("4-14b. and so does the outstanding-request date in pi-conditional",
+    !/String\(invRows\[0\]\.requested_at\)\.slice\(0, 10\)/.test(condSrc)
+    && condSrc.includes("practiceToday(range.timezone"),
+    "oldestRequestedDay is back on the server day");
+  // ⚠ THE CONTROL: the detector must be able to SEE the shape it bans. If the regex ever stops
+  // matching, 4-12 goes green because the detector died rather than because the code is right.
+  ok("4-14-control. the detector still recognises the shape it bans",
+    utcSliceShape.test(SAMPLE_UTC_SLICE));
   ok("4-8. the falsified NO-RATES header is gone and the v2 doctrine stands in its place",
     !pageSrc.includes("NO RATES. All three comps") && pageSrc.includes("RATES ARE GOVERNED NOW"));
   ok("4-9. s10: the By location card renders the module's own rows -- the deferral paragraph is gone,"

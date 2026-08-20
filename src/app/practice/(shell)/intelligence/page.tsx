@@ -281,6 +281,7 @@ export default async function IntelligencePage({ searchParams }: {
         {tab === "overview" && (
           <OverviewV2Area suite={suite} extras={await piV2Extras(admin, shell.ctx, {
             fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay, todayDate: suite.range.period.toDay,
+            timezone: suite.range.timezone,
           })}
             // CPR-MOB-001 s13: the area places these two at priorities 6 and 7. tabHref is passed so
             // the View more doors carry the period -- a door that reset the window would be the
@@ -303,6 +304,7 @@ export default async function IntelligencePage({ searchParams }: {
           return (
             <PatientV2Area suite={suite} extras={await piV2Extras(admin, shell.ctx, {
               fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay, todayDate: suite.range.period.toDay,
+            timezone: suite.range.timezone,
             })}
               segments={await computeSegments(admin, shell.ctx, { noVisitDays: activeCohort?.noVisitDays ?? undefined })}
               cohort={filterSegs.length > 0
@@ -320,13 +322,14 @@ export default async function IntelligencePage({ searchParams }: {
         {tab === "followups" && (
           <FollowUpV2Area suite={suite} extras={await piV2Extras(admin, shell.ctx, {
             fromDay: suite.range.period.fromDay, toDay: suite.range.period.toDay, todayDate: suite.range.period.toDay,
+            timezone: suite.range.timezone,
           })} zones={await conditionalZones(admin, shell.ctx, {
-            fromIso: suite.range.period.fromIso, toIso: suite.range.period.toIso,
+            fromIso: suite.range.period.fromIso, toIso: suite.range.period.toIso, timezone: suite.range.timezone,
           })} />
         )}
         {tab === "clinical" && (
           <ClinicalV2Area suite={suite} zones={await conditionalZones(admin, shell.ctx, {
-            fromIso: suite.range.period.fromIso, toIso: suite.range.period.toIso,
+            fromIso: suite.range.period.fromIso, toIso: suite.range.period.toIso, timezone: suite.range.timezone,
           })} clinical={{
             // v2 s8's Treatments and Investigations panels. Both call the engines the report templates
             // call, so the screen and a generated report cannot disagree about the same period.

@@ -266,7 +266,10 @@ export async function askPractice(admin: any, ctx: WorkspaceContext, args: {
         ? `You saw ${m.value} distinct patient${m.value === 1 ? "" : "s"} in ${period.periodLabel}, counting completed consultations only.`
         : `${m.value} consultation${m.value === 1 ? "" : "s"} completed in ${period.periodLabel}.`;
       figures = [{ label: m.label ?? intent, value: String(m.value), of: m.formula ?? null, registryId: figureRegistryId }];
-      const extras = await piV2Extras(admin, ctx, { fromDay: period.fromDay, toDay: period.toDay, todayDate: args.todayDate });
+      const extras = await piV2Extras(admin, ctx, {
+        fromDay: period.fromDay, toDay: period.toDay, todayDate: args.todayDate,
+        timezone: range.timezone,
+      });
       if (extras.available && extras.data && extras.data.avgVisitsPerPatient.patients > 0) {
         if (!registry.includes("pi.avg_visits_per_patient")) registry.push("pi.avg_visits_per_patient");
         figures.push({

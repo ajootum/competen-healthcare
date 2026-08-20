@@ -1,3 +1,4 @@
+import { practiceToday } from "@/lib/practice/practice-time";
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 
 // CPR-PI-001 v2 P0 -- the three metrics the existing modules do not compute, and ONLY those three.
@@ -49,6 +50,13 @@ export function medianOf(values: number[]): number | null {
 
 export async function piV2Extras(admin: any, ctx: WorkspaceContext, range: {
   fromDay: string; toDay: string; todayDate: string;
+  /**
+   * ⚠ REQUIRED, AND IT WAS MISSING, AND THAT IS THE WHOLE BUG BELOW. fromDay/toDay/todayDate are
+   * PRACTICE calendar days. Every timestamp this function reads is a timestamptz stored in UTC. You
+   * cannot compare the two without saying which zone turns an instant into a day, so the zone is now
+   * an argument rather than an assumption.
+   */
+  timezone: string;
 }): Promise<PiV2Extras> {
   if (!hasCapability(ctx, "report.view"))
     return { available: false, unavailableReason: "needs report.view", provenance: "Derived", data: null };
@@ -97,7 +105,11 @@ export async function piV2Extras(admin: any, ctx: WorkspaceContext, range: {
 
   // In-period distincts for the visits-per-patient ratio (v2 s15's Patients seen / Consultations).
   const inPeriod = encs.filter(e =>
-    String(e.started_at).slice(0, 10) >= range.fromDay && String(e.started_at).slice(0, 10) <= range.toDay);
+    // ⚠ THE SAME MISTAKE, ONE FUNCTION UP, AND NOT RED ONLY BECAUSE NO FIXTURE STRADDLES THE WINDOW.
+    // A consultation started at 21:30 UTC is the NEXT DAY in Kampala; filtering its UTC day against
+    // practice-day bounds files it in the wrong period, and at a period boundary drops it entirely.
+    (() => { const d = practiceToday(range.timezone, new Date(String(e.started_at)));
+      return d >= range.fromDay && d <= range.toDay; })());
   const distinctPatients = new Set(inPeriod.map(e => e.patient_id)).size;
 
   // Median: completed follow-ups whose closure fell in/after the period start, days from due to close.
@@ -106,7 +118,20 @@ export async function piV2Extras(admin: any, ctx: WorkspaceContext, range: {
   // clamping it would overstate how long follow-up takes.
   const pairs = ((followUpsRes.data ?? []) as any[])
     .slice(0, CAP)
-    .map(f => Math.round((Date.parse(String(f.closed_at).slice(0, 10) + "T00:00:00Z")
+    // ⚠⚠ THIS SUBTRACTED A UTC DAY FROM A PRACTICE DAY, AND UNDERSTATED EVERY FIGURE IT PRODUCED.
+    //
+    // due_on is a DATE in the practice calendar. closed_at is a timestamptz in UTC, and
+    // `.slice(0, 10)` takes its UTC day. In Kampala (UTC+3) the two disagree for three hours every
+    // evening: between 21:00 and midnight UTC the practice is already on the next day, so a follow-up
+    // closed then measured ONE DAY SHORTER than it took.
+    //
+    // ⚠ AND THE DIRECTION IS THE FLATTERING ONE, which is why nobody would have questioned it: the
+    // median reads lower, so a practice is told it follows up faster than it does. A figure that errs
+    // toward good news is the one least likely to be reported by the person reading it.
+    //
+    // Found because practice-pi-v2 3-4 went red overnight -- it was green in a sweep run the previous
+    // afternoon and failed the same evening, at 21:28 UTC, inside the window.
+    .map(f => Math.round((Date.parse(practiceToday(range.timezone, new Date(String(f.closed_at))) + "T00:00:00Z")
       - Date.parse(String(f.due_on) + "T00:00:00Z")) / 86400000))
     .filter(n => Number.isFinite(n));
 

@@ -248,7 +248,11 @@ export async function generateReport(admin: any, ctx: WorkspaceContext, args: {
     }];
   } else if (tpl.id === "followup_completion") {
     const f: any = ws!.modules.followUps;
-    const extras = await piV2Extras(admin, ctx, { fromDay: period.fromDay, toDay: period.toDay, todayDate: period.toDay });
+    // range is the IntelRange computed above and carries the practice timezone -- the same one
+    // every figure in this report is already dated by.
+    const extras = await piV2Extras(admin, ctx, {
+      fromDay: period.fromDay, toDay: period.toDay, todayDate: period.toDay, timezone: range.timezone,
+    });
     if (!f.available) sections = [refusedSection("Follow-ups", f)];
     else {
       const d = f.data;
