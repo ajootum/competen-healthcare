@@ -309,12 +309,27 @@ async function main() {
   // Back-dating ONE authored row is enough for two distinct dates, and it is done AFTER 3a-3e have run
   // so nothing above sees a changed register. `at` for an authored row is signed_at ?? created_at, so
   // both move together or the row keeps today's date through the column that was not touched.
+  // ⚠ THE BACK-DATING WAS SILENTLY FAILING AND 3f-control WAS THE ONLY THING THAT SAID SO. It took
+  // `limit(1)` -- an arbitrary row, often a SIGNED one -- and DISCARDED the update's error. Migration
+  // 194's trigger refuses a write to a signed document, so the row kept today's date, the register had
+  // one date, and a period over a single-date register selects everything. That is the unbounded run
+  // wearing a period's clothes, which is exactly what this control exists to catch.
+  //
+  // Two changes, and both are the same rule: pick a row that CAN be written, and never throw away the
+  // answer when you write it. A fixture that fails quietly makes the assertions above it meaningless
+  // while leaving them green.
   const backAt = new Date(Date.now() - 45 * 86400000).toISOString();
   const { data: toAge } = await admin.from("practice_clinical_document")
-    .select("id").eq("workspace_id", wsA).limit(1);
+    .select("id, status").eq("workspace_id", wsA)
+    .not("status", "in", "(SIGNED,AMENDED,ENTERED_IN_ERROR)").limit(1);
+  ok("3f-fixture. an UNLOCKED document exists to back-date -- a signed one cannot be written",
+    !!toAge?.[0], JSON.stringify(toAge));
   if (toAge?.[0]) {
-    await admin.from("practice_clinical_document")
-      .update({ created_at: backAt, signed_at: null }).eq("id", toAge[0].id);
+    const { data: aged, error: ageErr } = await admin.from("practice_clinical_document")
+      .update({ created_at: backAt, signed_at: null }).eq("id", toAge[0].id).select("id");
+    ok("3f-fixture-b. and the back-dating actually landed, so the register really has two dates",
+      !ageErr && (aged ?? []).length === 1,
+      ageErr?.message ?? `${(aged ?? []).length} rows updated`);
   }
 
   const spread = await documentsOverview(admin, wsA, { userId: USER_A, capabilities: ["document.view"] });
