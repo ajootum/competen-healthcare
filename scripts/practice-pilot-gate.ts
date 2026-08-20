@@ -255,9 +255,20 @@ async function main() {
       : "practice_sign_in is OFF, so the form does not render. Flip it in Platform Operations > Competen Practice first.");
   todo("Controlled internal and pilot-user acceptance testing",
     "Walk docs/CPR-GATE-001-pilot-walkthrough.md in a browser. No script can stand in for a person using the product.");
+  // ⚠ THIS NOTE SENT A READER AFTER A RETIREMENT THAT NEVER HAPPENED. It said "confirm disclosure
+  // assertion 7e was retired deliberately in the same change". 7e is
+  // practice-content-harness:481 -- "<page> has no password field" -- and it is LIVE and GREEN today
+  // (126/0). It never had to be retired, because it is about a different thing: the journey pages
+  // collect no credential, and the panel below them now LINKS to /practice/sign-in, which is where a
+  // password field belongs. Nothing conflicts.
+  //
+  // A note that names a consequence which did not occur is the same defect as a failure message that
+  // names the expected cause instead of the observed one: it hands the next reader a conclusion.
   todo("Replace the public \"not open yet\" panel with live actions",
     flags.practice_sign_in
-      ? "already live -- confirm disclosure assertion 7e was retired deliberately in the same change."
+      ? "DONE -- verified against the running server: /practice/login renders \"Sign in to your practice\" "
+        + "and /practice renders \"Create your practice\". The copy is read from practice_sign_in rather "
+        + "than written as prose, so the two cannot disagree again. Nothing to do; confirm and tick."
       : "do this only after the two items above pass.");
 
   report();
