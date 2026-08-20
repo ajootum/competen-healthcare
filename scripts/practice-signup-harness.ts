@@ -150,10 +150,25 @@ async function main() {
     await setFlag(true);
     const probe = await post({ ...VALID, email: `probe-${Date.now()}@example.invalid` });
     const probeBody = await probe.json().catch(() => ({}));
-    if (probe.status === 403 && probeBody?.error?.code === "SIGNUP_CLOSED") {
-      console.log("\n  SKIPPED from section 2 onwards -- the route still answers SIGNUP_CLOSED with the");
-      console.log("  launch flag ON. Everything below would be an echo of that one fact rather than");
-      console.log("  thirteen findings. Sections 1 and the restore still ran and are reported above.\n");
+    // ⚠ THERE ARE THREE GATES AND THIS PROBE HAS TO KNOW ABOUT TWO. The launch flag is the one this
+    // harness can move. THE SECOND IS INVISIBLE FROM THE REPOSITORY: Supabase Auth's own "allow new
+    // users to sign up" is OFF by the owner's standing decision, it lives in a dashboard rather than in
+    // any file here, and GoTrue answers it as SIGNUP_FAILED / "Signups not allowed for this instance"
+    // AFTER every validation rule has already passed. That is why the run reaches fourteen green
+    // assertions and then fails five -- the flag flip worked perfectly and a different gate closed.
+    //
+    // Both are owner decisions, so both are a SKIP. Neither may be cleared by a test.
+    const flagGate = probe.status === 403 && probeBody?.error?.code === "SIGNUP_CLOSED";
+    const authGate = probeBody?.error?.code === "SIGNUP_FAILED"
+      && /signups?\s+not\s+allowed/i.test(String(probeBody?.error?.message ?? ""));
+    if (flagGate || authGate) {
+      console.log(flagGate
+        ? "\n  SKIPPED from section 2 onwards -- the route still answers SIGNUP_CLOSED with the launch flag ON."
+        : "\n  SKIPPED from section 2 onwards -- Supabase Auth itself refuses: \"Signups not allowed for"
+          + "\n  this instance\". That is the owner's standing decision, set in the Supabase dashboard and"
+          + "\n  invisible from this repository. It is not a defect and must not be cleared by a test.");
+      console.log("  Everything below would be an echo of that one fact rather than several findings.");
+      console.log("  Sections 1 and the restore still ran and are reported above.\n");
       // ⚠ THE FIRST CAUSE TO RULE OUT IS A SPLIT-BRAIN FIXTURE, NOT A GATE, and this printout exists
       // because I reported the wrong one. This harness flips the flag through its OWN admin client,
       // which reads .env.local -- and it POSTs to whatever BASE_URL names, which may be a server started
