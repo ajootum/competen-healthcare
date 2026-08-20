@@ -53,8 +53,8 @@ routes found by searching `src/app/api`, UI references by searching `src/app/sup
 | `release.rollback` | ✅ | 0 | **declared absent on screen** — see §4 |
 | `export.execute` | ✅ | **0** | ⚠ **inert** |
 | `licence.verify` | ✅ | **0** | ⚠ **inert** |
-| `change.approve` | ❌ | 0 | correctly withheld |
-| `risk.accept` | ❌ | 0 | correctly withheld |
+| `change.approve` | ❌ | 0 | withheld from the PD by design — ⚠ but HELD by `platform_director` and `chief_executive`, see §4 |
+| `risk.accept` | ❌ | 0 | withheld from the PD by design |
 
 ⚠ **`export.execute` and `licence.verify` are granted to the position and referenced nowhere at all** —
 zero enforcing routes, zero UI references, zero mentions outside the grant itself. They are inert: they
@@ -97,8 +97,24 @@ migration that granted it (311), and explains that §25's `rollout`, `rollout_st
 objects do not exist — so there is no row to activate and no plan to reverse.
 
 It also states that `change.approve` is withheld from this position by design, as the checker half of
-maker-checker. **Verified against the live grant table: `change.approve` and `risk.accept` are genuinely
-not held.** The screen's claim about its own authority is true.
+maker-checker. Verified against the live grant table: **the Product Director does not hold
+`change.approve` or `risk.accept`.** The screen's claim about its own authority is true.
+
+⚠ **CORRECTION, 2026-08-20.** An earlier version of this line said those two capabilities were
+"genuinely not held" — full stop. That was a generalisation from a query that only ever asked about the
+Product Director. **`change.approve` IS held, by `platform_director` and `chief_executive`, on both
+staging and production.** The screen's own claim was always correct because it speaks only about this
+position; my restatement of it was not.
+
+The design is *better* than the wrong version described, not worse: maker-checker is real **and
+staffed** — there are checkers, and the Product Director is deliberately not one of them. The safety
+argument for creating a separate `hq.practice.launch.attest` rather than reusing `change.approve` is
+unaffected and stands.
+
+⚠ Migration 344's header repeats the same error ("deliberately held by nobody", "remains unheld"). It is
+**applied and deliberately not edited** — editing an applied migration makes the file a description of
+something that never ran. The correction lives here and in `pd-launch-attestation.ts`, which is where
+the next reader of that capability will be.
 
 **Gap class: NO GAP**, and the best example in the workspace of §4's `MISLEADING_INTELLIGENCE` being
 avoided rather than committed.

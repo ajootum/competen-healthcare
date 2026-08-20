@@ -342,7 +342,48 @@ const INERT_AWAITING_RULING = [
   "hq.practice.licence.verify",
 ];
 
-const inert = writeCaps.filter(c => !apiSrc.includes(`"${c}"`) && !(c in DORMANT_BY_DESIGN));
+/**
+ * ⚠ A ROUTE MAY GATE ON A NAMED CONSTANT, AND THE FIRST VERSION OF THIS SCAN COULD NOT SEE THAT.
+ *
+ * It searched the API tree for the literal `"hq.practice.x"`, so `hqApiGate([CAP_LAUNCH_ATTEST])` read
+ * as unenforced and the pin went red against a capability that was gated on the very commit creating
+ * it. Inlining the string to satisfy the scan would have been the wrong repair: one owner for the code
+ * is why the engine and the route cannot drift.
+ *
+ * Constants in src/lib/hq holding a capability string are resolved first, and a route naming the
+ * CONSTANT counts as enforcing the capability it holds.
+ */
+const libSrc = execSync('find src/lib/hq -name "*.ts"', { encoding: "utf8" })
+  .trim().split("\n").filter(Boolean)
+  .map(f => readFileSync(f, "utf8")).join("\n");
+const constToCap = new Map<string, string>();
+for (const m of libSrc.matchAll(/export const ([A-Z][A-Z0-9_]*)\s*=\s*"(hq\.[a-z._]+)"/g))
+  constToCap.set(m[1], m[2]);
+
+/**
+ * ⚠ ENFORCEMENT MEANS "INSIDE A GATE CALL", NOT "MENTIONED SOMEWHERE IN THE API TREE".
+ *
+ * The version before this searched all of src/app/api for the constant's NAME, and a break-test that
+ * repointed a route's gate away from the capability still passed — because the now-unused `import
+ * { CAP_LAUNCH_ATTEST }` line was still in the file and still matched. A capability imported and not
+ * used is exactly the inert grant this pin exists to catch.
+ *
+ * Fourth instance in this repository of a needle matching something other than what the assertion is
+ * about. The standing fix each time: narrow the haystack to the construct under test.
+ */
+const gateArgs: string[] = [];
+for (const m of apiSrc.matchAll(/(?:hqApiGate|requireHqCapability)\s*\(\s*(\[[^\]]*\]|"[^"]*")/g))
+  gateArgs.push(m[1]);
+const gateText = gateArgs.join(" | ");
+
+const enforced = (c: string): boolean => {
+  if (gateText.includes(`"${c}"`)) return true;
+  for (const [name, cap] of constToCap)
+    if (cap === c && new RegExp(`\\b${name}\\b`).test(gateText)) return true;
+  return false;
+};
+
+const inert = writeCaps.filter(c => !enforced(c) && !(c in DORMANT_BY_DESIGN));
 const unexpected = inert.filter(c => !INERT_AWAITING_RULING.includes(c));
 
 check("PD-013 §9. no NEW write capability is granted with nothing enforcing it",
@@ -352,8 +393,8 @@ check("PD-013 §9. CONTROL — the two known-inert capabilities are still inert,
   INERT_AWAITING_RULING.every(c => inert.includes(c)),
   `if this fails, one gained a route -- remove it from INERT_AWAITING_RULING rather than widening the list`);
 check("PD-013 §9. CONTROL — the scan finds the writes that ARE enforced, so it is not matching nothing",
-  writeCaps.filter(c => apiSrc.includes(`"${c}"`)).length >= 3,
-  `${writeCaps.filter(c => apiSrc.includes(`"${c}"`)).length} of ${writeCaps.length} write capabilities have a route`);
+  writeCaps.filter(enforced).length >= 3,
+  `${writeCaps.filter(enforced).length} of ${writeCaps.length} write capabilities have a route`);
 check("PD-013 §9. CONTROL — the dormant list is not a blanket exemption for every write",
   Object.keys(DORMANT_BY_DESIGN).length < writeCaps.length,
   `${Object.keys(DORMANT_BY_DESIGN).length} dormant of ${writeCaps.length} writes`);

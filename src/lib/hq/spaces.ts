@@ -102,6 +102,10 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   { code: "hq.practice.change.approve",       space: "practice"  },
   { code: "hq.practice.risk.accept",          space: "practice"  },
   { code: "hq.practice.configuration.manage", space: "practice"  },
+  // Migration 344. Records a human attestation against a launch control. Deliberately NOT flags.manage
+  // (the doer attesting their own doing) and NOT change.approve (PD-012 s21's checker half, held by
+  // nobody): an attestation states what was observed and authorises nothing.
+  { code: "hq.practice.launch.attest",       space: "practice"  },
   { code: "hq.learning.competencies.view",    space: "learning"  },
   { code: "hq.learning.content.view",         space: "learning"  },
   { code: "hq.learning.studio.view",          space: "learning"  },

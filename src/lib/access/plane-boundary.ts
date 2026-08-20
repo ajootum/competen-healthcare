@@ -482,8 +482,16 @@ export const UNRESOLVED_EXCEPTIONS: readonly UnresolvedException[] = [
 // second, genuinely different surface (the provisioning saga, which BUILDS a practice) and it wants its
 // own allowlist, not this one widened until it permits everything. Recording the five here keeps the gap
 // visible; the harness asserts the list is exactly the set that exists, so a SIXTH one fails.
+// ⚠ THE SIXTH ENTRY IS A DIFFERENT CASE FROM THE FIVE, AND IS RECORDED AS ONE RATHER THAN LUMPED IN.
+// launch-attestation/route.ts is operator-plane by the same test -- hqApiGate, no requirePracticeContext
+// -- but it reaches NO practice_* table at all. It writes one row to pd_launch_attestation, which is a
+// platform table this allowlist already governs through plat_pd_launch_attestation_current(). So it is
+// not an unjudged practice read like the other five: there is nothing here for the entry set to judge.
+// It is declared because A6 asserts this list is EXACTLY the operator-only set, which is what makes a
+// seventh route fail and get read by somebody.
 export const OUT_OF_SCOPE_OPERATOR_ROUTES: readonly string[] = [
   "src/app/api/v1/practice/flags/route.ts",
+  "src/app/api/v1/practice/launch-attestation/route.ts",
   "src/app/api/v1/practice/identifier-format/route.ts",
   "src/app/api/v1/practice/operations/users/route.ts",
   "src/app/api/v1/practice/provisioning/individual/route.ts",
