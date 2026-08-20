@@ -59,7 +59,7 @@ Severity is §9's scale: consequence × frequency. **Status** is what the code d
 | # | Finding | Class | Sev | Status |
 |---|---|---|---|---|
 | 12 | **Named patient rows disclosed with no access-log entry** — Ask evidence (≤10 named, linked) and cohort lists (≤200); the only row written was the suite-level one | `AUTHORITY_MISMATCH` | **high** | **FIXED** — one row per disclosure, written only when identification happened |
-| 13 | **`export.execute` and `licence.verify` granted and enforced by nothing** — zero routes, zero references | `AUTHORITY_MISMATCH` | low for a user, **medium for governance** | ⚠ **OPEN — needs a ruling.** Ratcheted so a third cannot appear |
+| 13 | **`export.execute` and `licence.verify` granted and enforced by nothing** — zero routes, zero references | `AUTHORITY_MISMATCH` | low for a user, **medium for governance** | **FIXED** — migration 347 revoked both by closing the temporal window; 21 live capabilities became 19 on both projects, history rows kept |
 | 14 | **No read-only Product Operations access exists** — one position holds the five screens *and* both writes | `AUTHORITY_MISMATCH` | medium | **FIXED** — `practice_product_observer` (migrations 345 + 346): 13 view capabilities, zero writes |
 | 15 | **Provision and flag controls enforced at the API, not conditioned in the UI** | `ACTIONABILITY/HFE_DEFECT` | low today, medium after #14 | **FIXED** — shipped with #14, which is what made it testable. Proven: an observer sees the flag STATE, gets no toggle, no wizard, and 403 from both endpoints |
 
@@ -134,7 +134,10 @@ Each verified absent from `src/` today, not merely edited at some point:
 1. ~~**#14 → #15**~~ — **done.** The order proved itself: the conditioning was only testable once an
    identity existed that the API would refuse, and appointing one immediately exposed a defect no
    harness had (see #21).
-2. **#13.** Revoke `export.execute` and `licence.verify`, or record why a dormant grant is intended.
+2. ~~**#13**~~ — **done.** Revoked by migration 347. ⚠ The codes SURVIVE in the registry: PD-010 §19 asks
+   for a separate export capability by name, so each has a specification behind it and only the
+   enforcement is missing. Regranting is an `UPDATE` back to `null`, never an `INSERT` — the unique
+   index on (position, capability) refuses a second row.
 3. ~~The browser pass~~ — **done. 86/86 rendered clean**, one defect found and fixed (#20 below).
    ⚠ **What it leaves open, precisely.** The sweep proves the screens *render and work*. It does not
    prove they are *populated*, and it covers only the no-horizontal-loss third of

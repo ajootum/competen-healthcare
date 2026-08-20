@@ -325,6 +325,11 @@ const DORMANT_BY_DESIGN: Record<string, string> = {
   // missing §25 objects rather than hiding the gap. Re-reported here so the pin does not go quiet.
   "hq.practice.release.activate": "PD-012 §25 rollout objects do not exist; stated on the Releases screen",
   "hq.practice.release.rollback": "PD-012 §25 rollback_plan does not exist; stated on the Releases screen",
+  // Revoked by migration 347 after the CPR-PD-013 §9 pass found them granted and enforced by nothing.
+  // The CODES survive because PD-010 §19 asks for a separate export capability by name, so each has a
+  // specification behind it and only the enforcement is missing. Held by no position today.
+  "hq.practice.export.execute": "revoked from every position by 347; PD-010 §19 keeps the code, nothing enforces it yet",
+  "hq.practice.licence.verify": "revoked from every position by 347; the code survives its use case, nothing enforces it yet",
 };
 
 const spacesSrc = readFileSync("src/lib/hq/spaces.ts", "utf8");
@@ -336,22 +341,23 @@ const apiSrc = execSync('find src/app/api -name "*.ts"', { encoding: "utf8" })
   .trim().split("\n").filter(Boolean)
   .map(f => readFileSync(f, "utf8")).join("\n");
 /**
- * ⚠ A RATCHET, NOT A FLAT BAN, AND THE TWO BELOW ARE NOT "BY DESIGN" -- THEY ARE UNDECIDED.
+ * ⚠ THE RULING CAME, AND THIS LIST IS NOW EMPTY. Both codes below were granted to
+ * practice_product_director and enforced by nothing, so an access review read the position as holding
+ * authority it did not have. Migration 347 revoked both by closing their temporal window -- the rows
+ * remain as history, and activeGrants() no longer returns them. Verified on staging and production:
+ * twenty-one live capabilities became nineteen.
  *
- * These are granted to practice_product_director by migration 311 and enforced by nothing anywhere:
- * no route, no UI reference, no mention outside the grant. That is a real finding and it is NOT the
- * same as the four above, each of which has a stated reason for having no enforcement yet. Calling
- * these "by design" would launder an open question into a decision, which is precisely what the
- * dormant list must not become.
+ * They move to DORMANT_BY_DESIGN rather than out of the file, because the CODES still exist in
+ * spaces.ts and in hq_capability and are still enforced by no route. What changed is not the
+ * enforcement, it is who holds them: nobody.
  *
- * They sit here so the pin can go green on the CURRENT state while still failing the moment a THIRD
- * inert write capability appears. The owner's ruling is either to revoke them or to record why a
- * dormant grant is intended; when that happens, this list empties and the check becomes flat.
+ * ⚠ AND THIS HARNESS CANNOT SEE THAT CHANGE, WHICH IS WORTH SAYING PLAINLY. It scans spaces.ts against
+ * the API routes -- code against code -- and deliberately never reads hq_position_capability, because
+ * a harness needing credentials joins the privileged-live tier that nothing in CI runs. So the pin's
+ * verdict is identical before and after 347. The revocation is real; this file is not the evidence of
+ * it, and it should not be read as though it were.
  */
-const INERT_AWAITING_RULING = [
-  "hq.practice.export.execute",
-  "hq.practice.licence.verify",
-];
+const INERT_AWAITING_RULING: string[] = [];
 
 /**
  * ⚠ A ROUTE MAY GATE ON A NAMED CONSTANT, AND THE FIRST VERSION OF THIS SCAN COULD NOT SEE THAT.
