@@ -389,10 +389,21 @@ export async function searchPractice(admin: any, ctx: WorkspaceContext, rawQuery
     [LABELS.documents, documents], [LABELS.followUps, followUps], [LABELS.tasks, tasks],
     [LABELS.threads, threads], [LABELS.contacts, contacts], [LABELS.incoming, incoming],
   ];
+  // ⚠⚠ THIS LOOP COMPUTED THE FAILURE AND THREW IT AWAY. It read, in full:
+  //
+  //       void readFailure(raw); void label;
+  //
+  // so `incomplete` only ever carried the patients entry and all twelve domains above kept doing
+  // exactly what the essay above them says must never happen. The comment was right, the fix was
+  // scaffolded, and the one line that does the work was never written -- and `void` is precisely what
+  // silences the unused-variable error that would otherwise have pointed at it. A no-op wearing an
+  // explanation is worse than no explanation: the next reader sees the reasoning, believes the channel
+  // is wired, and moves on. This one survived under 45 passing assertions in its own harness.
   for (const [label, raw] of domainReads) {
     // null means NOT SEARCHED (no capability) and is already reported above -- not a failure.
     if (raw === null || raw === undefined) continue;
-    void readFailure(raw); void label;
+    const failure = readFailure(raw);
+    if (failure) incomplete.push(`${label} (${failure})`);
   }
 
   return {
