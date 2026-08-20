@@ -65,7 +65,7 @@ import { doseArithmetic, CALCULATORS, DOSE_UNIT_CONVERSION_REFUSED } from "../sr
 import {
   REFUSES, MEDICATION_BOUNDARY, MEDICATION_NOT_CURRENT_REASON,
 } from "../src/lib/practice/patient-workspace-constants";
-import { PRACTICE_NAV } from "../src/lib/practice/navigation";
+import { PRACTICE_NAV, PRIMARY_ORDER } from "../src/lib/practice/navigation";
 import { purgeWorkspacesOwnedBy, cleanupOnKill } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
@@ -551,10 +551,22 @@ async function main() {
 
   ok("9a. ⚠ /practice/medications has NO nav entry -- CPR-MED-001 contains no navigation section",
     !PRACTICE_NAV.some(i => i.href.startsWith("/practice/medications")));
-  ok("9b. and the primary list is still nine",
-    PRACTICE_NAV.filter(i => i.primary).length === 9,
-    String(PRACTICE_NAV.filter(i => i.primary).length));
-  ok("9c-control. PRACTICE_NAV really was loaded", PRACTICE_NAV.length >= 9);
+  // ⚠ THIS PINNED "NINE" AND THE SIDEBAR WAS LEGITIMATELY REFROZEN AT ELEVEN.
+  //
+  // CPR-V5-002 froze PRIMARY_ORDER at nine; CPR-HFE-001 v1.1 superseded that with eleven items in
+  // five sections, and practice-handle-reachability-harness carries the authoritative pin ("PRIMARY_ORDER
+  // is CPR-HFE-001 v1.1's eleven, in order", written out in full, green today). This assertion was a
+  // SECOND COPY of a number that lives somewhere else, so a decision taken properly in one place
+  // reddened a harness in another.
+  //
+  // THE CLAIM HERE WAS NEVER ABOUT THE NUMBER. It is "my feature added nothing to the sidebar", and
+  // that is now asserted two ways that cannot go stale: the primary list agrees with PRIMARY_ORDER
+  // (one source of truth, whatever it holds), and this domain contributes none of it.
+  ok("9b. and the primary list is exactly PRIMARY_ORDER -- medications contributes none of it",
+    PRACTICE_NAV.filter(i => i.primary).length === PRIMARY_ORDER.length
+    && PRACTICE_NAV.filter(i => i.primary).every(i => PRIMARY_ORDER.includes(i.href)),
+    `${PRACTICE_NAV.filter(i => i.primary).length} vs ${PRIMARY_ORDER.length}`);
+  ok("9c-control. PRACTICE_NAV really was loaded", PRACTICE_NAV.length >= PRIMARY_ORDER.length);
   ok("9d. the page exists, so an entry added later cannot be a 404",
     existsSync(join(process.cwd(), "src", "app", "practice", "(shell)", "medications", "page.tsx")));
   ok("9e. the current-activity harness carries the written reason for having no entry",

@@ -127,7 +127,7 @@ async function main() {
   // ⚠ WRITTEN OUT IN FULL, NOT DERIVED. An assertion that compares PRIMARY_ORDER to itself, or to
   // whatever the catalogue currently marks primary, is a transcript. CPR-V5-002's nine are copied from
   // the specification, so moving one means editing this line and explaining why.
-  const FROZEN_NINE = [
+  const FROZEN_PRIMARY = [
     "/practice/home", "/practice/today", "/practice/calendar", "/practice/patients",
     "/practice/encounters", "/practice/follow-ups", "/practice/documents",
     "/practice/payments",
@@ -137,12 +137,12 @@ async function main() {
   // restored Encounters and added Payments. Eleven now, still written out in full, so the NEXT
   // change also has to arrive holding a document.
   ok("1a. ⚠ PRIMARY_ORDER is CPR-HFE-001 v1.1's eleven, in order",
-    PRIMARY_ORDER.join() === FROZEN_NINE.join(), PRIMARY_ORDER.join(" "));
+    PRIMARY_ORDER.join() === FROZEN_PRIMARY.join(), PRIMARY_ORDER.join(" "));
 
   const allCaps = [...new Set(PRACTICE_NAV.map(i => i.capability).filter(Boolean))] as string[];
   const rendered = primaryNav(allCaps);
   ok("1b. and the sidebar renders exactly those nine, in that order",
-    rendered.map(i => i.href).join() === FROZEN_NINE.join(), rendered.map(i => i.href).join(" "));
+    rendered.map(i => i.href).join() === FROZEN_PRIMARY.join(), rendered.map(i => i.href).join(" "));
   // NON-VACUITY. 1a and 1b would both pass against an empty catalogue.
   ok("1c-control. the catalogue is populated and the sidebar is not empty",
     PRACTICE_NAV.length >= 20 && rendered.length === 11,

@@ -385,22 +385,51 @@ export const PIE_NOT_BUILDABLE: UnbuildableModule[] = [
     key: "medication_review",
     label: "Medication review",
     from: "PIE §3 (intelligence modules) and §2 (data sources)",
-    why: "There is no medication engine in this product. CPR-MED-001 is unbuilt: no practice_medication, practice_medication_event, practice_medication_warning, practice_dose_calculation, practice_medication_monitoring or practice_adverse_reaction table exists in any migration; there is no medication module in src/lib/practice and no /practice/medications route. The nearest store is practice_treatment (migration 194), whose treatment_type may be 'medication' -- but that row is a decision recorded inside one consultation, it carries no drug, no dose, no route and no stop date, and its status is never written after insert. Counting those rows and heading the panel \"Medication review\" would answer a different question from the one on the heading, which is the failure this whole engine exists to avoid.",
-    wouldRequire: "The CPR-MED-001 medication record: a prescribing store with a drug, a dose, a route, a start and a stop, and a status something writes. That is a migration and an engine, and it is not scope a read-only intelligence layer can invent.",
+    // ⚠ THIS SENTENCE WENT FALSE AND WAS STILL BEING RENDERED. It said no practice_medication table
+    // existed in any migration, no medication module existed in src/lib/practice, and no
+    // /practice/medications route existed. Migration 258 creates practice_medication AND
+    // practice_medication_event; medication.ts and medication-constants.ts are both there; the route
+    // is at src/app/practice/(shell)/medications/page.tsx. Three factual claims, all wrong, inside an
+    // explanation whose entire job is to be trusted about an absence.
+    //
+    // ⚠⚠ AND THE FIRST CORRECTION WAS ITSELF MISLEADING, WHICH IS WORTH RECORDING RATHER THAN QUIETLY
+    // FIXING. It replaced the false list with a list of four "still absent" tables taken from the
+    // original prose -- practice_medication_warning, practice_dose_calculation,
+    // practice_medication_monitoring, practice_adverse_reaction -- and two of those four are absent ONLY
+    // UNDER THAT NAME. practice_medication_dose_calculation exists (migration 258) and
+    // practice_patient_monitoring_plan exists (migration 246). Every claim was literally true and the
+    // paragraph was not, which is the harder kind of wrong. Named by CAPABILITY now, not by a guessed
+    // table name.
+    //
+    // ⚠ THE CONCLUSION STILL STANDS AND THE REASON HAD TO CHANGE COMPLETELY -- the Orders Intelligence
+    // lesson again, where a tile explained an absence with a detail that had stopped being true. The
+    // module is NOT BUILT, which is why it is still in this list. It is no longer UNBUILDABLE, which is
+    // a different thing and is now said in those words.
+    why: "The medication store now EXISTS and this module has not been built on it. Migration 258 gives the product practice_medication (generic and brand name, dose, route, frequency, start and stop dates, prescriber, and a status of active, completed, paused or discontinued) and practice_medication_event beside it, with medication.ts as its engine and a /practice/medications route. Two capabilities CPR-MED-001 asks for are genuinely absent -- interaction and allergy WARNINGS, and adverse reactions -- and neither is what a review panel reads. This one is a build decision that has not been taken, not a gap in the record.",
+    // ⚠ AND THIS ASKED FOR SOMETHING THAT NOW EXISTS. Every item it named -- drug, dose, route, start,
+    // stop, and a status something writes -- is a column on practice_medication, and
+    // review_interval_days / next_review_on are written by medication.ts with an index on
+    // (workspace_id, next_review_on) where status in (active, paused). That index is exactly the read a
+    // review panel makes. What is missing is the decision to build the panel.
+    wouldRequire: "Nothing further in the record -- the substrate is there, including next_review_on and its index. What it needs is the owner's decision to build the panel, and a ruling on what 'due for review' means where no review interval was set: silence, or a practice default.",
   },
   {
     key: "medication_utilisation",
     label: "Medication utilisation",
     from: "PIE §5 (practice intelligence)",
-    why: "The same absent store as medication review, and one further reason of its own: utilisation is a question about what a practice dispenses or prescribes over time, and this product records neither. Nothing here has ever known that a prescription was issued.",
-    wouldRequire: "The medication record above, plus a dispensing or prescribing event with a date -- and a decision about whether utilisation counts prescriptions written or medicines given, because those are different numbers.",
+    // The store half is answered now; the second half of the original objection is NOT, and it is the
+    // half that actually decides this one. Kept, because it was right.
+    why: "The store exists (see medication review), but the question does not follow from it. Utilisation asks what a practice DISPENSES or PRESCRIBES over time, and practice_medication records what a patient is ON -- including rows whose recorded_source is patient_reported or imported, which are medicines this practice never issued. Counting them as practice utilisation would attribute another prescriber's work to this one.",
+    wouldRequire: "A ruling that recorded_source = 'practitioner' is what this practice prescribed, or a dispensing event of its own -- plus the original decision, still open, about whether utilisation counts prescriptions written or medicines given, because those are different numbers.",
   },
   {
     key: "medication_monitoring_due",
     label: "Medication monitoring due",
     from: "PIE §4 (patient intelligence)",
-    why: "This asks which patients are due bloods or a level because of a drug they are on. Both halves are needed and only one exists: migration 246 gives the product monitoring plans and due-parameter reminders, but nothing anywhere records that a patient is on a drug, so no plan can be attached to one.",
-    wouldRequire: "The medication record, and a link from a drug to the parameter its monitoring plan watches. The plan side is built (practice_patient_monitoring_plan); the drug side does not exist.",
+    // ⚠ "NOTHING ANYWHERE RECORDS THAT A PATIENT IS ON A DRUG" IS NOW FLATLY UNTRUE -- that is what
+    // practice_medication is. The remaining gap is the LINK, which is narrower and real.
+    why: "Both halves now exist and nothing joins them. Migration 246 gives monitoring plans and due-parameter reminders; migration 258 records which drugs a patient is on. What no column holds is WHICH PARAMETER a given drug's monitoring watches, so a plan cannot be attached to a medication -- and guessing that link from a drug name is how a patient gets chased for the wrong test -- and guessing is all that is available, because practice_medication.generic_name is free text and carries no reference to practice_medication_catalogue (migration 275), which does hold codes and aliases. The vocabulary exists; nothing joins a recorded medication to it.",
+    wouldRequire: "Two edges, both narrow. A recorded medication needs a reference to practice_medication_catalogue so a drug has an identity rather than a spelling, and a catalogue entry needs a link to the parameter its monitoring watches. Every table involved already exists.",
   },
   {
     key: "growth_percentiles",

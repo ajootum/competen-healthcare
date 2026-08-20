@@ -210,9 +210,55 @@ async function main() {
 
   ok("CONTROL: the probe discriminates -- practice_referral and practice_parameter_alert both EXIST",
     referralTable && alertTable, JSON.stringify({ referralTable, alertTable }));
-  ok("CPR-MED-001 IS NOT BUILT: neither practice_medication nor practice_medication_event exists, so every medication module PIE asks for is correctly refused",
-    !medicationTable && !medicationEventTable,
+  // ⚠ THIS ASSERTED THE ABSENCE OF A STORE THAT HAS SINCE BEEN BUILT, and while it was red nobody saw
+  // that three refusals in PIE_NOT_BUILDABLE were telling users, in the product, that no
+  // practice_medication table exists in any migration, that there is no medication module in
+  // src/lib/practice, and that there is no /practice/medications route. Migration 258 created the first
+  // two tables; medication.ts and the route are both there. A harness asserting an absence is a harness
+  // that goes stale the day somebody builds the thing -- and it goes stale POINTING AT THE WRONG
+  // PROBLEM, because the defect it should have surfaced was the false prose, not its own expectation.
+  //
+  // ⚠ SO IT NOW ASSERTS THE AGREEMENT, NOT THE ABSENCE: whatever the database holds, the refusals must
+  // describe it correctly. That claim survives the store being built, extended or dropped, and it fails
+  // in the direction that matters -- a sentence rendered to a user that is no longer true.
+  const medWhy = PIE_NOT_BUILDABLE.filter(u => u.key.startsWith("medication_"))
+    .map(u => `${u.why} ${u.wouldRequire}`).join(" ");
+  ok("the medication store EXISTS (migration 258), and the probe says so",
+    medicationTable && medicationEventTable,
     JSON.stringify({ medicationTable, medicationEventTable }));
+  ok("⚠ and NO medication refusal still claims that store is missing",
+    !/no practice_medication\b/i.test(medWhy)
+    && !/neither practice_medication/i.test(medWhy)
+    && !/no medication module in src\/lib\/practice/i.test(medWhy)
+    && !/no \/practice\/medications route/i.test(medWhy)
+    && !/nothing anywhere records that a patient is on a drug/i.test(medWhy),
+    medWhy.slice(0, 400));
+  // ⚠ THE CONTROL, because the assertion above is a set of NEGATIVES and negatives pass when the text is
+  // empty, when the keys stop matching, or when somebody renames the entries. This proves there is real
+  // prose being read.
+  ok("control. there are three medication refusals and they carry real prose to test",
+    PIE_NOT_BUILDABLE.filter(u => u.key.startsWith("medication_")).length === 3 && medWhy.length > 400,
+    `${PIE_NOT_BUILDABLE.filter(u => u.key.startsWith("medication_")).length} entries, ${medWhy.length} chars`);
+  // The four CPR-MED-001 tables that genuinely do NOT exist, probed rather than remembered -- the
+  // corrected prose names exactly these four and must stay right about them too.
+  // ⚠ THE TWO CAPABILITIES THAT ARE GENUINELY ABSENT -- named as capabilities, not as guessed table
+  // names, because the first correction to this prose listed four "absent" tables and two of them were
+  // absent ONLY UNDER THAT NAME: practice_medication_dose_calculation exists (258) and
+  // practice_patient_monitoring_plan exists (246). Every sentence was literally true and the paragraph
+  // was not.
+  const [warnings, adverse] = await Promise.all([
+    tableExists("practice_medication_warning"), tableExists("practice_adverse_reaction"),
+  ]);
+  ok("and the two capabilities the prose calls absent really are absent",
+    warnings === false && adverse === false, JSON.stringify({ warnings, adverse }));
+  // ⚠ THE NEAR-MISS CONTROL. These two DO exist and are the ones a guessed name gets wrong. If this ever
+  // reds, the prose above needs re-reading before anything else is believed about it.
+  const [doseCalc, monitorPlan, medCatalogue] = await Promise.all([
+    tableExists("practice_medication_dose_calculation"), tableExists("practice_patient_monitoring_plan"),
+    tableExists("practice_medication_catalogue"),
+  ]);
+  ok("control. dose calculation, monitoring plans and a drug catalogue all EXIST under their real names",
+    doseCalc && monitorPlan && medCatalogue, JSON.stringify({ doseCalc, monitorPlan, medCatalogue }));
   ok("and the three medication refusals are IN THE LIST rather than omitted",
     ["medication_review", "medication_utilisation", "medication_monitoring_due"]
       .every(k => PIE_NOT_BUILDABLE.some(u => u.key === k)),

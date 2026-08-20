@@ -65,7 +65,7 @@ import {
 } from "../src/lib/practice/parameters-constants";
 import { CALCULATORS } from "../src/lib/practice/clinical-calculators";
 import { findRates, REFUSED_PATIENT_STATES } from "../src/lib/practice/intelligence-constants";
-import { PRACTICE_NAV } from "../src/lib/practice/navigation";
+import { PRACTICE_NAV, PRIMARY_ORDER } from "../src/lib/practice/navigation";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
 loadEnvConfig(process.cwd());
@@ -488,8 +488,21 @@ async function main() {
 
   // ⚠ NAVIGATION: NOTHING MOVED.
   const primary = PRACTICE_NAV.filter(i => i.primary);
-  ok("nav-1. ⚠ PRIMARY_ORDER is still nine items and LCP-001 added none",
-    primary.length === 9, `${primary.length}: ${primary.map(i => i.label).join(", ")}`);
+  // ⚠ THIS PINNED "NINE" AND THE SIDEBAR WAS LEGITIMATELY REFROZEN AT ELEVEN.
+  //
+  // CPR-V5-002 froze PRIMARY_ORDER at nine; CPR-HFE-001 v1.1 superseded that with eleven items in
+  // five sections, and practice-handle-reachability-harness carries the authoritative pin ("PRIMARY_ORDER
+  // is CPR-HFE-001 v1.1's eleven, in order", written out in full, green today). This assertion was a
+  // SECOND COPY of a number that lives somewhere else, so a decision taken properly in one place
+  // reddened a harness in another.
+  //
+  // THE CLAIM HERE WAS NEVER ABOUT THE NUMBER. It is "my feature added nothing to the sidebar", and
+  // that is now asserted two ways that cannot go stale: the primary list agrees with PRIMARY_ORDER
+  // (one source of truth, whatever it holds), and this domain contributes none of it.
+  ok("nav-1. ⚠ the primary sidebar is exactly PRIMARY_ORDER, and LCP-001 added none of it",
+    primary.length === PRIMARY_ORDER.length
+    && primary.every(i => PRIMARY_ORDER.includes(i.href)),
+    `${primary.length} vs ${PRIMARY_ORDER.length}: ${primary.map(i => i.label).join(", ")}`);
   ok("nav-2. and there is no /practice/parameters route in the catalogue",
     !PRACTICE_NAV.some(i => i.href.includes("parameter")), "a parameter route reached navigation.ts");
 
