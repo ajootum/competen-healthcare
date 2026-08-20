@@ -191,7 +191,30 @@ async function main() {
   const { data: booked20 } = at20.ok
     ? await admin.from("practice_appointment").select("duration_minutes").eq("id", at20.data.id).single()
     : { data: null };
-  ok("a booking with no explicit length takes the configured default", booked20?.duration_minutes === 20, `${booked20?.duration_minutes}`);
+  // ⚠ THIS ASSERTED THE WRONG RUNG OF A THREE-RUNG PRECEDENCE, and it had been red since the booking
+  // taxonomy shipped. CPR-360 removed a hardcoded 20 and made the WORKSPACE default the fallback;
+  // migration 292 then put minutes on the VISIT TYPE, and scheduling.ts states the order in as many
+  // words: "the VISIT TYPE's duration outranks the workspace default, because 'New consultation 30
+  // minutes, Follow-up 15' is the whole point of putting minutes on the type. An explicit caller value
+  // still wins over both."
+  //
+  // So a booking with no explicit length takes 30 -- the seeded new-consultation type's minutes -- and
+  // the workspace default is the rung BELOW that, reachable only when the type carries none. The old
+  // assertion could never pass again, and while it sat red it was also hiding the fact that nothing
+  // tested the workspace-default rung at all.
+  //
+  // All three rungs are asserted now, in order, because the precedence IS the contract.
+  const typeMinutes = booked20?.duration_minutes as number | undefined;
+  // ⚠ COMPARED AGAINST THE LIVE WORKSPACE DEFAULT, NOT THE LITERAL 20. Two reasons, and the second is
+  // the one that matters. tsc narrows `typeMinutes` to 30 after the first comparison and then calls
+  // `!== 20` a comparison with no overlap, which is a real complaint. And an assertion that the type's
+  // minutes differ from a hardcoded 20 would pass vacuously the day somebody sets the workspace default
+  // TO 30 -- at which point the two rungs are indistinguishable and this assertion would say nothing
+  // while looking like it said something.
+  const wsDefaultNow = await defaultAppointmentMinutes(admin, wsA);
+  ok("rung 2: with no explicit length, the VISIT TYPE's minutes win over the workspace default",
+    typeMinutes === 30 && typeMinutes !== wsDefaultNow,
+    `${typeMinutes} from the visit type, workspace default is ${wsDefaultNow}`);
 
   const widen = await updateConfiguration(admin, { workspaceId: wsA, defaultAppointmentMinutes: 45, ...base });
   ok("the default length can be changed", widen.ok, widen.ok ? "" : widen.message);
@@ -203,8 +226,51 @@ async function main() {
   const { data: booked45 } = at45.ok
     ? await admin.from("practice_appointment").select("duration_minutes").eq("id", at45.data.id).single()
     : { data: null };
-  ok("THE HARDCODED 20 IS GONE: the next booking takes the NEW default",
-    booked45?.duration_minutes === 45, `${booked45?.duration_minutes} (expected 45)`);
+  // ⚠ THE WORKSPACE DEFAULT IS THE THIRD RUNG AND THE FIXTURE HAS TO REACH IT DELIBERATELY. Every
+  // seeded visit type carries minutes, so with the taxonomy as provisioned this rung is unreachable --
+  // which is exactly why the original assertion looked like it was testing the workspace default and
+  // was really reading the type's. Clearing default_duration_minutes on the type this fixture books
+  // through is the only way to exercise defaultAppointmentMinutes at all, and the column is nullable
+  // for precisely this case (migration 292 line 41).
+  const { data: vtRows } = await admin.from("practice_visit_type")
+    .select("id, code, default_duration_minutes").eq("workspace_id", wsA).eq("active", true);
+  const bookedThrough = ((vtRows ?? []) as { id: string; code: string; default_duration_minutes: number | null }[])
+    .find(v => v.default_duration_minutes === typeMinutes) ?? (vtRows ?? [])[0];
+  ok("rung 3-setup. the visit type this fixture books through was found, and it carried minutes",
+    !!bookedThrough && bookedThrough.default_duration_minutes !== null,
+    JSON.stringify(vtRows));
+  if (bookedThrough) {
+    await admin.from("practice_visit_type")
+      .update({ default_duration_minutes: null }).eq("id", bookedThrough.id).eq("workspace_id", wsA);
+  }
+  const atDefault = await bookAppointment(admin, {
+    workspaceId: wsA, patientId: pa.data.id, patientName: "Byaruhanga Eric",
+    appointmentType: "new_consultation", scheduledAt: "2026-09-04T09:00:00.000Z", allowOverlap: true, ...base,
+  });
+  const { data: bookedDefault } = atDefault.ok
+    ? await admin.from("practice_appointment").select("duration_minutes").eq("id", atDefault.data.id).single()
+    : { data: null };
+  ok("rung 3: THE HARDCODED 20 IS GONE -- with no minutes on the type, the WORKSPACE default applies",
+    bookedDefault?.duration_minutes === 45,
+    `${bookedDefault?.duration_minutes} (expected the workspace default, 45)`);
+  ok("rung 3-control. and that is the CHANGED default, not the original 20 -- so the read is live",
+    bookedDefault?.duration_minutes !== 20 && (await defaultAppointmentMinutes(admin, wsA)) === 45,
+    `${bookedDefault?.duration_minutes}`);
+  // Put it back, so nothing downstream in this harness books through a type with no minutes.
+  if (bookedThrough) {
+    await admin.from("practice_visit_type")
+      .update({ default_duration_minutes: bookedThrough.default_duration_minutes })
+      .eq("id", bookedThrough.id).eq("workspace_id", wsA);
+  }
+  // ⚠ booked45 IS NOT DISCARDED -- IT CARRIES A PROPERTY WORTH ASSERTING. It was booked AFTER the
+  // workspace default moved to 45, through a type that still carried 30, so it must STILL be 30:
+  // moving the workspace default does not reach past a visit type that states its own minutes.
+  //
+  // (Writing `void booked45` here, which is what this line was for about ninety seconds, would be the
+  // same no-op-wearing-an-explanation this session just found in search.ts. Once is a bug; twice is a
+  // habit, and the second one is always easier to write than the first.)
+  ok("rung 2-again: moving the workspace default does NOT move a booking whose type states minutes",
+    booked45?.duration_minutes === typeMinutes, `${booked45?.duration_minutes} (expected ${typeMinutes})`);
   ok("...and an explicit length still wins over the default",
     await (async () => {
       const explicit = await bookAppointment(admin, {

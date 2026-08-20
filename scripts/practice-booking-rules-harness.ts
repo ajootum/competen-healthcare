@@ -1040,9 +1040,36 @@ async function main() {
     channel: "walk_in", appointmentType: "walk_in", scheduledAt: at(D_CH, 11 * 60),
     durationMinutes: 20, locationId: LOC_ELIG, patientName: "Should Not Happen", ...ACT,
   });
-  ok("7g and the walk-in channel names Phase 5, which is the phase that owns queue rules",
-    !walkInBooking.ok && walkInBooking.code === "CHANNEL_NOT_BUILT" && /Phase 5/.test(walkInBooking.message),
-    walkInBooking.ok ? "booked" : `${walkInBooking.code} ${walkInBooking.message}`);
+  // ⚠ THE WALK-IN DOOR OPENED, AND THIS ASSERTION HAD BEEN EXPECTING IT SHUT EVER SINCE.
+  //
+  // It asserted CHANNEL_NOT_BUILT naming "Phase 5", which was right while s7.7's session limit, cutoff,
+  // queue rules and emergency override did not exist. All four exist now -- checkPlacement reads
+  // walkInAllowance, and migrations 268/269 added the cutoff, the queue policy and the override -- so
+  // booking-rule-constants.ts carries `door: true, phase: null` with the reasoning in full. This is the
+  // same transition 7f above already records for patient_self, one channel later.
+  //
+  // ⚠ AND THE REASON THE DOOR OPENED IS WHAT THIS NOW ASSERTS. The channel comment states it exactly:
+  // bookAppointment has taken appointment_type "walk_in" since Phase 1, so shutting this channel never
+  // stopped a walk-in -- it only stopped one being DECIDED BY A RULE CARD and stamped with the rule and
+  // version that decided it (AC-13). "A closed door that the traffic goes round is not a control."
+  // Asserting merely that the booking succeeds would miss the whole point of opening it; what matters is
+  // that it comes back governed.
+  ok("7g the walk-in channel books, and is DECIDED rather than merely permitted",
+    walkInBooking.ok && ["rule", "platform_default"].includes(walkInBooking.data.decidedBy)
+    && typeof walkInBooking.data.rung === "string" && walkInBooking.data.rung.length > 0,
+    walkInBooking.ok ? JSON.stringify({ decidedBy: walkInBooking.data.decidedBy, rung: walkInBooking.data.rung })
+      : `${walkInBooking.code} ${walkInBooking.message}`);
+  // ⚠ THE CONTROL, and it is the one that keeps 7g from becoming a rubber stamp: the engine must still
+  // refuse a channel that genuinely has no door. `referral` is that channel today -- it shares patient
+  // booking's one-time code and nothing here can send one -- so it is the live proof that
+  // CHANNEL_NOT_BUILT is still reachable and that walk-in passing means something.
+  const referralBooking = await bookUnderRules(admin, A, {
+    channel: "referral", appointmentType: "new_consultation", scheduledAt: at(D_CH, 12 * 60),
+    durationMinutes: 20, locationId: LOC_ELIG, patientName: "Should Not Happen Either", ...ACT,
+  });
+  ok("7g-control. a channel that really has NO door is still refused by name, so 7g is not vacuous",
+    !referralBooking.ok && referralBooking.code === "CHANNEL_NOT_BUILT",
+    referralBooking.ok ? "booked" : `${referralBooking.code} ${referralBooking.message}`);
 
   // ════════════════════════════════════════════════════════════════════════════════════════════════
   // 8. s7.6 -- ELIGIBILITY DECIDES WHOSE RULE IT IS, NOT WHETHER TO REFUSE
