@@ -60,7 +60,7 @@ import {
 } from "../src/lib/practice/patient-access";
 import {
   RECALL_CAPABILITIES, WALK_IN_CAPABILITIES, RECALL_NOT_RECORDED, RECALL_NOT_CONFIGURABLE,
-  WALK_IN_NOT_CONFIGURABLE,
+  WALK_IN_NOT_CONFIGURABLE, WALK_IN_NOW_CONFIGURABLE,
 } from "../src/lib/practice/recall-constants";
 import {
   PUBLISH_CAPABILITIES, PUBLISH_CHECKS, PUBLISH_CHECKS_NOT_CHECKABLE,
@@ -590,9 +590,30 @@ async function main() {
     wOtherDay.sessions.length === 0 || wOtherDay.date !== walkDate,
     `${wOtherDay.sessions.length} on ${wOtherDay.date}`);
 
-  ok("4i. what s7.7 asks for and no column holds is stated as data, each with what it would need",
-    WALK_IN_NOT_CONFIGURABLE.length === 3 && WALK_IN_NOT_CONFIGURABLE.every(n => n.wouldNeed.length > 20),
-    `${WALK_IN_NOT_CONFIGURABLE.length}`);
+  // ⚠ THIS PINNED A COUNT OF GAPS, AND GAPS ARE THE ONE NUMBER WORK IS MEANT TO REDUCE.
+  //
+  // It required WALK_IN_NOT_CONFIGURABLE.length === 3. All three -- the walk-in cutoff, queue ordering,
+  // and the emergency override -- were BUILT by migrations 268/269 and moved to
+  // WALK_IN_NOW_CONFIGURABLE, so the list is empty and the assertion asked the codebase to still be
+  // missing three things. Pinning a count you are actively trying to change is the most frequently
+  // recurring assertion defect in this repository, and this is its purest form: an assertion that goes
+  // red on success.
+  //
+  // ⚠ THE PROPERTY IS WHAT S7.7 ACTUALLY ASKS FOR, and it holds at 3/0, 0/3 or any split. Every item is
+  // in exactly one list; anything still missing says what it would need; anything now built says where
+  // it went. That is the honesty rule this whole constant exists to serve -- "no column holds it" is
+  // only a permissible answer when it comes with what would make it true.
+  ok("4i. every walk-in capability s7.7 names is in exactly one list -- missing with a remedy, or built with a place",
+    WALK_IN_NOT_CONFIGURABLE.every(n => n.wouldNeed.length > 20)
+    && WALK_IN_NOW_CONFIGURABLE.every(n => n.where.length > 20 && n.note.length > 20)
+    && !WALK_IN_NOT_CONFIGURABLE.some(n => WALK_IN_NOW_CONFIGURABLE.some(b => b.what === n.what)),
+    JSON.stringify({ notConfigurable: WALK_IN_NOT_CONFIGURABLE.length, nowConfigurable: WALK_IN_NOW_CONFIGURABLE.length }));
+  // ⚠ THE CONTROL, because 4i is satisfied by two EMPTY lists and would then be asserting nothing at
+  // all. s7.7 names these three capabilities; between them the lists must still account for all three,
+  // whichever side each one currently sits on.
+  ok("4i-control. and the two lists still account for all three of s7.7's walk-in capabilities",
+    WALK_IN_NOT_CONFIGURABLE.length + WALK_IN_NOW_CONFIGURABLE.length === 3,
+    `${WALK_IN_NOT_CONFIGURABLE.length} + ${WALK_IN_NOW_CONFIGURABLE.length}`);
 
   // ══ 5. PUBLISH READINESS ══════════════════════════════════════════════════════════════════════
   section("5. Publish readiness");
