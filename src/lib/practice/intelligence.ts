@@ -10,6 +10,9 @@ import {
 } from "@/lib/practice/metrics";
 // CPR-PI-001/002/003. A leaf module with no imports of its own, so nothing it carries can drag a
 // server-only dependency into a client component -- see the header of intelligence-constants.ts.
+// ⚠ READ FROM medication-constants, NEVER RE-TYPED. A capability code is a string compared against
+// practice_role_capabilities, and six invented ones have shipped on this product.
+import { CAP_MED_VIEW } from "@/lib/practice/medication-constants";
 import {
   INACTIVE_AFTER_DAYS, LOST_TO_FOLLOW_UP_AFTER_DAYS, REFUSED_PATIENT_STATES,
   ALERT_SEVERITIES, SEVERITY_NOT_CLASSIFIED, PIE_NOT_BUILDABLE,
@@ -3352,6 +3355,185 @@ export async function referralIntelligence(
   return intelModule("referral_intelligence", "Referrals", data, sources, problems);
 }
 
+// ── MEDICATION REVIEW: THE FIRST PIE MODULE BUILT ON A STORE THAT ARRIVED AFTER THE REFUSAL ─────────
+//
+// PIE §3 asks for medication review, and PIE_NOT_BUILDABLE refused it for as long as CPR-MED-001 was
+// unbuilt. Migration 258 built it -- practice_medication carries the drug, the dose, the route, the
+// start, the stop and a status something writes -- and the refusal went stale, telling users on screen
+// that no such table existed in any migration. That sentence was corrected first; this is the module it
+// was refusing.
+//
+// ⚠⚠ THE RULING THIS MODULE TURNS ON: A MEDICATION WITH NO REVIEW DATE IS NOT DUE FOR REVIEW.
+//
+// `next_review_on` is written from `review_interval_days`, and both are optional. So a practice that
+// never sets an interval has medications nobody has ever said should be looked at again -- and the
+// question is what a "due for review" figure does with them. The two answers are silence, or a default
+// interval this product invents.
+//
+// SILENCE, and the reason is the honesty rule this whole engine exists for. Choosing six months, or a
+// year, would produce a number that looks measured and is not: it would be THIS CODE's opinion about
+// clinical practice, printed beside real counts, with no practitioner having said it. CPR's honesty
+// rules name invented targets specifically. A medication nobody scheduled a review for is not overdue;
+// it is unscheduled, and those are different facts.
+//
+// ⚠ WHICH IS EXACTLY WHY THE SECOND FIGURE EXISTS AND IS NOT OPTIONAL. Silence alone would be its own
+// lie by omission: a panel reading "3 due for review" invites the reading that everything else is
+// watched, when forty medications may have no review date at all. The unscheduled count travels beside
+// the due count, always, so the absence is disclosed rather than hidden behind it. That is the same
+// shape as "no denominator, no percentage" elsewhere in this file.
+export type MedicationReviewData = {
+  /** Active or paused medications whose review date has arrived or passed. */
+  dueForReview: OpenableCount;
+  /** Active or paused medications with NO review date. Not overdue -- unscheduled. */
+  noReviewDate: OpenableCount;
+  /** The rule, in words, because the rule is what the first figure MEANS. */
+  rule: string;
+  /** True when the caller may see patient names. */
+  identified: boolean;
+};
+
+export async function medicationReview(
+  admin: any, ctx: WorkspaceContext, range: IntelRange, atTime: Date = new Date(),
+): Promise<IntelModule<MedicationReviewData>> {
+  const asOf = atTime.toISOString();
+  const sources = [
+    "practice_medication.next_review_on", "practice_medication.status",
+    "practice_medication.generic_name", "practice_medication.patient_id",
+  ];
+  const rule =
+    "A medication counts as due when its review date has arrived or passed and it is still active or "
+    + "paused. A medication with NO review date is NOT counted as due -- nobody said when it should be "
+    + "looked at, and this product does not choose an interval on a practitioner's behalf. Those are "
+    + "counted separately, beside it.";
+
+  if (!hasCapability(ctx, CAP_MED_VIEW))
+    return intelUnavailable("medication_review", "Medication review",
+      `${CAP_MED_VIEW} is required to see this practice's medications`, sources);
+
+  const identified = hasCapability(ctx, CAP_PATIENT_VIEW);
+  // ⚠ THE PRACTICE'S OWN DAY, NOT THE SERVER'S. "Due today" read off a UTC clock moves the boundary by
+  // three hours in Kampala, which is three hours in which a medication is due on one screen and not on
+  // another. range.timezone is the workspace's, resolved by the caller.
+  const today = practiceToday(range.timezone);
+
+  const prov = (formula: string, src: string[]): Provenance => ({
+    formula, sources: src, fromDay: null, toDay: null, asOf, provenance: "computed",
+  });
+
+  const dueFormula =
+    `count of practice_medication rows whose status is active or paused and whose next_review_on is on `
+    + `or before ${today} in the practice timezone (${range.timezone})`;
+  const unscheduledFormula =
+    "count of practice_medication rows whose status is active or paused and whose next_review_on is null";
+
+  const dueForReview = openable("medication_due_for_review", "Medications due for review",
+    `Still being taken, and the review date has arrived or passed as at ${today}.`,
+    "/practice/medications", prov(dueFormula, sources));
+  const noReviewDate = openable("medication_no_review_date", "Medications with no review date",
+    "Still being taken, and nobody has set a date to look at them again. NOT overdue -- unscheduled.",
+    "/practice/medications", prov(unscheduledFormula, sources));
+
+  const data: MedicationReviewData = { dueForReview, noReviewDate, rule, identified };
+  const problems: string[] = [];
+
+  const LIVE = ["active", "paused"];
+  const [dueRead, noneRead] = await Promise.all([
+    intelRows(admin.from("practice_medication")
+      .select("id, patient_id, generic_name, brand_name, next_review_on")
+      .eq("workspace_id", ctx.workspaceId).in("status", LIVE)
+      .not("next_review_on", "is", null).lte("next_review_on", today)
+      .order("next_review_on", { ascending: true })),
+    intelRows(admin.from("practice_medication")
+      .select("id, patient_id, generic_name, brand_name, started_on")
+      .eq("workspace_id", ctx.workspaceId).in("status", LIVE)
+      .is("next_review_on", null)
+      .order("started_on", { ascending: true })),
+  ]);
+
+  // ⚠ A MISSING TABLE IS NOT AN EMPTY PRACTICE, AND THIS MODULE CAN MEET ONE. CPR-MED-001's store
+  // arrives with migration 258, applied by hand, so a deployment that has not run it answers 42P01
+  // rather than returning no rows. Reported as UNAVAILABLE naming the migration -- the same answer
+  // medication.ts gives with its own STORE_ABSENT -- because "this practice has no medications due"
+  // and "this deployment has no medication table" must never render as the same sentence.
+  const storeAbsent = [dueRead.error, noneRead.error]
+    .some(e => typeof e === "string" && /does not exist|42P01|schema cache/i.test(e));
+  if (storeAbsent)
+    return intelUnavailable("medication_review", "Medication review",
+      "practice_medication does not exist on this deployment -- CPR-MED-001's store arrives with "
+      + "migration 258, and it has not been applied here",
+      sources);
+
+  const dueBad = dueRead.error
+    ? `could not be read: ${dueRead.error}`
+    : dueRead.overflowed ? overflowNote("medications due for review") : null;
+  if (dueBad) {
+    dueForReview.status = "unreadable";
+    dueForReview.reason = dueBad;
+    problems.push(`medications due for review: ${dueBad}`);
+  } else {
+    dueForReview.status = "ok";
+    dueForReview.count = dueRead.rows.length;
+  }
+
+  const noneBad = noneRead.error
+    ? `could not be read: ${noneRead.error}`
+    : noneRead.overflowed ? overflowNote("medications with no review date") : null;
+  if (noneBad) {
+    noReviewDate.status = "unreadable";
+    noReviewDate.reason = noneBad;
+    problems.push(`medications with no review date: ${noneBad}`);
+  } else {
+    noReviewDate.status = "ok";
+    noReviewDate.count = noneRead.rows.length;
+  }
+
+  // ── THE SAMPLES: THE ID TRAVELS EITHER WAY, THE NAME ONLY WITH patient.view ──────────────────────
+  const sampleSources = [
+    ...(dueBad ? [] : dueRead.rows.slice(0, SAMPLE_SIZE)),
+    ...(noneBad ? [] : noneRead.rows.slice(0, SAMPLE_SIZE)),
+  ];
+  const wantedIds = [...new Set(sampleSources
+    .map(r => r.patient_id).filter((x): x is string => typeof x === "string"))];
+
+  const nameById = new Map<string, string>();
+  if (identified && wantedIds.length > 0) {
+    const nameRead = await intelIn(admin, "practice_patient", "id, display_name", ctx.workspaceId, "id", wantedIds);
+    if (nameRead.error) problems.push(`patient names for the medication samples: ${nameRead.error}`);
+    else for (const p of nameRead.rows) nameById.set(p.id as string, String(p.display_name ?? ""));
+  }
+
+  // ⚠ THE DRUG NAME IS ON THE ROW AND IS SHOWN EITHER WAY. It is not patient-identifying on its own,
+  // and a worklist of six rows reading "a medication" would be a list nobody can act on -- which is the
+  // failure a drillable count exists to avoid. What patient.view gates is the PERSON, not the drug.
+  const sampleRow = (r: any, note: string | null) => {
+    const pid = typeof r.patient_id === "string" ? r.patient_id : "";
+    const drug = String(r.generic_name ?? "").trim() || "a medication";
+    const who = identified ? (nameById.get(pid) || "a patient") : "a patient";
+    return {
+      id: String(r.id),
+      label: `${drug} -- ${who}`,
+      note: note || null,
+      href: pid ? `/practice/patients/${pid}` : null,
+    };
+  };
+
+  const notNamed = "counted, and not named: you hold medication access but not clinical access";
+  if (dueForReview.status === "ok") {
+    dueForReview.sample = dueRead.rows.slice(0, SAMPLE_SIZE)
+      .map(r => sampleRow(r, `review due ${String(r.next_review_on ?? "")}`));
+    dueForReview.sampleIsPartial = (dueForReview.count ?? 0) > dueForReview.sample.length;
+    if (!identified) dueForReview.reason = notNamed;
+  }
+  if (noReviewDate.status === "ok") {
+    noReviewDate.sample = noneRead.rows.slice(0, SAMPLE_SIZE)
+      .map(r => sampleRow(r, r.started_on ? `started ${String(r.started_on)}` : null));
+    noReviewDate.sampleIsPartial = (noReviewDate.count ?? 0) > noReviewDate.sample.length;
+    if (!identified) noReviewDate.reason = notNamed;
+  }
+
+  return intelModule("medication_review", "Medication review", data, sources, problems);
+}
+
 // ── 8. THE PARAMETER ALERT SURFACE -- PIE §7, AND §4's "PARAMETER DETERIORATION" ──────────────────────
 
 /** Migration 246 seeds this; read out of the migration, not remembered. Practitioner and assistant. */
@@ -3653,6 +3835,8 @@ export type IntelligenceSuite = {
   referrals: IntelModule<ReferralIntelligenceData>;
   /** CPR-PIE-001 §7's alert framework, over the store migration 246 shipped and nothing surfaced. */
   alerts: IntelModule<ParameterAlertData>;
+  /** CPR-PIE-001 s3, built on migration 258 once its store existed. */
+  medications: IntelModule<MedicationReviewData>;
   /**
    * CPR-PIE-001 §3/§4/§5's modules that have NO store in this product, named where they would have gone.
    *
@@ -3693,7 +3877,7 @@ export async function intelligenceSuite(
   // practiceIntelligenceWorkspace already refuses politely when report.view is absent, and each of the
   // other four states its own permission answer. Nothing here short-circuits on a missing capability:
   // a page that renders nothing cannot explain why it rendered nothing.
-  const [workspace, patients, pathways, reports, cohorts, referrals, alerts, home] = await Promise.all([
+  const [workspace, patients, pathways, reports, cohorts, referrals, alerts, medications, home] = await Promise.all([
     practiceIntelligenceWorkspace(admin, ctx, opts, atTime),
     patientAttentionIntelligence(admin, ctx, range, atTime),
     pathwayIntelligence(admin, ctx, atTime),
@@ -3703,6 +3887,10 @@ export async function intelligenceSuite(
     // configured and a dead referral table still gets the other nine areas.
     referralIntelligence(admin, ctx, range, atTime),
     parameterAlertIntelligence(admin, ctx, range, atTime),
+    // ⚠ AND MEDICATION REVIEW JOINS THEM ON THE SAME TERMS. It fails alone: a deployment without
+    // migration 258 gets the other ten areas and one module that names the missing migration, rather
+    // than a page that renders nothing because one store is absent.
+    medicationReview(admin, ctx, range, atTime),
     operationsHome(admin, ctx),
   ]);
 
@@ -3740,7 +3928,7 @@ export async function intelligenceSuite(
       })),
     },
     patients, pathways, cohorts, reports,
-    referrals, alerts,
+    referrals, alerts, medications,
     // ⚠ NOT CONDITIONAL. The list of what cannot be built travels whatever the caller's permissions and
     // whatever the reads did: a reader who sees no medication panel must be able to tell "not built" from
     // "not permitted" from "nothing this month", and an omitted list answers none of the three.

@@ -42,7 +42,7 @@ import { registerPatient } from "../src/lib/practice/patients";
 import { resolveWorkspaceContext, hasCapability, type WorkspaceContext } from "../src/lib/practice/access";
 import {
   intelligenceSuite, referralIntelligence, parameterAlertIntelligence,
-  intelRange, suiteGroundingFigures, MIN_OBSERVATIONS_FOR_COMPARISON,
+  intelRange, suiteGroundingFigures, MIN_OBSERVATIONS_FOR_COMPARISON, medicationReview,
 } from "../src/lib/practice/intelligence";
 import {
   findRates, ALERT_SEVERITIES, ALERT_SEVERITY_LEVELS, SEVERITY_NOT_CLASSIFIED, PIE_NOT_BUILDABLE,
@@ -236,9 +236,21 @@ async function main() {
   // ⚠ THE CONTROL, because the assertion above is a set of NEGATIVES and negatives pass when the text is
   // empty, when the keys stop matching, or when somebody renames the entries. This proves there is real
   // prose being read.
-  ok("control. there are three medication refusals and they carry real prose to test",
-    PIE_NOT_BUILDABLE.filter(u => u.key.startsWith("medication_")).length === 3 && medWhy.length > 400,
-    `${PIE_NOT_BUILDABLE.filter(u => u.key.startsWith("medication_")).length} entries, ${medWhy.length} chars`);
+  // ⚠ TWO NOW, NOT THREE, AND THE CONTROL COUNTS WHAT IS LEFT RATHER THAN WHAT THERE WAS.
+  // medication_review was BUILT (migration 258 gave it next_review_on and the index a review panel
+  // reads), so it left the list -- which is the only way an entry should ever leave it. Asserting a
+  // count of REFUSALS is asserting how much is still missing, and that is the number work reduces.
+  // What this control is actually for is proving there is real prose to test, so it tests that.
+  const medRefusals = PIE_NOT_BUILDABLE.filter(u => u.key.startsWith("medication_"));
+  ok("control. the remaining medication refusals carry real prose to test",
+    medRefusals.length > 0 && medWhy.length > 400,
+    `${medRefusals.length} entries, ${medWhy.length} chars`);
+  // ⚠ AND THE ONE THAT LEFT IS GONE FOR THE RIGHT REASON: not deleted, BUILT. A refusal removed
+  // without the module appearing would be the list quietly getting shorter.
+  ok("...and medication_review is no longer refused, because the module now exists",
+    !PIE_NOT_BUILDABLE.some(u => u.key === "medication_review")
+    && typeof medicationReview === "function",
+    PIE_NOT_BUILDABLE.map(u => u.key).join(","));
   // The four CPR-MED-001 tables that genuinely do NOT exist, probed rather than remembered -- the
   // corrected prose names exactly these four and must stay right about them too.
   // ⚠ THE TWO CAPABILITIES THAT ARE GENUINELY ABSENT -- named as capabilities, not as guessed table
@@ -259,17 +271,27 @@ async function main() {
   ]);
   ok("control. dose calculation, monitoring plans and a drug catalogue all EXIST under their real names",
     doseCalc && monitorPlan && medCatalogue, JSON.stringify({ doseCalc, monitorPlan, medCatalogue }));
-  ok("and the three medication refusals are IN THE LIST rather than omitted",
-    ["medication_review", "medication_utilisation", "medication_monitoring_due"]
+  ok("and the two medication modules that CANNOT be built are still in the list rather than omitted",
+    ["medication_utilisation", "medication_monitoring_due"]
       .every(k => PIE_NOT_BUILDABLE.some(u => u.key === k)),
     PIE_NOT_BUILDABLE.map(u => u.key).join(","));
+  // ⚠ THE LENGTH PIN IS GONE. It read `=== 6`, and a list of things that cannot be built shrinks
+  // every time one gets built -- so the assertion reddened on success, which is the most recurring
+  // defect in this repository. The claim worth keeping is about EVERY entry, whatever the count.
   ok("each refusal names the section of PIE that asks for it, why it cannot be built, and what would make it real",
-    PIE_NOT_BUILDABLE.length === 6 &&
+    PIE_NOT_BUILDABLE.length > 0 &&
     PIE_NOT_BUILDABLE.every(u => /PIE §\d/.test(u.from) && u.why.length > 150 && u.wouldRequire.length > 60),
     PIE_NOT_BUILDABLE.map(u => `${u.key}:${u.why.length}/${u.wouldRequire.length}`).join(" "));
-  ok("the medication refusal names the tables that were looked for, so the next person does not repeat the search",
-    /practice_medication\b/.test(PIE_NOT_BUILDABLE.find(u => u.key === "medication_review")!.why),
-    PIE_NOT_BUILDABLE.find(u => u.key === "medication_review")!.why.slice(0, 100));
+  // ⚠ THIS READ `.find(...)!.why` FOR medication_review AND CRASHED WITH A TypeError THE MOMENT THAT
+  // ENTRY WAS BUILT AND REMOVED. The `!` turned an absent key into "Cannot read properties of undefined"
+  // rather than a failed assertion with a sentence -- the same shape as the continuity harness's
+  // `req!.id`. A harness that CRASHES instead of failing tells the reader nothing about what it wanted.
+  //
+  // Repointed to the refusals that remain, and written so a missing key FAILS rather than throws.
+  const namesTables = medRefusals.filter(u => /practice_medication\b/.test(u.why));
+  ok("the remaining medication refusals name the tables that were looked for, so nobody repeats the search",
+    medRefusals.length > 0 && namesTables.length === medRefusals.length,
+    medRefusals.map(u => `${u.key}:${/practice_medication\b/.test(u.why)}`).join(" "));
   // ⚠ THE NAME COLLISION THE SURVEY FLAGGED, ASSERTED SO IT CANNOT BE QUIETLY MERGED LATER.
   ok("the growth refusal warns that the built `practice_growth` module is BUSINESS growth, not a child's growth chart",
     /BUSINESS growth/.test(PIE_NOT_BUILDABLE.find(u => u.key === "growth_percentiles")!.why),
@@ -602,9 +624,20 @@ async function main() {
     findRates({ alerts: { series: [{ change: { percent: 12, direction: "up" } }] } }).length > 0,
     JSON.stringify(findRates({ alerts: { series: [{ change: { percent: 12 } }] } })));
 
+  // ⚠ TWO COUNT PINS AGAIN, AND BOTH NAMED medication_review AS PROOF THE LIST TRAVELLED. It was built,
+  // so it left the list, and an assertion that a REFUSAL is present reddens the day the thing is
+  // delivered. The claim is that the list travels intact -- so it is compared to the source of truth
+  // rather than to a number, which also catches the payload dropping or reordering entries.
   ok("THE LIST OF UNBUILDABLE MODULES TRAVELS IN THE PAYLOAD, not only on the page",
-    suite.notBuildable.length === 6 && suite.notBuildable.some(u => u.key === "medication_review"),
+    suite.notBuildable.length === PIE_NOT_BUILDABLE.length
+    && suite.notBuildable.every((u, i) => u.key === PIE_NOT_BUILDABLE[i].key),
     suite.notBuildable.map(u => u.key).join(","));
+  // ⚠ AND THE BUILT ONE IS IN THE SUITE AS A MODULE, which is the other half: an entry that left the
+  // refusal list without appearing as a module would be the list quietly getting shorter.
+  ok("...and medication review now travels as a MODULE rather than as a refusal",
+    !suite.notBuildable.some(u => u.key === "medication_review")
+    && suite.medications.key === "medication_review",
+    JSON.stringify({ key: suite.medications.key, available: suite.medications.available }));
 
   // ⚠ STRUCTURAL, over the two new subtrees rather than spot-checked on the figures somebody remembered.
   const newFigures = figuresWithFormula({ referrals: suite.referrals, alerts: suite.alerts });
@@ -687,7 +720,80 @@ async function main() {
   ok("and A's are non-empty, so the isolation test is not vacuous",
     (suite.referrals.data?.made.count ?? 0) > 0 && (suite.alerts.data?.open.count ?? 0) > 0);
   ok("B still gets the unbuildable list, because \"not built\" is a fact about the product rather than about a practice",
-    bSuite.notBuildable.length === 6);
+    bSuite.notBuildable.length === PIE_NOT_BUILDABLE.length,
+    `${bSuite.notBuildable.length} vs ${PIE_NOT_BUILDABLE.length}`);
+
+
+  // ══ E. MEDICATION REVIEW ═══════════════════════════════════════════════════════════════════════
+  //
+  // ⚠ THE RULING THIS MODULE TURNS ON IS THE THING UNDER TEST, not the arithmetic. A medication with
+  // NO review date is NOT due -- nobody said when to look at it -- and a panel that folded those into
+  // "due" would be printing this code's opinion about clinical practice as if a practitioner had said
+  // it. The fixture therefore makes the WRONG answer and the RIGHT answer different numbers: one
+  // medication genuinely overdue, TWO with no review date at all. An implementation that counted
+  // unscheduled rows as due would report 3 where the answer is 1.
+  const medPatient = await patient("Namusoke Medication");
+  const yesterday = dueDateFrom(today, -1);
+  const medRows = [
+    { generic_name: "Amlodipine", dose_text: "5 mg", status: "active", next_review_on: yesterday },
+    { generic_name: "Metformin", dose_text: "500 mg", status: "active", next_review_on: null },
+    { generic_name: "Salbutamol", dose_text: "2 puffs", status: "paused", next_review_on: null },
+    // ⚠ A DISCONTINUED ROW WITH A LONG-PAST REVIEW DATE. Without it, "only active or paused count"
+    // passes on a fixture where every row is live -- the filter would not be a filter.
+    // ⚠ discontinued_reason IS REQUIRED and the seed was refused without it. Migration 258:
+    // "DISCONTINUING WITHOUT SAYING WHY leaves the next prescriber unable to tell the course
+    // finished from it made them ill". The constraint is the point, so the fixture obeys it rather
+    // than working around it.
+    { generic_name: "Ibuprofen", dose_text: "400 mg", status: "discontinued",
+      discontinued_reason: "course finished", next_review_on: dueDateFrom(today, -90) },
+  ];
+  const { error: medSeedErr } = await admin.from("practice_medication").insert(
+    medRows.map(r => ({ workspace_id: wsA, patient_id: medPatient, created_by: OWNER, ...r })));
+  ok("E-fixture. four medications seed, three live and one discontinued",
+    !medSeedErr, medSeedErr?.message ?? "");
+
+  const med = await medicationReview(admin, a.ctx, range);
+  ok("E1. the module is available now that migration 258 exists",
+    med.available && med.data !== null, med.unavailableReason ?? JSON.stringify(med.problems));
+  ok("E2. ⚠ ONE medication is due -- the overdue live row, and NOT the two with no review date",
+    med.data?.dueForReview.count === 1,
+    JSON.stringify({ due: med.data?.dueForReview.count, unscheduled: med.data?.noReviewDate.count }));
+  ok("E3. ⚠ AND THE UNSCHEDULED ONES ARE COUNTED AND DISCLOSED, never folded into the first figure",
+    med.data?.noReviewDate.count === 2,
+    JSON.stringify({ unscheduled: med.data?.noReviewDate.count }));
+  ok("E4. control. the discontinued row is in neither figure, so the status filter IS a filter",
+    (med.data?.dueForReview.count ?? 0) + (med.data?.noReviewDate.count ?? 0) === 3,
+    JSON.stringify({ due: med.data?.dueForReview.count, unscheduled: med.data?.noReviewDate.count }));
+  ok("E5. the rule is stated ON THE PAYLOAD, so a screen cannot describe the figure differently",
+    /NOT counted as due/i.test(med.data?.rule ?? ""), med.data?.rule?.slice(0, 90) ?? "");
+  ok("E6. the count is drillable -- real rows travel with it, naming the drug",
+    (med.data?.dueForReview.sample.length ?? 0) === 1
+    && /Amlodipine/.test(med.data?.dueForReview.sample[0]?.label ?? ""),
+    JSON.stringify(med.data?.dueForReview.sample));
+  ok("E7. and it carries the practitioner-checkable formula rather than a bare number",
+    /next_review_on/.test(med.data?.dueForReview.formula ?? "")
+    && med.data?.dueForReview.provenance === "computed",
+    med.data?.dueForReview.formula?.slice(0, 90) ?? "");
+
+  // ⚠ THE PERMISSION ANSWER IS ITS OWN ANSWER, not an empty list. A practitioner without
+  // medication.view must be told they cannot see this, never shown a confident zero.
+  const noMedCtx = await withoutCapability(wsA, OWNER, ["medication.view"]);
+  const medBlind = await medicationReview(admin, noMedCtx, range);
+  ok("E8. ⚠ a caller without medication.view is REFUSED BY NAME, never handed a zero",
+    !medBlind.available && /medication\.view/.test(medBlind.unavailableReason ?? "")
+    && medBlind.data === null,
+    JSON.stringify({ available: medBlind.available, reason: medBlind.unavailableReason }));
+  const restoredMed = await restoreCapabilities(wsA, OWNER, ["medication.view"]);
+  ok("E8-control. medication.view is restored, so nothing after this passes for want of it",
+    hasCapability(restoredMed, "medication.view"));
+
+  // ⚠ A FAILED READ IS NEVER A ZERO. The one answer this whole engine exists to refuse.
+  const medBroken = await medicationReview(brokenAdmin(), a.ctx, range);
+  ok("E9. ⚠ a read that FAILED reports unreadable with the reason, never a count of nought",
+    medBroken.data?.dueForReview.status === "unreadable"
+    && medBroken.data?.dueForReview.count === null
+    && (medBroken.problems.length > 0),
+    JSON.stringify({ status: medBroken.data?.dueForReview.status, count: medBroken.data?.dueForReview.count }));
 
   return report();
 }

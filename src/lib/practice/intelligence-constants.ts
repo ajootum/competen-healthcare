@@ -380,39 +380,17 @@ export type UnbuildableModule = {
   wouldRequire: string;
 };
 
+// ⚠ medication_review LEFT THIS LIST BECAUSE IT WAS BUILT, which is the only way an entry should
+// ever leave it. Migration 258 gave the product practice_medication with next_review_on and an index
+// on (workspace_id, next_review_on) where status in (active, paused) -- which IS the read a review
+// panel makes -- so the refusal had stopped being true. intelligence.ts now carries medicationReview
+// and the suite carries it as `medications`.
+//
+// The other two medication entries STAY, and their reasons are narrower than "the store is missing":
+// utilisation asks what a practice PRESCRIBES and practice_medication records what a patient is ON,
+// including rows a different prescriber wrote; monitoring_due needs an edge from a drug to the
+// parameter its monitoring watches, and nothing joins them.
 export const PIE_NOT_BUILDABLE: UnbuildableModule[] = [
-  {
-    key: "medication_review",
-    label: "Medication review",
-    from: "PIE §3 (intelligence modules) and §2 (data sources)",
-    // ⚠ THIS SENTENCE WENT FALSE AND WAS STILL BEING RENDERED. It said no practice_medication table
-    // existed in any migration, no medication module existed in src/lib/practice, and no
-    // /practice/medications route existed. Migration 258 creates practice_medication AND
-    // practice_medication_event; medication.ts and medication-constants.ts are both there; the route
-    // is at src/app/practice/(shell)/medications/page.tsx. Three factual claims, all wrong, inside an
-    // explanation whose entire job is to be trusted about an absence.
-    //
-    // ⚠⚠ AND THE FIRST CORRECTION WAS ITSELF MISLEADING, WHICH IS WORTH RECORDING RATHER THAN QUIETLY
-    // FIXING. It replaced the false list with a list of four "still absent" tables taken from the
-    // original prose -- practice_medication_warning, practice_dose_calculation,
-    // practice_medication_monitoring, practice_adverse_reaction -- and two of those four are absent ONLY
-    // UNDER THAT NAME. practice_medication_dose_calculation exists (migration 258) and
-    // practice_patient_monitoring_plan exists (migration 246). Every claim was literally true and the
-    // paragraph was not, which is the harder kind of wrong. Named by CAPABILITY now, not by a guessed
-    // table name.
-    //
-    // ⚠ THE CONCLUSION STILL STANDS AND THE REASON HAD TO CHANGE COMPLETELY -- the Orders Intelligence
-    // lesson again, where a tile explained an absence with a detail that had stopped being true. The
-    // module is NOT BUILT, which is why it is still in this list. It is no longer UNBUILDABLE, which is
-    // a different thing and is now said in those words.
-    why: "The medication store now EXISTS and this module has not been built on it. Migration 258 gives the product practice_medication (generic and brand name, dose, route, frequency, start and stop dates, prescriber, and a status of active, completed, paused or discontinued) and practice_medication_event beside it, with medication.ts as its engine and a /practice/medications route. Two capabilities CPR-MED-001 asks for are genuinely absent -- interaction and allergy WARNINGS, and adverse reactions -- and neither is what a review panel reads. This one is a build decision that has not been taken, not a gap in the record.",
-    // ⚠ AND THIS ASKED FOR SOMETHING THAT NOW EXISTS. Every item it named -- drug, dose, route, start,
-    // stop, and a status something writes -- is a column on practice_medication, and
-    // review_interval_days / next_review_on are written by medication.ts with an index on
-    // (workspace_id, next_review_on) where status in (active, paused). That index is exactly the read a
-    // review panel makes. What is missing is the decision to build the panel.
-    wouldRequire: "Nothing further in the record -- the substrate is there, including next_review_on and its index. What it needs is the owner's decision to build the panel, and a ruling on what 'due for review' means where no review interval was set: silence, or a practice default.",
-  },
   {
     key: "medication_utilisation",
     label: "Medication utilisation",
