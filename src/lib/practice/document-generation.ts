@@ -76,8 +76,10 @@ export async function practitionerNameFor(admin: any, userId: string): Promise<s
 export async function buildMergeContext(admin: any, ctx: WorkspaceContext, args: {
   patientId: string; encounterId?: string | null; practitionerName?: string | null;
 }): Promise<MergeContext | null> {
+  // patient_number is CPR-PID-001's identifier and is selected for {{patient.identifier}} -- see the
+  // ladder where practiceId is computed below.
   const { data: patient } = await admin.from("practice_patient")
-    .select("id, display_name, sex, birth_date, age_estimate_years")
+    .select("id, display_name, sex, birth_date, age_estimate_years, patient_number")
     .eq("id", args.patientId).eq("workspace_id", ctx.workspaceId).maybeSingle();
   if (!patient) return null;
 
@@ -106,7 +108,27 @@ export async function buildMergeContext(admin: any, ctx: WorkspaceContext, args:
     }
   }
 
-  const practiceId = ((identifiers ?? []) as any[]).find(i => i.identifier_type === "practice_id")?.value ?? null;
+  // ⚠ THIS READ THE RETIRED IDENTIFIER ONLY, AND {{patient.identifier}} HAS BEEN RENDERING
+  // "[[patient.identifier not recorded]]" INTO REFERRAL LETTERS EVER SINCE.
+  //
+  // Migration 289 (CPR-PID-001 v1.0, FROZEN, owner decision 2026-08-11) made YY-NNNNNN on
+  // practice_patient.patient_number the patient identifier, and said of the old one in as many words:
+  // "existing P-XXXXXX practice ids RETIRE to searchable legacy aliases and stay in
+  // practice_patient_identifier untouched. New registrations stop issuing them." So this line was
+  // looking in the one place a patient registered after that date can never appear -- measured today:
+  // 60 patients, ALL 60 with a patient_number, and only 10 with a practice_id alias.
+  //
+  // A letter that says the practice identifier is not recorded, about a patient whose identifier is
+  // recorded, is a false statement leaving the practice on headed paper.
+  //
+  // ⚠ THE LADDER IS THE PRODUCT'S OWN, NOT A NEW ONE. CohortTable.tsx documents it as "the
+  // patientNumber ?? practiceId ?? 'none yet' ladder" and ContextBanner.tsx spells the same thing;
+  // every surface that shows a patient identifier already reads the number first and falls back to the
+  // legacy alias. This module was the one left behind, so it gets the established idiom rather than an
+  // invented one. The fallback still earns its place: it is what a pre-289 patient's letter shows.
+  const legacyPracticeId = ((identifiers ?? []) as any[])
+    .find(i => i.identifier_type === "practice_id")?.value ?? null;
+  const practiceId = patient.patient_number ?? legacyPracticeId;
   const phone = ((contacts ?? []) as any[]).find(c => c.contact_type === "phone" && c.preferred)?.value
     ?? ((contacts ?? []) as any[]).find(c => c.contact_type === "phone")?.value ?? null;
 

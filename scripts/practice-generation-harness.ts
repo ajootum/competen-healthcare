@@ -194,9 +194,57 @@ async function main() {
     body.includes("[[patient.date_of_birth not recorded]]"), body.slice(0, 200));
   ok("THE STORED BODY carries a visible marker for the unknown field too",
     body.includes("[[unknown field: referral.addressee]]"), body.slice(0, 120));
+  // ⚠ THIS CONTROL PINNED THE RETIRED IDENTIFIER FORMAT, AND IT WAS RIGHT TO GO RED.
+  //
+  // It matched /Practice identifier: P-/. Migration 289 (CPR-PID-001, FROZEN, owner decision
+  // 2026-08-11) replaced P-XXXXXX with YY-NNNNNN on practice_patient.patient_number and retired the
+  // old ids to "searchable legacy aliases", so no patient registered since can match that pattern --
+  // and buildMergeContext was still reading only the retired alias, which is the defect this
+  // assertion had been reporting all along without anybody reading it.
+  //
+  // ⚠ THE VALUE IS READ BACK FROM THE FIXTURE, NOT WRITTEN AS A PATTERN. A regex for YY-NNNNNN would
+  // be the same mistake one format later, and it would also pass on somebody ELSE's number. Reading
+  // the row asserts that THIS patient's identifier reached THIS letter.
+  const { data: p1Row } = await admin.from("practice_patient")
+    .select("patient_number").eq("id", p1.data.id).maybeSingle();
+  const p1Number = (p1Row as { patient_number: string | null } | null)?.patient_number ?? null;
+  ok("CONTROL-setup. the fixture patient really has a patient_number to look for",
+    !!p1Number, String(p1Number));
   ok("CONTROL: the fields that COULD be filled carry their real values",
-    body.includes("Nakiwala Prossy") && /Practice identifier: P-/.test(body), body.slice(0, 300));
+    body.includes("Nakiwala Prossy") && !!p1Number && body.includes(`Practice identifier: ${p1Number}`),
+    body.slice(0, 300));
   ok("the body contains no 'Dear ,' -- nothing was silently blanked", !/Dear\s*,/.test(body));
+
+  // ── 3b. THE SIGNATURE BLOCK, WHICH NOTHING WAS EXERCISING ────────────────
+  //
+  // ⚠ {{practitioner.name}} RENDERED "[[practitioner.name not recorded]]" IN EVERY LETTER THIS
+  // HARNESS GENERATED AND NO ASSERTION LOOKED AT IT. That is the signature on a referral, so a
+  // placeholder there is the one a consultant reads. It is honest for THIS fixture -- the synthetic
+  // owner is a fabricated uuid with no auth.users row and therefore no profiles row, so
+  // practitionerNameFor correctly finds nothing (measured: all 47 real profiles DO carry a full_name).
+  // But "correct for a user who cannot exist" is not coverage of the field that signs the letter.
+  //
+  // ⚠ PASSED EXPLICITLY RATHER THAN BY SEEDING A PROFILE, because profiles.id references
+  // auth.users(id) and this fixture's owner is not a real account. generateFromTemplate already takes
+  // practitionerName for exactly this reason, so the merge path is exercised end to end without
+  // inventing an identity.
+  const signed = await generateFromTemplate(admin, a.ctx, {
+    templateId: letterId, patientId: p1.data.id, allowUnresolved: true,
+    practitionerName: "Dr Aine Kabuye", correlationId: "harness-gen-signed",
+  });
+  ok("3b-setup. a letter generates with a named practitioner", signed.ok,
+    signed.ok ? "" : signed.message);
+  if (signed.ok) {
+    const signedBody = String((await getDocument(admin, wsA, signed.data.id))?.document?.body ?? "");
+    ok("3b. the signature carries the practitioner's real name",
+      signedBody.includes("Dr Aine Kabuye")
+      && !signedBody.includes("[[practitioner.name not recorded]]"),
+      signedBody.slice(-120));
+    // The other half of the same claim: where there IS no name, the marker still shows rather than a
+    // blank line under "Yours sincerely".
+    ok("3b-control. and where no name is known the marker still shows, so 3b is not vacuous",
+      body.includes("[[practitioner.name not recorded]]"), body.slice(-120));
+  }
 
   // ── 4. No fourth document model: CPR-130 owns it from here ───────────────
   ok("a generated letter IS an ordinary practice_clinical_document, in DRAFT",
