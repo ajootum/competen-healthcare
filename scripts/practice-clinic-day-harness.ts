@@ -21,7 +21,7 @@ import { createClient } from "@supabase/supabase-js";
 import { loadEnvConfig } from "@next/env";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { planActivity, startActivity, endActivity, todaysPlan } from "../src/lib/practice/activity";
-import { bookAppointment, transitionAppointment } from "../src/lib/practice/scheduling";
+import { bookAppointment, transitionAppointment, APPOINTMENT_TRANSITIONS } from "../src/lib/practice/scheduling";
 import { launchEncounter, transitionEncounter, interruptWith } from "../src/lib/practice/encounters";
 import { createFollowUp } from "../src/lib/practice/follow-ups";
 import { dashboardReadModel } from "../src/lib/practice/dashboard";
@@ -153,11 +153,35 @@ async function main() {
   ok("3b. the booking appears in the session's figures", (tile(bookedSeen, "booked") ?? 0) >= 1,
     String(tile(bookedSeen, "booked")));
 
-  const confirmed = await transitionAppointment(admin, {
-    workspaceId: ws, appointmentId: booking.data.id, to: "CONFIRMED", actorId: DOCTOR, correlationId: CORR,
-  });
-  ok("3b-2. a booking is confirmed before anybody can arrive against it", confirmed.ok,
-    confirmed.ok ? "" : JSON.stringify(confirmed));
+  // ══ 3b-2 USED TO CLICK CONFIRM, AND CLICKING CONFIRM IS THE THING THE OWNER REMOVED ═════════════
+  //
+  // ⚠ THIS ASSERTION WAS RED ON MAIN, and it had been red since `2ee597ae A staff booking confirms
+  // itself` -- the owner's decision of 2026-08-12: "Once patients book into an available space, it
+  // should be booked and not need human intervention to confirm. We are looking to reduce number of
+  // clicks." bookAppointment now enters CONFIRMED, so the harness asking the state machine to move
+  // CONFIRMED -> CONFIRMED was refused with ILLEGAL_TRANSITION, correctly, by an engine doing exactly
+  // what it was told to do.
+  //
+  // ⚠ THE ASSERTION PINNED AN ACTION WHERE IT MEANT A PRECONDITION, which is why it broke. Its
+  // sentence -- "a booking is confirmed before anybody can arrive against it" -- is a claim about the
+  // STATE the booking is in when 3c arrives against it. Performing a transition to reach that state
+  // was one way to establish it in 2026-08-11 and is a no-op today. Reading the state asserts the same
+  // property and cannot go stale when the route to it changes again.
+  //
+  // Same repair as practice-reschedule-harness line 312 ("THE PROPERTY IS LIVE, NOT REQUESTED") and
+  // practice-events-harness 2d/7c/7e. It is the most frequently recurring assertion defect here.
+  ok("3b-2. a staff booking is ALREADY confirmed -- nobody has to click Confirm before an arrival",
+    booking.data.status === "CONFIRMED", JSON.stringify(booking.data));
+
+  // ⚠ THE CONTROL, because 3b-2 on its own would still pass if ARRIVED became reachable from anywhere.
+  // What 3c depends on is not merely "the booking says CONFIRMED" but "CONFIRMED is the state an
+  // arrival is legal from, and the state before it is not". Read off the engine's own table rather
+  // than re-typed, so a change to the state machine reaches this assertion instead of going round it.
+  ok("3b-2-control. and ARRIVED is legal from CONFIRMED and from nowhere else",
+    APPOINTMENT_TRANSITIONS.CONFIRMED.includes("ARRIVED")
+    && Object.entries(APPOINTMENT_TRANSITIONS)
+      .filter(([from]) => from !== "CONFIRMED").every(([, to]) => !to.includes("ARRIVED")),
+    JSON.stringify(APPOINTMENT_TRANSITIONS));
 
   const arrived = await transitionAppointment(admin, {
     workspaceId: ws, appointmentId: booking.data.id, to: "ARRIVED", actorId: DOCTOR, correlationId: CORR,
