@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/server";
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadPdOperations, SUPABASE_GATE_NOTE } from "@/lib/hq/pd-operations";
-import { loadLaunchAttestations, attestedCount } from "@/lib/hq/pd-launch-attestation";
+import { loadLaunchAttestations, attestedCount, CAP_LAUNCH_ATTEST } from "@/lib/hq/pd-launch-attestation";
 import { FLAG_CONSEQUENCE, FLAG_ORDER } from "@/lib/practice/operations";
 import { OpsHeader, Panel, Warn, TechnicalOpsLink } from "../_components/ops-ui";
 import {
@@ -34,7 +34,11 @@ const FLAG_LABEL: Record<string, string> = {
 };
 
 export default async function Page() {
-  await requireHqCapability("hq.practice.operations.view");
+  const hq = await requireHqCapability("hq.practice.operations.view");
+  // !! THE OWNER BRANCH IS EXPLICIT. decideHq returns capabilities: [] for allow_owner, so reading the
+  // array alone would hide the control from the break-glass account -- the one used when something is
+  // wrong. Same shape as canRetry on Technical Operations.
+  const canAttest = hq.isOwner || hq.capabilities.includes(CAP_LAUNCH_ATTEST);
   const admin = createAdminClient();
   const [ops, attestations] = await Promise.all([
     loadPdOperations(admin),
@@ -121,11 +125,14 @@ export default async function Page() {
         <AttestationRows
           items={manual}
           attestations={attestations}
+          canAttest={canAttest}
           recordingUnavailableReason={
-            attestations.unavailable
+            attestations.unavailable || canAttest
               ? null
-              : "Recording an attestation is not yet possible: the authorised write path is pending, and "
-                + "a button that cannot record one would be a control that does nothing."
+              // !! NAMES WHO MAY, RATHER THAN OFFERING A CONTROL THAT WOULD REFUSE. s13 forbids a
+              // placeholder that does nothing, and the reader still needs to know why they cannot.
+              : "You do not hold hq.practice.launch.attest, so no recording control is offered here. "
+                + "The capability is granted to the Practice Product Director position by migration 344."
           } />
       </Panel>
 

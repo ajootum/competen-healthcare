@@ -1,6 +1,7 @@
 import type { GateItem } from "@/lib/practice/operations";
 import type { LaunchAttestations, AttestationStatus } from "@/lib/hq/pd-launch-attestation";
 import { statusFor } from "@/lib/hq/pd-launch-attestation";
+import AttestControl from "./AttestControl";
 
 // CPR-PD-014 §6 — Launch Readiness, gate-first.
 //
@@ -152,9 +153,14 @@ export { GROUPS, HUMAN_GROUP };
  * anything. §10 draws exactly this distinction, and conflating them would report a product as rejected
  * because a person has not got to it yet.
  */
-export function AttestationRows({ items, attestations, recordingUnavailableReason }: {
+export function AttestationRows({ items, attestations, recordingUnavailableReason, canAttest }: {
   items: GateItem[];
   attestations: LaunchAttestations;
+  /**
+   * Whether THIS caller holds hq.practice.launch.attest (migration 344). The control is drawn only when
+   * true -- s13 forbids a placeholder that does nothing, and a disabled button with a tooltip is one.
+   */
+  canAttest: boolean;
   /**
    * Why no "Record attestation" control is drawn, when none is. §13: "Do not create placeholder controls
    * that do nothing." A disabled button with a tooltip is still a control that does nothing, so the page
@@ -181,7 +187,8 @@ export function AttestationRows({ items, attestations, recordingUnavailableReaso
               <th className="pb-1.5 pr-3 font-semibold">Status</th>
               <th className="pb-1.5 pr-3 font-semibold">Evidence</th>
               <th className="pb-1.5 pr-3 font-semibold">Attested by</th>
-              <th className="pb-1.5 font-semibold">Attested at</th>
+              <th className="pb-1.5 pr-3 font-semibold">Attested at</th>
+              {canAttest && <th className="pb-1.5 font-semibold">Record</th>}
             </tr>
           </thead>
           <tbody>
@@ -204,9 +211,15 @@ export function AttestationRows({ items, attestations, recordingUnavailableReaso
                   <td className="py-2 pr-3 font-mono text-[11px] text-gray-500">
                     {row ? `${row.attestedBy.slice(0, 8)}…` : "—"}
                   </td>
-                  <td className="py-2 text-gray-600">
+                  <td className="py-2 pr-3 text-gray-600">
                     {row ? String(row.attestedAt).slice(0, 16).replace("T", " ") : "—"}
                   </td>
+                  {canAttest && (
+                    <td className="py-2 align-top">
+                      <AttestControl controlId={i.id} controlLabel={i.label}
+                        alreadyAttested={status === "ATTESTED"} />
+                    </td>
+                  )}
                 </tr>
               );
             })}
