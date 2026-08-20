@@ -98,32 +98,61 @@ function walk(dir: string, out: string[] = []): string[] {
  * DELIBERATELY NOT EVERY COLOUR CLASS, and every exclusion below is a stated reason rather than a
  * loosened pattern -- a scan that quietly widened until it passed would prove nothing.
  *
- * TWO FILES ARE EXCLUDED WHOLE:
- *   layout.tsx  -- the sidebar is ALREADY dark and its palette is its own. Inverting something that was
- *                  never light is how a dark theme produces a white sidebar.
- *   print/page  -- a printed document goes onto white paper. Theming it would produce a black rectangle
- *                  with a practitioner's name on it, and cost a great deal of somebody's toner.
- *
- * TWO UTILITIES ARE EXCLUDED BY NAME:
- *   text-white   -- sits on a filled primary button and is correct in both themes.
- *   bg-black/40  -- a modal scrim, which is dark on purpose in a light theme too.
+ * WHAT IS EXCLUDED, AND EACH BY A RULE RATHER THAN BY A NAME:
+ *   layout.tsx        -- the sidebar is ALREADY dark and its palette is its own. Inverting something
+ *                        that was never light is how a dark theme produces a white sidebar.
+ *   any print/page    -- a printed document goes onto white paper. Theming it would produce a black
+ *                        rectangle with a practitioner's name on it, and cost a great deal of
+ *                        somebody's toner.
+ *   text-white        -- sits on a filled primary button and is correct in both themes.
+ *   translucent black -- a scrim or hairline darkens whatever is beneath it, on either ground.
+ *     or white
+ *   already-dark      -- bg/border at shade 400+, text at 300 and below. These are dark or mid BY
+ *                        CHOICE, and remapping them would be the bug.
  */
-const THEME_EXEMPT_FILES = [
-  join(PRACTICE_TREE, "layout.tsx"),
-  join(PRACTICE_TREE, "documents", "[documentId]", "print", "page.tsx"),
-];
-const THEME_EXEMPT_UTILITIES = ["text-white", "bg-black/40"];
+// ⚠ THE TWO LITERALS ABOVE WERE INSTANCES OF RULES, AND KEEPING THEM AS LITERALS IS WHY THIS WENT RED
+// WITH TWENTY-TWO ENTRIES, MOST OF THEM NOT DEFECTS.
+//
+//   "documents/[documentId]/print/page.tsx" exempted ONE print page. There are two -- the invoice print
+//   page carries a `text-gray-200` watermark and was reported as unmapped. A print page is exempt
+//   because paper has no dark theme, which is true of every print page and not of that one file.
+//
+//   "bg-black/40" exempted ONE scrim. The tree now uses border-black/5 through /60, text-black/50,
+//   text-black/70 and bg-black/[0.02] -- every one a TRANSLUCENT OVERLAY, which is what made the scrim
+//   exempt in the first place: it darkens whatever is beneath it and is correct on either ground. Nine
+//   more literals would have been nine more entries waiting to be added one at a time.
+//
+// Both are now the rule they were an instance of. That is not a wider exemption; it is the same
+// exemption stated once instead of enumerated.
+const isPrintPage = (file: string) => /[\\/]print[\\/]page\.tsx$/.test(file);
+const THEME_EXEMPT_FILES = [join(PRACTICE_TREE, "layout.tsx")];
+const THEME_EXEMPT_UTILITIES = ["text-white"];
+/** A translucent black or white overlay darkens or lightens what is under it, on either theme. */
+const isTranslucentOverlay = (u: string) => /-(?:black|white)\/(?:\d+|\[[\d.]+\])$/.test(u);
 
 function lightUtilitiesUsed(): string[] {
   const found = new Set<string>();
-  const pattern = /\b(?:bg|text|border)-(?:white|black|gray-\d{2,3}|(?:amber|red|emerald|blue)-(?:50|100))(?:\/\d+)?\b/g;
+  const pattern = /\b(?:bg|text|border)-(?:white|black|gray-\d{2,3}|(?:amber|red|emerald|blue)-(?:50|100))(?:\/(?:\d+|\[[\d.]+\]))?(?![\w-])/g;
   for (const file of walk(PRACTICE_TREE)) {
-    if (THEME_EXEMPT_FILES.includes(file)) continue;
+    if (THEME_EXEMPT_FILES.includes(file) || isPrintPage(file)) continue;
     const src = readFileSync(file, "utf8");
     for (const m of src.matchAll(pattern)) {
       // The sidebar's own tints, which reach no light surface.
       if (/^(?:bg|border|text)-(?:white|blue-\d{2,3})\/\d+$/.test(m[0])) continue;
-      if (THEME_EXEMPT_UTILITIES.includes(m[0])) continue;
+      if (THEME_EXEMPT_UTILITIES.includes(m[0]) || isTranslucentOverlay(m[0])) continue;
+      // ⚠ A UTILITY THAT IS ALREADY DARK NEEDS NO DARK MAPPING, and the pattern above cannot tell --
+      // it matches gray-\d{2,3}, which is the whole scale. bg-gray-900 on a button, bg-gray-400 on a
+      // "cancelled" badge and border-gray-700 on a selected row are dark or mid BY CHOICE and are
+      // correct on either ground; remapping them would be the bug.
+      //
+      // Tailwind's light end is 50-300, so: a BACKGROUND or BORDER is light at 300 and below, and TEXT
+      // is dark -- and therefore needs remapping -- at 500 and above. Stated as the reading it is,
+      // rather than as five more names in an exemption list.
+      const shade = Number(m[0].match(/-(\d{2,3})(?:\/|$)/)?.[1] ?? NaN);
+      if (Number.isFinite(shade)) {
+        const isText = m[0].startsWith("text-");
+        if (isText ? shade < 500 : shade > 300) continue;
+      }
       found.add(m[0]);
     }
   }

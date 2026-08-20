@@ -47,15 +47,25 @@ export const DASHBOARD_WIDGETS = [
   ["schedule", "Today's timeline", false],
   ["locations", "My locations this week", false],
   ["queue", "Waiting queue", false],
-  ["followups", "Follow-up intelligence", false],
   ["alerts", "Operational alerts", true],
   ["tasks", "Tasks for today", false],
   ["messages", "Messages", false],
-  ["recent_patients", "Recent patients", false],
-  ["insights", "Patient insights", false],
-  ["documents", "Recent documents", false],
-  ["health", "Practice performance", false],
   ["quick_actions", "Quick access", false],
+  // ⚠ AND FIVE MORE WENT THE SAME WAY, FOR THE SAME REASON, TWO ARCS LATER: "Follow-up intelligence",
+  // "Recent patients", "Patient insights", "Recent documents" and "Practice performance".
+  //
+  // CPR-HFE-001 moved every one of those panels off /practice/home, and home/page.tsx records where
+  // each went in its own header: "patient insights, practice performance -> PRACTICE INTELLIGENCE -
+  // recent documents -> DOCUMENTS - follow-up detail -> FOLLOW-UPS - recent patients -> PATIENTS".
+  // This register was not updated with it, so five more switches sat in Settings changing nothing
+  // whichever way a practitioner left them.
+  //
+  // ⚠ MEASURED WITH COMMENTS STRIPPED BEFORE ANY WERE REMOVED, and that step is the reason this is
+  // right. All six untagged keys still APPEAR in home/page.tsx -- in the header prose that says where
+  // they went, and in a label map naming the destinations. A plain search finds every one and would
+  // have kept every one. With comments removed, only "Live clinic" survived as real markup, so that
+  // one was TAGGED rather than removed: its panel exists and its SWITCH was the broken thing.
+  //
   // ⚠ "This practice" AND "Recent activity" ARE REMOVED, and removing them is the fix rather than
   // tagging them on the page.
   //

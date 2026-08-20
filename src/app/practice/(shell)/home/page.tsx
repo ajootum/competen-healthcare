@@ -510,7 +510,13 @@ export default async function PracticeCommandCentre() {
             Attention module; a second rendering would be the story contradicting itself. ═══════════ */}
         <section className="max-md:hidden grid gap-4 lg:grid-cols-3">
           {/* ── Live clinic pointer ──────────────────────────────────────────────────────────────── */}
-          <div className={card}>
+          {/* ⚠ style={widget("queue")} WAS MISSING AND THE SWITCH IN SETTINGS DID NOTHING. "Waiting
+              queue" is in DASHBOARD_WIDGETS, so a practitioner can turn it off -- and this panel
+              rendered regardless, because hiding is done by widget() and nothing called it here.
+              PanelHead k="queue" is NOT the same mechanism: it looks up an icon and a badge colour
+              in PANEL, and carries no personalisation at all. Two attributes spelled with the same
+              key, doing different jobs, is how this went unnoticed. */}
+          <div className={card} style={widget("queue")}>
             <PanelHead k="queue" title="Live clinic" href="/practice/today" hrefLabel="Open Current Session" />
             <Link href="/practice/today"
               className="flex items-baseline gap-2 rounded-lg border border-gray-100 px-3 py-2 text-[12.5px] hover:bg-gray-50">

@@ -572,6 +572,21 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
 
 /* Neutrals. These are surfaces and hairlines rather than tints, so they land on the same near-black
    scale the shell already uses rather than getting a hue of their own. */
+/* ⚠ EVERY OPACITY STEP IS ITS OWN CLASS AND THEREFORE ITS OWN RULE. `.bg-gray-50` does not cover
+   `.bg-gray-50\/40`: Tailwind emits a separate utility per step, so a tint the tree starts using at a
+   new opacity stays LIGHT in the dark theme until a line is added here. That is the brittleness
+   practice-personalisation's scan exists to catch, and it caught these eight -- six tints and two
+   borders the tree had grown since the last pass. Values follow the neighbouring steps rather than
+   being picked fresh, so /40 and /50 sit either side of the /60 already below. */
+[data-practice-theme="dark"] .bg-gray-50\/40 { background-color: #141C2C; }
+[data-practice-theme="dark"] .bg-gray-50\/50 { background-color: #151E30; }
+[data-practice-theme="dark"] .bg-gray-100\/70 { background-color: #1B2540; }
+[data-practice-theme="dark"] .bg-amber-50\/40 { background-color: #2A1F0B; }
+[data-practice-theme="dark"] .bg-emerald-50\/30 { background-color: #0D231E; }
+[data-practice-theme="dark"] .bg-emerald-50\/50 { background-color: #0F2821; }
+[data-practice-theme="dark"] .border-amber-100 { border-color: #5C3D0C; }
+[data-practice-theme="dark"] .border-emerald-100 { border-color: #14453A; }
+
 [data-practice-theme="dark"] .bg-gray-50\/70,
 [data-practice-theme="dark"] .bg-gray-50\/80 { background-color: #111A2B; }
 [data-practice-theme="dark"] .bg-gray-200\/70 { background-color: #1C2942; }
