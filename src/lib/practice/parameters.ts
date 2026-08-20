@@ -1,3 +1,4 @@
+import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
 import { audit } from "@/lib/practice/audit";
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { type EngineResult } from "@/lib/practice/encounters";
@@ -1696,9 +1697,14 @@ export async function upsertPlanEntry(
       `this parameter is required for safety (${existing.safety_required_reason ?? "no reason recorded"}). Pausing, resolving or hiding it needs an authorised override with a written reason.`);
   }
 
+  // ⚠ THIS DATE DECIDES WHEN SOMEBODY IS CHASED FOR A BLOOD TEST, and BOTH branches were the
+  // server's day: one sliced a UTC timestamp, the other called todayIso(). In a practice three hours
+  // ahead of UTC an evening entry set next_due_on a day early, so the plan asked for a repeat before
+  // the interval it states had actually elapsed.
+  const { timezone: planTz, today: planToday } = await workspaceClock(admin, ctx.workspaceId);
   const nextDueOn = computeNextDue({
     schedule: input.schedule ?? null,
-    from: existing?.last_measured_at ? String(existing.last_measured_at).slice(0, 10) : todayIso(),
+    from: practiceDayOf(planTz, existing?.last_measured_at) ?? planToday,
     untilDate: input.untilDate ?? null,
   });
 
@@ -2147,8 +2153,13 @@ export async function recordMeasurement(
   // The plan's own bookkeeping. next_due_on advances from the measurement, so a due date is a fact
   // about when it was last done rather than about when the row was written.
   if (planRow) {
+    // The day the practice measured it. effective_at is timestamptz; the comment above says the due
+    // date is a fact about when it was last done, and that is the practice's calendar, not the server's.
+    const { timezone: measureTz, today: measureToday } = await workspaceClock(admin, ctx.workspaceId);
     const nextDue = computeNextDue({
-      schedule: planRow.schedule, from: String(row.effective_at).slice(0, 10), untilDate: planRow.until_date,
+      schedule: planRow.schedule,
+      from: practiceDayOf(measureTz, row.effective_at as string) ?? measureToday,
+      untilDate: planRow.until_date,
     });
     await admin.from("practice_patient_monitoring_plan").update({
       last_measured_at: row.effective_at, next_due_on: nextDue,

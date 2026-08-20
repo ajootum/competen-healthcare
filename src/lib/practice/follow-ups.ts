@@ -829,7 +829,9 @@ export async function followUpWorkspace(admin: any, workspaceId: string, options
     dueFrom: options.dueFrom ?? undefined, dueTo: options.dueTo ?? undefined,
   });
 
-  const ctx = { today };
+  // Both fields, because a view predicate that measures a window needs the zone as well as the day
+  // -- see ViewContext in follow-up-constants.ts. workspaceClock resolved both, ten lines up.
+  const ctx = { today, timezone };
   const blank = (v: FollowUpView): FollowUpCard =>
     ({ key: v.key, label: v.label, blurb: v.blurb, count: null, ids: [] });
 

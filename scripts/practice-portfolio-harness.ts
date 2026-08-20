@@ -227,9 +227,22 @@ async function main() {
 
   // ── 1. The coverage window ─────────────────────────────────────────────────
   const p = await buildPortfolio(admin, a.ctx);
+  // ⚠ THIS ASSERTION WAS GREEN FOR THE WRONG REASON. It compared the coverage date against the
+  // SERVER's UTC day, which matched only because the engine was making the same mistake -- the test
+  // and the code shared one bug, so nothing could see it. It went red the moment the engine was fixed,
+  // at 22:35 UTC, which in this fixture's Africa/Kampala workspace is already the next day.
+  //
+  // The expectation is now built with Intl directly rather than with practice-time's own helpers, so
+  // this is a second implementation of the conversion and not the engine agreeing with itself.
+  const kampalaDay = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Kampala", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
   ok("1. THE COVERAGE WINDOW IS NOW A REAL DATE, taken from the earliest thing recorded",
-    p.coverage.from === new Date().toISOString().slice(0, 10),
+    p.coverage.from === kampalaDay,
     JSON.stringify(p.coverage));
+  ok("1-control. ⚠ and it is the PRACTICE's day, not the server's -- these differ for three hours",
+    kampalaDay >= new Date().toISOString().slice(0, 10),
+    "the fixture workspace is UTC+3, so its day is never behind UTC's");
   ok("1b. and the statement names that date and disclaims a career",
     p.coverage.statement.includes(p.coverage.from!) &&
     /not a complete record/i.test(p.coverage.statement),

@@ -54,6 +54,12 @@ import {
   GUIDANCE_STATES_EDITABLE, guidanceCanMove, guidanceMovesFrom, GUIDANCE_MODULE_NAME,
 } from "../src/lib/practice/knowledge-constants";
 
+/**
+ * ⚠ NOT "UTC". The zone is an argument to renderSections precisely so a UTC-day slice cannot come
+ * back, and a harness that passes "UTC" would go green against the bug it is guarding.
+ */
+const TZ = "Africa/Kampala";
+
 loadEnvConfig(process.cwd());
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -190,7 +196,7 @@ async function main() {
     GUIDANCE_STATES.find(s => s.code === "published")?.inForce === true);
 
   // ══ 4. RENDERING: NEVER A BLANK UNDER A HEADING ════════════════════════════════════════════════
-  const bare = renderSections(emptyDoc, blankSections, null);
+  const bare = renderSections(emptyDoc, blankSections, null, TZ);
   ok("4a. a document with nothing on it still renders all ten sections",
     bare.length === 10, String(bare.length));
   ok("4b. ⚠ REVIEW SAYS 'NOT CHECKED' WHEN NO DATES ARE SET -- not a blank that reads as fine",
@@ -201,14 +207,33 @@ async function main() {
     bare.find(s => s.key === "approval")?.state === "not_checked",
     JSON.stringify(bare.find(s => s.key === "approval")?.state));
   ok("4c-b. and a PENDING request is still not an approval",
-    renderSections(emptyDoc, blankSections, pendingRequest as never)
+    renderSections(emptyDoc, blankSections, pendingRequest as never, TZ)
       .find(s => s.key === "approval")?.state === "not_checked");
+  // ── 4f. THE APPROVAL DATE IS THE PRACTICE'S DAY ───────────────────────────────────────────────
+  //
+  // decided_at is a timestamptz. Slicing it to ten characters takes the UTC day, so an approval
+  // recorded at 21:30 in Kampala was printed on a signed guidance document as the following date --
+  // a provenance line stating a day the decision was not made on.
+  const eveningApproval = {
+    ...(approvedRequest as never as Record<string, unknown>),
+    decided_at: "2026-08-10T21:30:00.000Z",
+  };
+  const evening = renderSections(readyDoc, filledSections, eveningApproval as never, TZ)
+    .find(s => s.key === "approval")?.body ?? "";
+  ok("4f. ⚠ an approval at 21:30 Kampala time is dated the 11th, not the 10th",
+    evening.includes("2026-08-11") && !evening.includes("2026-08-10"), evening);
+  // CONTROL. 4f proves nothing unless the SAME input under a UTC practice still reads the 10th --
+  // otherwise it would pass against a renderer that had simply hard-coded a day forward.
+  const utcEvening = renderSections(readyDoc, filledSections, eveningApproval as never, "UTC")
+    .find(s => s.key === "approval")?.body ?? "";
+  ok("4f-control. and the same instant under a UTC practice still reads the 10th",
+    utcEvening.includes("2026-08-10"), utcEvening);
   ok("4d. every not_checked section explains what it would take, rather than falling silent",
     bare.filter(s => s.state === "not_checked").every(s => (s.note ?? "").trim().length > 40) &&
     bare.filter(s => s.state === "not_checked").length === 2);
 
   // CONTROL. 4b-4d would pass just as well against a renderer that said "not checked" to everything.
-  const full = renderSections(readyDoc, filledSections, approvedRequest as never);
+  const full = renderSections(readyDoc, filledSections, approvedRequest as never, TZ);
   ok("4-control. ⚠ WITH DATES AND A REAL APPROVAL, BOTH DERIVED SECTIONS SAY SOMETHING",
     full.find(s => s.key === "review")?.state === "derived" &&
     full.find(s => s.key === "approval")?.state === "derived",

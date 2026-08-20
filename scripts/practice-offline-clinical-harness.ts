@@ -33,6 +33,7 @@ import { createClient } from "@supabase/supabase-js";
 import { loadEnvConfig } from "@next/env";
 import { readFileSync } from "node:fs";
 import { offlineClinicalPayload, addCalendarDays } from "../src/lib/practice/offline-clinical-source";
+import { zonedDayRange } from "../src/lib/practice/practice-time";
 import {
   OFFLINE_CLINICAL_HORIZON_DAYS, OFFLINE_CLINICAL_MAX_DAYS, OFFLINE_CLINICAL_RECORD_KEYS,
   OFFLINE_CLINICAL_FORBIDDEN_FIELDS, OFFLINE_LAST_VISIT_EXCLUDED_STATUSES, OFFLINE_MEDICATION_STATUSES,
@@ -290,9 +291,19 @@ async function main() {
     }).select("id").single();
     return data!.id as string;
   };
+  // ⚠ THIS FIXTURE WAS ONLY VALID FOR TWENTY-ONE HOURS A DAY, and 11a went red at 22:35 UTC to prove
+  // it. `at + dayOffset` then setUTCHours(9) builds an instant on the UTC calendar, but the horizon
+  // this is testing is measured on the PRACTICE's calendar. In Kampala after 21:00 UTC the practice is
+  // already on tomorrow, so offset 0 landed at noon YESTERDAY and that patient fell out of the pack --
+  // the harness reporting a horizon defect that was really its own clock.
+  //
+  // Built from the practice's day now, so offset 0 means 09:00 on the practice's today, always.
+  const practiceDayNow = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(at);
   const mkAppt = async (patientId: string, dayOffset: number) => {
-    const when = new Date(at.getTime() + dayOffset * 86400000);
-    when.setUTCHours(9, 0, 0, 0);
+    const day = addCalendarDays(practiceDayNow, dayOffset);
+    const when = new Date(Date.parse(zonedDayRange(day, TZ).startIso) + 9 * 3600000);
     await admin.from("practice_appointment").insert({
       workspace_id: wsId, patient_id: patientId, patient_name: "x",
       appointment_type: "scheduled_followup", scheduled_at: when.toISOString(),

@@ -1,3 +1,4 @@
+import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
 import { audit } from "@/lib/practice/audit";
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { type EngineResult } from "@/lib/practice/encounters";
@@ -1479,6 +1480,10 @@ export async function carryForwardTreatment(
   if (aErr && isMissingTable(aErr)) return storeAbsent();
   if (already) return fail(409, "ALREADY_CARRIED", "this treatment is already in the medication record");
 
+  // The day the treatment was written, in the practice's zone. started_on lands in a permanent
+  // clinical record; a consultation at 21:30 in Kampala would otherwise carry tomorrow's date.
+  const { timezone: carryTz } = await workspaceClock(admin, ctx.workspaceId);
+
   return await recordMedication(admin, ctx, {
     patientId: t.patient_id, encounterId: t.encounter_id, treatmentId: t.id,
     genericName: trim(input.genericName) || t.label,
@@ -1489,7 +1494,7 @@ export async function carryForwardTreatment(
     // The structured unit travels too, so the carried row is as complete as the one it came from.
     doseUnit: trim(t.dose_unit) || null,
     route: t.route, frequency: t.frequency, durationText: t.duration,
-    startedOn: input.startedOn ?? (t.created_at ? String(t.created_at).slice(0, 10) : null),
+    startedOn: input.startedOn ?? practiceDayOf(carryTz, t.created_at),
     source: "practitioner",
     actorId: input.actorId, correlationId: input.correlationId,
   }).then(r => r.ok

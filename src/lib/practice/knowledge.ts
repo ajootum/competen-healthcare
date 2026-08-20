@@ -1,3 +1,4 @@
+import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
 import { audit } from "@/lib/practice/audit";
 import { requestApproval } from "@/lib/practice/delegation";
 import type { EngineResult } from "@/lib/practice/encounters";
@@ -361,6 +362,9 @@ export function renderSections(
   doc: { effective_from: string | null; review_on: string | null; status: string; version: number },
   authored: { section_key: string; heading: string; body: string; position: number; required: boolean }[],
   approval: GuidanceApproval,
+  // The practice's zone, for the approval date in the provenance sentence below. Required rather than
+  // optional: a default would silently be the server's day, which is the bug this argument exists for.
+  timezone: string,
 ): RenderedSection[] {
   const byKey = new Map(authored.map(s => [s.section_key, s]));
 
@@ -426,7 +430,8 @@ export function renderSections(
     // product asserting a review that did not happen.
     const selfApproved = !!approval.decided_by && approval.decided_by === approval.requested_by;
     const who = selfApproved ? "the author" : approval.decidedByName ?? "a colleague";
-    const when = approval.decided_at ? ` on ${approval.decided_at.slice(0, 10)}` : "";
+    const whenDay = practiceDayOf(timezone, approval.decided_at);
+    const when = whenDay ? ` on ${whenDay}` : "";
     const said = approval.decision_note ? ` "${approval.decision_note}"` : "";
     return {
       key: def.key, heading: def.heading, source: "derived" as const, position, required: false,
@@ -689,7 +694,7 @@ export async function getGuidance(admin: any, workspaceId: string, guidanceId: s
       editable: GUIDANCE_STATES_EDITABLE.includes(doc.status),
       inForce: guidanceState(doc.status)?.inForce ?? false,
     },
-    sections: renderSections(doc, authored, approval),
+    sections: renderSections(doc, authored, approval, (await workspaceClock(admin, workspaceId)).timezone),
     authored,
     approval,
     readiness: guidanceReadiness(doc, authored, approval),

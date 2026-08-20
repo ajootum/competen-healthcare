@@ -1,5 +1,5 @@
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
-import { practiceToday, workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
+import { practiceToday, workspaceClock, zonedDayRange, practiceDayOf } from "@/lib/practice/practice-time";
 import { resolvePeriod, diagnosisReport, type Period } from "@/lib/practice/reports";
 import { logAccess } from "@/lib/practice/privacy";
 import { FOLLOW_UP_OUTCOMES } from "@/lib/practice/follow-up-constants";
@@ -2305,7 +2305,9 @@ export async function patientAttentionIntelligence(
       for (const e of encRead.rows) {
         const pid = e.patient_id as string;
         if (!pid || lastSeen.has(pid)) continue;
-        const at = typeof e.started_at === "string" ? e.started_at.slice(0, 10) : null;
+        // ⚠ practiceToday(range.timezone) IS FOUR LINES INTO THIS FUNCTION and this line still took
+        // the UTC day. "Last seen" driving a patient-attention list must be the practice's calendar.
+        const at = practiceDayOf(range.timezone, e.started_at as string);
         if (at) lastSeen.set(pid, at);
       }
     }

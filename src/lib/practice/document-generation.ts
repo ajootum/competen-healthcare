@@ -4,7 +4,7 @@ import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { getConfiguration } from "@/lib/practice/configuration";
 import { createDocument } from "@/lib/practice/documentation";
 import { MERGE_FIELDS } from "@/lib/practice/document-constants";
-import { practiceToday } from "@/lib/practice/practice-time";
+import { practiceToday, practiceDayOf } from "@/lib/practice/practice-time";
 
 // CPR-330 REPORTS, DOCUMENTS AND CORRESPONDENCE -- generation, rebuilt after CPR-AUDIT-001.
 //
@@ -143,7 +143,15 @@ export async function buildMergeContext(admin: any, ctx: WorkspaceContext, args:
     "patient.age": age,
     "patient.identifier": practiceId,
     "patient.phone": phone,
-    "encounter.date": encounter ? String(encounter.started_at).slice(0, 10) : null,
+    // ⚠⚠ THE DATE ON A REFERRAL LETTER, AND IT WAS THE SERVER'S DAY RATHER THAN THE PRACTICE'S.
+    // started_at is a timestamptz in UTC and slicing it takes the UTC day. A consultation held at
+    // 21:30 in Kampala is the NEXT day in UTC, so the letter that goes to a consultant stated a date
+    // the consultation did not happen on -- in a document that is signed, released, and cannot be
+    // edited afterwards.
+    //
+    // ⚠ AND THE LINE SIX BELOW THIS ONE ALREADY KNEW. "today" is practiceToday(config timezone). The
+    // rule was applied to one merge field and missed on the one beside it.
+    "encounter.date": practiceDayOf(config?.workspace?.timezone, encounter?.started_at),
     "encounter.reason": encounter?.reason_for_visit ?? null,
     "encounter.diagnoses": diagnoses.length ? diagnoses.map(d => `- ${d.label} (${d.certainty})`).join("\n") : null,
     "encounter.plan": planNote,

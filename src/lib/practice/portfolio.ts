@@ -1,7 +1,7 @@
 import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
-import { practiceToday, workspaceClock } from "@/lib/practice/practice-time";
+import { practiceToday, workspaceClock, practiceDayOf } from "@/lib/practice/practice-time";
 
 // CPR-240 PROFESSIONAL PORTFOLIO.
 //
@@ -403,6 +403,8 @@ export async function removeEntry(admin: any, ctx: WorkspaceContext, args: {
  * them -- so it cannot be set to a flattering date, and it moves only when the record does.
  */
 async function coverage(admin: any, ctx: WorkspaceContext) {
+  // The practice's own clock, for every date this function prints. See workspaceCreated below.
+  const { timezone: coverageTimezone } = await workspaceClock(admin, ctx.workspaceId);
   const earliestOf = async (table: string, column: string, userColumn: string) => {
     const { data } = await admin.from(table).select(column)
       .eq("workspace_id", ctx.workspaceId).eq(userColumn, ctx.userId)
@@ -417,16 +419,23 @@ async function coverage(admin: any, ctx: WorkspaceContext) {
     earliestOf("practice_reflection", "created_at", "author_id"),
   ])).filter(Boolean).map(String).sort();
 
+  // One conversion, read by both the figure and the sentence below.
+  const coverageFrom = practiceDayOf(coverageTimezone, dates[0] ?? null);
+
   const { data: ws } = await admin.from("practice_workspace")
     .select("created_at").eq("id", ctx.workspaceId).maybeSingle();
 
   return {
-    from: dates[0] ? dates[0].slice(0, 10) : null,
-    workspaceCreated: ws?.created_at ? String(ws.created_at).slice(0, 10) : null,
+    // ⚠ THE DATE PRINTED ON AN EXPORT, so it is the practice's day, not the server's. A portfolio is a
+    // document somebody hands to a college; a coverage window that opens a day early because the
+    // server was still on yesterday is a claim about a record that did not exist yet.
+    from: coverageFrom,
+    workspaceCreated: practiceDayOf(coverageTimezone, ws?.created_at),
     // THE SENTENCE THAT GOES ON THE EXPORT. Written here rather than on the page, so the page and the
-    // document cannot drift apart about what the figures mean.
-    statement: dates[0]
-      ? `Covers work recorded in this product from ${String(dates[0]).slice(0, 10)} onwards. It is not a complete record of this practitioner's career.`
+    // document cannot drift apart about what the figures mean. It now reads the SAME `coverageFrom`
+    // the page does -- it used to recompute the date itself, one line under this comment.
+    statement: coverageFrom
+      ? `Covers work recorded in this product from ${coverageFrom} onwards. It is not a complete record of this practitioner's career.`
       : "Nothing has been recorded in this product yet, so this portfolio covers no clinical work. It is not a record of this practitioner's career.",
   };
 }

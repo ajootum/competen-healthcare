@@ -1,3 +1,4 @@
+import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
 import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
 import { audit } from "@/lib/practice/audit";
@@ -265,13 +266,20 @@ async function buildContext(admin: any, ctx: WorkspaceContext, args: {
   documentId?: string | null; followUpId?: string | null; practice?: boolean;
 }): Promise<{ text: string; grounding: GroundingSource[]; patientId: string | null } | null> {
   const lines: string[] = [];
+  // ⚠ EVERY DATE BELOW IS READ BACK TO A PRACTITIONER BY THE ASSISTANT, so every one is the
+  // practice's day. These were the SERVER's: seven `String(x_at).slice(0, 10)` calls, which in
+  // Kampala name yesterday for three hours every evening. An assistant that says "the consultation on
+  // the 20th" about a consultation held on the 21st is worse than one that declines to answer -- it
+  // is confidently wrong about a clinical record, in the one surface built to sound authoritative.
+  const { timezone: assistantTz } = await workspaceClock(admin, ctx.workspaceId);
+  const day = (v: unknown) => practiceDayOf(assistantTz, v as string) ?? "date not recorded";
   const grounding: GroundingSource[] = [];
 
   if (args.encounterId) {
     const e = await getEncounter(admin, ctx.workspaceId, args.encounterId);
     if (!e) return null;
 
-    lines.push(`CONSULTATION on ${String(e.encounter.started_at).slice(0, 10)}, status ${e.encounter.status}.`);
+    lines.push(`CONSULTATION on ${day(e.encounter.started_at)}, status ${e.encounter.status}.`);
     if (e.encounter.reason_for_visit) lines.push(`Reason given: ${e.encounter.reason_for_visit}`);
     if (e.patient) {
       const age = e.patient.birth_date
@@ -282,7 +290,7 @@ async function buildContext(admin: any, ctx: WorkspaceContext, args: {
     }
     grounding.push({
       kind: "encounter", id: e.encounter.id,
-      label: `Consultation ${String(e.encounter.started_at).slice(0, 10)}`,
+      label: `Consultation ${day(e.encounter.started_at)}`,
       href: `/practice/encounters/${e.encounter.id}`,
     });
 
@@ -334,9 +342,9 @@ async function buildContext(admin: any, ctx: WorkspaceContext, args: {
       // Diagnoses failing is survivable where the encounters failing is not, but it must not read as
       // "no diagnosis was made" -- so the uncertainty is stated per line rather than left blank.
       const dxText = dx ? ` -- ${dx}` : timeline.diagnosesUnavailable ? " -- diagnoses could not be read" : "";
-      lines.push(`${String(e.started_at).slice(0, 10)} -- ${e.reason_for_visit ?? "no reason recorded"}${dxText} (${e.status})`);
+      lines.push(`${day(e.started_at)} -- ${e.reason_for_visit ?? "no reason recorded"}${dxText} (${e.status})`);
       grounding.push({
-        kind: "encounter", id: e.id, label: `Consultation ${String(e.started_at).slice(0, 10)}`,
+        kind: "encounter", id: e.id, label: `Consultation ${day(e.started_at)}`,
         href: `/practice/encounters/${e.id}`,
       });
     }
@@ -358,7 +366,7 @@ async function buildContext(admin: any, ctx: WorkspaceContext, args: {
       .eq("id", args.documentId).eq("workspace_id", ctx.workspaceId).maybeSingle();
     if (!doc) return null;
 
-    lines.push(`DOCUMENT: ${doc.title} (${doc.doc_type}), status ${doc.status}, created ${String(doc.created_at).slice(0, 10)}.`);
+    lines.push(`DOCUMENT: ${doc.title} (${doc.doc_type}), status ${doc.status}, created ${day(doc.created_at)}.`);
     if (doc.addressed_to) lines.push(`Addressed to: ${doc.addressed_to}`);
     lines.push(`CONTENT:\n${doc.body || "(the document has no body text)"}`);
 
@@ -407,14 +415,14 @@ async function buildContext(admin: any, ctx: WorkspaceContext, args: {
         href: `/practice/encounters/${fu.origin_encounter_id}`,
       });
     if (f.appointment)
-      lines.push(`BOOKED: appointment on ${String(f.appointment.scheduled_at).slice(0, 10)}, status ${f.appointment.status}.`);
+      lines.push(`BOOKED: appointment on ${day(f.appointment.scheduled_at)}, status ${f.appointment.status}.`);
 
     const events = (f.events ?? []) as any[];
     if (events.length === 0) lines.push("HISTORY: nothing beyond its creation has been recorded against it.");
     for (const e of events) {
       const moved = e.from_due_on && e.to_due_on && e.from_due_on !== e.to_due_on
         ? `, due date moved from ${e.from_due_on} to ${e.to_due_on}` : "";
-      lines.push(`HISTORY ${String(e.occurred_at).slice(0, 10)}: ${e.from_status ?? "created"} to ${e.to_status}${moved}${e.note ? ` -- ${e.note}` : ""}`);
+      lines.push(`HISTORY ${day(e.occurred_at)}: ${e.from_status ?? "created"} to ${e.to_status}${moved}${e.note ? ` -- ${e.note}` : ""}`);
     }
     grounding.push({
       kind: "follow_up", id: fu.id, label: `Follow-up due ${fu.due_on}`,

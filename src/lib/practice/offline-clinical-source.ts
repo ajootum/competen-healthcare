@@ -1,5 +1,5 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
-import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
+import { practiceToday, zonedDayRange, practiceDayOf } from "@/lib/practice/practice-time";
 import { isMissingTable } from "@/lib/practice/investigations";
 import {
   capOfflineClinical, projectOfflineAllergy, projectOfflineClinicalPack, projectOfflineMedication,
@@ -256,7 +256,9 @@ export async function offlineClinicalPayload(
         encounterId: encounter.id,
         // completed_at when the visit finished, started_at otherwise. Date only -- a time of day adds
         // nothing to a decision and is one more identifying detail on a device.
-        date: String(encounter.completed_at ?? encounter.started_at).slice(0, 10),
+        // opts.timezone is already resolved above for practiceToday. The date of a last visit is
+        // read on a device with no network, so there is nothing to correct it against later.
+        date: practiceDayOf(opts.timezone, encounter.completed_at ?? encounter.started_at) ?? "date not recorded",
         kindLabel: MODE_LABELS[encounter.encounter_mode] ?? "Consultation",
         assessment: noteSet.assessment,
         plan: noteSet.plan,

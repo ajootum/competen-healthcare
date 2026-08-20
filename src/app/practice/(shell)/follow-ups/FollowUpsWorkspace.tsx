@@ -107,7 +107,13 @@ export default function FollowUpsWorkspace({
 }) {
   const [view, setView] = useState(initialView);
   const [adding, setAdding] = useState(false);
-  const ctx = useMemo(() => ({ today: workspace.today }), [workspace.today]);
+  // ⚠ THE SAME ctx THE SERVER BUILT, timezone INCLUDED. The tab counts come from the server and the
+  // rows are filtered here by the same predicate; if this ctx were missing the zone the client would
+  // measure the Completed window differently from the card sitting above it.
+  const ctx = useMemo(
+    () => ({ today: workspace.today, timezone: workspace.timezone }),
+    [workspace.today, workspace.timezone],
+  );
 
   // ── CPR-MOB-001 s5/s11 row 2: THE FILTER ROW BECOMES ONE BUTTON AND A SHEET, BELOW md ────────────
   // Four controls and an Apply are a fifth of a phone screen before a single obligation is on it. The

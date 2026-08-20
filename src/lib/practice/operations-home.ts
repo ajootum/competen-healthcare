@@ -1,5 +1,5 @@
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
-import { workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
+import { workspaceClock, zonedDayRange, practiceDayOf } from "@/lib/practice/practice-time";
 import { followUpBoard } from "@/lib/practice/follow-ups";
 import { taskBoard, listNotifications } from "@/lib/practice/tasks";
 import { unreviewedIncoming, unreadThreadCount } from "@/lib/practice/communication";
@@ -267,7 +267,10 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
       detail: "A gap in the record, not an allegation about the consultation. Where consent was required the engine already refused; these are the ones where it was not.",
       href: "/practice/encounters",
       sample: procRows.slice(0, 4).map(p => ({
-        id: p.id, label: p.label, note: `${nameOf(p.patient_id)} — ${String(p.performed_at).slice(0, 10)}`,
+        // The date a practitioner reads beside a name, so it is the day THEY performed it. The workspace
+        // clock is already resolved at the top of this function, for exactly this class of reason.
+        id: p.id, label: p.label,
+        note: `${nameOf(p.patient_id)} — ${practiceDayOf(timezone, p.performed_at) ?? "date not recorded"}`,
       })),
     };
   }

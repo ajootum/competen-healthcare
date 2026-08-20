@@ -28,6 +28,11 @@
 //             words. A stored DUE needs something to run to become true, and the thing it needs is
 //             what a neglected practice does not do -- the board would go quietest for the practices
 //             that had forgotten most.
+// ⚠ THE ONE IMPORT, AND IT KEEPS THE HEADER'S PROMISE ABOVE. practice-time.ts has no imports of its
+// own -- it is Intl and arithmetic. Nothing server-only crosses into this module, so the board still
+// derives its buttons from the same source the engine enforces.
+import { practiceDayOf } from "@/lib/practice/practice-time";
+
 export const FOLLOW_UP_TRANSITIONS: Record<string, string[]> = {
   // A draft is either taken up or thrown away. It cannot be completed, because nothing was ever owed.
   DRAFT: ["OPEN", "CANCELLED"],
@@ -244,7 +249,16 @@ export type ViewableFollowUp = {
 };
 
 /** The practice's own today, passed in rather than read, so a predicate is a pure function of its inputs. */
-export type ViewContext = { today: string };
+/**
+ * ⚠ timezone JOINED THIS BECAUSE `today` ALONE CANNOT DECIDE A WINDOW.
+ *
+ * `today` is the practice's calendar day. The rows it is compared against carry timestamptz columns
+ * in UTC, and turning one of those into a day needs a zone. The Completed card measured
+ * closed_at's UTC day against this practice day, so for three hours every evening in Kampala a
+ * follow-up closed today counted as closed yesterday -- and one closed exactly at the window's edge
+ * fell out of the card while staying in the list it opens.
+ */
+export type ViewContext = { today: string; timezone: string };
 
 /** Whole days between two YYYY-MM-DD dates. Pure, so it may live beside the predicates that need it. */
 export const daysApart = (fromIso: string, toIso: string) =>
@@ -303,7 +317,8 @@ export const FOLLOW_UP_VIEWS: FollowUpView[] = [
     blurb: `Closed as done within the last ${COMPLETED_WINDOW_DAYS} days. One older than that is in "Closed", not here.`,
     match: (f, ctx) =>
       f.status === "COMPLETED" && !!f.closed_at &&
-      daysApart(String(f.closed_at).slice(0, 10), ctx.today) <= COMPLETED_WINDOW_DAYS,
+      // The day the practice closed it, not the day the server was on. See ViewContext.
+      daysApart(practiceDayOf(ctx.timezone, f.closed_at) ?? ctx.today, ctx.today) <= COMPLETED_WINDOW_DAYS,
   },
   {
     key: "drafts", label: "Drafts", card: false,

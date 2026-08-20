@@ -22,6 +22,12 @@ import { renderSections } from "../src/lib/practice/knowledge";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { purgeWorkspacesOwnedBy, cleanupOnKill } from "./_cleanup";
 
+/**
+ * ⚠ NOT "UTC". The zone is an argument to renderSections precisely so a UTC-day slice cannot come
+ * back, and a harness that passes "UTC" would go green against the bug it is guarding.
+ */
+const TZ = "Africa/Kampala";
+
 loadEnvConfig(process.cwd());
 
 let pass = 0; const failures: string[] = [];
@@ -102,7 +108,7 @@ async function main() {
   };
   const rendered = renderSections(
     { effective_from: "2026-01-01", review_on: null, status: "published", version: 1 },
-    [], selfApproval);
+    [], selfApproval, TZ);
   const approvalSection = rendered.find(s => s.key === "approval");
   ok("2a. ⚠ the approval section says it was approved by THE AUTHOR",
     /approved by the author/i.test(approvalSection?.body ?? ""), approvalSection?.body ?? "");
@@ -115,7 +121,7 @@ async function main() {
   const peerApproval = { ...selfApproval, decided_by: OTHER, decidedByName: "Dr Other" };
   const peer = renderSections(
     { effective_from: "2026-01-01", review_on: null, status: "published", version: 1 },
-    [], peerApproval).find(s => s.key === "approval");
+    [], peerApproval, TZ).find(s => s.key === "approval");
   ok("2d-control. a genuine peer approval reads normally and claims no self-approval",
     /approved by dr other/i.test(peer?.body ?? "") && !/nobody else has read/i.test(peer?.body ?? ""),
     peer?.body ?? "");

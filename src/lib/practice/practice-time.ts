@@ -22,6 +22,35 @@ export function practiceToday(timezone: string | null | undefined, at: Date = ne
   return formatIsoDate(timezone, at);
 }
 
+/**
+ * THE DAY AN INSTANT FELL ON, IN THE PRACTICE CALENDAR.
+ *
+ * ⚠ THIS EXISTS BECAUSE `String(row.some_at).slice(0, 10)` WAS WRITTEN ACROSS THE PRACTICE ENGINES,
+ * in referral letters, portfolio exports, follow-up windows, monitoring due dates, medication start
+ * dates and the AI assistant's own answers -- and each one
+ * silently takes the UTC day. Every timestamptz in this schema is stored in UTC; every date a
+ * practitioner reads, compares or is billed by is a day in THEIR calendar. In Kampala (UTC+3) the two
+ * disagree for three hours every evening -- long enough that a consultation, a closure or a printed
+ * letter lands on the wrong date, and short enough that nobody catches it in testing.
+ *
+ * ⚠ IT IS A SEPARATE NAME FROM practiceToday ON PURPOSE, even though it is one call. `practiceToday(tz,
+ * new Date(x))` reads as "today" at every call site, which is exactly what it is not. A function whose
+ * name contradicts its use at most of its call sites is a comment nobody will read.
+ *
+ * ⚠ NO COUNT IS QUOTED HERE ON PURPOSE. The first version of this header said SEVENTEEN, which was
+ * already wrong when it was written -- three more sites used a different spelling of the same slice
+ * and a grep for `String(...)` could not see them. A number in a comment is a claim that rots; the
+ * shape is the thing to recognise, not the tally.
+ *
+ * A null or unparseable instant returns null rather than todays date -- the two are different answers,
+ * and defaulting one to the other is how a missing date comes to look like a recent one.
+ */
+export function practiceDayOf(timezone: string | null | undefined, instant: string | Date | null | undefined): string | null {
+  if (instant === null || instant === undefined || instant === "") return null;
+  const at = instant instanceof Date ? instant : new Date(String(instant));
+  if (Number.isNaN(at.getTime())) return null;
+  return formatIsoDate(timezone, at);
+}
 function formatIsoDate(timezone: string | null | undefined, at: Date): string {
   try {
     return new Intl.DateTimeFormat("en-CA", {
