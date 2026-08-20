@@ -116,12 +116,35 @@ export const PLANNER_REFUSES = [
 // runtime for every user including the practice owner -- so the screen hides the control rather than
 // showing an error, and the feature is simply unreachable. Four invented codes have shipped here.
 //
-// Read out of the migrations rather than remembered: `appointment.manage` is migration 192,
-// `practice.home.view` is migration 191, and they are the pair activity.ts and migration 235 already
-// gate this same lifecycle on. Splitting the planner onto its own code would create a role that can
-// start a clinic and cannot move it.
+// Read out of the migrations rather than remembered: `appointment.manage` is migration 192 and
+// `practice.calendar.view` is migration 191.
+//
+// ⚠ CAN_VIEW WAS `practice.home.view`, AND THAT WAS WIDER THAN THE ONLY SCREEN THAT CALLS THIS.
+// /practice/calendar gates itself on `practice.calendar.view`, so two codes governed one read and they
+// disagreed in both directions:
+//
+//   - a role holding practice.calendar.view WITHOUT practice.home.view passes the page gate and gets
+//     seven unavailable days -- a screen that renders as broken rather than as refused;
+//   - a role holding practice.home.view WITHOUT practice.calendar.view is refused by the page and would
+//     be SERVED BY THIS ENGINE through any other door.
+//
+// The second decided it. plannerRange reads practice_appointment selecting `patient_id, patient_name`,
+// so this function returns NAMED PATIENTS. Migration 191 grants practice.home.view to billing_reporting
+// and read_only_auditor and deliberately withholds practice.calendar.view from both -- its own comment
+// says clinical capabilities come from the practitioner role, so workspace administration does not carry
+// clinical access. Gating a named-patient read on the administrative code contradicted that, and the
+// only thing keeping it theoretical is that this engine currently has exactly one caller.
+//
+// NOTHING ANY SHIPPED ROLE CAN REACH TODAY CHANGES. That one caller already requires
+// practice.calendar.view, and provisioning gives the founding practitioner BOTH memberships
+// (provisioning.ts line 274), so an owner who is also a clinician holds it. A practice_owner who is NOT
+// a clinician could not open the calendar before this change and cannot now.
+//
+// The old comment argued these were "the pair activity.ts and migration 235 gate this same lifecycle
+// on". That holds for CAN_PLAN, and it holds for activity.ts's own reads -- Today's Timeline lives on
+// /practice/home and is gated there. It never held for the planner's read, which is the calendar's.
 const CAN_PLAN = "appointment.manage";
-const CAN_VIEW = "practice.home.view";
+const CAN_VIEW = "practice.calendar.view";
 
 /** Exported so a harness can prove each one EXISTS, against these constants and never a re-typed list. */
 export const PLANNER_CAPABILITIES = [CAN_PLAN, CAN_VIEW];

@@ -13,12 +13,14 @@
  *
  *   npx --yes tsx scripts/practice-interruption-harness.ts
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { loadEnvConfig } from "@next/env";
 import { transitionEncounter, interruptWith, activeEncounterId } from "../src/lib/practice/encounters";
 import { practiceMetrics, metricScope } from "../src/lib/practice/metrics";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
-import { ENCOUNTER_TRANSITIONS } from "../src/lib/practice/encounter-constants";
+import { ENCOUNTER_TRANSITIONS, ENCOUNTER_ACTIONS } from "../src/lib/practice/encounter-constants";
 import type { WorkspaceContext } from "../src/lib/practice/access";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
 
@@ -233,6 +235,51 @@ async function main() {
   const pauseEvent = ((events ?? []) as EventRow[]).find(e => e.event_type === "encounter.paused" && e.payload?.interruptedBy);
   ok("5b. a pause caused by an interruption says what interrupted it",
     !!pauseEvent, JSON.stringify(((events ?? []) as EventRow[]).filter(e => e.event_type === "encounter.paused").map(e => e.payload)));
+
+  // ══ 6. THE ENGINE HAS A DOOR ═══════════════════════════════════════════════════════════════════
+  //
+  // ⚠ EVERYTHING ABOVE THIS LINE PASSED FOR MONTHS WHILE NO USER COULD REACH interruptWith.
+  // Twenty-three assertions proved the interruption is correct, safe, queue-preserving and honestly
+  // timed -- and its only callers in the entire repository were this harness and
+  // practice-clinic-day-harness. No API route named it and no screen posted to one. A feature with a
+  // complete engine, a complete test and no door is INDISTINGUISHABLE FROM A MISSING FEATURE to the
+  // person holding the emergency, and this codebase has now recorded that class four times
+  // (addFacility, patient booking, the booking-request queue, allergies).
+  //
+  // ⚠ AND IT WAS WORSE THAN SILENT HERE. The refusal 2a asserts above ends with the words "or start
+  // this one as an interruption" -- so the product was INSTRUCTING a practitioner to do a thing it
+  // gave them no way to do, at the moment an emergency had walked in.
+  //
+  // These are SOURCE assertions in a live harness on purpose: the door is a fact about the codebase,
+  // not about this workspace, and the alternative -- an HTTP call -- would need a signed-in session
+  // this harness has no way to mint.
+  const routeSrc = readFileSync(join(process.cwd(),
+    "src", "app", "api", "v1", "practice", "encounters", "[encounterId]", "route.ts"), "utf8");
+  ok("6a. the encounter route accepts an interrupt action and calls the engine",
+    /body\.action === "interrupt"/.test(routeSrc) && /await interruptWith\(/.test(routeSrc),
+    "the route must both recognise the action and call interruptWith, not one or the other");
+  // ⚠ NOT ENCOUNTER_ACTIONS. An interruption is not one transition -- it pauses another encounter and
+  // starts this one -- and the UI derives its buttons by mapping status through that table. An entry
+  // there would draw an "interrupt" button on every encounter as though it were a target status.
+  ok("6a-control. and it is NOT an ENCOUNTER_ACTIONS entry",
+    !Object.keys(ENCOUNTER_ACTIONS).includes("interrupt"), Object.keys(ENCOUNTER_ACTIONS).join(", "));
+
+  const consoleSrc = readFileSync(join(process.cwd(),
+    "src", "app", "practice", "(shell)", "encounters", "[encounterId]", "EncounterConsole.tsx"), "utf8");
+  ok("6b. a screen posts that action",
+    /action: "interrupt"/.test(consoleSrc) && /startAsInterruption/.test(consoleSrc),
+    "the console must build the request, not merely mention the word");
+
+  // ⚠ THE TWO STRINGS COME FROM TWO PLACES SO THIS CANNOT MATCH ITSELF: `second.code` is the code the
+  // ENGINE ACTUALLY RETURNED at 2a above, at runtime, against a real database; the other is read out
+  // of the screen SOURCE. A pin comparing the screen to a code re-typed in this file would agree with
+  // its own typo for ever -- and a refusal code the screen does not recognise means the offer never
+  // appears, which is the original defect wearing a button.
+  ok("6c. the screen offers the interruption on the SAME refusal code the engine returns",
+    !second.ok && consoleSrc.includes(`code !== "${second.code}"`),
+    JSON.stringify({ engineCode: second.ok ? null : second.code }));
+  ok("6c-control. and 2a really produced a refusal to read that code from",
+    !second.ok && typeof second.code === "string" && second.code.length > 0, JSON.stringify(second));
 
   await cleanup();
   report();

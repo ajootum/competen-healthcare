@@ -2,7 +2,7 @@ import { audit } from "@/lib/practice/audit";
 import { runningActivityId } from "@/lib/practice/activity";
 import { reflectClinicalActOnQueue } from "@/lib/practice/scheduling";
 import { ENCOUNTER_TRANSITIONS, LOCKED_STATUSES, LIVE_STATUSES } from "@/lib/practice/encounter-constants";
-import { emitEvents, type EventEnvelope, type EventSource, type PracticeEventType } from "@/lib/practice/events";
+import { emitEvents, emitAudited, type EventEnvelope, type EventSource, type PracticeEventType } from "@/lib/practice/events";
 
 // PEN-003 Clinical Encounter Engine + CPR-FLOW-001 encounter launch.
 //
@@ -137,6 +137,29 @@ export async function launchEncounter(admin: any, input: LaunchInput): Promise<E
     workspaceId: input.workspaceId, actorId: input.actorId, eventType: "practice.encounter_launched",
     payload: { encounterId: enc.id, patientId: input.patientId, pathway: input.pathway }, correlationId: input.correlationId,
   });
+
+  // ── s9 DOMAIN EVENT: THE ENCOUNTER EXISTS ───────────────────────────────────────────────────────
+  //
+  // ⚠ encounter.created IS NOT encounter.started, AND THE CATALOGUE CARRIES BOTH ON PURPOSE. This
+  // one fires when the record is opened in DRAFT -- the patient is in the room and the consultation
+  // has not begun; transitionEncounter fires encounter.started when it does. Only the second is a
+  // consultation; a projection that treated the first as one would start the clock at the doorway.
+  //
+  // ⚠ THE RESUME PATH ABOVE RETURNS EARLY AND EMITS NOTHING, deliberately. Resuming creates no
+  // encounter -- it finds the live one -- and announcing a creation there would count one visit
+  // twice on every card that reads the outbox.
+  await emitAudited(admin, [{
+    eventType: "encounter.created", practiceId: input.workspaceId,
+    // ⚠ "web" IS A CLAIM AND LaunchInput HAS NO BETTER ONE TO MAKE. Every other envelope in this file
+    // takes args.source, because transitionEncounter is given one; LaunchInput carries no source field,
+    // so the surface an encounter was opened from is genuinely not known here. Stated rather than
+    // defaulted silently: the offline queue replays through this function too, and the day it needs to
+    // say so, LaunchInput gains the field and this line reads it.
+    practitionerId: input.actorId, actorId: input.actorId, source: "web",
+    patientId: input.patientId, encounterId: enc.id as string,
+    activityInstanceId: activity.id, sessionId: activity.id,
+    payload: { pathway: input.pathway, appointmentId, encounterMode: input.encounterMode ?? "in_person" },
+  }], input.correlationId);
   // #4c: the patient just left the corridor for the consultation room.
   await reflectClinicalActOnQueue(admin, { workspaceId: input.workspaceId, patientId: input.patientId,
     act: "consultation_started", actorId: input.actorId, correlationId: input.correlationId });

@@ -1,7 +1,7 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
 import { ACTIVITY_TYPES, ACTIVITY_LABEL, type ActivityType } from "@/lib/practice/activity-constants";
 import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
-import { emitEvents, type EventEnvelope, type EventSource } from "@/lib/practice/events";
+import { emitEvents, emitAudited, type EventEnvelope, type EventSource } from "@/lib/practice/events";
 import { audit } from "@/lib/practice/audit";
 import { practiceMetrics, metricScope, type PracticeMetrics } from "@/lib/practice/metrics";
 
@@ -303,6 +303,27 @@ export async function planActivity(
     },
     correlationId: opts.correlationId, source: opts.source ?? "web",
   });
+
+  // ── s9 DOMAIN EVENT ───────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ EMITTED EVEN THOUGH NOTHING LISTENS TO IT, AND THAT IS NOT A CONTRADICTION. event-stream.ts
+  // puts activity.planned in NOT_STREAMED with a good reason -- planning next Tuesday changes nothing
+  // on today's dashboard. But the outbox is the RECORD of what the practice did, not a feed for one
+  // page: a projection rebuilt from it must be able to see the week being built, and a type in the
+  // catalogue that nothing ever writes is indistinguishable from a type nobody thought about.
+  //
+  // practitionerId is ctx.userId because the row above writes exactly that as practitioner_id, and
+  // its own comment marks the line to change the day a receptionist can plan somebody else's week.
+  await emitAudited(admin, [{
+    eventType: "activity.planned", practiceId: ctx.workspaceId,
+    practitionerId: ctx.userId, actorId: ctx.userId, source: opts.source ?? "web",
+    locationId: input.locationId ?? null, activityInstanceId: data.id as string, sessionId: data.id as string,
+    payload: {
+      activityType: input.activityType, title, planDate: input.planDate,
+      plannedStartMinute: input.plannedStartMinute, plannedEndMinute: input.plannedEndMinute,
+      facilityId: input.facilityId ?? null,
+    },
+  }], opts.correlationId);
   return { ok: true, value: { id: data.id } };
 }
 

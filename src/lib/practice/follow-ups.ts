@@ -1,5 +1,5 @@
 import { audit } from "@/lib/practice/audit";
-import { emitEvents } from "@/lib/practice/events";
+import { emitEvents, emitAudited } from "@/lib/practice/events";
 import type { EngineResult } from "@/lib/practice/encounters";
 import {
   FOLLOW_UP_TRANSITIONS, CLOSED_FOLLOW_UP_STATUSES, FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES,
@@ -344,6 +344,19 @@ export async function scheduleFollowUp(admin: any, args: {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.followup_scheduled",
     payload: { followUpId: f.id, appointmentId: appt.id }, correlationId: args.correlationId,
   });
+
+  // ── s9 DOMAIN EVENT ─────────────────────────────────────────────────────────────────────────────
+  //
+  // Follow-up Intelligence names followup.booked as one of its four triggers and has never received
+  // one, so the board moved on creation and on completion and stood still in between -- which is the
+  // state a practitioner most wants to watch change, because it is the one that clears the overdue
+  // list.
+  await emitAudited(admin, [{
+    eventType: "followup.booked", practiceId: args.workspaceId,
+    practitionerId: args.actorId, actorId: args.actorId, source: "web",
+    patientId: f.patient_id ?? null,
+    payload: { followUpId: f.id, appointmentId: appt.id, scheduledAt: appt.scheduled_at, from: f.status },
+  }], args.correlationId);
   return { ok: true, data: { status: "SCHEDULED" } };
 }
 

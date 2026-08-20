@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- the Supabase admin client is untyped; every
    engine in src/lib/practice does the same. */
+// audit.ts is imported for emitAudited at the foot of this file. It imports NOTHING itself (its own
+// header explains why: it is pulled into four client bundles through constant modules), and events.ts
+// is server-only -- no client component imports it -- so this costs no browser bundle a byte.
+import { audit } from "@/lib/practice/audit";
 // CPR-CORE-001 DOMAIN EVENT OUTBOX -- the one place a state change is announced. Migration 233.
 //
 // s3: "Dashboard summaries update from domain events rather than direct widget-to-database queries."
@@ -164,6 +168,97 @@ export async function emitEvents(admin: any, envelopes: EventEnvelope[]): Promis
   for (const envelope of envelopes) {
     const result = await emitEvent(admin, envelope);
     if (!result.ok) warnings.push(`${envelope.eventType}: ${result.code} ${result.message}`);
+  }
+  return warnings;
+}
+
+// ── WHAT NOTHING EMITS, AND WHY ─────────────────────────────────────────────────────────────────────
+//
+// ⚠ THE CATALOGUE HAD THIRTY-FOUR TYPES AND TWELVE PRODUCERS, AND NOTHING ANYWHERE SAID SO. Every one
+// of the other twenty-two read, from this file, as a thing the product announces. DASHBOARD_EVENTS then
+// declared thirty-two of the thirty-four as triggers the Command Centre re-renders on -- so twenty of
+// its declared triggers could never fire, and the page fell back to its 30-60 second poll for
+// appointments, check-in, the queue, results, tasks, documents and messages. It worked, slowly, which is
+// precisely why nobody found it.
+//
+// Sixteen of the twenty-two are now emitted. THESE SIX ARE NOT, and each is here
+// with the reason rather than left to look like the same oversight the other seventeen were. This is
+// NOT_STREAMED's idea applied to production instead of consumption: an omission somebody decided beats
+// an omission somebody has to rediscover.
+//
+// ⚠ ADDING A KEY HERE IS NOT A WAY TO SILENCE THE COVERAGE HARNESS. It is a claim that no state change
+// exists in the product, and scripts/practice-event-coverage-harness.ts asserts the claim from the
+// other side: it fails if a type listed here turns out to have an emit site after all.
+export const NO_PRODUCER: Readonly<Record<string, string>> = {
+  // No activity is ever confirmed. planActivity writes a plan and startActivity runs it; there is no
+  // intermediate acceptance step in the lifecycle, in the engine or in migration 232's columns.
+  "activity.confirmed":
+    "the activity lifecycle has no confirm step -- a block is planned, then started",
+  // ⚠ THIS ONE WAS ALREADY A DECISION, WRITTEN DOWN, AND IT IS NOT AN OVERSIGHT TO CORRECT.
+  // activity.ts's pauseEvents() explains it in full: the catalogue has `activity.paused` and NO
+  // `activity.resumed`, so emitting the activity half of a pause would announce a stop that no event
+  // in this vocabulary can ever announce the end of, and a projection built on it would show every
+  // paused session as permanently stopped -- correctly, on the evidence it was given. The session half
+  // IS a matched pair (session.paused / session.resumed) and is what gets emitted. The session and the
+  // activity are the same row in this build, so nothing is lost.
+  //
+  // Closing this properly means adding activity.resumed to the catalogue, which is a schema change to
+  // migration 233's CHECK and not a wiring job.
+  "activity.paused":
+    "deliberate -- the catalogue has no activity.resumed, so the pair would be unclosable; session.paused/resumed carries it (see pauseEvents in activity.ts)",
+
+  // Due-ness is DERIVED, not stored. FOLLOW_UP_DUE_STATES (overdue / due_today / due_this_week /
+  // upcoming / draft / closed) is computed from due_on against the practice's today, every read.
+  // FOLLOW_UP_TRANSITIONS has no DUE state to move to, so there is no moment to announce -- and a
+  // nightly job that emitted one would be announcing the calendar, not a change anybody made.
+  "followup.due":
+    "a follow-up becomes due by the date arriving, not by anybody changing it -- FOLLOW_UP_DUE_STATES is derived from due_on at read time",
+
+  // There is no alert substrate. No practice_alert table exists in any migration, and no engine in
+  // src/lib/practice raises or resolves one. The Command Centre's Operational Alerts are computed from
+  // the underlying records each render. Emitting these would require inventing the feature first.
+  "alert.created": "no alert record exists -- there is no practice_alert table and no engine that raises one",
+  "alert.resolved": "no alert record exists -- see alert.created",
+
+  // Metrics are computed live by practiceMetrics on every read and never stored, so no snapshot is ever
+  // taken. This is a deliberate property of that engine, not a gap in it: a stored figure and a
+  // recomputed one disagree the moment the underlying rows change.
+  "metric.snapshot_created": "practiceMetrics computes on read and stores nothing -- no snapshot is ever created",
+};
+
+/**
+ * Emit, and put the failure somewhere a person will find it.
+ *
+ * ⚠ THIS EXISTS BECAUSE OF THE SHAPE OF THE CALL SITES, NOT BECAUSE WARNINGS ARE UNIMPORTANT. The three
+ * engines that emitted before this all had somewhere to put `eventWarnings`: activity.ts and
+ * encounters.ts return them alongside a success, and a screen can say "it happened, the outbox did not
+ * hear about it". Seventeen new emit sites sit in functions whose return shapes are read by hundreds of
+ * callers, and widening all of them to carry a warning nobody renders would be a large change that buys
+ * a string nobody looks at.
+ *
+ * The alternative was `await emitEvents(...)` with the result dropped, which is what follow-ups.ts does
+ * today -- and that makes a broken outbox indistinguishable from a quiet practice, the exact failure
+ * emitEvent's own header refuses to allow.
+ *
+ * So the failure goes to the audit trail: durable, queryable, already scoped to the workspace, and the
+ * one place somebody investigating "why has the dashboard not moved since Tuesday" would actually look.
+ * The audit write is the LAST thing and its own failure is swallowed by audit() (which logs), because a
+ * failure to record a failure must not become a third failure.
+ *
+ * NEVER THROWS and never fails the caller: like emitEvents, this runs after a write has committed.
+ */
+export async function emitAudited(
+  admin: any, envelopes: EventEnvelope[], correlationId?: string,
+): Promise<string[]> {
+  const warnings = await emitEvents(admin, envelopes);
+  if (warnings.length > 0) {
+    await audit(admin, {
+      workspaceId: envelopes[0]?.practiceId ?? null,
+      actorId: envelopes[0]?.actorId ?? null,
+      eventType: "practice.event_emit_failed",
+      payload: { types: envelopes.map(e => e.eventType), warnings },
+      correlationId,
+    });
   }
   return warnings;
 }

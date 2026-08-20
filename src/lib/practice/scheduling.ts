@@ -1,4 +1,5 @@
 import { audit } from "@/lib/practice/audit";
+import { emitAudited, type EventEnvelope } from "@/lib/practice/events";
 import { loadTaxonomy, validateChoice, deriveBookingSource } from "@/lib/practice/taxonomy";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
 import { practiceToday, zonedDayRange, workspaceClock } from "@/lib/practice/practice-time";
@@ -554,6 +555,29 @@ export async function bookAppointment(admin: any, input: BookInput): Promise<Eng
     workspaceId: input.workspaceId, actorId: input.actorId, eventType: "practice.appointment_booked",
     payload: { appointmentId: appt.id, type: input.appointmentType }, correlationId: input.correlationId,
   });
+
+  // ── s9 DOMAIN EVENT, AFTER THE WRITE HAS COMMITTED ──────────────────────────────────────────────
+  //
+  // ⚠ appointment.created IS DECLARED IN DASHBOARD_EVENTS AND HAS NEVER BEEN EMITTED. Today at a
+  // Glance, Run Your Clinic and the Waiting Queue all name it as their update trigger, so every
+  // booking made in this practice moved those cards only when the 30-60 second poll next ran. It
+  // worked, slowly, which is why it survived twelve of thirty-four types being wired.
+  //
+  // ⚠ practitionerId IS THE ACTOR AND practice_appointment HAS NO PRACTITIONER COLUMN TO DO BETTER.
+  // Migration 192 gives it created_by and nothing else, so "whose work is this" has exactly one
+  // honest answer here: whoever booked it. In a solo practice that is right. The day a booking names
+  // the clinician it is FOR, this line reads that column instead -- the same note launchEncounter
+  // keeps against its own subject, and for the same reason.
+  await emitAudited(admin, [{
+    eventType: "appointment.created", practiceId: input.workspaceId,
+    practitionerId: input.actorId, actorId: input.actorId, source: "web",
+    locationId: locationId ?? null, patientId: input.patientId ?? null,
+    payload: {
+      appointmentId: appt.id, appointmentType: input.appointmentType,
+      scheduledAt: new Date(startMs).toISOString(), durationMinutes: duration,
+      status: appt.status, outsideRegularWeek,
+    },
+  }], input.correlationId);
   // CPR-GROWTH-001 s2. Count-based, so it is right however often it runs and whatever ran before it,
   // and non-blocking: a commercial metric that could not be written must never cost a booking.
   await onAppointmentCreated(admin, input.workspaceId, input.actorId);
@@ -711,8 +735,11 @@ export async function rescheduleAppointment(admin: any, args: {
 export async function transitionAppointment(admin: any, args: {
   workspaceId: string; appointmentId: string; to: string; actorId: string; correlationId: string;
 }): Promise<EngineResult<{ status: string; queueEntryId?: string }>> {
+  // patient_id and location_id are selected FOR THE DOMAIN EVENTS BELOW and for nothing else. An
+  // envelope with a null patient on a check-in is not wrong so much as useless: the Waiting Queue card
+  // it exists to refresh is keyed on the patient.
   const { data: appt } = await admin.from("practice_appointment")
-    .select("id, status, patient_name, record_version")
+    .select("id, status, patient_name, patient_id, location_id, record_version")
     .eq("id", args.appointmentId).eq("workspace_id", args.workspaceId).maybeSingle();
   if (!appt) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
@@ -756,14 +783,48 @@ export async function transitionAppointment(admin: any, args: {
     eventType: `practice.appointment_${args.to.toLowerCase()}`,
     payload: { appointmentId: appt.id }, correlationId: args.correlationId,
   });
+
+  // ── s9 DOMAIN EVENTS ────────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ ARRIVAL IS TWO EVENTS BECAUSE IT IS TWO FACTS, and the dashboard reads them on different cards.
+  // `patient.checked_in` is the person; `queue.entry_created` is the row in the corridor. This
+  // function's own header says as much -- "one action at the desk, three facts in the record" -- and
+  // announcing only one of them would leave whichever card listened for the other permanently stale,
+  // which is the failure lifecycleEvents() in activity.ts documents for the activity/session pair.
+  //
+  // ⚠ queue.entry_created IS EMITTED ONLY WHEN A ROW WAS ACTUALLY INSERTED. `queueEntryId` is
+  // undefined if that insert came back empty, and announcing the creation of a row that does not
+  // exist would put a phantom into any projection reading the outbox.
+  //
+  // NO_SHOW IS NOT A CANCELLATION and gets no appointment.cancelled. The patient did not withdraw;
+  // metrics.ts keeps NO_SHOW inside BOOKED_STATUSES for exactly that reason, and an outbox that
+  // called it a cancellation would contradict the metric engine reading the same row.
+  const events: EventEnvelope[] = [];
+  const apptBase = {
+    practiceId: args.workspaceId, practitionerId: args.actorId, actorId: args.actorId,
+    source: "web" as const, locationId: appt.location_id ?? null, patientId: appt.patient_id ?? null,
+  };
+  if (args.to === "ARRIVED") {
+    events.push({ ...apptBase, eventType: "patient.checked_in",
+      payload: { appointmentId: appt.id, patientName: appt.patient_name } });
+    if (queueEntryId)
+      events.push({ ...apptBase, eventType: "queue.entry_created",
+        payload: { queueEntryId, appointmentId: appt.id, origin: "appointment_arrival" } });
+  }
+  if (args.to === "CANCELLED")
+    events.push({ ...apptBase, eventType: "appointment.cancelled",
+      payload: { appointmentId: appt.id, from: appt.status, cancelledBy: "practice" } });
+  if (events.length > 0) await emitAudited(admin, events, args.correlationId);
+
   return { ok: true, data: { status: args.to, queueEntryId } };
 }
 
 export async function transitionQueueEntry(admin: any, args: {
   workspaceId: string; entryId: string; to: string; actorId: string; correlationId: string;
 }): Promise<EngineResult<{ status: string }>> {
+  // patient_id is selected for the domain event below; the transition itself never needed it.
   const { data: entry } = await admin.from("practice_queue_entry")
-    .select("id, status").eq("id", args.entryId).eq("workspace_id", args.workspaceId).maybeSingle();
+    .select("id, status, patient_id").eq("id", args.entryId).eq("workspace_id", args.workspaceId).maybeSingle();
   if (!entry) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
   if (!canTransition(QUEUE_TRANSITIONS, entry.status, args.to)) {
@@ -779,6 +840,24 @@ export async function transitionQueueEntry(admin: any, args: {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: `practice.queue_${args.to.toLowerCase()}`,
     payload: { entryId: entry.id }, correlationId: args.correlationId,
   });
+
+  // ── s9 DOMAIN EVENT ─────────────────────────────────────────────────────────────────────────────
+  //
+  // ONE TYPE FOR EVERY MOVE, with the from/to in the payload. The catalogue names
+  // `queue.entry_status_changed` rather than a type per status, and inventing per-status types here
+  // would put strings in the outbox that emitEvent refuses against PRACTICE_EVENT_TYPES anyway.
+  //
+  // ⚠ reflectClinicalActOnQueue DELIBERATELY DOES NOT COME THROUGH HERE. It bypasses QUEUE_TRANSITIONS
+  // on purpose (its own header says why) and moves the row as a CONSEQUENCE of a clinical act that has
+  // already emitted its own encounter event. Emitting a second event for the same moment would make
+  // one consultation look like two things happening in the corridor.
+  await emitAudited(admin, [{
+    eventType: "queue.entry_status_changed", practiceId: args.workspaceId,
+    practitionerId: args.actorId, actorId: args.actorId, source: "web",
+    patientId: entry.patient_id ?? null,
+    payload: { queueEntryId: entry.id, from: entry.status, to: args.to },
+  }], args.correlationId);
+
   return { ok: true, data: { status: args.to } };
 }
 

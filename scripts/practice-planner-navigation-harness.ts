@@ -813,6 +813,40 @@ async function main() {
     new Set(((realCaps ?? []) as { capability_code: string }[]).map(c => c.capability_code)).size
       === PLANNER_CAPABILITIES.length,
     JSON.stringify(realCaps));
+  // ---- 4i. THE PAGE'S READ GATE AND THE ENGINE'S READ GATE ARE ONE CODE ---------------------------
+  //
+  // ⚠ THEY WERE TWO DIFFERENT CODES AND NOTHING NOTICED. The engine refused on `practice.home.view`
+  // while /practice/calendar -- its only caller -- redirects on `practice.calendar.view`. Every seeded
+  // role that holds the second also holds the first, so no shipped user ever met the disagreement, and
+  // that is exactly why it survived: the failure needs a role nobody has created yet.
+  //
+  // Both directions are defects, and they are different sizes:
+  //   - page-in / engine-out gives a practitioner SEVEN UNAVAILABLE DAYS, a screen that reads as
+  //     broken rather than as refused;
+  //   - engine-wider-than-page means a named-patient read (plannerRange selects patient_name) answers
+  //     to the administrative capability that migration 191 deliberately withholds from
+  //     billing_reporting and read_only_auditor.
+  //
+  // ⚠ THE TWO STRINGS COME FROM TWO DIFFERENT PLACES ON PURPOSE, so this cannot match itself. The
+  // engine's is read out of a REFUSAL IT ACTUALLY PRODUCED at runtime; the page's is read out of the
+  // page SOURCE. A pin that compared the engine constant to itself would pass whatever the page did.
+  const gateless = await scheduleSearch(admin, ctxFor(ws, []), "Achen");
+  const engineCode = (gateless.detail ?? "").match(/([a-z]+(?:\.[a-z_]+)+) is required/)?.[1] ?? null;
+  const calendarPageSrc = readFileSync(
+    join(process.cwd(), "src", "app", "practice", "(shell)", "calendar", "page.tsx"), "utf8");
+  // The redirect guard specifically -- not any hasCapability call on the page. `appointment.manage` is
+  // also read there, to decide whether to draw the write controls, and matching that one would compare
+  // the read gate against the write gate and fail for the wrong reason.
+  const pageCode = calendarPageSrc
+    .match(/if\s*\(!hasCapability\(\s*shell\.ctx\s*,\s*"([^"]+)"\s*\)\)\s*redirect/)?.[1] ?? null;
+  ok("4i the calendar page and the planner engine gate the same read on the SAME capability code",
+    engineCode !== null && pageCode !== null && engineCode === pageCode,
+    JSON.stringify({ engineCode, pageCode }));
+  // Control: both halves of 4i must have actually found something. A regex that stopped matching would
+  // give null === null, and an assertion comparing two absences passes while proving nothing.
+  ok("4i-control. and both halves were really read -- neither regex quietly stopped matching",
+    engineCode !== null && pageCode !== null && PLANNER_CAPABILITIES.includes(engineCode),
+    JSON.stringify({ engineCode, pageCode, PLANNER_CAPABILITIES }));
   const otherSearch = await scheduleSearch(admin, otherCtx, "Achen");
   ok("4h. another practice searching the same name finds nothing",
     !otherSearch.unavailable && otherSearch.hits.length === 0, JSON.stringify(otherSearch.hits.length));

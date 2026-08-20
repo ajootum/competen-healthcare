@@ -1,4 +1,5 @@
 import { audit } from "@/lib/practice/audit";
+import { emitAudited } from "@/lib/practice/events";
 import { editableEncounter, type EngineResult } from "@/lib/practice/encounters";
 import { NOTE_TYPES } from "@/lib/practice/encounter-constants";
 import { doseWithUnit } from "@/lib/practice/medication-constants";
@@ -446,6 +447,19 @@ export async function createDocument(admin: any, args: {
     payload: { documentId: doc.id, patientId: args.patientId, encounterId, docType: args.docType ?? "consultation_summary", composed },
     correlationId: args.correlationId,
   });
+
+  // ── s9 DOMAIN EVENT ───────────────────────────────────────────────────────────────────────────
+  //
+  // Recent Documents names document.created as its trigger. This is the DRAFT existing, not the
+  // document being finished -- document.signed is the second of the three, and document.issued the
+  // third, and the catalogue keeps them separate because a card that showed drafts as issued letters
+  // would be claiming things had been sent that are still being written.
+  await emitAudited(admin, [{
+    eventType: "document.created", practiceId: args.workspaceId,
+    practitionerId: args.actorId, actorId: args.actorId, source: "web",
+    patientId: args.patientId ?? null, encounterId,
+    payload: { documentId: doc.id, docType: args.docType ?? "consultation_summary", composed, status: "DRAFT" },
+  }], args.correlationId);
   return { ok: true, data: { id: doc.id as string, composed } };
 }
 
@@ -497,8 +511,9 @@ export async function updateDocument(admin: any, args: {
 export async function transitionDocument(admin: any, args: {
   workspaceId: string; documentId: string; to: string; actorId: string; correlationId: string;
 }): Promise<EngineResult<{ status: string }>> {
+  // patient_id and encounter_id are selected for the domain event below.
   const { data: doc } = await admin.from("practice_clinical_document")
-    .select("id, status, body, record_version").eq("id", args.documentId).eq("workspace_id", args.workspaceId).maybeSingle();
+    .select("id, status, body, patient_id, encounter_id, record_version").eq("id", args.documentId).eq("workspace_id", args.workspaceId).maybeSingle();
   if (!doc) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
   if (AMEND_ONLY_STATUSES.includes(args.to))
@@ -524,6 +539,22 @@ export async function transitionDocument(admin: any, args: {
     eventType: `practice.document_${args.to.toLowerCase()}`, payload: { documentId: doc.id },
     correlationId: args.correlationId,
   });
+
+  // ── s9 DOMAIN EVENT ───────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ SIGNED ONLY, AND THE OTHER TRANSITIONS ARE NOT NEAR-MISSES. DOCUMENT_TRANSITIONS also reaches
+  // FINAL, DRAFT and ENTERED_IN_ERROR, and the catalogue has no type for any of them. FINAL is not a
+  // signature -- migration 195 keeps signed_at and signed_by for the moment a name goes on the record
+  // -- and announcing it as one would put an unsigned document into whatever counts signed ones.
+  if (args.to === "SIGNED") {
+    await emitAudited(admin, [{
+      eventType: "document.signed", practiceId: args.workspaceId,
+      practitionerId: args.actorId, actorId: args.actorId, source: "web",
+      patientId: doc.patient_id ?? null, encounterId: doc.encounter_id ?? null,
+      payload: { documentId: doc.id, from: doc.status },
+    }], args.correlationId);
+  }
+
   return { ok: true, data: { status: args.to } };
 }
 
@@ -586,8 +617,9 @@ export async function recordRelease(admin: any, args: {
   workspaceId: string; documentId: string; channel: string; recipient?: string; note?: string;
   actorId: string; correlationId: string;
 }): Promise<EngineResult<{ id: string }>> {
+  // patient_id and encounter_id are selected for the domain event below.
   const { data: doc } = await admin.from("practice_clinical_document")
-    .select("id, status").eq("id", args.documentId).eq("workspace_id", args.workspaceId).maybeSingle();
+    .select("id, status, patient_id, encounter_id").eq("id", args.documentId).eq("workspace_id", args.workspaceId).maybeSingle();
   if (!doc) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (doc.status !== "SIGNED")
     return { ok: false, status: 422, code: "NOT_SIGNED", message: "only a signed document can be issued" };
@@ -602,6 +634,20 @@ export async function recordRelease(admin: any, args: {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.document_released",
     payload: { documentId: doc.id, channel: args.channel }, correlationId: args.correlationId,
   });
+
+  // ── s9 DOMAIN EVENT: ISSUED ───────────────────────────────────────────────────────────────────
+  //
+  // ⚠ RELEASE IS WHAT "ISSUED" MEANS HERE, and it is worth saying because there is no ISSUED status
+  // to look for. DOCUMENT_TRANSITIONS runs DRAFT -> FINAL -> SIGNED -> AMENDED and stops; the moment
+  // a document leaves the practice is a row in practice_clinical_document_release, and this function
+  // is the only thing that writes one. Its own refusal above says "only a signed document can be
+  // issued", so the vocabulary was already agreed -- there was simply nothing announcing it.
+  await emitAudited(admin, [{
+    eventType: "document.issued", practiceId: args.workspaceId,
+    practitionerId: args.actorId, actorId: args.actorId, source: "web",
+    patientId: doc.patient_id ?? null, encounterId: doc.encounter_id ?? null,
+    payload: { documentId: doc.id, releaseId: rel.id, channel: args.channel, recipient: args.recipient ?? null },
+  }], args.correlationId);
   return { ok: true, data: { id: rel.id as string } };
 }
 

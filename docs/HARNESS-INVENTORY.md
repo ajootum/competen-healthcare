@@ -52,8 +52,8 @@ spec's five-tier vocabulary collapses, today, to three reachable tiers:
 
 | | Count |
 |---|---|
-| Total harness scripts | 212 |
-| **pure/local** (no Supabase client) | 32 |
+| Total harness scripts | 218 |
+| **pure/local** (no Supabase client) | 38 |
 | **privileged-live** (real Supabase, one project, no staging tier exists yet) | 180 |
 | — of which mutate the database | 160 |
 | — of which are read-only | 20 |
@@ -131,6 +131,7 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `anon-exposure-harness.ts` | Anon exposure harness — can a browser with no login read your tables? | privileged-live | — | read-only | n/a | no |
 | `api-membership-harness.ts` | CP-SPLIT-002 — platform membership at the API boundary. | privileged-live | COMP-ARCH-PSA-001 | read-only | n/a | no |
 | `attendance-harness.ts` | Attendance harness. No database, no migration. | pure/local | — | read-only | n/a | no |
+| `auth-boundary-harness.ts` | Every API route enters an approved authorization boundary, or is allowlisted with a reason. | pure/local | — | read-only | n/a | no |
 | `blanket-policy-harness.ts` | Blanket-policy harness: the latent tenant leak. | privileged-live | — | read-only | n/a | no |
 | `cgr-gate-harness.ts` | One-off harness for the CGR-028 activation gate. Calls the SHIPPED engines (@/lib/cgr/service-profiles + | privileged-live | — | update/delete | no — verify | no |
 | `cgr-suggest-harness.ts` | One-off harness for the CGR-027 AI link suggester. Calls the SHIPPED engine (@/lib/cgr/suggest-links) — the | privileged-live | — | read-only | n/a | no |
@@ -138,6 +139,7 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `cpl-catalogue-harness.ts` | CPR-CPL-001 -- the catalogue CONTENT, and what the shipped engine does to it. | privileged-live | CPR-CPL-001 | insert | yes | no |
 | `cpr040-design-system-harness.ts` | CPR-040 design-system harness -- the Practice surface uses the token layer, not raw colour. | pure/local | CPR-040, CPR-V2-001 | read-only | n/a | no |
 | `decision-immutability-harness.ts` | Decision immutability harness (XWI P2-10). | privileged-live | — | insert/delete | no — verify | no |
+| `dev-origin-harness.ts` | COMP-ENG-002H Track A — the two configs that must agree about the dev origin. | pure/local | COMP-ENG-002H | read-only | n/a | no |
 | `enterprise-membership-harness.ts` | ENTERPRISE MEMBERSHIP — GATE 3, AND THE DRIFT DETECTOR MIGRATION 286 PROMISED BY NAME. | privileged-live | PLAT-OVERSIGHT | read-only | n/a | no |
 | `estate-hygiene-harness.ts` | ESTATE HYGIENE -- DOES THE LIVE ESTATE CONTAIN ANYTHING THAT IS NOT A REAL PRACTICE? | privileged-live | — | read-only | yes | no |
 | `framework-currency-harness.ts` | Framework currency harness (XWI P2-10b). | privileged-live | — | read-only | n/a | no |
@@ -182,10 +184,8 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `pd-capability-matrix-harness.ts` | CPR-PD-014 BUILD 2 -- THE CAPABILITY MATRIX, AS IT ACTUALLY EXISTS IN THE DATABASE. | privileged-live | CPR-PD-014 | read-only | n/a | no |
 | `pd-health-harness.ts` | CPR-PD-008 PRODUCT HEALTH HARNESS. | pure/local | CPR-PD-008 | read-only | n/a | no |
 | `pd-nav-harness.ts` | CPR-PD-001 — THE PRACTICE PRODUCT DIRECTOR NAVIGATION FREEZE. | pure/local | CPR-PD-001 | read-only | n/a | no |
-| `pd-a11y-sweep.ts` | CPR-PD-013 §12 — axe-core (injected from node_modules, never installed), the collapsed-sidebar contract, keyboard focus and touch targets over a ten-screen PD sample. Needs a dev server and the staging HQ fixture. **Proof script, not a CI harness.** | privileged-live + browser | CPR-PD-013, CPR-PD-001 §4, CPR-MOB-001 §4 | read-only | n/a | no |
-| `pd-browser-sweep.ts` | CPR-PD-013 §9/§13 — renders all 86 PD destinations as a signed-in Product Director and fails on a redirect, a missing heading, a console error, a 5xx or horizontal scroll. Needs a running dev server and the staging HQ fixture, so it is a **proof script, not a CI harness**. | privileged-live + browser | CPR-PD-013 | read-only | n/a | no |
-| `prove-clinical-loop.ts` | CPR-IAM-001 §14.1 launch control `clinical` — drives registerPatient → launchEncounter → ACTIVE → COMPLETED → SIGNED through the **engines**, so the guards, version checks and audit trail are all exercised. ⚠ **WRITES a synthetic patient and encounter**; staging-guarded and refuses production. `--check` is read-only. | privileged-live | CPR-IAM-001 §14.1 | insert | yes | no |
-| `pd-screen-doctrine-harness.ts` | PD SCREEN DOCTRINE HARNESS — the countable rule out of docs/CPR-PD-SCREEN-DOCTRINE.md §2. | pure/local | CPR-PD-SCREEN-DOCTRINE | read-only | n/a | no |
+| `pd-practice-health-harness.ts` | The practice health derivation, proven — CPR-PD-014 §5.4, §8.4, §12. | pure/local | CPR-PD-014 | read-only | n/a | no |
+| `pd-screen-doctrine-harness.ts` | PD SCREEN DOCTRINE HARNESS — the countable rule out of docs/CPR-PD-SCREEN-DOCTRINE.md §2. | pure/local | CPR-PD-SCREEN-DOCTRINE, CPR-PD-013, CPR-PI-001 | read-only | n/a | no |
 | `plane-boundary-harness.ts` | plane-boundary-harness — the platform plane may see THAT a practice is used, not WHAT is in it. | pure/local | PLAT-OVERSIGHT-SURVEY-001, CPR-PD-014 | read-only | n/a | no |
 | `platform-flag-gate-harness.ts` | Platform feature-flag harness -- LCP-001 s9, migration 042. | privileged-live | — | insert/delete | yes | no |
 | `platform-membership-harness.ts` | PLATFORM MEMBERSHIP HARNESS -- CP-SPLIT-002 stages 1 to 4, COMP-ARCH-PSA-001 sections 7, 11, 14, 40. | privileged-live | COMP-ARCH-PSA-001, CPR-IAM-001 | insert/update/delete/upsert | yes | no |
@@ -228,6 +228,7 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `practice-encounter-workspace-harness.ts` | Encounters workspace harness -- CPR-ENC-001 (the dashboard) and CPR-ENC-002 (the encounter screen), | privileged-live | CPR-ENC-001, CPR-ENC-002, CPR-ENC-003 | insert/update | yes | no |
 | `practice-encounters-harness.ts` | Practice clinical-encounter harness -- PEN-003 / DM-001 s8-s10 / s16, exercised against the live | privileged-live | CPR-130 | insert/update/delete | yes | no |
 | `practice-encounters-landing-harness.ts` | THE ENCOUNTERS LANDING PAGE -- CPR-ENC-LANDING-001. | privileged-live | CPR-ENC-LANDING-001 | insert/delete | yes | no |
+| `practice-event-coverage-harness.ts` | practice-event-coverage (CPR-CORE-001 s9 / CORE-09) — does every type in the domain-event | pure/local | CPR-CORE-001 | read-only | n/a | no |
 | `practice-events-harness.ts` | CPR-CORE-001 s9/s9.1 domain event outbox harness. Migration 233, backlog CORE-09. | privileged-live | CPR-CORE-001 | insert/update/delete | yes | no |
 | `practice-facilities-harness.ts` | Facilities and facility identifiers harness -- CPR-PRM-001 s3, s7, s11. Migration 222. | privileged-live | CPR-PRM-001 | insert/update/delete | yes | no |
 | `practice-followup-plans-harness.ts` | Practice follow-up PLANS harness -- CPR-140's structural half, exercised against the live database | privileged-live | CPR-140 | insert/update/delete | yes | no |
@@ -273,7 +274,7 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `practice-personalisation-harness.ts` | Practice personalisation harness -- CPR-360, exercised against the live database through the same | privileged-live | CPR-360 | insert/update | yes | no |
 | `practice-pi-v2-harness.ts` | CPR-PI-001 v2 P0 harness -- the rebuilt intelligence screens and the metrics beneath them. | privileged-live | CPR-PI-001 | insert | yes | no |
 | `practice-pid-harness.ts` | CP Patient Numbering harness -- CPR-PID-001 v1.0 (FROZEN), migration 289. | privileged-live | CPR-PID-001 | insert/update/delete | yes | no |
-| `practice-planner-freeze-harness.ts` | CPR-PLN-002 -- THE PRACTICE PLANNER'S FUNCTIONAL FREEZE. | pure/local | CPR-PLN-002, CPR-PLAN-002 | read-only | n/a | no |
+| `practice-planner-freeze-harness.ts` | CPR-PLN-002 -- THE PRACTICE PLANNER'S FUNCTIONAL FREEZE. | pure/local | CPR-PLN-002, CPR-PLAN-002, CPR-PD-013 | read-only | n/a | no |
 | `practice-planner-harness.ts` | CPR-V5-005 PRACTICE PLANNER: the seven-day week, s5's actions, s7's conflict detection. Migration 236. | privileged-live | CPR-V5-005, CPR-CORE-001, CPR-SET-002 | insert/update/delete | yes | no |
 | `practice-planner-navigation-harness.ts` | CP-PLAN-002 sections 3-7: PRACTICE PLANNER NAVIGATION, CONTENT CONTROLS, THE FOUR VIEWS AND THE | privileged-live | CPR-300 | insert/update/delete | yes | no |
 | `practice-portfolio-harness.ts` | Professional Portfolio harness -- CPR-240. Migration 217. | privileged-live | CPR-240, CPR-IDENT-SURVEY-001, CPR-200 | insert/update/delete | yes | yes |
@@ -311,8 +312,9 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `practice-taxonomy-harness.ts` | Booking taxonomy harness (CP-BOOKING-TAXONOMY-001). No database. | pure/local | — | read-only | n/a | no |
 | `practice-team-harness.ts` | Practice team harness -- CPR-310, exercised against the live database through the same engine the | privileged-live | CPR-310, CPR-340 | insert/update | yes | no |
 | `practice-timeline-harness.ts` | Timeline harness -- timelineDay(). | privileged-live | — | insert/update/delete | yes | no |
-| `practice-treatment-investigation-harness.ts` | RAPID TREATMENT AND INVESTIGATION CAPTURE -- CPR-TREAT-001, CPR-INV-001, CINV-CAP-001, migration 275. | privileged-live | CPR-TREAT-001, CPR-INV-001, CPR-TRT-UI-002 | insert/update/delete | yes | no |
+| `practice-treatment-investigation-harness.ts` | RAPID TREATMENT AND INVESTIGATION CAPTURE -- CPR-TREAT-001, CPR-INV-001, CINV-CAP-001, migration 275. | privileged-live | CPR-TREAT-001, CPR-INV-001, CPR-PD-013 | insert/update/delete | yes | no |
 | `practice-v5007-phase56-harness.ts` | CPR-V5-007 PHASES 5 AND 6 -- FOLLOW-UPS AND WALK-INS, THEN PUBLISH READINESS. | privileged-live | CPR-V5-007, CPR-V2-005 | insert/update/delete | yes | no |
+| `production-guard-harness.ts` | The production-target guard, proven — COMP-ENG-002H Track B. | pure/local | COMP-ENG-002H | read-only | n/a | no |
 | `public-disclosure-harness.ts` | Public disclosure harness. Governed by WEB-HOME-001 since 2026-08-11 (WEB-DEC), superseding | privileged-live | CPR-IAM-001 | read-only | n/a | no |
 | `pui-a11y-harness.ts` | Every file under a directory, recursively. Used to find modal surfaces wherever they were added. | pure/local | — | read-only | n/a | no |
 | `pui-charts-harness.ts` | Harness for the Data Visualisation & Dashboard Standards (PUI-007). | pure/local | — | read-only | n/a | no |
@@ -324,6 +326,7 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `pui-tokens-harness.ts` | Harness for the Platform Design System (PUI-001) + the accessibility floor (PUI-005). | pure/local | — | read-only | n/a | no |
 | `qie-hub-harness.ts` | QIE-000 harness — does the hub tell the truth about its own engines? | privileged-live | — | read-only | n/a | no |
 | `qie-loop-harness.ts` | QIE-005 -> QIE-006: does an investigation actually produce an action? | privileged-live | — | insert/update/delete | yes | no |
+| `role-authorization-ratchet-harness.ts` | PLAT-GOV-001 §14 — the role-authorization ratchet. | pure/local | PLAT-GOV-001 | read-only | n/a | no |
 | `security-headers-harness.ts` | Security headers harness — COMP-SECURITY-SURVEY-001 s0.6 / s6.8. | pure/local | COMP-SECURITY-SURVEY-001 | read-only | n/a | no |
 | `sidebar-active-harness.ts` | sidebar-active-harness — proves no sidebar path highlights two rows at once. | pure/local | CPR-PD-001 | read-only | n/a | no |
 | `sso-harness.ts` | COMP-AUTH-001 / COMP-IDENTITY-001 item 15 — SSO, the last item of the security arc's Phase 3. | pure/local | COMP-AUTH-001, COMP-IDENTITY-001 | read-only | n/a | no |
@@ -341,5 +344,4 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `xw-competency-harness.ts` | CROSS-WORKSPACE SWEEP, THE COMPETENCY AXIS: does competency actually change what happens on a shift? | privileged-live | COMP-027 | insert/update/delete | yes | no |
 | `xw-sweep-harness.ts` | CROSS-WORKSPACE VERIFICATION SWEEP. | privileged-live | — | insert/update/delete | no — verify | no |
 | `xw-uplift-harness.ts` | CROSS-WORKSPACE SWEEP, UPWARD: bedside -> supervisor -> unit manager -> executive. | privileged-live | — | insert/update/delete | no — verify | no |
-
 <!-- END GENERATED TABLE -->

@@ -1,4 +1,5 @@
 import { audit } from "@/lib/practice/audit";
+import { emitAudited } from "@/lib/practice/events";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { type WorkspaceContext } from "@/lib/practice/access";
 import { practiceToday, workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
@@ -211,6 +212,22 @@ export async function queueWalkIn(admin: any, ctx: WorkspaceContext, args: {
     workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.walk_in_queued",
     payload: { queueId: data.id, patientId: patient.id }, correlationId: args.correlationId,
   });
+
+  // ── s9 DOMAIN EVENT ─────────────────────────────────────────────────────────────────────────────
+  //
+  // THE SECOND WAY A QUEUE ROW IS BORN. transitionAppointment creates one when a booked patient
+  // arrives; this creates one when somebody walks in without a booking. Both must announce it or the
+  // Waiting Queue card refreshes for half the practice's arrivals -- and it would be the half that
+  // arrives unannounced, which is the half a practitioner most wants to see appear.
+  //
+  // ⚠ NOT EMITTED ON THE ALREADY-WAITING PATH ABOVE, which returns early. Nothing was created there,
+  // and an event saying otherwise would count one person twice in the corridor.
+  await emitAudited(admin, [{
+    eventType: "queue.entry_created", practiceId: ctx.workspaceId,
+    practitionerId: ctx.userId, actorId: ctx.userId, source: "web",
+    patientId: patient.id,
+    payload: { queueEntryId: data.id, origin: "walk_in", status: "WAITING" },
+  }], args.correlationId);
   return { ok: true, data: { id: data.id as string, alreadyWaiting: false } };
 }
 

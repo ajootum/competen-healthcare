@@ -1,4 +1,5 @@
 import { audit } from "@/lib/practice/audit";
+import { emitAudited } from "@/lib/practice/events";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { workspaceClock } from "@/lib/practice/practice-time";
 import {
@@ -169,6 +170,21 @@ export async function createTask(admin: any, args: {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.task_created",
     payload: { taskId: t.id, assignedTo: args.assignedTo, category, priority }, correlationId: args.correlationId,
   });
+
+  // ── s9 DOMAIN EVENT ─────────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ practitionerId IS THE ASSIGNEE, NOT THE ACTOR, AND THIS IS THE ONE PLACE THAT DISTINCTION IS
+  // FREE. The envelope's practitionerId means "whose work this is" and practice_task answers it
+  // directly with assigned_to -- migration 198 calls it "WHO OWES IT" and makes it NOT NULL. Every
+  // other new emit site in this arc falls back to the actor because its table has no such column;
+  // taking the actor here would file a task the owner raised FOR somebody else onto the owner's
+  // board, which is the delegated-write mistake activity.ts warns about, available to make today.
+  await emitAudited(admin, [{
+    eventType: "task.created", practiceId: args.workspaceId,
+    practitionerId: args.assignedTo, actorId: args.actorId, source: "web",
+    patientId: args.patientId ?? null, encounterId: args.encounterId ?? null,
+    payload: { taskId: t.id, category, priority, dueOn: args.dueOn ?? null, raisedBy: args.actorId },
+  }], args.correlationId);
   return { ok: true, data: { id: t.id as string } };
 }
 
@@ -176,8 +192,10 @@ export async function transitionTask(admin: any, args: {
   workspaceId: string; taskId: string; to: string; reason?: string; outcome?: string;
   actorId: string; correlationId: string;
 }): Promise<EngineResult<{ status: string; recurred?: { id: string; dueOn: string } | null }>> {
+  // patient_id and encounter_id are selected for the domain event below -- the Tasks card and the
+  // patient timeline both key on them, and an event carrying neither cannot refresh either.
   const { data: task } = await admin.from("practice_task")
-    .select("id, status, title, assigned_to, created_by, record_version")
+    .select("id, status, title, assigned_to, created_by, patient_id, encounter_id, record_version")
     .eq("id", args.taskId).eq("workspace_id", args.workspaceId).maybeSingle();
   if (!task) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (!(TASK_TRANSITIONS[task.status] ?? []).includes(args.to))
@@ -231,6 +249,24 @@ export async function transitionTask(admin: any, args: {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: `practice.task_${args.to.toLowerCase()}`,
     payload: { taskId: task.id, ...(recurred ? { recurredTo: recurred.id } : {}) }, correlationId: args.correlationId,
   });
+
+  // ── s9 DOMAIN EVENT ─────────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ ONLY DONE. The catalogue has task.created and task.completed and NOTHING FOR THE STATES IN
+  // BETWEEN -- no task.blocked, no task.cancelled. Announcing a block under the word "completed"
+  // because it is the nearest available type is how a board comes to report work as finished that
+  // somebody is stuck on. The other transitions are in the audit trail, where they are true.
+  //
+  // practitionerId is the assignee for the same reason it is on creation: the task is theirs.
+  if (args.to === "DONE") {
+    await emitAudited(admin, [{
+      eventType: "task.completed", practiceId: args.workspaceId,
+      practitionerId: task.assigned_to ?? args.actorId, actorId: args.actorId, source: "web",
+      patientId: task.patient_id ?? null, encounterId: task.encounter_id ?? null,
+      payload: { taskId: task.id, from: task.status, recurredTo: recurred?.id ?? null },
+    }], args.correlationId);
+  }
+
   return { ok: true, data: { status: args.to, recurred } };
 }
 

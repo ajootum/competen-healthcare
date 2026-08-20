@@ -419,7 +419,10 @@ export default function EncounterConsole(props: {
     });
   }, [tab]);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  // `offer` is how a REFUSAL becomes an ACTION. Only one exists today (an interruption), and it is a
+  // named literal rather than a callback stored on the notice, so a notice stays serialisable data and
+  // the button lives with the rest of the markup.
+  const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string; offer?: "interrupt" } | null>(null);
   const [bodies, setBodies] = useState<Record<string, string>>(() => {
     const seed: Record<string, string> = {};
     for (const t of NOTE_TYPES) seed[t] = props.notes.find(n => n.note_type === t)?.body ?? "";
@@ -612,12 +615,23 @@ export default function EncounterConsole(props: {
     setNotice({ kind: "ok", text: "Added to the note. Not saved yet." });
   };
 
-  async function call(fn: () => Promise<Response>, okText: string, reload: boolean) {
+  /**
+   * `onError` is OPTIONAL AND ADDITIVE, which is the whole reason it is shaped this way. Twenty-odd
+   * callers pass three arguments and must keep behaving exactly as they did; only the one path that can
+   * meet a refusal it can DO something about passes a fourth. Returning true means "handled, do not
+   * write the default notice"; returning false, or passing nothing, leaves the old behaviour intact.
+   */
+  async function call(
+    fn: () => Promise<Response>, okText: string, reload: boolean,
+    onError?: (code: string | null, message: string) => boolean,
+  ) {
     setBusy(true); setNotice(null);
     const res = await fn();
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setNotice({ kind: "err", text: data?.error?.message ?? data?.error ?? "That did not work." });
+      const code: string | null = data?.error?.code ?? null;
+      const message: string = data?.error?.message ?? data?.error ?? "That did not work.";
+      if (!onError?.(code, message)) setNotice({ kind: "err", text: message });
       setBusy(false); return false;
     }
     if (reload) { window.location.reload(); return true; }
@@ -772,8 +786,49 @@ export default function EncounterConsole(props: {
     if (action === "entered_in_error" && !confirm("Mark this encounter as entered in error? It stays in the record, permanently flagged.")) return;
     call(() => fetch(`/api/v1/practice/encounters/${props.encounterId}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }),
-    }), label, true);
+    }), label, true,
+    // THE ENGINE HAS BEEN TELLING PEOPLE TO DO THIS SINCE MIGRATION 234 AND THERE WAS NO BUTTON.
+    // Its refusal reads "another consultation is already open. Pause it, or start this one as an
+    // interruption." The first half a practitioner could do -- navigate away, pause, navigate back.
+    // The second half named an engine (interruptWith) that had no route and no caller outside two
+    // harnesses, so the sentence sent somebody looking for a control that did not exist, in the one
+    // situation it names.
+    //
+    // THE ENGINE'S OWN SENTENCE IS STILL WHAT GETS PRINTED. The button is the answer to it, never a
+    // replacement for it: a summary written here drifts from the refusal it is summarising.
+    (code, message) => {
+      if (code !== "ANOTHER_ACTIVE" || !props.canEdit) return false;
+      setNotice({ kind: "err", text: message, offer: "interrupt" });
+      return true;
+    });
   };
+
+  /**
+   * Pause whatever is running and open this one, in the engine's order and with its rollback.
+   *
+   * NOT TWO CALLS FROM HERE. Doing it client-side -- PATCH pause, then PATCH start -- would put the
+   * rollback in the browser, so a start that failed after a successful pause would leave a practitioner
+   * with NOTHING active and a patient in front of them; a closed laptop between the two would leave it
+   * that way. interruptWith holds both writes and puts the clinic back if the second is refused.
+   */
+  const startAsInterruption = () => call(() => fetch(`/api/v1/practice/encounters/${props.encounterId}`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "interrupt" }),
+  }), "Started as an interruption.", true);
+
+  /**
+   * RENDERED IN BOTH FRAMES FROM ONE DEFINITION, because the notice is. The desktop paragraph is
+   * max-md:hidden and the dock draws its own below md; an offer attached to only one of them would be
+   * invisible on exactly the device somebody is holding when an emergency walks in.
+   *
+   * A SIBLING OF THE PARAGRAPH, NEVER A CHILD: the notice is a <p>, and a <button> inside one is
+   * invalid markup that React renders happily and the browser then re-parents.
+   */
+  const interruptOffer = notice?.offer === "interrupt" ? (
+    <button type="button" disabled={busy} onClick={startAsInterruption}
+      className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50">
+      Pause the other one and start this
+    </button>
+  ) : null;
 
   // (addDx and its `dx` state went with the single-diagnosis form. The working set posts to the batch
   // route through DiagnosisWorkspace, and leaving a second writer here -- unreachable but callable --
@@ -1005,7 +1060,10 @@ export default function EncounterConsole(props: {
             practitioner could not see, which is the cockpit's End-from-deep-scroll defect exactly.
             Below md the same notice renders inside the pinned dock instead — one per viewport. */}
         {notice && (
-          <p className={`rounded-lg px-3 py-2 text-[12px] max-md:hidden ${notice.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{notice.text}</p>
+          <div className="max-md:hidden">
+            <p className={`rounded-lg px-3 py-2 text-[12px] ${notice.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>{notice.text}</p>
+            {interruptOffer && <div className="mt-1.5">{interruptOffer}</div>}
+          </div>
         )}
 
         {/* ══ THE ACTION BAR, AT THE TOP ═══════════════════════════════════════════════════════════
@@ -1088,11 +1146,18 @@ export default function EncounterConsole(props: {
         {dockVisible && (
           <div className="fixed inset-x-0 bottom-[calc(var(--cp-bottomnav-h)_+_var(--cp-safe-bottom))] z-30 border-t border-gray-200 bg-white/95 px-3 py-2.5 backdrop-blur md:hidden">
             {notice && (
-              <p role="status" className={`mb-2 rounded-lg px-3 py-2 text-[12.5px] ${notice.kind === "ok"
-                ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
-                : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>
-                {notice.text}
-              </p>
+              <div className="mb-2">
+                <p role="status" className={`rounded-lg px-3 py-2 text-[12.5px] ${notice.kind === "ok"
+                  ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
+                  : "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"}`}>
+                  {notice.text}
+                </p>
+                {/* min-h so the offer is a touch target rather than a 24px strip on the device this
+                    situation is most likely to be met on. */}
+                {interruptOffer && (
+                  <div className="mt-1.5 flex min-h-[var(--cp-touch-primary)] items-stretch [&>button]:flex-1">{interruptOffer}</div>
+                )}
+              </div>
             )}
             {dockForward.length > 0 && (
               <div className="flex gap-2">

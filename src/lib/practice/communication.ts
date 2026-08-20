@@ -1,4 +1,19 @@
 import { audit } from "@/lib/practice/audit";
+import { emitAudited } from "@/lib/practice/events";
+
+/**
+ * Which arrivals in the register are RESULTS.
+ *
+ * ⚠ THE CATALOGUE HAS `result.received`, NOT `document.arrived`. INCOMING_DOC_TYPES holds six kinds
+ * and only two of them are results; a letter from a solicitor and a discharge summary are not, and
+ * announcing them under a result type would put them on the card a practitioner scans for things that
+ * need a clinical decision. That card is the one place a false positive is expensive: it is read at
+ * the end of a day to decide whether anything is outstanding.
+ *
+ * Everything that arrives is still audited (practice.incoming_recorded) and still on the register.
+ * Only the DOMAIN EVENT is narrowed, because the domain event is what the dashboard believes.
+ */
+const RESULT_DOC_TYPES = ["lab_result", "imaging_report"];
 import type { EngineResult } from "@/lib/practice/encounters";
 import { listMembers } from "@/lib/practice/tasks";
 import {
@@ -114,6 +129,24 @@ export async function postMessage(admin: any, args: {
   await admin.from("practice_thread").update({ last_message_at: message.created_at }).eq("workspace_id", args.workspaceId).eq("id", thread.id);
   // Your own message is read by definition -- otherwise every reply marks your own thread unread at you.
   await markThreadRead(admin, { workspaceId: args.workspaceId, threadId: thread.id, userId: args.actorId });
+
+  // ── s9 DOMAIN EVENT ───────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ "RECEIVED" IS FROM THE PRACTICE'S SIDE, AND THE WORD NEEDS THAT QUALIFICATION HERE.
+  // practice_thread is INTERNAL messaging: every message has an author_id who is a member of this
+  // workspace, and nothing in the product accepts a message from outside it. So this event does not
+  // mean "somebody wrote to us"; it means A MESSAGE LANDED IN A THREAD, which is exactly the moment
+  // the Command Centre's Messages card changes and the only moment it can learn to.
+  //
+  // ⚠ WHICH IS WHY THE AUTHOR IS IN THE PAYLOAD. A projection counting one person's unread must
+  // EXCLUDE messages they wrote -- markThreadRead above does exactly that for the reader's cursor,
+  // and a projection that forgot would tell every practitioner they have unread mail from themselves.
+  await emitAudited(admin, [{
+    eventType: "message.received", practiceId: args.workspaceId,
+    practitionerId: args.actorId, actorId: args.actorId, source: "web",
+    occurredAt: message.created_at,
+    payload: { threadId: thread.id, messageId: message.id, authorId: args.actorId },
+  }], args.correlationId);
 
   return { ok: true, data: { id: message.id as string } };
 }
@@ -301,6 +334,19 @@ export async function recordIncoming(admin: any, args: {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.incoming_recorded",
     payload: { incomingId: doc.id, docType, priority }, correlationId: args.correlationId,
   });
+
+  // ── s9 DOMAIN EVENT: A RESULT ARRIVED ─────────────────────────────────────────────────────────
+  //
+  // Declared in DASHBOARD_EVENTS beside Operational Alerts and never emitted, so a lab result
+  // logged into the register moved nothing on the Command Centre until the poll came round. See
+  // RESULT_DOC_TYPES for why a letter does not qualify.
+  if (RESULT_DOC_TYPES.includes(docType)) {
+    await emitAudited(admin, [{
+      eventType: "result.received", practiceId: args.workspaceId,
+      practitionerId: args.actorId, actorId: args.actorId, source: "web",
+      patientId, payload: { incomingId: doc.id, docType, priority, source: args.source.trim() },
+    }], args.correlationId);
+  }
   return { ok: true, data: { id: doc.id as string } };
 }
 
@@ -311,8 +357,10 @@ export async function recordIncoming(admin: any, args: {
 export async function reviewIncoming(admin: any, args: {
   workspaceId: string; incomingId: string; note?: string; actorId: string; correlationId: string;
 }): Promise<EngineResult<{ status: string }>> {
+  // doc_type and patient_id are selected for the domain event below: the event is emitted only for
+  // results (RESULT_DOC_TYPES) and is useless without the patient it concerns.
   const { data: doc } = await admin.from("practice_incoming_document")
-    .select("id, status").eq("id", args.incomingId).eq("workspace_id", args.workspaceId).maybeSingle();
+    .select("id, status, doc_type, patient_id").eq("id", args.incomingId).eq("workspace_id", args.workspaceId).maybeSingle();
   if (!doc) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (!(INCOMING_TRANSITIONS[doc.status] ?? []).includes("REVIEWED"))
     return { ok: false, status: 422, code: "ILLEGAL_TRANSITION", message: `${doc.status} cannot become REVIEWED` };
@@ -326,6 +374,22 @@ export async function reviewIncoming(admin: any, args: {
     workspaceId: args.workspaceId, actorId: args.actorId, eventType: "practice.incoming_reviewed",
     payload: { incomingId: doc.id }, correlationId: args.correlationId,
   });
+
+  // ── s9 DOMAIN EVENT: THE CLINICAL STAMP ───────────────────────────────────────────────────────
+  //
+  // Narrowed to results by the same rule as result.received. `via` says WHICH review this was:
+  // investigations.ts emits result.reviewed too, for investigations reviewed inside a consultation.
+  // They are different rows in different tables and neither double-counts the other, but a reader of
+  // the outbox should not have to work that out from the payload keys.
+  if (RESULT_DOC_TYPES.includes(String(doc.doc_type))) {
+    await emitAudited(admin, [{
+      eventType: "result.reviewed", practiceId: args.workspaceId,
+      practitionerId: args.actorId, actorId: args.actorId, source: "web",
+      patientId: doc.patient_id ?? null,
+      payload: { incomingId: doc.id, docType: doc.doc_type, via: "inbox" },
+    }], args.correlationId);
+  }
+
   return { ok: true, data: { status: "REVIEWED" } };
 }
 

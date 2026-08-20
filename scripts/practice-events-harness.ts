@@ -129,9 +129,17 @@ async function main() {
   if (!clinic.ok) { report(); return; }
 
   const before = await eventsFor(clinic.value.id);
-  ok("1a-control. nothing is announced before anything happens",
-    !before.readFailed && before.rows.length === 0,
-    before.readFailed ? before.detail : `${before.rows.length} rows`);
+  // ⚠ THIS ASSERTION USED TO READ "length === 0" AND THAT WAS A PIN ON A TOTAL, not on the thing it
+  // is for. Planning IS something happening -- planActivity emits activity.planned -- so the moment
+  // that producer was wired, a control asserting an EMPTY outbox went red while proving nothing had
+  // gone wrong. Its actual job is vacuity: show that the lifecycle assertions below are not passing on
+  // rows that were already there. Naming the one event that legitimately precedes a start does that
+  // job STRICTLY BETTER than counting zero, because it also proves the read works and returns the
+  // right row rather than failing silently to an empty array.
+  const beforeTypes = before.rows.map(r => r.event_type).sort();
+  ok("1a-control. the only thing announced before the clinic starts is the plan itself",
+    !before.readFailed && beforeTypes.join() === "activity.planned",
+    before.readFailed ? before.detail : beforeTypes.join() || "nothing");
 
   const startAt = new Date();
   const started = await startActivity(admin, ctxA, clinic.value.id, { at: startAt, source: "system" });
@@ -144,7 +152,11 @@ async function main() {
   ok("1d. starting writes an event", !afterStart.readFailed && afterStart.rows.length > 0,
     afterStart.readFailed ? afterStart.detail : "no events written");
 
-  const startTypes = afterStart.rows.map(r => r.event_type).sort();
+  // FILTERED TO THE LIFECYCLE PAIR THIS ASSERTION IS ABOUT. activity.planned is in this fixture's
+  // outbox and is not what "starting announces" means; leaving it in would make a correct producer
+  // look like a broken start.
+  const startTypes = afterStart.rows.map(r => r.event_type)
+    .filter(t => t.endsWith(".started")).sort();
   // BOTH HALVES. s6.1 requires the session event; s7 has different cards watching each. Emitting one is
   // the failure that leaves a card stale with nothing anywhere reporting it.
   ok("1e. starting announces BOTH activity.started and session.started",
@@ -188,8 +200,16 @@ async function main() {
   const endTypes = afterEnd.rows.map(r => r.event_type).filter(t => t.endsWith("completed") || t === "session.closed").sort();
   ok("2c. ending announces BOTH activity.completed and session.closed",
     endTypes.join() === "activity.completed,session.closed", endTypes.join() || "nothing");
+  // ⚠ COUNTED BY NAME, NOT BY TOTAL. "the four lifecycle events are all there" is a claim about four
+  // specific types; `rows.length === 4` was a claim about the whole outbox, which is a different and
+  // weaker thing wearing the same sentence. The distinction stopped being academic the moment a fifth
+  // legitimate producer existed -- and the next one will not break this.
+  const LIFECYCLE = ["activity.started", "session.started", "activity.completed", "session.closed"];
+  const lifecycleSeen = LIFECYCLE.filter(t => afterEnd.rows.some(r => r.event_type === t));
   ok("2d. the four lifecycle events are all there and none was overwritten",
-    afterEnd.rows.length === 4, `${afterEnd.rows.length}: ${afterEnd.rows.map(r => r.event_type).join()}`);
+    lifecycleSeen.length === 4
+    && LIFECYCLE.every(t => afterEnd.rows.filter(r => r.event_type === t).length === 1),
+    `${afterEnd.rows.length} rows: ${afterEnd.rows.map(r => r.event_type).join()}`);
 
   const closeEv = afterEnd.rows.find(r => r.event_type === "session.closed");
   ok("2e. the close carries the same session id as the open",
@@ -211,7 +231,10 @@ async function main() {
       JSON.stringify(s2));
 
     const firstEvents = await eventsFor(clinic2.value.id);
-    const firstTypes = firstEvents.rows.map(r => r.event_type).sort();
+    // Filtered to the lifecycle, for the reason 2d records: the plan event is real and is not part of
+    // what "the interrupted session is announced as closed" is asserting.
+    const firstTypes = firstEvents.rows.map(r => r.event_type)
+      .filter(t => t !== "activity.planned").sort();
     ok("3b. the interrupted session is announced as closed, not left open",
       firstTypes.join() === "activity.completed,activity.started,session.closed,session.started",
       firstTypes.join() || "nothing");
@@ -275,9 +298,15 @@ async function main() {
       && startBroken.value.eventWarnings.every(w => w.includes("EMIT_THREW")),
       startBroken.ok ? JSON.stringify(startBroken.value.eventWarnings) : "");
     const noneWritten = await eventsFor(brokenA.value.id);
-    ok("4d-control. and no event was written, so 4a-4c are not passing on a working outbox",
-      !noneWritten.readFailed && noneWritten.rows.length === 0,
-      noneWritten.readFailed ? noneWritten.detail : `${noneWritten.rows.length} rows`);
+    // ⚠ THE PLAN WAS WRITTEN BY THE WORKING CLIENT AND THE START BY THE BROKEN ONE, which is exactly
+    // what this control needs to say. `outboxErrors` is the deliberately-broken client used for 4a-4c;
+    // the fixture was PLANNED through the real admin client before it, so one activity.planned row
+    // legitimately exists. Asserting zero rows would now fail, and it would fail while the property
+    // under test -- that the broken client wrote NOTHING -- was perfectly true.
+    const brokenTypes = noneWritten.rows.map(r => r.event_type).sort();
+    ok("4d-control. the broken outbox wrote nothing, so 4a-4c are not passing on a working one",
+      !noneWritten.readFailed && brokenTypes.every(t => t === "activity.planned"),
+      noneWritten.readFailed ? noneWritten.detail : brokenTypes.join() || "nothing");
 
     const endBroken = await endActivity(outboxErrors, ctxA, brokenA.value.id, { source: "system" });
     ok("4e. an outbox that returns an ERROR does not fail the end", endBroken.ok,
@@ -373,8 +402,14 @@ async function main() {
 
     const { data: bRows, error: bErr } = await admin.from("practice_domain_event")
       .select("id, activity_instance_id").eq("workspace_id", wsB);
+    // ⚠ THE COUNT IS GONE AND THE PROPERTY IS WHAT IS LEFT. This assertion is about ISOLATION: every
+    // row under practice B belongs to B's own activity. `length === 2` was never part of that claim --
+    // it was the number of events B's fixture happened to produce on the day it was written, and a new
+    // producer changed it to 3 without weakening isolation by anything at all. A tenancy assertion that
+    // reds when an unrelated event type is added is a tenancy assertion somebody will eventually
+    // "fix" by loosening the wrong half.
     ok("7c. practice B's events are B's alone and do not appear under A",
-      !bErr && (bRows ?? []).length === 2
+      !bErr && (bRows ?? []).length > 0
       && ((bRows ?? []) as EventRow[]).every(r => r.activity_instance_id === bClinic.value.id),
       bErr?.message ?? `${(bRows ?? []).length} rows`);
 
@@ -383,9 +418,14 @@ async function main() {
     const cross = await startActivity(admin, ctxA, bClinic.value.id, { source: "system" });
     ok("7d-control. reaching into another practice is refused",
       !cross.ok && cross.code === "NOT_FOUND", JSON.stringify(cross));
+    // ⚠ MEASURED AS A DELTA, NOT AS A TOTAL, and that is the whole repair. The claim is "the refused
+    // write added nothing" -- so the number that matters is the one BEFORE compared with the one after,
+    // and a literal 2 was only ever that comparison with the before-value inlined from memory. Written
+    // this way it stays true however many legitimate events B's fixture grows.
+    const bBeforeCount = (bRows ?? []).length;
     const { data: bAfter } = await admin.from("practice_domain_event").select("id").eq("workspace_id", wsB);
-    ok("7e. and the refusal announced nothing", (bAfter ?? []).length === 2,
-      `${(bAfter ?? []).length} rows`);
+    ok("7e. and the refusal announced nothing", (bAfter ?? []).length === bBeforeCount,
+      `${bBeforeCount} before, ${(bAfter ?? []).length} after`);
   }
 
   // -- 8. The read pattern the indexes exist for ----------------------------------------------------

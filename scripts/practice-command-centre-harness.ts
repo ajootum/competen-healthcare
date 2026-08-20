@@ -37,7 +37,7 @@ import { commandCentre } from "../src/lib/practice/command-centre";
 import { activeFollowUps } from "../src/lib/practice/session";
 import { createFollowUp } from "../src/lib/practice/follow-ups";
 import { practiceToday } from "../src/lib/practice/practice-time";
-import { practiceMetrics, metricScope, MIN_OBSERVATIONS_FOR_DELAY } from "../src/lib/practice/metrics";
+import { practiceMetrics, metricScope, MIN_OBSERVATIONS_FOR_DELAY, METRIC_CAPABILITIES } from "../src/lib/practice/metrics";
 import { DASHBOARD_WIDGETS } from "../src/lib/practice/preference-constants";
 import { PERFORMANCE_SWATCH } from "../src/lib/practice/palette";
 import { purgeWorkspacesOwnedBy, cleanupOnKill } from "./_cleanup";
@@ -206,6 +206,38 @@ async function main() {
   ok("3d a metric the caller cannot see is not_permitted, NOT zero",
     blind.metrics.booked.status === "not_permitted" && blind.metrics.booked.value === null,
     JSON.stringify([blind.metrics.booked.status, blind.metrics.booked.value]));
+  // ---- 3e. THE CAPABILITY CODES metrics.ts COMPARES AGAINST ARE REAL ONES --------------------------
+  //
+  // ⚠ METRIC_CAPABILITIES WAS EXPORTED FOR THIS ASSERTION AND THE ASSERTION WAS NEVER WRITTEN. The
+  // export carried the sentence "Exported so a harness can prove each one EXISTS in
+  // practice_role_capabilities rather than re-typing it", and for as long as nothing consumed it that
+  // was a promise rather than a check -- the constant had exactly one occurrence in the repository, its
+  // own definition.
+  //
+  // WHAT IT GUARDS, in metrics.ts's own words: `practice.calendar.manage` shipped in activity.ts and
+  // `appointment.view` shipped in todays-work.ts, and both times THE SCREEN SHOWED A CONFIDENT ZERO.
+  // That is the whole danger of an invented capability here -- an unheld one and a nonexistent one are
+  // indistinguishable at runtime, so a typo reads as "this practitioner may not see it" for every user
+  // including the practice owner, for ever, without an error anywhere.
+  //
+  // Asserted against the ENGINE's exported list and never a list re-typed here: a re-typed list can
+  // invent the same fiction and agree with itself. PLANNER_CAPABILITIES is pinned this way in two
+  // harnesses already; this is the same pin on the constant that had none.
+  const { data: metricCaps, error: metricCapErr } = await admin.from("practice_role_capabilities")
+    .select("capability_code").in("capability_code", METRIC_CAPABILITIES);
+  const metricCapsSeeded = new Set(((metricCaps ?? []) as { capability_code: string }[])
+    .map(c => c.capability_code));
+  ok("3e every code in METRIC_CAPABILITIES exists in practice_role_capabilities",
+    !metricCapErr && METRIC_CAPABILITIES.every(c => metricCapsSeeded.has(c)),
+    metricCapErr?.message
+      ?? `missing: ${METRIC_CAPABILITIES.filter(c => !metricCapsSeeded.has(c)).join(", ") || "none"}`);
+  // ⚠ THE CONTROL, because a null-count is not an error and an `.in()` that matched nothing looks
+  // exactly like an `.in()` that matched everything from the pass side. A code nobody seeded must come
+  // back ABSENT, or 3e is green for the wrong reason.
+  const { data: inventedCap } = await admin.from("practice_role_capabilities")
+    .select("capability_code").in("capability_code", ["practice.metrics.invented"]);
+  ok("3e-control. and a capability nobody seeded is NOT found -- so 3e is able to fail",
+    ((inventedCap ?? []) as unknown[]).length === 0, JSON.stringify(inventedCap));
   // ---- 4. The week's locations distinguish three states ----------------------------------------------
   const { data: loc } = await admin.from("practice_location")
     .insert({ workspace_id: wsA, name: "Mulago Hospital", type: "hospital", active: true }).select("id").single();

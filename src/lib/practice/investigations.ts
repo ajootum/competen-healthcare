@@ -1,4 +1,5 @@
 import { audit } from "@/lib/practice/audit";
+import { emitAudited } from "@/lib/practice/events";
 // ⚠ BORROWED FROM THE PROCEDURE VOCABULARY ON PURPOSE. parseDetailFields and detailFieldIssues are
 // generic over {key,label,kind,required,options} and import nothing -- migration 301 gave
 // investigations the SAME detail_fields shape 297 gave procedures, and two parsers for one shape is
@@ -716,6 +717,25 @@ export async function reviewInvestigations(admin: any, ctx: WorkspaceContext, ar
     payload: { encounterId: args.encounterId, reviewed, requested: ids.length, reviewedAt },
     correlationId: args.correlationId,
   });
+
+  // ── s9 DOMAIN EVENT ───────────────────────────────────────────────────────────────────────────
+  //
+  // ⚠ ONLY WHEN SOMETHING WAS ACTUALLY MARKED. `reviewed` is the ids the update came back with, and
+  // it is empty when every named investigation had already left `requested` -- a review that changed
+  // nothing. Emitting there would announce clinical judgement nobody exercised on this call.
+  //
+  // ONE EVENT FOR THE BATCH, not one per investigation: the practitioner performed one act on one
+  // encounter, and `reviewed` carries how many rows it touched. `via` distinguishes it from the
+  // inbox review in communication.ts -- different tables, different rows, no double count.
+  if (reviewed.length > 0) {
+    await emitAudited(admin, [{
+      eventType: "result.reviewed", practiceId: ctx.workspaceId,
+      practitionerId: args.actorId, actorId: args.actorId, source: "web",
+      encounterId: args.encounterId, occurredAt: reviewedAt,
+      payload: { encounterId: args.encounterId, reviewed, count: reviewed.length, via: "encounter" },
+    }], args.correlationId);
+  }
+
   return { ok: true, data: { reviewed, reviewedAt } };
 }
 

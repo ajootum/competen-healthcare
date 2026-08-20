@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { emitEvent } from "@/lib/mos/event";
-import { getEncounter, transitionEncounter } from "@/lib/practice/encounters";
+import { getEncounter, transitionEncounter, interruptWith } from "@/lib/practice/encounters";
 import { saveNoteSegment } from "@/lib/practice/documentation";
 import { ENCOUNTER_ACTIONS } from "@/lib/practice/encounter-constants";
 
@@ -71,6 +71,47 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ en
     return res;
   }
 
+  // ── CPR-V2-006 s16 / migration 234: START THIS ONE AS AN INTERRUPTION ────────────────────────────
+  //
+  // ⚠ THE PRODUCT HAS BEEN NAMING THIS ACTION IN A REFUSAL SINCE MIGRATION 234 AND HAS NEVER OFFERED
+  // IT. transitionEncounter refuses a second ACTIVE consultation with the words "another consultation
+  // is already open. Pause it, OR START THIS ONE AS AN INTERRUPTION" -- and interruptWith, the engine
+  // that does exactly that, had no route and no caller outside two harnesses. An error message that
+  // instructs somebody to do something the product cannot do is worse than a missing feature: the
+  // missing one is silent, and this one sends a practitioner looking for a button during an emergency.
+  //
+  // IT IS A SEPARATE ACTION AND NOT AN ENCOUNTER_ACTIONS ENTRY, because it is not one transition. It
+  // pauses the OTHER encounter and starts this one, in that order, and rolls the pause back if the
+  // start is refused. Adding "interrupt" to the action table would make it look like a target status
+  // this encounter moves to, and the UI derives its buttons from that table by mapping status ->
+  // transitions -- an interruption belongs to no row of it.
+  //
+  // encounter.edit, the same capability as `start`. It opens a consultation; it does not sign one, and
+  // it must not need the signing capability to be reachable in a hurry.
+  //
+  // ⚠ THE PRACTITIONER IS THE CALLER, DELIBERATELY. interruptWith looks up "which encounter of THIS
+  // practitioner is currently active" -- pass anybody else and it would pause a colleague's
+  // consultation from across the practice. launchEncounter records the same assumption at its own
+  // subject line, and the day somebody may open another person's consultation, both change together.
+  if (body.action === "interrupt") {
+    const auth = await requirePracticeContext("encounter.edit");
+    if (isDenied(auth)) return auth;
+    const result = await interruptWith(auth.caller.admin, {
+      workspaceId: auth.ctx.workspaceId, encounterId,
+      actorId: auth.caller.userId, practitionerId: auth.caller.userId,
+      correlationId: auth.caller.traceId,
+    });
+    if (!result.ok)
+      return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
+    // `paused` is null when nothing was running -- an interruption of nobody is a plain start, and the
+    // screen says which happened rather than claiming a consultation was paused that never was.
+    // eventWarnings ride along with the success for the same reason emitEvents returns them: the
+    // interruption HAPPENED, and an outbox that failed must be visible without undoing it.
+    return NextResponse.json({
+      started: result.data.started, paused: result.data.paused,
+      eventWarnings: result.data.eventWarnings, correlationId: auth.caller.traceId,
+    });
+  }
   const to = ENCOUNTER_ACTIONS[body.action ?? ""];
   if (!to) return NextResponse.json({ error: `action must be one of: ${Object.keys(ENCOUNTER_ACTIONS).join(", ")}` }, { status: 400 });
 
