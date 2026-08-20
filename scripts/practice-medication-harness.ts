@@ -648,6 +648,64 @@ async function main() {
   ok("10g. the worklist payload carries the same nine checks and the same boundary",
     worklist.notChecked.length === 9 && worklist.boundary === MEDICATION_LIST_BOUNDARY);
 
+  // ── 10h. THE WORKLIST RUNS ON THE PRACTICE'S CLOCK, NOT THE SERVER'S ──────────────────────────
+  //
+  // ⚠ medicationWorklist USED TO TAKE `today = todayIso()` -- the server's UTC day -- AS A DEFAULT,
+  // and every caller outside the engine omitted the argument, so the default was the production
+  // value on /practice/medications and its API route. reviewsOverdue and daysOverdue were computed
+  // on it while the Intelligence medication panel counted the same rows on the practice day. The two
+  // surfaces disagreed for three hours every evening and nothing on either one showed it.
+  //
+  // ⚠ THE ZONE IS CHOSEN AT RUNTIME SO THIS TEST NEVER PASSES BY LUCK. A fixed zone would only
+  // expose the bug during the hours its day happens to differ from UTC's -- which is exactly how the
+  // bug survived. UTC+14 differs from UTC whenever the UTC hour is >= 10; UTC-11 differs whenever it
+  // is < 10. One of the two always differs, so the assertion below has teeth at every hour.
+  const utcHour = new Date().getUTCHours();
+  const skewZone = utcHour >= 10 ? "Pacific/Kiritimati" : "Pacific/Niue";
+  const zoneDay = new Intl.DateTimeFormat("en-CA", {
+    timeZone: skewZone, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+  const utcDay = new Date().toISOString().slice(0, 10);
+  ok("10h-control. ⚠ the chosen zone is on a DIFFERENT DAY from the server right now",
+    zoneDay !== utcDay, `${skewZone} is on ${zoneDay}, the server on ${utcDay}`);
+
+  // A medication whose review falls due on the PRACTICE's today. On the server's day it is either
+  // not yet due (zone ahead) or overdue by a day (zone behind) -- never exactly today.
+  await admin.from("practice_workspace").update({ timezone: skewZone }).eq("id", wsA);
+  const { data: dueMed, error: dueErr } = await admin.from(MEDICATION_TABLE).insert({
+    workspace_id: wsA, patient_id: patient, generic_name: "ClockTestDrug",
+    dose_text: "1 tab", status: "active", next_review_on: zoneDay,
+  }).select("id").maybeSingle();
+  // ⚠ THE ERROR IS REPORTED, NOT DISCARDED. A `!!dueMed` that reads `null` says the row is absent
+  // and nothing about why -- which sends the next reader looking at the engine instead of the insert.
+  ok("10h-fixture. a medication exists with its review due on the practice's today",
+    !!dueMed, dueErr ? `${dueErr.code}: ${dueErr.message}` : JSON.stringify(dueMed));
+
+  const skewed = await medicationWorklist(admin, medCtx);
+  const dueIds = skewed.reviewsOverdue.permitted ? skewed.reviewsOverdue.items.map(r => r.id) : [];
+  ok("10h. ⚠ a review due on the PRACTICE's today is on the worklist, whatever day the server is on",
+    !!dueMed && dueIds.includes(dueMed.id),
+    `worklist ran on ${skewZone}; server day ${utcDay}; ids ${JSON.stringify(dueIds)}`);
+
+  // CONTROL. 10h would pass against an engine that simply called everything due.
+  const { data: futureMed, error: futureErr } = await admin.from(MEDICATION_TABLE).insert({
+    workspace_id: wsA, patient_id: patient, generic_name: "ClockTestFuture",
+    dose_text: "1 tab", status: "active",
+    // Three days on, computed here rather than imported: the engine's own addDays is not exported,
+    // and a control that borrowed the engine's arithmetic would be the engine checking itself.
+    next_review_on: new Date(Date.parse(`${zoneDay}T00:00:00Z`) + 3 * 86400000).toISOString().slice(0, 10),
+  }).select("id").maybeSingle();
+  const after = await medicationWorklist(admin, medCtx);
+  const afterIds = after.reviewsOverdue.permitted ? after.reviewsOverdue.items.map(r => r.id) : [];
+  ok("10h-control-b. and one due three days out is NOT, so 10h is not counting everything",
+    !!futureMed && !afterIds.includes(futureMed.id),
+    futureErr ? `${futureErr.code}: ${futureErr.message}` : JSON.stringify(afterIds));
+
+  // Put the fixture back, so nothing after this point inherits a skewed clock.
+  await admin.from("practice_workspace").update({ timezone: "Africa/Kampala" }).eq("id", wsA);
+  await admin.from(MEDICATION_TABLE).delete().in(
+    "id", [dueMed?.id, futureMed?.id].filter(Boolean) as string[]);
+
   // ══ 11. TWO SUITES: the store-absent contract, or the full flow ═══════════════════════════════════
   if (!store.present) {
     section("11. STORE ABSENT -- the contract this deployment actually ships");

@@ -545,7 +545,18 @@ const fail = (status: number, code: string, message: string): EngineResult<never
 
 const trim = (v: unknown): string => String(v ?? "").trim();
 const nowIso = () => new Date().toISOString();
-const todayIso = (): string => new Date().toISOString().slice(0, 10);
+// ⚠ todayIso() USED TO LIVE HERE AND IT WAS THE SERVER'S DAY.
+//
+// It read as a harmless default -- `today = todayIso()` on six read functions. It was not a default:
+// EVERY caller outside this file omitted the argument, so the server's UTC day was the live value on
+// /practice/medications, /practice/patients/[id], /practice/encounters/[id] and their API routes.
+// medicationWorklist computed reviewsOverdue and daysOverdue on it while the Intelligence medication
+// panel counted the same rows on the practice day -- two surfaces disagreeing about the same
+// medications for three hours every evening, with nothing on either one to show it.
+//
+// THE FUNCTION IS DELETED RATHER THAN CORRECTED. A correct helper sitting next to an incorrect one is
+// a choice at every call site; no helper at all means the day has to come from the workspace, which
+// is the only thing that knows it. See practice-time.ts.
 
 /** PostgREST's schema-cache miss and Postgres's undefined-table, which mean the same thing here. */
 const MISSING_TABLE_CODES = new Set(["PGRST205", "PGRST202", "42P01"]);
@@ -673,8 +684,9 @@ export async function dosingMeasurement(
  * header: a hard-coded number here would be a clinical judgement about every patient at once.
  */
 export async function dosingWeight(
-  admin: any, ctx: WorkspaceContext, patientId: string, today = todayIso(),
+  admin: any, ctx: WorkspaceContext, patientId: string, todayIn?: string,
 ): Promise<{ verdict: WeightVerdict; measurement: DosingMeasurement }> {
+  const today = todayIn ?? (await workspaceClock(admin, ctx.workspaceId)).today;
   const measurement = await dosingMeasurement(admin, ctx, patientId, WEIGHT_PARAMETER_CODE);
   if (measurement.unavailable)
     return {
@@ -727,8 +739,9 @@ export async function dosingWeight(
  * into an adult, because a birth date, when there is one, always wins.
  */
 export async function dosingAge(
-  admin: any, ctx: WorkspaceContext, patientId: string, today = todayIso(),
+  admin: any, ctx: WorkspaceContext, patientId: string, todayIn?: string,
 ): Promise<AgeVerdict> {
+  const today = todayIn ?? (await workspaceClock(admin, ctx.workspaceId)).today;
   const { data, error } = await admin.from("practice_patient")
     .select("id, birth_date, age_estimate_years")
     .eq("id", patientId).eq("workspace_id", ctx.workspaceId).maybeSingle();
@@ -861,8 +874,15 @@ const readRow = (r: any, today: string): MedicationRow => ({
 });
 
 export async function patientMedications(
-  admin: any, ctx: WorkspaceContext, patientId: string, today = todayIso(),
+  admin: any, ctx: WorkspaceContext, patientId: string, todayIn?: string,
 ): Promise<PatientMedications> {
+  // Resolved ONCE here and handed down to dosingWeight/dosingAge below, so a page render costs one
+  // workspace read rather than three -- and all three agree about what day it is.
+  //
+  // AND IT STAYS ABOVE THE CAPABILITY CHECK, unlike the three functions below, because the base payload
+  // handed to a caller who is REFUSED carries the day itself in its weight and age lines. A refusal
+  // still has to be coherent about what day it is.
+  const today = todayIn ?? (await workspaceClock(admin, ctx.workspaceId)).today;
   const base = {
     active: [] as MedicationRow[], past: [] as MedicationRow[],
     legacy: loaded<LegacyTreatment>([]),
@@ -1045,7 +1065,7 @@ const readCalculation = (c: any): DoseCalculationRow => ({
 });
 
 export async function medicationTimeline(
-  admin: any, ctx: WorkspaceContext, medicationId: string, today = todayIso(),
+  admin: any, ctx: WorkspaceContext, medicationId: string, todayIn?: string,
 ): Promise<MedicationTimeline> {
   const base = {
     medication: null as MedicationRow | null, entries: [] as TimelineEntry[],
@@ -1054,6 +1074,9 @@ export async function medicationTimeline(
   };
   if (!hasCapability(ctx, CAP_MED_VIEW))
     return { ...base, permitted: false, unavailable: false, detail: null, storeState: "present" };
+
+  // After the refusal -- the base payload carries no date, so a denied caller costs no workspace read.
+  const today = todayIn ?? (await workspaceClock(admin, ctx.workspaceId)).today;
 
   const { data: med, error: mErr } = await admin.from(MEDICATION_TABLE)
     .select("*").eq("id", medicationId).eq("workspace_id", ctx.workspaceId).maybeSingle();
@@ -1118,8 +1141,11 @@ export type MedicationWorklist = {
 };
 
 export async function medicationWorklist(
-  admin: any, ctx: WorkspaceContext, today = todayIso(),
+  admin: any, ctx: WorkspaceContext, todayIn?: string,
 ): Promise<MedicationWorklist> {
+  // ⚠ THE WORKLIST IS WHAT A PRACTITIONER WORKS FROM. reviewsOverdue and daysOverdue are both measured
+  // against this day; on the server's day they disagreed with the Intelligence panel counting the same
+  // rows, and the panel was the one that was right.
   const base = {
     reviewsOverdue: loaded<{ id: string; patientId: string; genericName: string; nextReviewOn: string; daysOverdue: number }>([]),
     awaitingVerification: loaded<{ id: string; patientId: string; genericName: string; source: string; recordedAt: string }>([]),
@@ -1133,6 +1159,9 @@ export async function medicationWorklist(
       ...base, permitted: false, unavailable: false, detail: null, storeState: "present",
       reviewsOverdue: denied(), awaitingVerification: denied(), overrides: denied(), favourites: denied(),
     };
+
+  // After the refusal, for the same reason as the timeline above.
+  const today = todayIn ?? (await workspaceClock(admin, ctx.workspaceId)).today;
 
   const [reviewRes, verifyRes, overrideRes, nameRes] = await Promise.all([
     admin.from(MEDICATION_TABLE)
@@ -1268,7 +1297,10 @@ export async function recordMedication(
     route: trim(input.route) || null, frequency: trim(input.frequency) || null,
     frequency_per_day: input.frequencyPerDay ?? null,
     duration_text: trim(input.durationText) || null, indication: trim(input.indication) || null,
-    started_on: input.startedOn ?? todayIso(), prescriber: trim(input.prescriber) || null,
+    // The day the practice started it. started_on is permanent and every interval since is measured
+    // from it, so a server day here shifts every review date that follows.
+    started_on: input.startedOn ?? (await workspaceClock(admin, ctx.workspaceId)).today,
+    prescriber: trim(input.prescriber) || null,
     recorded_source: source, status: "active",
     review_interval_days: input.reviewIntervalDays ?? null,
     created_by: input.actorId, updated_by: input.actorId,
@@ -1353,7 +1385,8 @@ export async function changeMedication(
   if (rErr) return fail(503, "UNAVAILABLE", `the medication could not be read: ${rErr.message}`);
   if (!med) return fail(404, "NOT_FOUND", "no such medication");
 
-  const occurredOn = input.occurredOn ?? todayIso();
+  // The day the change happened, in the practice's calendar -- it lands in the append-only timeline.
+  const occurredOn = input.occurredOn ?? (await workspaceClock(admin, ctx.workspaceId)).today;
   const patch: Record<string, unknown> = { updated_at: nowIso(), updated_by: input.actorId };
   const previous: Record<string, unknown> = {};
   const next: Record<string, unknown> = {};
@@ -1626,12 +1659,15 @@ function decisionWorking(input: {
  *      say what nobody checked at the time.
  */
 export async function calculateDose(
-  admin: any, ctx: WorkspaceContext, input: DoseCalculationInput, today = todayIso(),
+  admin: any, ctx: WorkspaceContext, input: DoseCalculationInput, todayIn?: string,
 ): Promise<EngineResult<DoseCalculationResult>> {
   if (!hasCapability(ctx, CAP_MED_RECORD))
     return fail(403, "FORBIDDEN", "calculating a dose needs medication.record");
   if (!DOSE_BASIS_CODES.includes(input.basis))
     return fail(422, "VALIDATION_ERROR", `unknown dose basis "${input.basis}"`);
+
+  // After the guards: a caller who is refused should not cost a workspace read.
+  const today = todayIn ?? (await workspaceClock(admin, ctx.workspaceId)).today;
 
   const basis = input.basis as DoseBasis;
   const needsWeight = (BASES_NEEDING_WEIGHT as readonly string[]).includes(basis);
@@ -1899,7 +1935,7 @@ export async function setMedicationReview(
   if (!med) return fail(404, "NOT_FOUND", "no such medication");
 
   const nextReviewOn = input.reviewIntervalDays
-    ? addDays(med.started_on ?? todayIso(), input.reviewIntervalDays)
+    ? addDays(med.started_on ?? (await workspaceClock(admin, ctx.workspaceId)).today, input.reviewIntervalDays)
     : null;
 
   let followUpId: string | null = null;

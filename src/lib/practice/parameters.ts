@@ -1370,7 +1370,9 @@ const emptyPlanCounts = () => ({
 });
 
 /** The practice's own today, taken from the caller so the harness can pin it. */
-const todayIso = (): string => new Date().toISOString().slice(0, 10);
+// ⚠ todayIso() USED TO LIVE HERE TOO, and failed the same way: `options?.today ?? todayIso()` on the
+// two read functions, with every page and API caller omitting `options`. See medication.ts for the
+// full account. Deleted rather than corrected, for the same reason.
 
 export async function monitoringPlan(
   admin: any, ctx: WorkspaceContext, patientId: string,
@@ -1390,7 +1392,7 @@ export async function monitoringPlan(
     includeDefinitionIds?: string[];
   },
 ): Promise<MonitoringPlan> {
-  const today = options?.today ?? todayIso();
+  const today = options?.today ?? (await workspaceClock(admin, ctx.workspaceId)).today;
   const blank = (permitted: boolean, detail: string | null): MonitoringPlan => ({
     permitted,
     canRecord: permitted && hasCapability(ctx, CAP_RECORD),
@@ -2346,7 +2348,7 @@ export type EncounterCollection = {
 export async function encounterParameters(
   admin: any, ctx: WorkspaceContext, encounterId: string, options?: { today?: string },
 ): Promise<EncounterCollection> {
-  const today = options?.today ?? todayIso();
+  const today = options?.today ?? (await workspaceClock(admin, ctx.workspaceId)).today;
   const blank = (permitted: boolean, patientId: string | null, detail: string | null): EncounterCollection => ({
     permitted, canRecord: permitted && hasCapability(ctx, CAP_RECORD),
     canConfigure: permitted && hasCapability(ctx, CAP_CONFIGURE),
