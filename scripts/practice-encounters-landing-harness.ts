@@ -669,6 +669,31 @@ async function main() {
   const searched = await encountersLanding(admin, ctxA, { q: "Nakato" });
   ok("14g. the search runs and reports each half separately",
     !!searched.search && searched.search.ran && searched.search.patientsComplete);
+
+  // ── 14g-2. THE SEARCH RESULT CARRIES THE IDENTIFIER IT IS MEANT TO SHOW ────────────────────────
+  //
+  // ⚠ IT DROPPED IT, AND THE SCREEN SHOWED A BARE NAME. searchPatients has returned patientNumber
+  // since migration 289 made YY-NNNNNN the patient identifier and retired P-XXXXXX to a legacy alias.
+  // This loader's result type declared only the retired one and its mapping copied only that, so the
+  // patient list on /practice/encounters rendered a name with nothing beside it for every patient
+  // registered since -- and a name on its own is precisely what the register exists to disambiguate.
+  //
+  // ⚠ ASSERTED AGAINST THE ROW, NOT A FORMAT. A regex for YY-NNNNNN would pass on somebody else's
+  // number and would be the same mistake one numbering scheme later. This reads what the database
+  // holds for the matched patient and requires the search to have carried that exact string.
+  const searchHit = (searched.search?.patients ?? [])[0] ?? null;
+  ok("14g-2-setup. the search matched somebody, so the assertion below is not vacuous",
+    !!searchHit, JSON.stringify(searched.search?.patients ?? []));
+  if (searchHit) {
+    const { data: hitRow } = await admin.from("practice_patient")
+      .select("patient_number").eq("id", searchHit.id).maybeSingle();
+    const hitNumber = (hitRow as { patient_number: string | null } | null)?.patient_number ?? null;
+    ok("14g-2-control. the matched patient really has a patient_number to carry",
+      !!hitNumber, String(hitNumber));
+    ok("14g-2. and the search result carries it, so the list can name the patient by number",
+      !!hitNumber && searchHit.patientNumber === hitNumber,
+      JSON.stringify({ carried: searchHit.patientNumber, inTheRow: hitNumber }));
+  }
   const { data: logRows } = await admin.from("practice_access_log")
     .select("id, action, detail").eq("workspace_id", wsA).eq("action", "search");
   ok("14h. and it is logged, with the term, because 'who searched for this surname' is the question an access review asks",

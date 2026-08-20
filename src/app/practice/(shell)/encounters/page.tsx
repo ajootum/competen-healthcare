@@ -263,7 +263,12 @@ export default async function EncountersPage({ searchParams }: {
                       <Link href={`/practice/patients/${p.id}`}
                         className="block rounded-lg border border-gray-100 px-2.5 py-1.5 text-[12.5px] text-gray-800 hover:bg-gray-50">
                         <span className="font-semibold">{p.displayName}</span>
-                        {p.practiceId && <span className="ml-2 font-mono text-[11px] text-gray-500">{p.practiceId}</span>}
+                        {/* CPR-PID-001: the number leads, the retired P-XXXXXX is the fallback for a
+                            record that predates it -- the same patientNumber ?? practiceId ladder
+                            CohortTable, ContextBanner and SearchSection already use. */}
+                        {(p.patientNumber ?? p.practiceId) && (
+                          <span className="ml-2 font-mono text-[11px] text-gray-500">{p.patientNumber ?? p.practiceId}</span>
+                        )}
                         <span className="ml-2 text-[11px] text-gray-400">matched on {p.matchedBy}</span>
                       </Link>
                     </li>

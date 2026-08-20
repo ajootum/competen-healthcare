@@ -397,7 +397,15 @@ function shape(row: any, s: ShapeInput): LandingEncounter {
 export type LandingSearch = {
   query: string;
   ran: boolean;
-  patients: { id: string; displayName: string; practiceId: string | null; matchedBy: string }[];
+  // ⚠ patientNumber IS THE IDENTIFIER AND WAS BEING DROPPED HERE. searchPatients has returned it since
+  // migration 289 made YY-NNNNNN the patient identifier and retired P-XXXXXX to a legacy alias; this
+  // type declared only the retired one, so the search results on /practice/encounters showed a bare
+  // NAME for every patient registered since. Naming a patient without a number is the thing the
+  // register exists to prevent.
+  patients: {
+    id: string; displayName: string;
+    patientNumber: string | null; practiceId: string | null; matchedBy: string;
+  }[];
   /** ⚠ False when a probe failed. A caller must NOT then say "nobody matches". */
   patientsComplete: boolean;
   patientsDetail: string | null;
@@ -464,7 +472,8 @@ async function landingSearch(
     query, ran: true,
     patients: people
       ? people.results.map(p => ({
-        id: p.id, displayName: p.displayName, practiceId: p.practiceId ?? null, matchedBy: p.matchedBy,
+        id: p.id, displayName: p.displayName,
+        patientNumber: p.patientNumber ?? null, practiceId: p.practiceId ?? null, matchedBy: p.matchedBy,
       }))
       : [],
     patientsComplete: people ? people.complete : true,

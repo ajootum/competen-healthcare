@@ -353,7 +353,14 @@ export default function StartEncounter({ canStart, canRegisterPatient }: {
                   }
                   setNotice({
                     kind: "ok",
-                    text: `${r?.displayName ?? "The patient"} is registered${r?.practiceId ? ` as ${r.practiceId}` : ""}.`
+                    // ⚠ THIS READ r.practiceId, WHICH NO SERVER HAS EVER SENT. Neither
+                    // /api/v1/practice/registration nor /api/v1/practice/register-and-book returns a
+                    // practiceId field at all -- registration.ts returns patientNumber -- so the
+                    // conditional was always false and this sentence has NEVER named an identifier for
+                    // anybody, legacy record or new one. Not a post-289 regression: it never worked.
+                    // Same class as the handler prop no server could pass: an optional field read from
+                    // a payload that does not carry it fails silently and looks deliberate.
+                    text: `${r?.displayName ?? "The patient"} is registered${r?.patientNumber ? ` as ${r.patientNumber}` : ""}.`
                       + (r?.incomplete?.length ? ` Not everything saved: ${r.incomplete.map((i: any) => i.reason).join("; ")}.` : "")
                       + " No consultation was opened.",
                   });
