@@ -321,11 +321,30 @@ async function main() {
       const r = readFileSync(SRC("components", "practice", "FormFieldInput.tsx"), "utf8");
       return !/from "@\/lib\/practice\/forms"/.test(r) && /from "@\/lib\/practice\/form-field"/.test(r);
     })());
-  ok("1d-control. CONTROL: the SERVER engine does import the server-only pieces, so 1d is not passing on a file nobody imports anything into",
+  // ⚠ THIS CONTROL CONTRADICTED practice-bundle-harness A3 AND HAD BEEN RED SINCE THE FIX IT MISSED.
+  //
+  // It proved forms.ts was "the server engine" by requiring it to import from
+  // @/lib/practice/provisioning -- and A3 BANS that import across src/, because provisioning.ts reaches
+  // node:crypto and four client screens once carried 120.7 kB gzip of browserified crypto they never
+  // executed. c659e303 ("120.7 kB nobody asked for") repointed forms.ts to @/lib/practice/audit and
+  // this control was not updated with it, so two harnesses have been asserting opposite things since.
+  //
+  // ⚠ THE MARKER WAS THE PROBLEM, NOT THE INTENT. The intent is right and worth keeping: 1d, 1d-b and
+  // 1d-c all say the pure module is NARROWER than the engine, and they are vacuous if the "engine" is
+  // just as bare. But it identified the engine by an import NAME, and a name can be tidied away by an
+  // unrelated correctness fix -- which is exactly what happened.
+  //
+  // What cannot be tidied away is what the engine DOES: it talks to the database. That is the whole
+  // reason it must not reach a browser, and it is the honest boundary between these two files.
+  ok("1d-control. CONTROL: the SERVER engine really is the server one -- it queries the database and the pure module does not",
     (() => {
       const engine = readFileSync(SRC("lib", "practice", "forms.ts"), "utf8");
-      return /from "@\/lib\/practice\/provisioning"/.test(engine) && /from "@\/lib\/practice\/form-field"/.test(engine);
-    })());
+      const pure = readFileSync(SRC("lib", "practice", "form-field.ts"), "utf8");
+      const engineQueries = (engine.match(/admin\.from\(/g) ?? []).length;
+      const pureQueries = (pure.match(/admin\.from\(/g) ?? []).length;
+      return engineQueries > 0 && pureQueries === 0 && /from "@\/lib\/practice\/form-field"/.test(engine);
+    })(),
+    "forms.ts must read the database, form-field.ts must not, and they must share the evaluator");
 
   // ══ 2. THE SPECIFICATION'S VOCABULARY, WRITTEN OUT ═════════════════════════════════════════════
   ok("2a. section 4's kinds, thirteen of the fourteen, in the specification's order",
