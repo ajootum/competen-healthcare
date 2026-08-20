@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCaller, isResponse } from "@/lib/api-auth";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
-import { runProvisioning, audit, type IndividualRequest } from "@/lib/practice/provisioning";
+import { runProvisioning, type IndividualRequest } from "@/lib/practice/provisioning";
+// ⚠ audit COMES FROM ITS OWN MODULE, NOT THROUGH provisioning. provisioning.ts re-exports it, so both
+// spellings resolve to the same function and this line changes no behaviour at all -- which is exactly
+// why it drifted back. practice-bundle-harness A3 bans the re-export path across src/ because
+// provisioning.ts reaches node:crypto, and four client screens once carried 120.7 kB gzip of
+// browserified crypto they never executed. A route cannot leak to a browser bundle, so the harm here
+// is zero and the RULE is what has value: a ban with one standing exception is a ban nobody enforces.
+import { audit } from "@/lib/practice/audit";
 
 // GET /api/v1/practice/provisioning/{requestId} (PROV-001 s10). Visible to the request's actor, its
 // target, or a platform operator; everyone else gets the same 404 a nonexistent id gets.

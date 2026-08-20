@@ -92,8 +92,22 @@ export function validateIndividual(p: Partial<IndividualRequest>): string | null
   return null;
 }
 
-// ⚠ MOVED to ./audit and RE-EXPORTED. Seventy-odd modules import audit from here and none of them
-// needed to change; the four that must not reach node:crypto import ./audit directly. See audit.ts.
+// ⚠ MOVED to ./audit and RE-EXPORTED, and THE SENTENCE THAT USED TO BE HERE HAS GONE STALE.
+//
+// It read: "Seventy-odd modules import audit from here and none of them needed to change; the four
+// that must not reach node:crypto import ./audit directly." That was true at the moment of the move.
+// The estate has since gone the other way -- NOTHING under src/ imports audit through this module any
+// more, practice-bundle-harness A3 asserts exactly that, and the last straggler (the provisioning
+// [requestId] route) was repointed when that assertion was found red.
+//
+// ⚠ SO THIS LINE NOW HAS ZERO IMPORTERS -- measured across src/ AND scripts/, not assumed. It is kept
+// as a compatibility surface rather than deleted, because A3 already prevents the pattern coming back
+// and removing a public export is a change nobody asked for; it is not a recommended path. New code
+// imports @/lib/practice/audit.
+//
+// ⚠ AND A3 IS THE ONLY THING THAT WILL EVER NOTICE. Both spellings resolve to the same function, so no
+// test, no type and no runtime behaviour can object to the wrong one -- which is precisely how the last
+// straggler drifted back in unremarked.
 export { audit };
 
 /**
