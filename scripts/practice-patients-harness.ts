@@ -101,6 +101,36 @@ async function main() {
     !nearDup.ok && nearDup.code === "POSSIBLE_DUPLICATE" && (nearDup.candidates?.length ?? 0) > 0,
     nearDup.ok ? "was allowed" : nearDup.code);
 
+  // ⚠ A CANDIDATE MUST CARRY THE NUMBER A HUMAN MATCHES ON, AND THIS IS THE SCREEN WHERE IT COSTS MOST.
+  //
+  // The candidate list is what somebody reads to answer "is this the same patient?", with "This is a
+  // different person, register anyway" underneath it. Migration 289 made patient_number the identifier
+  // and retired P-XXXXXX to a legacy alias, so a candidate carrying only practiceId is a bare NAME AND
+  // DATE OF BIRTH for everybody registered since August -- and the next button splits the record.
+  //
+  // Candidate declares patientNumber for exactly this reason; RegistrationForm rendered only practiceId
+  // for months after the type stopped being blind to it. Asserted on the ENGINE here, and the screen is
+  // pinned separately below, because the type carrying it and the screen showing it are two facts.
+  const nearCandidate = nearDup.ok ? null : (nearDup.candidates ?? [])[0] ?? null;
+  ok("...and the candidate carries the CP Patient Number, which is what a human matches on",
+    !!nearCandidate && typeof nearCandidate.patientNumber === "string"
+    && /^\d{2}-\d{6}$/.test(nearCandidate.patientNumber),
+    JSON.stringify(nearCandidate));
+  // ⚠ THE CONTROL: practiceIdUnknown is REQUIRED on the type so "no legacy alias" and "the read failed"
+  // can never look alike. A candidate that dropped the distinction would pass the assertion above.
+  ok("...and it still says whether the legacy alias was READ or merely absent",
+    !!nearCandidate && typeof nearCandidate.practiceIdUnknown === "boolean",
+    JSON.stringify(nearCandidate));
+
+  // ⚠ AND THE SCREEN ACTUALLY READS IT. The engine carrying a field proves nothing about the list a
+  // person looks at -- that gap is the whole defect this pins. Checked as source because the candidate
+  // list only renders behind a refused registration in a browser session this harness has no way to mint.
+  const regForm = readFileSync(
+    join(process.cwd(), "src", "app", "practice", "(shell)", "patients", "RegistrationForm.tsx"), "utf8");
+  ok("...and the candidate list on RegistrationForm renders it, number first, legacy as the fallback",
+    /c\.patientNumber \?\? c\.practiceId/.test(regForm),
+    "RegistrationForm shows only the retired identifier, so a post-289 candidate is a bare name");
+
   // The hospital number exists so the merge below has an identifier to MOVE -- registrations stopped
   // minting a P-XXXXXX (CPR-PID-001 retired it), so a bare patient now has zero identifier rows.
   const namesake = await registerPatient(admin, {

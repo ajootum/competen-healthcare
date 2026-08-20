@@ -653,13 +653,35 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
           <ul className="mt-1.5 flex flex-col gap-1">
             {candidates.map((c: any) => (
               <li key={c.id}>
+                {/* ⚠ THIS SHOWED ONLY THE RETIRED IDENTIFIER, ON THE ONE SCREEN WHERE THAT COSTS MOST.
+                    Migration 289 made patient_number the identifier and retired P-XXXXXX to a legacy
+                    alias, so every candidate registered since August rendered as a bare NAME AND DATE
+                    OF BIRTH -- on the list a person reads to answer "is this the same patient?", with
+                    "This is a different person, register anyway" underneath it.
+
+                    Candidate.patientNumber has carried the value since that day and this screen did not
+                    read it. The type's own comment says why it was added: "THE ONE A HUMAN MATCHES ON
+                    since migration 289 retired the P-XXXXXX below... every candidate screen was
+                    type-blind to the identifier it is meant to show." The type stopped being blind; the
+                    screen did not.
+
+                    Same patientNumber ?? practiceId ladder as CohortTable, ContextBanner and
+                    SearchSection. The legacy alias still shows for a record that predates the
+                    numbering, because that is the number on that patient's older documents. */}
                 <Link href={`/practice/patients/${c.id}`} className="text-[13px] font-semibold text-gray-800 hover:underline">
-                  {c.displayName}{c.practiceId ? ` · ${c.practiceId}` : ""}{c.birthDate ? ` · b. ${c.birthDate}` : ""} ({c.matchedBy})
+                  {c.displayName}
+                  {(c.patientNumber ?? c.practiceId) ? ` · ${c.patientNumber ?? c.practiceId}` : ""}
+                  {c.birthDate ? ` · b. ${c.birthDate}` : ""} ({c.matchedBy})
                 </Link>
                 {/* ⚠ A BLANK PRACTICE ID AND AN UNREADABLE ONE LOOKED IDENTICAL HERE, on the one screen
                     where somebody decides whether this is the same patient. The practice id is what they
                     match on, so a failed read made a real match look like a stranger -- and the button
-                    below then creates the second record. */}
+                    below then creates the second record.
+
+                    ⚠ STILL SHOWN EVEN NOW THE NUMBER LEADS, and deliberately: practiceIdUnknown means a
+                    READ FAILED, and a candidate whose legacy alias could not be read is still harder to
+                    judge than one that simply never had one. Suppressing the warning because a patient
+                    number happens to be present would hide a failure behind an unrelated success. */}
                 {c.practiceIdUnknown && (
                   <span className="ml-1 text-[11px] font-semibold text-[var(--cmp-text-critical)]">
                     · practice ID could not be read
