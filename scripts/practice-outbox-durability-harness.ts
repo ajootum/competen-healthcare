@@ -53,7 +53,17 @@ const ok = (name: string, cond: boolean, detail = "") => {
   else { failures.push(name); console.log(`  FAIL  ${name}${detail ? ` -- ${detail}` : ""}`); }
 };
 
-const ORIGIN = "http://localhost:3000";
+// ⚠ CONFIGURABLE, BECAUSE HARDCODING IT COST AN HOUR. This harness launches a real Chrome and points
+// it at the origin; with nothing listening there, page.goto has no deadline of its own and the whole
+// run HANGS rather than failing. In a sweep of 125 harnesses it was the one that never returned, and
+// SIGKILL did not reach it through the shell on Windows -- it had to be found by PID. A harness that
+// hangs is worse than one that fails: a failure is a line in a log, a hang is a person waiting.
+//
+// ⚠ THE ORIGIN IS STILL THE POINT (see note 2 in the header): the IndexedDB reached must be the one
+// the product uses, so this must be the real dev server and never a fixture host. BASE_URL moves it
+// to another PORT of the same app, which is all this repository ever needs -- the dev server has been
+// running on :3100.
+const ORIGIN = process.env.BASE_URL ?? "http://localhost:3000";
 /** Any page on the origin will do -- what matters is the ORIGIN, not the document. */
 const PAGE = `${ORIGIN}/practice/offline`;
 
@@ -89,7 +99,28 @@ async function openWithOutbox(ctx: BrowserContext, code: string) {
   return page;
 }
 
+/** Fail in a sentence rather than hanging on a port with nothing behind it. */
+async function requireServer(): Promise<boolean> {
+  try {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), 5000);
+    await fetch(ORIGIN, { signal: ac.signal });
+    clearTimeout(t);
+    return true;
+  } catch (e) {
+    console.log(`
+  SKIPPED -- nothing is serving ${ORIGIN}.`);
+    console.log("  This harness drives a real Chrome against the real origin, so the dev server is not");
+    console.log("  optional and no part of it can run without one:");
+    console.log("      BASE_URL=http://localhost:3100 npx --yes tsx scripts/practice-outbox-durability-harness.ts");
+    console.log(`  (${e instanceof Error ? e.message : String(e)})
+`);
+    return false;
+  }
+}
+
 async function main() {
+  if (!(await requireServer())) return;
   let code: string;
   try {
     code = await bundle();

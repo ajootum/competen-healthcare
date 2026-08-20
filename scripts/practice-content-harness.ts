@@ -124,7 +124,33 @@ function visibleText(html: string): string {
     .replace(/\s+/g, " ");
 }
 
+/**
+ * ⚠ THIS HARNESS NEEDS THE APP SERVED, AND USED TO SAY SO WITH A STACK TRACE.
+ *
+ * With nothing listening it died on an unhandled ECONNREFUSED -- a raw AggregateError naming ::1 and
+ * 127.0.0.1 and no sentence anywhere saying what the reader was supposed to do about it. In a sweep of
+ * 125 harnesses that reads as a crashed harness, which is what somebody then goes and investigates.
+ *
+ * ⚠ AND THE DEFAULT PORT IS A REAL HAZARD, NOT A DETAIL. BASE_URL defaults to :3000; this repository's
+ * dev server has been running on :3100. Everything below fails identically whether the app is broken or
+ * merely somewhere else, so the preflight names the address it tried.
+ */
+async function requireServer(): Promise<boolean> {
+  try {
+    await fetch(BASE, { method: "GET" });
+    return true;
+  } catch (e) {
+    console.log(`\n  SKIPPED -- nothing is serving ${BASE}.`);
+    console.log("  This harness drives the running application, not the engines directly, so it cannot");
+    console.log("  run without one. Start the dev server, or point it somewhere else:");
+    console.log(`      BASE_URL=http://localhost:3100 npx --yes tsx ${process.argv[1]?.split(/[\\/]/).pop() ?? "this-harness"}`);
+    console.log(`  (${e instanceof Error ? e.message : String(e)})\n`);
+    return false;
+  }
+}
+
 async function main() {
+  if (!(await requireServer())) return;
   // ── 1. COVERAGE: both specification layers actually made it into the content ──────────────────────
   const tally = (ids: string[]) => {
     const m = new Map<string, number>();

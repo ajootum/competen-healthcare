@@ -70,10 +70,24 @@ const payload = (name: string): IndividualRequest => ({
 });
 
 async function provision(user: string, name: string, suffix: string): Promise<string> {
-  const { data: req } = await admin.from("provisioning_request").insert({
+  // ⚠ THE INSERT ERROR IS NOT DISCARDED, AND THAT IS NOT TIDINESS. It was, and the harness died on
+  // `req!.id` with "Cannot read properties of null (reading id)" -- a TypeError with no workspace, no
+  // table and no reason in it. In a 125-harness sweep that read as a crashed harness worth
+  // investigating; the actual cause was a duplicate idempotency_key left by a concurrent run, which the
+  // database had already said in words this line threw away.
+  //
+  // A FIXTURE THAT CANNOT BE BUILT MUST SAY WHY. Everything below is about continuity and none of it is
+  // about provisioning, so the one thing this function owes a reader is the database's own sentence.
+  const { data: req, error: reqErr } = await admin.from("provisioning_request").insert({
     idempotency_key: `harness-cc-${suffix}`, request_type: "pilot",
     actor_user_id: user, target_user_id: user, payload_hash: "harness", correlation_id: "harness-cc",
   }).select("id").single();
+  if (reqErr || !req)
+    throw new Error(`the fixture could not be provisioned -- provisioning_request insert refused for ` +
+      `harness-cc-${suffix}: ${reqErr?.message ?? "no row came back"}` +
+      (/duplicate|unique/i.test(reqErr?.message ?? "")
+        ? " (a previous or concurrent run left this idempotency_key behind -- run cleanup, or run this harness alone)"
+        : ""));
   const run = await runProvisioning(admin, { id: req!.id, target_user_id: user, correlation_id: "harness-cc", workspace_id: null }, payload(name));
   if (!run.ok || !run.workspaceId) throw new Error(`provisioning failed: ${run.errorCode}${run.detail ? " -- " + run.detail : ""}`);
   return run.workspaceId;
