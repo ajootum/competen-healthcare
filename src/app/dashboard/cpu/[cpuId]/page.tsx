@@ -262,7 +262,7 @@ export default async function CpuWorkspacePage({ params }: { params: Promise<{ c
         </div>
         <div className="flex items-center gap-2">
           <Link href={continueHref}
-            className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg">▶ Continue CPU</Link>
+            className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg">▶ Continue CPU</Link>
           <Link href="/dashboard/learning"
             className="text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 px-3 py-2 rounded-lg">View Learning</Link>
           <Link href="/dashboard/copilot"

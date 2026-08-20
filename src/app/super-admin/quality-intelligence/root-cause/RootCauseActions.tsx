@@ -38,7 +38,7 @@ export function StartInvestigation({ incidentId, label }: { incidentId: string; 
   return (
     <span className="inline-flex flex-col items-end gap-0.5 shrink-0">
       <button onClick={start} disabled={busy}
-        className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50">
+        className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-teal-700 hover:bg-teal-800 text-white disabled:opacity-50">
         {busy ? "…" : "Investigate"}
       </button>
       {err && <span className="text-[10px] text-[var(--cmp-text-error)]">{err}</span>}
@@ -122,7 +122,7 @@ export function InvestigationPanel({ id, status, hasRootCause }: { id: string; s
           placeholder={hasRootCause ? "Summary (optional)" : "Summary — required if no root cause is named"}
           className="flex-1 min-w-[200px] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/30" />
         <button onClick={complete} disabled={busy}
-          className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50">
+          className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white disabled:opacity-50">
           {busy ? "…" : "Complete"}
         </button>
         <button onClick={() => { setOpen(false); setNote(null); }}

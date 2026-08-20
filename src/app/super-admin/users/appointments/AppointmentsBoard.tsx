@@ -178,7 +178,7 @@ function PositionCard({ p, canAppoint, people, busy, onAppoint, onEnd, spaceStaf
               <button
                 onClick={() => onAppoint(p.code, person, termEnd)}
                 disabled={!person || busy === p.code || !p.isActive || !spaceStaffable}
-                className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-40"
+                className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white rounded-lg px-3 py-1.5 disabled:opacity-40"
               >
                 Appoint
               </button>

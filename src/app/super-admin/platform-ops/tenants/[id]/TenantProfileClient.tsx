@@ -92,7 +92,7 @@ export default function TenantProfileClient({ data }: { data: any }) {
           <div className="flex flex-wrap items-end gap-2 mb-4">
             <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Plan</label>
               <select value={planId} onChange={e => setPlanId(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-56"><option value="">— Select plan —</option>{plans.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-            <button onClick={() => planId && patch({ action: "assign_plan", plan_id: planId }, "Plan assigned")} disabled={busy || !planId || planId === plan?.id} className="text-sm font-semibold bg-teal-600 text-white rounded-lg px-3.5 py-2 hover:bg-teal-700 disabled:opacity-40">Assign plan</button>
+            <button onClick={() => planId && patch({ action: "assign_plan", plan_id: planId }, "Plan assigned")} disabled={busy || !planId || planId === plan?.id} className="text-sm font-semibold bg-teal-700 text-white rounded-lg px-3.5 py-2 hover:bg-teal-700 disabled:opacity-40">Assign plan</button>
           </div>
           {plan ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

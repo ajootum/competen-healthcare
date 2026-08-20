@@ -81,7 +81,7 @@ export default function ResponsibilitiesManager({ rows, staff, objects }: {
             <input className={`${input} flex-1`} type="date" title="Annual review due (optional)"
               value={form.review_due} onChange={e => setForm(f => ({ ...f, review_due: e.target.value }))} />
             <button disabled={busy || !form.user_id || !form.object} onClick={assign}
-              className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 rounded-lg transition-colors disabled:opacity-50">
+              className="bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-4 rounded-lg transition-colors disabled:opacity-50">
               Assign
             </button>
           </div>

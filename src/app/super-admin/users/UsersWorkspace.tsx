@@ -38,7 +38,7 @@ const STATUS_UI = {
   suspended: { label: "Suspended", pill: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",      dot: "bg-[var(--cmp-color-critical)]" },
 } as const;
 
-const AVATAR_TINTS = ["bg-teal-600", "bg-indigo-600", "bg-[var(--cmp-color-error)]", "bg-[var(--cmp-color-warning)]", "bg-violet-600", "bg-[var(--cmp-color-information)]"];
+const AVATAR_TINTS = ["bg-teal-700", "bg-indigo-600", "bg-[var(--cmp-color-error)]", "bg-[var(--cmp-color-warning)]", "bg-violet-600", "bg-[var(--cmp-color-information)]"];
 const tint = (id: string) => AVATAR_TINTS[[...id].reduce((s, ch) => s + ch.charCodeAt(0), 0) % AVATAR_TINTS.length];
 
 const relTime = (iso: string | null) => {
@@ -251,7 +251,7 @@ export default function UsersWorkspace({
           <p className="text-gray-500 text-sm mt-0.5">Manage your platform users and workforce</p>
         </div>
         <button onClick={() => { setAddOpen(true); setCreatedCreds(null); }}
-          className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg">
+          className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg">
           + Add User
         </button>
       </div>
@@ -511,7 +511,7 @@ export default function UsersWorkspace({
                   <button onClick={() => navigator.clipboard.writeText(`Email: ${createdCreds.email}\nPassword: ${createdCreds.password}`)}
                     className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">⧉ Copy both</button>
                   <button onClick={() => { setCreatedCreds(null); setAddOpen(false); }}
-                    className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700">Done</button>
+                    className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700">Done</button>
                 </div>
               </>
             ) : (
@@ -568,7 +568,7 @@ export default function UsersWorkspace({
                   <button onClick={() => setAddOpen(false)}
                     className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
                   <button onClick={createUser} disabled={busy || !addForm.full_name.trim() || !/.+@.+\..+/.test(addForm.email)}
-                    className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
+                    className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
                     {busy ? "Creating…" : addForm.mode === "invite" ? "Send Invitation" : "Create Account"}
                   </button>
                 </div>

@@ -47,7 +47,7 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
       {/* LEFT — banks */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 self-start">
         <button onClick={() => setShowNew(v => !v)}
-          className="w-full bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold py-2 rounded-lg transition-colors mb-3">
+          className="w-full bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold py-2 rounded-lg transition-colors mb-3">
           {showNew ? "Cancel" : "+ New Question Bank"}
         </button>
         {showNew && (
@@ -74,7 +74,7 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
                   pass_mark: Number(bankForm.pass_mark) || 80, validity_months: Number(bankForm.validity_months) || 24 });
                 if (r) { setSelectedId(r.id); setShowNew(false); setBankForm({ name: "", cpu_id: "", pass_mark: "80", validity_months: "24" }); }
               }}
-              className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold py-2 rounded-lg transition-colors disabled:opacity-50">
+              className="bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold py-2 rounded-lg transition-colors disabled:opacity-50">
               Create bank
             </button>
           </div>
@@ -159,7 +159,7 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
                   const r = await api({ kind: "bank_question", bank_id: selectedId, ...q });
                   if (r) setQ(EMPTY_Q);
                 }}
-                className="self-start bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
+                className="self-start bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
                 Add question
               </button>
             </div>

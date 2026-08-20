@@ -50,7 +50,7 @@ export default function AssetSearch() {
       <div className="bg-white rounded-xl border border-gray-100 p-4">
         <div className="flex gap-2">
           <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && run()} placeholder="Search competency assets — natural language or keywords…" className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-teal-400" />
-          <button onClick={run} disabled={searching} className="text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-5">{searching ? "…" : "Search"}</button>
+          <button onClick={run} disabled={searching} className="text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg px-5">{searching ? "…" : "Search"}</button>
         </div>
         {note && <p className="text-[11px] text-gray-500 mt-2">{note}</p>}
         {hits.length > 0 && (

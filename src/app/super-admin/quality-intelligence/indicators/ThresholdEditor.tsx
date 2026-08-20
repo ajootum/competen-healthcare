@@ -67,7 +67,7 @@ export default function ThresholdEditor({
         {field("Amber", a, setA)}
         {field("Red", r, setR)}
         <button onClick={save} disabled={busy}
-          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50">
+          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-teal-700 hover:bg-teal-800 text-white disabled:opacity-50">
           {busy ? "…" : "Save"}
         </button>
         <button onClick={() => { setOpen(false); setErr(null); }}

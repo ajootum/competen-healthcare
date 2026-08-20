@@ -58,7 +58,7 @@ export default function ForgotPasswordPage() {
             {error && <p className="text-red-500 text-xs bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
             <button
               type="submit" disabled={loading || !email}
-              className="w-full rounded-lg bg-teal-600 py-3 text-white font-semibold text-sm hover:bg-teal-700 transition-colors disabled:opacity-60"
+              className="w-full rounded-lg bg-teal-700 py-3 text-white font-semibold text-sm hover:bg-teal-700 transition-colors disabled:opacity-60"
             >
               {loading ? "Sending…" : "Send reset link"}
             </button>

@@ -26,7 +26,7 @@ export default function LicensingClient({ planRows, renewals, currency }: { plan
       <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200">
         <div className="flex items-center justify-between p-3 border-b border-gray-100">
           <h2 className="font-semibold text-gray-900">Plans <span className="text-gray-500 font-normal text-sm">({planRows.length})</span></h2>
-          <button onClick={() => { setModal({ mode: "create" }); setErr(""); }} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3.5 py-2">+ Create Plan</button>
+          <button onClick={() => { setModal({ mode: "create" }); setErr(""); }} className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white rounded-lg px-3.5 py-2">+ Create Plan</button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -111,7 +111,7 @@ function PlanModal({ mode, plan, currency, saving, err, onClose, onSave }: any) 
         {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
         <div className="flex gap-2 pt-1">
           <button onClick={onClose} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-          <button onClick={() => onSave(form)} disabled={saving || !form.name.trim()} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Saving…" : mode === "create" ? "Create" : "Save"}</button>
+          <button onClick={() => onSave(form)} disabled={saving || !form.name.trim()} className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Saving…" : mode === "create" ? "Create" : "Save"}</button>
         </div>
       </div>
     </Modal>

@@ -97,7 +97,7 @@ export default function AccountSettings({ profile }: { profile: ProfileFields })
             // eslint-disable-next-line @next/next/no-img-element -- avatar from Supabase storage, not a static asset
             <img src={avatarUrl} alt="Profile photo" className="w-16 h-16 rounded-full object-cover border border-gray-100" />
           ) : (
-            <span className="w-16 h-16 rounded-full bg-teal-600 text-white text-xl font-bold flex items-center justify-center">
+            <span className="w-16 h-16 rounded-full bg-teal-700 text-white text-xl font-bold flex items-center justify-center">
               {initials(form.full_name)}
             </span>
           )}
@@ -148,7 +148,7 @@ export default function AccountSettings({ profile }: { profile: ProfileFields })
           </p>
         )}
         <button type="submit" disabled={savingProfile}
-          className="mt-4 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
+          className="mt-4 bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
           {savingProfile ? "Saving…" : "Save profile"}
         </button>
       </form>

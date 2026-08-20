@@ -83,7 +83,7 @@ export default function ShiftDecisionsPanel({ shiftId, provisioned, decisions, e
           </div>
           <input value={summary} onChange={e => setSummary(e.target.value)} placeholder="Decision summary *" className={`${sel} w-full`} />
           <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason (optional)" className={`${sel} w-full`} />
-          <button onClick={log} disabled={!summary.trim() || busy === "log"} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50">{busy === "log" ? "…" : "Record decision"}</button>
+          <button onClick={log} disabled={!summary.trim() || busy === "log"} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-700 text-white hover:bg-teal-700 disabled:opacity-50">{busy === "log" ? "…" : "Record decision"}</button>
         </div>
       )}
 

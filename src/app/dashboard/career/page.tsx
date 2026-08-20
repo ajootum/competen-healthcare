@@ -244,14 +244,14 @@ export default async function CareerGrowthPage() {
                 <div key={step.role} className="flex gap-3">
                   <div className="flex flex-col items-center">
                     <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
-                      i === 0 ? "bg-teal-600 text-white" : i === 1 ? "bg-teal-50 border-2 border-teal-400 text-teal-700" : "bg-gray-100 text-gray-400"}`}>
+                      i === 0 ? "bg-teal-700 text-white" : i === 1 ? "bg-teal-50 border-2 border-teal-400 text-teal-700" : "bg-gray-100 text-gray-400"}`}>
                       {i === 0 ? "✓" : i + 1}
                     </span>
                     {i < LADDER.length - 1 && <span className="w-0.5 flex-1 bg-gray-100 my-0.5" />}
                   </div>
                   <div className={`pb-4 ${i > 1 ? "opacity-60" : ""}`}>
                     <p className="text-sm font-medium text-gray-800">{step.icon} {step.role}
-                      {i === 0 && <span className="ml-2 text-[9px] font-bold bg-teal-600 text-white px-1.5 py-0.5 rounded">Current</span>}
+                      {i === 0 && <span className="ml-2 text-[9px] font-bold bg-teal-700 text-white px-1.5 py-0.5 rounded">Current</span>}
                       {i === 1 && <span className="ml-2 text-[9px] font-bold bg-teal-50 text-teal-700 border border-teal-200 px-1.5 py-0.5 rounded">Next goal · {readiness}% ready</span>}
                     </p>
                     <p className="text-[10px] text-gray-400" suppressHydrationWarning>
@@ -300,7 +300,7 @@ export default async function CareerGrowthPage() {
           {/* Portfolio summary (spec §6) */}
           <div className={`${card} p-5`}>
             <div className="flex items-center gap-3 mb-3">
-              <span className="w-10 h-10 rounded-full bg-teal-600 text-white flex items-center justify-center text-sm font-bold">
+              <span className="w-10 h-10 rounded-full bg-teal-700 text-white flex items-center justify-center text-sm font-bold">
                 {profile?.full_name?.[0] ?? "?"}
               </span>
               <div className="min-w-0">

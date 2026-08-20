@@ -94,7 +94,7 @@ export default function CpuImporter({ practices, domains }: { practices: Opt[]; 
         </div>
         <div className="flex gap-2 mt-5">
           <button onClick={() => { setResult(null); setCpus(null); setText(""); }}
-            className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg">Import another</button>
+            className="bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-4 py-2 rounded-lg">Import another</button>
           <a href="/super-admin/studio/cpus" className="text-sm text-teal-700 bg-teal-50 hover:bg-teal-100 px-4 py-2 rounded-lg">View CPU library →</a>
         </div>
       </div>
@@ -126,7 +126,7 @@ export default function CpuImporter({ practices, domains }: { practices: Opt[]; 
             rows={6} placeholder="Paste the document text here…"
             className={`${input} font-mono text-xs mt-2`} />
           <button disabled={busy || !text.trim()} onClick={() => preview()}
-            className="mt-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">
+            className="mt-2 bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">
             {busy && !cpus ? "Reading…" : "Read pasted text"}
           </button>
         </details>
@@ -235,7 +235,7 @@ export default function CpuImporter({ practices, domains }: { practices: Opt[]; 
             </label>
           </div>
           <button disabled={busy || !practiceId || !domainId} onClick={commit}
-            className="mt-4 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg disabled:opacity-50">
+            className="mt-4 bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-5 py-2.5 rounded-lg disabled:opacity-50">
             {busy ? "Importing…" : `Import ${chosen.code ?? "CPU"} as a draft`}
           </button>
           <p className="text-[11px] text-gray-500 mt-2">

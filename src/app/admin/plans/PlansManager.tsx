@@ -56,7 +56,7 @@ export default function PlansManager({ plans, workers, assessors, cpus }: { plan
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <button onClick={() => setCreating(c => !c)} className="px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
+        <button onClick={() => setCreating(c => !c)} className="px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
           {creating ? "Cancel" : "+ New Plan"}
         </button>
       </div>
@@ -102,7 +102,7 @@ export default function PlansManager({ plans, workers, assessors, cpus }: { plan
               {cpus.map(c => {
                 const on = pickedCpus.has(c.id);
                 return <button key={c.id} onClick={() => toggle(pickedCpus, c.id, setPickedCpus)}
-                  className={`text-[11px] px-2.5 py-1 rounded-full border ${on ? "bg-teal-600 text-white border-teal-600" : "bg-white text-gray-600 border-gray-200 hover:border-teal-300"}`}>{on ? "✓ " : "+ "}{c.name}</button>;
+                  className={`text-[11px] px-2.5 py-1 rounded-full border ${on ? "bg-teal-700 text-white border-teal-600" : "bg-white text-gray-600 border-gray-200 hover:border-teal-300"}`}>{on ? "✓ " : "+ "}{c.name}</button>;
               })}
               {!cpus.length && <p className="text-[11px] text-gray-300 italic">No CPUs defined yet</p>}
             </div>
@@ -117,7 +117,7 @@ export default function PlansManager({ plans, workers, assessors, cpus }: { plan
               })}
             </div>
           </div>
-          <button onClick={create} disabled={busy} className="self-end px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
+          <button onClick={create} disabled={busy} className="self-end px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
             {busy ? "Creating…" : "Create Plan"}
           </button>
         </div>

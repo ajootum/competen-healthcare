@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 const ACCENT: Record<number, { badge: string; action: string }> = {
   1: { badge: "bg-[var(--cmp-surface-information)] text-blue-700", action: "bg-[var(--cmp-color-information)] hover:bg-blue-700" },
-  2: { badge: "bg-teal-100 text-teal-700", action: "bg-teal-600 hover:bg-teal-700" },
+  2: { badge: "bg-teal-100 text-teal-700", action: "bg-teal-700 hover:bg-teal-800" },
   3: { badge: "bg-violet-100 text-violet-700", action: "bg-violet-600 hover:bg-violet-700" },
   4: { badge: "bg-[var(--cmp-surface-warning)] text-orange-700", action: "bg-[var(--cmp-color-warning)] hover:bg-orange-700" },
   5: { badge: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", action: "bg-[var(--cmp-color-error)] hover:bg-rose-700" },

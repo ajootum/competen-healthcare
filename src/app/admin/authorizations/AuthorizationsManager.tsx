@@ -48,7 +48,7 @@ export default function AuthorizationsManager({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <button onClick={() => setGranting(g => !g)} className="px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
+        <button onClick={() => setGranting(g => !g)} className="px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
           {granting ? "Cancel" : "+ Grant Authorization"}
         </button>
       </div>
@@ -110,7 +110,7 @@ export default function AuthorizationsManager({
                     return (
                       <button key={c.competency_id}
                         onClick={() => setPicked(prev => { const s = new Set(prev); if (s.has(c.competency_id)) s.delete(c.competency_id); else s.add(c.competency_id); return s; })}
-                        className={`text-[11px] px-2.5 py-1 rounded-full border ${on ? "bg-teal-600 text-white border-teal-600" : "bg-white text-gray-600 border-gray-200 hover:border-teal-300"}`}>
+                        className={`text-[11px] px-2.5 py-1 rounded-full border ${on ? "bg-teal-700 text-white border-teal-600" : "bg-white text-gray-600 border-gray-200 hover:border-teal-300"}`}>
                         {on ? "✓ " : "+ "}{c.name}
                       </button>
                     );
@@ -123,7 +123,7 @@ export default function AuthorizationsManager({
           )}
 
           <button onClick={grant} disabled={busy}
-            className="self-end px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
+            className="self-end px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
             {busy ? "Granting…" : "Grant Authorization"}
           </button>
         </div>

@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const barCls = (n: number) => (n >= 85 ? "bg-[var(--cmp-color-success)]" : n >= 60 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]");
-const heatCls = (pct: number) => (pct >= 40 ? "bg-teal-600 text-white" : pct >= 20 ? "bg-teal-300 text-teal-900" : pct > 0 ? "bg-teal-100 text-teal-700" : "bg-gray-50 text-gray-300");
+const heatCls = (pct: number) => (pct >= 40 ? "bg-teal-700 text-white" : pct >= 20 ? "bg-teal-300 text-teal-900" : pct > 0 ? "bg-teal-100 text-teal-700" : "bg-gray-50 text-gray-300");
 
 export default async function CoverageGapsPage() {
   const supabase = await createClient();

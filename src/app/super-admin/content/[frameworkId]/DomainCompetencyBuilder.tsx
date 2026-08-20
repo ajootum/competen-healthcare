@@ -84,7 +84,7 @@ export default function DomainCompetencyBuilder({ frameworkId, domains }: { fram
       <div className="flex justify-between items-center mb-4">
         <span className="text-sm text-gray-500">{domains.length} domains</span>
         <button onClick={() => openAdd({ type: "add-domain" })}
-          className="px-3 py-1.5 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700">
+          className="px-3 py-1.5 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-700">
           + Add Domain
         </button>
       </div>
@@ -228,7 +228,7 @@ export default function DomainCompetencyBuilder({ frameworkId, domains }: { fram
                 className={`flex-1 py-2 rounded-lg text-sm font-semibold disabled:opacity-50 ${
                   isDelete
                     ? "bg-[var(--cmp-color-critical)] text-white hover:bg-[var(--cmp-color-critical)]"
-                    : "bg-teal-600 text-white hover:bg-teal-700"
+                    : "bg-teal-700 text-white hover:bg-teal-700"
                 }`}>
                 {saving ? "…" : isDelete ? "Delete" : isEdit ? "Save changes" : "Add"}
               </button>

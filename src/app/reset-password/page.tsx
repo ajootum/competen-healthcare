@@ -75,7 +75,7 @@ export default function ResetPasswordPage() {
             <h2 className="text-lg font-bold text-gray-900">Password updated</h2>
             <p className="text-sm text-gray-500 mt-2">You can now sign in with your new password.</p>
             <Link href="/login"
-              className="mt-5 inline-block bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
+              className="mt-5 inline-block bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
               Sign in
             </Link>
           </div>
@@ -100,7 +100,7 @@ export default function ResetPasswordPage() {
             {error && <p className="text-red-500 text-xs bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{error}</p>}
             <button
               type="submit" disabled={loading}
-              className="w-full rounded-lg bg-teal-600 py-3 text-white font-semibold text-sm hover:bg-teal-700 transition-colors disabled:opacity-60"
+              className="w-full rounded-lg bg-teal-700 py-3 text-white font-semibold text-sm hover:bg-teal-700 transition-colors disabled:opacity-60"
             >
               {loading ? "Updating…" : "Update password"}
             </button>

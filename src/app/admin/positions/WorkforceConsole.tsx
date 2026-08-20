@@ -26,7 +26,7 @@ async function call(method: string, path: string, body?: any) {
 
 const card = cardClass;
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
-const btn = "px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50";
+const btn = "px-4 py-2 rounded-lg bg-teal-700 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50";
 const btnGhost = "px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50";
 
 type UI = { busy: boolean; setBusy: (b: boolean) => void; toast: (k: "ok" | "err", t: string) => void; refresh: () => void };
@@ -35,7 +35,7 @@ type TabProps = { data: any; support: any; ui: UI };
 function Chip({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick}
-      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${on ? "bg-teal-600 border-teal-600 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-teal-400"}`}>
+      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${on ? "bg-teal-700 border-teal-600 text-white" : "bg-white border-gray-300 text-gray-600 hover:border-teal-400"}`}>
       {label}
     </button>
   );

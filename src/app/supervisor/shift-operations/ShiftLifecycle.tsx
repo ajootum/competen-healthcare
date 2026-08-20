@@ -53,7 +53,7 @@ export default function ShiftLifecycle({ states, index, subState, shiftStatus, g
           {gate.action && shiftId ? (
             <button onClick={advance} disabled={busy || !gate.allowed}
               title={gate.allowed ? "" : "Blocked — see readiness reasons"}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg text-white ${gate.allowed ? "bg-teal-600 hover:bg-teal-700" : "bg-gray-300 cursor-not-allowed"} disabled:opacity-70`}>
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg text-white ${gate.allowed ? "bg-teal-700 hover:bg-teal-800" : "bg-gray-300 cursor-not-allowed"} disabled:opacity-70`}>
               {busy ? "Working…" : gate.action.label}
             </button>
           ) : (
@@ -83,7 +83,7 @@ export default function ShiftLifecycle({ states, index, subState, shiftStatus, g
           return (
             <div key={s} className="flex items-center gap-1 shrink-0">
               <div className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium border ${
-                active ? "bg-teal-600 text-white border-teal-600"
+                active ? "bg-teal-700 text-white border-teal-600"
                 : done ? "bg-teal-50 text-teal-700 border-teal-200"
                 : "bg-gray-50 text-gray-400 border-gray-200"}`}>
                 <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${

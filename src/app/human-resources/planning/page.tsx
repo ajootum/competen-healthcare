@@ -51,7 +51,7 @@ export default async function WorkforcePlanningPage() {
           <h1 className="text-2xl font-bold text-gray-900">Workforce Planning</h1>
           <p className="text-sm text-gray-500 mt-1">Establishment vs filled positions by department.</p>
         </div>
-        <Link href="/admin/positions" className="shrink-0 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-4 py-2">Manage positions →</Link>
+        <Link href="/admin/positions" className="shrink-0 text-sm font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-4 py-2">Manage positions →</Link>
       </div>
 
       <div className="grid grid-cols-3 gap-3">

@@ -78,7 +78,7 @@ export default function QuizClient({ questions }: { questions: Question[] }) {
           {categories.map(cat => (
             <button key={cat} onClick={() => setFilter(cat)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                filter === cat ? "bg-teal-600 text-white" : "bg-white text-gray-600 border border-gray-200 hover:border-teal-300"
+                filter === cat ? "bg-teal-700 text-white" : "bg-white text-gray-600 border border-gray-200 hover:border-teal-300"
               }`}>
               {cat} ({cat === "All" ? questions.length : questions.filter(q => q.category === cat).length})
             </button>
@@ -101,7 +101,7 @@ export default function QuizClient({ questions }: { questions: Question[] }) {
             <p className="text-sm text-teal-600 mt-0.5">Test your clinical knowledge</p>
           </div>
           <button onClick={startQuiz}
-            className="bg-teal-600 text-white px-6 py-2.5 rounded-lg font-medium text-sm hover:bg-teal-700 transition-colors">
+            className="bg-teal-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm hover:bg-teal-700 transition-colors">
             Start Quiz →
           </button>
         </div>
@@ -138,7 +138,7 @@ export default function QuizClient({ questions }: { questions: Question[] }) {
         </div>
         <div className="flex gap-3 justify-center">
           <button onClick={startQuiz}
-            className="bg-teal-600 text-white px-6 py-2.5 rounded-lg font-medium text-sm hover:bg-teal-700 transition-colors">
+            className="bg-teal-700 text-white px-6 py-2.5 rounded-lg font-medium text-sm hover:bg-teal-700 transition-colors">
             Retry Quiz
           </button>
           <button onClick={() => { setQuizStarted(false); setQuizDone(false); }}
@@ -198,7 +198,7 @@ export default function QuizClient({ questions }: { questions: Question[] }) {
 
       {selected && (
         <button onClick={next}
-          className="w-full bg-teal-600 text-white py-3 rounded-xl font-medium text-sm hover:bg-teal-700 transition-colors">
+          className="w-full bg-teal-700 text-white py-3 rounded-xl font-medium text-sm hover:bg-teal-700 transition-colors">
           {current + 1 >= filtered.length ? "See Results" : "Next Question →"}
         </button>
       )}

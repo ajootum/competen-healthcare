@@ -301,7 +301,7 @@ export default async function PassportPage() {
             🔗 Share / Verify
           </Link>
           <Link href="/dashboard/passport/print"
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 px-4 py-2 rounded-lg transition-colors">
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 px-4 py-2 rounded-lg transition-colors">
             🖨️ Print / Export
           </Link>
         </div>
@@ -322,7 +322,7 @@ export default async function PassportPage() {
       <div className={`${card} p-6 mb-5`}>
         <div className="flex flex-col lg:flex-row lg:items-center gap-6">
           <div className="flex items-center gap-5 flex-1 min-w-0">
-            <div className="w-20 h-20 rounded-full bg-teal-600 text-white flex items-center justify-center text-2xl font-bold shrink-0">
+            <div className="w-20 h-20 rounded-full bg-teal-700 text-white flex items-center justify-center text-2xl font-bold shrink-0">
               {profile.full_name?.[0] ?? "?"}
             </div>
             <div className="min-w-0">
@@ -542,7 +542,7 @@ export default async function PassportPage() {
               <div key={j.label} className="flex-1 text-center relative">
                 {i > 0 && <div className={`absolute top-5 -left-1/2 w-full h-0.5 ${i <= journeyStage ? "bg-teal-400" : "bg-gray-100"}`} />}
                 <div className={`relative w-10 h-10 mx-auto rounded-full flex items-center justify-center text-base border-2 ${
-                  i < journeyStage ? "bg-teal-50 border-teal-400" : i === journeyStage ? "bg-teal-600 border-teal-600" : "bg-white border-gray-200"}`}>
+                  i < journeyStage ? "bg-teal-50 border-teal-400" : i === journeyStage ? "bg-teal-700 border-teal-600" : "bg-white border-gray-200"}`}>
                   {j.icon}
                 </div>
                 <p className={`text-[10px] font-semibold mt-1.5 ${i === journeyStage ? "text-teal-700" : "text-gray-600"}`}>{j.label}</p>

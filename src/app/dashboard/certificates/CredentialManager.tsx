@@ -101,7 +101,7 @@ export default function CredentialManager({ credentials }: { credentials: OwnCre
           {error && <p className="sm:col-span-2 text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] border border-[var(--cmp-color-critical)] rounded-lg px-3 py-2">{error}</p>}
           <div className="sm:col-span-2">
             <button type="submit" disabled={busy}
-              className="bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
+              className="bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
               {busy ? "Saving…" : "Submit for verification"}
             </button>
           </div>

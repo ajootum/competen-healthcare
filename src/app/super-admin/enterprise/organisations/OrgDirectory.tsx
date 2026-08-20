@@ -51,7 +51,7 @@ export default function OrgDirectory({ rows, networks }: { rows: any[]; networks
           <option value="all">All statuses</option>
           {STATUSES.map(s => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
         </select>
-        <button onClick={() => { setOpen(true); setErr(""); }} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3.5 py-2">+ Add Organisation</button>
+        <button onClick={() => { setOpen(true); setErr(""); }} className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white rounded-lg px-3.5 py-2">+ Add Organisation</button>
       </div>
 
       <div className="overflow-x-auto">
@@ -112,7 +112,7 @@ export default function OrgDirectory({ rows, networks }: { rows: any[]; networks
             {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
             <div className="flex gap-2 pt-1">
               <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create"}</button>
+              <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create"}</button>
             </div>
           </div>
         </Modal>

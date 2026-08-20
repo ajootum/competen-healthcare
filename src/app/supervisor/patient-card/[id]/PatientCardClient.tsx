@@ -22,7 +22,7 @@ const ACUITY_TONE: Record<string, string> = { stable: "bg-[var(--cmp-surface-suc
 
 const card = cardClass;
 const input = "w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
-const btn = "px-3 py-1.5 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50";
+const btn = "px-3 py-1.5 rounded-lg bg-teal-700 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50";
 const chip = "text-[11px] font-medium px-2 py-0.5 rounded-full";
 
 async function call(method: string, path: string, body?: any) {

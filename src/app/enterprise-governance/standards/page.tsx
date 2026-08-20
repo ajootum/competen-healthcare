@@ -29,7 +29,7 @@ export default async function StandardsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Enterprise Standards</h1>
           <p className="text-sm text-gray-500 mt-1">The shared master competency framework library that every tenant inherits.</p>
         </div>
-        <Link href="/competency-office" className="shrink-0 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-4 py-2">Govern in Competency Office →</Link>
+        <Link href="/competency-office" className="shrink-0 text-sm font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-4 py-2">Govern in Competency Office →</Link>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

@@ -54,7 +54,7 @@ export default async function FrameworkManagerPage() {
           <h1 className="text-2xl font-bold text-gray-900">Framework Manager</h1>
           <p className="text-sm text-gray-500 mt-1">Governed competency frameworks — Core, Specialty and Role libraries.</p>
         </div>
-        <Link href="/admin/studio" className="shrink-0 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-4 py-2">Open Competency Studio →</Link>
+        <Link href="/admin/studio" className="shrink-0 text-sm font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-4 py-2">Open Competency Studio →</Link>
       </div>
 
       <div className={card}>

@@ -72,7 +72,7 @@ export default async function NursesPage() {
           <p className="text-gray-400 text-sm mt-0.5">{nurses?.length ?? 0} nurses linked to your hospital</p>
         </div>
         <a href="/admin/invite"
-          className="flex items-center gap-2 text-xs bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors font-medium">
+          className="flex items-center gap-2 text-xs bg-teal-700 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors font-medium">
           ➕ Invite Nurse
         </a>
       </div>

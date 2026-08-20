@@ -54,7 +54,7 @@ export default function SimulationManager({ scenarios, competencyOptions }: { sc
         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
           <input value={participants} onChange={e => setParticipants(e.target.value)} type="number" min="1" placeholder="Participants" className={`${inp} sm:w-32`} />
           <input value={duration} onChange={e => setDuration(e.target.value)} type="number" min="1" placeholder="Duration (min)" className={`${inp} sm:w-36`} />
-          <button onClick={create} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2">{busy ? "…" : "Create scenario"}</button>
+          <button onClick={create} disabled={busy} className="text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg px-4 py-2">{busy ? "…" : "Create scenario"}</button>
           {err && <p className="text-[11px] text-[var(--cmp-text-critical)] sm:ml-1">{err}</p>}
         </div>
       </div>

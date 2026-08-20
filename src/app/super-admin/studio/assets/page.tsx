@@ -115,7 +115,7 @@ export default async function AssetPlatformPage() {
           <p className="text-gray-500 text-sm mt-0.5">The single source of truth — every competency asset, governed once and reused everywhere across the ecosystem.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Link href="/super-admin/studio/assets/browser" className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3 py-2">Browse assets →</Link>
+          <Link href="/super-admin/studio/assets/browser" className="text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-3 py-2">Browse assets →</Link>
           <Link href="/super-admin/studio" className="text-xs font-semibold text-gray-500 hover:text-teal-700 border border-gray-200 rounded-lg px-3 py-2">← Studio</Link>
         </div>
       </div>

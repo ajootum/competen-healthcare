@@ -112,7 +112,7 @@ export default function SupervisorPanel({ shiftId, provisioned, assignments, sta
             <select value={source} onChange={e => setSource(e.target.value)} className={sel}>
               {ASSIGNMENT_SOURCES.map((s) => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}
             </select>
-            <button onClick={assign} disabled={!userId || busy === "assign"} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50">
+            <button onClick={assign} disabled={!userId || busy === "assign"} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-700 text-white hover:bg-teal-700 disabled:opacity-50">
               {busy === "assign" ? "…" : "Assign"}
             </button>
           </div>

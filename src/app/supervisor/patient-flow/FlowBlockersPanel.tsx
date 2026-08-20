@@ -81,7 +81,7 @@ export default function FlowBlockersPanel({ blockers, auto, patients, configRead
           <select className={input} value={pid} onChange={e => setPid(e.target.value)}><option value="">Patient (optional)…</option>{patients.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select>
           <input className={`${input} flex-1 min-w-[8rem]`} placeholder="Detail (optional)" value={detail} onChange={e => setDetail(e.target.value)} />
           <button disabled={busy} onClick={async () => { if (await act(() => call("POST", "/api/operations/flow-blockers", { category: cat, patient_id: pid || undefined, detail: detail || undefined }), "Blocker logged")) setDetail(""); }}
-            className="text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3 py-1.5">Log blocker</button>
+            className="text-sm font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-3 py-1.5">Log blocker</button>
         </div>
       ) : (
         <p className="text-[11px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-3 py-2 mt-3">Apply migration <code className="bg-[var(--cmp-surface-warning)] px-1 rounded font-mono">048-flow-blockers.sql</code> to log &amp; resolve blockers. Auto-detected blockers above are live now.</p>

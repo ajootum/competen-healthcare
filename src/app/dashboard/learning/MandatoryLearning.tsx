@@ -49,7 +49,7 @@ export default function MandatoryLearning({ items }: { items: any[] }) {
               {e.status !== "completed" && e.status !== "exempt" && (
                 <div className="flex items-center gap-2 mt-2">
                   {e.status === "not_started" && <button onClick={() => act(e.id, "in_progress", "Marked in progress")} disabled={busy != null} className="text-[11px] text-blue-700 hover:underline disabled:opacity-50">Start</button>}
-                  <button onClick={() => act(e.id, "complete", "Training completed ✓")} disabled={busy != null} className="text-[11px] font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-2.5 py-1 disabled:opacity-50 ml-auto">Mark complete</button>
+                  <button onClick={() => act(e.id, "complete", "Training completed ✓")} disabled={busy != null} className="text-[11px] font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-2.5 py-1 disabled:opacity-50 ml-auto">Mark complete</button>
                 </div>
               )}
             </div>

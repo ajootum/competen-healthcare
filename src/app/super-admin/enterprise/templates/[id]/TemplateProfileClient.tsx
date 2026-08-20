@@ -62,7 +62,7 @@ export default function TemplateProfileClient({ data }: { data: any }) {
         <div className="flex flex-wrap items-center gap-2">
           {transitions.map((t: any) => <button key={t.to} onClick={() => act({ action: "transition", to: t.to }, `Moved to ${t.to}`)} disabled={busy} className="text-xs font-medium rounded-lg border border-teal-200 text-teal-700 hover:bg-teal-50 px-3 py-1.5 disabled:opacity-40">{t.label}</button>)}
           <button onClick={() => act({ action: "bump_minor" }, "Version bumped")} disabled={busy} className="text-xs font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 px-3 py-1.5 disabled:opacity-40">+ Minor version</button>
-          {canDeploy && <button onClick={() => setDeploy(true)} className="text-xs font-semibold rounded-lg bg-teal-600 text-white hover:bg-teal-700 px-3 py-1.5">Deploy →</button>}
+          {canDeploy && <button onClick={() => setDeploy(true)} className="text-xs font-semibold rounded-lg bg-teal-700 text-white hover:bg-teal-700 px-3 py-1.5">Deploy →</button>}
         </div>
       </div>
       {msg && <div className={`text-sm rounded-lg px-3 py-1.5 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</div>}
@@ -83,7 +83,7 @@ export default function TemplateProfileClient({ data }: { data: any }) {
           <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
             {["draft", "review", "approved", "published", "assigned", "retired"].map((s, i, arr) => (
               <span key={s} className="flex items-center gap-1.5">
-                <span className={`px-2 py-0.5 rounded capitalize ${template.status === s ? "bg-teal-600 text-white font-medium" : "bg-gray-100 text-gray-600"}`}>{s}</span>
+                <span className={`px-2 py-0.5 rounded capitalize ${template.status === s ? "bg-teal-700 text-white font-medium" : "bg-gray-100 text-gray-600"}`}>{s}</span>
                 {i < arr.length - 1 && <span className="text-gray-500">→</span>}
               </span>
             ))}
@@ -111,7 +111,7 @@ export default function TemplateProfileClient({ data }: { data: any }) {
             </div>
             <div className="flex gap-2 pt-1">
               <button onClick={() => setDeploy(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={runDeploy} disabled={busy} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{busy ? "Deploying…" : "Deploy"}</button>
+              <button onClick={runDeploy} disabled={busy} className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{busy ? "Deploying…" : "Deploy"}</button>
             </div>
           </div>
         </Modal>

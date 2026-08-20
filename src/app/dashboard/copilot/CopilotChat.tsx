@@ -127,7 +127,7 @@ export default function CopilotChat({ pinned, autoPrompt }: { pinned: PinnedReso
 
             {messages.length === 0 && (
               <div className="flex-1 flex flex-col items-center justify-center gap-5 py-6">
-                <div className="w-14 h-14 rounded-2xl bg-teal-600 flex items-center justify-center text-2xl">🤖</div>
+                <div className="w-14 h-14 rounded-2xl bg-teal-700 flex items-center justify-center text-2xl">🤖</div>
                 <div className="text-center">
                   <p className="font-semibold text-gray-800 text-lg">Your AI Clinical Coach</p>
                   <p className="text-sm text-gray-400 mt-1 max-w-sm">
@@ -161,14 +161,14 @@ export default function CopilotChat({ pinned, autoPrompt }: { pinned: PinnedReso
             {messages.map((msg, i) => (
               <div key={i} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 ${
-                  msg.role === "assistant" ? "bg-teal-600 text-white" : "bg-gray-200 text-gray-600"
+                  msg.role === "assistant" ? "bg-teal-700 text-white" : "bg-gray-200 text-gray-600"
                 }`}>
                   {msg.role === "assistant" ? "🤖" : "👤"}
                 </div>
                 <div className={`max-w-[78%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
                   msg.role === "assistant"
                     ? "bg-gray-50 text-gray-800 rounded-tl-none"
-                    : "bg-teal-600 text-white rounded-tr-none"
+                    : "bg-teal-700 text-white rounded-tr-none"
                 }`}>
                   {msg.content ? (
                     <span className="whitespace-pre-wrap">{msg.content}</span>
@@ -197,7 +197,7 @@ export default function CopilotChat({ pinned, autoPrompt }: { pinned: PinnedReso
               className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:opacity-50"
             />
             <button onClick={() => send()} disabled={!input.trim() || streaming}
-              className="bg-teal-600 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-teal-700 disabled:opacity-50 transition-colors">
+              className="bg-teal-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-teal-700 disabled:opacity-50 transition-colors">
               {streaming ? "…" : "Send ➤"}
             </button>
           </div>

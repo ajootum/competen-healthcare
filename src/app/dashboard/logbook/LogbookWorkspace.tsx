@@ -110,7 +110,7 @@ export default function LogbookWorkspace({ skills, entries, scored }: {
           <p className="text-gray-400 text-sm mt-0.5">Your verified record of clinical skills — from supervised practice to independent performance.</p>
         </div>
         <button onClick={() => setOpen(true)}
-          className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg">
+          className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg">
           ＋ Log a Skill
         </button>
       </div>
@@ -153,7 +153,7 @@ export default function LogbookWorkspace({ skills, entries, scored }: {
               <>
                 <p className="text-gray-400 text-sm mt-2 mb-4">Your logbook becomes a comprehensive record of your clinical skills across all your competency cycles.</p>
                 <button onClick={() => setOpen(true)}
-                  className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg">
+                  className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg">
                   ＋ Log Your First Skill
                 </button>
               </>
@@ -263,7 +263,7 @@ export default function LogbookWorkspace({ skills, entries, scored }: {
               <button onClick={() => setOpen(false)}
                 className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
               <button onClick={submit} disabled={busy || !valid}
-                className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
+                className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
                 {busy ? "Saving…" : "Log Skill"}
               </button>
             </div>

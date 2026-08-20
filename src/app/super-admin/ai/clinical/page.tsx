@@ -91,7 +91,7 @@ export default async function ClinicalIntelligence() {
               ))}
             </div>
           ) : <p className="text-xs text-gray-500 mb-3">{d.aiReady ? "No clinical AI activity in the last 24h." : "AI usage telemetry off."}</p>}
-          <Link href="/super-admin/assistant" className="mt-auto text-center text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3.5 py-2">Open Clinical Assistant</Link>
+          <Link href="/super-admin/assistant" className="mt-auto text-center text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white rounded-lg px-3.5 py-2">Open Clinical Assistant</Link>
         </div>
 
         {/* Approved knowledge composition */}

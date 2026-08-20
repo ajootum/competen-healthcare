@@ -37,7 +37,7 @@ export default function SafetyConsole({ incidentsProvisioned, qaProvisioned }: {
     <div className={cardClass}>
       <div className="flex items-center gap-2 mb-3">
         <button onClick={() => { setTab("incident"); setOk(null); setErr(null); }} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${tab === "incident" ? "bg-[var(--cmp-color-error)] text-white" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>🚩 Report Incident</button>
-        <button onClick={() => { setTab("capa"); setOk(null); setErr(null); }} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${tab === "capa" ? "bg-teal-600 text-white" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>✅ Create CAPA</button>
+        <button onClick={() => { setTab("capa"); setOk(null); setErr(null); }} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${tab === "capa" ? "bg-teal-700 text-white" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>✅ Create CAPA</button>
       </div>
 
       {gated ? (
@@ -61,7 +61,7 @@ export default function SafetyConsole({ incidentsProvisioned, qaProvisioned }: {
           </div>
           <input value={qa.title} onChange={e => setQa({ ...qa, title: e.target.value })} placeholder="Action title *" className={`${sel} w-full`} />
           <textarea value={qa.description} onChange={e => setQa({ ...qa, description: e.target.value })} rows={2} placeholder="Description…" className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 resize-none" />
-          <button onClick={() => post("/api/operations/quality-actions", { ...qa, due_hours: qa.due_hours ? Number(qa.due_hours) : undefined }, () => setQa({ action_type: "capa", title: "", priority: "medium", description: "", due_hours: "" }), "Action created")} disabled={!qa.title.trim() || busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50">{busy ? "…" : "Create action"}</button>
+          <button onClick={() => post("/api/operations/quality-actions", { ...qa, due_hours: qa.due_hours ? Number(qa.due_hours) : undefined }, () => setQa({ action_type: "capa", title: "", priority: "medium", description: "", due_hours: "" }), "Action created")} disabled={!qa.title.trim() || busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-700 text-white hover:bg-teal-700 disabled:opacity-50">{busy ? "…" : "Create action"}</button>
         </div>
       )}
       {ok && <p className="text-[11px] text-[var(--cmp-text-success)] mt-2">{ok}</p>}

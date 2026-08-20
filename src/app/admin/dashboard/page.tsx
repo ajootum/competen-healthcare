@@ -194,7 +194,7 @@ export default async function AdminDashboardPage() {
               </p>
             </div>
             <a href="/api/reports/admin-cpd"
-              className="flex items-center gap-2 text-xs bg-teal-600 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors font-medium">
+              className="flex items-center gap-2 text-xs bg-teal-700 text-white px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors font-medium">
               ↓ Export CSV
             </a>
           </div>

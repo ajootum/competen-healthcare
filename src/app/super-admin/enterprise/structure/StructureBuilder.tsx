@@ -79,7 +79,7 @@ export default function StructureBuilder({ data }: { data: any }) {
           {rows.map(([l, v]) => <div key={l} className="flex justify-between border-b border-gray-50 py-1.5"><span className="text-gray-500">{l}</span><span className="text-gray-800 text-right">{v ?? <span className="text-gray-500">—</span>}</span></div>)}
         </div>
         <div className="flex flex-wrap gap-2">
-          {child && <button onClick={() => { setModal({ mode: "create", entity: child.entity, parent: sel }); setErr(""); }} className="text-xs font-medium rounded-lg bg-teal-600 text-white hover:bg-teal-700 px-3 py-1.5">+ {child.label}</button>}
+          {child && <button onClick={() => { setModal({ mode: "create", entity: child.entity, parent: sel }); setErr(""); }} className="text-xs font-medium rounded-lg bg-teal-700 text-white hover:bg-teal-700 px-3 py-1.5">+ {child.label}</button>}
           <button onClick={() => { setModal({ mode: "edit", entity: e, node: sel }); setErr(""); }} className="text-xs font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5">Edit</button>
           {sel.status === "archived"
             ? <button onClick={() => setArchive(e, sel, "restore")} disabled={busy} className="text-xs font-medium rounded-lg border border-[var(--cmp-color-success)] text-[var(--cmp-text-success)] hover:bg-[var(--cmp-surface-success)] px-3 py-1.5">Restore</button>
@@ -104,7 +104,7 @@ export default function StructureBuilder({ data }: { data: any }) {
         </div>
         <div className="ml-auto flex gap-2">
           <button onClick={() => { setModal({ mode: "create", entity: "division", parent: { id: facility?.id, kind: "facility" } }); setErr(""); }} className="text-xs font-semibold rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5">+ Division</button>
-          <button onClick={() => { setModal({ mode: "create", entity: "department", parent: { id: facility?.id, kind: "facility" } }); setErr(""); }} className="text-xs font-semibold rounded-lg bg-teal-600 text-white hover:bg-teal-700 px-3 py-1.5">+ Department</button>
+          <button onClick={() => { setModal({ mode: "create", entity: "department", parent: { id: facility?.id, kind: "facility" } }); setErr(""); }} className="text-xs font-semibold rounded-lg bg-teal-700 text-white hover:bg-teal-700 px-3 py-1.5">+ Department</button>
         </div>
       </div>
       {msg && <div className="text-sm rounded-lg px-3 py-1.5 bg-[var(--cmp-surface-success)] text-green-800">{msg}</div>}
@@ -216,7 +216,7 @@ function EntityModal({ modal, staff, busy, err, onClose, onSave }: any) {
         {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
         <div className="flex gap-2 pt-1">
           <button onClick={onClose} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-          <button onClick={submit} disabled={busy || !form.name.trim()} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{busy ? "Saving…" : modal.mode === "create" ? "Create" : "Save"}</button>
+          <button onClick={submit} disabled={busy || !form.name.trim()} className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{busy ? "Saving…" : modal.mode === "create" ? "Create" : "Save"}</button>
         </div>
       </div>
     </Modal>
@@ -280,7 +280,7 @@ function TeamMembers({ teamId }: { teamId: string }) {
         <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="account email"
           className="flex-1 rounded-lg border border-gray-200 px-2 py-1 text-[12px]" />
         <button disabled={working || !email.trim()} onClick={() => act({ action: "add", teamId, email: email.trim() }, "Added.")}
-          className="text-[11px] font-semibold rounded-lg bg-teal-600 text-white px-2.5 py-1 disabled:opacity-40">
+          className="text-[11px] font-semibold rounded-lg bg-teal-700 text-white px-2.5 py-1 disabled:opacity-40">
           {working ? "…" : "Add"}
         </button>
       </div>

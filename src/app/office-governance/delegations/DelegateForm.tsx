@@ -34,7 +34,7 @@ export default function DelegateForm({ people, scopeHid, isSuper }: { people: Pe
     <div className="bg-white rounded-xl border border-gray-200 p-3">
       <div className="flex items-center justify-between">
         <p className="text-[12px] font-medium text-gray-700">Delegate authority</p>
-        <button onClick={() => setOpen(v => !v)} className="text-[12px] bg-teal-600 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700">{open ? "Close" : "＋ New delegation"}</button>
+        <button onClick={() => setOpen(v => !v)} className="text-[12px] bg-teal-700 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700">{open ? "Close" : "＋ New delegation"}</button>
       </div>
       {err && <div className="mt-2 bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] rounded-lg px-3 py-2 text-[12px]">{err}</div>}
       {open && (

@@ -128,7 +128,7 @@ export default async function PatientFlow() {
         <p className="text-sm text-gray-500 mt-1">Route each movement to its live operational surface — no action is a dead end.</p>
         <div className="flex flex-wrap gap-2 mt-3">
           {ACTIONS.map(a => (
-            <Link key={a.label} href={a.href} className="text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3 py-1.5 transition-colors">
+            <Link key={a.label} href={a.href} className="text-sm font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-3 py-1.5 transition-colors">
               {a.label}
             </Link>
           ))}

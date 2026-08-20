@@ -84,7 +84,7 @@ export default async function DocumentServiceConsole({ searchParams }: { searchP
       <div className={`${card} p-5`}>
         <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
           <h3 className="text-sm font-bold text-gray-900">Recent Documents</h3>
-          <div className="flex gap-1">{chips.map(s => <Link key={s} href={s === "All" ? "/super-admin/platform-ops/documents" : `/super-admin/platform-ops/documents?source=${s}`} className={`text-[10px] px-2 py-0.5 rounded-full ${active === s ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>{s}</Link>)}</div>
+          <div className="flex gap-1">{chips.map(s => <Link key={s} href={s === "All" ? "/super-admin/platform-ops/documents" : `/super-admin/platform-ops/documents?source=${s}`} className={`text-[10px] px-2 py-0.5 rounded-full ${active === s ? "bg-teal-700 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>{s}</Link>)}</div>
         </div>
         {d.recent.length === 0 ? (
           <div className="text-center py-8"><p className="text-3xl mb-2">📭</p><p className="text-sm text-gray-500">No documents in this source yet.</p></div>

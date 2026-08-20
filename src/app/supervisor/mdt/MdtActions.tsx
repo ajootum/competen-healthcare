@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const btn = "text-[11px] font-medium rounded-lg px-2.5 py-1 border transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
-const primary = `${btn} bg-teal-600 border-teal-600 text-white hover:bg-teal-700`;
+const primary = `${btn} bg-teal-700 border-teal-600 text-white hover:bg-teal-700`;
 const ghost = `${btn} bg-white border-gray-200 text-gray-600 hover:bg-gray-50`;
 
 function useAct() {
@@ -101,7 +101,7 @@ export function AttendanceRow({ participant }: { participant: any }) {
         {ATTENDANCE.map(a => (
           <button key={a.key} disabled={busy || p.attendance === a.key}
             className={`text-[10px] rounded px-1.5 py-0.5 border transition-colors ${
-              p.attendance === a.key ? "bg-teal-600 border-teal-600 text-white" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+              p.attendance === a.key ? "bg-teal-700 border-teal-600 text-white" : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"}`}
             onClick={() => {
               if (a.key === "delegated") {
                 const who = window.prompt("Who is attending in their place?");

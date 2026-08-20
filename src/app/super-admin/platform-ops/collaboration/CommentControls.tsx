@@ -25,7 +25,7 @@ export function NoteComposer() {
     <div className="space-y-2">
       <textarea value={body} onChange={e => setBody(e.target.value)} rows={2} placeholder="Post a platform note… (use @name to mention — mentions wire to entity pages next)" className="w-full text-sm rounded-lg border border-gray-200 px-3 py-2 focus:border-teal-400 focus:outline-none" />
       {err && <p className="text-[10px] text-[var(--cmp-text-error)]">{err}</p>}
-      <div className="flex justify-end"><button onClick={post} disabled={busy} className="text-xs font-semibold rounded-lg py-2 px-4 bg-teal-600 text-white disabled:opacity-50">{busy ? "Posting…" : "Post note"}</button></div>
+      <div className="flex justify-end"><button onClick={post} disabled={busy} className="text-xs font-semibold rounded-lg py-2 px-4 bg-teal-700 text-white disabled:opacity-50">{busy ? "Posting…" : "Post note"}</button></div>
     </div>
   );
 }

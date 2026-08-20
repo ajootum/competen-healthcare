@@ -35,7 +35,7 @@ export default async function CmoCampaignsPage() {
     <div className="space-y-4 max-w-[1400px]">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         {head}
-        <Link href="/super-admin/delivery/campaigns" className="text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3.5 py-2 shrink-0">Manage campaigns ↗</Link>
+        <Link href="/super-admin/delivery/campaigns" className="text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-3.5 py-2 shrink-0">Manage campaigns ↗</Link>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">

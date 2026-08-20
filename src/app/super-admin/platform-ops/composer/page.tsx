@@ -94,7 +94,7 @@ export default async function TenantExperienceComposer({ searchParams }: { searc
 
       {/* Registry-driven workspace catalogue (§10) with inheritance (§5) */}
       <div className={`${card} p-5`}>
-        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap"><h2 className="text-sm font-bold text-gray-900">Workspace Catalogue <span className="text-[10px] text-gray-400 font-normal">from registry · effective at {scopeName}</span></h2><Link href="/super-admin/platform-ops/configuration" className="text-xs bg-teal-600 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700 font-medium">Edit in Designer →</Link></div>
+        <div className="flex items-center justify-between mb-3 gap-2 flex-wrap"><h2 className="text-sm font-bold text-gray-900">Workspace Catalogue <span className="text-[10px] text-gray-400 font-normal">from registry · effective at {scopeName}</span></h2><Link href="/super-admin/platform-ops/configuration" className="text-xs bg-teal-700 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700 font-medium">Edit in Designer →</Link></div>
         <div className="space-y-4">
           {d.tree.map((ws: any) => (
             <div key={ws.key}>

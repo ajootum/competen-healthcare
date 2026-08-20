@@ -46,7 +46,7 @@ export default function OfficeAdmin({ offices, people, scopeHid, isSuper }: { of
       {err && <div className="bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] rounded-lg px-3 py-2 text-[12px]">{err}</div>}
       <div className="flex justify-between items-center">
         <p className="text-[12px] text-gray-500">{offices.length} constituted office{offices.length === 1 ? "" : "s"}{isSuper ? " · enterprise scope" : ""}</p>
-        <button onClick={() => setWizardOpen(v => !v)} className="text-[12px] bg-teal-600 text-white rounded-lg px-3 py-2 hover:bg-teal-700">{wizardOpen ? "Close" : "＋ Constitute new office"}</button>
+        <button onClick={() => setWizardOpen(v => !v)} className="text-[12px] bg-teal-700 text-white rounded-lg px-3 py-2 hover:bg-teal-700">{wizardOpen ? "Close" : "＋ Constitute new office"}</button>
       </div>
 
       {wizardOpen && <ConstituteWizard people={people} scopeHid={scopeHid} isSuper={isSuper} busy={busy} call={call} onDone={() => { setWizardOpen(false); router.refresh(); }} />}
@@ -141,7 +141,7 @@ function ConstituteWizard({ people, scopeHid, isSuper, busy, call, onDone }: { p
           ? <button disabled={busy || (step === 1 && !f.name.trim())} onClick={() => setStep(s => Math.min(5, s + 1))} className="text-[12px] bg-gray-800 text-white rounded-lg px-3 py-1.5 disabled:opacity-40">Next →</button>
           : <div className="flex gap-2">
               <button disabled={busy || !f.name.trim()} onClick={() => submit(false)} className="text-[12px] border border-gray-300 rounded-lg px-3 py-1.5 disabled:opacity-40">Save as proposed</button>
-              <button disabled={busy || !ready} onClick={() => submit(true)} className="text-[12px] bg-teal-600 text-white rounded-lg px-3 py-1.5 disabled:opacity-40">Constitute &amp; activate</button>
+              <button disabled={busy || !ready} onClick={() => submit(true)} className="text-[12px] bg-teal-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-40">Constitute &amp; activate</button>
             </div>}
       </div>
     </div>
@@ -174,7 +174,7 @@ function OfficeManage({ office, people, busy, call, onChange }: { office: Office
           <div className="flex gap-1.5">
             <select className={`${inp} flex-1 min-w-0`} value={personId} onChange={e => setPersonId(e.target.value)}><option value="">— person —</option>{people.map(p => <option key={p.id} value={p.id}>{p.full_name ?? "Unnamed"}</option>)}</select>
             <select className={inp} value={role} onChange={e => setRole(e.target.value)}>{APPOINTMENT_ROLES.map(r => <option key={r} value={r}>{APPOINTMENT_ROLE_LABEL[r]}</option>)}</select>
-            <button disabled={busy || !personId} onClick={appoint} className="text-[12px] bg-teal-600 text-white rounded-lg px-2 disabled:opacity-40">Add</button>
+            <button disabled={busy || !personId} onClick={appoint} className="text-[12px] bg-teal-700 text-white rounded-lg px-2 disabled:opacity-40">Add</button>
           </div>
         </div>
         <div className="bg-white rounded-lg border border-gray-100 p-2.5">
@@ -246,7 +246,7 @@ function CharterSection({ office, busy, call, onChange }: { office: Office; busy
           </div>
           <div className="grid grid-cols-2 gap-2 items-end">
             <div><label className={lbl}>Review date</label><input type="date" className={`${inp} w-full`} value={reviewDate} onChange={e => setReviewDate(e.target.value)} /></div>
-            <div className="flex justify-end"><button disabled={busy || !version.trim()} onClick={submit} className="text-[12px] bg-teal-600 text-white rounded-lg px-3 py-1.5 disabled:opacity-40">Adopt new version</button></div>
+            <div className="flex justify-end"><button disabled={busy || !version.trim()} onClick={submit} className="text-[12px] bg-teal-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-40">Adopt new version</button></div>
           </div>
           <p className="text-[10px] text-gray-400">Adopting supersedes the current version and points the office at {version || "the new version"}.</p>
         </div>

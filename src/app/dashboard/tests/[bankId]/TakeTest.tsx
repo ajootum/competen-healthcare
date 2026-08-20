@@ -52,7 +52,7 @@ export default function TakeTest({ bankId, questions, passMark }: { bankId: stri
         </div>
         <div className="flex gap-2">
           <button onClick={() => { setResult(null); setAnswers({}); }}
-            className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+            className="bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
             Retake test
           </button>
           <Link href="/dashboard/assessments" className="text-sm text-gray-500 hover:bg-gray-100 px-4 py-2 rounded-lg transition-colors">
@@ -86,7 +86,7 @@ export default function TakeTest({ bankId, questions, passMark }: { bankId: stri
       <div className="sticky bottom-4 bg-white rounded-xl border border-gray-200 shadow-lg px-5 py-3 flex items-center gap-3">
         <p className="text-sm text-gray-600 flex-1">{answered}/{questions.length} answered · pass mark {passMark}%</p>
         <button disabled={busy || answered < questions.length} onClick={submit}
-          className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors disabled:opacity-50">
+          className="bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors disabled:opacity-50">
           {busy ? "Grading…" : "Submit test"}
         </button>
       </div>

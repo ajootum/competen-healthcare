@@ -74,7 +74,7 @@ export default function InvitePage() {
           <button
             onClick={copyHospitalId}
             disabled={!hospitalId}
-            className="shrink-0 text-xs bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white px-4 py-2.5 rounded-lg transition-colors font-medium">
+            className="shrink-0 text-xs bg-teal-700 hover:bg-teal-800 disabled:opacity-40 text-white px-4 py-2.5 rounded-lg transition-colors font-medium">
             {copied ? "Copied ✓" : "Copy ID"}
           </button>
         </div>

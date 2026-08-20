@@ -62,7 +62,7 @@ export default function StandardsMappingManager({ options, rows }: { options: { 
         <select value={coverage} onChange={e => setCoverage(e.target.value)} className={`${inp} sm:w-40`}>
           {COVERAGE.map(x => <option key={x.v} value={x.v}>{x.label} coverage</option>)}
         </select>
-        <button onClick={add} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2">{busy ? "Saving…" : "Add mapping"}</button>
+        <button onClick={add} disabled={busy} className="text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg px-4 py-2">{busy ? "Saving…" : "Add mapping"}</button>
         {err && <p className="text-[11px] text-[var(--cmp-text-critical)] sm:ml-2">{err}</p>}
       </div>
 

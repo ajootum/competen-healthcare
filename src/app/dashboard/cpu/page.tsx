@@ -113,7 +113,7 @@ export default async function MyCpusPage() {
                       <p className="text-[10px] text-gray-400">{passing}/{cpuComps.length} competent</p>
                     </div>
                     <Link href={`/dashboard/cpu/${cpu.id}`}
-                      className="text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg shrink-0">
+                      className="text-xs font-semibold bg-teal-700 hover:bg-teal-800 text-white px-3 py-1.5 rounded-lg shrink-0">
                       Open workspace →
                     </Link>
                   </div>

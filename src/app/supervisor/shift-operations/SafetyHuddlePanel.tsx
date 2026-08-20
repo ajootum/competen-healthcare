@@ -94,7 +94,7 @@ export default function SafetyHuddlePanel({ shiftId, provisioned, huddle, editab
             {editable && (
               <span className="ml-auto flex gap-2">
                 <button onClick={() => save(false)} disabled={!!busy} className="text-xs px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50">{busy === "save" ? "…" : "Save draft"}</button>
-                <button onClick={() => save(true)} disabled={!!busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50">{busy === "complete" ? "…" : "Complete huddle"}</button>
+                <button onClick={() => save(true)} disabled={!!busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-700 text-white hover:bg-teal-700 disabled:opacity-50">{busy === "complete" ? "…" : "Complete huddle"}</button>
               </span>
             )}
           </div>

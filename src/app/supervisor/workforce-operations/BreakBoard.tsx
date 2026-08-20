@@ -125,7 +125,7 @@ export default function BreakBoard({ shiftId, data, staff, editable }: {
             <select value={staffId} onChange={e => setStaffId(e.target.value)} className={`${sel} flex-1 min-w-[120px]`}><option value="">Select staff…</option>{staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
             <select value={type} onChange={e => setType(e.target.value)} className={sel}>{BREAK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
             <input type="number" min={5} value={dur} onChange={e => setDur(e.target.value)} className={`${sel} w-16`} title="minutes" />
-            <button onClick={schedule} disabled={!staffId || busy === "schedule"} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50">{busy === "schedule" ? "…" : "Schedule"}</button>
+            <button onClick={schedule} disabled={!staffId || busy === "schedule"} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-700 text-white hover:bg-teal-700 disabled:opacity-50">{busy === "schedule" ? "…" : "Schedule"}</button>
           </div>
         </div>
       )}

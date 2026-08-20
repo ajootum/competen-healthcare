@@ -295,7 +295,7 @@ export default async function AssessmentCentrePage() {
                 <p className="text-sm font-semibold text-gray-800">{nextRec.title}</p>
                 <p className="text-[10px] text-gray-400 mb-3">{nextRec.sub}</p>
                 <Link href={nextRec.href}
-                  className="block text-center text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white py-2 rounded-lg">
+                  className="block text-center text-xs font-semibold bg-teal-700 hover:bg-teal-800 text-white py-2 rounded-lg">
                   {nextRec.action} →
                 </Link>
               </>

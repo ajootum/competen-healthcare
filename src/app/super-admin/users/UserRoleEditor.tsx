@@ -309,7 +309,7 @@ export default function UserRoleEditor({
               Cancel
             </button>
             <button onClick={save} disabled={saving}
-              className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
+              className="flex-1 py-2.5 rounded-xl bg-teal-700 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
               {saving ? "Saving…" : "Save Changes"}
             </button>
           </div>

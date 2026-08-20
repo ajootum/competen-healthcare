@@ -44,7 +44,7 @@ export default async function UsersPage() {
           <h1 className="text-2xl font-bold text-gray-900">Users</h1>
           <p className="text-sm text-gray-500 mt-1">{summary.users} accounts in {summary.orgName} · {users.assignedOrgRoles} with an org role assigned.</p>
         </div>
-        <Link href="/admin/invite" className="shrink-0 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-4 py-2">Invite users →</Link>
+        <Link href="/admin/invite" className="shrink-0 text-sm font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-4 py-2">Invite users →</Link>
       </div>
 
       {/* People asking to join this organisation -- renders nothing when the inbox is empty. */}

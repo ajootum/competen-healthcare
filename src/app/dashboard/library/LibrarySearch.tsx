@@ -57,7 +57,7 @@ export default function LibrarySearch() {
           className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30 bg-white"
         />
         <button type="submit" disabled={busy || !q.trim()}
-          className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-5 rounded-xl transition-colors disabled:opacity-50">
+          className="bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-5 rounded-xl transition-colors disabled:opacity-50">
           {busy ? "…" : "Search"}
         </button>
       </form>

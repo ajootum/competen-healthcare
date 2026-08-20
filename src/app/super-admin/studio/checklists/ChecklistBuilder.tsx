@@ -64,7 +64,7 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
       {/* LEFT — checklist library */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 self-start">
         <button onClick={() => setShowNew(v => !v)}
-          className="w-full bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold py-2 rounded-lg transition-colors mb-3">
+          className="w-full bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold py-2 rounded-lg transition-colors mb-3">
           {showNew ? "Cancel" : "+ New Checklist"}
         </button>
         {showNew && (
@@ -81,7 +81,7 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
                 const r = await api({ kind: "checklist", skill_id: newSkill, name: newName.trim(), assessor_instructions: newInstructions });
                 if (r) { setSelectedId(r.id); setShowNew(false); setNewName(""); setNewSkill(""); setNewInstructions(""); }
               }}
-              className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold py-2 rounded-lg transition-colors disabled:opacity-50">
+              className="bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold py-2 rounded-lg transition-colors disabled:opacity-50">
               Create
             </button>
           </div>
@@ -174,7 +174,7 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
                     const r = await api({ kind: "checklist_item", checklist_id: selectedId, ...itemForm });
                     if (r) setItemForm(f => ({ ...EMPTY_ITEM, section: f.section }));
                   }}
-                  className="ml-auto bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50">
+                  className="ml-auto bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors disabled:opacity-50">
                   Add item
                 </button>
               </div>

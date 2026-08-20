@@ -78,7 +78,7 @@ export default async function AssessmentStatus() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className={`${card} p-5`}>
           <h3 className="font-semibold text-gray-900 text-sm mb-3">Assessment Status Overview</h3>
-          <div className="flex gap-1 mb-2"><span className="text-[11px] bg-teal-600 text-white rounded-md px-2.5 py-1">By Type</span><span className="text-[11px] text-gray-400 px-2.5 py-1" title="Needs unit mapping (next-phase)">By Unit</span><span className="text-[11px] text-gray-400 px-2.5 py-1" title="Needs role mapping (next-phase)">By Role</span></div>
+          <div className="flex gap-1 mb-2"><span className="text-[11px] bg-teal-700 text-white rounded-md px-2.5 py-1">By Type</span><span className="text-[11px] text-gray-400 px-2.5 py-1" title="Needs unit mapping (next-phase)">By Unit</span><span className="text-[11px] text-gray-400 px-2.5 py-1" title="Needs role mapping (next-phase)">By Role</span></div>
           {d.overview.length === 0 ? <p className="text-sm text-gray-400">No assessment data yet.</p> : (
             <table className="w-full text-xs">
               <thead><tr className="text-[10px] uppercase tracking-wide text-gray-400 text-left border-b border-gray-100"><th className="py-1.5 font-medium">Type</th><th className="py-1.5 font-medium text-right">Req</th><th className="py-1.5 font-medium text-right">Done</th><th className="py-1.5 font-medium text-right">Pend</th><th className="py-1.5 font-medium text-right">Over</th><th className="py-1.5 font-medium text-right">%</th></tr></thead>

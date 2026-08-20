@@ -78,7 +78,7 @@ export default async function SimulationLabPage() {
         <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {STEPS.map((s, i) => (
             <div key={s.n} className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-teal-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">{s.n}</span>
+              <span className="w-6 h-6 rounded-full bg-teal-700 text-white text-[11px] font-bold flex items-center justify-center shrink-0">{s.n}</span>
               <div>
                 <p className="text-xs font-semibold text-gray-800">{s.icon} {s.title}</p>
                 <p className="text-[10px] text-gray-400 leading-snug mt-0.5">{s.sub}</p>

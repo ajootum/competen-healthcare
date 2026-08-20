@@ -142,7 +142,7 @@ export default function SettingsPage() {
             <button
               onClick={saveHospital}
               disabled={saving === "hospital"}
-              className="self-end text-sm bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg transition-colors font-medium">
+              className="self-end text-sm bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white px-5 py-2 rounded-lg transition-colors font-medium">
               {saving === "hospital" ? "Saving…" : saved === "hospital" ? "Saved ✓" : "Save Hospital"}
             </button>
           </div>
@@ -184,7 +184,7 @@ export default function SettingsPage() {
             <button
               onClick={saveProfile}
               disabled={saving === "profile"}
-              className="self-end text-sm bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg transition-colors font-medium">
+              className="self-end text-sm bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white px-5 py-2 rounded-lg transition-colors font-medium">
               {saving === "profile" ? "Saving…" : saved === "profile" ? "Saved ✓" : "Save Profile"}
             </button>
           </div>

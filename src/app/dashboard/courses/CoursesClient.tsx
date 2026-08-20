@@ -62,7 +62,7 @@ export default function CoursesClient({ courses, enrollments }: { courses: Cours
         {categories.map(cat => (
           <button key={cat} onClick={() => setFilter(cat)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              filter === cat ? "bg-teal-600 text-white" : "bg-white text-gray-600 border border-gray-200 hover:border-teal-300"
+              filter === cat ? "bg-teal-700 text-white" : "bg-white text-gray-600 border border-gray-200 hover:border-teal-300"
             }`}>
             {cat}
           </button>
@@ -118,7 +118,7 @@ export default function CoursesClient({ courses, enrollments }: { courses: Cours
                 </div>
               ) : (
                 <button onClick={() => enroll(course.id)} disabled={loading === course.id}
-                  className="mt-auto w-full text-xs bg-teal-600 text-white font-medium py-2 rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-60">
+                  className="mt-auto w-full text-xs bg-teal-700 text-white font-medium py-2 rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-60">
                   {loading === course.id ? "Enrolling…" : "Enroll free"}
                 </button>
               )}

@@ -101,7 +101,7 @@ export default async function CaseReaderPage({ params }: { params: Promise<{ cas
           Talk this case through with the AI Copilot — it can play the scenario with you and cite the source material.
         </p>
         <Link href="/dashboard/copilot"
-          className="text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg">
+          className="text-xs font-semibold bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg">
           Discuss with the Copilot →
         </Link>
       </div>

@@ -80,7 +80,7 @@ export default function WorkspaceDesigner({ catalog, rows, versions, hospitals, 
         <div className="ml-auto flex items-center gap-2">
           {unpublished > 0 && <span className="text-[11px] text-[var(--cmp-text-warning)] font-medium">{unpublished} unpublished change{unpublished > 1 ? "s" : ""}</span>}
           <button onClick={() => post({ action: "publish", label: `Publish ${new Date().toISOString().slice(0, 16).replace("T", " ")}` })} disabled={busy || !provisioned || unpublished === 0}
-            className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${unpublished > 0 && provisioned ? "bg-teal-600 text-white hover:bg-teal-700" : "bg-gray-100 text-gray-600"}`}>Publish</button>
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${unpublished > 0 && provisioned ? "bg-teal-700 text-white hover:bg-teal-700" : "bg-gray-100 text-gray-600"}`}>Publish</button>
         </div>
       </div>
       {err && <div className="rounded-lg bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] text-xs px-3 py-2">{err}</div>}
@@ -88,7 +88,7 @@ export default function WorkspaceDesigner({ catalog, rows, versions, hospitals, 
       {/* Workspace tabs */}
       <div className="flex gap-1 flex-wrap">
         {catalog.map(w => (
-          <button key={w.key} onClick={() => setActiveWs(w.key)} className={`text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${activeWs === w.key ? "bg-teal-600 text-white" : "bg-white border border-gray-200 text-gray-600"}`}>
+          <button key={w.key} onClick={() => setActiveWs(w.key)} className={`text-xs font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${activeWs === w.key ? "bg-teal-700 text-white" : "bg-white border border-gray-200 text-gray-600"}`}>
             {w.label}{w.wired ? <span className="text-[9px] px-1 rounded bg-[var(--cmp-color-success)]/20 text-green-100 border border-[var(--cmp-color-success)]/30">live</span> : <span className="text-[9px] px-1 rounded bg-gray-400/20 text-current opacity-60">stored</span>}
           </button>
         ))}

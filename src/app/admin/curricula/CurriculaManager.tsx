@@ -40,7 +40,7 @@ export default function CurriculaManager({ curricula, competencies }: { curricul
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <button onClick={() => setCreating(c => !c)} className="px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
+        <button onClick={() => setCreating(c => !c)} className="px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
           {creating ? "Cancel" : "+ New Curriculum"}
         </button>
       </div>
@@ -56,7 +56,7 @@ export default function CurriculaManager({ curricula, competencies }: { curricul
             <input value={form.target_role} onChange={e => setForm(p => ({ ...p, target_role: e.target.value }))} placeholder="Target role" className="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
             <input type="number" value={form.duration_weeks} onChange={e => setForm(p => ({ ...p, duration_weeks: e.target.value }))} placeholder="Weeks" className="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
           </div>
-          <button onClick={create} disabled={busy} className="self-end px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
+          <button onClick={create} disabled={busy} className="self-end px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
             {busy ? "Creating…" : "Create"}
           </button>
         </div>

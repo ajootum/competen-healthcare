@@ -41,7 +41,7 @@ export default function TemplateDirectory({ rows }: { rows: any[] }) {
         <h2 className="font-semibold text-gray-900 mr-auto">Templates library <span className="text-gray-500 font-normal text-sm">({filtered.length})</span></h2>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search templates…" className={`${input} w-52`} />
         <select value={type} onChange={e => setType(e.target.value)} className={`${input} w-40`}><option value="all">All types</option>{TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
-        <button onClick={() => { setOpen(true); setErr(""); }} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3.5 py-2">+ New Template</button>
+        <button onClick={() => { setOpen(true); setErr(""); }} className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white rounded-lg px-3.5 py-2">+ New Template</button>
       </div>
 
       <div className="overflow-x-auto">
@@ -79,7 +79,7 @@ export default function TemplateDirectory({ rows }: { rows: any[] }) {
             {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
             <div className="flex gap-2 pt-1">
               <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create draft"}</button>
+              <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create draft"}</button>
             </div>
           </div>
         </Modal>

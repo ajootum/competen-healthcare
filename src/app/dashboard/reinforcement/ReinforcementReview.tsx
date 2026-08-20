@@ -45,7 +45,7 @@ export default function ReinforcementReview({ initial }: { initial: Card[] }) {
         <p className="text-[10px] font-semibold text-teal-600 uppercase tracking-widest mb-2">{card.subject}</p>
         <p className="text-base text-gray-800 leading-relaxed mb-5">{card.prompt}</p>
         {!revealed ? (
-          <button onClick={() => setRevealed(true)} className="text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-5 py-2.5">Recall it, then grade yourself →</button>
+          <button onClick={() => setRevealed(true)} className="text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-5 py-2.5">Recall it, then grade yourself →</button>
         ) : (
           <div>
             <p className="text-[11px] text-gray-400 mb-2">How well did it come back?</p>

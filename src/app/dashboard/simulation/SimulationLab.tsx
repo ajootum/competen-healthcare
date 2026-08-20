@@ -53,7 +53,7 @@ export default function SimulationLab({ scenarios, cases }: { scenarios: Scenari
         {categories.map(c => (
           <button key={c} onClick={() => setCat(c)}
             className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
-              cat === c ? "bg-teal-600 border-teal-600 text-white" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"}`}>
+              cat === c ? "bg-teal-700 border-teal-600 text-white" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"}`}>
             {c}
           </button>
         ))}

@@ -103,7 +103,7 @@ export default function CPDClient({ initialLogs, totalHours, targetHours }: {
       <div className="flex justify-between items-center mb-4">
         <h2 className="font-semibold text-gray-900 text-sm">Activity Log</h2>
         <button onClick={() => setShowForm(true)}
-          className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors">
+          className="bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors">
           + Log Activity
         </button>
       </div>
@@ -152,7 +152,7 @@ export default function CPDClient({ initialLogs, totalHours, targetHours }: {
           )}
           <div className="flex gap-3">
             <button type="submit" disabled={loading}
-              className="bg-teal-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-60 transition-colors">
+              className="bg-teal-700 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-60 transition-colors">
               {loading ? "Saving…" : "Save Activity"}
             </button>
             <button type="button" onClick={() => setShowForm(false)}

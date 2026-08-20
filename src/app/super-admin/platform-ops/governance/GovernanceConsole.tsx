@@ -44,7 +44,7 @@ export default function GovernanceConsole({ list, objectKeys }: { list: any[]; o
   return (
     <div className={cardClass}>
       {msg && <div className={`fixed bottom-4 right-4 z-50 text-sm rounded-lg px-4 py-2.5 shadow-lg ${msg.kind === "ok" ? "bg-[var(--cmp-color-success)] text-white" : "bg-[var(--cmp-color-error)] text-white"}`}>{msg.text}</div>}
-      <div className="flex items-center justify-between mb-3"><h2 className="text-sm font-bold text-gray-900">Change Requests</h2><button onClick={() => setOpen(o => !o)} className="text-xs bg-teal-600 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700 font-medium">{open ? "Close" : "+ New Change Request"}</button></div>
+      <div className="flex items-center justify-between mb-3"><h2 className="text-sm font-bold text-gray-900">Change Requests</h2><button onClick={() => setOpen(o => !o)} className="text-xs bg-teal-700 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700 font-medium">{open ? "Close" : "+ New Change Request"}</button></div>
 
       {open && (
         <div className="rounded-lg border border-gray-100 p-4 mb-4 space-y-3">
@@ -58,7 +58,7 @@ export default function GovernanceConsole({ list, objectKeys }: { list: any[]; o
             <input className="w-full border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm mt-0.5 font-mono text-[11px]" value={f.affected} onChange={e => set("affected", e.target.value)} placeholder="workspace.unit-manager.quality" list="reg-keys" />
           </label>
           <datalist id="reg-keys">{objectKeys.slice(0, 500).map(o => <option key={o.key} value={o.key}>{o.name}</option>)}</datalist>
-          <div className="flex justify-end"><button onClick={create} disabled={busy || !f.title.trim()} className="text-sm bg-teal-600 text-white rounded-lg px-4 py-2 hover:bg-teal-700 disabled:opacity-50">Create (auto-classify risk)</button></div>
+          <div className="flex justify-end"><button onClick={create} disabled={busy || !f.title.trim()} className="text-sm bg-teal-700 text-white rounded-lg px-4 py-2 hover:bg-teal-700 disabled:opacity-50">Create (auto-classify risk)</button></div>
         </div>
       )}
 

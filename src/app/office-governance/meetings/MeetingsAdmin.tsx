@@ -51,7 +51,7 @@ export default function MeetingsAdmin({ meetings, offices, people, scopeHid, isS
       {err && <div className="bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] rounded-lg px-3 py-2 text-[12px]">{err}</div>}
       <div className="flex justify-between items-center">
         <p className="text-[12px] text-gray-500">{meetings.length} meeting{meetings.length === 1 ? "" : "s"}</p>
-        <button onClick={() => setScheduling(v => !v)} className="text-[12px] bg-teal-600 text-white rounded-lg px-3 py-2 hover:bg-teal-700">{scheduling ? "Close" : "＋ Schedule meeting"}</button>
+        <button onClick={() => setScheduling(v => !v)} className="text-[12px] bg-teal-700 text-white rounded-lg px-3 py-2 hover:bg-teal-700">{scheduling ? "Close" : "＋ Schedule meeting"}</button>
       </div>
 
       {scheduling && <ScheduleForm offices={offices} scopeHid={scopeHid} isSuper={isSuper} busy={busy} call={call} onDone={() => { setScheduling(false); refresh(); }} />}
@@ -154,7 +154,7 @@ function MeetingDetail({ meeting: m, people, busy, call, refresh }: { meeting: M
               <div key={a.id} className="flex items-center gap-2 text-[12px]"><span className="text-gray-300 tabular-nums w-4">{a.seq}</span><span className="flex-1 truncate text-gray-700">{a.title}</span><button disabled={busy} onClick={() => delAgenda(a.id)} className="text-rose-400 hover:text-[var(--cmp-text-error)] text-[11px] disabled:opacity-40">×</button></div>
             ))}
           </div>
-          <div className="flex gap-1.5"><input className={`${inp} flex-1 min-w-0`} value={agendaTitle} onChange={e => setAgendaTitle(e.target.value)} placeholder="Add agenda item" onKeyDown={e => { if (e.key === "Enter") addAgenda(); }} /><button disabled={busy || !agendaTitle.trim()} onClick={addAgenda} className="text-[12px] bg-teal-600 text-white rounded-lg px-2 disabled:opacity-40">Add</button></div>
+          <div className="flex gap-1.5"><input className={`${inp} flex-1 min-w-0`} value={agendaTitle} onChange={e => setAgendaTitle(e.target.value)} placeholder="Add agenda item" onKeyDown={e => { if (e.key === "Enter") addAgenda(); }} /><button disabled={busy || !agendaTitle.trim()} onClick={addAgenda} className="text-[12px] bg-teal-700 text-white rounded-lg px-2 disabled:opacity-40">Add</button></div>
         </div>
       </div>
 
@@ -189,7 +189,7 @@ function MeetingDetail({ meeting: m, people, busy, call, refresh }: { meeting: M
         <div className="grid grid-cols-1 md:grid-cols-4 gap-1.5">
           <input className={`${inp} md:col-span-2`} value={actTitle} onChange={e => setActTitle(e.target.value)} placeholder="New action" />
           <select className={inp} value={actOwner} onChange={e => setActOwner(e.target.value)}><option value="">— owner —</option>{people.map(p => <option key={p.id} value={p.id}>{p.full_name ?? "Unnamed"}</option>)}</select>
-          <div className="flex gap-1.5"><input type="date" className={`${inp} flex-1 min-w-0`} value={actDue} onChange={e => setActDue(e.target.value)} /><button disabled={busy || !actTitle.trim()} onClick={addAction} className="text-[12px] bg-teal-600 text-white rounded-lg px-2 disabled:opacity-40">Add</button></div>
+          <div className="flex gap-1.5"><input type="date" className={`${inp} flex-1 min-w-0`} value={actDue} onChange={e => setActDue(e.target.value)} /><button disabled={busy || !actTitle.trim()} onClick={addAction} className="text-[12px] bg-teal-700 text-white rounded-lg px-2 disabled:opacity-40">Add</button></div>
         </div>
       </div>
 
@@ -260,7 +260,7 @@ function DecisionForm({ base, people, attendees, busy, call, refresh }: { base: 
         <select className={inp} value={actOwner} onChange={e => setActOwner(e.target.value)} disabled={!actTitle.trim()}><option value="">— action owner —</option>{people.map(p => <option key={p.id} value={p.id}>{p.full_name ?? "Unnamed"}</option>)}</select>
       </div>
       {useRoll && <p className="text-[10px] text-gray-400">Roll-call over the {attendees.length} present member{attendees.length === 1 ? "" : "s"} — the tally is derived and each member&apos;s vote recorded. Mark attendance &ldquo;present&rdquo; to include a member.</p>}
-      <div className="flex justify-end gap-2"><button onClick={() => setOpen(false)} className="text-[12px] text-gray-500">Cancel</button><button disabled={busy || !title.trim()} onClick={submit} className="text-[12px] bg-teal-600 text-white rounded-lg px-3 py-1 disabled:opacity-40">Record decision</button></div>
+      <div className="flex justify-end gap-2"><button onClick={() => setOpen(false)} className="text-[12px] text-gray-500">Cancel</button><button disabled={busy || !title.trim()} onClick={submit} className="text-[12px] bg-teal-700 text-white rounded-lg px-3 py-1 disabled:opacity-40">Record decision</button></div>
     </div>
   );
 }

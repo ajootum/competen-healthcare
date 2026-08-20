@@ -400,7 +400,7 @@ export default function AssessmentSession({
                   <button key={p.label} onClick={() => stepperJump(i)} className="flex items-center gap-2.5 text-left group">
                     <span className={`w-7 h-7 rounded-full text-[11px] font-bold flex items-center justify-center shrink-0 transition-colors ${
                       st === "Complete" ? "bg-[var(--cmp-color-success)] text-white"
-                      : st === "In Progress" ? "bg-teal-600 text-white"
+                      : st === "In Progress" ? "bg-teal-700 text-white"
                       : "bg-gray-100 text-gray-400 group-hover:bg-gray-200"
                     }`}>
                       {st === "Complete" ? "✓" : i + 1}
@@ -586,7 +586,7 @@ export default function AssessmentSession({
 
               <div className="bg-white border border-gray-100 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                 <button onClick={submitReport} disabled={numeric.length === 0}
-                  className="text-xs font-semibold bg-teal-600 hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-lg transition-colors">
+                  className="text-xs font-semibold bg-teal-700 hover:bg-teal-800 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-lg transition-colors">
                   🖨 Submit &amp; Generate Report
                 </button>
                 <button onClick={() => setStep(ASSESSMENT_SECTIONS.length - 1)}

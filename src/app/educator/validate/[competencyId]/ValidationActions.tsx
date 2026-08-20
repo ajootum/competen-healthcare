@@ -51,7 +51,7 @@ export default function ValidationActions({
             <button
               onClick={() => submit("validate")}
               disabled={saving}
-              className="flex-1 py-2.5 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
+              className="flex-1 py-2.5 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
               {saving ? "Saving…" : "✓ Validate & Sign Off"}
             </button>
           </div>

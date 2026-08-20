@@ -81,7 +81,7 @@ export default function FrameworkLibrary({
                   <button
                     onClick={() => adopt(f.id)}
                     disabled={adopting === f.id}
-                    className="px-3 py-1.5 text-xs font-semibold bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors">
+                    className="px-3 py-1.5 text-xs font-semibold bg-teal-700 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors">
                     {adopting === f.id ? "Adopting…" : "Adopt"}
                   </button>
                 )}

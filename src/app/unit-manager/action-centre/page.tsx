@@ -102,7 +102,7 @@ export default async function ExecutiveActionsCentre({ searchParams }: { searchP
         <div className={`${card} p-5 xl:col-span-2`}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-bold text-gray-900">Management Work Queue</h3>
-            <div className="flex gap-1">{["All", "High Priority", "Due Today", "Overdue"].map((f, i) => <span key={f} className={`text-[10px] px-2 py-0.5 rounded-full ${i === 0 ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500"}`}>{f}</span>)}</div>
+            <div className="flex gap-1">{["All", "High Priority", "Due Today", "Overdue"].map((f, i) => <span key={f} className={`text-[10px] px-2 py-0.5 rounded-full ${i === 0 ? "bg-teal-700 text-white" : "bg-gray-100 text-gray-500"}`}>{f}</span>)}</div>
           </div>
           {/* ⚠ A SOURCE THAT FAILED TO LOAD CONTRIBUTES NOTHING AND USED TO SAY NOTHING, so the empty state
               below claimed "no open escalations, incidents, improvement actions or pending validations" for a

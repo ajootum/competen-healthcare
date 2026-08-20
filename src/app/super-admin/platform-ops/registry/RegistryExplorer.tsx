@@ -44,7 +44,7 @@ export default function RegistryExplorer({ objects }: { objects: any[] }) {
         <h2 className="text-sm font-bold text-gray-900">Object Explorer <span className="text-[10px] text-gray-400 font-normal">{objects.length} registered</span></h2>
         <div className="flex items-center gap-2">
           {msg && <span className="text-[11px] text-gray-500">{msg}</span>}
-          <button onClick={sync} disabled={busy} className="text-xs bg-teal-600 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700 disabled:opacity-50 font-medium">{busy ? "Syncing…" : "↻ Sync from catalogue"}</button>
+          <button onClick={sync} disabled={busy} className="text-xs bg-teal-700 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700 disabled:opacity-50 font-medium">{busy ? "Syncing…" : "↻ Sync from catalogue"}</button>
         </div>
       </div>
 

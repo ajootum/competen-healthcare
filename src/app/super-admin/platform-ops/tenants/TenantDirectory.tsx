@@ -44,7 +44,7 @@ export default function TenantDirectory({ rows, plans }: { rows: any[]; plans: a
         <h2 className="font-semibold text-gray-900 mr-auto">Tenant directory <span className="text-gray-500 font-normal text-sm">({filtered.length})</span></h2>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search tenants…" className={`${input} w-52`} />
         <select value={status} onChange={e => setStatus(e.target.value)} className={`${input} w-36`}><option value="all">All statuses</option>{STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select>
-        <button onClick={() => { setOpen(true); setErr(""); }} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3.5 py-2">+ Create Tenant</button>
+        <button onClick={() => { setOpen(true); setErr(""); }} className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white rounded-lg px-3.5 py-2">+ Create Tenant</button>
       </div>
 
       <div className="overflow-x-auto">
@@ -85,7 +85,7 @@ export default function TenantDirectory({ rows, plans }: { rows: any[]; plans: a
             {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
             <div className="flex gap-2 pt-1">
               <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-              <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create"}</button>
+              <button onClick={create} disabled={saving} className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{saving ? "Creating…" : "Create"}</button>
             </div>
           </div>
         </Modal>

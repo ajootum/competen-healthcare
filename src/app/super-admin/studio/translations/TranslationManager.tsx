@@ -45,7 +45,7 @@ export default function TranslationManager({ translations }: { translations: any
           <input value={label} onChange={e => setLabel(e.target.value)} placeholder="Asset name" className={`${inp} flex-1`} />
           <select value={locale} onChange={e => setLocale(e.target.value)} className={`${inp} lg:w-32`}>{LOCALES.map(l => <option key={l.v} value={l.v}>{l.label}</option>)}</select>
           <input value={translator} onChange={e => setTranslator(e.target.value)} placeholder="Translator (optional)" className={`${inp} lg:w-40`} />
-          <button onClick={add} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2 whitespace-nowrap">{busy ? "…" : "Add"}</button>
+          <button onClick={add} disabled={busy} className="text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg px-4 py-2 whitespace-nowrap">{busy ? "…" : "Add"}</button>
         </div>
         {err && <p className="text-[11px] text-[var(--cmp-text-critical)] mt-1">{err}</p>}
       </div>

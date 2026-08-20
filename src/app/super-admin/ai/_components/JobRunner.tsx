@@ -36,7 +36,7 @@ export default function JobRunner({ jobs, title = "Run Automation" }: { jobs: Jo
           <select value={key} onChange={e => setKey(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40 min-w-[220px]">
             {runnable.map(j => <option key={j.key} value={j.key}>{j.name}</option>)}
           </select>
-          <button onClick={run} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Running…" : "Run now"}</button>
+          <button onClick={run} disabled={busy} className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Running…" : "Run now"}</button>
           {result && <span className={`text-xs rounded-lg px-2.5 py-1.5 ${result.ok ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{result.text}</span>}
         </div>
       )}

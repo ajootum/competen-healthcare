@@ -342,7 +342,7 @@ export default function BuilderWorkspace({
               className={`px-3 py-1.5 ${view === "board" ? "bg-gray-800 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}>Board</button>
           </div>
           <button onClick={() => { setAdding({ type: "domain" }); setDraft(""); }}
-            className="text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg">+ Add Domain</button>
+            className="text-xs font-semibold bg-teal-700 hover:bg-teal-800 text-white px-3 py-1.5 rounded-lg">+ Add Domain</button>
         </div>
 
         {err && (
@@ -357,7 +357,7 @@ export default function BuilderWorkspace({
               onKeyDown={e => e.key === "Enter" && draft.trim() && add("domains", { name: draft.trim(), framework_id: frameworkId })}
               className={`${input} flex-1`} />
             <button disabled={busy || !draft.trim()} onClick={() => add("domains", { name: draft.trim(), framework_id: frameworkId })}
-              className="bg-teal-600 text-white text-sm font-semibold px-4 rounded-lg disabled:opacity-50">Add</button>
+              className="bg-teal-700 text-white text-sm font-semibold px-4 rounded-lg disabled:opacity-50">Add</button>
             <button onClick={() => setAdding(null)} className="text-sm text-gray-400 px-2">Cancel</button>
           </div>
         )}
@@ -514,7 +514,7 @@ export default function BuilderWorkspace({
                               onKeyDown={e => e.key === "Enter" && draft.trim() && add("competencies", { name: draft.trim(), domain_id: d.id })}
                               className={`${input} flex-1`} />
                             <button disabled={busy || !draft.trim()} onClick={() => add("competencies", { name: draft.trim(), domain_id: d.id })}
-                              className="bg-teal-600 text-white text-sm font-semibold px-4 rounded-lg disabled:opacity-50">Add</button>
+                              className="bg-teal-700 text-white text-sm font-semibold px-4 rounded-lg disabled:opacity-50">Add</button>
                             <button onClick={() => setAdding(null)} className="text-sm text-gray-400 px-2">✕</button>
                           </div>
                         ) : (

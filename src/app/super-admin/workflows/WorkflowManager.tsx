@@ -41,7 +41,7 @@ export default function WorkflowManager() {
   return (
     <>
       <button onClick={() => setOpen(true)}
-        className="px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
+        className="px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
         + Add Workflow
       </button>
 
@@ -119,7 +119,7 @@ export default function WorkflowManager() {
 
         <div className="flex gap-2">
           <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600">Cancel</button>
-          <button onClick={save} disabled={saving || !form.name} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
+          <button onClick={save} disabled={saving || !form.name} className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
             {saving ? "Saving…" : "Save Workflow"}
           </button>
         </div>

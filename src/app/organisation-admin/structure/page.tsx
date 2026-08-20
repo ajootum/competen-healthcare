@@ -33,7 +33,7 @@ export default async function OrgStructurePage() {
           <h1 className="text-2xl font-bold text-gray-900">Organisation Structure</h1>
           <p className="text-sm text-gray-500 mt-1">Organisation → facilities → departments.</p>
         </div>
-        <Link href="/admin/departments" className="shrink-0 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-4 py-2">Manage departments →</Link>
+        <Link href="/admin/departments" className="shrink-0 text-sm font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-4 py-2">Manage departments →</Link>
       </div>
 
       <div className="grid grid-cols-3 gap-3">

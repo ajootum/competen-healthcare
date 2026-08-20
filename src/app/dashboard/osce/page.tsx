@@ -171,7 +171,7 @@ function ChecklistModal({ station, onClose }: { station: Station; onClose: () =>
                 checked.has(item.id) ? "bg-teal-50 border border-teal-100" : "bg-gray-50 border border-gray-100 hover:border-gray-200"
               }`}>
                 <div className={`w-5 h-5 rounded border-2 shrink-0 mt-0.5 flex items-center justify-center transition-colors ${
-                  checked.has(item.id) ? "bg-teal-600 border-teal-600" : "border-gray-300"
+                  checked.has(item.id) ? "bg-teal-700 border-teal-600" : "border-gray-300"
                 }`}>
                   {checked.has(item.id) && <span className="text-white text-xs font-bold">✓</span>}
                 </div>
@@ -205,7 +205,7 @@ function ChecklistModal({ station, onClose }: { station: Station; onClose: () =>
               <button onClick={() => setChecked(new Set())} className="text-xs text-gray-400 hover:text-gray-600 transition-colors px-3 py-1.5">
                 Clear all
               </button>
-              <button onClick={onClose} className="text-xs bg-teal-600 text-white px-4 py-1.5 rounded-lg hover:bg-teal-700 transition-colors font-medium">
+              <button onClick={onClose} className="text-xs bg-teal-700 text-white px-4 py-1.5 rounded-lg hover:bg-teal-700 transition-colors font-medium">
                 Close
               </button>
             </div>
@@ -320,7 +320,7 @@ export default function OSCEPage() {
             {categories.map(c => (
               <button key={c} onClick={() => setCat(c)}
                 className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
-                  cat === c ? "bg-teal-600 border-teal-600 text-white" : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"}`}>
+                  cat === c ? "bg-teal-700 border-teal-600 text-white" : "border-gray-200 bg-white text-gray-500 hover:bg-gray-50"}`}>
                 {c}
               </button>
             ))}
@@ -356,7 +356,7 @@ export default function OSCEPage() {
                   {s.status !== "coming_soon" && (
                     <a href={`/dashboard/copilot?scenario=${encodeURIComponent(examinerPrompt(s))}`}
                       title="Be examined and scored by the AI Clinical Coach"
-                      className="text-sm font-medium py-2 px-3 rounded-lg bg-teal-600 text-white hover:bg-teal-700 transition-colors">
+                      className="text-sm font-medium py-2 px-3 rounded-lg bg-teal-700 text-white hover:bg-teal-700 transition-colors">
                       🤖 AI Examiner
                     </a>
                   )}
@@ -395,7 +395,7 @@ export default function OSCEPage() {
             Your OSCE results will appear here after you complete a session with an accredited examiner. Full video-based assessments launch Q4 2026.
           </p>
           <button onClick={() => setTab("book")}
-            className="inline-flex items-center gap-2 bg-teal-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors">
+            className="inline-flex items-center gap-2 bg-teal-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors">
             Register interest for Q4 2026 →
           </button>
         </div>
@@ -440,7 +440,7 @@ export default function OSCEPage() {
                 { step: "4", title: "Receive certificate", desc: "Digital certificate emailed within 5 working days" },
               ].map(({ step, title, desc }) => (
                 <div key={step} className="text-center">
-                  <div className="w-9 h-9 rounded-full bg-teal-600 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">{step}</div>
+                  <div className="w-9 h-9 rounded-full bg-teal-700 text-white text-sm font-bold flex items-center justify-center mx-auto mb-3">{step}</div>
                   <p className="text-sm font-semibold text-gray-800 mb-1">{title}</p>
                   <p className="text-xs text-gray-400 leading-relaxed">{desc}</p>
                 </div>

@@ -63,7 +63,7 @@ export default function RuleManager({ rules, competencies, roles }: { rules: Rul
       {msg && <div className="bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] text-emerald-700 rounded-lg px-3 py-2 text-[12px]">{msg}</div>}
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-gray-500">{rules.length} assignment rule{rules.length === 1 ? "" : "s"}</p>
-        <button onClick={() => setOpen(v => !v)} className="text-[12px] bg-teal-600 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700">{open ? "Close" : "＋ New rule"}</button>
+        <button onClick={() => setOpen(v => !v)} className="text-[12px] bg-teal-700 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700">{open ? "Close" : "＋ New rule"}</button>
       </div>
 
       {open && (
@@ -93,7 +93,7 @@ export default function RuleManager({ rules, competencies, roles }: { rules: Rul
             <span className="text-[11px] text-gray-500 w-20 text-right"><span className="font-semibold text-gray-800 tabular-nums">{r.population}</span> staff</span>
             <span className="text-[11px] text-gray-500 w-24 text-right"><span className="font-semibold text-gray-800 tabular-nums">{r.generated}</span> generated</span>
             <span className="text-[11px] text-gray-400 w-16 text-right">{r.recurrence ? `${r.recurrence}mo` : "one-off"}</span>
-            <button disabled={busy} onClick={() => apply(r.id)} className="text-[11px] bg-teal-600 text-white rounded-lg px-2.5 py-1 hover:bg-teal-700 disabled:opacity-40">Apply</button>
+            <button disabled={busy} onClick={() => apply(r.id)} className="text-[11px] bg-teal-700 text-white rounded-lg px-2.5 py-1 hover:bg-teal-700 disabled:opacity-40">Apply</button>
             <button disabled={busy} onClick={() => del(r.id)} className="text-rose-400 hover:text-[var(--cmp-text-error)] text-[11px] disabled:opacity-40">remove</button>
           </div>
         ))}

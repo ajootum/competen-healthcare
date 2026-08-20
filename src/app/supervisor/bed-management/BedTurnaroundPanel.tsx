@@ -61,7 +61,7 @@ export default function BedTurnaroundPanel({ turnaround, cleaningBeds, configRea
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium text-gray-800 truncate">{t.op_beds?.label ?? "Bed"}{t.patient_label ? <span className="text-gray-400 font-normal"> · vacated by {t.patient_label}</span> : null}</span>
                     <button disabled={busy} onClick={() => act(() => call("PATCH", `/api/operations/bed-turnaround?id=${t.id}`), atLast ? "Bed ready & available" : "Stage advanced")}
-                      className="text-[11px] font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-full px-2.5 py-0.5 shrink-0">{atLast ? "Mark ready" : "Advance"}</button>
+                      className="text-[11px] font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-full px-2.5 py-0.5 shrink-0">{atLast ? "Mark ready" : "Advance"}</button>
                   </div>
                   {/* stepper */}
                   <div className="flex items-center gap-1 mt-2">
@@ -85,7 +85,7 @@ export default function BedTurnaroundPanel({ turnaround, cleaningBeds, configRea
                 {startable.map((b: any) => <option key={b.id} value={b.id}>{b.label}</option>)}
               </select>
               <button disabled={busy || !bed} onClick={async () => { if (await act(() => call("POST", "/api/operations/bed-turnaround", { bed_id: bed, stage: "cleaning" }), "Turnaround started")) setBed(""); }}
-                className="text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3 py-1.5">Start turnaround</button>
+                className="text-sm font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-3 py-1.5">Start turnaround</button>
             </div>
           )}
         </>

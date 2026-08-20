@@ -51,7 +51,7 @@ export default function ShiftMetricsPanel({ shiftId, provisioned, live, persiste
             <p className="text-[9px] text-gray-400 uppercase">Overall</p>
           </div>
           {provisioned && editable && (
-            <button onClick={persist} disabled={busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50">{busy ? "…" : "Compute & persist"}</button>
+            <button onClick={persist} disabled={busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-700 text-white hover:bg-teal-700 disabled:opacity-50">{busy ? "…" : "Compute & persist"}</button>
           )}
         </div>
       </div>

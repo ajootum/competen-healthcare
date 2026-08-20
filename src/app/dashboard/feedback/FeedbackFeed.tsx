@@ -17,7 +17,7 @@ export type FeedbackItem = {
   positive: boolean;         // score >= 3 (or unscored narrative)
 };
 
-const AVATAR_TINTS = ["bg-teal-600", "bg-indigo-600", "bg-[var(--cmp-color-error)]", "bg-[var(--cmp-color-warning)]", "bg-violet-600", "bg-[var(--cmp-color-information)]"];
+const AVATAR_TINTS = ["bg-teal-700", "bg-indigo-600", "bg-[var(--cmp-color-error)]", "bg-[var(--cmp-color-warning)]", "bg-violet-600", "bg-[var(--cmp-color-information)]"];
 const tint = (s: string) => AVATAR_TINTS[[...s].reduce((a, ch) => a + ch.charCodeAt(0), 0) % AVATAR_TINTS.length];
 const SCORE_COLORS = ["#ef4444", "#f97316", "#eab308", "#14b8a6", "#0d9488", "#3b82f6", "#8b5cf6"];
 

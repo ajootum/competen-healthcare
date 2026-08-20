@@ -82,7 +82,7 @@ export default function NetworkProfileClient({ data, available }: { data: any; a
       {tab === "Member Organisations" && (
         <div className={card}>
           <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900">Member organisations ({members.length})</h3>
-            <button onClick={() => setAddOpen(true)} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3 py-1.5">+ Add organisation</button></div>
+            <button onClick={() => setAddOpen(true)} className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white rounded-lg px-3 py-1.5">+ Add organisation</button></div>
           {members.length === 0 ? <p className="text-sm text-gray-500">No member organisations. Add one to build the network.</p> : (
             <div className="divide-y divide-gray-50">
               {members.map((m: any) => (
@@ -139,7 +139,7 @@ export default function NetworkProfileClient({ data, available }: { data: any; a
                 </select>
                 <div className="flex gap-2 pt-1">
                   <button onClick={() => setAddOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                  <button onClick={() => pick && member("add_member", pick)} disabled={busy || !pick} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">Add</button>
+                  <button onClick={() => pick && member("add_member", pick)} disabled={busy || !pick} className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">Add</button>
                 </div>
               </>
             )}

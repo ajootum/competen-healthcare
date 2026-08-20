@@ -67,7 +67,7 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
           <h2 className="font-semibold text-gray-900 mb-1">Enrol to access this course</h2>
           <p className="text-sm text-gray-400 mb-5">Free access to all CPD Academy courses</p>
           <Link href="/dashboard/courses"
-            className="inline-flex bg-teal-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors">
+            className="inline-flex bg-teal-700 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors">
             Enrol from CPD Academy
           </Link>
         </div>

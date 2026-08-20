@@ -67,7 +67,7 @@ export default async function StaffRecordsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Staff Records</h1>
           <p className="text-sm text-gray-500 mt-1">{rows.length} staff · role, employment status and competency coverage.</p>
         </div>
-        <Link href="/admin/invite" className="shrink-0 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-4 py-2">Invite workers →</Link>
+        <Link href="/admin/invite" className="shrink-0 text-sm font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-4 py-2">Invite workers →</Link>
       </div>
       <div className={card}>
         <div className="overflow-x-auto">

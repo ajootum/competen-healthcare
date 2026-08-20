@@ -32,7 +32,7 @@ export function NewObjectiveButton({ themes }: { themes: Theme[] }) {
     router.refresh();
   }
 
-  if (!open) return <button onClick={() => setOpen(true)} className="text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3.5 py-2">+ New Objective</button>;
+  if (!open) return <button onClick={() => setOpen(true)} className="text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-3.5 py-2">+ New Objective</button>;
 
   const input = "w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30";
   return (
@@ -56,7 +56,7 @@ export function NewObjectiveButton({ themes }: { themes: Theme[] }) {
         </div>
         {err && <p className="text-[11px] text-[var(--cmp-text-error)]">{err}</p>}
         <div className="flex items-center gap-2 pt-0.5">
-          <button onClick={submit} disabled={busy} className="text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-3.5 py-1.5">{busy ? "Creating…" : "Create draft"}</button>
+          <button onClick={submit} disabled={busy} className="text-sm font-semibold text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg px-3.5 py-1.5">{busy ? "Creating…" : "Create draft"}</button>
           <span className="text-[11px] text-gray-500">Created as a draft — submit or publish from its row.</span>
         </div>
       </div>

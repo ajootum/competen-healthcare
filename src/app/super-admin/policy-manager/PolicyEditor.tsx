@@ -30,7 +30,7 @@ export default function PolicyEditor({ frameworks }: { frameworks: Framework[] }
   return (
     <>
       <button onClick={() => setOpen(true)}
-        className="px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
+        className="px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
         + New Policy
       </button>
 
@@ -87,7 +87,7 @@ export default function PolicyEditor({ frameworks }: { frameworks: Framework[] }
         </div>
         <div className="flex gap-2 mt-5">
           <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600">Cancel</button>
-          <button onClick={save} disabled={saving || !form.title} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
+          <button onClick={save} disabled={saving || !form.title} className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
             {saving ? "Saving…" : "Save Policy"}
           </button>
         </div>

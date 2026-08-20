@@ -208,7 +208,7 @@ export default async function PatientList() {
               key={a.label}
               href={a.href}
               className={a.primary
-                ? "text-sm rounded-lg bg-teal-600 text-white px-3.5 py-2 hover:bg-teal-700 transition-colors"
+                ? "text-sm rounded-lg bg-teal-700 text-white px-3.5 py-2 hover:bg-teal-700 transition-colors"
                 : "text-sm rounded-lg border border-gray-200 text-gray-700 px-3.5 py-2 hover:border-teal-300 hover:text-teal-700 transition-colors"}
             >
               {a.label}

@@ -25,7 +25,7 @@ async function call(method: string, path: string, body?: any) {
 
 const card = cardClass;
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
-const btn = "px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50";
+const btn = "px-4 py-2 rounded-lg bg-teal-700 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50";
 const btnGhost = "px-2.5 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-50";
 const label = "block text-sm";
 const lbl = "text-gray-600 text-xs";

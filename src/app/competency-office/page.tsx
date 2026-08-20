@@ -133,7 +133,7 @@ export default async function CompetencyDashboard() {
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900 text-sm">Workforce Readiness by Unit</h3><Link href="/competency-office/readiness" className="text-[11px] text-teal-600 hover:underline">Full report →</Link></div>
           <div className="flex gap-1 mb-3">
-            <span className="text-[11px] bg-teal-600 text-white rounded-md px-2.5 py-1">By Unit</span>
+            <span className="text-[11px] bg-teal-700 text-white rounded-md px-2.5 py-1">By Unit</span>
             <span className="text-[11px] text-gray-400 rounded-md px-2.5 py-1" title="Grouping by department needs unit→department mapping (next-phase)">By Department</span>
             <span className="text-[11px] text-gray-400 rounded-md px-2.5 py-1" title="Grouping by role needs role mapping (next-phase)">By Role</span>
           </div>

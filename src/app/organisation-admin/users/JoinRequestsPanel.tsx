@@ -103,7 +103,7 @@ export default function JoinRequestsPanel() {
                       className="mt-2 block w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12.5px]" />
                     <div className="mt-2 flex items-center gap-2">
                       <button type="button" disabled={busy || roles.length === 0} onClick={() => decide(r.id, true)}
-                        className="rounded-lg bg-teal-600 px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
+                        className="rounded-lg bg-teal-700 px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
                         {busy ? "Granting…" : "Approve and grant"}
                       </button>
                       <button type="button" disabled={busy} onClick={() => setRefusing(true)}

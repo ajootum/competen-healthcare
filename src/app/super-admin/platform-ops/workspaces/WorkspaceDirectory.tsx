@@ -115,7 +115,7 @@ function EditModal({ w, busy, onClose, onSave, onReset }: any) {
         <div className="flex items-center gap-2 pt-1">
           {w.customized && <button onClick={onReset} disabled={busy} className="text-xs text-gray-500 hover:text-[var(--cmp-text-error)] mr-auto">Reset to defaults</button>}
           <button onClick={onClose} className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-          <button onClick={() => onSave({ label: form.label, icon: form.icon, description: form.description, accent: form.accent, is_enabled: form.is_enabled, audience: form.audience })} disabled={busy || !form.label.trim()} className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{busy ? "Saving…" : "Save"}</button>
+          <button onClick={() => onSave({ label: form.label, icon: form.icon, description: form.description, accent: form.accent, is_enabled: form.is_enabled, audience: form.audience })} disabled={busy || !form.label.trim()} className="px-4 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{busy ? "Saving…" : "Save"}</button>
         </div>
       </div>
     </Modal>

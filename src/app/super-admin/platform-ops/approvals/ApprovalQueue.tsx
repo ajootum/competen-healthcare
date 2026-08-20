@@ -47,7 +47,7 @@ export default function ApprovalQueue({ queue, workflows, canAct }: { queue: any
           <div className="flex items-center gap-2">
             <select value={wf} onChange={e => setWf(e.target.value)} className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm">{workflows.map(w => <option key={w.key} value={w.key}>{w.name}</option>)}</select>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Entity name (optional)" className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm w-44" />
-            <button onClick={submit} disabled={busy === "submit"} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3 py-1.5 disabled:opacity-60">Submit</button>
+            <button onClick={submit} disabled={busy === "submit"} className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white rounded-lg px-3 py-1.5 disabled:opacity-60">Submit</button>
           </div>
         )}
       </div>

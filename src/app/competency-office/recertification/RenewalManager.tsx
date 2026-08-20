@@ -87,7 +87,7 @@ function WorklistRow({ item, onErr, onDone }: { item: WorklistItem; onErr: (s: s
         <span className={`text-[10px] px-1.5 py-0.5 rounded-full whitespace-nowrap ${BAND_TONE[item.bandTone] ?? "bg-gray-100 text-gray-600"}`}>{item.daysLeft < 0 ? `${Math.abs(item.daysLeft)}d overdue` : `${item.daysLeft}d left`}</span>
         {item.hasRenewal
           ? <span className="text-[10px] text-[var(--cmp-text-success)] whitespace-nowrap">renewal open</span>
-          : <button onClick={() => setOpen(v => !v)} className="text-[11px] bg-teal-600 text-white rounded-lg px-2.5 py-1 hover:bg-teal-700 whitespace-nowrap">{open ? "Close" : "Start renewal"}</button>}
+          : <button onClick={() => setOpen(v => !v)} className="text-[11px] bg-teal-700 text-white rounded-lg px-2.5 py-1 hover:bg-teal-700 whitespace-nowrap">{open ? "Close" : "Start renewal"}</button>}
       </div>
       {open && !item.hasRenewal && (
         <div className="mt-2 flex items-center gap-1.5">
@@ -127,7 +127,7 @@ function RenewalRow({ r, onErr, onDone }: { r: Renewal; onErr: (s: string | null
       </div>
       {r.inFlight && (
         <div className="mt-2 flex items-center gap-1.5">
-          {next && <button disabled={busy} onClick={() => advance(next)} className="text-[11px] bg-teal-600 text-white rounded-lg px-2.5 py-1 hover:bg-teal-700 disabled:opacity-40 whitespace-nowrap">{NEXT_LABEL[next]}</button>}
+          {next && <button disabled={busy} onClick={() => advance(next)} className="text-[11px] bg-teal-700 text-white rounded-lg px-2.5 py-1 hover:bg-teal-700 disabled:opacity-40 whitespace-nowrap">{NEXT_LABEL[next]}</button>}
           <button disabled={busy} onClick={() => advance("lapsed")} className="text-[11px] text-rose-500 hover:text-[var(--cmp-text-error)] border border-[var(--cmp-color-error)] rounded-lg px-2.5 py-1 disabled:opacity-40">Lapse</button>
         </div>
       )}

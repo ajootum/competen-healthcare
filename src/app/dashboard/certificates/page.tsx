@@ -160,7 +160,7 @@ export default async function CertificatesPage() {
           <p className="text-gray-400 text-sm mt-0.5">Your earned qualifications, certifications and recognitions.</p>
         </div>
         <Link href="/dashboard/passport/print"
-          className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg">
+          className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg">
           🖨️ Export portfolio
         </Link>
       </div>

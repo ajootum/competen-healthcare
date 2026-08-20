@@ -141,7 +141,7 @@ export default function BuilderClient({ saved, assessors, departments, initialRu
             <button key={c.key}
               onClick={() => setCols(prev => { const s = new Set(prev); if (s.has(c.key)) s.delete(c.key); else s.add(c.key); return s; })}
               className={`text-[10px] px-2 py-1 rounded-full border transition-colors ${
-                cols.has(c.key) ? "bg-teal-600 text-white border-teal-600" : "bg-white text-gray-400 border-gray-200 hover:border-teal-300"}`}>
+                cols.has(c.key) ? "bg-teal-700 text-white border-teal-600" : "bg-white text-gray-400 border-gray-200 hover:border-teal-300"}`}>
               {c.label}
             </button>
           ))}

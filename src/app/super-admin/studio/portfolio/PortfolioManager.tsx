@@ -51,7 +51,7 @@ export default function PortfolioManager({ templates }: { templates: any[] }) {
         <div className="flex flex-col sm:flex-row gap-2">
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Portfolio name (e.g. Advanced Practice Nurse Portfolio)" className={`${inp} flex-1`} />
           <select value={type} onChange={e => setType(e.target.value)} className={`${inp} sm:w-40`}>{TYPES.map(t => <option key={t.v} value={t.v}>{t.label}</option>)}</select>
-          <button onClick={create} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2 whitespace-nowrap">{busy ? "…" : "Create"}</button>
+          <button onClick={create} disabled={busy} className="text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg px-4 py-2 whitespace-nowrap">{busy ? "…" : "Create"}</button>
         </div>
         {err && <p className="text-[11px] text-[var(--cmp-text-critical)] mt-1">{err}</p>}
       </div>

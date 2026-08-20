@@ -153,7 +153,7 @@ export default async function KnowledgeAssessmentPage() {
                       </span>
                     )}
                     <Link href={`/dashboard/tests/${b.id}`}
-                      className="text-[11px] font-semibold bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg shrink-0">
+                      className="text-[11px] font-semibold bg-teal-700 hover:bg-teal-800 text-white px-3 py-1.5 rounded-lg shrink-0">
                       {best?.passed ? "Retake" : best ? "Try again" : "Start"}
                     </Link>
                   </div>

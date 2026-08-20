@@ -75,7 +75,7 @@ export default function SkillBuilder({ skills, links, competencies }: {
       {/* LEFT — library */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 self-start">
         <button onClick={() => select(null)}
-          className="w-full bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold py-2 rounded-lg transition-colors mb-3">
+          className="w-full bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold py-2 rounded-lg transition-colors mb-3">
           + New Skill
         </button>
         <input className={`${input} mb-2`} placeholder="Search skills…" value={search} onChange={e => setSearch(e.target.value)} />
@@ -137,7 +137,7 @@ export default function SkillBuilder({ skills, links, competencies }: {
           </div>
           <div className="flex gap-2">
             <button disabled={busy || !form.name.trim()} onClick={save}
-              className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
+              className="bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
               {busy ? "Saving…" : selected ? "Save changes" : "Create skill"}
             </button>
             {selected && (

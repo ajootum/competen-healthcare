@@ -49,7 +49,7 @@ export default async function StaffGatewayPage({ searchParams }: {
       <main className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
           <div className="flex items-center gap-2.5 justify-center mb-2">
-            <span className="w-9 h-9 rounded-full bg-teal-600 flex items-center justify-center text-white font-bold">C</span>
+            <span className="w-9 h-9 rounded-full bg-teal-700 flex items-center justify-center text-white font-bold">C</span>
             <span className="leading-tight">
               <span className="block text-lg font-bold text-white">competen</span>
               <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-teal-400">Staff Access</span>

@@ -33,7 +33,7 @@ export default async function StudioMarketplacePage() {
           <h1 className="text-xl font-bold text-gray-900">Competency Marketplace</h1>
           <p className="text-gray-400 text-sm mt-0.5">Discover and adopt published competency packages across the enterprise.</p>
         </div>
-        <Link href="/super-admin/studio/packages" className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3 py-2">Publisher console →</Link>
+        <Link href="/super-admin/studio/packages" className="text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-3 py-2">Publisher console →</Link>
       </div>
 
       {!provisioned ? (

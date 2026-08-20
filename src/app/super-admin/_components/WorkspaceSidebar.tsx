@@ -75,18 +75,18 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
       </Link>
 
       {inWorkspace ? (
-        <Link href="/super-admin" className="flex items-center gap-2 px-3 mb-3 text-[10px] font-semibold text-slate-500 hover:text-white transition-colors" data-sb-label>
+        <Link href="/super-admin" className="flex items-center gap-2 px-3 mb-3 text-[10px] font-semibold text-slate-400 hover:text-white transition-colors" data-sb-label>
           ← {spaceLabel}
         </Link>
       ) : (
         <div className="px-3 mb-4" data-sb-label>
-          <span className="text-[10px] font-bold text-rose-400/70 uppercase tracking-widest">{spaceLabel} Workspace</span>
+          <span className="text-[10px] font-bold text-rose-300 uppercase tracking-widest">{spaceLabel} Workspace</span>
         </div>
       )}
 
       <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto">
         {nav.map(({ group, items }) => (
-          <NavGroup key={group} title={group} hrefs={items.map(i => i.href)} headerClass="text-[9px] font-bold text-slate-600 uppercase tracking-widest">
+          <NavGroup key={group} title={group} hrefs={items.map(i => i.href)} headerClass="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
             {items.map(({ label, href, icon }) => (
               <NavLink key={label} href={href} icon={icon} label={label}
                 exact={OVERVIEW_HREFS.has(href) || exactHrefs.has(href.split("?")[0])}
@@ -117,7 +117,7 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
                 and appointment reads on all 205 HQ pages. The count is true without pretending, and the
                 "Acting as" switcher on the page is the authority -- it names the active one and can
                 change it. */}
-            <p className="text-rose-300/60 text-[10px]">
+            <p className="text-rose-300 text-[10px]">
               {isOwner
                 ? (inWorkspace ? "Platform Owner" : "Super Admin")
                 : positionNames.length === 1 ? positionNames[0]
@@ -130,7 +130,7 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
           <div className="mb-2" data-sb-label><RoleSwitcher roles={roles} activeRole={activeRole} workspaces={workspaces} /></div>
         )}
         <form action="/api/auth/logout" method="POST">
-          <button type="submit" data-sb-item className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-800/30 hover:text-white transition-colors">
+          <button type="submit" data-sb-item className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-slate-800/30 hover:text-white transition-colors">
             <span className="w-5 text-center">↩</span>
             <span data-sb-label>Sign out</span>
           </button>

@@ -34,7 +34,7 @@ export default function CommsConsole({ messagesProvisioned, broadcastsProvisione
     <div className={cardClass}>
       <div className="flex items-center gap-2 mb-3">
         {(["message", "broadcast"] as const).map(t => (
-          <button key={t} onClick={() => { setTab(t); setOk(null); setErr(null); }} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${tab === t ? "bg-teal-600 text-white" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>{t === "message" ? "💬 New Message" : "📣 Send Broadcast"}</button>
+          <button key={t} onClick={() => { setTab(t); setOk(null); setErr(null); }} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${tab === t ? "bg-teal-700 text-white" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>{t === "message" ? "💬 New Message" : "📣 Send Broadcast"}</button>
         ))}
       </div>
 
@@ -47,7 +47,7 @@ export default function CommsConsole({ messagesProvisioned, broadcastsProvisione
             <select value={m.context_type} onChange={e => setM({ ...m, context_type: e.target.value })} className={sel}>{CONTEXT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
           </div>
           <textarea value={m.body} onChange={e => setM({ ...m, body: e.target.value })} rows={2} placeholder="Message…" className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 resize-none" />
-          <button onClick={() => post("/api/operations/messages", { ...m, channel: m.channel || "General" }, () => setM({ channel: "", context_type: "team", body: "" }), "Message sent")} disabled={!m.body.trim() || busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50">{busy ? "…" : "Send message"}</button>
+          <button onClick={() => post("/api/operations/messages", { ...m, channel: m.channel || "General" }, () => setM({ channel: "", context_type: "team", body: "" }), "Message sent")} disabled={!m.body.trim() || busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-700 text-white hover:bg-teal-700 disabled:opacity-50">{busy ? "…" : "Send message"}</button>
         </div>
       ) : (
         <div className="space-y-2">
@@ -61,7 +61,7 @@ export default function CommsConsole({ messagesProvisioned, broadcastsProvisione
             <label className="flex items-center gap-1 text-[11px] text-gray-600"><input type="checkbox" checked={bc.emergency} onChange={e => setBc({ ...bc, emergency: e.target.checked })} /> Emergency</label>
           </div>
           <textarea value={bc.body} onChange={e => setBc({ ...bc, body: e.target.value })} rows={2} placeholder="Broadcast body…" className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 resize-none" />
-          <button onClick={() => post("/api/operations/broadcasts", { ...bc, expires_hours: bc.expires_hours ? Number(bc.expires_hours) : undefined }, () => setBc({ title: "", audience: "All Staff", priority: "medium", body: "", emergency: false, expires_hours: "" }), "Broadcast sent")} disabled={!bc.title.trim() || busy} className={`text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-50 ${bc.emergency ? "bg-[var(--cmp-color-error)] hover:bg-rose-700" : "bg-teal-600 hover:bg-teal-700"}`}>{busy ? "…" : bc.emergency ? "Send emergency broadcast" : "Send broadcast"}</button>
+          <button onClick={() => post("/api/operations/broadcasts", { ...bc, expires_hours: bc.expires_hours ? Number(bc.expires_hours) : undefined }, () => setBc({ title: "", audience: "All Staff", priority: "medium", body: "", emergency: false, expires_hours: "" }), "Broadcast sent")} disabled={!bc.title.trim() || busy} className={`text-xs font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-50 ${bc.emergency ? "bg-[var(--cmp-color-error)] hover:bg-rose-700" : "bg-teal-700 hover:bg-teal-800"}`}>{busy ? "…" : bc.emergency ? "Send emergency broadcast" : "Send broadcast"}</button>
         </div>
       )}
       {ok && <p className="text-[11px] text-[var(--cmp-text-success)] mt-2">{ok}</p>}

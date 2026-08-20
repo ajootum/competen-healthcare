@@ -62,7 +62,7 @@ export default function AssetEdit({ objectType, objectId, currentStatus, current
             <input value={version} onChange={e => setVersion(e.target.value)} placeholder="e.g. 2.1" className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 w-24 focus:outline-none focus:ring-1 focus:ring-teal-400" />
           </label>
         )}
-        <button onClick={save} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-1.5">{busy ? "Saving…" : "Save"}</button>
+        <button onClick={save} disabled={busy} className="text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg px-4 py-1.5">{busy ? "Saving…" : "Save"}</button>
         {msg && <span className="text-[11px] text-gray-500">{msg}</span>}
       </div>
       <p className="text-[10px] text-gray-500 mt-2">Writes to the source in its native convention, then updates the index.{supported.length <= 2 ? " This type only tracks active / archived." : ""}</p>

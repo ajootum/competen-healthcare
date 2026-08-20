@@ -129,12 +129,12 @@ export default function SmartQueue({ tasks, workload }: {
                           <div className="flex gap-2 mt-3">
                             {t.type === "entrustment" ? (
                               <button onClick={() => { setEntrustFor(t); setLevel("independent"); setError(null); }}
-                                className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
+                                className="bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
                                 🔑 Record entrustment decision
                               </button>
                             ) : (
                               <Link href="/assessor/assess"
-                                className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
+                                className="bg-teal-700 hover:bg-teal-800 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
                                 ▶ Start assessment
                               </Link>
                             )}
@@ -177,7 +177,7 @@ export default function SmartQueue({ tasks, workload }: {
             <div className="flex gap-2 justify-end">
               <button onClick={() => setEntrustFor(null)} className="text-sm text-gray-500 px-4 py-2 rounded-lg hover:bg-gray-50">Cancel</button>
               <button disabled={busy} onClick={decide}
-                className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
+                className="bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
                 {busy ? "Recording…" : "Record decision"}
               </button>
             </div>

@@ -56,7 +56,7 @@ export default async function LocalizationConsole({ searchParams }: { searchPara
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
             <h3 className="text-sm font-bold text-gray-900">Resource Bundle Preview</h3>
-            <div className="flex gap-1 flex-wrap">{cat.locales.map(l => <Link key={l.code} href={`/super-admin/platform-ops/localization?locale=${l.code}`} className={`text-[10px] px-2 py-0.5 rounded-full ${bundle.locale.code === l.code ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>{l.code}</Link>)}</div>
+            <div className="flex gap-1 flex-wrap">{cat.locales.map(l => <Link key={l.code} href={`/super-admin/platform-ops/localization?locale=${l.code}`} className={`text-[10px] px-2 py-0.5 rounded-full ${bundle.locale.code === l.code ? "bg-teal-700 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>{l.code}</Link>)}</div>
           </div>
           <div className="overflow-x-auto" dir={bundle.locale.dir}>
             <table className="w-full text-xs">

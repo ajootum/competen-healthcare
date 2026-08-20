@@ -115,7 +115,7 @@ export default async function CpdAcademyPage() {
                       )}
                     </div>
                     <Link href={`/dashboard/courses/${c.id}`}
-                      className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg shrink-0">
+                      className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg shrink-0">
                       {e ? "Continue Learning" : "Start Course"}
                     </Link>
                   </div>

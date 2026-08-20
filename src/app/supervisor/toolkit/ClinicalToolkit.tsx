@@ -68,7 +68,7 @@ export default function ClinicalToolkit() {
   return (
     <div className={cardClass}>
       <div className="flex items-center gap-2 mb-4 flex-wrap">
-        {TABS.map(t => (<button key={t} onClick={() => setTab(t)} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${tab === t ? "bg-teal-600 text-white" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>{t}</button>))}
+        {TABS.map(t => (<button key={t} onClick={() => setTab(t)} className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${tab === t ? "bg-teal-700 text-white" : "bg-gray-50 text-gray-600 border border-gray-200"}`}>{t}</button>))}
       </div>
 
       {tab === "NEWS2" && (

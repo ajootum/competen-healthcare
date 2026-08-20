@@ -32,7 +32,7 @@ export default function NotificationsTester() {
     <div className={cardClass}>
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-gray-900 text-[15px]">Test Delivery</h2>
-        <button onClick={send} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3.5 py-2 disabled:opacity-60">{busy ? "Sending…" : "Send test to me"}</button>
+        <button onClick={send} disabled={busy} className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white rounded-lg px-3.5 py-2 disabled:opacity-60">{busy ? "Sending…" : "Send test to me"}</button>
       </div>
       {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2 mb-2">{err}</p>}
       {result && (

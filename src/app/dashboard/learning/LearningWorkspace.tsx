@@ -77,7 +77,7 @@ export default function LearningWorkspace({ items }: { items: PathwayItem[] }) {
           <div className="flex items-center gap-1.5 shrink-0">
             {!started && (
               <button onClick={() => setStatus(i.id, "in_progress")} disabled={busy === i.id}
-                className="text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">Start</button>
+                className="text-xs font-semibold bg-teal-700 hover:bg-teal-800 text-white px-3 py-1.5 rounded-lg disabled:opacity-50">Start</button>
             )}
             {started && <span className="text-[9px] font-bold text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] px-1.5 py-0.5 rounded">IN PROGRESS</span>}
             <button onClick={() => setStatus(i.id, "completed")} disabled={busy === i.id}

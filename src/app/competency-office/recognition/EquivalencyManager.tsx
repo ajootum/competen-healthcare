@@ -45,7 +45,7 @@ export default function EquivalencyManager({ rules, competencies }: { rules: Rul
       {err && <div className="bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] rounded-lg px-3 py-2 text-[12px]">{err}</div>}
       <div className="flex items-center justify-between">
         <p className="text-[12px] text-gray-500">{rules.length} equivalency rule{rules.length === 1 ? "" : "s"}</p>
-        <button onClick={() => setOpen(v => !v)} className="text-[12px] bg-teal-600 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700">{open ? "Close" : "＋ New rule"}</button>
+        <button onClick={() => setOpen(v => !v)} className="text-[12px] bg-teal-700 text-white rounded-lg px-3 py-1.5 hover:bg-teal-700">{open ? "Close" : "＋ New rule"}</button>
       </div>
 
       {open && (

@@ -45,7 +45,7 @@ export default function ShareManager({ tokens }: { tokens: Token[] }) {
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex items-center justify-between">
           <div><p className="text-sm font-semibold text-gray-900">Create a verification link</p><p className="text-[12px] text-gray-500">Share proof of your competencies &amp; credentials with an employer or regulator — time-limited and revocable.</p></div>
-          <button onClick={() => setOpen(v => !v)} className="text-[13px] bg-teal-600 text-white rounded-lg px-3 py-2 hover:bg-teal-700 shrink-0">{open ? "Close" : "＋ New link"}</button>
+          <button onClick={() => setOpen(v => !v)} className="text-[13px] bg-teal-700 text-white rounded-lg px-3 py-2 hover:bg-teal-700 shrink-0">{open ? "Close" : "＋ New link"}</button>
         </div>
         {open && (
           <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-2 items-end">

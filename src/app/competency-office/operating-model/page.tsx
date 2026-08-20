@@ -77,7 +77,7 @@ export default async function OperatingModelPage() {
             const active = m.num === d.maturityNum;
             return (
               <div key={m.num} className={`rounded-lg border p-3 ${active ? "border-teal-300 bg-teal-50" : "border-gray-100"}`}>
-                <div className="flex items-center gap-1.5 mb-1"><span className={`text-[10px] font-bold rounded px-1.5 py-0.5 ${active ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500"}`}>L{m.num}</span><p className={`text-[12px] font-semibold ${active ? "text-teal-800" : "text-gray-700"}`}>{m.label}</p></div>
+                <div className="flex items-center gap-1.5 mb-1"><span className={`text-[10px] font-bold rounded px-1.5 py-0.5 ${active ? "bg-teal-700 text-white" : "bg-gray-100 text-gray-500"}`}>L{m.num}</span><p className={`text-[12px] font-semibold ${active ? "text-teal-800" : "text-gray-700"}`}>{m.label}</p></div>
                 <p className="text-[10px] text-gray-500 leading-snug">{m.desc}</p>
               </div>
             );

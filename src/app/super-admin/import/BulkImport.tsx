@@ -211,7 +211,7 @@ export default function BulkImport({ hospitals }: { hospitals: Hospital[] }) {
                 Cancel
               </button>
               <button onClick={runImport} disabled={importing || validCount === 0}
-                className="px-4 py-1.5 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
+                className="px-4 py-1.5 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
                 {importing ? "Importing…" : `Confirm & Import ${validCount} users`}
               </button>
             </div>
@@ -277,7 +277,7 @@ export default function BulkImport({ hospitals }: { hospitals: Hospital[] }) {
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <p className="font-semibold text-gray-900 text-sm">Import Results</p>
               <button onClick={() => { setResults(null); setFilename(""); if (fileRef.current) fileRef.current.value = ""; }}
-                className="px-3 py-1.5 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700">
+                className="px-3 py-1.5 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-700">
                 Import Another File
               </button>
             </div>

@@ -64,7 +64,7 @@ export default async function AssignmentRulesPage() {
         <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2">
           {STEPS.map(s => (
             <div key={s.n} className="rounded-lg border border-gray-100 bg-gray-50/60 p-2.5">
-              <div className="flex items-center gap-1.5"><span className="w-4 h-4 rounded-full bg-teal-600 text-white text-[9px] font-bold flex items-center justify-center shrink-0">{s.n}</span><span className="text-[11px] font-medium text-gray-700 truncate">{s.label}</span></div>
+              <div className="flex items-center gap-1.5"><span className="w-4 h-4 rounded-full bg-teal-700 text-white text-[9px] font-bold flex items-center justify-center shrink-0">{s.n}</span><span className="text-[11px] font-medium text-gray-700 truncate">{s.label}</span></div>
               <p className="text-lg font-bold tabular-nums text-gray-900 mt-1">{s.value}</p>
               <p className="text-[10px] text-gray-400">{s.sub}</p>
             </div>

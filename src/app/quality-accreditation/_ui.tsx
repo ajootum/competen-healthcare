@@ -65,7 +65,7 @@ export function Head({ title, code, sub, action }: { title: string; code?: strin
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <ScopeFilter />
-        {action && <Link href={action.href} className="text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3.5 py-1.5">{action.label}</Link>}
+        {action && <Link href={action.href} className="text-sm font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-3.5 py-1.5">{action.label}</Link>}
       </div>
     </div>
   );

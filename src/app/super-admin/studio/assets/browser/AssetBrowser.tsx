@@ -26,7 +26,7 @@ function StatusBadge({ s }: { s: string | null }) {
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button onClick={onClick} className={`text-[11px] font-semibold rounded-lg px-2.5 py-1 border transition-colors ${active ? "bg-teal-600 text-white border-teal-600" : "bg-white text-gray-600 border-gray-200 hover:border-teal-200"}`}>{children}</button>
+    <button onClick={onClick} className={`text-[11px] font-semibold rounded-lg px-2.5 py-1 border transition-colors ${active ? "bg-teal-700 text-white border-teal-600" : "bg-white text-gray-600 border-gray-200 hover:border-teal-200"}`}>{children}</button>
   );
 }
 
@@ -93,7 +93,7 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
             <h2 className="font-semibold text-gray-900 text-sm">Governed index</h2>
             <p className="text-[11px] text-gray-500">{status.total} assets across {status.types} types · last refreshed {fmtDate(status.lastIndexedAt)}</p>
           </div>
-          <button onClick={refresh} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2">{busy ? "Refreshing…" : "Refresh index"}</button>
+          <button onClick={refresh} disabled={busy} className="text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg px-4 py-2">{busy ? "Refreshing…" : "Refresh index"}</button>
         </div>
         {empty && <p className="text-[11px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-3 py-2">The index is empty. Click <span className="font-semibold">Refresh index</span> to build cap_assets from the 12 source tables.</p>}
         <div className="flex flex-wrap gap-1.5 mt-2">

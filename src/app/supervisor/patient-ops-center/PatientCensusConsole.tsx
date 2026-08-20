@@ -33,7 +33,7 @@ export default function PatientCensusConsole({ records, tabs }: { records: any[]
           <h2 className="text-sm font-bold text-gray-900 mr-1">Patient Census</h2>
           {tabs.map((t) => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${tab === t.key ? "bg-teal-600 text-white border-teal-600" : "bg-white text-gray-600 border-gray-200 hover:border-teal-300"}`}>
+              className={`text-xs font-medium px-2.5 py-1 rounded-lg border transition-colors ${tab === t.key ? "bg-teal-700 text-white border-teal-600" : "bg-white text-gray-600 border-gray-200 hover:border-teal-300"}`}>
               {t.label} <span className={tab === t.key ? "text-teal-100" : "text-gray-400"}>{t.n}</span>
             </button>
           ))}

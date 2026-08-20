@@ -49,7 +49,7 @@ export default function DeptManager({ hospitalId }: { hospitalId: string }) {
   return (
     <>
       <button onClick={openModal}
-        className="px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 transition-colors">
+        className="px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 transition-colors">
         + Add
       </button>
 
@@ -124,7 +124,7 @@ export default function DeptManager({ hospitalId }: { hospitalId: string }) {
                   Cancel
                 </button>
                 <button onClick={tab === "dept" ? saveDept : saveUnit} disabled={saving}
-                  className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">
+                  className="flex-1 px-4 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">
                   {saving ? "Saving..." : "Save"}
                 </button>
               </div>

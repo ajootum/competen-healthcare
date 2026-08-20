@@ -107,7 +107,7 @@ export default function QualityManager({ domains, frameworks, qos, standards, in
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Quality Objects</h2>
-          <button onClick={() => setShowQoForm(v => !v)} className={`${btn} bg-teal-600 hover:bg-teal-700 text-white`}>
+          <button onClick={() => setShowQoForm(v => !v)} className={`${btn} bg-teal-700 hover:bg-teal-800 text-white`}>
             {showQoForm ? "Cancel" : "+ Quality Object"}
           </button>
         </div>
@@ -139,7 +139,7 @@ export default function QualityManager({ domains, frameworks, qos, standards, in
             <button disabled={busy || !qoTitle.trim()}
               onClick={() => post({ kind: "quality_object", title: qoTitle.trim(), description: qoDesc.trim() || null, domain_id: qoDomain || null, standards: stdRows },
                 () => { setShowQoForm(false); setQoTitle(""); setQoDesc(""); setQoDomain(""); setStdRows([{ framework_id: "", reference_code: "" }]); })}
-              className={`${btn} bg-teal-600 hover:bg-teal-700 text-white self-start`}>
+              className={`${btn} bg-teal-700 hover:bg-teal-800 text-white self-start`}>
               {busy ? "Saving…" : "Create Quality Object"}
             </button>
           </div>

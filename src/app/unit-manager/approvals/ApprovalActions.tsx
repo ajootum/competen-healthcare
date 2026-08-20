@@ -25,7 +25,7 @@ export function NewApprovalButton({ provisioned }: { provisioned: boolean }) {
   const inp = "w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5";
   return (
     <>
-      <button onClick={() => setOpen(o => !o)} disabled={!provisioned} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:bg-gray-200 disabled:text-gray-400">+ New Request</button>
+      <button onClick={() => setOpen(o => !o)} disabled={!provisioned} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-700 text-white hover:bg-teal-700 disabled:bg-gray-200 disabled:text-gray-400">+ New Request</button>
       {open && (
         <div className="absolute right-0 mt-2 z-20 w-72 bg-white rounded-xl border border-gray-200 shadow-lg p-3 space-y-2">
           <input placeholder="Request title" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} className={inp} />
@@ -36,7 +36,7 @@ export function NewApprovalButton({ provisioned }: { provisioned: boolean }) {
           <select value={f.impact} onChange={e => setF({ ...f, impact: e.target.value })} className={inp}>{["high", "medium", "low"].map(p => <option key={p} value={p}>{p} impact</option>)}</select>
           <textarea placeholder="Reason / context" value={f.reason} onChange={e => setF({ ...f, reason: e.target.value })} className={`${inp} h-16 resize-none`} />
           {err && <p className="text-[10px] text-[var(--cmp-text-error)]">{err}</p>}
-          <div className="flex gap-2"><button onClick={create} disabled={busy} className="flex-1 text-xs font-semibold bg-teal-600 text-white rounded-lg py-1.5">Submit</button><button onClick={() => setOpen(false)} className="text-xs text-gray-500 px-3">Cancel</button></div>
+          <div className="flex gap-2"><button onClick={create} disabled={busy} className="flex-1 text-xs font-semibold bg-teal-700 text-white rounded-lg py-1.5">Submit</button><button onClick={() => setOpen(false)} className="text-xs text-gray-500 px-3">Cancel</button></div>
         </div>
       )}
     </>

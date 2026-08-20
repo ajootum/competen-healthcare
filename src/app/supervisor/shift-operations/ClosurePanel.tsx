@@ -83,7 +83,7 @@ export default function ClosurePanel({ shiftId, provisioned, snapshots, transfer
           <h2 className="text-sm font-bold text-gray-900">Closure &amp; Command Transfer</h2>
           <p className="text-[11px] text-gray-500">Immutable snapshots + who accepts command (SSW-002 §18 / §8)</p>
         </div>
-        {editable && <button onClick={capture} disabled={busy === "capture"} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 shrink-0">{busy === "capture" ? "…" : "Capture snapshot"}</button>}
+        {editable && <button onClick={capture} disabled={busy === "capture"} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-700 text-white hover:bg-teal-700 disabled:opacity-50 shrink-0">{busy === "capture" ? "…" : "Capture snapshot"}</button>}
       </div>
 
       {/* Latest snapshot metrics */}
@@ -131,7 +131,7 @@ export default function ClosurePanel({ shiftId, provisioned, snapshots, transfer
               {TRANSFER_REASONS.map((r) => <option key={r} value={r}>{TRANSFER_REASON_LABEL[r]}</option>)}
             </select>
             <input value={summary} onChange={e => setSummary(e.target.value)} placeholder="Outstanding items (optional)" className={`${sel} flex-1 min-w-[130px]`} />
-            <button onClick={initiate} disabled={!toId || busy === "transfer"} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50">{busy === "transfer" ? "…" : "Initiate"}</button>
+            <button onClick={initiate} disabled={!toId || busy === "transfer"} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-700 text-white hover:bg-teal-700 disabled:opacity-50">{busy === "transfer" ? "…" : "Initiate"}</button>
           </div>
         )}
       </div>

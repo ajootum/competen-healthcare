@@ -113,7 +113,7 @@ export default function AssessmentCentre({ rows }: { rows: CentreRow[] }) {
             <span className={`text-[9px] font-bold px-2 py-0.5 rounded shrink-0 ${st.cls}`}>{st.label}</span>
             <span className="w-12 text-right text-xs font-bold text-gray-700 shrink-0">{r.score ?? "—"}</span>
             {r.href && r.action
-              ? <Link href={r.href} className="text-[11px] font-semibold bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg shrink-0">{r.action}</Link>
+              ? <Link href={r.href} className="text-[11px] font-semibold bg-teal-700 hover:bg-teal-800 text-white px-3 py-1.5 rounded-lg shrink-0">{r.action}</Link>
               : <span className="w-16 shrink-0" />}
           </div>
         );

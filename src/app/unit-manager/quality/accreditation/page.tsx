@@ -66,7 +66,7 @@ export default async function AccreditationReadiness() {
     <>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-teal-50 flex items-center justify-center text-lg">🏅</span><div><h1 className="text-2xl font-bold text-gray-900 tracking-tight">Accreditation Readiness Centre</h1><p className="text-sm text-gray-500">Monitor, manage and improve accreditation readiness across all standards · enterprise programme</p></div></div>
-        <div className="flex items-center gap-2"><Link href="/unit-manager/quality/accreditation" className="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 hover:bg-gray-50">↻ Refresh</Link><Link href="/quality-accreditation" className="text-xs bg-teal-600 text-white rounded-lg px-3 py-2 hover:bg-teal-700 font-medium">+ Add Evidence</Link></div>
+        <div className="flex items-center gap-2"><Link href="/unit-manager/quality/accreditation" className="text-xs border border-gray-200 rounded-lg px-3 py-2 text-gray-600 hover:bg-gray-50">↻ Refresh</Link><Link href="/quality-accreditation" className="text-xs bg-teal-700 text-white rounded-lg px-3 py-2 hover:bg-teal-700 font-medium">+ Add Evidence</Link></div>
       </div>
       <QualityTabs />
     </>
@@ -119,7 +119,7 @@ export default async function AccreditationReadiness() {
       {/* ── Work queue · gap analysis · survey readiness ───────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className={`${card} p-5`}>
-          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap"><h3 className="font-semibold text-gray-900 text-sm">Accreditation Work Queue</h3><div className="flex gap-1 text-[10px]"><span className="px-2 py-0.5 rounded-full bg-teal-600 text-white">All {d.queueCounts.all}</span><span className="px-2 py-0.5 rounded-full bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]">At Risk {d.queueCounts.atRisk}</span><span className="px-2 py-0.5 rounded-full bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]">Awaiting Verif. {d.queueCounts.awaitingVerification}</span></div></div>
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap"><h3 className="font-semibold text-gray-900 text-sm">Accreditation Work Queue</h3><div className="flex gap-1 text-[10px]"><span className="px-2 py-0.5 rounded-full bg-teal-700 text-white">All {d.queueCounts.all}</span><span className="px-2 py-0.5 rounded-full bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]">At Risk {d.queueCounts.atRisk}</span><span className="px-2 py-0.5 rounded-full bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]">Awaiting Verif. {d.queueCounts.awaitingVerification}</span></div></div>
           {d.workQueue.length ? (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">

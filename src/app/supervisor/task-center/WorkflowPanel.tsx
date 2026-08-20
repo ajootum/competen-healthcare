@@ -100,7 +100,7 @@ export default function WorkflowPanel({ provisioned, templates, editable }: { pr
             {f.trigger_event === "pews_high" && <input type="number" min={0} max={20} value={f.pews_threshold} onChange={e => setF({ ...f, pews_threshold: e.target.value })} className={`${sel} w-20`} title="PEWS/EWS threshold" placeholder="EWS ≥" />}
           </div>
           <input value={f.description} onChange={e => setF({ ...f, description: e.target.value })} placeholder="Description (optional)" className={`${sel} w-full`} />
-          <button onClick={create} disabled={!f.name.trim() || busy === "create"} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50">{busy === "create" ? "…" : "Create template"}</button>
+          <button onClick={create} disabled={!f.name.trim() || busy === "create"} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-700 text-white hover:bg-teal-700 disabled:opacity-50">{busy === "create" ? "…" : "Create template"}</button>
         </div>
       )}
 

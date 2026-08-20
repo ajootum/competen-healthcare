@@ -67,7 +67,7 @@ export default function SupervisorNotesPanel({ shiftId, data, editable }: {
             <select value={type} onChange={e => setType(e.target.value)} className={`${sel} flex-1`}>{NOTE_TYPES.map(t => <option key={t} value={t}>{NOTE_TYPE_LABEL[t]}</option>)}</select>
           </div>
           <textarea value={body} onChange={e => setBody(e.target.value)} rows={2} placeholder="Write a note…" className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1.5 resize-none" />
-          <button onClick={add} disabled={!body.trim() || busy === "add"} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50">{busy === "add" ? "…" : "Add Note"}</button>
+          <button onClick={add} disabled={!body.trim() || busy === "add"} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-700 text-white hover:bg-teal-700 disabled:opacity-50">{busy === "add" ? "…" : "Add Note"}</button>
         </div>
       )}
 

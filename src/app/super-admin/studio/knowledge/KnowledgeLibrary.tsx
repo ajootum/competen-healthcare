@@ -60,14 +60,14 @@ export default function KnowledgeLibrary({ objects, cpus }: { objects: KO[]; cpu
       {/* Type summary */}
       <div className="flex flex-wrap gap-2">
         <button onClick={() => setTypeFilter("all")}
-          className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${typeFilter === "all" ? "bg-teal-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+          className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${typeFilter === "all" ? "bg-teal-700 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
           All ({objects.length})
         </button>
         {[...byType.entries()].sort((a, b) => b[1] - a[1]).map(([t, n]) => {
           const ui = KNOWLEDGE_TYPE_UI[t] ?? KNOWLEDGE_TYPE_UI.other;
           return (
             <button key={t} onClick={() => setTypeFilter(t)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${typeFilter === t ? "bg-teal-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+              className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${typeFilter === t ? "bg-teal-700 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
               {ui.icon} {ui.label} ({n})
             </button>
           );
@@ -78,7 +78,7 @@ export default function KnowledgeLibrary({ objects, cpus }: { objects: KO[]; cpu
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search knowledge…"
           className="flex-1 border border-gray-200 rounded-lg px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30" />
         <button onClick={() => setShowNew(v => !v)}
-          className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg">
+          className="bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-4 py-2 rounded-lg">
           {showNew ? "Cancel" : "+ New"}
         </button>
       </div>
@@ -102,7 +102,7 @@ export default function KnowledgeLibrary({ objects, cpus }: { objects: KO[]; cpu
             onChange={e => setForm(f => ({ ...f, content: e.target.value }))} />
           <button disabled={busy || !form.title.trim()}
             onClick={async () => { if (await api("POST", form)) { setShowNew(false); setForm({ title: "", knowledge_type: "anatomy", cpu_id: "", summary: "", content: "" }); } }}
-            className="self-start bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">
+            className="self-start bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-4 py-2 rounded-lg disabled:opacity-50">
             Create knowledge object
           </button>
         </div>

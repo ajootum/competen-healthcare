@@ -42,7 +42,7 @@ export default function RecognitionsManager({ workers, recognitions }: { workers
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <button onClick={() => setAdding(a => !a)} className="px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
+        <button onClick={() => setAdding(a => !a)} className="px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
           {adding ? "Cancel" : "+ Award Recognition"}
         </button>
       </div>
@@ -73,7 +73,7 @@ export default function RecognitionsManager({ workers, recognitions }: { workers
             rows={2} placeholder="Citation / reason (optional)"
             className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none" />
           <button onClick={award} disabled={busy}
-            className="self-end px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
+            className="self-end px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
             {busy ? "Awarding…" : "Award"}
           </button>
         </div>

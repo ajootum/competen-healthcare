@@ -66,7 +66,7 @@ export default function RequestAssessment({ staffId, staffName }: { staffId: str
         <span className="flex items-center gap-2">
           <button onClick={() => { setOpen(false); setNote(null); }} className="text-[11px] px-2.5 py-1 rounded-lg border border-gray-200 bg-white hover:bg-gray-50">Cancel</button>
           <button onClick={submit} disabled={busy}
-            className="text-[11px] font-semibold px-3 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50">
+            className="text-[11px] font-semibold px-3 py-1 rounded-lg bg-teal-700 hover:bg-teal-800 text-white disabled:opacity-50">
             {busy ? "Sending…" : "Send to assessors"}
           </button>
         </span>

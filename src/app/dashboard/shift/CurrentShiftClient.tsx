@@ -25,7 +25,7 @@ async function call(method: string, path: string, body?: any) {
 
 const card = cardClass;
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
-const btn = "px-3.5 py-2 rounded-lg bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50";
+const btn = "px-3.5 py-2 rounded-lg bg-teal-700 text-white text-sm font-medium hover:bg-teal-700 disabled:opacity-50";
 const btnGhost = "px-2.5 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50";
 const RISK: Record<string, string> = { low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", high: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };
 const ACUITY: Record<string, string> = { stable: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", moderate: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", critical: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]" };

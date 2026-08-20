@@ -79,7 +79,7 @@ export default function BrandingEditor({ hospital }: { hospital: Hospital }) {
 
         <div className="flex justify-end">
           <button onClick={save} disabled={saving}
-            className="px-5 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors">
+            className="px-5 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50 transition-colors">
             {saving ? "Saving…" : saved ? "✓ Saved" : "Save Branding"}
           </button>
         </div>

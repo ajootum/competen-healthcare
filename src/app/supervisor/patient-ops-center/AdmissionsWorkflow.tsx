@@ -46,7 +46,7 @@ export default function AdmissionsWorkflow({ departments, beds }: { departments:
           <h3 className="font-semibold text-gray-900 flex items-center gap-2">🆕 Admissions</h3>
           <p className="text-xs text-gray-500 mt-0.5">Register a new operational admission — the single entry point to the census.</p>
         </div>
-        <button onClick={() => setOpen(o => !o)} className="text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3.5 py-2">{open ? "Close" : "New admission"}</button>
+        <button onClick={() => setOpen(o => !o)} className="text-sm font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-3.5 py-2">{open ? "Close" : "New admission"}</button>
       </div>
       {msg && <div className={`mt-3 text-sm rounded-lg px-4 py-2.5 ${msg.kind === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800 border border-[var(--cmp-color-success)]" : "bg-[var(--cmp-surface-warning)] text-amber-800 border border-[var(--cmp-color-warning)]"}`}>{msg.text}</div>}
       {open && (
@@ -61,7 +61,7 @@ export default function AdmissionsWorkflow({ departments, beds }: { departments:
           <label className="text-xs text-gray-500">Isolation<select className={input} value={f.isolation_status} onChange={e => set("isolation_status", e.target.value)}>{ISO.map(a => <option key={a} value={a}>{tc(a)}</option>)}</select></label>
           <label className="text-xs text-gray-500">Stage<select className={input} value={f.current_stage} onChange={e => set("current_stage", e.target.value)}>{STAGES.map(a => <option key={a} value={a}>{tc(a)}</option>)}</select></label>
           <div className="sm:col-span-2 lg:col-span-3 flex justify-end">
-            <button disabled={busy || !f.label.trim()} onClick={admit} className="text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-4 py-2 disabled:opacity-50">Confirm admission</button>
+            <button disabled={busy || !f.label.trim()} onClick={admit} className="text-sm font-medium text-white bg-teal-700 hover:bg-teal-800 rounded-lg px-4 py-2 disabled:opacity-50">Confirm admission</button>
           </div>
           <p className="sm:col-span-2 lg:col-span-3 text-[11px] text-gray-400">Operational identifier only (initials / bed alias) — not clinical documentation. Nurse assignment is done in Assignments.</p>
         </div>

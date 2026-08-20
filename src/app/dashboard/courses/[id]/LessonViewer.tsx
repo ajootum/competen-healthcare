@@ -57,7 +57,7 @@ export default function LessonViewer({ courseId, lessons, initialProgress, initi
                   active === i ? "bg-teal-50 text-teal-700 font-medium" : "text-gray-600 hover:bg-gray-50"
                 }`}>
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 font-semibold ${
-                  completed.has(i) || courseCompleted ? "bg-[var(--cmp-color-success)] text-white" : active === i ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-400"
+                  completed.has(i) || courseCompleted ? "bg-[var(--cmp-color-success)] text-white" : active === i ? "bg-teal-700 text-white" : "bg-gray-100 text-gray-400"
                 }`}>
                   {completed.has(i) || courseCompleted ? "✓" : i + 1}
                 </div>
@@ -119,7 +119,7 @@ export default function LessonViewer({ courseId, lessons, initialProgress, initi
             </button>
           ) : (
             <button onClick={markComplete} disabled={saving}
-              className="bg-teal-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-60 transition-colors">
+              className="bg-teal-700 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 disabled:opacity-60 transition-colors">
               {saving ? "Saving…" : active < lessons.length - 1 ? "Mark Complete & Continue →" : "Complete Course ✓"}
             </button>
           )}

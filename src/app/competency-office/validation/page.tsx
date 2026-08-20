@@ -35,7 +35,7 @@ export default async function ValidationDashboard() {
     <>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div><h1 className="text-2xl font-bold text-gray-900">Validation Queue</h1><p className="text-sm text-gray-500">Review, validate, approve and govern competency evidence — approval updates readiness immediately.</p></div>
-        <Link href="/unit-manager/competency-validations" className="text-xs bg-teal-600 text-white rounded-lg px-3 py-2 hover:bg-teal-700 transition-colors">Open validation workflow</Link>
+        <Link href="/unit-manager/competency-validations" className="text-xs bg-teal-700 text-white rounded-lg px-3 py-2 hover:bg-teal-700 transition-colors">Open validation workflow</Link>
       </div>
       <ValidationTabs />
     </>

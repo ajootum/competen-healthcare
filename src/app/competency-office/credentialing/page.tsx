@@ -39,7 +39,7 @@ export default async function CredentialDashboard() {
     <>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div><h1 className="text-2xl font-bold text-gray-900">Credential Management</h1><p className="text-sm text-gray-500">The system of record for licences, certifications, privileges and verification — one authoritative credential status.</p></div>
-        <Link href="/admin/credentials" className="text-xs bg-teal-600 text-white rounded-lg px-3 py-2 hover:bg-teal-700 transition-colors">+ Add / manage credentials</Link>
+        <Link href="/admin/credentials" className="text-xs bg-teal-700 text-white rounded-lg px-3 py-2 hover:bg-teal-700 transition-colors">+ Add / manage credentials</Link>
       </div>
       <CredentialTabs />
     </>

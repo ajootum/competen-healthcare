@@ -81,7 +81,7 @@ export default async function CrossWorkspaceIntegrationPage() {
 
       <Card title="Cross-workspace integration map" right={<span className="text-[11px] text-gray-400">structural</span>}>
         <div className="flex flex-col items-center">
-          <div className="mb-3 w-20 h-20 rounded-2xl bg-teal-600 text-white flex flex-col items-center justify-center shadow-sm shrink-0">
+          <div className="mb-3 w-20 h-20 rounded-2xl bg-teal-700 text-white flex flex-col items-center justify-center shadow-sm shrink-0">
             <span className="text-base font-bold leading-none">CMO</span>
             <span className="text-[9px] opacity-80 mt-0.5">at centre</span>
           </div>

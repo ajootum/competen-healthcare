@@ -117,7 +117,7 @@ export default function PanelManager({ cycles, assessors }: { cycles: Cycle[]; a
                   <button
                     onClick={() => addAssessor(cycle.id)}
                     disabled={!adding[cycle.id] || saving === cycle.id}
-                    className="px-3 py-1.5 text-xs font-semibold bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-40 transition-colors">
+                    className="px-3 py-1.5 text-xs font-semibold bg-teal-700 text-white rounded-lg hover:bg-teal-700 disabled:opacity-40 transition-colors">
                     {saving === cycle.id ? "Adding…" : "Add"}
                   </button>
                 </div>

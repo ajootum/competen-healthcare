@@ -44,7 +44,7 @@ export default function ScoringManager({ scales }: { scales: Scale[] }) {
   return (
     <>
       <button onClick={() => setOpen(true)}
-        className="px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
+        className="px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
         + Add / Edit
       </button>
 
@@ -76,7 +76,7 @@ export default function ScoringManager({ scales }: { scales: Scale[] }) {
             </div>
             <div className="flex gap-2 mt-2">
               <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600">Cancel</button>
-              <button onClick={saveScale} disabled={saving || !scaleForm.name} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
+              <button onClick={saveScale} disabled={saving || !scaleForm.name} className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
                 {saving ? "Saving…" : "Create Scale"}
               </button>
             </div>
@@ -114,7 +114,7 @@ export default function ScoringManager({ scales }: { scales: Scale[] }) {
             </label>
             <div className="flex gap-2 mt-2">
               <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600">Cancel</button>
-              <button onClick={saveLevel} disabled={saving || !levelForm.label} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
+              <button onClick={saveLevel} disabled={saving || !levelForm.label} className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50">
                 {saving ? "Saving…" : "Add Level"}
               </button>
             </div>

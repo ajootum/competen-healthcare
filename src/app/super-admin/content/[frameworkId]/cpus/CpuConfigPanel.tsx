@@ -59,7 +59,7 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
       <div className="flex gap-1 pt-4">
           {([["blueprint", "Assessment Blueprint"], ["evidence", "Evidence Matrix"], ["critical", "Critical Failures"]] as const).map(([k, label]) => (
             <button key={k} onClick={() => setTab(k)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${tab === k ? "bg-teal-600 text-white" : "text-gray-500 hover:bg-gray-100"}`}>
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${tab === k ? "bg-teal-700 text-white" : "text-gray-500 hover:bg-gray-100"}`}>
               {label}
             </button>
           ))}

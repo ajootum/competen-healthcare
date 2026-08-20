@@ -37,7 +37,7 @@ export default function AiAssistant() {
       <div className="flex items-center gap-2 mb-3"><span className="w-6 h-6 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center text-[11px] font-bold">6</span><h3 className="text-xs font-bold text-gray-900">AI Assistant</h3></div>
       <div className="flex gap-2 mb-2">
         <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && ask(q)} placeholder="Ask me anything about your shift…" className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5" />
-        <button onClick={() => ask(q)} disabled={!q.trim() || busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50">{busy ? "…" : "Ask"}</button>
+        <button onClick={() => ask(q)} disabled={!q.trim() || busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-700 text-white hover:bg-teal-700 disabled:opacity-50">{busy ? "…" : "Ask"}</button>
       </div>
       {answer && <div className="rounded-lg bg-teal-50/50 border border-teal-100 p-2.5 mb-2 text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">{answer}</div>}
       {err && <div className="rounded-lg bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] p-2 mb-2 text-[11px] text-[var(--cmp-text-warning)]">{err}</div>}

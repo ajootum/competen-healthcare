@@ -88,7 +88,7 @@ export default function RequestQueue({ rows, meId }: { rows: RequestRow[]; meId:
                 )}
                 {r.status === "open" && (
                   <button onClick={() => act(r.id, "claim")} disabled={busy === r.id}
-                    className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50">
+                    className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white disabled:opacity-50">
                     {busy === r.id ? "…" : "Claim"}
                   </button>
                 )}
@@ -97,7 +97,7 @@ export default function RequestQueue({ rows, meId }: { rows: RequestRow[]; meId:
                     <button onClick={() => act(r.id, "release")} disabled={busy === r.id}
                       className="text-[11px] font-medium px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">Release</button>
                     <button onClick={() => act(r.id, "complete")} disabled={busy === r.id}
-                      className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50">Mark assessed</button>
+                      className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white disabled:opacity-50">Mark assessed</button>
                   </>
                 )}
                 {r.status === "claimed" && !mine && (

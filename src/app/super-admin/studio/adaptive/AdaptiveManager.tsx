@@ -48,7 +48,7 @@ export default function AdaptiveManager({ exams, bankOptions }: { exams: any[]; 
           <select value={start} onChange={e => setStart(e.target.value)} className={`${inp} w-28`}>{DIFF.map(d => <option key={d.v} value={d.v}>{d.label}</option>)}</select>
           <label className="text-[10px] text-gray-500 ml-2">Pass %</label>
           <input value={pass} onChange={e => setPass(e.target.value)} type="number" min="1" max="100" className={`${inp} w-20`} />
-          <button onClick={create} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2 ml-auto">{busy ? "…" : "Create"}</button>
+          <button onClick={create} disabled={busy} className="text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg px-4 py-2 ml-auto">{busy ? "…" : "Create"}</button>
         </div>
         {err && <p className="text-[11px] text-[var(--cmp-text-critical)] mt-1">{err}</p>}
       </div>

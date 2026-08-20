@@ -65,7 +65,7 @@ export default async function KnowledgeReaderPage({ params }: { params: Promise<
           Want this explained differently, or a quick quiz on it? The AI Copilot cites this exact document.
         </p>
         <Link href="/dashboard/copilot"
-          className="text-xs font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg">
+          className="text-xs font-semibold bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg">
           Ask the Copilot →
         </Link>
       </div>

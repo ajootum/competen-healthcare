@@ -131,7 +131,7 @@ export default function PersonProfileClient({ data, assignableRoles, employmentT
               <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Staff number</label><input value={form.staff_number} onChange={set("staff_number")} className={input} /></div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setEdit(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                <button onClick={saveEdit} disabled={busy} className="flex-1 py-2 bg-teal-600 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{busy ? "Saving…" : "Save"}</button>
+                <button onClick={saveEdit} disabled={busy} className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-60">{busy ? "Saving…" : "Save"}</button>
               </div>
           </div>
         </Modal>

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 // respond -> resolve) over the existing PATCH /api/operations/escalations,
 // which supports acknowledge / assign / escalate / resolve and audits each.
 
-const btn = "px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs font-medium hover:bg-teal-700 disabled:opacity-50";
+const btn = "px-3 py-1.5 rounded-lg bg-teal-700 text-white text-xs font-medium hover:bg-teal-700 disabled:opacity-50";
 const btnGhost = "px-2.5 py-1 rounded-lg border border-gray-300 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50";
 const input = "border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 

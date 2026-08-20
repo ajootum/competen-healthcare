@@ -77,7 +77,7 @@ export default function CycleCreator({ nurses, frameworks }: Props) {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="bg-teal-600 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors">
+        className="bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-teal-700 transition-colors">
         + Create Cycle
       </button>
 
@@ -165,7 +165,7 @@ export default function CycleCreator({ nurses, frameworks }: Props) {
             <div className="-mx-6 px-6 pt-4 mt-2 border-t border-gray-100 flex items-center justify-between gap-3">
               <button onClick={() => setOpen(false)} className="text-sm text-gray-500 hover:text-gray-700 transition-colors">Cancel</button>
               <button onClick={handleCreate} disabled={saving}
-                className="bg-teal-600 text-white text-sm font-semibold px-6 py-2.5 rounded-lg hover:bg-teal-700 disabled:opacity-40 transition-colors">
+                className="bg-teal-700 text-white text-sm font-semibold px-6 py-2.5 rounded-lg hover:bg-teal-700 disabled:opacity-40 transition-colors">
                 {saving ? "Creating…" : "Create Cycle"}
               </button>
             </div>

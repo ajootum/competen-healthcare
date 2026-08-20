@@ -139,7 +139,7 @@ export default function AssessmentBuilder({ cpus, skills, frameworks }: { cpus: 
         )}
 
         <div className="flex items-center gap-2 mt-4">
-          <button onClick={create} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Creating…" : `Create ${TABS.find(t => t.key === tab)!.label.toLowerCase()}`}</button>
+          <button onClick={create} disabled={busy} className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Creating…" : `Create ${TABS.find(t => t.key === tab)!.label.toLowerCase()}`}</button>
           <button onClick={() => setForm({})} className="text-sm text-gray-500 hover:text-gray-700 px-2">Clear</button>
           <span className="text-[11px] text-gray-500 ml-auto">Creates a real assessment asset via the live APIs.</span>
         </div>

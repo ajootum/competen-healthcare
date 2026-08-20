@@ -53,7 +53,7 @@ export default function StandardSettingManager({ studies, bankOptions }: { studi
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Study name" className={`${inp} flex-1`} />
           <select value={method} onChange={e => setMethod(e.target.value)} className={`${inp} lg:w-48`}>{METHODS.map(m => <option key={m.v} value={m.v}>{m.label}</option>)}</select>
           <select value={bank} onChange={e => setBank(e.target.value)} className={`${inp} lg:w-56`}><option value="">Link bank (for impact)…</option>{bankOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
-          <button onClick={create} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2 whitespace-nowrap">{busy ? "…" : "Create"}</button>
+          <button onClick={create} disabled={busy} className="text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 disabled:opacity-50 rounded-lg px-4 py-2 whitespace-nowrap">{busy ? "…" : "Create"}</button>
         </div>
         {err && <p className="text-[11px] text-[var(--cmp-text-critical)] mt-1">{err}</p>}
       </div>

@@ -715,7 +715,7 @@ export function MatchAudit({
             <button
               onClick={() => generateMatchReport(title, info, infoFields, sections, scores, yesLabel, noLabel, partialLabel, assessorComments, assesseeComments, assesseeLabel)}
               disabled={answered === 0}
-              className="text-xs bg-teal-600 hover:bg-teal-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg transition-colors">
+              className="text-xs bg-teal-700 hover:bg-teal-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-3 py-1.5 rounded-lg transition-colors">
               Generate Report
             </button>
             <button onClick={() => setScores({})} className="text-xs text-teal-400 hover:text-white border border-teal-700 px-3 py-1.5 rounded-lg transition-colors">

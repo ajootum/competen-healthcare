@@ -44,7 +44,7 @@ export default function CredentialsManager({ workers, credentials }: { workers: 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <button onClick={() => setAdding(a => !a)} className="px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
+        <button onClick={() => setAdding(a => !a)} className="px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
           {adding ? "Cancel" : "+ Add Credential"}
         </button>
       </div>
@@ -80,7 +80,7 @@ export default function CredentialsManager({ workers, credentials }: { workers: 
               <input type="date" value={form.expiry_date} onChange={e => setForm(p => ({ ...p, expiry_date: e.target.value }))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm" />
             </div>
           </div>
-          <button onClick={create} disabled={busy} className="self-end px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
+          <button onClick={create} disabled={busy} className="self-end px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
             {busy ? "Saving…" : "Add"}
           </button>
         </div>

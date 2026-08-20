@@ -26,7 +26,7 @@ export function CompleteCycleButton({ cycleId }: { cycleId: string }) {
       <div className="flex items-center gap-2">
         <span className="text-xs text-gray-500">Confirm?</span>
         <button onClick={complete} disabled={loading}
-          className="px-3 py-1 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
+          className="px-3 py-1 bg-teal-700 text-white text-xs font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
           {loading ? "…" : "Yes, complete"}
         </button>
         <button onClick={() => setConfirming(false)}

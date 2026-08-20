@@ -35,7 +35,7 @@ function Frame({ name, children }: { name: string | null; children: React.ReactN
     <div className="min-h-screen bg-[#0f1923] flex flex-col">
       <header className="px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <span className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white text-sm font-bold">C</span>
+          <span className="w-8 h-8 rounded-full bg-teal-700 flex items-center justify-center text-white text-sm font-bold">C</span>
           <span className="leading-tight">
             <span className="block text-[15px] font-bold text-white">competen</span>
             <span className="block text-[9px] font-bold uppercase tracking-[0.18em] text-teal-400">Staff Access</span>

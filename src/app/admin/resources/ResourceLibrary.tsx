@@ -42,7 +42,7 @@ export default function ResourceLibrary({ resources, links, competencies }: { re
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <button onClick={() => setAdding(a => !a)} className="px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
+        <button onClick={() => setAdding(a => !a)} className="px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700">
           {adding ? "Cancel" : "+ New Resource"}
         </button>
       </div>
@@ -59,7 +59,7 @@ export default function ResourceLibrary({ resources, links, competencies }: { re
             <input value={form.url} onChange={e => setForm(p => ({ ...p, url: e.target.value }))} placeholder="URL (optional)"
               className="border border-gray-200 rounded-lg px-3 py-2 text-sm" />
           </div>
-          <button onClick={create} disabled={busy} className="self-end px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
+          <button onClick={create} disabled={busy} className="self-end px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 disabled:opacity-50">
             {busy ? "Saving…" : "Create"}
           </button>
         </div>
