@@ -208,7 +208,9 @@ async function main() {
 
   // ---- 7. An arrived patient is standing there -----------------------------------------------------
   const here = await book("Arrived Patient", "18:00", { locationId: siteA });
-  await transitionAppointment(admin, { workspaceId: wsA, appointmentId: here, to: "CONFIRMED", actorId: OWNER, correlationId: "rc-7" });
+  // No confirm step: bookAppointment enters CONFIRMED for staff bookings (2ee597ae, the owner's
+  // 2026-08-12 click-reduction decision), so a transition here is refused as CONFIRMED -> CONFIRMED.
+  // The REQUESTED rung is still exercised, deliberately, in practice-scheduling-harness.
   const arrived = await transitionAppointment(admin, { workspaceId: wsA, appointmentId: here, to: "ARRIVED", actorId: OWNER, correlationId: "rc-7b" });
   ok("7a CONTROL: the patient did arrive, so 7b is not vacuous", arrived.ok, JSON.stringify(arrived));
   const movePresent = await rescheduleAppointment(admin, {

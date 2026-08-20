@@ -157,7 +157,9 @@ async function main() {
   ok("4b CONTROL: it was drawn before it was cancelled", t.blocks.some(b => b.id === wardRound));
 
   // ---- 5. What cannot be dragged says so -------------------------------------------------------------
-  await transitionAppointment(admin, { workspaceId: wsA, appointmentId: evening, to: "CONFIRMED", actorId: OWNER, correlationId: "tl-5" });
+  // No confirm step: bookAppointment enters CONFIRMED for staff bookings (2ee597ae, the owner's
+  // 2026-08-12 click-reduction decision), so a transition here is refused as CONFIRMED -> CONFIRMED.
+  // The REQUESTED rung is still exercised, deliberately, in practice-scheduling-harness.
   await transitionAppointment(admin, { workspaceId: wsA, appointmentId: evening, to: "ARRIVED", actorId: OWNER, correlationId: "tl-5b" });
   const t3 = await timelineDay(admin, ctxA.ctx, DAY, TZ);
   const arrivedBlock = t3.blocks.find(b => b.id === evening);

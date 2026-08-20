@@ -264,7 +264,9 @@ async function main() {
   });
   if (appt2.ok) {
     await scheduleFollowUp(admin, { workspaceId: wsA, followUpId: past.data.id, appointmentId: appt2.data.id, ...base });
-    await transitionAppointment(admin, { workspaceId: wsA, appointmentId: appt2.data.id, to: "CONFIRMED", ...base });
+    // No confirm step: bookAppointment enters CONFIRMED for staff bookings (2ee597ae, the owner's
+    // 2026-08-12 click-reduction decision), so a transition here is refused as CONFIRMED -> CONFIRMED.
+    // The REQUESTED rung is still exercised, deliberately, in practice-scheduling-harness.
     await transitionAppointment(admin, { workspaceId: wsA, appointmentId: appt2.data.id, to: "NO_SHOW", ...base });
     const { data: afterNoShow } = await admin.from("practice_follow_up").select("status").eq("id", past.data.id).single();
     ok("a NO-SHOW releases the obligation too (not being seen is not being settled)",

@@ -147,6 +147,24 @@ async function main() {
   ok("an appointment is booked", true);
 
   // ── 1. Only the state machine may say "confirmed" ──────────────────────────
+  //
+  // ⚠ THE FIXTURE PUTS THIS BACK TO REQUESTED ON PURPOSE, AND THAT IS NOT AN ARTIFICIAL STATE.
+  // bookAppointment has entered CONFIRMED for staff bookings since `2ee597ae A staff booking confirms
+  // itself` -- the owner's 2026-08-12 click-reduction decision -- so this harness's opening premise
+  // silently stopped being true and assertion 1 has been RED ON MAIN ever since, testing a state its
+  // own fixture could no longer produce.
+  //
+  // The property it asserts is untouched by that decision and still governs real appointments:
+  // booking-rules.ts keeps REQUESTED for the patient-facing cases (confirmation_mode conditional, and
+  // the DNA rule's require_approval), and telling a patient their appointment is confirmed when the
+  // practice has not yet agreed to it is exactly the message that must never go out. So the rung is
+  // re-established rather than the assertion deleted -- the repair practice-scheduling-harness already
+  // made, with the same reasoning at its own line.
+  //
+  // ⚠ SET DIRECTLY, NOT THROUGH transitionAppointment, because APPOINTMENT_TRANSITIONS has no
+  // CONFIRMED -> REQUESTED edge and should not grow one for a test's convenience. Un-confirming is not
+  // a thing the product does.
+  await admin.from("practice_appointment").update({ status: "REQUESTED" }).eq("id", appt.data.id);
   const atRequested = await notify(wsA, appt.data.id);
   ok("1. A REQUESTED APPOINTMENT TELLS NOBODY -- only the state machine may claim it is confirmed",
     atRequested.ok && atRequested.data.attempted === null &&
@@ -162,7 +180,17 @@ async function main() {
   ok("the practice switches sms on", enabled.ok, enabled.ok ? "" : enabled.message);
 
   // ── 8. Consent still governs -- these messages get no exemption ────────────
-  await transitionAppointment(admin, { workspaceId: wsA, appointmentId: appt.data.id, to: "CONFIRMED", ...base });
+  //
+  // ⚠ AND THIS CONFIRM IS A REAL TRANSITION AGAIN, not the no-op it had quietly become. With the
+  // fixture on the REQUESTED rung above, REQUESTED -> CONFIRMED is a legal move that this harness now
+  // exercises end to end -- which is the whole narrative it was written to tell: nothing is said while
+  // the appointment is merely requested, and the moment the state machine confirms it, the consent
+  // ladder is what stands between the practice and the patient's phone.
+  const stateConfirmed = await transitionAppointment(admin, {
+    workspaceId: wsA, appointmentId: appt.data.id, to: "CONFIRMED", ...base,
+  });
+  ok("8-setup. the state machine confirms it, and that is what makes a notice possible at all",
+    stateConfirmed.ok, stateConfirmed.ok ? "" : JSON.stringify(stateConfirmed));
   const noConsent = await notify(wsA, appt.data.id);
   ok("8. THE CONSENT LADDER STILL GOVERNS -- a confirmation is not exempt from it",
     noConsent.ok && noConsent.data.attempted?.status === "refused" &&

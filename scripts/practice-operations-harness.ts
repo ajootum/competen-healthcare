@@ -183,7 +183,9 @@ async function main() {
   });
   ok("two appointments book for today", a1.ok && a2.ok, a1.ok ? (a2.ok ? "" : a2.message) : a1.message);
   if (a2.ok) {
-    await transitionAppointment(admin, { workspaceId: wsA, appointmentId: a2.data.id, to: "CONFIRMED", ...base });
+    // No confirm step: bookAppointment enters CONFIRMED for staff bookings (2ee597ae, the owner's
+    // 2026-08-12 click-reduction decision), so a transition here is refused as CONFIRMED -> CONFIRMED.
+    // The REQUESTED rung is still exercised, deliberately, in practice-scheduling-harness.
     await transitionAppointment(admin, { workspaceId: wsA, appointmentId: a2.data.id, to: "CANCELLED", ...base });
   }
 

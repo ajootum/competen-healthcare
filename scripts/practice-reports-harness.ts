@@ -128,9 +128,11 @@ async function main() {
     [a1, a2, a3, a4].map(r => r.ok ? "ok" : r.message).join("; "));
   if (!a1.ok || !a2.ok || !a3.ok || !a4.ok) return report();
 
-  await transitionAppointment(admin, { workspaceId: wsA, appointmentId: a1.data.id, to: "CONFIRMED", ...base });
+  // No confirm step: bookAppointment enters CONFIRMED for staff bookings (2ee597ae, the owner's
+  // 2026-08-12 click-reduction decision), so a transition here is refused as CONFIRMED -> CONFIRMED.
+  // The REQUESTED rung is still exercised, deliberately, in practice-scheduling-harness.
+  // ARRIVED, NO_SHOW and CANCELLED are all legal from CONFIRMED, so each of these is one step now.
   await transitionAppointment(admin, { workspaceId: wsA, appointmentId: a1.data.id, to: "ARRIVED", ...base });
-  await transitionAppointment(admin, { workspaceId: wsA, appointmentId: a2.data.id, to: "CONFIRMED", ...base });
   await transitionAppointment(admin, { workspaceId: wsA, appointmentId: a2.data.id, to: "NO_SHOW", ...base });
   await transitionAppointment(admin, { workspaceId: wsA, appointmentId: a3.data.id, to: "CANCELLED", ...base });
 
