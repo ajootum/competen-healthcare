@@ -279,8 +279,16 @@ export async function retireIdentifier(admin: any, ctx: WorkspaceContext, args: 
   if (!row) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
   if (row.valid_to) return { ok: true, data: { retired: true } };
 
-  // THE PRACTICE ID IS HOW THIS PRODUCT FINDS ITS OWN PATIENTS. Retiring it would leave a record with
-  // no handle of its own -- migration 193 issues exactly one and never reissues.
+  // ⚠ THE GUARD IS UNCHANGED AND ITS OLD REASON HAS GONE STALE, so the reason is rewritten rather
+  // than left to be trusted. It used to say "retiring it would leave a record with no handle of its
+  // own -- migration 193 issues exactly one and never reissues". Migration 289 (CPR-PID-001) stopped
+  // issuing practice ids altogether and made patient_number the handle, so a record whose alias were
+  // retired would still be findable -- the old sentence no longer carries the refusal.
+  //
+  // WHAT DOES: 289 kept the existing ids as "searchable legacy aliases", and the thing an alias is
+  // searched by is a number already PRINTED -- on last year's discharge summary, in a referral
+  // letter, in somebody's notebook. Retiring it does not lose the record; it breaks the only route
+  // from a document already out in the world back to the patient it describes.
   if (row.identifier_type === "practice_id")
     return { ok: false, status: 422, code: "CANNOT_RETIRE", message: "the practice ID is how this record is found here" };
 

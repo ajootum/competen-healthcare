@@ -206,11 +206,48 @@ async function main() {
     before!.identifiers.find(i => i.identifier_type === "hospital_mrn")!.facility?.name === "Mulago National Referral Hospital",
     JSON.stringify(before!.identifiers.find(i => i.identifier_type === "hospital_mrn")?.facility));
 
-  const practiceId = before!.identifiers.find(i => i.identifier_type === "practice_id");
-  ok("7. THE PRACTICE ID CANNOT BE RETIRED -- it is how this product finds its own records",
+  // ── 7. THE LEGACY PRACTICE ID STILL CANNOT BE RETIRED ─────────────────────
+  //
+  // ⚠ THE FIXTURE USED TO GET ONE FOR FREE AND CANNOT ANY MORE, which is why this went red.
+  // Migration 289 (CPR-PID-001, FROZEN, owner decision 2026-08-11) stopped issuing P-XXXXXX at
+  // registration -- "existing practice ids RETIRE to searchable legacy aliases... New registrations
+  // stop issuing them" -- so a patient registered by this harness has a patient_number and no
+  // practice_id row at all, and the assertion was reading an absence rather than testing a rule.
+  //
+  // ⚠ THE RULE IT TESTS IS STILL LIVE, AND DELETING THE ASSERTION WOULD HAVE BEEN THE WRONG READ.
+  // Ten of the sixty patients in this database still carry a legacy alias; retireIdentifier still
+  // refuses to retire one, and it must, because that alias is the number printed on last year's
+  // discharge summary -- the exact case assertion 6 above exists for. So the fixture MINTS one
+  // deliberately, which is honest: adding a practice_id today is precisely creating a legacy alias.
+  const legacyAlias = await addPatientIdentifier(admin, a.ctx, {
+    patientId: p1.data.id, identifierType: "practice_id", value: "P-000777",
+    correlationId: "harness-fac",
+  });
+  ok("7-setup. a legacy practice id can still be recorded on a record that predates the numbering",
+    legacyAlias.ok, legacyAlias.ok ? "" : legacyAlias.message);
+  const after7 = await patientIdentifiers(admin, a.ctx, p1.data.id);
+  const practiceId = after7!.identifiers.find(i => i.identifier_type === "practice_id");
+  ok("7. THE LEGACY PRACTICE ID CANNOT BE RETIRED -- it is the number on documents already sent out",
     !!practiceId &&
     !(await retireIdentifier(admin, a.ctx, { id: practiceId.id, correlationId: "harness-fac" })).ok,
     practiceId ? "" : "no practice id was issued");
+  // ⚠ THE CONTROL, because 7 is a NEGATIVE and a retire that refused EVERYTHING would satisfy it.
+  //
+  // ⚠ ON A THROWAWAY IDENTIFIER, ON THE OTHER PATIENT, AND BOTH HALVES OF THAT MATTER. The first
+  // version of this control retired p1's national_id -- which assertion 6b counts twenty lines further
+  // down, so the control broke it and reported {"a":1,"h":2}. A control that mutates state a later
+  // assertion measures is not a control; it is a second fixture nobody declared. p2's identifiers are
+  // read only by 6c (its hospital_mrn, which must stay active), so a passport minted here for this one
+  // purpose is touched by nothing else in the file.
+  const throwaway = await addPatientIdentifier(admin, a.ctx, {
+    patientId: p2.data.id, identifierType: "passport", value: "PA-CONTROL-7",
+    correlationId: "harness-fac",
+  });
+  ok("7-control-setup. a throwaway identifier exists to try the verb on",
+    throwaway.ok, throwaway.ok ? "" : throwaway.message);
+  ok("7-control. and an ordinary identifier IS retirable, so 7 names this type and not the verb",
+    throwaway.ok && (await retireIdentifier(admin, a.ctx, { id: throwaway.data.id, correlationId: "harness-fac" })).ok,
+    throwaway.ok ? "" : "nothing to try");
 
   const mrnId = before!.identifiers.find(i => i.identifier_type === "hospital_mrn")!.id;
   const retired = await retireIdentifier(admin, a.ctx, { id: mrnId, correlationId: "harness-fac" });
