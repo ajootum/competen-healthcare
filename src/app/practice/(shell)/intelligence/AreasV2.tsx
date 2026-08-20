@@ -7,6 +7,11 @@ import type { treatmentsRecorded, investigationsOrdered } from "@/lib/practice/r
 import CohortSaveControl from "./CohortSaveControl";
 import { SEGMENT_REGISTRY } from "@/lib/practice/segment-registry";
 import { metricById } from "@/lib/practice/intelligence-registry";
+// ⚠ THE SHARED BLOCK, NOT A SECOND COPY. OpenableCountBlock carries the rule that a non-ok status
+// draws an EM DASH AND NEVER A NOUGHT, and it has no prop that makes it do otherwise. Re-rendering a
+// count inline here would give that rule two owners and one maintainer -- Areas.tsx already imports
+// the same component for the same reason.
+import { OpenableCountBlock } from "./Ui";
 import { weekdayPattern, INTELLIGENCE_TABS, type IntelligenceTabKey } from "@/lib/practice/intelligence-constants";
 
 // CPR-PI-001 v2 P0 -- the five rebuilt screen contracts (s6-s10), composed from the EXISTING modules
@@ -788,7 +793,34 @@ export function ClinicalV2Area({ suite, zones, clinical }: {
           })()}
         </section>
       </div>
-      <TrustFooter ids={["pi.top_conditions_by_patients", "pi.top_conditions_by_encounters", "pi.condition_treatment_pairs", "pi.referrals_recorded"]} />
+      {/* ══ MEDICATION REVIEW (CPR-PIE-001 s3) ═════════════════════════════════════════════════
+          ⚠ IT SITS IN CLINICAL RATHER THAN BECOMING A SIXTH AREA. The tab strip is frozen and
+          practice-pi-v2 4-5 pins the screen at exactly five trust footers -- a new area would red
+          both. This is a clinical figure and it belongs beside referrals, not in a tab of its own.
+
+          ⚠⚠ TWO COUNTS, ALWAYS BOTH. "3 due for review" on its own invites the reading that
+          everything else is watched, when forty medications may carry no review date at all. The
+          engine returns the unscheduled count for exactly that reason and the panel may not drop it:
+          rendering the first without the second would put the omission back. */}
+      <section className={CARD}>
+        <h3 className="text-[13px] font-bold text-gray-900">Medication review</h3>
+        {(() => {
+          const meds: any = suite.medications;
+          if (!meds?.available || !meds.data) return <Unavailable module={meds} />;
+          const md: any = meds.data;
+          return (
+            <>
+              <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                <OpenableCountBlock item={md.dueForReview} figureClass="text-amber-700" />
+                <OpenableCountBlock item={md.noReviewDate} />
+              </div>
+              {/* The rule, on the screen, because the rule is what the first figure MEANS. */}
+              <p className="mt-2 text-[10px] leading-relaxed text-gray-500">{md.rule}</p>
+            </>
+          );
+        })()}
+      </section>
+      <TrustFooter ids={["pi.top_conditions_by_patients", "pi.top_conditions_by_encounters", "pi.condition_treatment_pairs", "pi.referrals_recorded", "pi.medication_due_for_review", "pi.medication_no_review_date"]} />
     </div>
   );
 }

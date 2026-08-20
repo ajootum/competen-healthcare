@@ -227,6 +227,31 @@ METRIC_REGISTRY.push(
     nullHandling: "A failed read is unavailable, never 'nothing was prescribed'. Reads are bounded and say so when capped.",
     drillthrough: "/practice/encounters", releaseState: "required", owner: "CPR-PI-001 v2 s12",
   },
+  // ⚠ REGISTERED BEFORE THEY ARE RENDERED, AND THAT ORDER IS NOT PEDANTRY. A figure with no registry
+  // entry has no definition a reader can check, and this screen has already shipped one that cited
+  // pi.avg_visits_per_patient -- a DIFFERENT metric's definition -- because no entry existed for the
+  // number actually on screen. The trust footer names ids; an id that is not here is a footnote
+  // pointing at nothing.
+  {
+    metricId: "pi.medication_due_for_review", version: 1, displayName: "Medications due for review",
+    definition: "practice_medication rows whose status is active or paused and whose next_review_on is on or before today in the practice timezone. A medication with NO review date is NOT counted here -- nobody said when it should be looked at, and this product does not choose an interval on a practitioner's behalf. Those are counted by pi.medication_no_review_date instead.",
+    sourceDomains: ["medication"],
+    numerator: "medications whose review date has arrived or passed",
+    denominator: "not a proportion -- a live backlog, and no denominator is claimed",
+    timeField: "practice_medication.next_review_on", comparisonRule: "none",
+    nullHandling: "A failed read is unreadable with the reason, never a count of nought. A deployment without migration 258 reports the module unavailable and names the migration.",
+    drillthrough: "/practice/medications", releaseState: "conditional", owner: "CPR-PIE-001 s3",
+  },
+  {
+    metricId: "pi.medication_no_review_date", version: 1, displayName: "Medications with no review date",
+    definition: "practice_medication rows whose status is active or paused and whose next_review_on is null. NOT overdue -- unscheduled. It travels beside the due count so that \"3 due for review\" cannot be read as \"everything else is watched\".",
+    sourceDomains: ["medication"],
+    numerator: "medications with no review date set",
+    denominator: "not a proportion -- a live backlog, and no denominator is claimed",
+    timeField: "practice_medication.next_review_on", comparisonRule: "none",
+    nullHandling: "A failed read is unreadable with the reason, never a count of nought.",
+    drillthrough: "/practice/medications", releaseState: "conditional", owner: "CPR-PIE-001 s3",
+  },
   {
     metricId: "pi.referrals_recorded", version: 1, displayName: "Referrals recorded",
     definition: "practice_referral rows in the period by status and destination as typed. RECORDED, NOT SENT (migration 238): a row is the practitioner's note that they decided to refer; accepted/declined reflect only what somebody told them.",

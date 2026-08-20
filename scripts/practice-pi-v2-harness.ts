@@ -231,6 +231,33 @@ async function main() {
     `${(areasSrc.match(/<TrustFooter ids=/g) ?? []).length} footers`);
   ok("4-6. s17: care gaps ROUTE to the owning workspace",
     areasSrc.includes("/practice/follow-ups?filter=overdue") && areasSrc.includes('href="/practice/patients"'));
+
+  // ── 4-5b. MEDICATION REVIEW IS ON THE CLINICAL AREA, NOT IN A TAB OF ITS OWN ───────────────────
+  //
+  // ⚠ WHERE IT WENT IS DECIDED BY TWO FROZEN THINGS. The tab strip is frozen, and 4-5 above pins the
+  // screen at exactly five trust footers -- a sixth area would red both. It is a clinical figure and
+  // it belongs beside referrals.
+  ok("4-5b. the medication panel renders inside the clinical area, adding no sixth footer",
+    areasSrc.includes("suite.medications") && areasSrc.includes("Medication review")
+    && (areasSrc.match(/<TrustFooter ids=/g) ?? []).length === 5,
+    `${(areasSrc.match(/<TrustFooter ids=/g) ?? []).length} footers`);
+  // ⚠⚠ BOTH COUNTS OR NEITHER. "3 due for review" alone invites the reading that everything else is
+  // watched, when forty medications may carry no review date at all. The engine returns the
+  // unscheduled count for exactly that reason and the screen may not drop it.
+  ok("4-5c. ⚠ the panel renders the unscheduled count BESIDE the due count, never the due count alone",
+    areasSrc.includes("md.dueForReview") && areasSrc.includes("md.noReviewDate"),
+    "one figure without the other puts the omission back");
+  // ⚠ AND THE RULE IS ON THE SCREEN, because the rule is what the first figure MEANS.
+  ok("4-5d. the rule that defines `due` is rendered, not left in the engine",
+    areasSrc.includes("{md.rule}"));
+  // ⚠ THE FOOTER MAY ONLY NAME FIGURES THE REGISTRY DEFINES. This screen has already shipped a figure
+  // citing pi.avg_visits_per_patient -- a DIFFERENT metric -- because no entry existed for the number
+  // actually on it. Checked against the registry rather than against a re-typed list.
+  ok("4-5e. ⚠ both medication ids the footer cites EXIST in the metric registry",
+    metricById("pi.medication_due_for_review") !== null && metricById("pi.medication_no_review_date") !== null,
+    "the trust footer points at a definition nobody wrote");
+  ok("4-5e-control. and an id nobody registered is absent, so 4-5e can fail",
+    metricById("pi.medication_invented") === null);
   ok("4-7. the page renders the strip FROM the strip constant, so declaration order cannot reorder it",
     pageSrc.includes("INTELLIGENCE_TAB_STRIP.map(k => INTELLIGENCE_TABS.find(t => t.key === k)!)"));
   ok("4-8. the falsified NO-RATES header is gone and the v2 doctrine stands in its place",
