@@ -46,9 +46,20 @@ const ID = /\b\d{2,3}:\d{1,3}(?:-\d{1,3})?\b|\b[\w-]+\.tsx?:\d+|\bmigrations?\s+
 // ⚠ LINE-PRESERVING COMMENT BLANKING, NOT STRIPPING. Deleting comment lines shifts every line number
 // after them, so a reported offender points at the wrong line — and a previous harness in this repo
 // reddened itself when its own explanatory comments quoted the thing they described.
+// ⚠ LINE COMMENTS ARE BLANKED FIRST, AND THE ORDER IS THE WHOLE FIX. Doing blocks first meant a `/*`
+// appearing INSIDE a `//` comment opened a block that ran to the next `*/` — swallowing real code in
+// between. A route written in prose as `/api/v1/practice/provisioning/*` did exactly that and blanked
+// the twelve lines after it, so a pin looking for a capability literal on one of them read false while
+// the literal was plainly there.
+//
+// ⚠ AND THE FAILURE MODE IS THE DANGEROUS DIRECTION: blanking too MUCH makes this harness under-report.
+// It found a pin that was wrong; it would just as easily have hidden a doctrine violation on any file
+// whose comments mention a glob. Line comments cannot legally contain code, so removing them first is
+// safe, and a `//` inside a block comment is still covered because the block pass follows.
 function blankComments(src: string): string {
-  const noBlock = src.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, " "));
-  return noBlock.split("\n").map(l => l.replace(/\/\/.*$/, m => " ".repeat(m.length))).join("\n");
+  const noLine = src.split("\n")
+    .map(l => l.replace(/(^|[^:])\/\/.*$/, (m, p1) => p1 + " ".repeat(m.length - p1.length))).join("\n");
+  return noLine.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, " "));
 }
 
 /**
@@ -428,6 +439,41 @@ check("PD-013 §9. CONTROL — the scan finds pages that DO collapse nullable re
   NULLABLE_MODULES.some(m => walk(`src/app/super-admin/pd/${m}`, /\.tsx$/)
     .some(f => /\?\.rows\s*\?\?\s*\[\]/.test(blankComments(readFileSync(f, "utf8"))))),
   "no file matched the collapse pattern at all — the detector is looking for the wrong shape");
+
+// ══ CPR-PD-014 §6.2: EVERY WRITE CONTROL ON TECHNICAL OPERATIONS IS CONDITIONED ═══════════════════
+//
+// The API enforced provisioning and launch-flag changes all along; the SCREEN offered both to anybody
+// holding operations.view. That was invisible while one position held every capability — everybody who
+// could see the screen could also use the controls, so the unconditioned branch had no audience.
+// Migration 345's read-only position gives it one, which is why the conditioning ships beside it.
+//
+// ⚠ THIS PIN IS STATIC AND THE GRANTS ARE NOT. Whether a POSITION holds a capability lives in
+// hq_position_capability, so a harness asserting it would need credentials and would join the
+// privileged-live tier that nothing in CI runs — the tier where two PI assertions sat red-if-run for
+// months. What is checkable here is the thing that actually regresses: a control rendered without
+// asking whether this caller may use it.
+const opsConsole = blankComments(readFileSync(
+  "src/app/super-admin/platform-ops/practice/PracticeOpsConsole.tsx", "utf8"));
+const opsPage = blankComments(readFileSync(
+  "src/app/super-admin/platform-ops/practice/page.tsx", "utf8"));
+
+// ⚠ TWO RESOLUTIONS, NOT THREE, AND THE FIRST VERSION OF THIS PIN EXPECTED THREE. `canProvision`
+// deliberately ALIASES `canRetry`: /api/v1/practice/provisioning/* gates provisioning and retry on the
+// same hq.practice.provision.execute, so resolving it twice would let the screen offer a distinction
+// the API does not make. The pin was written against an imagined shape and corrected to the real one.
+check("PD-014 §6.2. the page resolves both write capabilities that exist",
+  /"hq\.practice\.provision\.execute"/.test(opsPage) && /"hq\.practice\.flags\.manage"/.test(opsPage)
+  && /canProvision\s*=/.test(opsPage) && /canManageFlags\s*=/.test(opsPage),
+  "provisioning and flags are separate capabilities and each needs its own answer");
+check("PD-014 §6.2. the provisioning wizard is gated on canProvision",
+  /\{canProvision && \(<>/.test(opsConsole) && /<Stepper step=\{step\} \/>/.test(opsConsole),
+  "the whole wizard, not only its progress indicator");
+check("PD-014 §6.2. the launch-flag TOGGLE is gated, and the flag's STATE still renders either way",
+  /\{canManageFlags \? \(/.test(opsConsole) && /\) : \(\s*<span/.test(opsConsole),
+  "ON/OFF is information; only the ability to press it is a permission");
+check("PD-014 §6.2. CONTROL — every distinct capability resolution keeps its owner branch",
+  (opsPage.match(/hq\.isOwner \|\|/g) ?? []).length >= 2,
+  "decideHq returns capabilities: [] for allow_owner, so a bare array read hides these from break-glass");
 
 console.log(`\n  identifiers preserved in citation carriers: ${citedInPages + citedInLoaders}`);
 console.log(`  identifiers in visible text: ${pageOffenders.length + loaderOffenders.length}\n`);

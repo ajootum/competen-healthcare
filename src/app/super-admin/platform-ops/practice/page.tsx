@@ -48,6 +48,18 @@ export default async function PracticeOperations() {
    * avoids is offering a control that would answer 403 to the person looking at it.
    */
   const canRetry = hq.isOwner || hq.capabilities.includes("hq.practice.provision.execute");
+  // ── CPR-PD-014 s6.2, and it only became TESTABLE with migration 345 ──────────────────────────────
+  //
+  // !! THESE TWO CONTROLS WERE ENFORCED AT THE API AND NOT CONDITIONED HERE, and the reason it never
+  // showed is that one position held every capability: everybody who could SEE this screen could also
+  // USE both controls, so the unconditioned branch had no audience. 345 creates a position that can see
+  // it and do neither, which turns a latent defect into a button that 403s in front of a real person.
+  //
+  // !! PROVISIONING IS THE SAME CAPABILITY AS RETRY, deliberately. Both are the provisioning saga and
+  // /api/v1/practice/provisioning/* gates both on provision.execute -- so one flag, not two, or the
+  // screen would offer a distinction the API does not make.
+  const canProvision = canRetry;
+  const canManageFlags = hq.isOwner || hq.capabilities.includes("hq.practice.flags.manage");
 
   const ops = await loadPracticeOps(admin);
   const gate = await evaluateGate(admin, ops);
@@ -204,6 +216,8 @@ export default async function PracticeOperations() {
         callerId={user.id}
         callerName={profile?.full_name ?? "me"}
         canRetry={canRetry}
+        canProvision={canProvision}
+        canManageFlags={canManageFlags}
         initial={JSON.parse(JSON.stringify({ ...ops, gate }))}
       />
     </div>

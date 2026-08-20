@@ -41,7 +41,7 @@ const STATE_MARK: Record<string, string> = { pass: "✓", fail: "✗", pending: 
 
 const newKey = () => `ops-${Math.random().toString(36).slice(2, 10)}-${Math.random().toString(36).slice(2, 10)}`;
 
-export default function PracticeOpsConsole({ callerId, callerName, initial, canRetry }: {
+export default function PracticeOpsConsole({ callerId, callerName, initial, canRetry, canProvision, canManageFlags }: {
   callerId: string; callerName: string; initial: any;
   /**
    * Whether this caller holds hq.practice.provision.execute, resolved on the SERVER.
@@ -51,6 +51,9 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
    * 403. What it prevents is offering somebody a control that would refuse them.
    */
   canRetry: boolean;
+  /** CPR-PD-014 s6.2. Both gate a real API capability -- see the page for why provisioning reuses retry. */
+  canProvision: boolean;
+  canManageFlags: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err" | "warn"; text: string } | null>(null);
@@ -271,11 +274,23 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
                   <p className="text-[12px] font-semibold text-gray-900">{FLAG_LABEL[f.flag] ?? f.flag}</p>
                   <p className="text-[11px] text-gray-500">{f.note}</p>
                 </div>
-                <button type="button" disabled={busy} onClick={() => toggleFlag(f.flag, !f.enabled)}
-                  className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold disabled:opacity-50 ${
+                {/* !! THE STATE STAYS, THE ACTION GOES. ON/OFF is INFORMATION -- it is what the flag
+                    currently is -- and this button was carrying both jobs at once. Hiding it from a
+                    reader who may not flip it would hide the state as well, leaving them unable to see
+                    what is live on the public site. So the badge renders either way and only the
+                    ability to press it is conditioned (CPR-PD-014 s6.2). */}
+                {canManageFlags ? (
+                  <button type="button" disabled={busy} onClick={() => toggleFlag(f.flag, !f.enabled)}
+                    className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold disabled:opacity-50 ${
+                      f.enabled ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-600"}`}>
+                    {f.enabled ? "ON" : "OFF"}
+                  </button>
+                ) : (
+                  <span className={`shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-bold ${
                     f.enabled ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-600"}`}>
-                  {f.enabled ? "ON" : "OFF"}
-                </button>
+                    {f.enabled ? "ON" : "OFF"}
+                  </span>
+                )}
               </li>
             ))}
           </ul>
@@ -290,6 +305,18 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
           engine: a duplicate-safe request returns the first workspace rather than creating a second.
         </p>
 
+        {/* !! A WHOLE PANEL IS NOT A ROW ACTION. Omission is the right answer for the Retry link on
+            one run -- a missing link beside a finished row reads as "nothing to do here". A missing
+            five-step wizard reads as a broken screen, and this product has been reported broken over
+            exactly that before. So the section keeps its heading and says why it is empty. */}
+        {!canProvision && (
+          <p className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[12px] text-gray-700">
+            Provisioning is not offered to you. It needs the provisioning capability, which this
+            position does not hold; the launch flags above and the register below are read-only for the
+            same reason. Nothing here is broken and nothing is hidden.
+          </p>
+        )}
+        {canProvision && (<>
         <Stepper step={step} />
 
         {step === 1 && (
@@ -343,6 +370,7 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
           {step === 1 && !target && <span className="text-[11px] text-gray-500">Choose who the workspace is for.</span>}
           {step === 3 && !form.displayName.trim() && <span className="text-[11px] text-gray-500">A practice name is required.</span>}
         </div>
+        </>)}
       </section>
 
 

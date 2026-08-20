@@ -60,14 +60,26 @@ Severity is §9's scale: consequence × frequency. **Status** is what the code d
 |---|---|---|---|---|
 | 12 | **Named patient rows disclosed with no access-log entry** — Ask evidence (≤10 named, linked) and cohort lists (≤200); the only row written was the suite-level one | `AUTHORITY_MISMATCH` | **high** | **FIXED** — one row per disclosure, written only when identification happened |
 | 13 | **`export.execute` and `licence.verify` granted and enforced by nothing** — zero routes, zero references | `AUTHORITY_MISMATCH` | low for a user, **medium for governance** | ⚠ **OPEN — needs a ruling.** Ratcheted so a third cannot appear |
-| 14 | **No read-only Product Operations access exists** — one position holds the five screens *and* both writes | `AUTHORITY_MISMATCH` | medium | ⚠ **OPEN — needs a decision.** Precedent: migration 264's CFO-vs-CEO |
-| 15 | **Provision and flag controls enforced at the API, not conditioned in the UI** | `ACTIONABILITY/HFE_DEFECT` | low today, medium after #14 | ⚠ **OPEN — blocked on #14.** Building it first ships a branch no identity can reach |
+| 14 | **No read-only Product Operations access exists** — one position holds the five screens *and* both writes | `AUTHORITY_MISMATCH` | medium | **FIXED** — `practice_product_observer` (migrations 345 + 346): 13 view capabilities, zero writes |
+| 15 | **Provision and flag controls enforced at the API, not conditioned in the UI** | `ACTIONABILITY/HFE_DEFECT` | low today, medium after #14 | **FIXED** — shipped with #14, which is what made it testable. Proven: an observer sees the flag STATE, gets no toggle, no wizard, and 403 from both endpoints |
 
 ### P4b — found by the browser pass
 
 | # | Finding | Class | Sev | Status |
 |---|---|---|---|---|
 | 20 | `/pd/configuration` **scrolled sideways by 194px** at 1440 — a bare `1fr` in an arbitrary Tailwind track is `minmax(auto, 1fr)`, so a `min-w-[560px]` table forced the grid past the viewport. **Five more PD grids had the same unguarded shape**, latent only because no child was wide enough yet | `ACTIONABILITY/HFE_DEFECT` | medium | **FIXED** — all six tracks `minmax(0,…)`; full re-sweep clean |
+
+### P4c — found only by putting a real identity in front of a real screen
+
+| # | Finding | Class | Sev | Status |
+|---|---|---|---|---|
+| 21 | **The observer position got the generic HQ nav, not the Practice workspace** — every PD page reachable by URL and none of it discoverable. `resolveMissionProfile` chooses the shell from `hq_position.product_line_code`, **not from capabilities**, and migration 345 left that column NULL | `ACTIONABILITY/HFE_DEFECT` | **high** | **FIXED** — migration 346 |
+| 22 | **A `/*` inside a `//` comment blinded the doctrine harness**, blanking every line to the next `*/`. The failure direction is the dangerous one: it makes the scan UNDER-report | `n/a — control defect` | **high** | **FIXED** — line comments are blanked first |
+| 23 | **A source path rendered in visible text on the Capability Registry screen**, standing since that module shipped and invisible to the harness because of #22 | `SPEC/UI_DRIFT` | medium | **FIXED** — moved behind `<Cite>` |
+
+⚠ **#21 is the one worth remembering.** The grant table said 13-and-0 and was correct. Both harnesses were
+green. The capability model was right. The workspace was still wrong, and nothing static could have said
+so — it took appointing somebody and looking at what they saw.
 
 ### P5 — controls that could not fail
 
@@ -119,8 +131,9 @@ Each verified absent from `src/` today, not merely edited at some point:
 
 ## Part 4 — the three open items, in the order they should be taken
 
-1. **#14 → #15.** The read-only position, then the UI conditioning. This order is not preference: today
-   no identity can exercise the refused branch, so conditioning built first cannot be tested.
+1. ~~**#14 → #15**~~ — **done.** The order proved itself: the conditioning was only testable once an
+   identity existed that the API would refuse, and appointing one immediately exposed a defect no
+   harness had (see #21).
 2. **#13.** Revoke `export.execute` and `licence.verify`, or record why a dormant grant is intended.
 3. ~~The browser pass~~ — **done. 86/86 rendered clean**, one defect found and fixed (#20 below).
    ⚠ **What it leaves open, precisely.** The sweep proves the screens *render and work*. It does not

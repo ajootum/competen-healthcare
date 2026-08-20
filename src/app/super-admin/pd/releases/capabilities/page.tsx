@@ -59,12 +59,16 @@ export default async function Page() {
       <Warn title="The catalogue is real and it is code, not a governed table">
         <p>
           Twelve capabilities, a full dependency graph in both directions, five configuration artefacts
-          and three default states — all of it shipped as constants in{" "}
-          <span className="font-mono text-[11px]">src/lib/practice/capability-registry.ts</span>, with
-          the closure rules exported so that a screen and a harness use the same rule rather than two
-          copies of it. That is {carried} of §3&apos;s {CAPABILITY_ATTRIBUTES.length} attributes
-          genuinely carried.
+          and three default states — all of it shipped as constants in code rather than as rows in a
+          governed table, with the closure rules exported so that a screen and a harness use the same
+          rule rather than two copies of it. That is {carried} of §3&apos;s{" "}
+          {CAPABILITY_ATTRIBUTES.length} attributes genuinely carried.
         </p>
+        {/* PD-001 §3 is a PLACEMENT rule, so the path survives — behind the disclosure, where a reader
+            who wants to check it can, and out of the sentence they cannot avoid. This violation stood
+            since the module shipped and the doctrine harness could not see it: a `/*` inside a line
+            comment elsewhere in the tree was blanking whole regions before the scan ran. */}
+        <Cite>src/lib/practice/capability-registry.ts</Cite>
         <p className="mt-1.5">
           <span className="font-semibold">
             What a code catalogue cannot do is be governed at runtime.
