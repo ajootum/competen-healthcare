@@ -269,7 +269,9 @@ export async function clinicalTimeline(
   const limit = opts.limit ?? 50;
 
   const { data: encRows, error: encErr } = await admin.from("practice_encounter")
-    .select("id, status, entry_pathway, encounter_mode, reason_for_visit, started_at, completed_at, signed_at, outcome, outcome_note, activity_id")
+    // location_id is selected for the PLACE TAG below. The encounter carries its own (migration 194)
+    // and inherits an activity that carries a facility, and the two are resolved in that order.
+    .select("id, status, entry_pathway, encounter_mode, reason_for_visit, started_at, completed_at, signed_at, outcome, outcome_note, activity_id, location_id")
     .eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId)
     .order("started_at", { ascending: false }).limit(limit);
 
@@ -317,6 +319,64 @@ export async function clinicalTimeline(
     if (res?.error) sourcesUnavailable.push(name);
   }
 
+  // ── WHERE EACH CONSULTATION HAPPENED ───────────────────────────────────────────────────────────
+  //
+  // ⚠ THE PRODUCT HAS ALWAYS STORED THIS AND NEVER SHOWN IT. CPR-OPT-001 D15: "Show the facility, do
+  // not merely store it... the timeline should READ 'Aga Khan - 12 Mar -> Nairobi Hospital - 4 Jun'.
+  // That visual is the product demo. Today it is a column, not a story." JourneyEvent.tags has carried
+  // the comment "Chips: encounter type, location, status" since it was written, and location was the
+  // one of the three nothing ever put there.
+  //
+  // ⚠ TWO SOURCES, IN THIS ORDER, AND THE ORDER IS THE RULE. practice_encounter.location_id is what
+  // THIS consultation recorded; the activity behind it is where the practitioner was that session. The
+  // encounter wins, because a consultation moved mid-session is the case worth being right about --
+  // and launchEncounter's own comment says the activity is "a note about where the work STARTED, not a
+  // field that tracks where the practitioner currently is".
+  //
+  // ⚠ AND A PLACE NOBODY RECORDED GETS NO TAG AT ALL. Not "unknown", not "no facility" -- an absent
+  // chip. A consultation in a practice that records one location has nothing to disambiguate, and a
+  // chip reading "unknown" on every row of a single-site practice is noise that teaches people to stop
+  // reading the chips. A FAILED read is different from an absent one and is named in
+  // sourcesUnavailable, so the screen can say the places could not be read rather than showing none.
+  const activityIds = [...new Set(encounters
+    .map(e => e.activity_id).filter((x: any): x is string => typeof x === "string"))];
+  const [locRes, facRes, actRes] = await Promise.all([
+    admin.from("practice_location").select("id, name, facility_id").eq("workspace_id", ctx.workspaceId),
+    admin.from("practice_facility").select("id, name").eq("workspace_id", ctx.workspaceId),
+    activityIds.length
+      ? admin.from("practice_activity").select("id, facility_id, location_id")
+        .eq("workspace_id", ctx.workspaceId).in("id", activityIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if ((locRes as any).error || (facRes as any).error || (actRes as any).error) sourcesUnavailable.push("places");
+
+  const locById = new Map<string, { name: string; facilityId: string | null }>();
+  for (const l of (((locRes as any).data ?? []) as any[]))
+    locById.set(l.id as string, { name: String(l.name ?? ""), facilityId: l.facility_id ?? null });
+  const facById = new Map<string, string>();
+  for (const f of (((facRes as any).data ?? []) as any[])) facById.set(f.id as string, String(f.name ?? ""));
+  const actById = new Map<string, { facilityId: string | null; locationId: string | null }>();
+  for (const act of (((actRes as any).data ?? []) as any[]))
+    actById.set(act.id as string, { facilityId: act.facility_id ?? null, locationId: act.location_id ?? null });
+
+  /**
+   * The place one consultation happened, as one string, or null when nobody recorded one.
+   *
+   * ⚠ THE FACILITY IS THE HEADLINE AND THE ROOM IS THE DETAIL. "Aga Khan" is what distinguishes one
+   * consultation from another across a peripatetic week; "Clinic 2" does not, and a chip reading
+   * "Clinic 2" on a timeline spanning three hospitals is worse than no chip. So the facility name is
+   * used where there is one, and the location name only where there is no facility above it.
+   */
+  const placeOf = (e: any): string | null => {
+    const viaEncounter = typeof e.location_id === "string" ? locById.get(e.location_id) : undefined;
+    const act = typeof e.activity_id === "string" ? actById.get(e.activity_id) : undefined;
+    const viaActivityLoc = act?.locationId ? locById.get(act.locationId) : undefined;
+    const loc = viaEncounter ?? viaActivityLoc;
+    const facilityId = loc?.facilityId ?? act?.facilityId ?? null;
+    const facility = facilityId ? facById.get(facilityId) : undefined;
+    return (facility && facility.trim()) || (loc?.name && loc.name.trim()) || null;
+  };
+
   const diagByEnc = new Map<string, any[]>();
   for (const d of ((diagRes as any).data ?? []) as any[]) {
     const list = diagByEnc.get(d.encounter_id) ?? [];
@@ -335,7 +395,11 @@ export async function clinicalTimeline(
   for (const e of encounters) {
     const dx = diagByEnc.get(e.id) ?? [];
     const tx = treatByEnc.get(e.id) ?? [];
+    // ⚠ THE PLACE LEADS. It is the chip a practitioner scans a peripatetic week by, and putting it
+    // after the pathway and the mode would bury the one thing no other product can show them.
+    const place = placeOf(e);
     const tags = [
+      ...(place ? [place] : []),
       String(e.entry_pathway).replace(/_/g, " "),
       String(e.encounter_mode).replace(/_/g, " "),
     ];

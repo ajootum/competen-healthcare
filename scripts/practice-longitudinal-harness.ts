@@ -469,6 +469,106 @@ async function main() {
     svcRows === TABLES.length, `${svcRows}/${TABLES.length}`);
   ok("rls-2. anon reads 0 rows from both", leaked === 0, `${leaked} table(s) leaked`);
 
+
+  // ── tl-P. THE FACILITY STORY: CPR-OPT-001 D15 ──────────────────────────────────────────────────
+  //
+  // ⚠ THE ONE THING NO SINGLE-SITE EMR CAN SHOW, AND THE PRODUCT STORED IT WITHOUT SHOWING IT.
+  // The backlog: "the timeline should READ 'Aga Khan - 12 Mar -> Nairobi Hospital - 4 Jun'. That
+  // visual is the product demo. Today it is a column, not a story."
+  //
+  // ⚠ THE FIXTURE NEEDS TWO FACILITIES OR IT PROVES NOTHING. One hospital and every chip reads the
+  // same, so an implementation that stamped a constant would pass. Two, and the wrong answer and the
+  // right answer are different strings on different rows.
+  // ⚠ facility_type, NOT type -- AND THE `!` I FIRST WROTE HERE TURNED THAT TYPO INTO A TypeError.
+  // practice_facility (migration 222) names the column facility_type; practice_location names its own
+  // one `type`. The insert was refused for an unknown column, the error was discarded, and `facAga!.id`
+  // crashed with "Cannot read properties of null" -- the third time this session a non-null assertion
+  // has turned a discarded error into a crash instead of a sentence. Captured and asserted now.
+  const facAgaRes = await admin.from("practice_facility")
+    .insert({ workspace_id: wsA, name: "Aga Khan University Hospital", facility_type: "hospital" })
+    .select("id").single();
+  const facNboRes = await admin.from("practice_facility")
+    .insert({ workspace_id: wsA, name: "Nairobi Hospital", facility_type: "hospital" })
+    .select("id").single();
+  ok("tl-P-fixture-a. two facilities record",
+    !!facAgaRes.data?.id && !!facNboRes.data?.id,
+    facAgaRes.error?.message ?? facNboRes.error?.message ?? "");
+  if (!facAgaRes.data || !facNboRes.data) return report();
+  const locAgaRes = await admin.from("practice_location")
+    .insert({ workspace_id: wsA, name: "Paediatric clinic 2", type: "hospital", active: true, facility_id: facAgaRes.data.id })
+    .select("id").single();
+  const locNboRes = await admin.from("practice_location")
+    .insert({ workspace_id: wsA, name: "Outpatients", type: "hospital", active: true, facility_id: facNboRes.data.id })
+    .select("id").single();
+  ok("tl-P-fixture-b. and a location inside each",
+    !!locAgaRes.data?.id && !!locNboRes.data?.id,
+    locAgaRes.error?.message ?? locNboRes.error?.message ?? "");
+  if (!locAgaRes.data || !locNboRes.data) return report();
+
+  // ⚠ EACH VISIT MUST BE CLOSED BEFORE THE NEXT CAN OPEN, AND MY FIRST FIXTURE IGNORED THAT.
+  // launchEncounter RESUMES rather than creates when the patient already has a live encounter -- its
+  // own "Resume before create" rule -- so two back-to-back launches returned the SAME row, both
+  // location stamps landed on it, and the last one won. The symptom was the unplaced encounter wearing
+  // "Nairobi Hospital", which is the fixture describing a patient who was never at two hospitals.
+  //
+  // Completing between visits is also what actually happens: a patient seen in March and again in June
+  // has a closed March consultation.
+  const closeLive = async () => {
+    const { data: live } = await admin.from("practice_encounter").select("id, status")
+      .eq("workspace_id", wsA).eq("patient_id", patient).in("status", ["DRAFT", "ACTIVE", "PAUSED"]);
+    for (const l of ((live ?? []) as any[])) {
+      if (l.status === "DRAFT") await transitionEncounter(admin, { workspaceId: wsA, encounterId: l.id, to: "ACTIVE", ...base });
+      await transitionEncounter(admin, { workspaceId: wsA, encounterId: l.id, to: "COMPLETED", ...base });
+    }
+  };
+  await closeLive();
+  const encAga = await launchEncounter(admin, {
+    workspaceId: wsA, patientId: patient, pathway: "booked", reasonForVisit: "seen at Aga Khan", ...base,
+  });
+  ok("tl-P-fixture-c. the Aga Khan visit is a NEW encounter, not a resumed one",
+    encAga.ok && encAga.data.resumed === false, JSON.stringify(encAga));
+  await closeLive();
+  const encNbo = await launchEncounter(admin, {
+    workspaceId: wsA, patientId: patient, pathway: "booked", reasonForVisit: "seen at Nairobi", ...base,
+  });
+  ok("tl-P-fixture-d. and so is the Nairobi visit -- two visits, two rows",
+    encNbo.ok && encNbo.data.resumed === false && encNbo.data.id !== (encAga.ok ? encAga.data.id : ""),
+    JSON.stringify(encNbo));
+  // Stamped directly: launchEncounter inherits the place from the running ACTIVITY, and this fixture is
+  // testing the RESOLVER rather than the inheritance -- which practice-activity-harness already owns.
+  if (encAga.ok) await admin.from("practice_encounter").update({ location_id: locAgaRes.data.id }).eq("id", encAga.data.id);
+  if (encNbo.ok) await admin.from("practice_encounter").update({ location_id: locNboRes.data.id }).eq("id", encNbo.data.id);
+
+  const placed = await clinicalTimeline(admin, ctxA, patient);
+  const agaEvent = placed.events.find(e => e.title === "seen at Aga Khan");
+  const nboEvent = placed.events.find(e => e.title === "seen at Nairobi");
+  ok("tl-P1. ⚠ each consultation carries WHERE IT HAPPENED, and the two read differently",
+    agaEvent?.tags.includes("Aga Khan University Hospital") === true
+    && nboEvent?.tags.includes("Nairobi Hospital") === true,
+    JSON.stringify({ aga: agaEvent?.tags, nbo: nboEvent?.tags }));
+  // ⚠ THE FACILITY, NOT THE ROOM. "Clinic 2" does not distinguish one hospital from another on a
+  // peripatetic week, and a chip reading it would be worse than no chip.
+  ok("tl-P2. the chip names the FACILITY rather than the room inside it",
+    agaEvent?.tags.includes("Paediatric clinic 2") === false,
+    JSON.stringify(agaEvent?.tags));
+  // ⚠ THE PLACE LEADS, because it is what a practitioner scans the week by.
+  ok("tl-P3. and it is the FIRST chip, ahead of the pathway and the mode",
+    agaEvent?.tags[0] === "Aga Khan University Hospital", JSON.stringify(agaEvent?.tags));
+  // ⚠ AND A CONSULTATION NOBODY PLACED GETS NO CHIP AT ALL -- not "unknown", not "no facility". The
+  // original encounter in this fixture has no location, and a placeholder on every row of a
+  // single-site practice is noise that teaches people to stop reading the chips.
+  const unplaced = placed.events.find(e => e.kind === "encounters" && e.title === "no outcome recorded");
+  ok("tl-P4. ⚠ a consultation nobody placed carries NO place chip, rather than an invented one",
+    !!unplaced && !unplaced.tags.some(t => /unknown|no facility|unplaced/i.test(t))
+    && unplaced.tags.length === 2,
+    JSON.stringify(unplaced?.tags));
+  // ⚠ CONTROL: a FAILED place read is not the same as an unplaced consultation, and says so.
+  const blindPlaces = await clinicalTimeline(
+    failingOn("practice_facility", "simulated facility failure") as never, ctxA, patient);
+  ok("tl-P5. ⚠ a failed PLACE read is named, so the screen can say the places are missing",
+    blindPlaces.sourcesUnavailable.includes("places"),
+    JSON.stringify(blindPlaces.sourcesUnavailable));
+
   await cleanup();
   const { count: left } = await admin.from("practice_patient_milestone")
     .select("*", { count: "exact", head: true }).eq("patient_id", patient);
