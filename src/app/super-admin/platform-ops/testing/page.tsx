@@ -31,7 +31,7 @@ export default async function TestingPage() {
 
   const header = (
     <>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Testing &amp; Simulation</span>
@@ -39,7 +39,7 @@ export default async function TestingPage() {
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">🧪</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Testing &amp; Simulation <span className="text-gray-300 font-medium text-lg">(NCP-012)</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Testing &amp; Simulation <span className="text-gray-500 font-medium text-lg">(NCP-012)</span></h1>
           <p className="text-sm text-gray-500">Author test suites that assert outcomes against live configuration — executed server-side, gating promotion.</p>
         </div>
       </div>
@@ -57,7 +57,7 @@ export default async function TestingPage() {
         <Stat label="Test Cases" value={cases} sub="across all suites" />
       </div>
       <TestCentre suites={listS} objects={(objects ?? []) as any[]} />
-      <p className="text-[11px] text-gray-400">Six test types execute against the live object definitions (schema conformance, dependency safety, metric RAG, rule decision, permission policy, object status). Sandbox provisioning, synthetic-data generation, performance/load testing and CI integration (NCP-012 §4/§6) are next-phase.</p>
+      <p className="text-[11px] text-gray-500">Six test types execute against the live object definitions (schema conformance, dependency safety, metric RAG, rule decision, permission policy, object status). Sandbox provisioning, synthetic-data generation, performance/load testing and CI integration (NCP-012 §4/§6) are next-phase.</p>
     </div>
   );
 }

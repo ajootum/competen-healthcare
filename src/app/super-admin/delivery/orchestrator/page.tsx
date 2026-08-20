@@ -34,7 +34,7 @@ export default async function OrchestratorPage() {
         <div>
           <p className="text-[11px] font-semibold text-violet-500 uppercase tracking-widest mb-0.5">CDP-001 · Delivery Orchestrator</p>
           <h1 className="text-xl font-bold text-gray-900">Delivery Orchestrator</h1>
-          <p className="text-gray-400 text-sm mt-0.5">The event→schedule→deliver loop — evaluates active assignment rules and materialises pending competency deliveries.</p>
+          <p className="text-gray-500 text-sm mt-0.5">The event→schedule→deliver loop — evaluates active assignment rules and materialises pending competency deliveries.</p>
         </div>
         <Link href="/super-admin/delivery" className="text-xs font-semibold text-gray-500 hover:text-violet-700 border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Delivery</Link>
       </div>
@@ -55,7 +55,7 @@ export default async function OrchestratorPage() {
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-0.5">{k.label}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-0.5">{k.label}</p>
               </div>
             ))}
           </div>
@@ -64,16 +64,16 @@ export default async function OrchestratorPage() {
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <h2 className="font-semibold text-gray-900 text-sm">Run orchestration</h2>
-                <p className="text-[11px] text-gray-400">Materialises every active rule that has never been delivered into a target-based assignment, emitting a competency.assigned event each. Idempotent — already-delivered rules are skipped. Runs daily via cron.</p>
+                <p className="text-[11px] text-gray-500">Materialises every active rule that has never been delivered into a target-based assignment, emitting a competency.assigned event each. Idempotent — already-delivered rules are skipped. Runs daily via cron.</p>
               </div>
               <OrchestratorRunner pending={q.kpis.pending} />
             </div>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-gray-50"><p className="text-[11px] text-gray-400">{q.rows.length} active rule{q.rows.length === 1 ? "" : "s"} · pending shown first</p></div>
+            <div className="px-4 py-2.5 border-b border-gray-50"><p className="text-[11px] text-gray-500">{q.rows.length} active rule{q.rows.length === 1 ? "" : "s"} · pending shown first</p></div>
             {q.rows.length === 0 ? (
-              <p className="text-xs text-gray-400 px-4 py-8 text-center">No active assignment rules. Author rules in the Competency Office to drive delivery.</p>
+              <p className="text-xs text-gray-500 px-4 py-8 text-center">No active assignment rules. Author rules in the Competency Office to drive delivery.</p>
             ) : (
               <div className="divide-y divide-gray-50">
                 {q.rows.map(r => (
@@ -81,7 +81,7 @@ export default async function OrchestratorPage() {
                     <span className={`text-[9px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0 w-20 text-center ${r.delivered ? "text-teal-700 bg-teal-50 border-teal-100" : "text-violet-700 bg-violet-50 border-violet-100"}`}>{r.delivered ? "Delivered" : "Pending"}</span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-gray-800 truncate">{r.competency}</p>
-                      <p className="text-[11px] text-gray-400">{r.target} · {r.population} in population · due in {r.dueDays}d</p>
+                      <p className="text-[11px] text-gray-500">{r.target} · {r.population} in population · due in {r.dueDays}d</p>
                     </div>
                     <span className={`text-[9px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0 ${PRIORITY[r.priority] ?? PRIORITY.low}`}>{r.priority}</span>
                   </div>

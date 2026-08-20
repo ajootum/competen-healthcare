@@ -52,7 +52,7 @@ export default async function RegulatoryIntelligencePage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-002 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Regulatory Intelligence &amp; Standards Mapping</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Which regulations require each competency, which competencies support accreditation, and where the compliance gaps are — the intelligence lens over the standards library.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Which regulations require each competency, which competencies support accreditation, and where the compliance gaps are — the intelligence lens over the standards library.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/super-admin/studio/standards" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Author mappings →</Link>
@@ -61,7 +61,7 @@ export default async function RegulatoryIntelligencePage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No competency definitions yet — regulatory intelligence computes once the registry has competencies and standard mappings.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No competency definitions yet — regulatory intelligence computes once the registry has competencies and standard mappings.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -81,7 +81,7 @@ export default async function RegulatoryIntelligencePage() {
                 {d.bodies.map((b: any) => (
                   <div key={b.body} className="flex items-center gap-2 border border-gray-100 rounded-lg px-3 py-1.5">
                     <span className="text-[12px] font-bold text-emerald-700">{bodyLabel(b.body)}</span>
-                    <span className="text-[10px] text-gray-400">{b.standards} standard{b.standards === 1 ? "" : "s"} · {b.competencies} comp</span>
+                    <span className="text-[10px] text-gray-500">{b.standards} standard{b.standards === 1 ? "" : "s"} · {b.competencies} comp</span>
                   </div>
                 ))}
               </div>
@@ -93,10 +93,10 @@ export default async function RegulatoryIntelligencePage() {
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="text-sm font-bold text-gray-800">Standards Library</p>
-                <p className="text-[10px] text-gray-400">{d.standards.length} clauses · coverage → competencies</p>
+                <p className="text-[10px] text-gray-500">{d.standards.length} clauses · coverage → competencies</p>
               </div>
               {d.standards.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-sm text-gray-400">No standard mappings yet. <Link href="/super-admin/studio/standards" className="text-[var(--cmp-text-success)] hover:underline">Map the first standard →</Link></p></div>
+                <div className="p-6 text-center"><p className="text-sm text-gray-500">No standard mappings yet. <Link href="/super-admin/studio/standards" className="text-[var(--cmp-text-success)] hover:underline">Map the first standard →</Link></p></div>
               ) : (
                 <div className="max-h-[420px] overflow-y-auto">
                   <table className="w-full">
@@ -108,7 +108,7 @@ export default async function RegulatoryIntelligencePage() {
                               <span className="text-[9px] font-bold text-emerald-700 bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded px-1 py-0.5 shrink-0">{bodyLabel(s.body)}</span>
                               <span className="text-[12px] font-semibold text-gray-800">{s.ref}</span>
                             </div>
-                            {s.title && <p className="text-[10px] text-gray-400 mt-0.5 leading-snug line-clamp-1">{s.title}</p>}
+                            {s.title && <p className="text-[10px] text-gray-500 mt-0.5 leading-snug line-clamp-1">{s.title}</p>}
                           </td>
                           <td className="py-2 pr-4 pl-2 w-40"><CoverageBar s={s} /></td>
                         </tr>
@@ -117,7 +117,7 @@ export default async function RegulatoryIntelligencePage() {
                   </table>
                 </div>
               )}
-              <div className="px-4 py-2 border-t border-gray-50 flex gap-3 text-[9px] text-gray-400">
+              <div className="px-4 py-2 border-t border-gray-50 flex gap-3 text-[9px] text-gray-500">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />full</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-warning)]" />partial</span>
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300" />reference</span>
@@ -128,10 +128,10 @@ export default async function RegulatoryIntelligencePage() {
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="text-sm font-bold text-gray-800">Coverage by clinical domain</p>
-                <p className="text-[10px] text-gray-400">weakest first</p>
+                <p className="text-[10px] text-gray-500">weakest first</p>
               </div>
               {d.domainGaps.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-sm text-gray-400">No domains to profile.</p></div>
+                <div className="p-6 text-center"><p className="text-sm text-gray-500">No domains to profile.</p></div>
               ) : (
                 <div className="max-h-[420px] overflow-y-auto">
                   <table className="w-full">
@@ -145,7 +145,7 @@ export default async function RegulatoryIntelligencePage() {
                               <span className="text-[11px] font-semibold text-gray-600 tabular-nums w-8 text-right">{g.pct}%</span>
                             </div>
                           </td>
-                          <td className="py-2 pr-4 pl-2 text-right text-[11px] text-gray-400 tabular-nums w-20">{g.unmapped > 0 ? <span className="text-[var(--cmp-text-error)] font-semibold">{g.unmapped} gap</span> : "covered"}</td>
+                          <td className="py-2 pr-4 pl-2 text-right text-[11px] text-gray-500 tabular-nums w-20">{g.unmapped > 0 ? <span className="text-[var(--cmp-text-error)] font-semibold">{g.unmapped} gap</span> : "covered"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -159,14 +159,14 @@ export default async function RegulatoryIntelligencePage() {
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <p className="text-sm font-bold text-gray-800">Compliance Gap Analysis</p>
-              <p className="text-[10px] text-gray-400">unmapped competencies · highest-risk first</p>
+              <p className="text-[10px] text-gray-500">unmapped competencies · highest-risk first</p>
             </div>
             {d.unmapped.length === 0 ? (
               <div className="p-6 text-center"><p className="text-sm text-[var(--cmp-text-success)] font-medium">Every analysed competency is mapped to at least one standard.</p></div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px]">
-                  <thead><tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                  <thead><tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
                     <th className="text-left py-2 pl-4 pr-2">Competency</th>
                     <th className="text-left py-2 px-2">Risk</th>
                     <th className="text-left py-2 px-2">Domain</th>
@@ -176,7 +176,7 @@ export default async function RegulatoryIntelligencePage() {
                   <tbody>
                     {d.unmapped.map((r: GovRecord) => (
                       <tr key={r.id} className="border-t border-gray-50">
-                        <td className="py-2 pl-4 pr-2 text-[12px] font-medium text-gray-800">{r.name}{r.code && <span className="text-[10px] text-gray-400 ml-1">{r.code}</span>}</td>
+                        <td className="py-2 pl-4 pr-2 text-[12px] font-medium text-gray-800">{r.name}{r.code && <span className="text-[10px] text-gray-500 ml-1">{r.code}</span>}</td>
                         <td className="py-2 px-2"><span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 capitalize ${RISK_META[r.risk] ?? RISK_META.standard}`}>{r.risk}</span></td>
                         <td className="py-2 px-2 text-[11px] text-gray-500">{r.domain ?? "—"}</td>
                         <td className="py-2 px-2 text-[11px] text-gray-500">{r.owner ?? <span className="text-[var(--cmp-text-error)]">unowned</span>}</td>
@@ -197,7 +197,7 @@ export default async function RegulatoryIntelligencePage() {
             )}
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is live from the standard-mapping store. The Standards Library is the distinct clauses actually mapped; gap analysis lists competencies with no mapping (regulatory gaps) and those mapped only weakly, prioritised by clinical risk. Authoring mappings, importing standards and approving them happens in <Link href="/super-admin/studio/standards" className="text-[var(--cmp-text-success)] hover:underline">the Standards Mapping Centre</Link>; per the CGR mandate only authorised governance users approve mappings, and every change is audited.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every figure is live from the standard-mapping store. The Standards Library is the distinct clauses actually mapped; gap analysis lists competencies with no mapping (regulatory gaps) and those mapped only weakly, prioritised by clinical risk. Authoring mappings, importing standards and approving them happens in <Link href="/super-admin/studio/standards" className="text-[var(--cmp-text-success)] hover:underline">the Standards Mapping Centre</Link>; per the CGR mandate only authorised governance users approve mappings, and every change is audited.</p>
         </div>
       )}
     </div>

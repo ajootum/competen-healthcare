@@ -43,7 +43,7 @@ export default async function OrganisationalLearningPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-027 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Organisational Learning &amp; Knowledge Transformation</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Does the learning loop actually close? Proven signal→competency causation above the operational picture of how events are handled.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Does the learning loop actually close? Proven signal→competency causation above the operational picture of how events are handled.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/competency-office/quality-feedback" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Signal correlation →</Link>
@@ -52,17 +52,17 @@ export default async function OrganisationalLearningPage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No quality events, competency changes or learning links recorded yet.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No quality events, competency changes or learning links recorded yet.</p></div>
       ) : (
         <div className="space-y-4">
           {/* ── LAYER 1: causal closure ── */}
           <div>
             <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Proven closure — signal caused change</h2>
+              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Proven closure — signal caused change</h2>
               <span className="text-[9px] font-bold text-emerald-700 bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded px-1.5 py-0.5">CAUSAL</span>
               {L.ready && (
                 <div className="ml-auto flex items-center gap-2 flex-wrap">
-                  {d.candidates.unlinkedTotal > 0 && <span className="text-[10px] text-gray-400">{d.candidates.unlinkedTotal} unlinked signal{d.candidates.unlinkedTotal === 1 ? "" : "s"}</span>}
+                  {d.candidates.unlinkedTotal > 0 && <span className="text-[10px] text-gray-500">{d.candidates.unlinkedTotal} unlinked signal{d.candidates.unlinkedTotal === 1 ? "" : "s"}</span>}
                   <SuggestLinks unlinked={d.candidates.unlinkedTotal} />
                   <ProposeLink signals={d.candidates.signals} competencies={d.candidates.competencies} />
                 </div>
@@ -92,11 +92,11 @@ export default async function OrganisationalLearningPage() {
                   <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                       <p className="text-sm font-bold text-gray-800">Learning linkage register</p>
-                      <p className="text-[10px] text-gray-400">signal → competency change</p>
+                      <p className="text-[10px] text-gray-500">signal → competency change</p>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-[680px]">
-                        <thead><tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                        <thead><tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
                           <th className="text-left py-2 pl-4 pr-2">Signal</th>
                           <th className="text-left py-2 px-2">Change</th>
                           <th className="text-left py-2 px-2">Type</th>
@@ -108,11 +108,11 @@ export default async function OrganisationalLearningPage() {
                             <tr key={r.id} className="border-t border-gray-50">
                               <td className="py-2 pl-4 pr-2">
                                 <p className="text-[12px] font-medium text-gray-800 truncate max-w-[220px]">{r.source}{r.byAi && <span className="ml-1 text-[9px] font-bold text-violet-600">AI</span>}</p>
-                                <p className="text-[10px] text-gray-400">{r.sourceType}</p>
+                                <p className="text-[10px] text-gray-500">{r.sourceType}</p>
                               </td>
                               <td className="py-2 px-2 text-[12px] text-gray-700 truncate max-w-[180px]">{r.target}</td>
                               <td className="py-2 px-2 text-[11px] text-gray-500">{r.linkType}</td>
-                              <td className="py-2 px-2 text-center text-[11px] tabular-nums">{r.days == null ? <span className="text-gray-300">—</span> : <span className="font-semibold text-gray-700">{r.days}</span>}</td>
+                              <td className="py-2 px-2 text-center text-[11px] tabular-nums">{r.days == null ? <span className="text-gray-500">—</span> : <span className="font-semibold text-gray-700">{r.days}</span>}</td>
                               <td className="py-2 pr-4 pl-2">
                                 <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${(STATUS_META[r.status] ?? STATUS_META.proposed).cls}`}>{(STATUS_META[r.status] ?? STATUS_META.proposed).label}</span>
                                 <LinkDecisions id={r.id} status={r.status} />
@@ -126,7 +126,7 @@ export default async function OrganisationalLearningPage() {
 
                   <div className="bg-white rounded-xl border border-gray-100 p-4">
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Transformation type (§7)</p>
-                    {L.types.length === 0 ? <p className="text-[12px] text-gray-400">—</p> : (
+                    {L.types.length === 0 ? <p className="text-[12px] text-gray-500">—</p> : (
                       <div className="space-y-1.5">
                         {L.types.map((t: any) => (
                           <div key={t.type} className="flex items-center justify-between gap-2 border border-gray-50 rounded-lg px-2.5 py-1.5">
@@ -136,7 +136,7 @@ export default async function OrganisationalLearningPage() {
                         ))}
                       </div>
                     )}
-                    <p className="text-[10px] text-gray-400 mt-3">Every link carries a mandatory rationale and is confirmed by a person — AI may propose, never confirm.</p>
+                    <p className="text-[10px] text-gray-500 mt-3">Every link carries a mandatory rationale and is confirmed by a person — AI may propose, never confirm.</p>
                   </div>
                 </div>
               </>
@@ -147,16 +147,16 @@ export default async function OrganisationalLearningPage() {
           <div className="bg-white rounded-xl border border-gray-100 p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Knowledge transformation lifecycle (§6)</p>
-              <span className="text-[10px] text-gray-400">signal → action → linkage → proven closure</span>
+              <span className="text-[10px] text-gray-500">signal → action → linkage → proven closure</span>
             </div>
             <div className="space-y-2">
               {d.lifecycle.map((l: any, i: number) => (
                 <div key={l.step} className="flex items-center gap-3">
-                  <span className="text-[10px] font-bold text-gray-300 tabular-nums w-4">{i + 1}</span>
+                  <span className="text-[10px] font-bold text-gray-500 tabular-nums w-4">{i + 1}</span>
                   <span className="text-[11px] text-gray-600 w-40 shrink-0">{l.step}</span>
                   <div className="flex-1 h-3 rounded bg-gray-50 overflow-hidden"><div className={`h-full rounded ${i === d.lifecycle.length - 1 ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-success)]"}`} style={{ width: `${(l.n / lifeMax) * 100}%` }} /></div>
                   <span className="text-[12px] font-bold text-gray-700 tabular-nums w-10 text-right">{l.n}</span>
-                  <span className="text-[10px] text-gray-400 w-44 shrink-0">{l.note}</span>
+                  <span className="text-[10px] text-gray-500 w-44 shrink-0">{l.note}</span>
                 </div>
               ))}
             </div>
@@ -164,7 +164,7 @@ export default async function OrganisationalLearningPage() {
 
           {/* ── LAYER 2: operational ── */}
           <div className="flex items-center gap-2 pt-1">
-            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Operational handling — all events</h2>
+            <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Operational handling — all events</h2>
             <span className="text-[9px] font-bold text-gray-500 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5">RECORDED FACTS</span>
           </div>
 
@@ -181,10 +181,10 @@ export default async function OrganisationalLearningPage() {
             <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Recurrence by event type (§14)</p>
-                <span className={`text-[11px] font-bold ${k.recurrenceDelta == null ? "text-gray-400" : k.recurrenceDelta < 0 ? "text-[var(--cmp-text-success)]" : k.recurrenceDelta > 0 ? "text-[var(--cmp-text-error)]" : "text-gray-500"}`}>overall {deltaFmt(k.recurrenceDelta)} vs prior 90d</span>
+                <span className={`text-[11px] font-bold ${k.recurrenceDelta == null ? "text-gray-500" : k.recurrenceDelta < 0 ? "text-[var(--cmp-text-success)]" : k.recurrenceDelta > 0 ? "text-[var(--cmp-text-error)]" : "text-gray-500"}`}>overall {deltaFmt(k.recurrenceDelta)} vs prior 90d</span>
               </div>
               {d.types.length === 0 ? (
-                <p className="text-[12px] text-gray-400">Not enough event history to measure recurrence.</p>
+                <p className="text-[12px] text-gray-500">Not enough event history to measure recurrence.</p>
               ) : (
                 <>
                   <div className="space-y-1.5">
@@ -195,12 +195,12 @@ export default async function OrganisationalLearningPage() {
                           <div className="flex-1 h-2 rounded bg-gray-50 overflow-hidden"><div className="h-full bg-gray-300 rounded" style={{ width: `${(t.prior / typeMax) * 100}%` }} /></div>
                           <div className="flex-1 h-2 rounded bg-gray-50 overflow-hidden"><div className="h-full bg-[var(--cmp-color-success)] rounded" style={{ width: `${(t.recent / typeMax) * 100}%` }} /></div>
                         </div>
-                        <span className="text-[11px] tabular-nums w-14 text-right"><span className="text-gray-400">{t.prior}</span><span className="text-gray-300">→</span><span className="font-bold text-gray-700">{t.recent}</span></span>
-                        <span className={`text-[10px] font-bold tabular-nums w-8 text-right ${t.delta < 0 ? "text-[var(--cmp-text-success)]" : t.delta > 0 ? "text-[var(--cmp-text-error)]" : "text-gray-300"}`}>{t.delta > 0 ? `+${t.delta}` : t.delta || "—"}</span>
+                        <span className="text-[11px] tabular-nums w-14 text-right"><span className="text-gray-500">{t.prior}</span><span className="text-gray-500">→</span><span className="font-bold text-gray-700">{t.recent}</span></span>
+                        <span className={`text-[10px] font-bold tabular-nums w-8 text-right ${t.delta < 0 ? "text-[var(--cmp-text-success)]" : t.delta > 0 ? "text-[var(--cmp-text-error)]" : "text-gray-500"}`}>{t.delta > 0 ? `+${t.delta}` : t.delta || "—"}</span>
                       </div>
                     ))}
                   </div>
-                  <div className="flex gap-3 mt-2.5 pt-2 border-t border-gray-50 text-[9px] text-gray-400">
+                  <div className="flex gap-3 mt-2.5 pt-2 border-t border-gray-50 text-[9px] text-gray-500">
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300" />prior 90d</span>
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />last 90d</span>
                     <span className="ml-auto">falling recurrence = the loop is working</span>
@@ -212,26 +212,26 @@ export default async function OrganisationalLearningPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Competency evolution (§7)</p>
               {d.evolution.total === 0 ? (
-                <p className="text-[12px] text-gray-400">No competency changes raised yet.</p>
+                <p className="text-[12px] text-gray-500">No competency changes raised yet.</p>
               ) : (
                 <>
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     <div className="border border-gray-100 rounded-lg p-2.5"><p className="text-xl font-bold text-[var(--cmp-text-success)] tabular-nums">{d.evolution.done}</p><p className="text-[10px] text-gray-500">enacted</p></div>
                     <div className="border border-gray-100 rounded-lg p-2.5"><p className={`text-xl font-bold tabular-nums ${d.evolution.open ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{d.evolution.open}</p><p className="text-[10px] text-gray-500">in flight</p></div>
                   </div>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1.5">By kind</p>
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1.5">By kind</p>
                   <div className="flex flex-wrap gap-1.5">
                     {(["major", "minor", "revision"] as const).map((kd) => (
                       <span key={kd} className="text-[10px] text-gray-600 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 capitalize">{kd} <span className="font-semibold">{d.evolution.byKind[kd]}</span></span>
                     ))}
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-3"><Link href="/super-admin/cgr/change-control" className="text-[var(--cmp-text-success)] hover:underline">Change control →</Link></p>
+                  <p className="text-[10px] text-gray-500 mt-3"><Link href="/super-admin/cgr/change-control" className="text-[var(--cmp-text-success)] hover:underline">Change control →</Link></p>
                 </>
               )}
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">
+          <p className="text-[11px] text-gray-500 leading-relaxed">
             {hasLinks
               ? <><span className="font-medium text-gray-500">Two layers, deliberately separated.</span> The causal layer is proven: each link is a governance assertion — signal, resulting change, mandatory rationale, human confirmation — so closure rate and time-to-improvement are measured, not inferred. Signal coverage tells you how much of the event stream is actually linked; the operational layer below covers every event, linked or not. </>
               : <><span className="font-medium text-gray-500">The operational layer is real but not proof.</span> Conversion, cycle time and recurrence are computed from recorded fields on quality events. Competency changes are counted alongside — not causally attributed — until learning links are asserted above. </>}

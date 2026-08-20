@@ -39,10 +39,10 @@ function KpiCard({ icon, iconBg, label, value, sub, muted, spark, sparkColor, to
         <span className="text-[11px] font-semibold text-gray-500">{label}</span>
         <span className={`w-7 h-7 rounded-lg ${iconBg} flex items-center justify-center text-sm shrink-0`}>{icon}</span>
       </div>
-      <p className={`text-2xl font-bold mt-1.5 tabular-nums ${muted ? "text-gray-400" : tone ?? "text-gray-900"}`}>{value}</p>
-      <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{sub}</p>
+      <p className={`text-2xl font-bold mt-1.5 tabular-nums ${muted ? "text-gray-500" : tone ?? "text-gray-900"}`}>{value}</p>
+      <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">{sub}</p>
       <div className="mt-2 -mb-1">
-        {muted ? <div className="h-7 flex items-center"><span className="text-[9px] text-gray-300">Not yet provisioned</span></div> : <Sparkline data={spark ?? []} color={sparkColor ?? "#14b8a6"} />}
+        {muted ? <div className="h-7 flex items-center"><span className="text-[9px] text-gray-500">Not yet provisioned</span></div> : <Sparkline data={spark ?? []} color={sparkColor ?? "#14b8a6"} />}
       </div>
     </div>
   );
@@ -240,7 +240,7 @@ export default async function MissionControl({ searchParams }: { searchParams: P
       {/* 2) Operations ribbon */}
       <div className={`${card} px-5 py-3.5 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm`}>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">Operations Region</span>
+          <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Operations Region</span>
           <span className="text-[11px] font-semibold text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] rounded px-2 py-0.5">Production</span>
         </div>
         {[
@@ -250,8 +250,8 @@ export default async function MissionControl({ searchParams }: { searchParams: P
           { l: "Last Backup", v: ops.lastBackup ? relTime(ops.lastBackup) : "Not tracked", muted: !ops.lastBackup },
         ].map(x => (
           <div key={x.l} className="flex flex-col">
-            <span className="text-[10px] text-gray-400">{x.l}</span>
-            <span className={`text-sm font-semibold ${x.muted ? "text-gray-400" : "text-gray-800"}`}>{x.v}</span>
+            <span className="text-[10px] text-gray-500">{x.l}</span>
+            <span className={`text-sm font-semibold ${x.muted ? "text-gray-500" : "text-gray-800"}`}>{x.v}</span>
           </div>
         ))}
         <div className="flex items-center gap-3 ml-auto">
@@ -260,7 +260,7 @@ export default async function MissionControl({ searchParams }: { searchParams: P
           ].map(s => (
             <span key={s.l} className="inline-flex items-center gap-1.5 text-xs">
               <span className={`w-1.5 h-1.5 rounded-full ${s.ok === true ? "bg-[var(--cmp-color-success)]" : "bg-gray-300"}`} />
-              <span className={s.ok === true ? "text-gray-600" : "text-gray-400"}>{s.l}</span>
+              <span className={s.ok === true ? "text-gray-600" : "text-gray-500"}>{s.l}</span>
             </span>
           ))}
         </div>
@@ -278,8 +278,8 @@ export default async function MissionControl({ searchParams }: { searchParams: P
               <Link key={m.key} href={m.href} className="flex items-center justify-between gap-2 px-2 py-2 rounded-lg hover:bg-gray-50 group">
                 <span className="text-sm text-gray-600 group-hover:text-gray-900">{m.label}</span>
                 {m.n == null
-                  ? <span className="text-[10px] text-gray-300 shrink-0">n/a</span>
-                  : <span className={`text-sm font-bold tabular-nums shrink-0 ${m.n ? TONE_TEXT[m.tone] ?? "text-gray-900" : "text-gray-300"}`}>{m.n}</span>}
+                  ? <span className="text-[10px] text-gray-500 shrink-0">n/a</span>
+                  : <span className={`text-sm font-bold tabular-nums shrink-0 ${m.n ? TONE_TEXT[m.tone] ?? "text-gray-900" : "text-gray-500"}`}>{m.n}</span>}
               </Link>
             ))}
           </div>
@@ -287,7 +287,7 @@ export default async function MissionControl({ searchParams }: { searchParams: P
 
         <Panel title="Platform Activity" href="/super-admin/audit" linkLabel="View all">
           {!activityReady || activity.length === 0 ? (
-            <p className="text-sm text-gray-400 py-6 text-center">{activityReady ? "No recorded activity yet." : "Activity feed activates with the audit log."}</p>
+            <p className="text-sm text-gray-500 py-6 text-center">{activityReady ? "No recorded activity yet." : "Activity feed activates with the audit log."}</p>
           ) : (
             <div className="space-y-2.5 max-h-80 overflow-y-auto">
               {activity.slice(0, 10).map((a, i) => (
@@ -295,9 +295,9 @@ export default async function MissionControl({ searchParams }: { searchParams: P
                   <span className="text-sm mt-0.5">{a.icon}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-800 truncate">{a.title}</p>
-                    {a.detail && <p className="text-[10px] text-gray-400 truncate capitalize">{a.detail}</p>}
+                    {a.detail && <p className="text-[10px] text-gray-500 truncate capitalize">{a.detail}</p>}
                   </div>
-                  <span className="text-[10px] text-gray-400 shrink-0 tabular-nums">{relTime(a.at)}</span>
+                  <span className="text-[10px] text-gray-500 shrink-0 tabular-nums">{relTime(a.at)}</span>
                 </div>
               ))}
             </div>
@@ -308,8 +308,8 @@ export default async function MissionControl({ searchParams }: { searchParams: P
           <div className="grid grid-cols-3 gap-2 mb-3">
             {[["Running", 0], ["Queued", 0], ["Models", 0]].map(([l, n]) => (
               <div key={l as string} className="text-center rounded-lg border border-gray-100 py-2.5">
-                <p className="text-xl font-bold text-gray-300 tabular-nums">{n as number}</p>
-                <p className="text-[10px] text-gray-400">{l}</p>
+                <p className="text-xl font-bold text-gray-500 tabular-nums">{n as number}</p>
+                <p className="text-[10px] text-gray-500">{l}</p>
               </div>
             ))}
           </div>
@@ -329,13 +329,13 @@ export default async function MissionControl({ searchParams }: { searchParams: P
                 <div key={w.role}>
                   <div className="flex items-center justify-between text-sm mb-1">
                     <span className="flex items-center gap-2 text-gray-700"><span>{w.icon}</span>{w.name}</span>
-                    <span className="tabular-nums text-gray-500">{fmt(w.users)} <span className="text-gray-300 text-xs">· {pct}%</span></span>
+                    <span className="tabular-nums text-gray-500">{fmt(w.users)} <span className="text-gray-500 text-xs">· {pct}%</span></span>
                   </div>
                   <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-teal-500 rounded-full" style={{ width: `${Math.min(pct, 100)}%` }} /></div>
                 </div>
               );
             })}
-            <p className="text-[10px] text-gray-400 pt-1">Active users per workspace role · platform v{ops.version}</p>
+            <p className="text-[10px] text-gray-500 pt-1">Active users per workspace role · platform v{ops.version}</p>
           </div>
         </Panel>
 
@@ -353,7 +353,7 @@ export default async function MissionControl({ searchParams }: { searchParams: P
                   <div className="w-9 h-9 mx-auto rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center text-base">{st.icon}</div>
                   <p className="text-lg font-bold text-gray-900 tabular-nums mt-1">{st.n}</p>
                   <p className="text-[9px] text-gray-500 leading-tight">{st.l}</p>
-                  <p className="text-[8px] text-gray-400 leading-tight">{st.s}</p>
+                  <p className="text-[8px] text-gray-500 leading-tight">{st.s}</p>
                 </div>
                 {i < arr.length - 1 && <span className="text-gray-200 text-xs">→</span>}
               </div>
@@ -371,13 +371,13 @@ export default async function MissionControl({ searchParams }: { searchParams: P
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-lg font-bold text-gray-900 tabular-nums">{healthy}/{monitored}</span>
-                <span className="text-[9px] text-gray-400">healthy</span>
+                <span className="text-[9px] text-gray-500">healthy</span>
               </div>
             </div>
             <div className="flex-1 space-y-1.5">
               {health.services.map(s => {
                 const dot = s.status === "healthy" ? "bg-[var(--cmp-color-success)]" : s.status === "degraded" ? "bg-[var(--cmp-color-warning)]" : "bg-gray-300";
-                const txt = s.status === "healthy" ? "text-[var(--cmp-text-success)] font-medium" : s.status === "degraded" ? "text-[var(--cmp-text-warning)] font-medium" : "text-gray-400";
+                const txt = s.status === "healthy" ? "text-[var(--cmp-text-success)] font-medium" : s.status === "degraded" ? "text-[var(--cmp-text-warning)] font-medium" : "text-gray-500";
                 const label = s.status === "healthy" ? "Healthy" : s.status === "degraded" ? "Degraded" : "Not monitored";
                 return (
                   <div key={s.name} className="flex items-center justify-between text-xs">
@@ -397,7 +397,7 @@ export default async function MissionControl({ searchParams }: { searchParams: P
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4">
         <Panel title="What's Changed Today" href="/super-admin/audit" linkLabel="Change log">
           {changedToday.length === 0 ? (
-            <p className="text-sm text-gray-400 py-6 text-center">No platform changes recorded today.</p>
+            <p className="text-sm text-gray-500 py-6 text-center">No platform changes recorded today.</p>
           ) : (
             <div className="space-y-2">
               {changedToday.map(c => (
@@ -413,7 +413,7 @@ export default async function MissionControl({ searchParams }: { searchParams: P
 
         <Panel title="Operations Timeline" href="/super-admin/audit" linkLabel="Full timeline">
           {timeline.length === 0 ? (
-            <p className="text-sm text-gray-400 py-6 text-center">No platform milestones yet.</p>
+            <p className="text-sm text-gray-500 py-6 text-center">No platform milestones yet.</p>
           ) : (
             <div className="space-y-2.5 max-h-80 overflow-y-auto">
               {timeline.map((e, i) => (
@@ -421,9 +421,9 @@ export default async function MissionControl({ searchParams }: { searchParams: P
                   <span className="text-sm mt-0.5">{e.icon}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-800 truncate">{e.title}</p>
-                    <p className="text-[10px] text-gray-400 truncate">{e.detail}</p>
+                    <p className="text-[10px] text-gray-500 truncate">{e.detail}</p>
                   </div>
-                  <span className="text-[10px] text-gray-400 shrink-0 tabular-nums">{relTime(e.at)}</span>
+                  <span className="text-[10px] text-gray-500 shrink-0 tabular-nums">{relTime(e.at)}</span>
                 </div>
               ))}
             </div>
@@ -434,7 +434,7 @@ export default async function MissionControl({ searchParams }: { searchParams: P
           {systemAlerts.length === 0 ? (
             <div className="py-6 text-center">
               <p className="text-2xl mb-1">✅</p>
-              <p className="text-sm text-gray-400">No active alerts — all clear.</p>
+              <p className="text-sm text-gray-500">No active alerts — all clear.</p>
             </div>
           ) : (
             <div className="space-y-2 max-h-80 overflow-y-auto">
@@ -464,7 +464,7 @@ export default async function MissionControl({ searchParams }: { searchParams: P
         </Panel>
       </div>
 
-      <p className="text-[11px] text-gray-400 pt-1 pb-4">
+      <p className="text-[11px] text-gray-500 pt-1 pb-4">
         Mission Control aggregates live data across the platform. Panels marked “not provisioned / not monitored” activate when their underlying module (AI serving, deploy pipeline, background workers, service-health probes) is connected — figures shown are real platform records only.
       </p>
     </div>

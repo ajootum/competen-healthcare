@@ -25,7 +25,7 @@ export default async function PersonalisationPage() {
         <Stat label="Mandatory Pinned" value={d.topEffective.filter((p: any) => p.mandatory).length} sub="always top" tone="text-[var(--cmp-text-error)]" />
       </div>
 
-      <Card title="Workspace Behaviour" right={<span className="text-[11px] text-gray-400">resolved priorities per context</span>}>
+      <Card title="Workspace Behaviour" right={<span className="text-[11px] text-gray-500">resolved priorities per context</span>}>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {d.workspaces.map((w: any) => (
             <div key={w.workspace} className="border border-gray-200 rounded-lg p-3">
@@ -48,7 +48,7 @@ export default async function PersonalisationPage() {
           ))}</div>
         </Card>
 
-        <Card title="Base Effective Set" right={<span className="text-[11px] text-gray-400">before workspace tuning</span>}>
+        <Card title="Base Effective Set" right={<span className="text-[11px] text-gray-500">before workspace tuning</span>}>
           <div className="space-y-1.5">{d.topEffective.map((p: any) => (
             <div key={p.id} className="flex items-center gap-2 border border-gray-100 rounded-lg px-2.5 py-1.5"><span className="w-6 h-6 rounded-full bg-teal-50 text-teal-700 text-[11px] font-bold flex items-center justify-center shrink-0">{p.rank}</span><span className="text-[12px] text-gray-800 flex-1 truncate">{p.title}</span>{p.mandatory && <span className="text-rose-500 text-[10px]">★</span>}<Pill text={p.urgency} tone={URGENCY_TONE[p.urgency]} /><span className="text-sm font-bold text-gray-700 tabular-nums w-8 text-right">{p.weight}</span></div>
           ))}</div>

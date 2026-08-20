@@ -31,7 +31,7 @@ export default async function ReleasesPage() {
 
   const header = (
     <>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Publishing Service</span>
@@ -39,7 +39,7 @@ export default async function ReleasesPage() {
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">🚀</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Publishing Service <span className="text-gray-300 font-medium text-lg">(NCP-019)</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Publishing Service <span className="text-gray-500 font-medium text-lg">(NCP-019)</span></h1>
           <p className="text-sm text-gray-500">Promote configuration through release channels with a validate → approve → publish → activate pipeline and rollback.</p>
         </div>
       </div>
@@ -57,7 +57,7 @@ export default async function ReleasesPage() {
         <Stat label="In Production" value={inProd} tone={inProd ? "text-[var(--cmp-text-success)]" : undefined} sub="production channel" />
       </div>
       <ReleaseManager releases={listR} objects={(objects ?? []) as any[]} />
-      <p className="text-[11px] text-gray-400">Each stage is gated: validate reuses the schema contract + dependency gate; activation flips objects live after snapshotting them, so a release is rollback-capable. Canary/phased execution, blue-green activation and tenant-adoption monitoring (NCP-019 §9/§10) are next-phase.</p>
+      <p className="text-[11px] text-gray-500">Each stage is gated: validate reuses the schema contract + dependency gate; activation flips objects live after snapshotting them, so a release is rollback-capable. Canary/phased execution, blue-green activation and tenant-adoption monitoring (NCP-019 §9/§10) are next-phase.</p>
     </div>
   );
 }

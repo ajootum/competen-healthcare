@@ -16,7 +16,7 @@ const CATS = ["clinical", "operational", "analytics", "governance", "workforce",
 const LICENSES = ["proprietary", "open", "subscription", "enterprise"];
 const PRICING = ["included", "subscription", "one_time", "usage_based"];
 const VIS = ["private", "enterprise", "public"];
-const ST: Record<string, string> = { draft: "bg-gray-100 text-gray-600", validated: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", published: "bg-[var(--cmp-surface-success)] text-emerald-700", deprecated: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", retired: "bg-gray-100 text-gray-400" };
+const ST: Record<string, string> = { draft: "bg-gray-100 text-gray-600", validated: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", published: "bg-[var(--cmp-surface-success)] text-emerald-700", deprecated: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", retired: "bg-gray-100 text-gray-600" };
 const input = "border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white";
 
 function closure(members: string[], dep: Record<string, string[]>): Set<string> {
@@ -74,8 +74,8 @@ export default function PackageBuilder({ packages, objects, dependsOn }: { packa
       <div className={`${card} p-4`}>
         <p className="text-[11px] font-semibold text-gray-500 mb-2">Packages ({packages.length})</p>
         <div className="space-y-1 max-h-[300px] overflow-y-auto mb-3">
-          {packages.map(p => <button key={p.package_key} onClick={() => pick(p)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === p.package_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}><p className="text-xs font-medium text-gray-800 truncate flex items-center gap-1.5">{p.package_name}<span className={`text-[8px] px-1 py-px rounded ${ST[p.status] ?? ST.draft}`}>{p.status}</span></p><p className="text-[10px] text-gray-400 truncate">v{p.version} · {(p.members?.length ?? 0)} member(s)</p></button>)}
-          {packages.length === 0 && <p className="text-[11px] text-gray-400 py-2">No packages yet.</p>}
+          {packages.map(p => <button key={p.package_key} onClick={() => pick(p)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === p.package_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}><p className="text-xs font-medium text-gray-800 truncate flex items-center gap-1.5">{p.package_name}<span className={`text-[8px] px-1 py-px rounded ${ST[p.status] ?? ST.draft}`}>{p.status}</span></p><p className="text-[10px] text-gray-500 truncate">v{p.version} · {(p.members?.length ?? 0)} member(s)</p></button>)}
+          {packages.length === 0 && <p className="text-[11px] text-gray-500 py-2">No packages yet.</p>}
         </div>
         <div className="border-t border-gray-100 pt-3 space-y-1.5">
           <p className="text-[11px] font-semibold text-gray-500">New package</p>
@@ -86,9 +86,9 @@ export default function PackageBuilder({ packages, objects, dependsOn }: { packa
       </div>
 
       <div className={`${card} p-5 lg:col-span-3`}>
-        {!selP ? <p className="text-sm text-gray-400 py-16 text-center">Select or create a package.</p> : (
+        {!selP ? <p className="text-sm text-gray-500 py-16 text-center">Select or create a package.</p> : (
           <>
-            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">{selP.package_name}<span className={`text-[9px] px-1.5 py-0.5 rounded ${ST[selP.status] ?? ST.draft}`}>{selP.status}</span></h3><span className="text-[10px] text-gray-400 font-mono">{selP.package_key}</span></div>
+            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">{selP.package_name}<span className={`text-[9px] px-1.5 py-0.5 rounded ${ST[selP.status] ?? ST.draft}`}>{selP.status}</span></h3><span className="text-[10px] text-gray-500 font-mono">{selP.package_key}</span></div>
 
             {/* Metadata */}
             <div className="flex items-end gap-2 mb-4 flex-wrap">
@@ -103,14 +103,14 @@ export default function PackageBuilder({ packages, objects, dependsOn }: { packa
               {/* Members */}
               <div>
                 <p className="text-[11px] font-semibold text-gray-500 mb-1.5">Members ({members.length})</p>
-                {members.length === 0 ? <p className="text-xs text-gray-400 py-3">No members yet — add objects from the registry.</p> : (
+                {members.length === 0 ? <p className="text-xs text-gray-500 py-3">No members yet — add objects from the registry.</p> : (
                   <div className="space-y-1 max-h-52 overflow-y-auto">
                     {members.map(k => { const o = byKey.get(k); const dep = required.has(k); return (
                       <div key={k} className="flex items-center gap-1.5 text-xs">
-                        <span className="text-[8px] px-1 py-px rounded bg-gray-100 text-gray-500 shrink-0">{o?.object_type ?? "?"}</span>
+                        <span className="text-[8px] px-1 py-px rounded bg-gray-100 text-gray-600 shrink-0">{o?.object_type ?? "?"}</span>
                         <span className="text-gray-700 truncate flex-1">{o?.display_name ?? k}</span>
                         {dep && <span className="text-[8px] text-indigo-400" title="also required by another member">dep</span>}
-                        <button onClick={() => toggle(k)} className="text-gray-300 hover:text-[var(--cmp-text-error)]">✕</button>
+                        <button onClick={() => toggle(k)} className="text-gray-500 hover:text-[var(--cmp-text-error)]">✕</button>
                       </div>
                     ); })}
                   </div>
@@ -120,9 +120,9 @@ export default function PackageBuilder({ packages, objects, dependsOn }: { packa
               <div>
                 <div className="flex items-center justify-between mb-1.5"><p className="text-[11px] font-semibold text-gray-500">Add from registry</p><input className={`${input} w-32`} value={q} onChange={e => setQ(e.target.value)} placeholder="search…" /></div>
                 <div className="space-y-2 max-h-52 overflow-y-auto border border-gray-100 rounded-lg p-2">
-                  {groups.length === 0 ? <p className="text-[11px] text-gray-400">No objects match.</p> : groups.map(g => (
+                  {groups.length === 0 ? <p className="text-[11px] text-gray-500">No objects match.</p> : groups.map(g => (
                     <div key={g}>
-                      <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">{g}</p>
+                      <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wide mb-0.5">{g}</p>
                       {palette.filter(o => o.object_type === g).map(o => (
                         <label key={o.object_key} className="flex items-center gap-1.5 text-xs py-0.5 cursor-pointer">
                           <input type="checkbox" checked={members.includes(o.object_key)} onChange={() => toggle(o.object_key)} />

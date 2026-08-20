@@ -30,7 +30,7 @@ export default async function KnowledgeIntelligence() {
   const q = await loadKnowledgeIntelligence(admin);
   const k = q.kpis;
 
-  const healthTone = k.health == null ? "text-gray-400" : k.health >= 80 ? "text-[var(--cmp-text-success)]" : k.health >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-warning)]";
+  const healthTone = k.health == null ? "text-gray-500" : k.health >= 80 ? "text-[var(--cmp-text-success)]" : k.health >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-warning)]";
   const kpiCards = [
     { label: "Knowledge Health", value: k.health == null ? "—" : `${k.health}%`, icon: "💚", iconBg: "bg-[var(--cmp-surface-success)]", tone: healthTone },
     { label: "Coverage Score", value: k.coverage == null ? "—" : `${k.coverage}%`, icon: "🎯", iconBg: "bg-violet-50", tone: k.coverage != null && k.coverage < 50 ? "text-[var(--cmp-text-warning)]" : "text-gray-900" },
@@ -54,7 +54,7 @@ export default async function KnowledgeIntelligence() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/ckp" className="hover:text-teal-700">Clinical Knowledge Platform</Link><span>/</span><span className="text-gray-600">Knowledge Intelligence</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Knowledge Intelligence</h1>
@@ -90,22 +90,22 @@ export default async function KnowledgeIntelligence() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Knowledge health dimensions */}
         <div className={`${card} p-5`}>
-          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Knowledge Health <span className="text-[10px] text-gray-400">{k.health == null ? "" : `${k.health}% overall`}</span></h2>
+          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Knowledge Health <span className="text-[10px] text-gray-500">{k.health == null ? "" : `${k.health}% overall`}</span></h2>
           <div className="space-y-2.5">
             {q.dimensions.map((d: any) => (
               <div key={d.label}>
-                <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600">{d.label}</span><span className={`tabular-nums ${d.value == null ? "text-gray-300" : "text-gray-700"}`}>{d.value == null ? "n/a" : `${d.value}%`}</span></div>
+                <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600">{d.label}</span><span className={`tabular-nums ${d.value == null ? "text-gray-500" : "text-gray-700"}`}>{d.value == null ? "n/a" : `${d.value}%`}</span></div>
                 <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">{d.value != null && <div className={`h-full rounded-full ${d.value >= 70 ? "bg-[var(--cmp-color-success)]" : d.value >= 40 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-warning)]"}`} style={{ width: `${d.value}%` }} />}</div>
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">Usage needs access telemetry (not collected); overall health averages the computable dimensions.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Usage needs access telemetry (not collected); overall health averages the computable dimensions.</p>
         </div>
 
         {/* Top AI insights */}
         <div className={`${card} p-5 lg:col-span-2`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Top AI Insights</h2>
-          {q.insights.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">✅ No gaps detected — the knowledge base looks healthy.</p> : (
+          {q.insights.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">✅ No gaps detected — the knowledge base looks healthy.</p> : (
             <div className="space-y-2">
               {q.insights.map((r: any, i: number) => (
                 <Link key={i} href={r.href ?? "/super-admin/ckp"} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5 hover:border-teal-300 hover:bg-teal-50/40 transition-colors">
@@ -131,10 +131,10 @@ export default async function KnowledgeIntelligence() {
           </div>
           {q.coverage.lowCoverageFrameworks.length > 0 ? (
             <div className="space-y-1 pt-2 border-t border-gray-50">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase">Low-coverage frameworks</p>
+              <p className="text-[10px] font-semibold text-gray-500 uppercase">Low-coverage frameworks</p>
               {q.coverage.lowCoverageFrameworks.map((f: any) => <div key={f.name} className="flex items-center justify-between text-xs"><span className="text-gray-600 truncate">{f.name}</span><span className="text-[var(--cmp-text-warning)] tabular-nums">{f.cov}%</span></div>)}
             </div>
-          ) : <p className="text-[11px] text-gray-400 pt-2 border-t border-gray-50">All frameworks above 50% coverage.</p>}
+          ) : <p className="text-[11px] text-gray-500 pt-2 border-t border-gray-50">All frameworks above 50% coverage.</p>}
         </div>
 
         {/* Duplicate detection */}
@@ -145,7 +145,7 @@ export default async function KnowledgeIntelligence() {
               <div key={l as string} className="rounded-lg border border-gray-100 p-3 text-center"><p className={`text-xl font-bold tabular-nums ${(n as number) > 0 ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{fmt(n as number)}</p><p className="text-[10px] text-gray-500">{l}</p></div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">Exact normalised-title matches. Semantic near-duplicate detection activates with the embedding index.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Exact normalised-title matches. Semantic near-duplicate detection activates with the embedding index.</p>
         </div>
 
         {/* Gap analysis */}
@@ -176,12 +176,12 @@ export default async function KnowledgeIntelligence() {
           <div className="py-6 text-center">
             <p className="text-2xl mb-1">📈</p>
             <p className="text-sm text-gray-500">Views, downloads and search analytics activate with content-access telemetry.</p>
-            <span className="inline-block mt-2 text-[9px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">Not collected</span>
+            <span className="inline-block mt-2 text-[9px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">Not collected</span>
           </div>
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Knowledge Intelligence is the analytics and AI layer — coverage, gap analysis, duplicate detection, knowledge health and recommendations are computed live from the knowledge base. The Intelligence Scan recomputes the composite on demand (and nightly at 05:00 UTC) and snapshots it to the platform event log for trending; each insight deep-links to the surface where it gets fixed, and the assistant answers grounded exclusively in approved CKCM content — published CPUs, active knowledge objects, cases and policies — with citations; drafts and retired items are never retrieved. Semantic duplicate detection and usage/search analytics activate with the embedding index and access telemetry.</p>
+      <p className="text-[11px] text-gray-500 pb-4">Knowledge Intelligence is the analytics and AI layer — coverage, gap analysis, duplicate detection, knowledge health and recommendations are computed live from the knowledge base. The Intelligence Scan recomputes the composite on demand (and nightly at 05:00 UTC) and snapshots it to the platform event log for trending; each insight deep-links to the surface where it gets fixed, and the assistant answers grounded exclusively in approved CKCM content — published CPUs, active knowledge objects, cases and policies — with citations; drafts and retired items are never retrieved. Semantic duplicate detection and usage/search analytics activate with the embedding index and access telemetry.</p>
     </div>
   );
 }

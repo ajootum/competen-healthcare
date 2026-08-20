@@ -60,7 +60,7 @@ export default function DeliveryConfigForm({ config, updatedBy, updatedAt }: { c
         <div className={rowCls}>
           <div className="min-w-0">
             <div className="flex items-center gap-2"><p className="text-sm font-semibold text-gray-900">Run delivery orchestration</p><span className="text-[8px] font-bold uppercase tracking-wide text-violet-600 bg-violet-50 border border-violet-100 rounded px-1.5 py-0.5">CDP-001</span></div>
-            <p className="text-[11px] text-gray-400 mt-0.5">When off, the orchestrator stops materialising new competency deliveries from assignment rules. Existing assignments are untouched.</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">When off, the orchestrator stops materialising new competency deliveries from assignment rules. Existing assignments are untouched.</p>
           </div>
           <Toggle on={form.orchestration_enabled} onChange={v => set("orchestration_enabled", v)} disabled={busy} />
         </div>
@@ -68,7 +68,7 @@ export default function DeliveryConfigForm({ config, updatedBy, updatedAt }: { c
         <div className={rowCls}>
           <div className="min-w-0">
             <div className="flex items-center gap-2"><p className="text-sm font-semibold text-gray-900">Auto-remediate failed assessments</p><span className="text-[8px] font-bold uppercase tracking-wide text-violet-600 bg-violet-50 border border-violet-100 rounded px-1.5 py-0.5">CDP-015</span></div>
-            <p className="text-[11px] text-gray-400 mt-0.5">When on, the event consumer notifies the learner and queues a reinforcement card whenever an assessment is failed. When off, those events are acknowledged with no follow-up.</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">When on, the event consumer notifies the learner and queues a reinforcement card whenever an assessment is failed. When off, those events are acknowledged with no follow-up.</p>
           </div>
           <Toggle on={form.auto_remediation} onChange={v => set("auto_remediation", v)} disabled={busy} />
         </div>
@@ -76,17 +76,17 @@ export default function DeliveryConfigForm({ config, updatedBy, updatedAt }: { c
         <div className={rowCls}>
           <div className="min-w-0">
             <div className="flex items-center gap-2"><p className="text-sm font-semibold text-gray-900">Reminder lead time</p><span className="text-[8px] font-bold uppercase tracking-wide text-violet-600 bg-violet-50 border border-violet-100 rounded px-1.5 py-0.5">CDP-011</span></div>
-            <p className="text-[11px] text-gray-400 mt-0.5">How many days ahead the scan reminds learners before a credential or competency expires.</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">How many days ahead the scan reminds learners before a credential or competency expires.</p>
           </div>
-          <div className="flex items-center gap-2 shrink-0"><NumberField value={form.reminder_horizon_days} onChange={v => set("reminder_horizon_days", v)} /><span className="text-[11px] text-gray-400">days</span></div>
+          <div className="flex items-center gap-2 shrink-0"><NumberField value={form.reminder_horizon_days} onChange={v => set("reminder_horizon_days", v)} /><span className="text-[11px] text-gray-500">days</span></div>
         </div>
 
         <div className={rowCls}>
           <div className="min-w-0">
             <div className="flex items-center gap-2"><p className="text-sm font-semibold text-gray-900">Default campaign deadline</p><span className="text-[8px] font-bold uppercase tracking-wide text-violet-600 bg-violet-50 border border-violet-100 rounded px-1.5 py-0.5">CDP-008</span></div>
-            <p className="text-[11px] text-gray-400 mt-0.5">The deadline applied to a learning campaign when the author doesn&apos;t set an explicit due date.</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">The deadline applied to a learning campaign when the author doesn&apos;t set an explicit due date.</p>
           </div>
-          <div className="flex items-center gap-2 shrink-0"><NumberField value={form.campaign_default_due_days} onChange={v => set("campaign_default_due_days", v)} /><span className="text-[11px] text-gray-400">days</span></div>
+          <div className="flex items-center gap-2 shrink-0"><NumberField value={form.campaign_default_due_days} onChange={v => set("campaign_default_due_days", v)} /><span className="text-[11px] text-gray-500">days</span></div>
         </div>
       </div>
 
@@ -94,7 +94,7 @@ export default function DeliveryConfigForm({ config, updatedBy, updatedAt }: { c
         <button onClick={save} disabled={busy || !dirty} className="text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 rounded-lg px-4 py-2">{busy ? "Saving…" : dirty ? "Save policy" : "Saved"}</button>
         {dirty && !busy && <button onClick={() => { setForm(saved); setMsg(null); }} className="text-xs font-semibold text-gray-500 hover:text-gray-700">Reset</button>}
         {msg && <span className="text-[11px] text-gray-500">{msg}</span>}
-        {!dirty && !msg && prov.by && <span className="text-[11px] text-gray-400">Last set by {prov.by}{prov.at ? ` · ${new Date(prov.at).toLocaleDateString()}` : ""}</span>}
+        {!dirty && !msg && prov.by && <span className="text-[11px] text-gray-500">Last set by {prov.by}{prov.at ? ` · ${new Date(prov.at).toLocaleDateString()}` : ""}</span>}
       </div>
     </div>
   );

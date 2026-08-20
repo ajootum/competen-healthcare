@@ -32,10 +32,10 @@ export default async function AnalyticsPage() {
         <Card title="Objective Progress by Theme" className="xl:col-span-2">
           {d.byTheme.length ? <div className="space-y-2.5">{d.byTheme.map((t: any) => (
             <div key={t.name}>
-              <div className="flex items-center justify-between text-[12px] mb-1"><span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: t.color }} /><span className="text-gray-700">{t.name}</span><span className="text-gray-400 text-[10px]">({t.objectives} obj · {t.priorities} prio)</span></span><span className="font-semibold text-gray-900 tabular-nums">{t.progress}%</span></div>
+              <div className="flex items-center justify-between text-[12px] mb-1"><span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ background: t.color }} /><span className="text-gray-700">{t.name}</span><span className="text-gray-500 text-[10px]">({t.objectives} obj · {t.priorities} prio)</span></span><span className="font-semibold text-gray-900 tabular-nums">{t.progress}%</span></div>
               <Progress pct={t.progress} tone={t.progress >= 70 ? "bg-[var(--cmp-color-success)]" : t.progress >= 40 ? "bg-teal-500" : "bg-[var(--cmp-color-warning)]"} />
             </div>
-          ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No theme data.</p>}
+          ))}</div> : <p className="text-sm text-gray-500 py-4 text-center">No theme data.</p>}
         </Card>
 
         <Card title="Strategic Alignment">
@@ -51,7 +51,7 @@ export default async function AnalyticsPage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card title="Scope Comparison">
           <div className="space-y-2 text-[12px]">{d.scopeCompare.map((s: any) => (
-            <div key={s.scope}><div className="flex items-center justify-between mb-0.5"><span className="text-gray-600 capitalize">{s.scope} <span className="text-gray-400 text-[10px]">({s.n})</span></span><span className="font-semibold text-gray-900">{s.progress}%</span></div><Progress pct={s.progress} /></div>
+            <div key={s.scope}><div className="flex items-center justify-between mb-0.5"><span className="text-gray-600 capitalize">{s.scope} <span className="text-gray-500 text-[10px]">({s.n})</span></span><span className="font-semibold text-gray-900">{s.progress}%</span></div><Progress pct={s.progress} /></div>
           ))}</div>
         </Card>
 
@@ -61,10 +61,10 @@ export default async function AnalyticsPage() {
           ))}</div>
         </Card>
 
-        <Card title="At Risk" right={<span className="text-[11px] text-gray-400">&lt;40%</span>}>
+        <Card title="At Risk" right={<span className="text-[11px] text-gray-500">&lt;40%</span>}>
           {d.atRisk.length ? <div className="space-y-2 text-[12px]">{d.atRisk.map((o: any) => (
             <div key={o.title} className="flex items-center gap-2 rounded-lg bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] px-2 py-1.5"><span className="text-rose-500">⚠</span><span className="text-gray-700 flex-1 truncate">{o.title}</span><span className="font-semibold text-[var(--cmp-text-error)] tabular-nums">{o.progress}%</span></div>
-          ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">Nothing at risk. ✅</p>}
+          ))}</div> : <p className="text-sm text-gray-500 py-4 text-center">Nothing at risk. ✅</p>}
         </Card>
       </div>
 

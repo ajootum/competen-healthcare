@@ -34,7 +34,7 @@ export default function StructureBuilder({ data }: { data: any }) {
   const [msg, setMsg] = useState("");
   const toast = (t: string) => { setMsg(t); setTimeout(() => setMsg(""), 3500); };
 
-  if (facilities.length === 0) return <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400">No facilities registered yet. Create one in the Facilities module first.</div>;
+  if (facilities.length === 0) return <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-500">No facilities registered yet. Create one in the Facilities module first.</div>;
 
   const pickFacility = (id: string) => router.push(`/super-admin/enterprise/structure?facility=${id}`);
 
@@ -53,8 +53,8 @@ export default function StructureBuilder({ data }: { data: any }) {
         className={`group flex items-center gap-1.5 py-1.5 pr-2 rounded-md cursor-pointer ${active ? "bg-teal-50" : "hover:bg-gray-50"}`} style={{ paddingLeft: `${depth * 18 + 6}px` }}>
         <span className="text-sm leading-none">{ICON[entity]}</span>
         <span className={`text-sm truncate ${active ? "text-teal-800 font-medium" : "text-gray-700"}`}>{node.name}</span>
-        {node.code && <span className="text-[10px] text-gray-400">{node.code}</span>}
-        {node.status === "archived" && <span className="text-[9px] bg-gray-100 text-gray-500 rounded px-1">archived</span>}
+        {node.code && <span className="text-[10px] text-gray-500">{node.code}</span>}
+        {node.status === "archived" && <span className="text-[9px] bg-gray-100 text-gray-600 rounded px-1">archived</span>}
         {addLabel && addEntity && (
           <button onClick={e => { e.stopPropagation(); setModal({ mode: "create", entity: addEntity, parent: node }); setErr(""); }}
             className="ml-auto opacity-0 group-hover:opacity-100 text-[11px] text-teal-600 hover:text-teal-800 shrink-0">+ {addLabel}</button>
@@ -74,9 +74,9 @@ export default function StructureBuilder({ data }: { data: any }) {
     return (
       <div>
         <div className="flex items-center gap-2 mb-2"><span className="text-lg">{ICON[e]}</span><h3 className="font-semibold text-gray-900 truncate">{sel.name}</h3></div>
-        <p className="text-[11px] text-gray-400 mb-3 capitalize">{e}{sel.code ? ` · ${sel.code}` : ""}</p>
+        <p className="text-[11px] text-gray-500 mb-3 capitalize">{e}{sel.code ? ` · ${sel.code}` : ""}</p>
         <div className="text-sm space-y-1 mb-4">
-          {rows.map(([l, v]) => <div key={l} className="flex justify-between border-b border-gray-50 py-1.5"><span className="text-gray-500">{l}</span><span className="text-gray-800 text-right">{v ?? <span className="text-gray-300">—</span>}</span></div>)}
+          {rows.map(([l, v]) => <div key={l} className="flex justify-between border-b border-gray-50 py-1.5"><span className="text-gray-500">{l}</span><span className="text-gray-800 text-right">{v ?? <span className="text-gray-500">—</span>}</span></div>)}
         </div>
         <div className="flex flex-wrap gap-2">
           {child && <button onClick={() => { setModal({ mode: "create", entity: child.entity, parent: sel }); setErr(""); }} className="text-xs font-medium rounded-lg bg-teal-600 text-white hover:bg-teal-700 px-3 py-1.5">+ {child.label}</button>}
@@ -115,7 +115,7 @@ export default function StructureBuilder({ data }: { data: any }) {
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
           <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-100"><span>{ICON.facility}</span><span className="font-semibold text-gray-900">{facility?.name}</span></div>
           <div className="max-h-[32rem] overflow-y-auto">
-            {tree.divisions.length === 0 && tree.unassignedDepartments.length === 0 && <p className="text-sm text-gray-400 py-8 text-center">No structure yet. Add a division or department to begin.</p>}
+            {tree.divisions.length === 0 && tree.unassignedDepartments.length === 0 && <p className="text-sm text-gray-500 py-8 text-center">No structure yet. Add a division or department to begin.</p>}
             {tree.divisions.map((v: any) => (
               <div key={v.id}>
                 <Node node={v} entity="division" depth={0} addLabel="Dept" addEntity="department" />
@@ -128,15 +128,15 @@ export default function StructureBuilder({ data }: { data: any }) {
 
         {/* Detail */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 min-h-[12rem]">
-          {detail ?? <p className="text-sm text-gray-400 py-8 text-center">Select a node to view details and add children.</p>}
+          {detail ?? <p className="text-sm text-gray-500 py-8 text-center">Select a node to view details and add children.</p>}
         </div>
       </div>
 
       {/* Service catalogue */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900">Service catalogue <span className="text-gray-400 font-normal text-sm">({services.length})</span></h3>
+        <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900">Service catalogue <span className="text-gray-500 font-normal text-sm">({services.length})</span></h3>
           <button onClick={() => { setModal({ mode: "create", entity: "service", parent: { id: facility?.id, kind: "facility" } }); setErr(""); }} className="text-xs font-semibold rounded-lg border border-teal-200 text-teal-700 hover:bg-teal-50 px-3 py-1.5">+ Service</button></div>
-        {services.length === 0 ? <p className="text-sm text-gray-400">No services catalogued for this facility.</p> : (
+        {services.length === 0 ? <p className="text-sm text-gray-500">No services catalogued for this facility.</p> : (
           <div className="flex flex-wrap gap-2">{services.map((s: any) => <span key={s.id} className="text-xs bg-teal-50 text-teal-700 rounded-lg px-2.5 py-1">{s.name}{s.category ? <span className="text-teal-400"> · {s.category}</span> : null}</span>)}</div>
         )}
       </div>
@@ -262,15 +262,15 @@ function TeamMembers({ teamId }: { teamId: string }) {
     <div className="mt-4 border-t border-gray-100 pt-3">
       <h4 className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Members</h4>
       {detail && <p className="mt-1 text-[11.5px] rounded bg-amber-50 border border-amber-200 px-2 py-1 text-amber-900">{detail}</p>}
-      {members === null && !detail && <p className="mt-1 text-[11.5px] text-gray-400">Reading&hellip;</p>}
+      {members === null && !detail && <p className="mt-1 text-[11.5px] text-gray-500">Reading&hellip;</p>}
       {members !== null && members.length === 0 && !detail && (
-        <p className="mt-1 text-[11.5px] text-gray-400">Nobody is on this team yet.</p>
+        <p className="mt-1 text-[11.5px] text-gray-500">Nobody is on this team yet.</p>
       )}
       <ul className="mt-1 space-y-1">
         {(members ?? []).map(m => (
           <li key={m.id} className="flex items-center gap-2 text-[12px]">
             <span className="text-gray-800">{m.profiles?.full_name ?? m.user_id}</span>
-            <span className="text-[10.5px] text-gray-400">{m.profiles?.email}</span>
+            <span className="text-[10.5px] text-gray-500">{m.profiles?.email}</span>
             <button disabled={working} onClick={() => act({ action: "remove", teamId, userId: m.user_id }, "Removed.")}
               className="ml-auto text-[10.5px] text-rose-600 hover:underline">remove</button>
           </li>

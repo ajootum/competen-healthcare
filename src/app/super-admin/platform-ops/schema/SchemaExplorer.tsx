@@ -14,13 +14,13 @@ function FieldTable({ fields }: { fields: FieldSpec[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
-        <thead><tr className="text-gray-400 text-left"><th className="font-medium py-1 pr-3">Field</th><th className="font-medium py-1 pr-3">Type</th><th className="font-medium py-1 pr-3">Req</th><th className="font-medium py-1">Notes</th></tr></thead>
+        <thead><tr className="text-gray-500 text-left"><th className="font-medium py-1 pr-3">Field</th><th className="font-medium py-1 pr-3">Type</th><th className="font-medium py-1 pr-3">Req</th><th className="font-medium py-1">Notes</th></tr></thead>
         <tbody>
           {fields.map(f => (
             <tr key={f.key} className="border-t border-gray-100 align-top">
-              <td className="py-1 pr-3"><span className="font-mono text-gray-700">{f.key}</span><span className="text-gray-400 block text-[10px]">{f.label}</span></td>
-              <td className="py-1 pr-3"><span className="text-indigo-600">{f.type}{f.of ? `<${f.of}>` : ""}</span>{f.keyed && <span className="text-[9px] text-gray-400 block">keyed</span>}</td>
-              <td className="py-1 pr-3">{f.required ? <span className="text-[var(--cmp-text-error)]">●</span> : <span className="text-gray-300">○</span>}</td>
+              <td className="py-1 pr-3"><span className="font-mono text-gray-700">{f.key}</span><span className="text-gray-500 block text-[10px]">{f.label}</span></td>
+              <td className="py-1 pr-3"><span className="text-indigo-600">{f.type}{f.of ? `<${f.of}>` : ""}</span>{f.keyed && <span className="text-[9px] text-gray-500 block">keyed</span>}</td>
+              <td className="py-1 pr-3">{f.required ? <span className="text-[var(--cmp-text-error)]">●</span> : <span className="text-gray-500">○</span>}</td>
               <td className="py-1 text-gray-500">{f.enum ? <span className="text-[10px] font-mono text-gray-500">{f.enum.join(" · ")}</span> : (f.note ?? "")}</td>
             </tr>
           ))}
@@ -54,8 +54,8 @@ export default function SchemaExplorer({ schemas, counts }: { schemas: ObjectSch
           {schemas.map(x => (
             <button key={x.type} onClick={() => { setSel(x.type); setRes(null); }} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors flex items-center gap-2 ${sel === x.type ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}>
               <span className="text-sm">{x.icon}</span>
-              <span className="flex-1 min-w-0"><span className="text-xs font-medium text-gray-800 block truncate">{x.title}</span><span className="text-[10px] text-gray-400 font-mono">{x.type}</span></span>
-              <span className="text-[10px] text-gray-400 tabular-nums">{counts[x.type] ?? 0}</span>
+              <span className="flex-1 min-w-0"><span className="text-xs font-medium text-gray-800 block truncate">{x.title}</span><span className="text-[10px] text-gray-500 font-mono">{x.type}</span></span>
+              <span className="text-[10px] text-gray-500 tabular-nums">{counts[x.type] ?? 0}</span>
             </button>
           ))}
         </div>
@@ -64,7 +64,7 @@ export default function SchemaExplorer({ schemas, counts }: { schemas: ObjectSch
       <div className={`${card} p-5 lg:col-span-3`}>
         {s && (
           <>
-            <div className="flex items-center gap-2 mb-1"><span className="text-xl">{s.icon}</span><h3 className="text-sm font-semibold text-gray-900">{s.title}</h3><span className="text-[10px] text-gray-400 font-mono">{s.type}</span><span className="text-[10px] text-gray-400 ml-auto">{counts[s.type] ?? 0} in registry</span></div>
+            <div className="flex items-center gap-2 mb-1"><span className="text-xl">{s.icon}</span><h3 className="text-sm font-semibold text-gray-900">{s.title}</h3><span className="text-[10px] text-gray-500 font-mono">{s.type}</span><span className="text-[10px] text-gray-500 ml-auto">{counts[s.type] ?? 0} in registry</span></div>
             {s.note && <p className="text-[11px] text-gray-500 mb-3">{s.note}</p>}
 
             <p className="text-[11px] font-semibold text-gray-500 mb-1">Definition contract</p>

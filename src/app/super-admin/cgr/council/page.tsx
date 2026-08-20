@@ -56,7 +56,7 @@ export default async function GovernanceCouncilPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-010 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Operating Model &amp; Governance Council</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Who governs competency systems, who makes decisions, and how accountability is maintained — the live council structure above the stated operating model.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Who governs competency systems, who makes decisions, and how accountability is maintained — the live council structure above the stated operating model.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/office-governance" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Office governance →</Link>
@@ -77,14 +77,14 @@ export default async function GovernanceCouncilPage() {
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden mb-4">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <p className="text-sm font-bold text-gray-800">Governance Councils <span className="text-[10px] font-normal text-[var(--cmp-text-success)]">— live</span></p>
-          {d.byLevel.length > 0 && <p className="text-[10px] text-gray-400">{d.byLevel.map((l: any) => `${cap(l.level)} ${l.councils}`).join(" · ")}</p>}
+          {d.byLevel.length > 0 && <p className="text-[10px] text-gray-500">{d.byLevel.map((l: any) => `${cap(l.level)} ${l.councils}`).join(" · ")}</p>}
         </div>
         {!d.provisioned ? (
-          <div className="p-6 text-center"><p className="text-sm text-gray-400">No competency-governance councils constituted yet. Office-level governance bodies live in <Link href="/office-governance" className="text-[var(--cmp-text-success)] hover:underline">Office Governance</Link>; the stated operating model is below.</p></div>
+          <div className="p-6 text-center"><p className="text-sm text-gray-500">No competency-governance councils constituted yet. Office-level governance bodies live in <Link href="/office-governance" className="text-[var(--cmp-text-success)] hover:underline">Office Governance</Link>; the stated operating model is below.</p></div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px]">
-              <thead><tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+              <thead><tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
                 <th className="text-left py-2 pl-4 pr-2">Council</th>
                 <th className="text-left py-2 px-2">Level</th>
                 <th className="text-left py-2 px-2">Chair</th>
@@ -96,12 +96,12 @@ export default async function GovernanceCouncilPage() {
               <tbody>
                 {d.councils.map((c: any) => (
                   <tr key={c.id} className="border-t border-gray-50">
-                    <td className="py-2 pl-4 pr-2 text-[12px] font-medium text-gray-800">{c.name}{!c.active && <span className="ml-1 text-[9px] text-gray-400">(inactive)</span>}</td>
+                    <td className="py-2 pl-4 pr-2 text-[12px] font-medium text-gray-800">{c.name}{!c.active && <span className="ml-1 text-[9px] text-gray-500">(inactive)</span>}</td>
                     <td className="py-2 px-2"><span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${LEVEL_META[c.level] ?? LEVEL_META.facility}`}>{cap(c.level)}</span></td>
                     <td className="py-2 px-2 text-[11px] text-gray-600">{c.chairs.length ? c.chairs.join(", ") : <span className="text-rose-500">no chair</span>}</td>
                     <td className="py-2 px-2 text-center text-[12px] text-gray-700 tabular-nums">{c.members}</td>
                     <td className="py-2 px-2 text-center text-[12px] text-gray-500 tabular-nums">{c.reviewers}</td>
-                    <td className="py-2 px-2 text-center text-[12px] tabular-nums">{c.frameworksGoverned > 0 ? <span className="font-semibold text-gray-700">{c.frameworksGoverned} fw</span> : <span className="text-gray-300">—</span>}</td>
+                    <td className="py-2 px-2 text-center text-[12px] tabular-nums">{c.frameworksGoverned > 0 ? <span className="font-semibold text-gray-700">{c.frameworksGoverned} fw</span> : <span className="text-gray-500">—</span>}</td>
                     <td className="py-2 pr-4 pl-2">{c.meetsQuorum ? <span className="text-[10px] font-semibold text-[var(--cmp-text-success)]">✓ {c.members}/{c.quorum}</span> : <span className="text-[10px] font-semibold text-[var(--cmp-text-warning)]">⚠ {c.members}/{c.quorum}</span>}</td>
                   </tr>
                 ))}
@@ -117,13 +117,13 @@ export default async function GovernanceCouncilPage() {
           <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Accountability gap — frameworks without a governing council</p>
           <div className="flex flex-wrap gap-1.5">
             {d.ungovernedFrameworks.map((f: any) => <span key={f.id} className="text-[11px] text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] rounded px-2 py-0.5">{f.name} <span className="text-rose-300">· {f.pubStatus}</span></span>)}
-            {k.fwUngoverned > d.ungovernedFrameworks.length && <span className="text-[11px] text-gray-400 px-2 py-0.5">+{k.fwUngoverned - d.ungovernedFrameworks.length} more</span>}
+            {k.fwUngoverned > d.ungovernedFrameworks.length && <span className="text-[11px] text-gray-500 px-2 py-0.5">+{k.fwUngoverned - d.ungovernedFrameworks.length} more</span>}
           </div>
         </div>
       )}
 
       {/* Stated operating model — narrative reference */}
-      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Operating model — stated framework <span className="font-normal normal-case text-gray-300">(reference, not computed)</span></p>
+      <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Operating model — stated framework <span className="font-normal normal-case text-gray-500">(reference, not computed)</span></p>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="bg-white rounded-xl border border-gray-100 p-4">
           <p className="text-[11px] font-semibold text-gray-500 mb-3">🗳️ Decision rights</p>
@@ -142,7 +142,7 @@ export default async function GovernanceCouncilPage() {
             {RACI.map((r) => (
               <div key={r.activity} className="border-b border-gray-50 pb-1.5 last:border-0">
                 <p className="text-[12px] font-medium text-gray-700">{r.activity}</p>
-                <p className="text-[10px] text-gray-400">R: {r.responsible} · <span className="font-semibold text-gray-500">A: {r.accountable}</span></p>
+                <p className="text-[10px] text-gray-500">R: {r.responsible} · <span className="font-semibold text-gray-500">A: {r.accountable}</span></p>
               </div>
             ))}
           </div>
@@ -153,14 +153,14 @@ export default async function GovernanceCouncilPage() {
             {MEETINGS.map((m) => (
               <div key={m.name} className="border-b border-gray-50 pb-1.5 last:border-0">
                 <div className="flex items-center justify-between gap-2"><span className="text-[12px] font-medium text-gray-700">{m.name}</span><span className="text-[10px] font-semibold text-[var(--cmp-text-success)]">{m.cadence}</span></div>
-                <p className="text-[10px] text-gray-400 leading-snug">{m.focus}</p>
+                <p className="text-[10px] text-gray-500 leading-snug">{m.focus}</p>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">The council structure at the top is REAL — the governance committees, their membership and quorum, and what each governs (frameworks linked to their governing council), with the accountability coverage gap where frameworks have no council. The decision-rights matrix, RACI and meeting cadence are the office&apos;s stated operating model (reference). Office-level governance bodies, meetings, votes and e-signatures are owned by <Link href="/office-governance" className="text-[var(--cmp-text-success)] hover:underline">Office Governance (OGS)</Link>; council appointments by the <Link href="/competency-office/membership" className="text-[var(--cmp-text-success)] hover:underline">Competency Office</Link>. Per the CGR mandate, AI supports meeting prep and summaries but never replaces the council or makes accountability decisions.</p>
+      <p className="text-[11px] text-gray-500 mt-4 leading-relaxed">The council structure at the top is REAL — the governance committees, their membership and quorum, and what each governs (frameworks linked to their governing council), with the accountability coverage gap where frameworks have no council. The decision-rights matrix, RACI and meeting cadence are the office&apos;s stated operating model (reference). Office-level governance bodies, meetings, votes and e-signatures are owned by <Link href="/office-governance" className="text-[var(--cmp-text-success)] hover:underline">Office Governance (OGS)</Link>; council appointments by the <Link href="/competency-office/membership" className="text-[var(--cmp-text-success)] hover:underline">Competency Office</Link>. Per the CGR mandate, AI supports meeting prep and summaries but never replaces the council or makes accountability decisions.</p>
     </div>
   );
 }

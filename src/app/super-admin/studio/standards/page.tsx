@@ -35,7 +35,7 @@ export default async function StudioStandardsPage() {
         <div>
           <p className="text-[11px] font-semibold text-rose-500 uppercase tracking-widest mb-0.5">CST-108 · Standards Mapping</p>
           <h1 className="text-xl font-bold text-gray-900">Standards Mapping</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Trace competencies to WHO, JCI, SafeCare, MOH and council standards — coverage, gaps and regulatory alignment.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Trace competencies to WHO, JCI, SafeCare, MOH and council standards — coverage, gaps and regulatory alignment.</p>
         </div>
         <Link href="/super-admin/studio" className="text-xs font-semibold text-gray-500 hover:text-teal-700 border border-gray-200 rounded-lg px-3 py-2">← Studio</Link>
       </div>
@@ -50,13 +50,13 @@ export default async function StudioStandardsPage() {
               { label: "Mappings", value: std.kpis.total, tone: "text-gray-900" },
               { label: "Competencies mapped", value: std.kpis.competenciesMapped, tone: "text-teal-600" },
               { label: "Standards coverage", value: `${std.kpis.coveragePct}%`, tone: std.kpis.coveragePct >= 50 ? "text-teal-600" : "text-[var(--cmp-text-warning)]" },
-              { label: "Unmapped", value: std.kpis.unmapped, tone: std.kpis.unmapped > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
+              { label: "Unmapped", value: std.kpis.unmapped, tone: std.kpis.unmapped > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-500" },
               { label: "Total competencies", value: std.kpis.totalCompetencies, tone: "text-gray-900" },
               { label: "Standard bodies", value: std.kpis.bodies, tone: "text-gray-900" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-0.5">{k.label}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-0.5">{k.label}</p>
               </div>
             ))}
           </div>
@@ -65,7 +65,7 @@ export default async function StudioStandardsPage() {
           <div className="grid md:grid-cols-2 gap-5 mb-5">
             <div className="bg-white rounded-xl border border-gray-100 p-5">
               <h2 className="font-semibold text-gray-900 text-sm mb-3">By standard body</h2>
-              {std.bodyDist.length === 0 ? <p className="text-xs text-gray-400">No mappings yet.</p> : std.bodyDist.map(bd => {
+              {std.bodyDist.length === 0 ? <p className="text-xs text-gray-500">No mappings yet.</p> : std.bodyDist.map(bd => {
                 const pct = std.kpis.total ? Math.round((bd.n / std.kpis.total) * 100) : 0;
                 return (
                   <div key={bd.key} className="flex items-center gap-3 py-1.5">
@@ -78,7 +78,7 @@ export default async function StudioStandardsPage() {
             </div>
             <div className="bg-white rounded-xl border border-gray-100 p-5">
               <h2 className="font-semibold text-gray-900 text-sm mb-3">By coverage level</h2>
-              {std.coverageDist.length === 0 ? <p className="text-xs text-gray-400">No mappings yet.</p> : std.coverageDist.map(cd => (
+              {std.coverageDist.length === 0 ? <p className="text-xs text-gray-500">No mappings yet.</p> : std.coverageDist.map(cd => (
                 <div key={cd.key} className="flex items-center gap-3 py-1.5">
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cd.color }} />
                   <span className="text-xs text-gray-600 flex-1">{cd.label}</span>

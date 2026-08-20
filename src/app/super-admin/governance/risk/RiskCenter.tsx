@@ -110,7 +110,7 @@ export default function RiskCenter({ risks, controls }: { risks: Picker[]; contr
             <div className="grid grid-cols-3 gap-3 items-end">
               {scaleSelect("likelihood", "Likelihood (1–5)")}
               {scaleSelect("impact", "Impact (1–5)")}
-              <div className="text-center pb-1"><span className={`text-xs font-bold px-2 py-1 rounded ${BAND_TONE[band(inherent)]}`}>{inherent} · {band(inherent)}</span><p className="text-[9px] text-gray-400 mt-0.5">inherent</p></div>
+              <div className="text-center pb-1"><span className={`text-xs font-bold px-2 py-1 rounded ${BAND_TONE[band(inherent)]}`}>{inherent} · {band(inherent)}</span><p className="text-[9px] text-gray-500 mt-0.5">inherent</p></div>
             </div>
             <div><label className={label}>Treatment</label><select value={form.treatment ?? "reduce"} onChange={set("treatment")} className={input}>{TREATMENTS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
             <div className="sm:col-span-2"><label className={label}>Description</label><textarea value={form.description ?? ""} onChange={set("description")} rows={2} className={input} /></div>
@@ -138,7 +138,7 @@ export default function RiskCenter({ risks, controls }: { risks: Picker[]; contr
             <div className="grid grid-cols-3 gap-3 items-end">
               <div><label className={label}>Residual likelihood</label><select value={form.residual_likelihood ?? ""} onChange={set("residual_likelihood")} className={input}><option value="">—</option>{SCALE.map(n => <option key={n} value={n}>{n}</option>)}</select></div>
               <div><label className={label}>Residual impact</label><select value={form.residual_impact ?? ""} onChange={set("residual_impact")} className={input}><option value="">—</option>{SCALE.map(n => <option key={n} value={n}>{n}</option>)}</select></div>
-              <div className="text-center pb-1">{residual != null ? <span className={`text-xs font-bold px-2 py-1 rounded ${BAND_TONE[band(residual)]}`}>{residual} · {band(residual)}</span> : <span className="text-[10px] text-gray-300">residual</span>}</div>
+              <div className="text-center pb-1">{residual != null ? <span className={`text-xs font-bold px-2 py-1 rounded ${BAND_TONE[band(residual)]}`}>{residual} · {band(residual)}</span> : <span className="text-[10px] text-gray-500">residual</span>}</div>
             </div>
             <div><label className={label}>Review date</label><input type="date" value={form.review_date ?? ""} onChange={set("review_date")} className={input} /></div>
             <div className="sm:col-span-2"><label className={label}>Mitigation update</label><textarea value={form.mitigation ?? ""} onChange={set("mitigation")} rows={2} className={input} /></div>
@@ -152,14 +152,14 @@ export default function RiskCenter({ risks, controls }: { risks: Picker[]; contr
             <div><label className={label}>Effectiveness *</label><select value={form.effectiveness ?? ""} onChange={set("effectiveness")} className={input}><option value="">— Select rating —</option>{EFFECTIVENESS.map(e => <option key={e} value={e}>{e.replace(/_/g, " ")}</option>)}</select></div>
             <div><label className={label}>Test date</label><input type="date" value={form.last_tested ?? ""} onChange={set("last_tested")} className={input} /></div>
             {controls.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No controls in the library yet — add one first.</p>}
-            <p className="sm:col-span-2 text-[11px] text-gray-400">Rating a control records the test outcome (defaults to today when no date given).</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-500">Rating a control records the test outcome (defaults to today when no date given).</p>
           </div>
         )}
 
         <div className="flex items-center gap-2 mt-4">
           <button onClick={act} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Working…" : TABS.find(t => t.key === tab)!.label}</button>
           <button onClick={() => setForm({})} className="text-sm text-gray-500 hover:text-gray-700 px-2">Clear</button>
-          <span className="text-[11px] text-gray-400 ml-auto">Real ERM actions — audit-logged.</span>
+          <span className="text-[11px] text-gray-500 ml-auto">Real ERM actions — audit-logged.</span>
         </div>
       </div>
     </div>

@@ -15,7 +15,7 @@ const ITEM_TYPES = [
 ];
 const typeLabel = (t: string) => TYPES.find(x => x.v === t)?.label ?? t;
 const itemLabel = (t: string) => ITEM_TYPES.find(x => x.v === t)?.label ?? t;
-const STATUS_TONE: Record<string, string> = { draft: "text-gray-500 bg-gray-50 border-gray-200", published: "text-teal-600 bg-teal-50 border-teal-200", archived: "text-gray-400 bg-gray-50 border-gray-200" };
+const STATUS_TONE: Record<string, string> = { draft: "text-gray-500 bg-gray-50 border-gray-200", published: "text-teal-600 bg-teal-50 border-teal-200", archived: "text-gray-500 bg-gray-50 border-gray-200" };
 
 export default function PackageManager({ packages, competencyOptions }: { packages: any[]; competencyOptions: { id: string; label: string }[] }) {
   const router = useRouter();
@@ -64,34 +64,34 @@ export default function PackageManager({ packages, competencyOptions }: { packag
 
       {/* Package list */}
       {packages.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-6 text-center text-xs text-gray-400">No packages yet — create one above, then add competencies and other assets to it.</div>
+        <div className="bg-white rounded-xl border border-gray-100 p-6 text-center text-xs text-gray-500">No packages yet — create one above, then add competencies and other assets to it.</div>
       ) : packages.map(p => (
         <div key={p.id} className="bg-white rounded-xl border border-gray-100 p-4">
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => setOpen(open === p.id ? null : p.id)} className="text-sm font-bold text-gray-900 hover:text-teal-700">{open === p.id ? "▾" : "▸"} {p.name}</button>
             <span className="text-[10px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">{typeLabel(p.package_type)}</span>
-            <span className="text-[10px] text-gray-400">v{p.version}</span>
+            <span className="text-[10px] text-gray-500">v{p.version}</span>
             <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${STATUS_TONE[p.status] ?? STATUS_TONE.draft}`}>{p.status}</span>
-            <span className="text-[10px] text-gray-400">{p.itemCount} item{p.itemCount === 1 ? "" : "s"}</span>
+            <span className="text-[10px] text-gray-500">{p.itemCount} item{p.itemCount === 1 ? "" : "s"}</span>
             <div className="ml-auto flex items-center gap-1.5">
               {p.status !== "published" && <button onClick={() => setStatus(p.id, "published")} disabled={busy} className="text-[10px] font-semibold text-teal-700 hover:underline">Publish</button>}
-              {p.status !== "archived" && <button onClick={() => setStatus(p.id, "archived")} disabled={busy} className="text-[10px] font-semibold text-gray-400 hover:underline">Archive</button>}
+              {p.status !== "archived" && <button onClick={() => setStatus(p.id, "archived")} disabled={busy} className="text-[10px] font-semibold text-gray-500 hover:underline">Archive</button>}
               {p.status === "archived" && <button onClick={() => setStatus(p.id, "draft")} disabled={busy} className="text-[10px] font-semibold text-gray-500 hover:underline">Restore</button>}
-              <button onClick={() => del(p.id)} disabled={busy} className="text-gray-300 hover:text-red-500" title="Delete package">✕</button>
+              <button onClick={() => del(p.id)} disabled={busy} className="text-gray-500 hover:text-red-500" title="Delete package">✕</button>
             </div>
           </div>
-          {p.description && <p className="text-[11px] text-gray-400 mt-1 ml-4">{p.description}</p>}
+          {p.description && <p className="text-[11px] text-gray-500 mt-1 ml-4">{p.description}</p>}
 
           {open === p.id && (
             <div className="mt-3 ml-4 border-l-2 border-gray-50 pl-3">
-              {p.items.length === 0 ? <p className="text-[11px] text-gray-400 mb-2">No items yet.</p> : (
+              {p.items.length === 0 ? <p className="text-[11px] text-gray-500 mb-2">No items yet.</p> : (
                 <div className="flex flex-col divide-y divide-gray-50 mb-2">
                   {p.items.map((it: any) => (
                     <div key={it.id} className="flex items-center gap-2 py-1.5 text-xs">
-                      <span className="text-[9px] font-semibold text-gray-400 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 w-24 text-center shrink-0">{itemLabel(it.item_type)}</span>
+                      <span className="text-[9px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 w-24 text-center shrink-0">{itemLabel(it.item_type)}</span>
                       <span className="text-gray-700 truncate">{it.item_label ?? "Item"}</span>
-                      {!it.is_required && <span className="text-[9px] text-gray-400">optional</span>}
-                      <button onClick={() => removeItem(it.id)} disabled={busy} className="ml-auto text-gray-300 hover:text-red-500 shrink-0" title="Remove">✕</button>
+                      {!it.is_required && <span className="text-[9px] text-gray-500">optional</span>}
+                      <button onClick={() => removeItem(it.id)} disabled={busy} className="ml-auto text-gray-500 hover:text-red-500 shrink-0" title="Remove">✕</button>
                     </div>
                   ))}
                 </div>

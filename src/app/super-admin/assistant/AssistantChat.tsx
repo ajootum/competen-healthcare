@@ -41,7 +41,7 @@ export default function AssistantChat() {
         {turns.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 py-8">
             <p className="text-3xl">🤖</p>
-            <p className="text-sm text-gray-400">Ask about your competency content. Try:</p>
+            <p className="text-sm text-gray-500">Ask about your competency content. Try:</p>
             <div className="flex flex-wrap gap-2 justify-center">
               {SUGGESTIONS.map(s => (
                 <button key={s} onClick={() => ask(s)} className="text-xs px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-gray-600 hover:bg-gray-100">{s}</button>
@@ -53,12 +53,12 @@ export default function AssistantChat() {
             <div key={i} className={`flex ${t.role === "user" ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${t.role === "user" ? "bg-[var(--cmp-color-error)] text-white" : "bg-gray-50 border border-gray-100 text-gray-800"}`}>
                 <p className="text-sm whitespace-pre-wrap">{t.text}</p>
-                {t.meta && <p className="text-[10px] text-gray-400 mt-1.5">{t.meta}</p>}
+                {t.meta && <p className="text-[10px] text-gray-500 mt-1.5">{t.meta}</p>}
               </div>
             </div>
           ))
         )}
-        {busy && <div className="flex justify-start"><div className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-2.5 text-sm text-gray-400">Thinking…</div></div>}
+        {busy && <div className="flex justify-start"><div className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-2.5 text-sm text-gray-500">Thinking…</div></div>}
       </div>
 
       <form onSubmit={e => { e.preventDefault(); ask(input); }} className="border-t border-gray-100 p-3 flex gap-2">
@@ -69,7 +69,7 @@ export default function AssistantChat() {
           Ask
         </button>
       </form>
-      <p className="px-4 pb-3 text-[10px] text-gray-400">
+      <p className="px-4 pb-3 text-[10px] text-gray-500">
         Answers are grounded in governed content and cited. The assistant navigates the framework — it does not make competency decisions. Every query is audit-logged.
       </p>
     </div>

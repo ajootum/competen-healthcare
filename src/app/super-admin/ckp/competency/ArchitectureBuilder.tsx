@@ -58,14 +58,14 @@ export default function ArchitectureBuilder({ frameworks, domains }: { framework
           {TABS.map((t, i) => (
             <div key={t.key} className="flex items-center gap-1">
               <button onClick={() => switchTab(t.key)} className={`text-xs font-medium rounded-lg px-2.5 py-1.5 border ${tab === t.key ? "bg-teal-50 border-teal-300 text-teal-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}>{t.icon} {t.label}</button>
-              {i < TABS.length - 1 && <span className="text-gray-300 text-xs">→</span>}
+              {i < TABS.length - 1 && <span className="text-gray-500 text-xs">→</span>}
             </div>
           ))}
         </div>
       </div>
 
       <div className="p-5">
-        <p className="text-[11px] text-gray-400 mb-3">{active.icon} {active.hint}.</p>
+        <p className="text-[11px] text-gray-500 mb-3">{active.icon} {active.hint}.</p>
 
         {tab === "framework" && (
           <div className="grid sm:grid-cols-2 gap-3">
@@ -95,7 +95,7 @@ export default function ArchitectureBuilder({ frameworks, domains }: { framework
         <div className="flex items-center gap-2 mt-4">
           <button onClick={create} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Creating…" : `Create ${active.label.toLowerCase()}`}</button>
           <button onClick={() => setForm({})} className="text-sm text-gray-500 hover:text-gray-700 px-2">Clear</button>
-          <span className="text-[11px] text-gray-400 ml-auto">Builds real architecture via the content API.</span>
+          <span className="text-[11px] text-gray-500 ml-auto">Builds real architecture via the content API.</span>
         </div>
       </div>
     </div>

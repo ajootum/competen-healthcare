@@ -23,7 +23,7 @@ function BenchTable({ rows, mean }: { rows: any[]; mean: number }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[680px]">
-        <thead><tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+        <thead><tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
           <th className="text-left py-2 pl-4 pr-2">Unit</th>
           <th className="text-center py-2 px-2">n</th>
           <th className="text-left py-2 px-2 w-40">Governance maturity</th>
@@ -48,7 +48,7 @@ function BenchTable({ rows, mean }: { rows: any[]; mean: number }) {
                   <span className="text-[11px] font-bold text-gray-600 tabular-nums w-6">{r.maturity}</span>
                 </div>
               </td>
-              <td className="py-2 px-2 text-center"><span className={`text-[11px] font-bold tabular-nums ${r.gap > 0 ? "text-[var(--cmp-text-success)]" : r.gap < 0 ? "text-[var(--cmp-text-error)]" : "text-gray-400"}`}>{gapFmt(r.gap)}</span></td>
+              <td className="py-2 px-2 text-center"><span className={`text-[11px] font-bold tabular-nums ${r.gap > 0 ? "text-[var(--cmp-text-success)]" : r.gap < 0 ? "text-[var(--cmp-text-error)]" : "text-gray-500"}`}>{gapFmt(r.gap)}</span></td>
               <td className="py-2 px-2 text-center text-[11px] text-gray-500 tabular-nums">{r.ownership}%</td>
               <td className="py-2 px-2 text-center text-[11px] text-gray-500 tabular-nums">{r.regulatory}%</td>
               <td className="py-2 px-2 text-center text-[11px] text-gray-500 tabular-nums">{r.review}%</td>
@@ -79,7 +79,7 @@ export default async function GovernanceBenchmarkingPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-022 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Benchmarking &amp; Comparative Intelligence</h1>
-          <p className="text-gray-400 text-sm mt-0.5">How does governance compare across units, and what can we learn to improve? Comparative maturity, gap-to-benchmark and peer-learning exemplars — to learn, not to rank.</p>
+          <p className="text-gray-500 text-sm mt-0.5">How does governance compare across units, and what can we learn to improve? Comparative maturity, gap-to-benchmark and peer-learning exemplars — to learn, not to rank.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/super-admin/performance/benchmarking" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Capability benchmarks →</Link>
@@ -88,7 +88,7 @@ export default async function GovernanceBenchmarkingPage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No governance data to benchmark yet — once competencies exist across domains and frameworks, comparative intelligence computes here.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No governance data to benchmark yet — once competencies exist across domains and frameworks, comparative intelligence computes here.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -123,9 +123,9 @@ export default async function GovernanceBenchmarkingPage() {
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <p className="text-sm font-bold text-gray-800">Domain benchmarking</p>
-              <p className="text-[10px] text-gray-400">best first · marker = enterprise mean ({e.maturity})</p>
+              <p className="text-[10px] text-gray-500">best first · marker = enterprise mean ({e.maturity})</p>
             </div>
-            {d.domains.length === 0 ? <div className="p-6 text-center"><p className="text-[12px] text-gray-400">No domains to benchmark.</p></div> : <BenchTable rows={d.domains} mean={e.maturity} />}
+            {d.domains.length === 0 ? <div className="p-6 text-center"><p className="text-[12px] text-gray-500">No domains to benchmark.</p></div> : <BenchTable rows={d.domains} mean={e.maturity} />}
           </div>
 
           {/* Comparative intelligence */}
@@ -133,7 +133,7 @@ export default async function GovernanceBenchmarkingPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <p className="text-xs font-bold text-[var(--cmp-text-success)] uppercase tracking-widest mb-2">Peer-learning exemplars (§9)</p>
               {d.exemplars.length === 0 ? (
-                <p className="text-[12px] text-gray-400">No units are clearly leading the enterprise mean yet.</p>
+                <p className="text-[12px] text-gray-500">No units are clearly leading the enterprise mean yet.</p>
               ) : (
                 <div className="space-y-1.5">
                   {d.exemplars.map((x: any) => (
@@ -142,7 +142,7 @@ export default async function GovernanceBenchmarkingPage() {
                       <span className="text-[11px] text-emerald-700 font-semibold shrink-0">{x.maturity} <span className="text-emerald-400">({gapFmt(x.gap)})</span></span>
                     </div>
                   ))}
-                  <p className="text-[10px] text-gray-400 pt-1">High-performing governance — patterns to share across units.</p>
+                  <p className="text-[10px] text-gray-500 pt-1">High-performing governance — patterns to share across units.</p>
                 </div>
               )}
             </div>
@@ -158,7 +158,7 @@ export default async function GovernanceBenchmarkingPage() {
                       <span className="text-[11px] text-[var(--cmp-text-error)] font-semibold shrink-0">{x.maturity} <span className="text-rose-400">({gapFmt(x.gap)})</span></span>
                     </div>
                   ))}
-                  <p className="text-[10px] text-gray-400 pt-1">Below the enterprise mean — prioritise for governance improvement.</p>
+                  <p className="text-[10px] text-gray-500 pt-1">Below the enterprise mean — prioritise for governance improvement.</p>
                 </div>
               )}
             </div>
@@ -172,7 +172,7 @@ export default async function GovernanceBenchmarkingPage() {
             </div>
           )}
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — governance maturity and its indicators are computed live from the registry, grouped by clinical domain and framework, and compared to the enterprise mean. This benchmarks <span className="font-medium">governance</span> (maturity, ownership, regulatory readiness); <span className="font-medium">capability</span> benchmarking (competency coverage + Benner maturity) lives in <Link href="/super-admin/performance/benchmarking" className="text-[var(--cmp-text-success)] hover:underline">Competency Performance</Link>. This is internal cross-unit comparison — external, inter-organisation benchmarking (§4.1/§10) requires consent, anonymisation and governance approval. Per the CGR mandate, benchmarking exists to identify learning opportunities, not to rank, and AI never publishes rankings without governance approval.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every figure is real — governance maturity and its indicators are computed live from the registry, grouped by clinical domain and framework, and compared to the enterprise mean. This benchmarks <span className="font-medium">governance</span> (maturity, ownership, regulatory readiness); <span className="font-medium">capability</span> benchmarking (competency coverage + Benner maturity) lives in <Link href="/super-admin/performance/benchmarking" className="text-[var(--cmp-text-success)] hover:underline">Competency Performance</Link>. This is internal cross-unit comparison — external, inter-organisation benchmarking (§4.1/§10) requires consent, anonymisation and governance approval. Per the CGR mandate, benchmarking exists to identify learning opportunities, not to rank, and AI never publishes rankings without governance approval.</p>
         </div>
       )}
     </div>

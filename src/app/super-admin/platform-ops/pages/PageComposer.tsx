@@ -46,36 +46,36 @@ export default function PageComposer({ pages, palette }: { pages: Page[]; palett
   }
 
   const card = "bg-white rounded-xl border border-gray-200";
-  if (!pages.length) return <div className={`${card} p-8 text-center`}><p className="text-sm text-gray-500">No page objects yet.</p><p className="text-xs text-gray-400 mt-1">Author a <b>Page</b> in the <a href="/super-admin/platform-ops/studio" className="text-indigo-700 underline">Configuration Studio</a> first, then compose its layout here.</p></div>;
+  if (!pages.length) return <div className={`${card} p-8 text-center`}><p className="text-sm text-gray-500">No page objects yet.</p><p className="text-xs text-gray-500 mt-1">Author a <b>Page</b> in the <a href="/super-admin/platform-ops/studio" className="text-indigo-700 underline">Configuration Studio</a> first, then compose its layout here.</p></div>;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
       <div className={`${card} p-4`}>
         <p className="text-[11px] font-semibold text-gray-500 mb-2">Pages ({pages.length})</p>
         <div className="space-y-1 max-h-[460px] overflow-y-auto">
-          {pages.map(p => <button key={p.object_key} onClick={() => pick(p.object_key)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === p.object_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}><p className="text-xs font-medium text-gray-800 truncate">{p.display_name}</p><p className="text-[10px] text-gray-400 truncate">{(p.definition?.rows?.length ?? 0)} row(s)</p></button>)}
+          {pages.map(p => <button key={p.object_key} onClick={() => pick(p.object_key)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === p.object_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}><p className="text-xs font-medium text-gray-800 truncate">{p.display_name}</p><p className="text-[10px] text-gray-500 truncate">{(p.definition?.rows?.length ?? 0)} row(s)</p></button>)}
         </div>
       </div>
 
       <div className={`${card} p-5 lg:col-span-3`}>
-        {!selPage ? <p className="text-sm text-gray-400 py-16 text-center">Select a page.</p> : (
+        {!selPage ? <p className="text-sm text-gray-500 py-16 text-center">Select a page.</p> : (
           <>
-            <div className="flex items-center justify-between mb-4"><div><h3 className="text-sm font-semibold text-gray-900">{selPage.display_name}</h3><p className="text-[10px] text-gray-400 font-mono">{selPage.object_key} · 12-column grid</p></div><button onClick={addRow} className="text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1.5">+ Row</button></div>
+            <div className="flex items-center justify-between mb-4"><div><h3 className="text-sm font-semibold text-gray-900">{selPage.display_name}</h3><p className="text-[10px] text-gray-500 font-mono">{selPage.object_key} · 12-column grid</p></div><button onClick={addRow} className="text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1.5">+ Row</button></div>
 
-            {d.rows.length === 0 ? <p className="text-xs text-gray-400 py-8 text-center border border-dashed border-gray-200 rounded-lg">Empty page — add a row to begin.</p> : (
+            {d.rows.length === 0 ? <p className="text-xs text-gray-500 py-8 text-center border border-dashed border-gray-200 rounded-lg">Empty page — add a row to begin.</p> : (
               <div className="space-y-2">
                 {d.rows.map((row, ri) => {
                   const sum = rowSum(row); const over = sum > GRID;
                   return (
                     <div key={ri} className={`rounded-lg border p-2 ${over ? "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]/40" : "border-gray-100 bg-gray-50/40"}`}>
                       <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-[10px] text-gray-400">Row {ri + 1}</span>
-                        <span className={`text-[10px] font-semibold ${over ? "text-[var(--cmp-text-error)]" : sum === GRID ? "text-[var(--cmp-text-success)]" : "text-gray-400"}`}>{sum}/{GRID}</span>
+                        <span className="text-[10px] text-gray-500">Row {ri + 1}</span>
+                        <span className={`text-[10px] font-semibold ${over ? "text-[var(--cmp-text-error)]" : sum === GRID ? "text-[var(--cmp-text-success)]" : "text-gray-500"}`}>{sum}/{GRID}</span>
                         <span className="flex-1" />
                         <button onClick={() => addCol(ri)} className="text-[10px] text-indigo-700 hover:underline">+ col</button>
-                        <button onClick={() => moveRow(ri, -1)} className="text-gray-400 hover:text-gray-700 text-xs px-0.5">↑</button>
-                        <button onClick={() => moveRow(ri, 1)} className="text-gray-400 hover:text-gray-700 text-xs px-0.5">↓</button>
-                        <button onClick={() => rmRow(ri)} className="text-gray-400 hover:text-[var(--cmp-text-error)] text-xs px-0.5">✕</button>
+                        <button onClick={() => moveRow(ri, -1)} className="text-gray-500 hover:text-gray-700 text-xs px-0.5">↑</button>
+                        <button onClick={() => moveRow(ri, 1)} className="text-gray-500 hover:text-gray-700 text-xs px-0.5">↓</button>
+                        <button onClick={() => rmRow(ri)} className="text-gray-500 hover:text-[var(--cmp-text-error)] text-xs px-0.5">✕</button>
                       </div>
                       <div className="flex gap-1.5">
                         {row.columns.map((col, ci) => (
@@ -86,9 +86,9 @@ export default function PageComposer({ pages, palette }: { pages: Page[]; palett
                             </select>
                             <div className="flex items-center gap-1 mt-1">
                               <select className={`${sel} w-14`} value={col.span} onChange={e => setCol(ri, ci, { span: Number(e.target.value) })}>{Array.from({ length: GRID }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n}</option>)}</select>
-                              <span className="text-[9px] text-gray-300">cols</span>
+                              <span className="text-[9px] text-gray-500">cols</span>
                               <span className="flex-1" />
-                              <button onClick={() => rmCol(ri, ci)} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-[11px]">✕</button>
+                              <button onClick={() => rmCol(ri, ci)} className="text-gray-500 hover:text-[var(--cmp-text-error)] text-[11px]">✕</button>
                             </div>
                           </div>
                         ))}

@@ -31,7 +31,7 @@ export default async function EvidenceIntegrityPage() {
         <div>
           <p className="text-[11px] font-semibold text-indigo-500 uppercase tracking-widest mb-0.5">CAPA-004 · Competency Assurance</p>
           <h1 className="text-xl font-bold text-gray-900">Evidence Integrity</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Whether competency evidence is verified, authentic and traceable — the verification backlog, integrity issues, and chain-of-custody.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Whether competency evidence is verified, authentic and traceable — the verification backlog, integrity issues, and chain-of-custody.</p>
         </div>
         <Link href="/super-admin/assurance" className="text-xs font-semibold text-gray-500 hover:text-indigo-700 border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Assurance</Link>
       </div>
@@ -39,7 +39,7 @@ export default async function EvidenceIntegrityPage() {
       {!q.provisioned ? (
         <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4"><p className="text-[13px] text-amber-900">Evidence integrity isn&apos;t provisioned — apply migration 149 (<code className="text-[11px]">149-capa-evidence-integrity.sql</code>) to add the verification lifecycle to <code className="text-[11px]">evidence</code>.</p></div>
       ) : q.empty ? (
-        <div className="bg-white border border-gray-100 rounded-xl p-6"><p className="text-sm text-gray-400">No evidence recorded yet. Once competency evidence is uploaded, the verification queue and integrity signals populate here.</p></div>
+        <div className="bg-white border border-gray-100 rounded-xl p-6"><p className="text-sm text-gray-500">No evidence recorded yet. Once competency evidence is uploaded, the verification queue and integrity signals populate here.</p></div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
@@ -51,21 +51,21 @@ export default async function EvidenceIntegrityPage() {
               { label: "Expiring ≤30d", value: q.kpis.expiring, tone: q.kpis.expiring ? "text-[var(--cmp-text-warning)]" : "text-gray-900", sub: `${q.kpis.expired} expired` },
               { label: "Suspected dupes", value: q.kpis.duplicates, tone: q.kpis.duplicates ? "text-[var(--cmp-text-warning)]" : "text-gray-900", sub: "same file+size" },
             ].map(k => (
-              <div key={k.label} className={`${card} p-3.5`}><p className={`text-xl font-bold tabular-nums ${k.tone}`}>{k.value}</p><p className="text-[10px] text-gray-400 font-medium mt-0.5 leading-tight">{k.label}</p><p className="text-[9px] text-gray-300 leading-tight">{k.sub}</p></div>
+              <div key={k.label} className={`${card} p-3.5`}><p className={`text-xl font-bold tabular-nums ${k.tone}`}>{k.value}</p><p className="text-[10px] text-gray-500 font-medium mt-0.5 leading-tight">{k.label}</p><p className="text-[9px] text-gray-500 leading-tight">{k.sub}</p></div>
             ))}
           </div>
 
           {/* Verification queue */}
           <div className={`${card} overflow-hidden mb-5`}>
-            <div className="px-4 py-2.5 border-b border-gray-50 flex items-center justify-between"><p className="text-[11px] font-semibold text-gray-500">Verification queue</p><span className="text-[10px] text-gray-400">{q.kpis.pending} pending — verify, flag or reject</span></div>
+            <div className="px-4 py-2.5 border-b border-gray-50 flex items-center justify-between"><p className="text-[11px] font-semibold text-gray-500">Verification queue</p><span className="text-[10px] text-gray-500">{q.kpis.pending} pending — verify, flag or reject</span></div>
             {q.queue.length === 0 ? (
-              <p className="text-xs text-gray-400 px-4 py-6 text-center">Nothing pending — all evidence has been reviewed. 🎯</p>
+              <p className="text-xs text-gray-500 px-4 py-6 text-center">Nothing pending — all evidence has been reviewed. 🎯</p>
             ) : (
               <div className="divide-y divide-gray-50">
                 {q.queue.map((e: any) => (
                   <div key={e.id} className="flex items-center gap-3 px-4 py-2.5">
                     <span className="text-sm text-gray-800 truncate flex-1" title={e.file}>{e.file}</span>
-                    <span className="text-[10px] text-gray-400 truncate max-w-[120px] hidden sm:inline">{e.owner}{e.competency !== "—" ? ` · ${e.competency}` : ""}</span>
+                    <span className="text-[10px] text-gray-500 truncate max-w-[120px] hidden sm:inline">{e.owner}{e.competency !== "—" ? ` · ${e.competency}` : ""}</span>
                     <span className="text-[9px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 shrink-0">{String(e.kind).replace(/_/g, " ")}</span>
                     <EvidenceActions id={e.id} />
                   </div>
@@ -92,30 +92,30 @@ export default async function EvidenceIntegrityPage() {
             {/* Suspicious duplicates */}
             <div className={`${card} p-4`}>
               <p className="text-[11px] font-semibold text-gray-500 mb-3">Suspected duplicates</p>
-              {q.suspicious.length === 0 ? <p className="text-xs text-gray-400 py-6 text-center">No duplicate files detected. ✅</p> : (
+              {q.suspicious.length === 0 ? <p className="text-xs text-gray-500 py-6 text-center">No duplicate files detected. ✅</p> : (
                 <div className="space-y-2">
                   {q.suspicious.map((s: any, i: number) => (
                     <div key={i} className="flex items-center gap-2 text-[12px]"><span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-warning)] shrink-0" /><span className="text-gray-700 truncate flex-1" title={s.file}>{s.file}</span><span className="text-[10px] font-semibold text-[var(--cmp-text-warning)] shrink-0">×{s.count}</span></div>
                   ))}
                 </div>
               )}
-              <p className="text-[10px] text-gray-400 mt-3">Same file name + byte size across rows — a heuristic; a content hash on upload would make this exact.</p>
+              <p className="text-[10px] text-gray-500 mt-3">Same file name + byte size across rows — a heuristic; a content hash on upload would make this exact.</p>
             </div>
 
             {/* Chain-of-custody log */}
             <div className={`${card} p-4`}>
               <p className="text-[11px] font-semibold text-gray-500 mb-3">Chain of custody</p>
-              {q.events.length === 0 ? <p className="text-xs text-gray-400 py-6 text-center">No integrity events yet — verify an item to start the log.</p> : (
+              {q.events.length === 0 ? <p className="text-xs text-gray-500 py-6 text-center">No integrity events yet — verify an item to start the log.</p> : (
                 <div className="space-y-1.5 max-h-56 overflow-y-auto">
                   {q.events.map((ev: any, i: number) => (
-                    <div key={i} className="flex items-start gap-1.5 text-[11px]"><span className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-1.5 shrink-0" /><span className="text-gray-600 flex-1 leading-tight"><span className="font-semibold capitalize">{ev.event_type}</span>{ev.actor_name ? ` · ${ev.actor_name}` : ""}</span><span className="text-gray-400 shrink-0">{fmt(ev.created_at)}</span></div>
+                    <div key={i} className="flex items-start gap-1.5 text-[11px]"><span className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-1.5 shrink-0" /><span className="text-gray-600 flex-1 leading-tight"><span className="font-semibold capitalize">{ev.event_type}</span>{ev.actor_name ? ` · ${ev.actor_name}` : ""}</span><span className="text-gray-500 shrink-0">{fmt(ev.created_at)}</span></div>
                   ))}
                 </div>
               )}
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">Verifying, flagging or rejecting an item writes an immutable integrity event (chain-of-custody). Duplicate detection is a file-name+size heuristic today; a content hash captured at upload would make authenticity/tamper exact — the honest next step.</p>
+          <p className="text-[11px] text-gray-500 mt-4 leading-relaxed">Verifying, flagging or rejecting an item writes an immutable integrity event (chain-of-custody). Duplicate detection is a file-name+size heuristic today; a content hash captured at upload would make authenticity/tamper exact — the honest next step.</p>
         </>
       )}
     </div>

@@ -95,7 +95,7 @@ export default function ComplianceCenter({ frameworks, obligations }: { framewor
             <div><label className={label}>Effective date</label><input type="date" value={form.effective_date ?? ""} onChange={set("effective_date")} className={input} /></div>
             <div><label className={label}>Expiry / renewal date</label><input type="date" value={form.expiry_date ?? ""} onChange={set("expiry_date")} className={input} /></div>
             <div className="sm:col-span-2"><label className={label}>Evidence required</label><input value={form.evidence_required ?? ""} onChange={set("evidence_required")} className={input} placeholder="e.g. Inspection certificate, training records" /></div>
-            <p className="sm:col-span-2 text-[11px] text-gray-400">Registered by a platform super admin → the obligation is <span className="font-medium text-gray-500">platform-wide</span> (tenant scope bound server-side). Starts as “not assessed”.</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-500">Registered by a platform super admin → the obligation is <span className="font-medium text-gray-500">platform-wide</span> (tenant scope bound server-side). Starts as “not assessed”.</p>
           </div>
         )}
 
@@ -114,7 +114,7 @@ export default function ComplianceCenter({ frameworks, obligations }: { framewor
         <div className="flex items-center gap-2 mt-4">
           <button onClick={act} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Working…" : tab === "create" ? "Register obligation" : "Update status"}</button>
           <button onClick={() => setForm({})} className="text-sm text-gray-500 hover:text-gray-700 px-2">Clear</button>
-          <span className="text-[11px] text-gray-400 ml-auto">Real register actions — audit-logged.</span>
+          <span className="text-[11px] text-gray-500 ml-auto">Real register actions — audit-logged.</span>
         </div>
       </div>
     </div>

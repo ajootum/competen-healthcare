@@ -109,7 +109,7 @@ export default async function StudioPage() {
         <div>
           <p className="text-[11px] font-semibold text-rose-500 uppercase tracking-widest mb-0.5">CST-000 · Competency Studio Platform</p>
           <h1 className="text-xl font-bold text-gray-900">Competency Studio</h1>
-          <p className="text-gray-400 text-sm mt-0.5">
+          <p className="text-gray-500 text-sm mt-0.5">
             The no-code authoring platform and single source of truth for every competency the platform consumes.
           </p>
         </div>
@@ -121,19 +121,19 @@ export default async function StudioPage() {
         {PORTFOLIO.map(p => (
           <div key={p.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
             <div className="flex items-center justify-between mb-1"><span className="text-sm">{p.icon}</span><p className="text-xl font-bold text-gray-900">{p.value}</p></div>
-            <p className="text-[10px] text-gray-400 font-medium">{p.label}</p>
+            <p className="text-[10px] text-gray-500 font-medium">{p.label}</p>
           </div>
         ))}
       </div>
 
       {/* CST-100 — authoring pipeline flow */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 mb-5">
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2.5">CST-100 · Authoring workflow</p>
+        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2.5">CST-100 · Authoring workflow</p>
         <div className="flex flex-wrap items-center gap-1.5">
           {PIPELINE.map((s, i) => (
             <span key={s} className="flex items-center gap-1.5">
               <span className="text-[11px] font-semibold text-gray-600 bg-gray-50 border border-gray-100 rounded-full px-2.5 py-1">{s}</span>
-              {i < PIPELINE.length - 1 && <span className="text-gray-300 text-xs">→</span>}
+              {i < PIPELINE.length - 1 && <span className="text-gray-500 text-xs">→</span>}
             </span>
           ))}
         </div>
@@ -143,8 +143,8 @@ export default async function StudioPage() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
         {ATTENTION.map(w => (
           <Link key={w.label} href={w.href} className="bg-white rounded-xl border border-gray-100 p-4 hover:border-teal-200 transition-colors">
-            <div className="flex items-center justify-between mb-1"><span>{w.icon}</span><p className={`text-2xl font-bold ${w.on ? w.tone : "text-gray-300"}`}>{w.value}</p></div>
-            <p className="text-[10px] text-gray-400 font-medium">{w.label}</p>
+            <div className="flex items-center justify-between mb-1"><span>{w.icon}</span><p className={`text-2xl font-bold ${w.on ? w.tone : "text-gray-500"}`}>{w.value}</p></div>
+            <p className="text-[10px] text-gray-500 font-medium">{w.label}</p>
           </Link>
         ))}
       </div>
@@ -152,17 +152,17 @@ export default async function StudioPage() {
       {/* Global search across the governed knowledge base */}
       <div className="mb-7"><LibrarySearch /></div>
 
-      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Core studio modules · CST-001–012</h2>
+      <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Core studio modules · CST-001–012</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 mb-7">
         {CORE.map(m => <ModuleCard key={m.code} m={m} />)}
       </div>
 
-      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Reference library &amp; supply chain · CST-102–112</h2>
+      <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Reference library &amp; supply chain · CST-102–112</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 mb-7">
         {REFERENCE.map(m => <ModuleCard key={m.code} m={m} />)}
       </div>
 
-      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Governance &amp; lifecycle · CST-101/106/107</h2>
+      <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Governance &amp; lifecycle · CST-101/106/107</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 mb-7">
         {GOVERNANCE.map(m => <ModuleCard key={m.code} m={m} />)}
       </div>

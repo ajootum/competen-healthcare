@@ -174,7 +174,7 @@ export default async function FrameworkDetailPage({ params }: { params: Promise<
 
   return (
     <div data-wide>
-      <div className="flex items-center gap-2 text-xs text-gray-400 mb-4">
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-4">
         <span>Competency Studio</span>
         <span>/</span>
         <span className="text-gray-700 font-medium">{framework.name}</span>

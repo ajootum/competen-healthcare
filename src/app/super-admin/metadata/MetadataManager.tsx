@@ -53,7 +53,7 @@ export default function MetadataManager({ taxonomies, terms, tags }: { taxonomie
               <div key={tax.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
                 <div className="px-5 py-3 bg-gray-50/60 border-b border-gray-100 flex items-center justify-between">
                   <p className="font-semibold text-gray-900 text-sm">{tax.label}</p>
-                  <span className="text-[10px] text-gray-400 font-mono">{tax.kind}</span>
+                  <span className="text-[10px] text-gray-500 font-mono">{tax.kind}</span>
                 </div>
                 <div className="px-5 py-3">
                   <div className="flex flex-wrap gap-1.5 mb-2">
@@ -64,7 +64,7 @@ export default function MetadataManager({ taxonomies, terms, tags }: { taxonomie
                           className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-[var(--cmp-text-critical)] transition-opacity leading-none px-0.5">×</button>
                       </span>
                     ))}
-                    {!items.length && <p className="text-[11px] text-gray-300 italic">No terms</p>}
+                    {!items.length && <p className="text-[11px] text-gray-500 italic">No terms</p>}
                   </div>
                   <button onClick={() => { const v = prompt(`Add term to "${tax.label}":`); if (v?.trim()) post({ type: "term", taxonomy_id: tax.id, value: v.trim() }); }}
                     className="text-[11px] text-[var(--cmp-text-error)] font-semibold hover:underline">+ Add term</button>
@@ -80,7 +80,7 @@ export default function MetadataManager({ taxonomies, terms, tags }: { taxonomie
           <div className="flex flex-col gap-4">
             {["clinical", "safety", "education", "governance", "general"].map(cat => (
               <div key={cat}>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">{cat}</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">{cat}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {(tagsByCat[cat] ?? []).map(t => (
                     <span key={t.id} className={`group inline-flex items-center gap-1 text-xs pl-2.5 pr-1.5 py-0.5 rounded-full ${TAG_CAT_CLS[cat]}`}>
@@ -89,7 +89,7 @@ export default function MetadataManager({ taxonomies, terms, tags }: { taxonomie
                         className="opacity-0 group-hover:opacity-100 hover:opacity-100 opacity-60 leading-none px-0.5">×</button>
                     </span>
                   ))}
-                  {!(tagsByCat[cat] ?? []).length && <p className="text-[11px] text-gray-300 italic">No tags</p>}
+                  {!(tagsByCat[cat] ?? []).length && <p className="text-[11px] text-gray-500 italic">No tags</p>}
                 </div>
               </div>
             ))}

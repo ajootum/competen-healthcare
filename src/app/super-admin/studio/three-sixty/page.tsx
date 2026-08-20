@@ -27,7 +27,7 @@ export default async function ThreeSixtyPage() {
         <div>
           <p className="text-[11px] font-semibold text-rose-500 uppercase tracking-widest mb-0.5">CST-041 · 360° Assessment</p>
           <h1 className="text-xl font-bold text-gray-900">360° Assessment Designer</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Multisource feedback — configure weighted respondent groups, rating scale and confidentiality.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Multisource feedback — configure weighted respondent groups, rating scale and confidentiality.</p>
         </div>
         <Link href="/super-admin/studio/assessment" className="text-xs font-semibold text-gray-500 hover:text-teal-700 border border-gray-200 rounded-lg px-3 py-2">← Assessment</Link>
       </div>
@@ -45,7 +45,7 @@ export default async function ThreeSixtyPage() {
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-0.5">{k.label}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-0.5">{k.label}</p>
               </div>
             ))}
           </div>

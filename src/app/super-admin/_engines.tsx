@@ -24,7 +24,7 @@ export const BADGE: Record<Status, { text: string; cls: string }> = {
   real: { text: "Live", cls: "text-teal-700 bg-teal-50 border-teal-100" },
   linked: { text: "Linked", cls: "text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]" },
   partial: { text: "Partial", cls: "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]" },
-  gap: { text: "Planned", cls: "text-gray-400 bg-gray-50 border-gray-100" },
+  gap: { text: "Planned", cls: "text-gray-500 bg-gray-50 border-gray-100" },
 };
 
 // label = the hover colour on the module name, border = the hover colour on the card edge. Both taken
@@ -45,12 +45,12 @@ export function EngineCard({ m, accent = "indigo" }: { m: Mod; accent?: Accent }
       <div className="flex items-center gap-2.5 mb-1.5">
         <span className="text-xl shrink-0">{m.icon}</span>
         <div className="min-w-0">
-          <p className="text-[9px] font-bold text-gray-300 tracking-widest">{m.code}</p>
+          <p className="text-[9px] font-bold text-gray-500 tracking-widest">{m.code}</p>
           <p className={`font-bold text-sm leading-tight ${m.status === "gap" ? "text-gray-500" : `text-gray-900 ${a.label}`}`}>{m.label}</p>
         </div>
         <span className={`ml-auto shrink-0 text-[8px] font-bold uppercase tracking-wide border px-1.5 py-0.5 rounded ${b.cls}`}>{b.text}</span>
       </div>
-      <p className="text-[11px] text-gray-400 leading-relaxed">{m.desc}</p>
+      <p className="text-[11px] text-gray-500 leading-relaxed">{m.desc}</p>
     </>
   );
   const base = "bg-white rounded-xl border border-gray-100 p-4 block";
@@ -62,7 +62,7 @@ export function EngineCard({ m, accent = "indigo" }: { m: Mod; accent?: Accent }
 export function Layer({ title, mods, accent = "indigo" }: { title: string; mods: Mod[]; accent?: Accent }) {
   return (
     <>
-      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">{title}</h2>
+      <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">{title}</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 mb-7">{mods.map(m => <EngineCard key={m.code} m={m} accent={accent} />)}</div>
     </>
   );

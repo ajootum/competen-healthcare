@@ -40,7 +40,7 @@ export default async function ClinicalKnowledgePlatform() {
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Clinical Knowledge Platform</h1>
           <p className="text-sm text-gray-500">Create, govern and publish the clinical knowledge that powers Competen — six modules.</p>
         </div>
-        <span className="text-xs text-gray-400 tabular-nums">Updated {new Date(ckp.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+        <span className="text-xs text-gray-500 tabular-nums">Updated {new Date(ckp.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
       </div>
 
       {/* Six module cards */}
@@ -84,7 +84,7 @@ export default async function ClinicalKnowledgePlatform() {
         {TRUST.map(t => <span key={t} className="text-[11px] font-medium text-gray-500">{t}</span>)}
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The Clinical Knowledge Platform is the authoritative source for every competency, CPU, CKO, framework, assessment, policy and clinical guideline. Each module’s KPIs are live from the knowledge schema; open a module for its full workspace. Metrics the platform doesn’t track (duplicate detection, usage analytics) show honest states inside each module.</p>
+      <p className="text-[11px] text-gray-500 pb-4">The Clinical Knowledge Platform is the authoritative source for every competency, CPU, CKO, framework, assessment, policy and clinical guideline. Each module’s KPIs are live from the knowledge schema; open a module for its full workspace. Metrics the platform doesn’t track (duplicate detection, usage analytics) show honest states inside each module.</p>
     </div>
   );
 }

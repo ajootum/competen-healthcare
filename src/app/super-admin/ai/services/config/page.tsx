@@ -28,11 +28,11 @@ export default async function ConfigPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {d.byCategory.map((g: any) => (
-          <Card key={g.category} title={`${CAT_ICON[g.category] ?? "⚙️"} ${g.category.charAt(0).toUpperCase() + g.category.slice(1)}`} right={<span className="text-[11px] text-gray-400">{g.items.length}</span>}>
+          <Card key={g.category} title={`${CAT_ICON[g.category] ?? "⚙️"} ${g.category.charAt(0).toUpperCase() + g.category.slice(1)}`} right={<span className="text-[11px] text-gray-500">{g.items.length}</span>}>
             <div className="space-y-1.5">
               {g.items.map((i: any) => (
                 <div key={i.id} className="flex items-center gap-2 text-[12px]">
-                  <div className="min-w-0 flex-1"><p className="text-gray-800 leading-tight truncate">{i.name}</p><p className="text-[10px] text-gray-400 font-mono">{i.config_key}</p></div>
+                  <div className="min-w-0 flex-1"><p className="text-gray-800 leading-tight truncate">{i.name}</p><p className="text-[10px] text-gray-500 font-mono">{i.config_key}</p></div>
                   <span className="text-gray-700 font-medium text-[11px] text-right truncate max-w-[40%]">{i.value}</span>
                   <Pill text={i.source} tone={i.source === "inherited" ? "blue" : "amber"} />
                 </div>

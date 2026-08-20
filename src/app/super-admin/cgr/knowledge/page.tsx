@@ -33,7 +33,7 @@ export default async function KnowledgeEvidencePage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-012 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Knowledge Repository &amp; Evidence Intelligence</h1>
-          <p className="text-gray-400 text-sm mt-0.5">What evidence supports each competency, how reliable it is, and when it should be reviewed — the governance evidence lens: inventory, competency evidence coverage, and the knowledge graph.</p>
+          <p className="text-gray-500 text-sm mt-0.5">What evidence supports each competency, how reliable it is, and when it should be reviewed — the governance evidence lens: inventory, competency evidence coverage, and the knowledge graph.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/super-admin/ckp/repository" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Knowledge browser →</Link>
@@ -42,7 +42,7 @@ export default async function KnowledgeEvidencePage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No knowledge objects or evidence links recorded yet. Authoring knowledge objects happens in the <Link href="/super-admin/ckp/repository" className="text-[var(--cmp-text-success)] hover:underline">Clinical Knowledge Repository</Link>; once they link to CPUs, competency evidence coverage computes here.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No knowledge objects or evidence links recorded yet. Authoring knowledge objects happens in the <Link href="/super-admin/ckp/repository" className="text-[var(--cmp-text-success)] hover:underline">Clinical Knowledge Repository</Link>; once they link to CPUs, competency evidence coverage computes here.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -68,7 +68,7 @@ export default async function KnowledgeEvidencePage() {
                 </div>
                 <div className="text-[11px] text-gray-500 space-y-1">
                   <p><span className="font-bold text-gray-700 tabular-nums">{k.linkedComps}</span> of {k.totalComps} competencies are backed by a knowledge object (via their CPU).</p>
-                  <p className="text-gray-400">{k.coverageOfGrouped}% of the {k.groupedComps} CPU-grouped competencies. Ungrouped competencies can&apos;t yet carry evidence links.</p>
+                  <p className="text-gray-500">{k.coverageOfGrouped}% of the {k.groupedComps} CPU-grouped competencies. Ungrouped competencies can&apos;t yet carry evidence links.</p>
                 </div>
               </div>
             </div>
@@ -77,7 +77,7 @@ export default async function KnowledgeEvidencePage() {
             <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 p-4">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Knowledge inventory by type</p>
               {d.inventory.length === 0 ? (
-                <p className="text-[12px] text-gray-400">No knowledge objects yet.</p>
+                <p className="text-[12px] text-gray-500">No knowledge objects yet.</p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
                   {d.inventory.map((x: any) => (
@@ -97,7 +97,7 @@ export default async function KnowledgeEvidencePage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Best-evidenced practice units</p>
               {d.topCpus.length === 0 ? (
-                <p className="text-[12px] text-gray-400">No knowledge objects linked to practice units yet.</p>
+                <p className="text-[12px] text-gray-500">No knowledge objects linked to practice units yet.</p>
               ) : (
                 <div className="space-y-1.5">
                   {d.topCpus.map((c: any, i: number) => (
@@ -113,9 +113,9 @@ export default async function KnowledgeEvidencePage() {
 
             {/* Knowledge graph relationships */}
             <div className="bg-white rounded-xl border border-gray-100 p-4">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Governed knowledge graph <span className="font-normal normal-case text-gray-300">— {k.edges} edges</span></p>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Governed knowledge graph <span className="font-normal normal-case text-gray-500">— {k.edges} edges</span></p>
               {d.relationships.length === 0 ? (
-                <p className="text-[12px] text-gray-400">No knowledge-graph edges recorded. The <Link href="/super-admin/studio/dependencies" className="text-[var(--cmp-text-success)] hover:underline">dependency graph</Link> builds these links.</p>
+                <p className="text-[12px] text-gray-500">No knowledge-graph edges recorded. The <Link href="/super-admin/studio/dependencies" className="text-[var(--cmp-text-success)] hover:underline">dependency graph</Link> builds these links.</p>
               ) : (
                 <div className="space-y-1.5">
                   {d.relationships.map((r: any) => (
@@ -130,7 +130,7 @@ export default async function KnowledgeEvidencePage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real: the inventory and traceability come from the knowledge-object repository, competency evidence coverage is computed by joining knowledge objects to competencies through their practice units, and the graph is the governed knowledge edges. This is the governance evidence lens — authoring knowledge objects and the full knowledge browser live in the <Link href="/super-admin/ckp/repository" className="text-[var(--cmp-text-success)] hover:underline">Clinical Knowledge Repository</Link>, and assessment-evidence integrity in the <Link href="/super-admin/assurance/evidence" className="text-[var(--cmp-text-success)] hover:underline">CAPA Evidence Centre</Link>. Per the CGR mandate, AI may search, summarise and flag outdated evidence but never approves evidence validity or determines clinical appropriateness.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every figure is real: the inventory and traceability come from the knowledge-object repository, competency evidence coverage is computed by joining knowledge objects to competencies through their practice units, and the graph is the governed knowledge edges. This is the governance evidence lens — authoring knowledge objects and the full knowledge browser live in the <Link href="/super-admin/ckp/repository" className="text-[var(--cmp-text-success)] hover:underline">Clinical Knowledge Repository</Link>, and assessment-evidence integrity in the <Link href="/super-admin/assurance/evidence" className="text-[var(--cmp-text-success)] hover:underline">CAPA Evidence Centre</Link>. Per the CGR mandate, AI may search, summarise and flag outdated evidence but never approves evidence validity or determines clinical appropriateness.</p>
         </div>
       )}
     </div>

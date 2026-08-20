@@ -47,7 +47,7 @@ export default async function IntegrationHealthPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-013 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Interoperability &amp; Integration</h1>
-          <p className="text-gray-400 text-sm mt-0.5">How governance information moves between systems with accuracy, security and accountability — the event-driven integration health over the governance event bus.</p>
+          <p className="text-gray-500 text-sm mt-0.5">How governance information moves between systems with accuracy, security and accountability — the event-driven integration health over the governance event bus.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/competency-office/integration" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Workspace links →</Link>
@@ -57,12 +57,12 @@ export default async function IntegrationHealthPage() {
 
       {!d.provisioned ? (
         <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
-          <p className="text-sm text-gray-400 mb-4">No domain events on the bus yet. As governed changes fire (competency approved, regulatory change detected, risk identified → §10), the event-driven integration health builds here. The stated internal integration architecture is below.</p>
+          <p className="text-sm text-gray-500 mb-4">No domain events on the bus yet. As governed changes fire (competency approved, regulatory change detected, risk identified → §10), the event-driven integration health builds here. The stated internal integration architecture is below.</p>
           <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 text-left max-w-4xl mx-auto">
             {INTERNAL.map((p) => (
               <div key={p.key} className="border border-gray-100 rounded-lg p-2.5">
                 <p className="text-[11px] font-bold text-gray-700">{p.key}</p>
-                <p className="text-[10px] text-gray-400 leading-snug">{p.exchange}</p>
+                <p className="text-[10px] text-gray-500 leading-snug">{p.exchange}</p>
               </div>
             ))}
           </div>
@@ -104,7 +104,7 @@ export default async function IntegrationHealthPage() {
                 <div className="flex items-center justify-between"><span className="text-[11px] text-gray-500">Retry backlog</span><span className={`text-[13px] font-bold tabular-nums ${k.retryBacklog ? "text-[var(--cmp-text-warning)]" : "text-gray-700"}`}>{k.retryBacklog}</span></div>
                 <div className="flex items-center justify-between"><span className="text-[11px] text-gray-500">Trace-ID coverage</span><span className="text-[13px] font-bold text-gray-700 tabular-nums">{k.tracePct}%</span></div>
                 <div className="flex items-center justify-between"><span className="text-[11px] text-gray-500">Version (idempotency)</span><span className="text-[13px] font-bold text-gray-700 tabular-nums">{k.versionPct}%</span></div>
-                <p className="text-[10px] text-gray-400 pt-1">At-least-once + idempotent-by-(subject, version) — §4.1 data integrity.</p>
+                <p className="text-[10px] text-gray-500 pt-1">At-least-once + idempotent-by-(subject, version) — §4.1 data integrity.</p>
               </div>
             </div>
           </div>
@@ -144,19 +144,19 @@ export default async function IntegrationHealthPage() {
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="text-sm font-bold text-gray-800">Events needing attention</p>
-                <p className="text-[10px] text-gray-400">failed &amp; dead-letter · <Link href="/super-admin/platform-ops/monitoring" className="text-[var(--cmp-text-success)] hover:underline">monitoring →</Link></p>
+                <p className="text-[10px] text-gray-500">failed &amp; dead-letter · <Link href="/super-admin/platform-ops/monitoring" className="text-[var(--cmp-text-success)] hover:underline">monitoring →</Link></p>
               </div>
               <div className="divide-y divide-gray-50">
                 {d.failing.map((f: any, i: number) => (
                   <div key={i} className="flex items-center justify-between gap-3 px-4 py-2">
                     <div className="min-w-0">
                       <p className="text-[12px] text-gray-700 font-mono truncate">{f.type}</p>
-                      <p className="text-[10px] text-gray-400">{f.subject}</p>
+                      <p className="text-[10px] text-gray-500">{f.subject}</p>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-[10px] text-gray-400 tabular-nums">{f.attempts} attempts</span>
+                      <span className="text-[10px] text-gray-500 tabular-nums">{f.attempts} attempts</span>
                       <span className={`text-[10px] font-bold rounded px-1.5 py-0.5 ${f.status === "dead_letter" ? "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)]" : "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)]"}`}>{STATUS_META[f.status]?.label ?? f.status}</span>
-                      <span className="text-[9px] text-gray-300 tabular-nums">{fmt(f.at)}</span>
+                      <span className="text-[9px] text-gray-500 tabular-nums">{fmt(f.at)}</span>
                     </div>
                   </div>
                 ))}
@@ -164,7 +164,7 @@ export default async function IntegrationHealthPage() {
             </div>
           )}
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the governance event bus (domain_events) with at-least-once, idempotent delivery. Processing health, retry/dead-letter backlog and traceability come straight from the event log; the platform mapping groups event families onto the internal platforms (CST/CAP/CDP/COMP/CMO). Endpoint configuration and workspace links are owned by the <Link href="/competency-office/integration" className="text-[var(--cmp-text-success)] hover:underline">Cross-Workspace Integration</Link> surface, and dispatch monitoring by <Link href="/super-admin/platform-ops/monitoring" className="text-[var(--cmp-text-success)] hover:underline">Platform Monitoring</Link>. Per the CGR mandate, AI receives approved governance data only and cannot autonomously approve, override or modify records.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every figure is real — the governance event bus (domain_events) with at-least-once, idempotent delivery. Processing health, retry/dead-letter backlog and traceability come straight from the event log; the platform mapping groups event families onto the internal platforms (CST/CAP/CDP/COMP/CMO). Endpoint configuration and workspace links are owned by the <Link href="/competency-office/integration" className="text-[var(--cmp-text-success)] hover:underline">Cross-Workspace Integration</Link> surface, and dispatch monitoring by <Link href="/super-admin/platform-ops/monitoring" className="text-[var(--cmp-text-success)] hover:underline">Platform Monitoring</Link>. Per the CGR mandate, AI receives approved governance data only and cannot autonomously approve, override or modify records.</p>
         </div>
       )}
     </div>

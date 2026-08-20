@@ -30,7 +30,7 @@ export default async function FormsBuilder() {
 
   const header = (
     <>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Form & Data-Capture Builder</span>
@@ -38,7 +38,7 @@ export default async function FormsBuilder() {
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">📝</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Form &amp; Data-Capture Builder <span className="text-gray-300 font-medium text-lg">(NCP-003)</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Form &amp; Data-Capture Builder <span className="text-gray-500 font-medium text-lg">(NCP-003)</span></h1>
           <p className="text-sm text-gray-500">Design the fields of each governed form — types, required flags and options — with a live preview of the rendered form.</p>
         </div>
       </div>
@@ -56,7 +56,7 @@ export default async function FormsBuilder() {
         <Stat label="Awaiting Design" value={list.length - withFields} tone={list.length - withFields ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} sub="no fields yet" />
       </div>
       <FormDesigner forms={list} />
-      <p className="text-[11px] text-gray-400">Fields persist onto the form object&apos;s definition. Conditional logic, validation rules, e-signatures, workflow binding, offline capture and the runtime form renderer (NCP-003 §6/§7/§8) are next-phase.</p>
+      <p className="text-[11px] text-gray-500">Fields persist onto the form object&apos;s definition. Conditional logic, validation rules, e-signatures, workflow binding, offline capture and the runtime form renderer (NCP-003 §6/§7/§8) are next-phase.</p>
     </div>
   );
 }

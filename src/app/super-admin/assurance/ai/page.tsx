@@ -34,7 +34,7 @@ export default async function AssuranceAiPage() {
         <div>
           <p className="text-[11px] font-semibold text-indigo-500 uppercase tracking-widest mb-0.5">CAPA-010 · Competency Assurance</p>
           <h1 className="text-xl font-bold text-gray-900">AI Assurance Intelligence</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Ask the assurance copilot — it predicts, recommends and explains over the live assurance score, domains and risks the engines produce.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Ask the assurance copilot — it predicts, recommends and explains over the live assurance score, domains and risks the engines produce.</p>
         </div>
         <Link href="/super-admin/assurance" className="text-xs font-semibold text-gray-500 hover:text-indigo-700 border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Assurance</Link>
       </div>
@@ -53,7 +53,7 @@ export default async function AssuranceAiPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
           {/* Score it's grounded in */}
           <div className={`${card} p-5 flex flex-col items-center justify-center text-center`}>
-            <p className="text-[11px] text-gray-400 uppercase tracking-wide mb-1">Grounded in assurance score</p>
+            <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Grounded in assurance score</p>
             <p className={`text-4xl font-bold tabular-nums ${BAND[q.band!.tone]}`}>{q.overall}</p>
             <p className={`text-sm font-semibold mt-0.5 ${BAND[q.band!.tone]}`}>{q.band!.label}</p>
             <Link href="/super-admin/assurance/dashboard" className="text-[11px] text-indigo-600 hover:underline mt-2">Full dashboard →</Link>
@@ -63,7 +63,7 @@ export default async function AssuranceAiPage() {
           <div className={`${card} p-4 lg:col-span-2`}>
             <p className="text-[11px] font-semibold text-gray-500 mb-3">Signals in context</p>
             {q.risks.length === 0 ? (
-              <p className="text-sm text-gray-400 py-6 text-center">No open risks — the copilot will confirm the system is within tolerance.</p>
+              <p className="text-sm text-gray-500 py-6 text-center">No open risks — the copilot will confirm the system is within tolerance.</p>
             ) : (
               <div className="space-y-2">
                 {q.risks.slice(0, 5).map((r: any, i: number) => (
@@ -81,7 +81,7 @@ export default async function AssuranceAiPage() {
         </div>
       )}
 
-      <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">The copilot answers only from the live assurance signals above — it never invents scores, staff or competencies. It advises; acting on any recommendation routes through the owning, audited surface. Every call logs to the AI gateway (AIS-011 observability).</p>
+      <p className="text-[11px] text-gray-500 mt-4 leading-relaxed">The copilot answers only from the live assurance signals above — it never invents scores, staff or competencies. It advises; acting on any recommendation routes through the owning, audited surface. Every call logs to the AI gateway (AIS-011 observability).</p>
     </div>
   );
 }

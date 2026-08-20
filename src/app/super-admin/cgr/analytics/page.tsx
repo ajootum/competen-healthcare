@@ -42,7 +42,7 @@ export default async function GovernanceAnalyticsPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-016 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Analytics, Metrics &amp; Continuous Improvement</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Is our governance system improving over time, and where should leaders focus? Governance trends, maturity progression and ranked improvement opportunities.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Is our governance system improving over time, and where should leaders focus? Governance trends, maturity progression and ranked improvement opportunities.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/super-admin/performance" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Performance →</Link>
@@ -51,7 +51,7 @@ export default async function GovernanceAnalyticsPage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No governance data to analyse yet — once competencies exist and readiness snapshots accrue, trends and improvement opportunities compute here.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No governance data to analyse yet — once competencies exist and readiness snapshots accrue, trends and improvement opportunities compute here.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -74,7 +74,7 @@ export default async function GovernanceAnalyticsPage() {
                 </div>
               </div>
               {!hasTrend ? (
-                <div className="h-24 flex items-center justify-center"><p className="text-[12px] text-gray-400">Trend needs at least two readiness snapshots. Current metrics and improvement opportunities are shown regardless.</p></div>
+                <div className="h-24 flex items-center justify-center"><p className="text-[12px] text-gray-500">Trend needs at least two readiness snapshots. Current metrics and improvement opportunities are shown regardless.</p></div>
               ) : (
                 <>
                   <svg viewBox="0 0 300 80" className="w-full h-24" preserveAspectRatio="none">
@@ -82,7 +82,7 @@ export default async function GovernanceAnalyticsPage() {
                     <polyline points={polyline(d.trend, "readiness")} fill="none" stroke="#10b981" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
                     <polyline points={polyline(d.trend, "compliance")} fill="none" stroke="#3b82f6" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
                   </svg>
-                  <div className="flex justify-between text-[9px] text-gray-400 mt-1"><span>{d.trend[0].date}</span><span>{d.trend[d.trend.length - 1].date}</span></div>
+                  <div className="flex justify-between text-[9px] text-gray-500 mt-1"><span>{d.trend[0].date}</span><span>{d.trend[d.trend.length - 1].date}</span></div>
                 </>
               )}
             </div>
@@ -96,8 +96,8 @@ export default async function GovernanceAnalyticsPage() {
                   const reached = d.maturity && lv.num <= d.maturity.num;
                   return (
                     <div key={lv.num} className={`flex items-center gap-2 rounded-lg px-2 py-1 ${active ? "bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)]" : ""}`}>
-                      <span className={`text-[10px] font-bold rounded w-6 text-center ${reached ? "bg-[var(--cmp-color-success)] text-white" : "bg-gray-100 text-gray-400"}`}>L{lv.num}</span>
-                      <span className={`text-[11px] ${active ? "font-bold text-emerald-800" : reached ? "text-gray-700" : "text-gray-400"}`}>{lv.label}</span>
+                      <span className={`text-[10px] font-bold rounded w-6 text-center ${reached ? "bg-[var(--cmp-color-success)] text-white" : "bg-gray-100 text-gray-600"}`}>L{lv.num}</span>
+                      <span className={`text-[11px] ${active ? "font-bold text-emerald-800" : reached ? "text-gray-700" : "text-gray-500"}`}>{lv.label}</span>
                     </div>
                   );
                 })}
@@ -108,8 +108,8 @@ export default async function GovernanceAnalyticsPage() {
           {/* Continuous improvement opportunities */}
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-              <p className="text-sm font-bold text-gray-800">Continuous improvement opportunities <span className="text-[10px] font-normal text-gray-400">— §8, ranked</span></p>
-              <p className="text-[10px] text-gray-400">from the governance registry gaps</p>
+              <p className="text-sm font-bold text-gray-800">Continuous improvement opportunities <span className="text-[10px] font-normal text-gray-500">— §8, ranked</span></p>
+              <p className="text-[10px] text-gray-500">from the governance registry gaps</p>
             </div>
             {d.opportunities.length === 0 ? (
               <div className="p-6 text-center"><p className="text-sm text-[var(--cmp-text-success)] font-medium">No open improvement opportunities — governance is fully covered.</p></div>
@@ -118,10 +118,10 @@ export default async function GovernanceAnalyticsPage() {
                 {d.opportunities.map((o: any, i: number) => (
                   <div key={i} className="flex items-center justify-between gap-3 px-4 py-2.5">
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-[13px] font-bold text-gray-300 tabular-nums w-5">{i + 1}</span>
+                      <span className="text-[13px] font-bold text-gray-500 tabular-nums w-5">{i + 1}</span>
                       <div className="min-w-0">
                         <p className="text-[12px] font-medium text-gray-800">{o.action}</p>
-                        <p className="text-[10px] text-gray-400">{o.lever}</p>
+                        <p className="text-[10px] text-gray-500">{o.lever}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
@@ -157,7 +157,7 @@ export default async function GovernanceAnalyticsPage() {
             </div>
           )}
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the trend is the enterprise-aggregated readiness snapshots over time, the metrics are computed live from the governance registry, and the improvement opportunities are the registry gaps ranked by impact and volume (§8 continuous improvement). Deep performance analytics and benchmarking are owned by <Link href="/super-admin/performance" className="text-[var(--cmp-text-success)] hover:underline">Competency Performance</Link>; the point-in-time governance rollup by the <Link href="/super-admin/cgr/dashboard" className="text-[var(--cmp-text-success)] hover:underline">Governance Dashboard</Link>. Per the CGR mandate, AI may identify trends and recommend priorities but never approves improvement actions or determines accountability.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every figure is real — the trend is the enterprise-aggregated readiness snapshots over time, the metrics are computed live from the governance registry, and the improvement opportunities are the registry gaps ranked by impact and volume (§8 continuous improvement). Deep performance analytics and benchmarking are owned by <Link href="/super-admin/performance" className="text-[var(--cmp-text-success)] hover:underline">Competency Performance</Link>; the point-in-time governance rollup by the <Link href="/super-admin/cgr/dashboard" className="text-[var(--cmp-text-success)] hover:underline">Governance Dashboard</Link>. Per the CGR mandate, AI may identify trends and recommend priorities but never approves improvement actions or determines accountability.</p>
         </div>
       )}
     </div>

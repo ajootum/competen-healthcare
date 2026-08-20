@@ -33,7 +33,7 @@ export default async function StudioSimulationsPage() {
         <div>
           <p className="text-[11px] font-semibold text-rose-500 uppercase tracking-widest mb-0.5">CST-006 · Simulation Studio</p>
           <h1 className="text-xl font-bold text-gray-900">Simulation Scenarios</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Author, version and govern simulation scenarios — mock codes, team sims, virtual patients — linked to competencies.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Author, version and govern simulation scenarios — mock codes, team sims, virtual patients — linked to competencies.</p>
         </div>
         <Link href="/super-admin/studio" className="text-xs font-semibold text-gray-500 hover:text-teal-700 border border-gray-200 rounded-lg px-3 py-2">← Studio</Link>
       </div>
@@ -52,7 +52,7 @@ export default async function StudioSimulationsPage() {
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-0.5">{k.label}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-0.5">{k.label}</p>
               </div>
             ))}
           </div>
@@ -61,7 +61,7 @@ export default async function StudioSimulationsPage() {
             <div className="grid md:grid-cols-2 gap-5 mb-5">
               <div className="bg-white rounded-xl border border-gray-100 p-5">
                 <h2 className="font-semibold text-gray-900 text-sm mb-3">By scenario type</h2>
-                {sim.typeDist.length === 0 ? <p className="text-xs text-gray-400">No scenarios yet.</p> : (
+                {sim.typeDist.length === 0 ? <p className="text-xs text-gray-500">No scenarios yet.</p> : (
                   <div className="flex flex-wrap gap-1.5">
                     {sim.typeDist.map(t => <span key={t.key} className="text-[11px] font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded-full px-2.5 py-1">{t.label} <b className="text-gray-900">{t.n}</b></span>)}
                   </div>
@@ -69,7 +69,7 @@ export default async function StudioSimulationsPage() {
               </div>
               <div className="bg-white rounded-xl border border-gray-100 p-5">
                 <h2 className="font-semibold text-gray-900 text-sm mb-3">By difficulty</h2>
-                {sim.diffDist.length === 0 ? <p className="text-xs text-gray-400">No scenarios yet.</p> : sim.diffDist.map(d => (
+                {sim.diffDist.length === 0 ? <p className="text-xs text-gray-500">No scenarios yet.</p> : sim.diffDist.map(d => (
                   <div key={d.key} className="flex items-center gap-2.5 py-1.5">
                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: d.color }} />
                     <span className="text-xs text-gray-600 flex-1">{d.label}</span>

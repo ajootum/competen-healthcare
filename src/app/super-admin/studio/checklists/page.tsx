@@ -34,14 +34,14 @@ export default async function ChecklistBuilderPage() {
 
   return (
     <div className="max-w-6xl">
-      <div className="flex items-center gap-2 text-xs text-gray-400 mb-4">
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-4">
         <Link href="/super-admin/studio" className="hover:text-gray-600">Studio</Link>
         <span>/</span>
         <span className="text-gray-700 font-medium">Checklist Builder</span>
       </div>
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">Checklist Builder</h1>
-        <p className="text-gray-400 text-sm mt-0.5">
+        <p className="text-gray-500 text-sm mt-0.5">
           Structured observation checklists — sections, scoring rules, critical-fail items and evidence capture.
         </p>
       </div>

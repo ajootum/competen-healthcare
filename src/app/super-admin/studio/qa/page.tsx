@@ -36,15 +36,15 @@ export default async function StudioQaPage() {
         <div>
           <p className="text-[11px] font-semibold text-rose-500 uppercase tracking-widest mb-0.5">CST-107 · Quality Assurance</p>
           <h1 className="text-xl font-bold text-gray-900">Content Quality Assurance</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Completeness, assessment integrity and evidence coverage across every authored competency — computed live.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Completeness, assessment integrity and evidence coverage across every authored competency — computed live.</p>
         </div>
         <Link href="/super-admin/studio" className="text-xs font-semibold text-gray-500 hover:text-teal-700 border border-gray-200 rounded-lg px-3 py-2">← Studio</Link>
       </div>
 
       {!qa.provisioned ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-400">Content tables are not available in this environment.</div>
+        <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-500">Content tables are not available in this environment.</div>
       ) : qa.empty ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-400">No authored competencies yet — QA scores will appear once frameworks and competencies are created in the Studio.</div>
+        <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-500">No authored competencies yet — QA scores will appear once frameworks and competencies are created in the Studio.</div>
       ) : (
         <>
           {/* KPI row */}
@@ -54,12 +54,12 @@ export default async function StudioQaPage() {
               { label: "Competencies", value: qa.kpis.competencies, tone: "text-gray-900" },
               { label: "Avg completeness", value: `${qa.kpis.avgScore}%`, tone: qa.kpis.avgScore >= 75 ? "text-teal-600" : qa.kpis.avgScore >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-critical)]" },
               { label: "Fully complete", value: qa.kpis.fullyComplete, tone: "text-teal-600" },
-              { label: "Issues found", value: qa.kpis.issues, tone: qa.kpis.issues > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
-              { label: "High severity", value: qa.kpis.high, tone: qa.kpis.high > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-300" },
+              { label: "Issues found", value: qa.kpis.issues, tone: qa.kpis.issues > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-500" },
+              { label: "High severity", value: qa.kpis.high, tone: qa.kpis.high > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-500" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-0.5">{k.label}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-0.5">{k.label}</p>
               </div>
             ))}
           </div>
@@ -74,7 +74,7 @@ export default async function StudioQaPage() {
                   <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                     <div className="h-full rounded-full" style={{ width: `${d.pct}%`, backgroundColor: scoreColor(d.pct) }} />
                   </div>
-                  <span className="text-[11px] font-bold text-gray-600 w-16 text-right">{d.pct}% <span className="text-gray-300 font-normal">({d.passed})</span></span>
+                  <span className="text-[11px] font-bold text-gray-600 w-16 text-right">{d.pct}% <span className="text-gray-500 font-normal">({d.passed})</span></span>
                 </div>
               ))}
             </div>
@@ -89,7 +89,7 @@ export default async function StudioQaPage() {
                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: b.color }} />
                     <span className="text-xs text-gray-600 flex-1">{b.band}</span>
                     <span className="text-[11px] font-bold text-gray-700">{b.n}</span>
-                    <span className="text-[10px] text-gray-400 w-9 text-right">{pct}%</span>
+                    <span className="text-[10px] text-gray-500 w-9 text-right">{pct}%</span>
                   </div>
                 );
               })}
@@ -100,7 +100,7 @@ export default async function StudioQaPage() {
           <div className="bg-white rounded-xl border border-gray-100 p-5 mb-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold text-gray-900 text-sm">Framework scorecards</h2>
-              <span className="text-[9px] text-gray-400">lowest completeness first</span>
+              <span className="text-[9px] text-gray-500">lowest completeness first</span>
             </div>
             <div className="flex flex-col gap-2">
               {qa.frameworks.map(f => (
@@ -110,7 +110,7 @@ export default async function StudioQaPage() {
                     <div className="h-full rounded-full" style={{ width: `${f.pct}%`, backgroundColor: scoreColor(f.pct) }} />
                   </div>
                   <span className="text-[11px] font-bold text-gray-600 w-10 text-right">{f.pct}%</span>
-                  <span className="text-[10px] text-gray-400 w-24 text-right">{f.complete}/{f.competencies} complete</span>
+                  <span className="text-[10px] text-gray-500 w-24 text-right">{f.complete}/{f.competencies} complete</span>
                   <div className="hidden lg:flex gap-1 w-40 flex-wrap justify-end">
                     {f.flags.map(fl => <span key={fl} className="text-[8px] font-semibold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] px-1.5 py-0.5 rounded">{fl}</span>)}
                   </div>
@@ -123,10 +123,10 @@ export default async function StudioQaPage() {
           <div className="bg-white rounded-xl border border-gray-100 p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold text-gray-900 text-sm">Quality issues</h2>
-              <span className="text-[9px] text-gray-400">{qa.kpis.issues} total · showing {qa.issues.length}</span>
+              <span className="text-[9px] text-gray-500">{qa.kpis.issues} total · showing {qa.issues.length}</span>
             </div>
             {qa.issues.length === 0 ? (
-              <p className="text-xs text-gray-400">No content-quality issues detected. 🎉</p>
+              <p className="text-xs text-gray-500">No content-quality issues detected. 🎉</p>
             ) : (
               <div className="flex flex-col divide-y divide-gray-50">
                 {qa.issues.map((it, i) => {
@@ -135,7 +135,7 @@ export default async function StudioQaPage() {
                     <div key={i} className="flex items-center gap-3 py-2">
                       <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${s.cls} w-16 text-center shrink-0`}>{s.label}</span>
                       <span className="text-xs text-gray-700 flex-1 min-w-0">{it.label}</span>
-                      {it.context && <span className="text-[10px] text-gray-400 truncate max-w-[180px]">{it.context}</span>}
+                      {it.context && <span className="text-[10px] text-gray-500 truncate max-w-[180px]">{it.context}</span>}
                     </div>
                   );
                 })}

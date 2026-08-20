@@ -46,7 +46,7 @@ export default async function GovernanceAuditPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-005 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Audit &amp; Evidence Assurance</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Can we prove the competency system is effective, current, evidence-based and audit-ready? The continuous governance audit trail plus the evidence-assurance headline.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Can we prove the competency system is effective, current, evidence-based and audit-ready? The continuous governance audit trail plus the evidence-assurance headline.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/super-admin/assurance" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Assurance engines →</Link>
@@ -55,7 +55,7 @@ export default async function GovernanceAuditPage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No governance audit events yet — as competencies are approved, changed, decided and mapped, the continuous audit trail builds here.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No governance audit events yet — as competencies are approved, changed, decided and mapped, the continuous audit trail builds here.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -72,7 +72,7 @@ export default async function GovernanceAuditPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Evidence assurance</p>
-                <p className="text-[10px] text-gray-400">headline from the registry · deep engines in <Link href="/super-admin/assurance" className="text-[var(--cmp-text-success)] hover:underline">CAPA Assurance</Link></p>
+                <p className="text-[10px] text-gray-500">headline from the registry · deep engines in <Link href="/super-admin/assurance" className="text-[var(--cmp-text-success)] hover:underline">CAPA Assurance</Link></p>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <div className="border border-gray-100 rounded-lg p-3"><p className={`text-xl font-bold tabular-nums ${a.avgScore >= 75 ? "text-[var(--cmp-text-success)]" : a.avgScore >= 45 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]"}`}>{a.avgScore}</p><p className="text-[10px] text-gray-500">assurance score /100</p></div>
@@ -95,20 +95,20 @@ export default async function GovernanceAuditPage() {
             <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="text-sm font-bold text-gray-800">Governance Audit Trail</p>
-                <p className="text-[10px] text-gray-400">newest first · <Link href="/super-admin/audit" className="text-[var(--cmp-text-success)] hover:underline">full log →</Link></p>
+                <p className="text-[10px] text-gray-500">newest first · <Link href="/super-admin/audit" className="text-[var(--cmp-text-success)] hover:underline">full log →</Link></p>
               </div>
               {d.feed.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-sm text-gray-400">No governance events recorded yet.</p></div>
+                <div className="p-6 text-center"><p className="text-sm text-gray-500">No governance events recorded yet.</p></div>
               ) : (
                 <div className="max-h-[460px] overflow-y-auto divide-y divide-gray-50">
                   {d.feed.map((f: any, i: number) => (
                     <div key={i} className="flex items-start gap-2.5 px-4 py-2">
                       <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${dotTone(f.action)}`} />
                       <div className="min-w-0 flex-1">
-                        <p className="text-[12px] text-gray-700 leading-tight"><span className="font-semibold text-gray-800">{f.action}</span> <span className="text-gray-400">· {f.entityType}</span></p>
-                        <p className="text-[10px] text-gray-400 truncate">{f.entityName}</p>
+                        <p className="text-[12px] text-gray-700 leading-tight"><span className="font-semibold text-gray-800">{f.action}</span> <span className="text-gray-500">· {f.entityType}</span></p>
+                        <p className="text-[10px] text-gray-500 truncate">{f.entityName}</p>
                       </div>
-                      <div className="text-right shrink-0"><p className="text-[10px] text-gray-500">{f.actor}</p><p className="text-[9px] text-gray-300 tabular-nums">{fmt(f.ts)}</p></div>
+                      <div className="text-right shrink-0"><p className="text-[10px] text-gray-500">{f.actor}</p><p className="text-[9px] text-gray-500 tabular-nums">{fmt(f.ts)}</p></div>
                     </div>
                   ))}
                 </div>
@@ -133,7 +133,7 @@ export default async function GovernanceAuditPage() {
               <div className="bg-white rounded-xl border border-gray-100 p-4">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Most active (accountability)</p>
                 {d.topActors.length === 0 ? (
-                  <p className="text-[12px] text-gray-400">No attributed actions yet.</p>
+                  <p className="text-[12px] text-gray-500">No attributed actions yet.</p>
                 ) : (
                   <div className="space-y-1">
                     {d.topActors.map((ac: any) => (
@@ -148,7 +148,7 @@ export default async function GovernanceAuditPage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every entry is a real recorded action — the governance audit trail joins the audit log and the domain-event stream, scoped to competency governance, so every approval, change, decision, mapping and lifecycle transition is traceable to an actor and time (§4.4 transparency). The evidence-assurance headline derives from the registry; the deep statistical assurance — evidence integrity, assessor reliability and competency drift — is owned by the <Link href="/super-admin/assurance" className="text-[var(--cmp-text-success)] hover:underline">CAPA Assurance platform</Link>, and findings &amp; corrective actions by the CAPA centre. Per the CGR mandate, AI may summarise findings and flag audit risk but never closes findings or determines compliance.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every entry is a real recorded action — the governance audit trail joins the audit log and the domain-event stream, scoped to competency governance, so every approval, change, decision, mapping and lifecycle transition is traceable to an actor and time (§4.4 transparency). The evidence-assurance headline derives from the registry; the deep statistical assurance — evidence integrity, assessor reliability and competency drift — is owned by the <Link href="/super-admin/assurance" className="text-[var(--cmp-text-success)] hover:underline">CAPA Assurance platform</Link>, and findings &amp; corrective actions by the CAPA centre. Per the CGR mandate, AI may summarise findings and flag audit risk but never closes findings or determines compliance.</p>
         </div>
       )}
     </div>

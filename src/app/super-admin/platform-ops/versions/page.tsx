@@ -30,7 +30,7 @@ export default async function VersionsPage() {
 
   const header = (
     <>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Versioning &amp; Audit</span>
@@ -38,7 +38,7 @@ export default async function VersionsPage() {
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">🕰️</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Versioning &amp; Audit <span className="text-gray-300 font-medium text-lg">(NCP-018)</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Versioning &amp; Audit <span className="text-gray-500 font-medium text-lg">(NCP-018)</span></h1>
           <p className="text-sm text-gray-500">Immutable version history for every configuration object — compare any two versions and restore in one click.</p>
         </div>
       </div>
@@ -56,7 +56,7 @@ export default async function VersionsPage() {
         <Stat label="Restores" value={restores} tone={restores ? "text-[var(--cmp-text-warning)]" : undefined} sub="point-in-time recoveries" />
       </div>
       <VersionManager objects={(objects ?? []) as any[]} />
-      <p className="text-[11px] text-gray-400">Snapshots capture the full object state (definition + governance fields) with an integrity checksum; restore writes a past state back and snapshots the restore. Branching, release tagging and cryptographic signing (NCP-018 §6) are next-phase.</p>
+      <p className="text-[11px] text-gray-500">Snapshots capture the full object state (definition + governance fields) with an integrity checksum; restore writes a past state back and snapshots the restore. Branching, release tagging and cryptographic signing (NCP-018 §6) are next-phase.</p>
     </div>
   );
 }

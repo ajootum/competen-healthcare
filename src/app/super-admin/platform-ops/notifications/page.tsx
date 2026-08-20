@@ -16,7 +16,7 @@ const card = "bg-white rounded-xl border border-gray-200";
 const fmt = (n: number) => n.toLocaleString();
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 const CH_ICON: Record<string, string> = { in_app: "🔔", email: "✉️", sms: "💬", webhook: "🪝", teams: "👥", slack: "🧵" };
-const STATUS_TONE: Record<string, string> = { sent: "text-[var(--cmp-text-success)]", failed: "text-[var(--cmp-text-error)]", skipped: "text-gray-400", queued: "text-[var(--cmp-text-warning)]" };
+const STATUS_TONE: Record<string, string> = { sent: "text-[var(--cmp-text-success)]", failed: "text-[var(--cmp-text-error)]", skipped: "text-gray-500", queued: "text-[var(--cmp-text-warning)]" };
 
 export default async function NotificationsConsole() {
   const supabase = await createClient();
@@ -40,7 +40,7 @@ export default async function NotificationsConsole() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/platform-ops" className="hover:text-teal-700">Platform Operations</Link><span>/</span><span className="text-gray-600">Notifications</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Notification &amp; Delivery</h1>
@@ -61,8 +61,8 @@ export default async function NotificationsConsole() {
               <span className="text-[11px] font-semibold text-gray-500 leading-tight">{k.label}</span>
               <span className={`w-7 h-7 rounded-lg ${k.iconBg} flex items-center justify-center text-sm shrink-0`}>{k.icon}</span>
             </div>
-            <p className={`text-2xl font-bold mt-1.5 tabular-nums ${(k as any).muted ? "text-gray-400" : (k as any).tone ?? "text-gray-900"}`}>{k.value}</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">{k.sub}</p>
+            <p className={`text-2xl font-bold mt-1.5 tabular-nums ${(k as any).muted ? "text-gray-500" : (k as any).tone ?? "text-gray-900"}`}>{k.value}</p>
+            <p className="text-[10px] text-gray-500 mt-0.5">{k.sub}</p>
           </div>
         ))}
       </div>
@@ -76,14 +76,14 @@ export default async function NotificationsConsole() {
               <div key={ch.channel} className="flex items-center gap-3 py-1.5">
                 <span className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-sm shrink-0">{CH_ICON[ch.channel]}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm text-gray-800 capitalize">{ch.channel.replace("_", "-")} <span className="text-[10px] text-gray-400">{ch.provider ? `· ${ch.provider}` : ""}</span></p>
-                  <p className="text-[10px] text-gray-400">{s.ready ? `${ch.n} sent ${ch.sent} · failed ${ch.failed} · skipped ${ch.skipped} (24h)` : "tracking off"}</p>
+                  <p className="text-sm text-gray-800 capitalize">{ch.channel.replace("_", "-")} <span className="text-[10px] text-gray-500">{ch.provider ? `· ${ch.provider}` : ""}</span></p>
+                  <p className="text-[10px] text-gray-500">{s.ready ? `${ch.n} sent ${ch.sent} · failed ${ch.failed} · skipped ${ch.skipped} (24h)` : "tracking off"}</p>
                 </div>
-                <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${ch.ready ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{ch.ready ? "Provider ready" : "No provider"}</span>
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${ch.ready ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-600"}`}>{ch.ready ? "Provider ready" : "No provider"}</span>
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">In-app is always live. Email activates with <code className="font-mono">RESEND_API_KEY</code>+<code className="font-mono">NOTIFY_FROM_EMAIL</code>, webhook with <code className="font-mono">NOTIFY_WEBHOOK_URL</code>, SMS with Twilio env. Unconfigured channels record an honest skip.</p>
+          <p className="text-[10px] text-gray-500 mt-3 pt-2 border-t border-gray-50">In-app is always live. Email activates with <code className="font-mono">RESEND_API_KEY</code>+<code className="font-mono">NOTIFY_FROM_EMAIL</code>, webhook with <code className="font-mono">NOTIFY_WEBHOOK_URL</code>, SMS with Twilio env. Unconfigured channels record an honest skip.</p>
         </div>
 
         {/* Test send */}
@@ -93,10 +93,10 @@ export default async function NotificationsConsole() {
       {/* Recent deliveries */}
       <div className={`${card} p-5`}>
         <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Recent Deliveries</h2>
-        {!s.ready || recent.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">{s.ready ? "No deliveries recorded yet — send a test above." : "Run the migration to record deliveries."}</p> : (
+        {!s.ready || recent.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">{s.ready ? "No deliveries recorded yet — send a test above." : "Run the migration to record deliveries."}</p> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+              <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-100">
                 <th className="px-3 py-2 font-semibold">Channel</th><th className="px-3 py-2 font-semibold">Provider</th><th className="px-3 py-2 font-semibold">Target</th><th className="px-3 py-2 font-semibold">Status</th><th className="px-3 py-2 font-semibold">Detail</th><th className="px-3 py-2 font-semibold text-right">When</th>
               </tr></thead>
               <tbody>
@@ -106,8 +106,8 @@ export default async function NotificationsConsole() {
                     <td className="px-3 py-2 text-gray-500">{r.provider ?? "—"}</td>
                     <td className="px-3 py-2 text-gray-500 font-mono text-[11px] truncate max-w-[160px]">{r.address ?? "—"}</td>
                     <td className={`px-3 py-2 capitalize font-medium ${STATUS_TONE[r.status] ?? "text-gray-500"}`}>{r.status}</td>
-                    <td className="px-3 py-2 text-gray-400 text-[11px] truncate max-w-[220px]">{r.error ?? ""}</td>
-                    <td className="px-3 py-2 text-right text-[11px] text-gray-400">{relTime(r.at)}</td>
+                    <td className="px-3 py-2 text-gray-500 text-[11px] truncate max-w-[220px]">{r.error ?? ""}</td>
+                    <td className="px-3 py-2 text-right text-[11px] text-gray-500">{relTime(r.at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -116,7 +116,7 @@ export default async function NotificationsConsole() {
         )}
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Every notification records a per-channel delivery attempt. In-app is real and always on; email and webhook are real adapters gated on provider env; SMS/Teams/Slack show honest states until a provider is wired. Escalation chains, retries and read receipts are the next layer.</p>
+      <p className="text-[11px] text-gray-500 pb-4">Every notification records a per-channel delivery attempt. In-app is real and always on; email and webhook are real adapters gated on provider env; SMS/Teams/Slack show honest states until a provider is wired. Escalation chains, retries and read receipts are the next layer.</p>
     </div>
   );
 }

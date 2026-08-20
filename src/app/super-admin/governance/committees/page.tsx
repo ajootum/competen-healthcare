@@ -28,7 +28,7 @@ export default async function CommitteesPage() {
     <div className="max-w-4xl">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">Governance Committees</h1>
-        <p className="text-gray-400 text-sm mt-0.5">
+        <p className="text-gray-500 text-sm mt-0.5">
           Clinical governance bodies that review and approve competency content (Book I Ch.11).
         </p>
       </div>

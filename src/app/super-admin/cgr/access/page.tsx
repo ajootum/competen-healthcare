@@ -42,7 +42,7 @@ export default async function GovernanceAccessPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-014 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Security, Privacy &amp; Access Control</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Who can access governance information, what they can do, and how it&apos;s controlled — least privilege, separation of duties and full auditability.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Who can access governance information, what they can do, and how it&apos;s controlled — least privilege, separation of duties and full auditability.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/super-admin/system/identity" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Identity &amp; access →</Link>
@@ -51,7 +51,7 @@ export default async function GovernanceAccessPage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No governance responsibilities or assessor authorisations recorded yet. Once ownership and approval roles are assigned (in <Link href="/super-admin/studio/responsibilities" className="text-[var(--cmp-text-success)] hover:underline">Ownership</Link>), the access map and separation-of-duties checks compute here.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No governance responsibilities or assessor authorisations recorded yet. Once ownership and approval roles are assigned (in <Link href="/super-admin/studio/responsibilities" className="text-[var(--cmp-text-success)] hover:underline">Ownership</Link>), the access map and separation-of-duties checks compute here.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -66,15 +66,15 @@ export default async function GovernanceAccessPage() {
           {/* Separation of duties — flagship */}
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-              <p className="text-sm font-bold text-gray-800">Separation of Duties <span className="text-[10px] font-normal text-gray-400">— §6: creators cannot approve their own submissions</span></p>
-              <p className="text-[10px] text-gray-400">{k.sodViolations} conflict{k.sodViolations === 1 ? "" : "s"}</p>
+              <p className="text-sm font-bold text-gray-800">Separation of Duties <span className="text-[10px] font-normal text-gray-500">— §6: creators cannot approve their own submissions</span></p>
+              <p className="text-[10px] text-gray-500">{k.sodViolations} conflict{k.sodViolations === 1 ? "" : "s"}</p>
             </div>
             {d.violations.length === 0 ? (
               <div className="p-6 text-center"><p className="text-sm text-[var(--cmp-text-success)] font-medium">✓ No separation-of-duties conflicts — no user both authors and approves the same competency object.</p></div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[560px]">
-                  <thead><tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                  <thead><tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
                     <th className="text-left py-2 pl-4 pr-2">Content object</th>
                     <th className="text-left py-2 px-2">User</th>
                     <th className="text-left py-2 pr-4 pl-2">Conflicting roles</th>
@@ -82,7 +82,7 @@ export default async function GovernanceAccessPage() {
                   <tbody>
                     {d.violations.map((v: any, i: number) => (
                       <tr key={i} className="border-t border-gray-50">
-                        <td className="py-2 pl-4 pr-2"><p className="text-[12px] font-medium text-gray-800">{v.content}</p><p className="text-[10px] text-gray-400">{v.type}</p></td>
+                        <td className="py-2 pl-4 pr-2"><p className="text-[12px] font-medium text-gray-800">{v.content}</p><p className="text-[10px] text-gray-500">{v.type}</p></td>
                         <td className="py-2 px-2 text-[12px] text-gray-700">{v.user}</td>
                         <td className="py-2 pr-4 pl-2">
                           <div className="flex flex-wrap gap-1">
@@ -102,7 +102,7 @@ export default async function GovernanceAccessPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Governance access map (RBAC)</p>
               {d.roles.length === 0 ? (
-                <p className="text-[12px] text-gray-400">No governance responsibilities assigned.</p>
+                <p className="text-[12px] text-gray-500">No governance responsibilities assigned.</p>
               ) : (
                 <div className="space-y-1.5">
                   {d.roles.map((r: any) => (
@@ -118,12 +118,12 @@ export default async function GovernanceAccessPage() {
 
             {/* Assessor authorization */}
             <div className="bg-white rounded-xl border border-gray-100 p-4">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Assessor authorisation <span className="font-normal normal-case text-gray-300">— {ass.total} grants</span></p>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Assessor authorisation <span className="font-normal normal-case text-gray-500">— {ass.total} grants</span></p>
               {ass.total === 0 ? (
-                <p className="text-[12px] text-gray-400">No assessor authorisations recorded.</p>
+                <p className="text-[12px] text-gray-500">No assessor authorisations recorded.</p>
               ) : (
                 <>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1.5">Independence level</p>
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1.5">Independence level</p>
                   <div className="flex gap-2 mb-3">
                     {(["independent", "supervised", "countersigned"] as const).map((lv) => (
                       <div key={lv} className={`flex-1 border rounded-lg p-2 text-center ${INDEP_META[lv].cls}`}>
@@ -143,18 +143,18 @@ export default async function GovernanceAccessPage() {
 
           {/* Access controls posture */}
           <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Access controls posture <span className="font-normal normal-case text-gray-300">— platform-enforced</span></p>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Access controls posture <span className="font-normal normal-case text-gray-500">— platform-enforced</span></p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {CONTROLS.map((c) => (
                 <div key={c.name} className="border border-gray-100 rounded-lg p-3">
                   <p className="text-[12px] font-semibold text-gray-700 flex items-center gap-1"><span className="text-emerald-500">✓</span>{c.name}</p>
-                  <p className="text-[10px] text-gray-400 leading-snug mt-0.5">{c.note}</p>
+                  <p className="text-[10px] text-gray-500 leading-snug mt-0.5">{c.note}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — governance roles and assessor authorisations from the scoped-authority stores, and the separation-of-duties check computed by cross-referencing who authors and who approves each competency object. Identity management, authentication, encryption and RLS enforcement are owned by the <Link href="/super-admin/system" className="text-[var(--cmp-text-success)] hover:underline">System &amp; Security platform</Link>; emergency (break-glass) access is tracked in <Link href="/super-admin/cgr/risk" className="text-[var(--cmp-text-success)] hover:underline">Exceptions &amp; Risk</Link>. Per the CGR mandate, AI analyses approved governance data only and cannot bypass security controls or approve governance decisions.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every figure is real — governance roles and assessor authorisations from the scoped-authority stores, and the separation-of-duties check computed by cross-referencing who authors and who approves each competency object. Identity management, authentication, encryption and RLS enforcement are owned by the <Link href="/super-admin/system" className="text-[var(--cmp-text-success)] hover:underline">System &amp; Security platform</Link>; emergency (break-glass) access is tracked in <Link href="/super-admin/cgr/risk" className="text-[var(--cmp-text-success)] hover:underline">Exceptions &amp; Risk</Link>. Per the CGR mandate, AI analyses approved governance data only and cannot bypass security controls or approve governance decisions.</p>
         </div>
       )}
     </div>

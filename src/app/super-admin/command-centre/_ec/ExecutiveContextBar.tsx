@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 // the Dashboard Context & Reporting Framework (CPF-001) is provisioned.
 const RANGES = [{ v: 7, l: "Last 7 Days" }, { v: 30, l: "Last 30 Days" }, { v: 90, l: "Last 90 Days" }];
 const chip = "flex flex-col gap-0.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 min-w-[9rem]";
-const lab = "text-[9px] font-semibold text-gray-400 uppercase tracking-wide";
+const lab = "text-[9px] font-semibold text-gray-500 uppercase tracking-wide";
 
 export default function ExecutiveContextBar({ rangeDays, generatedAt }: { rangeDays: number; generatedAt: string }) {
   const router = useRouter();
@@ -35,10 +35,10 @@ export default function ExecutiveContextBar({ rangeDays, generatedAt }: { rangeD
       </label>
       <div className={`${chip} opacity-60`} title="Activates with CPF-001 (Dashboard Context Framework)">
         <span className={lab}>Enterprise · Region · Compare</span>
-        <span className="text-sm font-medium text-gray-400">All · CPF-001</span>
+        <span className="text-sm font-medium text-gray-500">All · CPF-001</span>
       </div>
       <div className="ml-auto flex items-end gap-2">
-        <span className="text-[11px] text-gray-400 pb-1.5 tabular-nums">Updated {time}</span>
+        <span className="text-[11px] text-gray-500 pb-1.5 tabular-nums">Updated {time}</span>
         <button onClick={() => setAuto(a => !a)}
           className={`flex flex-col gap-0.5 rounded-lg border px-3 py-1.5 ${auto ? "border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]" : "border-gray-200 bg-white"}`}>
           <span className={lab}>Auto Refresh</span>

@@ -21,7 +21,7 @@ export default async function AssistantPage() {
     <div className="max-w-3xl">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">Clinical Intelligence Assistant</h1>
-        <p className="text-gray-400 text-sm mt-0.5">
+        <p className="text-gray-500 text-sm mt-0.5">
           Ask questions about your competency frameworks, CPUs and policies. Answers are grounded in your governed CKCM content and cite their sources (Book IV Ch.10–11).
         </p>
       </div>

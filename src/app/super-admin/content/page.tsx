@@ -28,7 +28,7 @@ export default async function ContentHubPage() {
     <div className="max-w-md mx-auto text-center py-20">
       <p className="text-4xl mb-3">📐</p>
       <h1 className="text-lg font-bold text-gray-900">Clinical Knowledge &amp; Competency Studio</h1>
-      <p className="text-sm text-gray-400 mt-1 mb-6">No frameworks yet — create the first one to start building.</p>
+      <p className="text-sm text-gray-500 mt-1 mb-6">No frameworks yet — create the first one to start building.</p>
       <FrameworkActions />
     </div>
   );

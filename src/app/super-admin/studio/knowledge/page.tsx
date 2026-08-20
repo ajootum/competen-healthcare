@@ -39,14 +39,14 @@ export default async function KnowledgePage() {
 
   return (
     <div className="max-w-5xl">
-      <div className="flex items-center gap-2 text-xs text-gray-400 mb-4">
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-4">
         <Link href="/super-admin/studio" className="hover:text-gray-600">Studio</Link>
         <span>/</span>
         <span className="text-gray-700 font-medium">Knowledge Objects</span>
       </div>
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">Clinical Knowledge Objects</h1>
-        <p className="text-gray-400 text-sm mt-0.5">
+        <p className="text-gray-500 text-sm mt-0.5">
           Governed clinical knowledge — anatomy, physiology, classification and reasoning — reusable across CPUs and citable by the AI assistant.
         </p>
       </div>

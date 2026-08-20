@@ -43,7 +43,7 @@ export default async function GovernanceApprovalsPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-003 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Approval &amp; Governance Workflow</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Who has authority to approve, what governance steps are complete, and where approvals are stuck — the controlled pathway from draft to approved deployment.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Who has authority to approve, what governance steps are complete, and where approvals are stuck — the controlled pathway from draft to approved deployment.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/super-admin/platform-ops/approvals" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Decide in console →</Link>
@@ -52,7 +52,7 @@ export default async function GovernanceApprovalsPage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">The approval engine has no governance requests yet. Once frameworks/competencies are submitted for review — via <Link href="/competency-office/review-board" className="text-[var(--cmp-text-success)] hover:underline">the review board</Link> or the platform console — the pipeline, turnaround and decision audit compute here.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">The approval engine has no governance requests yet. Once frameworks/competencies are submitted for review — via <Link href="/competency-office/review-board" className="text-[var(--cmp-text-success)] hover:underline">the review board</Link> or the platform console — the pipeline, turnaround and decision audit compute here.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -85,13 +85,13 @@ export default async function GovernanceApprovalsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Approval workspace — pending queue */}
             <div className="lg:col-span-2">
-              <Card title="Approval Workspace" right={<span className="text-[10px] text-gray-400">oldest first · {d.queueTotal} pending</span>}>
+              <Card title="Approval Workspace" right={<span className="text-[10px] text-gray-500">oldest first · {d.queueTotal} pending</span>}>
                 {d.queue.length === 0 ? (
                   <div className="p-6 text-center"><p className="text-sm text-[var(--cmp-text-success)] font-medium">No governance approvals pending — the queue is clear.</p></div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[620px]">
-                      <thead><tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                      <thead><tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
                         <th className="text-left py-2 pl-4 pr-2">Item</th>
                         <th className="text-left py-2 px-2">Workflow</th>
                         <th className="text-left py-2 px-2">Requested by</th>
@@ -103,7 +103,7 @@ export default async function GovernanceApprovalsPage() {
                           <tr key={`${q.source}-${q.id}`} className="border-t border-gray-50">
                             <td className="py-2 pl-4 pr-2">
                               <p className="text-[12px] font-medium text-gray-800 leading-tight">{q.entityName}</p>
-                              <p className="text-[10px] text-gray-400">{q.entityType}</p>
+                              <p className="text-[10px] text-gray-500">{q.entityType}</p>
                             </td>
                             <td className="py-2 px-2 text-[11px] text-gray-600"><span className="mr-1">{q.icon}</span>{q.workflow}</td>
                             <td className="py-2 px-2 text-[11px] text-gray-500">{q.requestedBy}</td>
@@ -119,15 +119,15 @@ export default async function GovernanceApprovalsPage() {
             </div>
 
             {/* Reviewer workload */}
-            <Card title="Reviewer Workload" right={<span className="text-[10px] text-gray-400">{k.decisions} decisions</span>}>
+            <Card title="Reviewer Workload" right={<span className="text-[10px] text-gray-500">{k.decisions} decisions</span>}>
               {d.reviewers.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-[12px] text-gray-400">No recorded decisions yet.</p></div>
+                <div className="p-6 text-center"><p className="text-[12px] text-gray-500">No recorded decisions yet.</p></div>
               ) : (
                 <div className="p-3 space-y-1.5">
                   {d.reviewers.map((r: any) => (
                     <div key={r.name} className="flex items-center justify-between gap-2 border border-gray-50 rounded-lg px-2.5 py-1.5">
                       <span className="text-[12px] text-gray-700 truncate">{r.name}</span>
-                      <span className="text-[10px] text-gray-400 shrink-0"><span className="text-[var(--cmp-text-success)] font-semibold">{r.approved}</span> ✓ · <span className="text-[var(--cmp-text-error)] font-semibold">{r.rejected}</span> ✕ · {r.total}</span>
+                      <span className="text-[10px] text-gray-500 shrink-0"><span className="text-[var(--cmp-text-success)] font-semibold">{r.approved}</span> ✓ · <span className="text-[var(--cmp-text-error)] font-semibold">{r.rejected}</span> ✕ · {r.total}</span>
                     </div>
                   ))}
                 </div>
@@ -136,9 +136,9 @@ export default async function GovernanceApprovalsPage() {
           </div>
 
           {/* Governance timeline */}
-          <Card title="Governance Timeline" right={<span className="text-[10px] text-gray-400">recent decision audit</span>}>
+          <Card title="Governance Timeline" right={<span className="text-[10px] text-gray-500">recent decision audit</span>}>
             {d.timeline.length === 0 ? (
-              <div className="p-6 text-center"><p className="text-[12px] text-gray-400">No decisions recorded yet — the per-step audit will appear here as reviewers act.</p></div>
+              <div className="p-6 text-center"><p className="text-[12px] text-gray-500">No decisions recorded yet — the per-step audit will appear here as reviewers act.</p></div>
             ) : (
               <div className="p-3 space-y-1">
                 {d.timeline.map((t: any, i: number) => (
@@ -147,11 +147,11 @@ export default async function GovernanceApprovalsPage() {
                     <div className="min-w-0 flex-1">
                       <p className="text-[12px] text-gray-700 leading-tight">
                         <span className={`font-semibold ${t.decision === "approved" ? "text-emerald-700" : "text-[var(--cmp-text-error)]"}`}>{t.decision}</span>
-                        {" "}<span className="text-gray-500">step {t.step} ·</span> <span className="font-medium">{t.entityName}</span> <span className="text-gray-400">({t.workflow})</span>
+                        {" "}<span className="text-gray-500">step {t.step} ·</span> <span className="font-medium">{t.entityName}</span> <span className="text-gray-500">({t.workflow})</span>
                       </p>
-                      {t.note && <p className="text-[10px] text-gray-400 leading-snug">&ldquo;{t.note}&rdquo;</p>}
+                      {t.note && <p className="text-[10px] text-gray-500 leading-snug">&ldquo;{t.note}&rdquo;</p>}
                     </div>
-                    <div className="text-right shrink-0"><p className="text-[10px] text-gray-500">{t.actor}</p><p className="text-[9px] text-gray-300">{fmtDate(t.at)}</p></div>
+                    <div className="text-right shrink-0"><p className="text-[10px] text-gray-500">{t.actor}</p><p className="text-[9px] text-gray-500">{fmtDate(t.at)}</p></div>
                   </div>
                 ))}
               </div>
@@ -166,14 +166,14 @@ export default async function GovernanceApprovalsPage() {
                 {d.byWorkflow.map((w: any) => (
                   <div key={w.key} className="flex items-center gap-2 border border-gray-100 rounded-lg px-3 py-1.5">
                     <span>{w.icon}</span>
-                    <div><p className="text-[12px] font-semibold text-gray-700 leading-none">{w.name}</p><p className="text-[10px] text-gray-400 mt-0.5">{w.steps} step{w.steps === 1 ? "" : "s"}{w.pending > 0 && <span className="text-[var(--cmp-text-warning)] font-semibold"> · {w.pending} pending</span>}</p></div>
+                    <div><p className="text-[12px] font-semibold text-gray-700 leading-none">{w.name}</p><p className="text-[10px] text-gray-500 mt-0.5">{w.steps} step{w.steps === 1 ? "" : "s"}{w.pending > 0 && <span className="text-[var(--cmp-text-warning)] font-semibold"> · {w.pending} pending</span>}</p></div>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is live: the pipeline and turnaround come from the approval-request store, the reviewer workload and timeline from the per-step decision audit, and content changes from change control. This is the governance <span className="font-medium">workspace</span> — deciding happens in <Link href="/super-admin/platform-ops/approvals" className="text-[var(--cmp-text-success)] hover:underline">the approvals console</Link> and <Link href="/competency-office/review-board" className="text-[var(--cmp-text-success)] hover:underline">the Office review board</Link>, where separation of creation and approval, appropriate authority and full audit are enforced. Per the CGR mandate, AI may recommend reviewers or summarise evidence but never approves.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every figure is live: the pipeline and turnaround come from the approval-request store, the reviewer workload and timeline from the per-step decision audit, and content changes from change control. This is the governance <span className="font-medium">workspace</span> — deciding happens in <Link href="/super-admin/platform-ops/approvals" className="text-[var(--cmp-text-success)] hover:underline">the approvals console</Link> and <Link href="/competency-office/review-board" className="text-[var(--cmp-text-success)] hover:underline">the Office review board</Link>, where separation of creation and approval, appropriate authority and full audit are enforced. Per the CGR mandate, AI may recommend reviewers or summarise evidence but never approves.</p>
         </div>
       )}
     </div>

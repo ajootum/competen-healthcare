@@ -11,7 +11,7 @@ import { Modal } from "@/components/ui/interactive";
 // with live editing of position, roles, employment and account status.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const BADGE: Record<string, string> = { active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", invited: "bg-[var(--cmp-surface-information)] text-blue-700", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", deactivated: "bg-gray-100 text-gray-500", left: "bg-gray-100 text-gray-500" };
+const BADGE: Record<string, string> = { active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", invited: "bg-[var(--cmp-surface-information)] text-blue-700", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", deactivated: "bg-gray-100 text-gray-600", left: "bg-gray-100 text-gray-600" };
 const TABS = ["Overview", "Position & Roles", "Workspace Access", "Audit"] as const;
 const card = cardClass;
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
@@ -42,7 +42,7 @@ export default function PersonProfileClient({ data, assignableRoles, employmentT
 
   return (
     <div data-wide className="space-y-4">
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/enterprise" className="hover:text-teal-700">Enterprise Administration</Link><span>/</span>
         <Link href="/super-admin/enterprise/people" className="hover:text-teal-700">People</Link><span>/</span><span className="text-gray-600 truncate">{person.name}</span>
       </div>
@@ -81,11 +81,11 @@ export default function PersonProfileClient({ data, assignableRoles, employmentT
         <div className="grid lg:grid-cols-2 gap-4">
           <div className={card}><h3 className="font-semibold text-gray-900 mb-2">Position</h3>
             <Row label="Position" value={person.position?.title} /><Row label="Code" value={person.position?.code} /><Row label="Grade" value={person.position?.grade} /><Row label="Profession" value={person.position?.profession} />
-            <p className="text-[11px] text-gray-400 mt-2">Change the assigned position via Edit.</p>
+            <p className="text-[11px] text-gray-500 mt-2">Change the assigned position via Edit.</p>
           </div>
           <div className={card}>
             <h3 className="font-semibold text-gray-900 mb-2">Roles</h3>
-            <p className="text-[11px] text-gray-400 mb-2">Primary role: <span className="capitalize font-medium text-gray-600">{person.primaryRole?.replace(/_/g, " ") ?? "—"}</span>. Toggle assignable roles:</p>
+            <p className="text-[11px] text-gray-500 mb-2">Primary role: <span className="capitalize font-medium text-gray-600">{person.primaryRole?.replace(/_/g, " ") ?? "—"}</span>. Toggle assignable roles:</p>
             <div className="flex flex-wrap gap-2">
               {assignableRoles.map(r => (
                 <button key={r} onClick={() => toggleRole(r, has(r))} disabled={busy}
@@ -95,7 +95,7 @@ export default function PersonProfileClient({ data, assignableRoles, employmentT
               ))}
             </div>
             {person.roles.filter((r: string) => !assignableRoles.includes(r)).length > 0 &&
-              <p className="text-[10px] text-gray-400 mt-3">Other roles (not editable here): {person.roles.filter((r: string) => !assignableRoles.includes(r)).map((r: string) => r.replace(/_/g, " ")).join(", ")}</p>}
+              <p className="text-[10px] text-gray-500 mt-3">Other roles (not editable here): {person.roles.filter((r: string) => !assignableRoles.includes(r)).map((r: string) => r.replace(/_/g, " ")).join(", ")}</p>}
           </div>
         </div>
       )}
@@ -103,8 +103,8 @@ export default function PersonProfileClient({ data, assignableRoles, employmentT
       {tab === "Workspace Access" && (
         <div className={card}>
           <h3 className="font-semibold text-gray-900 mb-3">Workspace access</h3>
-          <p className="text-[11px] text-gray-400 mb-3">Derived from the person&apos;s roles — each role grants access to its workspace.</p>
-          {person.workspaces.length === 0 ? <p className="text-sm text-gray-400">No workspaces — assign a role to grant access.</p> : (
+          <p className="text-[11px] text-gray-500 mb-3">Derived from the person&apos;s roles — each role grants access to its workspace.</p>
+          {person.workspaces.length === 0 ? <p className="text-sm text-gray-500">No workspaces — assign a role to grant access.</p> : (
             <div className="flex flex-wrap gap-2">{person.workspaces.map((w: string) => <span key={w} className="text-sm bg-indigo-50 text-indigo-700 rounded-lg px-3 py-1.5">{w}</span>)}</div>
           )}
         </div>
@@ -112,9 +112,9 @@ export default function PersonProfileClient({ data, assignableRoles, employmentT
 
       {tab === "Audit" && (
         <div className={card}><h3 className="font-semibold text-gray-900 mb-3">Audit history</h3>
-          {!auditReady || audit.length === 0 ? <p className="text-sm text-gray-400">{auditReady ? "No audit entries for this person yet." : "Audit log not available."}</p> : (
+          {!auditReady || audit.length === 0 ? <p className="text-sm text-gray-500">{auditReady ? "No audit entries for this person yet." : "Audit log not available."}</p> : (
             <div className="space-y-2">{audit.map((a: any, i: number) => (
-              <div key={i} className="flex items-center gap-2.5 text-sm"><span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" /><span className="text-gray-700 capitalize">{(a.action ?? "").replace(/_/g, " ")}</span><span className="text-gray-400 text-xs ml-auto">{relTime(a.created_at)}</span></div>
+              <div key={i} className="flex items-center gap-2.5 text-sm"><span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" /><span className="text-gray-700 capitalize">{(a.action ?? "").replace(/_/g, " ")}</span><span className="text-gray-500 text-xs ml-auto">{relTime(a.created_at)}</span></div>
             ))}</div>
           )}
         </div>

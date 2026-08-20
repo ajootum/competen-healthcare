@@ -79,7 +79,7 @@ export default function ProposeLink({ signals, competencies }: { signals: Signal
     <div className="bg-white rounded-xl border border-[var(--cmp-color-success)] p-4">
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm font-bold text-gray-800">Propose a learning link</p>
-        <button onClick={() => { setOpen(false); reset(); }} className="text-[11px] text-gray-400 hover:text-gray-600">Close</button>
+        <button onClick={() => { setOpen(false); reset(); }} className="text-[11px] text-gray-500 hover:text-gray-600">Close</button>
       </div>
 
       {/* Source */}
@@ -100,7 +100,7 @@ export default function ProposeLink({ signals, competencies }: { signals: Signal
               <option value="">Select an unlinked event…</option>
               {signals.map((s) => <option key={s.id} value={s.id}>{s.date ? `${s.date} · ` : ""}{s.label}{s.severity ? ` [${s.severity}]` : ""}</option>)}
             </select>
-          ) : <p className="text-[11px] text-gray-400">No unlinked events available.</p>
+          ) : <p className="text-[11px] text-gray-500">No unlinked events available.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <select value={sourceType} onChange={(e) => setSourceType(e.target.value)} className={input}>
@@ -115,7 +115,7 @@ export default function ProposeLink({ signals, competencies }: { signals: Signal
         <div>
           <span className={lbl}>Signal date</span>
           <input type="date" value={signalDate} onChange={(e) => setSignalDate(e.target.value)} className={`${input} w-full`} />
-          <p className="text-[9px] text-gray-400 mt-0.5">Starts the time-to-improvement clock.</p>
+          <p className="text-[9px] text-gray-500 mt-0.5">Starts the time-to-improvement clock.</p>
         </div>
         <div className="sm:col-span-2">
           <span className={lbl}>Competency affected</span>
@@ -148,7 +148,7 @@ export default function ProposeLink({ signals, competencies }: { signals: Signal
           className="text-[11px] font-semibold text-white bg-[var(--cmp-color-success)] hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-[var(--cmp-color-success)] rounded-lg px-3 py-1.5 transition-colors">
           {busy ? "Proposing…" : "Propose link"}
         </button>
-        <span className="text-[10px] text-gray-400">Proposed links require governance confirmation before they count as closed.</span>
+        <span className="text-[10px] text-gray-500">Proposed links require governance confirmation before they count as closed.</span>
         {err && <span className="text-[11px] text-[var(--cmp-text-error)] font-medium">{err}</span>}
       </div>
     </div>

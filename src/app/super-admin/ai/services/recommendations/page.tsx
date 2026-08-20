@@ -33,7 +33,7 @@ export default async function RecommendationsPage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card title="By Source">
           <Bars rows={d.bySource.map((s: any) => ({ label: s.label, n: s.n }))} />
-          <p className="text-[10px] text-gray-400 mt-3">Aggregated from adm_ai_recommendations (Administration) + pa_predictions (Performance). PPE priority AI and per-workspace copilots feed in as those stores grow.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Aggregated from adm_ai_recommendations (Administration) + pa_predictions (Performance). PPE priority AI and per-workspace copilots feed in as those stores grow.</p>
         </Card>
         <Card title="By Kind"><Bars rows={d.byKind.map((s: any) => ({ label: s.label, n: s.n }))} /></Card>
         <Card title="Confidence Bands">
@@ -45,7 +45,7 @@ export default async function RecommendationsPage() {
         </Card>
       </div>
 
-      <Card title="Top Insights" right={<span className="text-[11px] text-gray-400">by confidence</span>}>
+      <Card title="Top Insights" right={<span className="text-[11px] text-gray-500">by confidence</span>}>
         <div className="space-y-2">
           {d.top.map((r: any, i: number) => (
             <div key={i} className="flex items-start gap-3 border border-gray-100 rounded-lg p-2.5">

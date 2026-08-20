@@ -51,22 +51,22 @@ export default function TranslationManager({ translations }: { translations: any
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 p-4">
-        <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Translations ({translations.length})</h3>
+        <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2">Translations ({translations.length})</h3>
         {translations.length === 0 ? (
-          <p className="text-xs text-gray-400">No translations registered yet — English is the source; add a target-locale translation above.</p>
+          <p className="text-xs text-gray-500">No translations registered yet — English is the source; add a target-locale translation above.</p>
         ) : (
           <div className="flex flex-col divide-y divide-gray-50">
             {translations.map((t: any) => (
               <div key={t.id} className="flex items-center gap-2 py-2 text-xs flex-wrap">
                 <span className="text-[9px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 shrink-0 w-24 text-center">{t.typeLabel}</span>
                 <span className="font-semibold text-gray-800 truncate max-w-[30%]">{t.assetLabel}</span>
-                <span className="text-gray-300">→</span>
+                <span className="text-gray-500">→</span>
                 <span className="font-semibold text-gray-700 w-20">{t.localeLabel}</span>
                 <span className="inline-flex items-center gap-1 text-[10px]"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: STATUS_COLOR[t.status] }} />{t.status.replace(/_/g, " ")}</span>
-                {t.translator && <span className="text-[10px] text-gray-400 truncate hidden md:inline">· {t.translator}</span>}
+                {t.translator && <span className="text-[10px] text-gray-500 truncate hidden md:inline">· {t.translator}</span>}
                 <div className="ml-auto flex items-center gap-1.5">
                   {NEXT[t.status] && <button onClick={() => setStatus(t.id, NEXT[t.status])} disabled={busy} className="text-[10px] font-semibold text-teal-700 hover:underline">→ {NEXT[t.status].replace(/_/g, " ")}</button>}
-                  <button onClick={() => del(t.id)} disabled={busy} className="text-gray-300 hover:text-red-500" title="Remove">✕</button>
+                  <button onClick={() => del(t.id)} disabled={busy} className="text-gray-500 hover:text-red-500" title="Remove">✕</button>
                 </div>
               </div>
             ))}

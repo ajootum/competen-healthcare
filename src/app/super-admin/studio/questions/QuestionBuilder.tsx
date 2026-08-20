@@ -59,11 +59,11 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
               {cpus.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             <div className="grid grid-cols-2 gap-2">
-              <label className="text-[10px] text-gray-400">Pass mark %
+              <label className="text-[10px] text-gray-500">Pass mark %
                 <input className={input} type="number" value={bankForm.pass_mark}
                   onChange={e => setBankForm(f => ({ ...f, pass_mark: e.target.value }))} />
               </label>
-              <label className="text-[10px] text-gray-400">Valid (months)
+              <label className="text-[10px] text-gray-500">Valid (months)
                 <input className={input} type="number" value={bankForm.validity_months}
                   onChange={e => setBankForm(f => ({ ...f, validity_months: e.target.value }))} />
               </label>
@@ -80,7 +80,7 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
           </div>
         )}
         <div className="flex flex-col gap-1 max-h-96 overflow-y-auto">
-          {banks.length === 0 && <p className="text-xs text-gray-400 py-4 text-center">No banks yet.</p>}
+          {banks.length === 0 && <p className="text-xs text-gray-500 py-4 text-center">No banks yet.</p>}
           {banks.map(b => (
             <button key={b.id} onClick={() => { setSelectedId(b.id); setError(null); }}
               className={`text-left px-3 py-2 rounded-lg text-sm transition-colors ${
@@ -88,9 +88,9 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
               <span className="flex items-center gap-2">
                 <span>❓</span>
                 <span className="flex-1 min-w-0 truncate">{b.name}</span>
-                <span className="text-[9px] bg-gray-100 text-gray-500 rounded-full px-1.5 font-bold">{qCount.get(b.id) ?? 0}</span>
+                <span className="text-[9px] bg-gray-100 text-gray-600 rounded-full px-1.5 font-bold">{qCount.get(b.id) ?? 0}</span>
               </span>
-              {b.cpu_id && <span className="text-[9px] text-gray-400 ml-6">{cpuName(b.cpu_id)}</span>}
+              {b.cpu_id && <span className="text-[9px] text-gray-500 ml-6">{cpuName(b.cpu_id)}</span>}
             </button>
           ))}
         </div>
@@ -100,13 +100,13 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
       <div className="bg-white rounded-xl border border-gray-100 p-5 self-start">
         {error && <div className="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
         {!selected ? (
-          <p className="text-sm text-gray-400 py-8 text-center">Select or create a question bank.</p>
+          <p className="text-sm text-gray-500 py-8 text-center">Select or create a question bank.</p>
         ) : (
           <>
             <div className="flex items-start justify-between">
               <div>
                 <p className="font-bold text-gray-900 text-sm">{selected.name}</p>
-                <p className="text-[11px] text-gray-400 mt-0.5">
+                <p className="text-[11px] text-gray-500 mt-0.5">
                   Pass mark {selected.pass_mark}% · valid {selected.validity_months} months
                   {selected.cpu_id ? ` · ${cpuName(selected.cpu_id)}` : ""}
                   {" · "}{bankAttempts.length} attempt{bankAttempts.length !== 1 ? "s" : ""}
@@ -125,7 +125,7 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
                     <p className="text-sm text-gray-800 flex-1"><b>{i + 1}.</b> {x.content}</p>
                     <button disabled={busy} title="Delete"
                       onClick={async () => { setBusy(true); await fetch(`/api/studio?kind=bank_question&id=${x.id}`, { method: "DELETE" }); setBusy(false); router.refresh(); }}
-                      className="text-gray-300 hover:text-red-500 text-xs">✕</button>
+                      className="text-gray-500 hover:text-red-500 text-xs">✕</button>
                   </div>
                   <div className="mt-1.5 flex flex-col gap-0.5">
                     {x.options.map(o => (
@@ -136,7 +136,7 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
                   </div>
                 </div>
               ))}
-              {bankQuestions.length === 0 && <p className="text-xs text-gray-400">No questions yet — add the first below.</p>}
+              {bankQuestions.length === 0 && <p className="text-xs text-gray-500">No questions yet — add the first below.</p>}
             </div>
 
             {/* Add question */}

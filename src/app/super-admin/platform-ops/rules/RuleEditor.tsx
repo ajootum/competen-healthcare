@@ -61,21 +61,21 @@ export default function RuleEditor({ rules }: { rules: Rule[] }) {
   }
 
   const card = "bg-white rounded-xl border border-gray-200";
-  if (!rules.length) return <div className={`${card} p-8 text-center`}><p className="text-sm text-gray-500">No business-rule objects yet.</p><p className="text-xs text-gray-400 mt-1">Author a <b>Business Rule</b> in the <a href="/super-admin/platform-ops/studio" className="text-indigo-700 underline">Configuration Studio</a> first, then design its decision table here.</p></div>;
+  if (!rules.length) return <div className={`${card} p-8 text-center`}><p className="text-sm text-gray-500">No business-rule objects yet.</p><p className="text-xs text-gray-500 mt-1">Author a <b>Business Rule</b> in the <a href="/super-admin/platform-ops/studio" className="text-indigo-700 underline">Configuration Studio</a> first, then design its decision table here.</p></div>;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
       <div className={`${card} p-4`}>
         <p className="text-[11px] font-semibold text-gray-500 mb-2">Rules ({rules.length})</p>
         <div className="space-y-1 max-h-[460px] overflow-y-auto">
-          {rules.map(r => <button key={r.object_key} onClick={() => pick(r.object_key)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === r.object_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}><p className="text-xs font-medium text-gray-800 truncate">{r.display_name}</p><p className="text-[10px] text-gray-400 truncate">{(r.definition?.rows?.length ?? 0)} row(s)</p></button>)}
+          {rules.map(r => <button key={r.object_key} onClick={() => pick(r.object_key)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === r.object_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}><p className="text-xs font-medium text-gray-800 truncate">{r.display_name}</p><p className="text-[10px] text-gray-500 truncate">{(r.definition?.rows?.length ?? 0)} row(s)</p></button>)}
         </div>
       </div>
 
       <div className={`${card} p-5 lg:col-span-3`}>
-        {!sel ? <p className="text-sm text-gray-400 py-16 text-center">Select a rule.</p> : (
+        {!sel ? <p className="text-sm text-gray-500 py-16 text-center">Select a rule.</p> : (
           <>
-            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-gray-900">{sel.display_name}</h3><span className="text-[10px] text-gray-400 font-mono">{sel.object_key}</span></div>
+            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-gray-900">{sel.display_name}</h3><span className="text-[10px] text-gray-500 font-mono">{sel.object_key}</span></div>
 
             {/* Columns */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
@@ -84,11 +84,11 @@ export default function RuleEditor({ rules }: { rules: Rule[] }) {
             </div>
 
             {/* Decision table */}
-            {(t.conditions.length + t.actions.length) === 0 ? <p className="text-xs text-gray-400 py-4 text-center">Add condition &amp; action columns, then rows.</p> : (
+            {(t.conditions.length + t.actions.length) === 0 ? <p className="text-xs text-gray-500 py-4 text-center">Add condition &amp; action columns, then rows.</p> : (
               <div className="overflow-x-auto border border-gray-100 rounded-lg">
                 <table className="w-full text-xs">
                   <thead><tr className="bg-gray-50">
-                    <th className="p-1 text-gray-400 font-medium w-8">#</th>
+                    <th className="p-1 text-gray-500 font-medium w-8">#</th>
                     {t.conditions.map(c => <th key={c.key} className="p-1.5 text-left text-[var(--cmp-text-information)] font-semibold">{c.label}</th>)}
                     {t.actions.map(c => <th key={c.key} className="p-1.5 text-left text-emerald-700 font-semibold border-l border-gray-200">{c.label}</th>)}
                     <th className="w-12" />
@@ -96,10 +96,10 @@ export default function RuleEditor({ rules }: { rules: Rule[] }) {
                   <tbody>
                     {t.rows.map((row, ri) => (
                       <tr key={ri} className={`border-t border-gray-50 ${matchIdx === ri && canSim ? "bg-indigo-50/60" : ""}`}>
-                        <td className="p-1 text-center text-gray-300">{ri + 1}</td>
+                        <td className="p-1 text-center text-gray-500">{ri + 1}</td>
                         {t.conditions.map(c => <td key={c.key} className="p-1"><input className={input} value={row.conditions[c.key] ?? ""} onChange={e => setCell(ri, "conditions", c.key, e.target.value)} placeholder="any" /></td>)}
                         {t.actions.map(c => <td key={c.key} className="p-1 border-l border-gray-100"><input className={input} value={row.actions[c.key] ?? ""} onChange={e => setCell(ri, "actions", c.key, e.target.value)} /></td>)}
-                        <td className="p-1 whitespace-nowrap text-gray-400"><button onClick={() => moveRow(ri, -1)} className="hover:text-gray-700 px-0.5">↑</button><button onClick={() => moveRow(ri, 1)} className="hover:text-gray-700 px-0.5">↓</button><button onClick={() => rmRow(ri)} className="hover:text-[var(--cmp-text-error)] px-0.5">✕</button></td>
+                        <td className="p-1 whitespace-nowrap text-gray-500"><button onClick={() => moveRow(ri, -1)} className="hover:text-gray-700 px-0.5">↑</button><button onClick={() => moveRow(ri, 1)} className="hover:text-gray-700 px-0.5">↓</button><button onClick={() => rmRow(ri)} className="hover:text-[var(--cmp-text-error)] px-0.5">✕</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -115,7 +115,7 @@ export default function RuleEditor({ rules }: { rules: Rule[] }) {
                 <div className="flex flex-wrap gap-2 items-end">
                   {t.conditions.map(c => <label key={c.key} className="text-[10px] text-gray-500">{c.label}<input className={`${input} w-24`} value={sim[c.key] ?? ""} onChange={e => setSim(p => ({ ...p, [c.key]: e.target.value }))} /></label>)}
                 </div>
-                {canSim && <div className="mt-2 text-[11px]">{matchIdx >= 0 ? <span className="text-emerald-700">→ Row {matchIdx + 1}: {t.actions.map(a => `${a.label}=${t.rows[matchIdx].actions[a.key] ?? "—"}`).join(", ")}</span> : <span className="text-gray-400">No row matched.</span>}</div>}
+                {canSim && <div className="mt-2 text-[11px]">{matchIdx >= 0 ? <span className="text-emerald-700">→ Row {matchIdx + 1}: {t.actions.map(a => `${a.label}=${t.rows[matchIdx].actions[a.key] ?? "—"}`).join(", ")}</span> : <span className="text-gray-500">No row matched.</span>}</div>}
               </div>
             )}
 

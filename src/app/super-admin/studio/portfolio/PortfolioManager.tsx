@@ -12,7 +12,7 @@ const EVIDENCE = [
   { v: "case_log", label: "Case log" }, { v: "procedure_log", label: "Procedure log" }, { v: "reflection", label: "Reflection" }, { v: "certificate", label: "Certificate" },
   { v: "assessment", label: "Assessment" }, { v: "project", label: "Project" }, { v: "document", label: "Document" }, { v: "feedback", label: "Feedback" }, { v: "osce", label: "OSCE" }, { v: "other", label: "Other" },
 ];
-const STATUS_TONE: Record<string, string> = { draft: "text-gray-500 bg-gray-50 border-gray-200", active: "text-teal-600 bg-teal-50 border-teal-200", archived: "text-gray-400 bg-gray-50 border-gray-200" };
+const STATUS_TONE: Record<string, string> = { draft: "text-gray-500 bg-gray-50 border-gray-200", active: "text-teal-600 bg-teal-50 border-teal-200", archived: "text-gray-500 bg-gray-50 border-gray-200" };
 
 export default function PortfolioManager({ templates }: { templates: any[] }) {
   const router = useRouter();
@@ -57,7 +57,7 @@ export default function PortfolioManager({ templates }: { templates: any[] }) {
       </div>
 
       {templates.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-6 text-center text-xs text-gray-400">No portfolio templates yet — create one, then add required-evidence sections (weights should sum to 100%).</div>
+        <div className="bg-white rounded-xl border border-gray-100 p-6 text-center text-xs text-gray-500">No portfolio templates yet — create one, then add required-evidence sections (weights should sum to 100%).</div>
       ) : templates.map((t: any) => (
         <div key={t.id} className="bg-white rounded-xl border border-gray-100 p-4">
           <div className="flex items-center gap-2 flex-wrap">
@@ -65,9 +65,9 @@ export default function PortfolioManager({ templates }: { templates: any[] }) {
             <span className="text-[10px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">{t.typeLabel}</span>
             <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${STATUS_TONE[t.status] ?? STATUS_TONE.draft}`}>{t.status}</span>
             <div className="ml-auto flex items-center gap-2 text-xs">
-              <span className="text-gray-400">{t.sections.length} section{t.sections.length === 1 ? "" : "s"} · {t.requiredArtefacts} artefacts</span>
-              <span className={t.balanced ? "text-teal-600 font-semibold" : t.weightSum > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-400"}>{t.weightSum}%{t.balanced ? " ✓" : ""}</span>
-              <button onClick={() => del(t.id)} disabled={busy} className="text-gray-300 hover:text-red-500" title="Delete">✕</button>
+              <span className="text-gray-500">{t.sections.length} section{t.sections.length === 1 ? "" : "s"} · {t.requiredArtefacts} artefacts</span>
+              <span className={t.balanced ? "text-teal-600 font-semibold" : t.weightSum > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-500"}>{t.weightSum}%{t.balanced ? " ✓" : ""}</span>
+              <button onClick={() => del(t.id)} disabled={busy} className="text-gray-500 hover:text-red-500" title="Delete">✕</button>
             </div>
           </div>
 
@@ -81,7 +81,7 @@ export default function PortfolioManager({ templates }: { templates: any[] }) {
                       <span className="text-[10px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 shrink-0">{s.evLabel}</span>
                       <span className="text-gray-500 w-16 text-right">×{s.requiredCount}{s.required ? "" : " opt"}</span>
                       <span className="font-semibold text-gray-900 w-10 text-right tabular-nums">{s.weight}%</span>
-                      <button onClick={() => removeSec(s.id)} disabled={busy} className="text-gray-300 hover:text-red-500 shrink-0" title="Remove">✕</button>
+                      <button onClick={() => removeSec(s.id)} disabled={busy} className="text-gray-500 hover:text-red-500 shrink-0" title="Remove">✕</button>
                     </div>
                   ))}
                 </div>
@@ -96,7 +96,7 @@ export default function PortfolioManager({ templates }: { templates: any[] }) {
               {t.sections.length > 0 && !t.balanced && t.weightSum !== 100 && <p className="text-[10px] text-[var(--cmp-text-warning)] mt-1">Section weights sum to {t.weightSum}% — adjust to 100% before activation.</p>}
               <div className="mt-2 flex gap-3">
                 {t.sections.length > 0 && t.status !== "active" && <button onClick={() => setStatus(t.id, "active")} disabled={busy} className="text-[11px] font-semibold text-teal-700 hover:underline">Activate →</button>}
-                {t.status === "active" && <button onClick={() => setStatus(t.id, "archived")} disabled={busy} className="text-[11px] font-semibold text-gray-400 hover:underline">Archive</button>}
+                {t.status === "active" && <button onClick={() => setStatus(t.id, "archived")} disabled={busy} className="text-[11px] font-semibold text-gray-500 hover:underline">Archive</button>}
               </div>
             </div>
           )}

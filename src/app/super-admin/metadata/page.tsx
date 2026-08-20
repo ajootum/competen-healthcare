@@ -22,7 +22,7 @@ export default async function MetadataPage() {
     <div className="max-w-4xl">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">Metadata &amp; Taxonomy</h1>
-        <p className="text-gray-400 text-sm mt-0.5">
+        <p className="text-gray-500 text-sm mt-0.5">
           Controlled vocabularies and governed tags — the common language of the CKCM (Book I Ch.13).
         </p>
       </div>

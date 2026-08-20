@@ -41,7 +41,7 @@ export default function AskPanel({ title, placeholder, prompts }: { title: strin
       {answer && (
         <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50/60 p-3">
           <p className="text-sm text-gray-800 whitespace-pre-wrap">{answer.text}</p>
-          <p className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-100">Grounded in {answer.sources ?? 0} CKCM source{answer.sources === 1 ? "" : "s"} · {answer.model ?? "—"} · every answer is audit-logged.</p>
+          <p className="text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-100">Grounded in {answer.sources ?? 0} CKCM source{answer.sources === 1 ? "" : "s"} · {answer.model ?? "—"} · every answer is audit-logged.</p>
         </div>
       )}
     </div>

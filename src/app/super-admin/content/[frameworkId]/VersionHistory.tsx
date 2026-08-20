@@ -37,7 +37,7 @@ export default function VersionHistory({ versions }: { versions: Version[] }) {
 
   return (
     <div className="mt-8">
-      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
+      <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
         Version History ({versions.length})
       </h2>
       <div className="flex flex-col gap-2">
@@ -55,7 +55,7 @@ export default function VersionHistory({ versions }: { versions: Version[] }) {
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
-                    i === 0 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"
+                    i === 0 ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-600"
                   }`}>
                     v{v.version_num}
                   </div>
@@ -66,13 +66,13 @@ export default function VersionHistory({ versions }: { versions: Version[] }) {
                         {i === 0 && <span className="ml-1.5 text-[10px] bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] font-bold px-1.5 py-0.5 rounded">Current</span>}
                       </p>
                     </div>
-                    <p className="text-[10px] text-gray-400">
+                    <p className="text-[10px] text-gray-500">
                       {domainCount} domains · {compCount} competencies · Published {fmt(v.published_at)}
                       {v.published_by_name && ` by ${v.published_by_name}`}
                     </p>
                   </div>
                 </div>
-                <span className="text-gray-400 text-sm">{isOpen ? "▲" : "▼"}</span>
+                <span className="text-gray-500 text-sm">{isOpen ? "▲" : "▼"}</span>
               </button>
 
               {isOpen && (
@@ -88,11 +88,11 @@ export default function VersionHistory({ versions }: { versions: Version[] }) {
                               .sort((a, b) => a.sort_order - b.sort_order)
                               .map(comp => (
                                 <div key={comp.name} className="flex items-start gap-2">
-                                  <span className="text-gray-300 text-xs mt-0.5">—</span>
+                                  <span className="text-gray-500 text-xs mt-0.5">—</span>
                                   <div>
                                     <p className="text-[11px] text-gray-600 font-medium">{comp.name}</p>
                                     {(comp.competency_skills ?? []).length > 0 && (
-                                      <p className="text-[10px] text-gray-400">
+                                      <p className="text-[10px] text-gray-500">
                                         {(comp.competency_skills ?? []).map(s => s.name).join(" · ")}
                                       </p>
                                     )}
@@ -104,7 +104,7 @@ export default function VersionHistory({ versions }: { versions: Version[] }) {
                       ))}
                   </div>
                   {v.notes && (
-                    <p className="mt-2 text-xs text-gray-400 italic">&ldquo;{v.notes}&rdquo;</p>
+                    <p className="mt-2 text-xs text-gray-500 italic">&ldquo;{v.notes}&rdquo;</p>
                   )}
                 </div>
               )}

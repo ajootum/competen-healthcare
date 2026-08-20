@@ -79,7 +79,7 @@ export default function CpuBuilder({
             <div className="flex items-center justify-between px-5 py-3 bg-gray-50/60 border-b border-gray-100">
               <div>
                 <p className="font-semibold text-gray-900 text-sm">{domain.name}</p>
-                <p className="text-[10px] text-gray-400">{doms.length} practice{doms.length !== 1 ? "s" : ""} · {domain.framework_competencies.length} competencies</p>
+                <p className="text-[10px] text-gray-500">{doms.length} practice{doms.length !== 1 ? "s" : ""} · {domain.framework_competencies.length} competencies</p>
               </div>
               <button onClick={() => addPractice(domain.id)} disabled={busy}
                 className="px-3 py-1 bg-indigo-50 text-indigo-600 text-xs font-semibold rounded-lg hover:bg-indigo-100 disabled:opacity-50">
@@ -96,7 +96,7 @@ export default function CpuBuilder({
                       <div className="flex items-center gap-2">
                         <span className="text-indigo-400 text-xs">▸</span>
                         <p className="text-sm font-medium text-gray-800">{practice.name}</p>
-                        <span className="text-[10px] text-gray-400">{pcpus.length} CPU{pcpus.length !== 1 ? "s" : ""}</span>
+                        <span className="text-[10px] text-gray-500">{pcpus.length} CPU{pcpus.length !== 1 ? "s" : ""}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => renamePractice(practice)} className="px-2 py-0.5 text-[11px] text-gray-500 border border-gray-200 rounded hover:bg-gray-100">Edit</button>
@@ -117,9 +117,9 @@ export default function CpuBuilder({
                                 <span className="text-teal-500 text-xs">■</span>
                                 <p className="text-sm font-medium text-gray-800">{cpu.name}</p>
                                 <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${risk.cls}`}>{risk.label}</span>
-                                <span className="text-[9px] text-gray-400">L{cpu.complexity} · {COMPLEXITY_LABELS[cpu.complexity]}</span>
+                                <span className="text-[9px] text-gray-500">L{cpu.complexity} · {COMPLEXITY_LABELS[cpu.complexity]}</span>
                                 {cpu.pub_status !== "published" && (
-                                  <span className="text-[9px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded capitalize">{cpu.pub_status.replace("_", " ")}</span>
+                                  <span className="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded capitalize">{cpu.pub_status.replace("_", " ")}</span>
                                 )}
                               </div>
                               <div className="flex items-center gap-1.5">
@@ -136,17 +136,17 @@ export default function CpuBuilder({
                                     className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-[var(--cmp-text-critical)] transition-opacity leading-none px-0.5">×</button>
                                 </span>
                               ))}
-                              {!inCpu.length && <p className="text-[11px] text-gray-300 italic">No competencies assigned</p>}
+                              {!inCpu.length && <p className="text-[11px] text-gray-500 italic">No competencies assigned</p>}
                             </div>
                           </div>
                         );
                       })}
-                      {!pcpus.length && <p className="text-[11px] text-gray-300 italic pl-1">No CPUs yet — click &quot;+ CPU&quot;</p>}
+                      {!pcpus.length && <p className="text-[11px] text-gray-500 italic pl-1">No CPUs yet — click &quot;+ CPU&quot;</p>}
                     </div>
                   </div>
                 );
               })}
-              {!doms.length && <p className="px-5 py-3 text-xs text-gray-400 italic">No practices yet — click &quot;+ Practice&quot;</p>}
+              {!doms.length && <p className="px-5 py-3 text-xs text-gray-500 italic">No practices yet — click &quot;+ Practice&quot;</p>}
             </div>
 
             {/* Unassigned competencies — quick-assign into a CPU */}
@@ -168,7 +168,7 @@ export default function CpuBuilder({
                             {allCpus.map(cpu => <option key={cpu.id} value={cpu.id}>{cpu.practiceName} → {cpu.name}</option>)}
                           </select>
                         ) : (
-                          <span className="text-[10px] text-gray-300 italic">create a CPU first</span>
+                          <span className="text-[10px] text-gray-500 italic">create a CPU first</span>
                         )}
                       </div>
                     );
@@ -182,7 +182,7 @@ export default function CpuBuilder({
 
       {!domains.length && (
         <div className="bg-white rounded-xl border border-gray-100 p-10 text-center">
-          <p className="text-gray-400 text-sm">This framework has no domains yet. Add domains &amp; competencies in the main builder first, then organise them here.</p>
+          <p className="text-gray-500 text-sm">This framework has no domains yet. Add domains &amp; competencies in the main builder first, then organise them here.</p>
         </div>
       )}
 

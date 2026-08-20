@@ -40,7 +40,7 @@ export default async function OrganisationsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Organisations</h1>
-          <p className="text-gray-400 text-sm mt-0.5">
+          <p className="text-gray-500 text-sm mt-0.5">
             {(orgs ?? []).length} groups · {totalFacilities} facilities · {allCountries.length} countries
           </p>
         </div>

@@ -22,7 +22,7 @@ export default async function PeopleModule() {
     <div data-wide className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="flex items-center gap-2 text-xs text-gray-400">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
             <Link href="/super-admin/enterprise" className="hover:text-teal-700">Enterprise Administration</Link><span>/</span><span className="text-gray-600">People, Positions &amp; Roles</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mt-0.5">People, Positions &amp; Roles</h1>
@@ -35,10 +35,10 @@ export default async function PeopleModule() {
         {[
           { label: "People", n: summary.total, tone: "text-gray-900" },
           { label: "Active", n: summary.active, tone: "text-[var(--cmp-text-success)]" },
-          { label: "Suspended", n: summary.suspended, tone: summary.suspended ? "text-[var(--cmp-text-error)]" : "text-gray-300" },
-          { label: "Leavers", n: summary.leavers, tone: summary.leavers ? "text-gray-500" : "text-gray-300" },
+          { label: "Suspended", n: summary.suspended, tone: summary.suspended ? "text-[var(--cmp-text-error)]" : "text-gray-500" },
+          { label: "Leavers", n: summary.leavers, tone: summary.leavers ? "text-gray-500" : "text-gray-500" },
           { label: "Positions", n: summary.positions, tone: "text-violet-600" },
-          { label: "No position", n: summary.noPosition, tone: summary.noPosition ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
+          { label: "No position", n: summary.noPosition, tone: summary.noPosition ? "text-[var(--cmp-text-warning)]" : "text-gray-500" },
         ].map(k => (
           <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-4">
             <p className={`text-2xl font-bold tabular-nums ${k.tone}`}>{k.n}</p>

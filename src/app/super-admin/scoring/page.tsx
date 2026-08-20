@@ -21,7 +21,7 @@ export default async function ScoringPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Scoring Rules</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Configure scoring scales, level labels, colours, and pass thresholds</p>
+          <p className="text-gray-500 text-sm mt-0.5">Configure scoring scales, level labels, colours, and pass thresholds</p>
         </div>
         <ScoringManager scales={scales ?? []} />
       </div>
@@ -35,9 +35,9 @@ export default async function ScoringPage() {
                   <h2 className="font-semibold text-gray-900">{scale.name}</h2>
                   {scale.is_default && <span className="text-[10px] bg-teal-100 text-teal-700 font-bold px-2 py-0.5 rounded">Default</span>}
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5">{scale.description}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{scale.description}</p>
               </div>
-              <span className="text-xs text-gray-400">Score {scale.min_score}–{scale.max_score}</span>
+              <span className="text-xs text-gray-500">Score {scale.min_score}–{scale.max_score}</span>
             </div>
             <div className="divide-y divide-gray-50">
               {(scale.scoring_levels ?? []).sort((a, b) => a.score - b.score).map(level => (
@@ -46,7 +46,7 @@ export default async function ScoringPage() {
                     style={{ backgroundColor: level.color }}>{level.score}</div>
                   <div className="flex-1">
                     <p className="text-sm font-medium text-gray-800">{level.label}</p>
-                    {level.description && <p className="text-[10px] text-gray-400 mt-0.5">{level.description}</p>}
+                    {level.description && <p className="text-[10px] text-gray-500 mt-0.5">{level.description}</p>}
                   </div>
                   <div className="flex items-center gap-2">
                     {level.is_passing

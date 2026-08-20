@@ -45,7 +45,7 @@ export default function WorkspaceDirectory({ groups, canEdit }: { groups: any[];
       {filtered.map(g => (
         <div key={g.kind} className="bg-white rounded-xl border border-gray-200">
           <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-900 text-sm">{g.label} <span className="text-gray-400 font-normal">({g.items.length})</span></h2>
+            <h2 className="font-semibold text-gray-900 text-sm">{g.label} <span className="text-gray-500 font-normal">({g.items.length})</span></h2>
           </div>
           <div className="divide-y divide-gray-50">
             {g.items.map((w: any) => (
@@ -57,9 +57,9 @@ export default function WorkspaceDirectory({ groups, canEdit }: { groups: any[];
                     {w.customized && <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-violet-50 text-violet-700">customised</span>}
                     {!w.enabled && <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]">disabled</span>}
                   </div>
-                  <p className="text-[11px] text-gray-400 truncate">{w.route} · {w.audience.map(roleLabel).join(", ")}</p>
+                  <p className="text-[11px] text-gray-500 truncate">{w.route} · {w.audience.map(roleLabel).join(", ")}</p>
                 </div>
-                <Link href={w.route} className="text-xs text-gray-400 hover:text-teal-700 shrink-0 hidden sm:inline">Open ↗</Link>
+                <Link href={w.route} className="text-xs text-gray-500 hover:text-teal-700 shrink-0 hidden sm:inline">Open ↗</Link>
                 {canEdit ? (
                   <>
                     <button onClick={() => patch(w.key, { is_enabled: !w.enabled }, w.enabled ? "Disabled" : "Enabled")} disabled={busyKey === w.key}
@@ -69,14 +69,14 @@ export default function WorkspaceDirectory({ groups, canEdit }: { groups: any[];
                     <button onClick={() => setEditing(w)} className="text-xs font-medium text-teal-700 hover:underline shrink-0">Edit</button>
                   </>
                 ) : (
-                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded shrink-0 ${w.enabled ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{w.enabled ? "Enabled" : "Disabled"}</span>
+                  <span className={`text-[11px] font-medium px-2 py-0.5 rounded shrink-0 ${w.enabled ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-600"}`}>{w.enabled ? "Enabled" : "Disabled"}</span>
                 )}
               </div>
             ))}
           </div>
         </div>
       ))}
-      {filtered.length === 0 && <p className="text-sm text-gray-400 text-center py-8">No workspaces match.</p>}
+      {filtered.length === 0 && <p className="text-sm text-gray-500 text-center py-8">No workspaces match.</p>}
 
       {editing && <EditModal w={editing} busy={busyKey === editing.key}
         onClose={() => setEditing(null)}
@@ -95,7 +95,7 @@ function EditModal({ w, busy, onClose, onSave, onReset }: any) {
   return (
     <Modal open title="Edit workspace" onClose={onClose}>
       <div className="flex flex-col gap-3">
-        <p className="text-[11px] text-gray-400 -mt-1">{w.route} · <span className="capitalize">{w.kind.replace("_", "-")}</span> plane</p>
+        <p className="text-[11px] text-gray-500 -mt-1">{w.route} · <span className="capitalize">{w.kind.replace("_", "-")}</span> plane</p>
         <div className="grid grid-cols-[1fr_auto_auto] gap-3 items-end">
           <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Name</label><input value={form.label} onChange={e => set("label", e.target.value)} className={input} /></div>
           <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Icon</label><input value={form.icon} onChange={e => set("icon", e.target.value)} maxLength={4} className={`${input} w-16 text-center`} /></div>

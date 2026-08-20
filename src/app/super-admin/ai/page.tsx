@@ -46,7 +46,7 @@ export default async function AiIntelligencePlatform() {
   const o = p.opsStatus;
 
   const ribbon = [
-    { label: "AI Health", value: pct(r.aiHealth), icon: "🛡️", tone: r.aiHealth != null && r.aiHealth >= 95 ? "text-[var(--cmp-text-success)]" : r.aiHealth == null ? "text-gray-400" : "text-[var(--cmp-text-warning)]" },
+    { label: "AI Health", value: pct(r.aiHealth), icon: "🛡️", tone: r.aiHealth != null && r.aiHealth >= 95 ? "text-[var(--cmp-text-success)]" : r.aiHealth == null ? "text-gray-500" : "text-[var(--cmp-text-warning)]" },
     { label: "Running Agents", value: big(r.runningAgents), icon: "🤖" },
     { label: "Queued Jobs", value: big(r.queuedJobs), icon: "🗂️" },
     { label: "Failed Jobs", value: big(r.failedJobs), icon: "⚠️", tone: (r.failedJobs ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
@@ -65,7 +65,7 @@ export default async function AiIntelligencePlatform() {
         </div>
         <div className="flex items-center gap-2">
           <span className={`text-xs font-medium px-2.5 py-1 rounded-lg ${o.configured ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{o.configured ? `● ${o.provider} configured` : "AI not configured"}</span>
-          <span className="text-xs text-gray-400 tabular-nums">Updated {new Date(p.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+          <span className="text-xs text-gray-500 tabular-nums">Updated {new Date(p.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
         </div>
       </div>
 
@@ -150,7 +150,7 @@ export default async function AiIntelligencePlatform() {
         <div className={`${cardClass} lg:col-span-2`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 text-[15px]">Copilot Spotlight</h2>
-            <span className="text-[10px] text-gray-400">usage today · live from AI runtime</span>
+            <span className="text-[10px] text-gray-500">usage today · live from AI runtime</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {p.copilots.map((c: any) => (
@@ -162,12 +162,12 @@ export default async function AiIntelligencePlatform() {
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-lg font-bold text-gray-900 tabular-nums leading-none">{c.usageToday.toLocaleString()}</p>
-                  <p className="text-[9px] text-gray-400">requests</p>
+                  <p className="text-[9px] text-gray-500">requests</p>
                 </div>
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">Copilots map to the real server-side AI operations recorded in the runtime gateway. Model accuracy is not yet metered — Intelligence Analytics will surface it once evaluation is wired.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Copilots map to the real server-side AI operations recorded in the runtime gateway. Model accuracy is not yet metered — Intelligence Analytics will surface it once evaluation is wired.</p>
         </div>
       </div>
 
@@ -176,7 +176,7 @@ export default async function AiIntelligencePlatform() {
         {TRUST.map(t => <span key={t} className="text-[11px] font-medium text-gray-500">{t}</span>)}
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The AI &amp; Intelligence Platform is the enterprise intelligence layer above every Competen engine. The KPI ribbon, operations status and copilot usage are live from the AI runtime gateway (plat_ai_requests), the background job runner and the approval queue. Metrics the platform does not yet meter — recommendation acceptance, model accuracy, workforce/enterprise scores — show honest “—” states and are wired module by module.</p>
+      <p className="text-[11px] text-gray-500 pb-4">The AI &amp; Intelligence Platform is the enterprise intelligence layer above every Competen engine. The KPI ribbon, operations status and copilot usage are live from the AI runtime gateway (plat_ai_requests), the background job runner and the approval queue. Metrics the platform does not yet meter — recommendation acceptance, model accuracy, workforce/enterprise scores — show honest “—” states and are wired module by module.</p>
     </div>
   );
 }

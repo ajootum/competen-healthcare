@@ -28,7 +28,7 @@ export default async function DeliveryConfigPage() {
         <div>
           <p className="text-[11px] font-semibold text-violet-500 uppercase tracking-widest mb-0.5">CDP-014 · Learning Governance & Delivery Config</p>
           <h1 className="text-xl font-bold text-gray-900">Delivery Policy</h1>
-          <p className="text-gray-400 text-sm mt-0.5">The platform-wide delivery rules the runtime engines read live — set the reminder lead time, whether failed assessments auto-remediate, and whether orchestration runs.</p>
+          <p className="text-gray-500 text-sm mt-0.5">The platform-wide delivery rules the runtime engines read live — set the reminder lead time, whether failed assessments auto-remediate, and whether orchestration runs.</p>
         </div>
         <Link href="/super-admin/delivery" className="text-xs font-semibold text-gray-500 hover:text-violet-700 border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Delivery</Link>
       </div>

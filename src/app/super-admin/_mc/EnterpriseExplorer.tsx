@@ -12,7 +12,7 @@ function Row({ depth, children, onClick, open, hasChildren }: { depth: number; c
     <div onClick={onClick}
       className={`flex items-center gap-1.5 py-1.5 pr-2 rounded-md ${onClick ? "cursor-pointer hover:bg-gray-50" : ""}`}
       style={{ paddingLeft: `${depth * 16 + 4}px` }}>
-      <span className={`text-gray-300 text-[10px] w-3 shrink-0 ${hasChildren ? "" : "opacity-0"}`}>{open ? "▾" : "▸"}</span>
+      <span className={`text-gray-500 text-[10px] w-3 shrink-0 ${hasChildren ? "" : "opacity-0"}`}>{open ? "▾" : "▸"}</span>
       {children}
     </div>
   );
@@ -25,14 +25,14 @@ export default function EnterpriseExplorer({ orgs, unassigned }: { orgs: any[]; 
 
   return (
     <div className="text-sm">
-      {orgs.length === 0 && <p className="text-gray-400 py-6 text-center">No organisations registered yet.</p>}
+      {orgs.length === 0 && <p className="text-gray-500 py-6 text-center">No organisations registered yet.</p>}
       {orgs.map(o => (
         <div key={o.id}>
           <Row depth={0} hasChildren={o.countries.length > 0} open={openOrg[o.id]} onClick={() => setOpenOrg(s => ({ ...s, [o.id]: !s[o.id] }))}>
             <span className="text-base">🏛️</span>
             <span className="font-semibold text-gray-900 truncate">{o.name}</span>
-            <span className={`ml-1 text-[9px] px-1.5 py-0.5 rounded font-medium ${o.active ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{o.active ? "Active" : "Setup"}</span>
-            <span className="ml-auto text-[10px] text-gray-400 tabular-nums shrink-0">{o.countryCount} {o.countryCount === 1 ? "country" : "countries"} · {o.facilityCount} facilities</span>
+            <span className={`ml-1 text-[9px] px-1.5 py-0.5 rounded font-medium ${o.active ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-600"}`}>{o.active ? "Active" : "Setup"}</span>
+            <span className="ml-auto text-[10px] text-gray-500 tabular-nums shrink-0">{o.countryCount} {o.countryCount === 1 ? "country" : "countries"} · {o.facilityCount} facilities</span>
           </Row>
           {openOrg[o.id] && o.countries.map((c: any) => {
             const ckey = `${o.id}:${c.country}`;
@@ -41,7 +41,7 @@ export default function EnterpriseExplorer({ orgs, unassigned }: { orgs: any[]; 
                 <Row depth={1} hasChildren open={openCountry[ckey]} onClick={() => setOpenCountry(s => ({ ...s, [ckey]: !s[ckey] }))}>
                   <span className="text-base leading-none">{c.flag}</span>
                   <span className="text-gray-700">{c.country}</span>
-                  <span className="ml-auto text-[10px] text-gray-400 tabular-nums shrink-0">{c.facilities.length} {c.facilities.length === 1 ? "facility" : "facilities"}</span>
+                  <span className="ml-auto text-[10px] text-gray-500 tabular-nums shrink-0">{c.facilities.length} {c.facilities.length === 1 ? "facility" : "facilities"}</span>
                 </Row>
                 {openCountry[ckey] && c.facilities.map((f: any) => (
                   <div key={f.id}>

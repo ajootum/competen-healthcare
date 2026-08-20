@@ -60,7 +60,7 @@ export default function SocConsole({ users }: { users: Picker[] }) {
           </button>
         </div>
       </div>
-      <p className="text-[11px] text-gray-400 mt-3">Containment is a real, reversible Supabase Auth ban — sign-in is blocked until released. Human-approved and audit-logged; automation may recommend but never silently executes. You cannot suspend your own account.</p>
+      <p className="text-[11px] text-gray-500 mt-3">Containment is a real, reversible Supabase Auth ban — sign-in is blocked until released. Human-approved and audit-logged; automation may recommend but never silently executes. You cannot suspend your own account.</p>
     </div>
   );
 }

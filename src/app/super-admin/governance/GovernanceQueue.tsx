@@ -36,7 +36,7 @@ export default function GovernanceQueue({ queue }: { queue: Item[] }) {
     finally { setBusyId(null); }
   }
 
-  if (queue.length === 0) return <p className="text-sm text-gray-400 py-6 text-center">Queue is clear.</p>;
+  if (queue.length === 0) return <p className="text-sm text-gray-500 py-6 text-center">Queue is clear.</p>;
 
   return (
     <div>
@@ -47,7 +47,7 @@ export default function GovernanceQueue({ queue }: { queue: Item[] }) {
             <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-gray-800 leading-tight truncate">{q.title}</p>
-                <p className="text-[10px] text-gray-400 capitalize">{q.sub}{q.step ? ` · ${q.step}` : ""}{q.by ? ` · ${q.by}` : ""} · {relTime(q.at)}</p>
+                <p className="text-[10px] text-gray-500 capitalize">{q.sub}{q.step ? ` · ${q.step}` : ""}{q.by ? ` · ${q.by}` : ""} · {relTime(q.at)}</p>
               </div>
               <button onClick={() => decide(q, "approved")} disabled={busyId !== null}
                 className="text-[11px] font-semibold text-white bg-[var(--cmp-color-success)] hover:bg-green-700 rounded-lg px-2.5 py-1 disabled:opacity-50 shrink-0">

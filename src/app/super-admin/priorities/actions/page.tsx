@@ -29,7 +29,7 @@ export default async function ActionsPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <Card title="Traceability — Strategy → Execution" className="xl:col-span-2" right={<span className="text-[11px] text-gray-400">objective → priority → action</span>}>
+        <Card title="Traceability — Strategy → Execution" className="xl:col-span-2" right={<span className="text-[11px] text-gray-500">objective → priority → action</span>}>
           {d.chains.length ? <div className="space-y-3">{d.chains.map((c: any, i: number) => (
             <div key={i} className="border border-gray-100 rounded-lg p-3">
               <p className="text-[13px] font-medium text-gray-900">🎯 {c.objective}</p>
@@ -40,19 +40,19 @@ export default async function ActionsPage() {
                 ))}
               </div>
             </div>
-          ))}</div> : <p className="text-sm text-gray-400 py-6 text-center">No traceability chains.</p>}
+          ))}</div> : <p className="text-sm text-gray-500 py-6 text-center">No traceability chains.</p>}
         </Card>
 
         <Card title="Actions by Type">
           {d.byType.length ? <div className="space-y-2 text-[12px]">{d.byType.map((t: any) => (
             <div key={t.type} className="flex items-center gap-2"><span>{TYPE_ICON[t.type] ?? "•"}</span><span className="text-gray-600 flex-1 capitalize">{t.type}</span><div className="w-16 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-teal-500" style={{ width: `${(t.n / k.total) * 100}%` }} /></div><span className="font-semibold text-gray-900 tabular-nums w-5 text-right">{t.n}</span></div>
-          ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No actions.</p>}
+          ))}</div> : <p className="text-sm text-gray-500 py-4 text-center">No actions.</p>}
         </Card>
       </div>
 
-      <Card title="Generated Work" right={<span className="text-[11px] text-gray-400">{d.actions.length} actions</span>}>
+      <Card title="Generated Work" right={<span className="text-[11px] text-gray-500">{d.actions.length} actions</span>}>
         <div className="space-y-1.5">
-          <div className="flex items-center text-[10px] text-gray-400 uppercase tracking-wide px-1"><span className="w-6" /><span className="flex-1">Action</span><span className="w-28">Source priority</span><span className="w-28">Target</span><span className="w-20 text-right">Status</span></div>
+          <div className="flex items-center text-[10px] text-gray-500 uppercase tracking-wide px-1"><span className="w-6" /><span className="flex-1">Action</span><span className="w-28">Source priority</span><span className="w-28">Target</span><span className="w-20 text-right">Status</span></div>
           {d.actions.map((a: any) => (
             <div key={a.id} className="flex items-center gap-2 border border-gray-100 rounded-lg px-2 py-1.5 text-[11px]">
               <span className="w-6 text-center">{TYPE_ICON[a.action_type] ?? "•"}</span>

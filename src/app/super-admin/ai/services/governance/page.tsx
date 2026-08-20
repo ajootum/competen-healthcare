@@ -32,18 +32,18 @@ export default async function GovernancePage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {d.byCategory.map((g: any) => (
-          <Card key={g.category} title={`${CAT_ICON[g.category] ?? "•"} ${g.category.charAt(0).toUpperCase() + g.category.slice(1)}`} right={<span className="text-[11px] text-gray-400">{g.items.length}</span>}>
+          <Card key={g.category} title={`${CAT_ICON[g.category] ?? "•"} ${g.category.charAt(0).toUpperCase() + g.category.slice(1)}`} right={<span className="text-[11px] text-gray-500">{g.items.length}</span>}>
             <div className="space-y-1.5">{g.items.map((p: any) => (
-              <div key={p.id} className="flex items-center gap-2 text-[12px]"><div className="min-w-0 flex-1"><p className="text-gray-800 leading-tight">{p.name}</p><p className="text-[10px] text-gray-400">{p.scope}</p></div><Pill text={p.enforcement} tone={ENF_TONE[p.enforcement]} /></div>
+              <div key={p.id} className="flex items-center gap-2 text-[12px]"><div className="min-w-0 flex-1"><p className="text-gray-800 leading-tight">{p.name}</p><p className="text-[10px] text-gray-500">{p.scope}</p></div><Pill text={p.enforcement} tone={ENF_TONE[p.enforcement]} /></div>
             ))}</div>
           </Card>
         ))}
       </div>
 
-      <Card title="Recent Safety Events" right={<span className="text-[11px] text-gray-400">{d.telemetryReady ? "from gateway telemetry" : "telemetry pending"}</span>}>
+      <Card title="Recent Safety Events" right={<span className="text-[11px] text-gray-500">{d.telemetryReady ? "from gateway telemetry" : "telemetry pending"}</span>}>
         {d.safetyEvents.length ? <div className="space-y-1.5">{d.safetyEvents.map((e: any, i: number) => (
-          <div key={i} className="flex items-center gap-2 text-[12px]"><span className={`w-2 h-2 rounded-full shrink-0 ${e.status === "refusal" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} /><span className="text-gray-700 flex-1 truncate">{e.operation ?? "—"} · <span className="font-mono text-gray-400">{e.model}</span></span><Pill text={e.status} tone={e.status === "refusal" ? "amber" : "rose"} /><span className="text-gray-400 text-[11px]">{fmtT(e.at)}</span></div>
-        ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No safety events (refusals/errors) in the recent window. ✅</p>}
+          <div key={i} className="flex items-center gap-2 text-[12px]"><span className={`w-2 h-2 rounded-full shrink-0 ${e.status === "refusal" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} /><span className="text-gray-700 flex-1 truncate">{e.operation ?? "—"} · <span className="font-mono text-gray-500">{e.model}</span></span><Pill text={e.status} tone={e.status === "refusal" ? "amber" : "rose"} /><span className="text-gray-500 text-[11px]">{fmtT(e.at)}</span></div>
+        ))}</div> : <p className="text-sm text-gray-500 py-4 text-center">No safety events (refusals/errors) in the recent window. ✅</p>}
       </Card>
 
       <Foot>AIS-008 — governance over ais_policies + <strong>real safety telemetry</strong> from the AI Runtime Gateway (refusals &amp; errors are actual plat_ai_requests events, not seeded). Policy definitions and enforcement modes are real config; the runtime policy-enforcement engine (pre/post-processing controls, redaction, injection screening) is backend in src/lib/ai/* — the gateway already tracks refusals/errors. Explainability capture &amp; e-signature audit are the next phase.</Foot>

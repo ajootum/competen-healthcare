@@ -9,7 +9,7 @@ import { Modal } from "@/components/ui/interactive";
 
 const TYPES = ["hospital", "clinic", "university", "nursing_school", "ministry", "ngo", "health_network", "multinational_group", "individual"];
 const STATUSES = ["prospect", "trial", "active", "suspended", "archived", "deleted"];
-const STATUS_BADGE: Record<string, string> = { prospect: "bg-gray-100 text-gray-600", trial: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", archived: "bg-gray-100 text-gray-500", deleted: "bg-gray-100 text-gray-400" };
+const STATUS_BADGE: Record<string, string> = { prospect: "bg-gray-100 text-gray-600", trial: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", archived: "bg-gray-100 text-gray-600", deleted: "bg-gray-100 text-gray-600" };
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 
 export default function TenantDirectory({ rows, plans }: { rows: any[]; plans: any[] }) {
@@ -41,7 +41,7 @@ export default function TenantDirectory({ rows, plans }: { rows: any[]; plans: a
   return (
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100">
-        <h2 className="font-semibold text-gray-900 mr-auto">Tenant directory <span className="text-gray-400 font-normal text-sm">({filtered.length})</span></h2>
+        <h2 className="font-semibold text-gray-900 mr-auto">Tenant directory <span className="text-gray-500 font-normal text-sm">({filtered.length})</span></h2>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search tenants…" className={`${input} w-52`} />
         <select value={status} onChange={e => setStatus(e.target.value)} className={`${input} w-36`}><option value="all">All statuses</option>{STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select>
         <button onClick={() => { setOpen(true); setErr(""); }} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3.5 py-2">+ Create Tenant</button>
@@ -49,17 +49,17 @@ export default function TenantDirectory({ rows, plans }: { rows: any[]; plans: a
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+          <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-100">
             <th className="px-4 py-2.5 font-semibold">Tenant</th><th className="px-4 py-2.5 font-semibold">Type</th><th className="px-4 py-2.5 font-semibold">Plan</th><th className="px-4 py-2.5 font-semibold">Status</th>
             <th className="px-4 py-2.5 font-semibold text-right">Users</th><th className="px-4 py-2.5 font-semibold text-right">Facilities</th><th className="px-4 py-2.5 font-semibold text-right">Seats</th>
           </tr></thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No tenants match.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">No tenants match.</td></tr>}
             {filtered.map(r => (
               <tr key={r.id} onClick={() => router.push(`/super-admin/platform-ops/tenants/${r.id}`)} className="border-b border-gray-50 hover:bg-gray-50/60 cursor-pointer">
-                <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-[var(--cmp-surface-information)] flex items-center justify-center text-sm shrink-0">🏢</span><div className="min-w-0"><p className="font-medium text-gray-900 truncate">{r.name}</p><p className="text-[10px] text-gray-400">{r.country}</p></div></div></td>
+                <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-[var(--cmp-surface-information)] flex items-center justify-center text-sm shrink-0">🏢</span><div className="min-w-0"><p className="font-medium text-gray-900 truncate">{r.name}</p><p className="text-[10px] text-gray-500">{r.country}</p></div></div></td>
                 <td className="px-4 py-3 text-gray-600 capitalize">{(r.type ?? "").replace(/_/g, " ")}</td>
-                <td className="px-4 py-3 text-gray-600">{r.plan ?? <span className="text-gray-300">Unplanned</span>}</td>
+                <td className="px-4 py-3 text-gray-600">{r.plan ?? <span className="text-gray-500">Unplanned</span>}</td>
                 <td className="px-4 py-3"><span className={`text-[10px] font-medium px-2 py-0.5 rounded ${STATUS_BADGE[r.status] ?? "bg-gray-100 text-gray-600"}`}>{r.status}</span></td>
                 <td className="px-4 py-3 text-right tabular-nums text-gray-700">{r.users}</td>
                 <td className="px-4 py-3 text-right tabular-nums text-gray-700">{r.facilities}</td>

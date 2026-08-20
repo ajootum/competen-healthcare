@@ -88,14 +88,14 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
         )}
         <input className={`${input} mb-2`} placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
         <div className="flex flex-col gap-1 max-h-96 overflow-y-auto">
-          {visibleChecklists.length === 0 && <p className="text-xs text-gray-400 py-4 text-center">No checklists yet.</p>}
+          {visibleChecklists.length === 0 && <p className="text-xs text-gray-500 py-4 text-center">No checklists yet.</p>}
           {visibleChecklists.map(c => (
             <button key={c.id} onClick={() => { setSelectedId(c.id); setError(null); }}
               className={`text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${
                 c.id === selectedId ? "bg-teal-50 text-teal-800 border border-teal-200" : "hover:bg-gray-50 text-gray-700"}`}>
               <span>☑️</span>
               <span className="flex-1 min-w-0 truncate">{c.name}</span>
-              <span className="text-[9px] bg-gray-100 text-gray-500 rounded-full px-1.5 font-bold shrink-0">{itemCount.get(c.id) ?? 0}</span>
+              <span className="text-[9px] bg-gray-100 text-gray-600 rounded-full px-1.5 font-bold shrink-0">{itemCount.get(c.id) ?? 0}</span>
             </button>
           ))}
         </div>
@@ -105,7 +105,7 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
       <div className="bg-white rounded-xl border border-gray-100 p-5 self-start">
         {error && <div className="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
         {!selected ? (
-          <p className="text-sm text-gray-400 py-8 text-center">Select or create a checklist to edit its items.</p>
+          <p className="text-sm text-gray-500 py-8 text-center">Select or create a checklist to edit its items.</p>
         ) : (
           <>
             <p className="font-bold text-gray-900 text-sm">{selected.name}</p>
@@ -117,13 +117,13 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
             <div className="mt-4 flex flex-col gap-4">
               {[...sections.entries()].map(([section, sectionItems]) => (
                 <div key={section}>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">{section}</p>
+                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5">{section}</p>
                   <div className="flex flex-col gap-1">
                     {sectionItems.map(i => (
                       <div key={i.id} className="flex items-start gap-2 bg-gray-50 rounded-lg px-3 py-2">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-gray-800">{i.item}</p>
-                          <p className="text-[10px] text-gray-400">
+                          <p className="text-[10px] text-gray-500">
                             {SCORING_METHOD_LABELS[i.scoring_method] ?? i.scoring_method}
                             {!i.is_required && " · optional"}
                             {i.evidence_required && ` · evidence: ${i.evidence_required}`}
@@ -132,13 +132,13 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
                         {i.is_critical && <span className="text-[9px] bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] px-1.5 py-0.5 rounded font-bold shrink-0">CRITICAL FAIL</span>}
                         <button disabled={busy} title="Delete item"
                           onClick={async () => { setBusy(true); await fetch(`/api/studio?kind=checklist_item&id=${i.id}`, { method: "DELETE" }); setBusy(false); router.refresh(); }}
-                          className="text-gray-300 hover:text-red-500 text-xs shrink-0">✕</button>
+                          className="text-gray-500 hover:text-red-500 text-xs shrink-0">✕</button>
                       </div>
                     ))}
                   </div>
                 </div>
               ))}
-              {selectedItems.length === 0 && <p className="text-xs text-gray-400">No items yet — add the first one below.</p>}
+              {selectedItems.length === 0 && <p className="text-xs text-gray-500">No items yet — add the first one below.</p>}
             </div>
 
             {/* Add item */}
@@ -185,9 +185,9 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
 
       {/* RIGHT — relationships chain */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 self-start">
-        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Linked chain</p>
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Linked chain</p>
         {!selectedSkill ? (
-          <p className="text-xs text-gray-400">Select a checklist to see its place in the hierarchy.</p>
+          <p className="text-xs text-gray-500">Select a checklist to see its place in the hierarchy.</p>
         ) : (
           <div className="flex flex-col gap-1 text-xs">
             {[
@@ -197,14 +197,14 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
               { label: "Checklist", value: selected?.name ?? "", icon: "☑️" },
             ].map((row, i) => (
               <div key={row.label}>
-                {i > 0 && <p className="text-gray-300 text-center leading-none">↓</p>}
+                {i > 0 && <p className="text-gray-500 text-center leading-none">↓</p>}
                 <div className="bg-gray-50 rounded-lg px-3 py-2">
-                  <p className="text-[9px] font-bold text-gray-400 uppercase">{row.icon} {row.label}</p>
+                  <p className="text-[9px] font-bold text-gray-500 uppercase">{row.icon} {row.label}</p>
                   <p className="text-gray-800 leading-tight">{row.value}</p>
                 </div>
               </div>
             ))}
-            <p className="text-[10px] text-gray-400 mt-3">
+            <p className="text-[10px] text-gray-500 mt-3">
               Critical-fail items block competency regardless of overall score.
             </p>
           </div>

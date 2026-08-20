@@ -21,7 +21,7 @@ export default async function TenantOperations() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/platform-ops" className="hover:text-teal-700">Platform Operations</Link><span>/</span><span className="text-gray-600">Tenant Operations</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Tenant Operations</h1>
@@ -33,9 +33,9 @@ export default async function TenantOperations() {
           { label: "Total Tenants", n: summary.total, tone: "text-gray-900" },
           { label: "Active", n: summary.active, tone: "text-[var(--cmp-text-success)]" },
           { label: "Trial", n: summary.trial, tone: "text-[var(--cmp-text-warning)]" },
-          { label: "Suspended", n: summary.suspended, tone: summary.suspended ? "text-[var(--cmp-text-error)]" : "text-gray-300" },
-          { label: "Archived", n: summary.archived, tone: "text-gray-400" },
-          { label: "Unplanned", n: summary.unplanned, tone: summary.unplanned ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
+          { label: "Suspended", n: summary.suspended, tone: summary.suspended ? "text-[var(--cmp-text-error)]" : "text-gray-500" },
+          { label: "Archived", n: summary.archived, tone: "text-gray-500" },
+          { label: "Unplanned", n: summary.unplanned, tone: summary.unplanned ? "text-[var(--cmp-text-warning)]" : "text-gray-500" },
         ].map(k => (
           <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-4">
             <p className={`text-2xl font-bold tabular-nums ${k.tone}`}>{k.n}</p>

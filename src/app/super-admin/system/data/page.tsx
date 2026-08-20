@@ -18,8 +18,8 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const relTime = (iso?: string | null) => { if (!iso) return "never"; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const readyTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
-const OUT_TONE: Record<string, string> = { passed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", partial: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", failed: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", pending: "bg-gray-100 text-gray-500" };
+const readyTone = (n: number | null) => (n == null ? "text-gray-500" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 60 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const OUT_TONE: Record<string, string> = { passed: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", partial: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", failed: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", pending: "bg-gray-100 text-gray-600" };
 const KIND_LABEL: Record<string, string> = { dr_test: "DR test", restore_request: "Restore", backup_verification: "Backup verify", privacy_request: "Privacy", retention_review: "Retention" };
 
 export default async function DataProtectionRecovery() {
@@ -45,7 +45,7 @@ export default async function DataProtectionRecovery() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/system" className="hover:text-teal-700">System &amp; Security</Link><span>/</span><span className="text-gray-600">Data Protection &amp; Recovery</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Data Protection &amp; Recovery</h1>
@@ -79,12 +79,12 @@ export default async function DataProtectionRecovery() {
         <div className={`${card} p-5 lg:col-span-2`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 text-[15px]">Recovery Event Log</h2>
-            <span className="text-[10px] text-gray-400">{d.drStats.passed}/{d.drStats.completed} DR tests passed</span>
+            <span className="text-[10px] text-gray-500">{d.drStats.passed}/{d.drStats.completed} DR tests passed</span>
           </div>
-          {d.recent.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">{d.ready ? "No recovery events logged yet — start above." : "Activates with migration 063."}</p> : (
+          {d.recent.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">{d.ready ? "No recovery events logged yet — start above." : "Activates with migration 063."}</p> : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-100">
                   <th className="px-3 py-2 font-semibold">Event</th><th className="px-3 py-2 font-semibold">Type</th><th className="px-3 py-2 font-semibold">Scope</th><th className="px-3 py-2 font-semibold text-right">RTO</th><th className="px-3 py-2 font-semibold text-right">Status</th><th className="px-3 py-2 font-semibold text-right">Outcome</th>
                 </tr></thead>
                 <tbody>
@@ -95,7 +95,7 @@ export default async function DataProtectionRecovery() {
                       <td className="px-3 py-2 text-gray-500 text-[12px]">{e.scope ?? "—"}</td>
                       <td className="px-3 py-2 text-right tabular-nums text-[12px] text-gray-500">{e.rto != null ? `${e.rto}m` : "—"}</td>
                       <td className="px-3 py-2 text-right text-[11px] text-gray-500 capitalize">{String(e.status).replace(/_/g, " ")}</td>
-                      <td className="px-3 py-2 text-right"><span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${OUT_TONE[e.outcome] ?? "bg-gray-100 text-gray-500"}`}>{e.outcome}</span></td>
+                      <td className="px-3 py-2 text-right"><span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${OUT_TONE[e.outcome] ?? "bg-gray-100 text-gray-600"}`}>{e.outcome}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -106,7 +106,7 @@ export default async function DataProtectionRecovery() {
 
         {/* RPO / RTO */}
         <div className={`${card} p-5`}>
-          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">RPO / RTO <span className="text-[10px] text-gray-400">latest DR test</span></h2>
+          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">RPO / RTO <span className="text-[10px] text-gray-500">latest DR test</span></h2>
           {/* ⚠ THE TARGET FALLS BACK TO THE COMMITTED OBJECTIVE, THE ACTUAL NEVER DOES. A target is
               policy and is known before any test runs (owner decision 2026-08-19); an actual is a
               measurement and is honestly absent until a rehearsal has produced one. Showing an em dash
@@ -116,9 +116,9 @@ export default async function DataProtectionRecovery() {
               <div key={l} className="rounded-lg border border-gray-100 p-3 text-center">
                 <p className="text-2xl font-bold text-gray-900 tabular-nums">{o.actual != null ? `${o.actual}m` : "—"}</p>
                 <p className="text-[10px] text-gray-500">{l} actual</p>
-                <p className="text-[9px] text-gray-400 mt-1">
+                <p className="text-[9px] text-gray-500 mt-1">
                   target {formatObjective(o.target ?? committed)}
-                  {o.target == null && <span className="ml-1 text-gray-300">(committed)</span>}
+                  {o.target == null && <span className="ml-1 text-gray-500">(committed)</span>}
                 </p>
               </div>
             ))}
@@ -146,17 +146,17 @@ export default async function DataProtectionRecovery() {
             {d.posture.map((p: any) => (
               <div key={p.label} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">
                 <span className="text-xs text-gray-700">{p.label}</span>
-                <span className={`text-[10px] font-medium text-right ${p.on === true ? "text-[var(--cmp-text-success)]" : p.on === false ? "text-rose-500" : "text-gray-400"}`}>{p.value}</span>
+                <span className={`text-[10px] font-medium text-right ${p.on === true ? "text-[var(--cmp-text-success)]" : p.on === false ? "text-rose-500" : "text-gray-500"}`}>{p.value}</span>
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">Documented facts — encryption and backups are provider-managed; key rotation, secrets vault and retention have no surface yet, shown honestly.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Documented facts — encryption and backups are provider-managed; key rotation, secrets vault and retention have no surface yet, shown honestly.</p>
         </div>
 
         {/* Data access events */}
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900 text-[15px]">Data Access &amp; Export <span className="text-[10px] text-gray-400">30d</span></h2>
+            <h2 className="font-semibold text-gray-900 text-[15px]">Data Access &amp; Export <span className="text-[10px] text-gray-500">30d</span></h2>
             <Link href="/super-admin/audit" className="text-xs text-teal-700 hover:underline">Audit →</Link>
           </div>
           <div className="grid grid-cols-2 gap-2 mb-3">
@@ -166,7 +166,7 @@ export default async function DataProtectionRecovery() {
           {d.dataAccess.recent.length > 0 && (
             <div className="space-y-1 pt-2 border-t border-gray-50">
               {d.dataAccess.recent.map((a: any, i: number) => (
-                <div key={i} className="flex items-center justify-between text-[11px]"><span className="text-gray-600 truncate">{a.entity || (a.action ?? "").replace(/_/g, " ")}</span><span className="text-gray-400 shrink-0 ml-2">{relTime(a.at)}</span></div>
+                <div key={i} className="flex items-center justify-between text-[11px]"><span className="text-gray-600 truncate">{a.entity || (a.action ?? "").replace(/_/g, " ")}</span><span className="text-gray-500 shrink-0 ml-2">{relTime(a.at)}</span></div>
               ))}
             </div>
           )}
@@ -178,7 +178,7 @@ export default async function DataProtectionRecovery() {
             <h2 className="font-semibold text-gray-900 text-[15px]">Privacy &amp; Retention</h2>
             <Link href="/super-admin/governance/compliance" className="text-xs text-teal-700 hover:underline">Obligations →</Link>
           </div>
-          {d.obligations.total === 0 ? <p className="text-sm text-gray-400 py-4 text-center">No data-privacy obligations registered.</p> : (
+          {d.obligations.total === 0 ? <p className="text-sm text-gray-500 py-4 text-center">No data-privacy obligations registered.</p> : (
             <div className="space-y-2">
               {Object.entries(d.obligations.byDomain).map(([domain, n]: any) => (
                 <div key={domain} className="flex items-center justify-between text-xs"><span className="text-gray-600 capitalize">{String(domain).replace(/_/g, " ")}</span><span className="tabular-nums text-gray-500">{n}</span></div>
@@ -186,11 +186,11 @@ export default async function DataProtectionRecovery() {
               {d.obligations.nonCompliant > 0 && <p className="text-[11px] text-[var(--cmp-text-error)] pt-2 border-t border-gray-50">{d.obligations.nonCompliant} non-compliant / at-risk</p>}
             </div>
           )}
-          <p className="text-[10px] text-gray-400 mt-3">Data-privacy, documentation and cybersecurity obligations from the compliance register (Governance module 3).</p>
+          <p className="text-[10px] text-gray-500 mt-3">Data-privacy, documentation and cybersecurity obligations from the compliance register (Governance module 3).</p>
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Data Protection &amp; Recovery keeps the resilience evidence trail — DR exercises, restore and privacy requests, backup verifications with RPO/RTO targets vs actuals — alongside live database health, the data-access/export/deletion audit slice and the data-privacy obligations. Backups and encryption are provider-managed (Supabase/Postgres) and surfaced as honest facts; key rotation, a secrets vault and retention scheduling have no surface yet and are shown as such rather than fabricated (SYS-002 AC-02).</p>
+      <p className="text-[11px] text-gray-500 pb-4">Data Protection &amp; Recovery keeps the resilience evidence trail — DR exercises, restore and privacy requests, backup verifications with RPO/RTO targets vs actuals — alongside live database health, the data-access/export/deletion audit slice and the data-privacy obligations. Backups and encryption are provider-managed (Supabase/Postgres) and surfaced as honest facts; key rotation, a secrets vault and retention scheduling have no surface yet and are shown as such rather than fabricated (SYS-002 AC-02).</p>
     </div>
   );
 }

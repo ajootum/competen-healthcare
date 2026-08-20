@@ -42,7 +42,7 @@ export default async function AllHospitalsPage() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">All Hospitals</h1>
-          <p className="text-gray-400 text-sm mt-0.5">{rows.length} hospital{rows.length !== 1 ? "s" : ""} registered</p>
+          <p className="text-gray-500 text-sm mt-0.5">{rows.length} hospital{rows.length !== 1 ? "s" : ""} registered</p>
         </div>
       </div>
 
@@ -56,13 +56,13 @@ export default async function AllHospitalsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/50">
-                <th className="text-left px-5 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Hospital</th>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Location</th>
-                <th className="text-center px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Plan</th>
-                <th className="text-center px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Nurses</th>
-                <th className="text-center px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Assessors</th>
-                <th className="text-center px-4 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Educators</th>
-                <th className="text-right px-5 py-3 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Joined</th>
+                <th className="text-left px-5 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Hospital</th>
+                <th className="text-left px-4 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Location</th>
+                <th className="text-center px-4 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Plan</th>
+                <th className="text-center px-4 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Nurses</th>
+                <th className="text-center px-4 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Assessors</th>
+                <th className="text-center px-4 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Educators</th>
+                <th className="text-right px-5 py-3 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Joined</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -73,7 +73,7 @@ export default async function AllHospitalsPage() {
                       <div className="w-8 h-8 rounded-lg bg-[var(--cmp-surface-error)] flex items-center justify-center text-[var(--cmp-text-error)] text-sm shrink-0">🏥</div>
                       <div>
                         <p className="font-medium text-gray-900">{h.name}</p>
-                        <p className="text-[10px] text-gray-400 font-mono mt-0.5">{h.id.slice(0, 8)}…</p>
+                        <p className="text-[10px] text-gray-500 font-mono mt-0.5">{h.id.slice(0, 8)}…</p>
                       </div>
                     </div>
                   </td>
@@ -88,7 +88,7 @@ export default async function AllHospitalsPage() {
                   <td className="px-4 py-3.5 text-center text-xs text-gray-700 font-medium">{h.nurses}</td>
                   <td className="px-4 py-3.5 text-center text-xs text-gray-700">{h.assessors}</td>
                   <td className="px-4 py-3.5 text-center text-xs text-gray-700">{h.educators}</td>
-                  <td className="px-5 py-3.5 text-right text-xs text-gray-400">
+                  <td className="px-5 py-3.5 text-right text-xs text-gray-500">
                     {new Date(h.created_at).toLocaleDateString()}
                   </td>
                 </tr>

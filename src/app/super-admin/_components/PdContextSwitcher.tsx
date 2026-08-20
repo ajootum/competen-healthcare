@@ -79,7 +79,7 @@ export default function PdContextSwitcher({ workspaces, geometry, productLabel, 
             aria-label="Switch context"
             className="absolute bottom-full left-0 z-50 mb-1 max-h-[70vh] w-64 overflow-y-auto rounded-xl border border-gray-100 bg-white shadow-xl"
           >
-            <p className="px-3 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Current context</p>
+            <p className="px-3 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-gray-500">Current context</p>
             <div className="flex items-start gap-2.5 px-3 pb-2 text-sm">
               <span aria-hidden>🩺</span>
               <span className="min-w-0 flex-1">
@@ -92,7 +92,7 @@ export default function PdContextSwitcher({ workspaces, geometry, productLabel, 
 
             {elsewhere.length > 0 ? (
               <>
-                <p className="border-t border-gray-100 px-3 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">Switch to</p>
+                <p className="border-t border-gray-100 px-3 pb-1 pt-3 text-[10px] font-bold uppercase tracking-widest text-gray-500">Switch to</p>
                 {elsewhere.map(ws => (
                   <a
                     key={ws.href}

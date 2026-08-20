@@ -36,7 +36,7 @@ export default async function PackagesBuilder() {
 
   const header = (
     <>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Template, Package &amp; Marketplace Manager</span>
@@ -44,7 +44,7 @@ export default async function PackagesBuilder() {
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">📦</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Template, Package &amp; Marketplace Manager <span className="text-gray-300 font-medium text-lg">(NCP-011)</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Template, Package &amp; Marketplace Manager <span className="text-gray-500 font-medium text-lg">(NCP-011)</span></h1>
           <p className="text-sm text-gray-500">Bundle governed configuration objects into versioned packages — the resolver guarantees each bundle is dependency-complete before publish.</p>
         </div>
       </div>
@@ -63,7 +63,7 @@ export default async function PackagesBuilder() {
       </div>
       {!graph.provisioned && <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4 text-sm text-amber-800">The configuration registry (migration 092) is not provisioned, so there are no objects to bundle yet.</div>}
       <PackageBuilder packages={listP} objects={objects} dependsOn={dependsOn} />
-      <p className="text-[11px] text-gray-400">Packages + computed manifests persist to the package registry; publish is gated on dependency-completeness (reusing the WCE-002 dependency graph). The installation engine (transactional deploy, backup, health check), upgrade/rollback, licensing enforcement and the public/enterprise marketplace portal with ratings + analytics (NCP-011 §4/§7/§8) are next-phase.</p>
+      <p className="text-[11px] text-gray-500">Packages + computed manifests persist to the package registry; publish is gated on dependency-completeness (reusing the WCE-002 dependency graph). The installation engine (transactional deploy, backup, health check), upgrade/rollback, licensing enforcement and the public/enterprise marketplace portal with ratings + analytics (NCP-011 §4/§7/§8) are next-phase.</p>
     </div>
   );
 }

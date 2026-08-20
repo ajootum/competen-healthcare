@@ -30,7 +30,7 @@ export default async function RulesEngine() {
 
   const header = (
     <>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Rules & Decision Engine</span>
@@ -38,7 +38,7 @@ export default async function RulesEngine() {
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">⚖️</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Rules &amp; Decision Engine <span className="text-gray-300 font-medium text-lg">(NCP-007)</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Rules &amp; Decision Engine <span className="text-gray-500 font-medium text-lg">(NCP-007)</span></h1>
           <p className="text-sm text-gray-500">Author priority-ordered decision tables for each governed rule — condition &amp; action columns — and simulate them against sample inputs.</p>
         </div>
       </div>
@@ -56,7 +56,7 @@ export default async function RulesEngine() {
         <Stat label="Awaiting Table" value={list.length - withTable} tone={list.length - withTable ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-success)]"} sub="no rows yet" />
       </div>
       <RuleEditor rules={list} />
-      <p className="text-[11px] text-gray-400">The decision table persists onto the rule object. Condition cells support comparators (&ge; &le; &gt; &lt; = !=), exact match and any/*. The runtime decision service, decision trees, salience/conflict resolution and batch evaluation (NCP-007 §7) are next-phase.</p>
+      <p className="text-[11px] text-gray-500">The decision table persists onto the rule object. Condition cells support comparators (&ge; &le; &gt; &lt; = !=), exact match and any/*. The runtime decision service, decision trees, salience/conflict resolution and batch evaluation (NCP-007 §7) are next-phase.</p>
     </div>
   );
 }

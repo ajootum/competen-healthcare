@@ -113,7 +113,7 @@ export default function CpuImporter({ practices, domains }: { practices: Opt[]; 
           <span className="text-2xl">📄</span>
           <div className="flex-1">
             <p className="text-sm font-semibold text-gray-800">{fileName ?? "Choose a .docx file"}</p>
-            <p className="text-[11px] text-gray-400">Recommended — Word list formatting is preserved, so more is extracted.</p>
+            <p className="text-[11px] text-gray-500">Recommended — Word list formatting is preserved, so more is extracted.</p>
           </div>
           <input type="file" accept=".docx" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
@@ -121,7 +121,7 @@ export default function CpuImporter({ practices, domains }: { practices: Opt[]; 
         </label>
 
         <details className="mt-3">
-          <summary className="text-[11px] text-gray-400 cursor-pointer hover:text-gray-600">…or paste the text instead</summary>
+          <summary className="text-[11px] text-gray-500 cursor-pointer hover:text-gray-600">…or paste the text instead</summary>
           <textarea value={text} onChange={e => { setText(e.target.value); setCpus(null); setFileName(null); }}
             rows={6} placeholder="Paste the document text here…"
             className={`${input} font-mono text-xs mt-2`} />
@@ -140,7 +140,7 @@ export default function CpuImporter({ practices, domains }: { practices: Opt[]; 
           <p className="text-[10px] font-bold text-teal-600 uppercase tracking-widest mb-2">
             Step 2 · Review — {cpus.length} CPU{cpus.length !== 1 ? "s" : ""} found
           </p>
-          {cpus.length === 0 && <p className="text-sm text-gray-400">No CPU could be read. Check the document starts with a line like “CPU-DIS-010: Title”.</p>}
+          {cpus.length === 0 && <p className="text-sm text-gray-500">No CPU could be read. Check the document starts with a line like “CPU-DIS-010: Title”.</p>}
           <div className="flex flex-col gap-2">
             {cpus.map(c => {
               const isSel = c.code === selected;
@@ -149,7 +149,7 @@ export default function CpuImporter({ practices, domains }: { practices: Opt[]; 
                   className={`text-left rounded-lg border p-3 transition-colors ${isSel ? "border-teal-400 bg-teal-50/50" : "border-gray-100 hover:bg-gray-50"}`}>
                   <div className="flex items-center gap-2">
                     <input type="radio" readOnly checked={isSel} />
-                    <span className="font-mono text-[10px] text-gray-400">{c.code ?? "no code"}</span>
+                    <span className="font-mono text-[10px] text-gray-500">{c.code ?? "no code"}</span>
                     <span className="text-sm font-medium text-gray-800 flex-1 truncate">{c.title ?? "Untitled"}</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5 mt-2 ml-6">
@@ -159,7 +159,7 @@ export default function CpuImporter({ practices, domains }: { practices: Opt[]; 
                       ["case studies", c.cases.length], ["red flags", c.redFlags.length],
                       ["MCQs", c.questions.length], ["checklist", c.checklistItems.length],
                     ].map(([label, n]) => (
-                      <span key={label as string} className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${(n as number) > 0 ? "bg-teal-100 text-teal-700" : "bg-gray-100 text-gray-400"}`}>
+                      <span key={label as string} className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${(n as number) > 0 ? "bg-teal-100 text-teal-700" : "bg-gray-100 text-gray-600"}`}>
                         {n as number} {label as string}
                       </span>
                     ))}
@@ -173,35 +173,35 @@ export default function CpuImporter({ practices, domains }: { practices: Opt[]; 
           {chosen && (
             <div className="mt-4 border-t border-gray-100 pt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Competencies to create</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5">Competencies to create</p>
                 {chosen.competencies.length ? (
                   <ul className="text-xs text-gray-700 space-y-0.5 max-h-40 overflow-y-auto">
                     {chosen.competencies.map((x, i) => <li key={i}>• {x}</li>)}
                   </ul>
-                ) : <p className="text-xs text-gray-400">None found.</p>}
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-3 mb-1.5">Critical-failure rules</p>
+                ) : <p className="text-xs text-gray-500">None found.</p>}
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-3 mb-1.5">Critical-failure rules</p>
                 {chosen.redFlags.length ? (
                   <ul className="text-xs text-[var(--cmp-text-critical)] space-y-0.5 max-h-28 overflow-y-auto">
                     {chosen.redFlags.map((x, i) => <li key={i}>⛔ {x}</li>)}
                   </ul>
-                ) : <p className="text-xs text-gray-400">None found.</p>}
+                ) : <p className="text-xs text-gray-500">None found.</p>}
               </div>
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Skills → reusable library</p>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5">Skills → reusable library</p>
                 {chosen.skills.length ? (
                   <ul className="text-xs text-gray-700 space-y-0.5 max-h-32 overflow-y-auto">
                     {chosen.skills.slice(0, 20).map((x, i) => <li key={i}>• {x}</li>)}
-                    {chosen.skills.length > 20 && <li className="text-gray-400">…and {chosen.skills.length - 20} more</li>}
+                    {chosen.skills.length > 20 && <li className="text-gray-500">…and {chosen.skills.length - 20} more</li>}
                   </ul>
-                ) : <p className="text-xs text-gray-400">None found.</p>}
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-3 mb-1.5">Knowledge objects</p>
+                ) : <p className="text-xs text-gray-500">None found.</p>}
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-3 mb-1.5">Knowledge objects</p>
                 {chosen.knowledgeObjects.length ? (
                   <ul className="text-xs text-gray-700 space-y-0.5 max-h-32 overflow-y-auto">
                     {chosen.knowledgeObjects.map((k, i) => (
-                      <li key={i}>🫀 {k.title} <span className="text-gray-400">({k.words.toLocaleString()} words)</span></li>
+                      <li key={i}>🫀 {k.title} <span className="text-gray-500">({k.words.toLocaleString()} words)</span></li>
                     ))}
                   </ul>
-                ) : <p className="text-xs text-gray-400">None found.</p>}
+                ) : <p className="text-xs text-gray-500">None found.</p>}
               </div>
               {chosen.warnings.length > 0 && (
                 <div className="md:col-span-2 bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg p-3">
@@ -238,7 +238,7 @@ export default function CpuImporter({ practices, domains }: { practices: Opt[]; 
             className="mt-4 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg disabled:opacity-50">
             {busy ? "Importing…" : `Import ${chosen.code ?? "CPU"} as a draft`}
           </button>
-          <p className="text-[11px] text-gray-400 mt-2">
+          <p className="text-[11px] text-gray-500 mt-2">
             Imports as a <b>draft</b> — nothing is published until you review it in the Studio and take it through approval.
           </p>
         </div>

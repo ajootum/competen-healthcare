@@ -63,9 +63,9 @@ export default function AssetFiles({ objectType, objectId }: { objectType: strin
       </div>
       {err && <p className="text-[11px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded px-2 py-1 mb-2">{err}</p>}
       {loading ? (
-        <p className="text-[11px] text-gray-400">Loading…</p>
+        <p className="text-[11px] text-gray-500">Loading…</p>
       ) : files.length === 0 ? (
-        <p className="text-[11px] text-gray-400">No files attached. Upload documents, images or video for this asset (≤ 50 MB).</p>
+        <p className="text-[11px] text-gray-500">No files attached. Upload documents, images or video for this asset (≤ 50 MB).</p>
       ) : (
         <div className="flex flex-col divide-y divide-gray-50">
           {files.map(f => (
@@ -73,7 +73,7 @@ export default function AssetFiles({ objectType, objectId }: { objectType: strin
               <span className="text-sm shrink-0">📄</span>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-medium text-gray-800 truncate">{f.file_name}</p>
-                <p className="text-[10px] text-gray-400">{fmtSize(f.size_bytes)}{f.uploaded_by_name ? ` · ${f.uploaded_by_name}` : ""}</p>
+                <p className="text-[10px] text-gray-500">{fmtSize(f.size_bytes)}{f.uploaded_by_name ? ` · ${f.uploaded_by_name}` : ""}</p>
               </div>
               {f.url && <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-teal-700 hover:underline shrink-0">Download</a>}
               <button onClick={() => del(f.id)} disabled={busy} className="text-[11px] font-semibold text-rose-400 hover:text-[var(--cmp-text-error)] disabled:opacity-40 shrink-0">Remove</button>

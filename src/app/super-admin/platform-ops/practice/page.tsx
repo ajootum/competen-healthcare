@@ -151,7 +151,7 @@ export default async function PracticeOperations() {
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wide text-gray-500">Failing</p>
-              <p className={`text-xl font-bold tabular-nums ${failed ? "text-[var(--cmp-text-critical)]" : "text-gray-300"}`}>{failed}</p>
+              <p className={`text-xl font-bold tabular-nums ${failed ? "text-[var(--cmp-text-critical)]" : "text-gray-500"}`}>{failed}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wide text-gray-500">Workspaces</p>

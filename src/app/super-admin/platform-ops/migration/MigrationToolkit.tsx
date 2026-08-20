@@ -72,7 +72,7 @@ export default function MigrationToolkit({ objects, jobs }: { objects: ObjRow[];
             <div className="space-y-2 max-h-80 overflow-y-auto border border-gray-100 rounded-lg p-2">
               {groups.map(g => (
                 <div key={g}>
-                  <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">{g}</p>
+                  <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wide mb-0.5">{g}</p>
                   {filtered.filter(o => o.object_type === g).map(o => <label key={o.object_key} className="flex items-center gap-1.5 text-xs py-0.5 cursor-pointer"><input type="checkbox" checked={sel.has(o.object_key)} onChange={() => toggle(o.object_key)} /><span className="text-gray-700 truncate">{o.display_name}</span></label>)}
                 </div>
               ))}
@@ -97,14 +97,14 @@ export default function MigrationToolkit({ objects, jobs }: { objects: ObjRow[];
           </div>
           <div className={`${card} p-4`}>
             <p className="text-[11px] font-semibold text-gray-500 mb-2">Dry-run report</p>
-            {!dry ? <p className="text-xs text-gray-400 py-8 text-center">Paste a bundle and run a dry run to preview the import.</p> : (
+            {!dry ? <p className="text-xs text-gray-500 py-8 text-center">Paste a bundle and run a dry run to preview the import.</p> : (
               <>
                 <div className={`text-xs font-medium mb-2 ${dry.ok ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{dry.ok ? "✓ Safe to import" : "✕ Resolve issues before importing"}</div>
-                <div className="flex gap-3 text-[11px] mb-3"><span className="text-[var(--cmp-text-success)]">{dry.counts.new} new</span><span className="text-[var(--cmp-text-warning)]">{dry.counts.update} update</span><span className="text-gray-400">{dry.counts.identical} identical</span></div>
+                <div className="flex gap-3 text-[11px] mb-3"><span className="text-[var(--cmp-text-success)]">{dry.counts.new} new</span><span className="text-[var(--cmp-text-warning)]">{dry.counts.update} update</span><span className="text-gray-500">{dry.counts.identical} identical</span></div>
                 {dry.missingDeps?.length > 0 && <div className="mb-2 text-[11px] text-[var(--cmp-text-error)]">Missing prerequisites: {dry.missingDeps.join(", ")}</div>}
                 <div className="space-y-0.5 max-h-52 overflow-y-auto">
                   {dry.report.map((r: any) => (
-                    <div key={r.key} className="flex items-center gap-2 text-[11px]"><span className={`w-14 shrink-0 ${r.op === "new" ? "text-[var(--cmp-text-success)]" : r.op === "update" ? "text-[var(--cmp-text-warning)]" : "text-gray-400"}`}>{r.op}</span><span className="text-gray-700 truncate flex-1">{r.name || r.key}</span>{r.issues.length > 0 && <span className="text-rose-500 text-[10px]" title={r.issues.join("; ")}>⚠ {r.issues.length}</span>}</div>
+                    <div key={r.key} className="flex items-center gap-2 text-[11px]"><span className={`w-14 shrink-0 ${r.op === "new" ? "text-[var(--cmp-text-success)]" : r.op === "update" ? "text-[var(--cmp-text-warning)]" : "text-gray-500"}`}>{r.op}</span><span className="text-gray-700 truncate flex-1">{r.name || r.key}</span>{r.issues.length > 0 && <span className="text-rose-500 text-[10px]" title={r.issues.join("; ")}>⚠ {r.issues.length}</span>}</div>
                   ))}
                 </div>
               </>
@@ -123,9 +123,9 @@ export default function MigrationToolkit({ objects, jobs }: { objects: ObjRow[];
               <div key={j.id} className="flex items-center gap-2 text-[11px]">
                 <span className={`text-[9px] px-1.5 py-0.5 rounded ${JT[j.job_type] ?? "bg-gray-100 text-gray-600"}`}>{j.job_type}</span>
                 <span className="text-gray-600 flex-1 truncate">{j.note}</span>
-                <span className="text-gray-400">{j.status}</span>
-                <span className="text-gray-300">{j.created_by_name ?? "—"}</span>
-                <span className="text-gray-300">{when(j.created_at)}</span>
+                <span className="text-gray-500">{j.status}</span>
+                <span className="text-gray-500">{j.created_by_name ?? "—"}</span>
+                <span className="text-gray-500">{when(j.created_at)}</span>
                 {j.job_type === "import" && j.status === "applied" && <button onClick={() => rollback(j.id)} disabled={busy} className="text-[10px] font-medium text-[var(--cmp-text-warning)] border border-[var(--cmp-color-warning)] rounded px-1.5 py-0.5 hover:bg-[var(--cmp-surface-warning)]">Roll back</button>}
               </div>
             ))}

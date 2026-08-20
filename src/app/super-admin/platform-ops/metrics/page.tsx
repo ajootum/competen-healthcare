@@ -32,7 +32,7 @@ export default async function MetricsBuilder() {
 
   const header = (
     <>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Metrics & Indicator Builder</span>
@@ -40,7 +40,7 @@ export default async function MetricsBuilder() {
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">📐</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Metrics &amp; Indicator Builder <span className="text-gray-300 font-medium text-lg">(NCP-005)</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Metrics &amp; Indicator Builder <span className="text-gray-500 font-medium text-lg">(NCP-005)</span></h1>
           <p className="text-sm text-gray-500">Define the formula, aggregation, target and RAG thresholds for each governed metric — validated live and persisted onto the object.</p>
         </div>
       </div>
@@ -60,12 +60,12 @@ export default async function MetricsBuilder() {
       <MetricEditor metrics={list} />
 
       <div className={`${card} p-4`}>
-        <p className="text-[11px] font-semibold text-gray-500 mb-1">Live data functions <span className="font-normal text-gray-400">· reference these in a formula for a computed value</span></p>
-        <p className="text-[10px] text-gray-400 mb-2">A formula using only these tokens (and arithmetic + round/abs/min/max/avg/sum/pct/ratio) computes a real, hospital-scoped value at runtime — e.g. <span className="font-mono text-gray-500">pct(open_escalations, patients)</span>.</p>
-        <div className="flex flex-wrap gap-1.5">{listDataFunctions().map(f => <span key={f.name} className="text-[10px] bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5"><span className="font-mono text-indigo-600">{f.name}</span> <span className="text-gray-400">· {f.label}</span></span>)}</div>
+        <p className="text-[11px] font-semibold text-gray-500 mb-1">Live data functions <span className="font-normal text-gray-500">· reference these in a formula for a computed value</span></p>
+        <p className="text-[10px] text-gray-500 mb-2">A formula using only these tokens (and arithmetic + round/abs/min/max/avg/sum/pct/ratio) computes a real, hospital-scoped value at runtime — e.g. <span className="font-mono text-gray-500">pct(open_escalations, patients)</span>.</p>
+        <div className="flex flex-wrap gap-1.5">{listDataFunctions().map(f => <span key={f.name} className="text-[10px] bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5"><span className="font-mono text-indigo-600">{f.name}</span> <span className="text-gray-500">· {f.label}</span></span>)}</div>
       </div>
 
-      <p className="text-[11px] text-gray-400">The formula + thresholds persist onto the metric object and its references wire into the dependency graph. The <b>live calculation runtime</b> now computes values from the data functions above (visible on metadata-driven surfaces via the Runtime Engine); historical snapshots, benchmarking and AI narrative (NCP-005 §6/§9) remain next-phase.</p>
+      <p className="text-[11px] text-gray-500">The formula + thresholds persist onto the metric object and its references wire into the dependency graph. The <b>live calculation runtime</b> now computes values from the data functions above (visible on metadata-driven surfaces via the Runtime Engine); historical snapshots, benchmarking and AI narrative (NCP-005 §6/§9) remain next-phase.</p>
     </div>
   );
 }

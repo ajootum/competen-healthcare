@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const pct = (n: number | null | undefined) => (n == null ? "—" : `${n}%`);
-const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-teal-600" : n >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const scoreTone = (n: number | null) => (n == null ? "text-gray-500" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-teal-600" : n >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 
 export default async function EnterpriseIntelligence() {
   const supabase = await createClient();
@@ -33,7 +33,7 @@ export default async function EnterpriseIntelligence() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/ai" className="hover:text-teal-700">AI &amp; Intelligence</Link><span>/</span><span className="text-gray-600">Enterprise Intelligence</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Enterprise Intelligence</h1>
@@ -44,13 +44,13 @@ export default async function EnterpriseIntelligence() {
       <div className={`${card} p-5`}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-gray-900 text-[15px]">Enterprise Scorecard</h2>
-          <span className="text-[10px] text-gray-400">{sc.computedCount}/8 dimensions measured</span>
+          <span className="text-[10px] text-gray-500">{sc.computedCount}/8 dimensions measured</span>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-5">
           <div className="text-center shrink-0">
             <p className={`text-5xl font-bold tabular-nums ${scoreTone(sc.overall)}`}>{pct(sc.overall)}</p>
             <p className="text-xs text-gray-500 mt-1">Overall Enterprise Score</p>
-            <p className="text-[10px] text-gray-400">mean of measured dimensions</p>
+            <p className="text-[10px] text-gray-500">mean of measured dimensions</p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1 w-full">
             {sc.dims.map((dim: any) => (
@@ -61,7 +61,7 @@ export default async function EnterpriseIntelligence() {
             ))}
           </div>
         </div>
-        <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">Dimensions are filled only from defensible direct metrics (competency scores, audit compliance, CAPA closure, incident resolution, subscription activation). Patient Safety % and any dimension without a clean signal show an honest “—” rather than a fabricated score.</p>
+        <p className="text-[10px] text-gray-500 mt-3 pt-2 border-t border-gray-50">Dimensions are filled only from defensible direct metrics (competency scores, audit compliance, CAPA closure, incident resolution, subscription activation). Patient Safety % and any dimension without a clean signal show an honest “—” rather than a fabricated score.</p>
       </div>
 
       {/* Live grounded executive Q&A */}
@@ -80,7 +80,7 @@ export default async function EnterpriseIntelligence() {
         {/* Executive briefing */}
         <div className={`${card} p-5 lg:col-span-2`}>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900 text-[15px]">Executive Briefing <span className="text-[10px] text-gray-400">auto-generated · live signals</span></h2>
+            <h2 className="font-semibold text-gray-900 text-[15px]">Executive Briefing <span className="text-[10px] text-gray-500">auto-generated · live signals</span></h2>
             <Link href="/super-admin/reports" className="text-xs text-teal-700 hover:underline">Report templates →</Link>
           </div>
           <ul className="space-y-2">
@@ -127,7 +127,7 @@ export default async function EnterpriseIntelligence() {
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">Accreditation readiness = share of audits with zero unmet items; compliance = CAPA closure rate. Live from the audit &amp; corrective-action records.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Accreditation readiness = share of audits with zero unmet items; compliance = CAPA closure rate. Live from the audit &amp; corrective-action records.</p>
         </div>
 
         {/* Enterprise structure */}
@@ -161,7 +161,7 @@ export default async function EnterpriseIntelligence() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Enterprise Intelligence turns live platform data into executive insight. The scorecard, quality intelligence and financial utilisation are computed from real records (competency_scores, audits, capa_actions, plat_subscriptions, op_escalations); the executive briefing is rule-derived from those same signals. Decisions follow the human-in-the-loop workflow — insight → classify → recommend → review → decide → assign → monitor. Benchmarking context and scenario modelling deepen as cross-facility comparators are wired.</p>
+      <p className="text-[11px] text-gray-500 pb-4">Enterprise Intelligence turns live platform data into executive insight. The scorecard, quality intelligence and financial utilisation are computed from real records (competency_scores, audits, capa_actions, plat_subscriptions, op_escalations); the executive briefing is rule-derived from those same signals. Decisions follow the human-in-the-loop workflow — insight → classify → recommend → review → decide → assign → monitor. Benchmarking context and scenario modelling deepen as cross-facility comparators are wired.</p>
     </div>
   );
 }

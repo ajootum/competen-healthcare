@@ -45,7 +45,7 @@ export default async function AiStudioAutomation() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/ai" className="hover:text-teal-700">AI &amp; Intelligence</Link><span>/</span><span className="text-gray-600">AI Studio &amp; Automation</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">AI Studio &amp; Automation</h1>
@@ -90,7 +90,7 @@ export default async function AiStudioAutomation() {
               <Link key={c.name} href={c.href} className="flex items-center gap-3 py-2.5 hover:bg-gray-50/60 -mx-2 px-2 rounded transition-colors">
                 <div className="min-w-0 flex-1"><p className="text-sm font-medium text-gray-800 leading-tight">{c.name}</p><p className="text-[10px] text-gray-500 leading-tight">{c.desc}</p></div>
                 <span className="text-sm font-bold text-gray-900 tabular-nums shrink-0">{dash(c.count)}</span>
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded shrink-0 ${c.count != null ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-400"}`}>{c.count != null ? "connected" : "n/a"}</span>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded shrink-0 ${c.count != null ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-600"}`}>{c.count != null ? "connected" : "n/a"}</span>
               </Link>
             ))}
           </div>
@@ -102,16 +102,16 @@ export default async function AiStudioAutomation() {
             <h2 className="font-semibold text-gray-900 text-[15px]">Automation Registry</h2>
             <Link href="/super-admin/platform-ops/monitoring" className="text-xs text-teal-700 hover:underline">Run &amp; monitor →</Link>
           </div>
-          {!d.automationsReady ? <p className="text-sm text-gray-400 py-4 text-center">Job runner not ready — run migration 054.</p> : (
+          {!d.automationsReady ? <p className="text-sm text-gray-500 py-4 text-center">Job runner not ready — run migration 054.</p> : (
             <div className="divide-y divide-gray-50">
               {d.automations.map((a: any) => (
                 <div key={a.key} className="flex items-center gap-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-800 leading-tight">{a.name}</p>
-                    <p className="text-[10px] text-gray-400 leading-tight">{a.category} · <span className="font-mono">{a.schedule}</span>{a.runnable ? "" : " · external"}</p>
+                    <p className="text-[10px] text-gray-500 leading-tight">{a.category} · <span className="font-mono">{a.schedule}</span>{a.runnable ? "" : " · external"}</p>
                   </div>
-                  {a.last ? <span className={`text-[10px] font-semibold px-2 py-0.5 rounded shrink-0 ${JOB_TONE[a.last.status] ?? "bg-gray-100 text-gray-500"}`}>{a.last.status}</span> : <span className="text-[10px] text-gray-400 shrink-0">no runs</span>}
-                  <span className="text-[10px] text-gray-400 w-14 text-right shrink-0">{relTime(a.last?.started_at)}</span>
+                  {a.last ? <span className={`text-[10px] font-semibold px-2 py-0.5 rounded shrink-0 ${JOB_TONE[a.last.status] ?? "bg-gray-100 text-gray-600"}`}>{a.last.status}</span> : <span className="text-[10px] text-gray-500 shrink-0">no runs</span>}
+                  <span className="text-[10px] text-gray-500 w-14 text-right shrink-0">{relTime(a.last?.started_at)}</span>
                 </div>
               ))}
             </div>
@@ -130,7 +130,7 @@ export default async function AiStudioAutomation() {
             {d.workflows.map((w: any) => (
               <div key={w.key} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5">
                 <span className="text-base shrink-0">{w.icon}</span>
-                <div className="min-w-0 flex-1"><p className="text-sm font-medium text-gray-800 leading-tight truncate">{w.name}</p><p className="text-[10px] text-gray-400">{w.steps} step{w.steps === 1 ? "" : "s"}</p></div>
+                <div className="min-w-0 flex-1"><p className="text-sm font-medium text-gray-800 leading-tight truncate">{w.name}</p><p className="text-[10px] text-gray-500">{w.steps} step{w.steps === 1 ? "" : "s"}</p></div>
                 {w.pending > 0 && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] shrink-0">{w.pending} pending</span>}
               </div>
             ))}
@@ -172,14 +172,14 @@ export default async function AiStudioAutomation() {
           {d.stages.map((s: string, i: number) => (
             <div key={s} className="flex items-center gap-1.5">
               <span className="text-[11px] font-medium text-gray-700 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1.5">{s}</span>
-              {i < d.stages.length - 1 && <span className="text-gray-300 text-xs">→</span>}
+              {i < d.stages.length - 1 && <span className="text-gray-500 text-xs">→</span>}
             </div>
           ))}
         </div>
-        <p className="text-[10px] text-gray-400 mt-3">Every AI asset moves through this governed lifecycle before production — with safety and clinical/operational review, governance approval and monitoring. Human-in-the-loop at each gate.</p>
+        <p className="text-[10px] text-gray-500 mt-3">Every AI asset moves through this governed lifecycle before production — with safety and clinical/operational review, governance approval and monitoring. Human-in-the-loop at each gate.</p>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">AI Studio inventories the real automation primitives — the copilot catalogue (agents), the job registry (automations), the workflow/approval catalogue and the connector engines — each with live counts. Builders open the closest real authoring surface today; a dedicated builder-persistence layer (draft agents, prompt versions, test-run history) is the next Studio phase, so those specific counts show honest states until then. No AI asset reaches production outside the governed publishing lifecycle.</p>
+      <p className="text-[11px] text-gray-500 pb-4">AI Studio inventories the real automation primitives — the copilot catalogue (agents), the job registry (automations), the workflow/approval catalogue and the connector engines — each with live counts. Builders open the closest real authoring surface today; a dedicated builder-persistence layer (draft agents, prompt versions, test-run history) is the next Studio phase, so those specific counts show honest states until then. No AI asset reaches production outside the governed publishing lifecycle.</p>
     </div>
   );
 }

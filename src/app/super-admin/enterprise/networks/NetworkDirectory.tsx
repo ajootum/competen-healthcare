@@ -36,19 +36,19 @@ export default function NetworkDirectory({ rows }: { rows: any[] }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100">
-        <h2 className="font-semibold text-gray-900 mr-auto">Enterprise networks <span className="text-gray-400 font-normal text-sm">({filtered.length})</span></h2>
+        <h2 className="font-semibold text-gray-900 mr-auto">Enterprise networks <span className="text-gray-500 font-normal text-sm">({filtered.length})</span></h2>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search networks…" className={`${input} w-56`} />
         <button onClick={() => { setOpen(true); setErr(""); }} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3.5 py-2">+ Add Network</button>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+          <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-100">
             <th className="px-4 py-2.5 font-semibold">Network</th><th className="px-4 py-2.5 font-semibold">Type</th><th className="px-4 py-2.5 font-semibold">HQ</th>
             <th className="px-4 py-2.5 font-semibold text-right">Members</th><th className="px-4 py-2.5 font-semibold text-right">Facilities</th><th className="px-4 py-2.5 font-semibold text-right">Countries</th><th className="px-4 py-2.5 font-semibold text-right">Users</th>
           </tr></thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No networks yet.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">No networks yet.</td></tr>}
             {filtered.map(r => (
               <tr key={r.id} onClick={() => router.push(`/super-admin/enterprise/networks/${r.id}`)} className="border-b border-gray-50 hover:bg-gray-50/60 cursor-pointer">
                 <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center text-sm shrink-0">🌐</span><span className="font-medium text-gray-900 truncate">{r.name}</span></div></td>

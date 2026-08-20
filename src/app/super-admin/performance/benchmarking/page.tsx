@@ -32,7 +32,7 @@ export default async function BenchmarkingPage() {
         <div>
           <p className="text-[11px] font-semibold text-sky-500 uppercase tracking-widest mb-0.5">CAPM-006 · Competency Performance</p>
           <h1 className="text-xl font-bold text-gray-900">Benchmarking & Maturity</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Which departments lead on competency capability, and how mature the organisation is — every department benchmarked against the enterprise mean.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Which departments lead on competency capability, and how mature the organisation is — every department benchmarked against the enterprise mean.</p>
         </div>
         <Link href="/super-admin/performance" className="text-xs font-semibold text-gray-500 hover:text-[var(--cmp-text-information)] border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Performance</Link>
       </div>
@@ -40,7 +40,7 @@ export default async function BenchmarkingPage() {
       {!q.provisioned ? (
         <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4"><p className="text-[13px] text-amber-900">Competency data isn&apos;t available — benchmarking reads <code className="text-[11px]">competency_decisions</code> via <code className="text-[11px]">profiles.department_id</code>.</p></div>
       ) : q.empty ? (
-        <div className="bg-white border border-gray-100 rounded-xl p-6"><p className="text-sm text-gray-400">No department competency data to benchmark yet.</p></div>
+        <div className="bg-white border border-gray-100 rounded-xl p-6"><p className="text-sm text-gray-500">No department competency data to benchmark yet.</p></div>
       ) : q.insufficient ? (
         <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5"><p className="text-[13px] text-amber-900 font-semibold mb-1">Not enough departments to benchmark</p><p className="text-[12px] text-amber-800">Benchmarking needs at least 2 departments with enough competency decisions. Currently {q.n} qualify.</p></div>
       ) : (
@@ -54,7 +54,7 @@ export default async function BenchmarkingPage() {
               { label: "Above benchmark", value: q.kpis.aboveBenchmark, tone: "text-gray-900", sub: `of ${q.kpis.departments}` },
               { label: "Spread", value: q.kpis.spread, tone: q.kpis.spread > 30 ? "text-[var(--cmp-text-warning)]" : "text-gray-900", sub: "top→bottom" },
             ].map(k => (
-              <div key={k.label} className={`${card} p-3.5`}><p className={`text-xl font-bold tabular-nums ${k.tone}`}>{k.value}</p><p className="text-[10px] text-gray-400 font-medium mt-0.5 leading-tight">{k.label}</p><p className="text-[9px] text-gray-300 truncate">{k.sub}</p></div>
+              <div key={k.label} className={`${card} p-3.5`}><p className={`text-xl font-bold tabular-nums ${k.tone}`}>{k.value}</p><p className="text-[10px] text-gray-500 font-medium mt-0.5 leading-tight">{k.label}</p><p className="text-[9px] text-gray-500 truncate">{k.sub}</p></div>
             ))}
           </div>
 
@@ -77,11 +77,11 @@ export default async function BenchmarkingPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] mb-2">Best practice — leaders</p>
-                  <div className="space-y-1.5">{q.leaders.map((r: any) => (<div key={r.id} className="flex items-center gap-2 text-[12px]"><span className="text-gray-400 tabular-nums w-4">#{r.rank}</span><span className="text-gray-700 flex-1 truncate">{r.department}</span><span className="font-semibold text-[var(--cmp-text-success)] tabular-nums">{r.capability}</span></div>))}</div>
+                  <div className="space-y-1.5">{q.leaders.map((r: any) => (<div key={r.id} className="flex items-center gap-2 text-[12px]"><span className="text-gray-500 tabular-nums w-4">#{r.rank}</span><span className="text-gray-700 flex-1 truncate">{r.department}</span><span className="font-semibold text-[var(--cmp-text-success)] tabular-nums">{r.capability}</span></div>))}</div>
                 </div>
                 <div>
                   <p className="text-[11px] font-semibold text-[var(--cmp-text-error)] mb-2">Improvement priority — laggards</p>
-                  <div className="space-y-1.5">{q.laggards.map((r: any) => (<div key={r.id} className="flex items-center gap-2 text-[12px]"><span className="text-gray-400 tabular-nums w-4">#{r.rank}</span><span className="text-gray-700 flex-1 truncate">{r.department}</span><span className="text-[10px] text-rose-500 shrink-0">−{r.gapToLeader}</span></div>))}</div>
+                  <div className="space-y-1.5">{q.laggards.map((r: any) => (<div key={r.id} className="flex items-center gap-2 text-[12px]"><span className="text-gray-500 tabular-nums w-4">#{r.rank}</span><span className="text-gray-700 flex-1 truncate">{r.department}</span><span className="text-[10px] text-rose-500 shrink-0">−{r.gapToLeader}</span></div>))}</div>
                 </div>
               </div>
             </div>
@@ -92,14 +92,14 @@ export default async function BenchmarkingPage() {
             <div className="px-4 py-2.5 border-b border-gray-50"><p className="text-[11px] font-semibold text-gray-500">Department benchmark — ranked by capability</p></div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr className="text-left text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-50"><th className="py-2 px-4 font-medium">#</th><th className="py-2 px-3 font-medium">Department</th><th className="py-2 px-2 font-medium text-right">Capability</th><th className="py-2 px-2 font-medium text-right">Δ bench</th><th className="py-2 px-2 font-medium text-right">Cover</th><th className="py-2 px-2 font-medium text-right">Maturity</th><th className="py-2 px-4 font-medium">Level</th></tr></thead>
+                <thead><tr className="text-left text-[10px] uppercase tracking-wide text-gray-500 border-b border-gray-50"><th className="py-2 px-4 font-medium">#</th><th className="py-2 px-3 font-medium">Department</th><th className="py-2 px-2 font-medium text-right">Capability</th><th className="py-2 px-2 font-medium text-right">Δ bench</th><th className="py-2 px-2 font-medium text-right">Cover</th><th className="py-2 px-2 font-medium text-right">Maturity</th><th className="py-2 px-4 font-medium">Level</th></tr></thead>
                 <tbody className="divide-y divide-gray-50">
                   {q.rows.slice(0, 60).map((r: any) => (
                     <tr key={r.id}>
-                      <td className="py-2 px-4 text-gray-400 tabular-nums">{r.rank}</td>
-                      <td className="py-2 px-3 text-gray-800 truncate max-w-[160px]">{r.department}<span className="text-[9px] text-gray-400 ml-1">n{r.staff}</span></td>
+                      <td className="py-2 px-4 text-gray-500 tabular-nums">{r.rank}</td>
+                      <td className="py-2 px-3 text-gray-800 truncate max-w-[160px]">{r.department}<span className="text-[9px] text-gray-500 ml-1">n{r.staff}</span></td>
                       <td className={`py-2 px-2 tabular-nums text-right font-bold ${capTone(r.capability)}`}>{r.capability}</td>
-                      <td className={`py-2 px-2 tabular-nums text-right ${r.delta > 0 ? "text-[var(--cmp-text-success)]" : r.delta < 0 ? "text-[var(--cmp-text-error)]" : "text-gray-400"}`}>{r.delta > 0 ? "+" : ""}{r.delta}</td>
+                      <td className={`py-2 px-2 tabular-nums text-right ${r.delta > 0 ? "text-[var(--cmp-text-success)]" : r.delta < 0 ? "text-[var(--cmp-text-error)]" : "text-gray-500"}`}>{r.delta > 0 ? "+" : ""}{r.delta}</td>
                       <td className="py-2 px-2 tabular-nums text-right text-gray-500">{r.coverage}%</td>
                       <td className="py-2 px-2 tabular-nums text-right text-gray-500">{r.avgMaturity}</td>
                       <td className="py-2 px-4"><span className={`text-[9px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 ${LVL[r.levelTone]}`}>{r.level}</span></td>
@@ -110,7 +110,7 @@ export default async function BenchmarkingPage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">Capability = 50% competency coverage + 30% Benner maturity + 20% currency. Maturity level from the average Benner band of achieved competencies. Benchmarking is <span className="font-semibold">internal</span> (department vs the enterprise mean) — cross-tenant peer comparison would need shared external benchmark data, which isn&apos;t present. Decision-support for targeted improvement, not a ranking mandate.</p>
+          <p className="text-[11px] text-gray-500 mt-4 leading-relaxed">Capability = 50% competency coverage + 30% Benner maturity + 20% currency. Maturity level from the average Benner band of achieved competencies. Benchmarking is <span className="font-semibold">internal</span> (department vs the enterprise mean) — cross-tenant peer comparison would need shared external benchmark data, which isn&apos;t present. Decision-support for targeted improvement, not a ranking mandate.</p>
         </>
       )}
     </div>

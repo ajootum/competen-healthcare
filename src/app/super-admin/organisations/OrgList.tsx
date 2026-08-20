@@ -22,7 +22,7 @@ const FACILITY_ICON: Record<string, string> = {
 };
 
 const TIER_BADGE: Record<string, string> = {
-  free: "bg-gray-100 text-gray-500", professional: "bg-[var(--cmp-surface-information)] text-blue-700", enterprise: "bg-purple-100 text-purple-700",
+  free: "bg-gray-100 text-gray-600", professional: "bg-[var(--cmp-surface-information)] text-blue-700", enterprise: "bg-purple-100 text-purple-700",
 };
 
 type EditTarget = { kind: "org"; org: Org } | { kind: "facility"; facility: Facility };
@@ -215,17 +215,17 @@ export default function OrgList({
 
       {/* Country footprint */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 mb-6">
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Country footprint</p>
+        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-3">Country footprint</p>
         <div className="flex flex-wrap gap-2">
           {allCountries.map(c => {
             const count = facilities.filter(f => f.country === c).length;
             return (
               <span key={c} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-lg text-xs font-medium text-gray-700">
-                <span>🌍</span><span>{c}</span><span className="text-gray-400">({count})</span>
+                <span>🌍</span><span>{c}</span><span className="text-gray-500">({count})</span>
               </span>
             );
           })}
-          {!allCountries.length && <p className="text-xs text-gray-400 italic">No facilities added yet</p>}
+          {!allCountries.length && <p className="text-xs text-gray-500 italic">No facilities added yet</p>}
         </div>
       </div>
 
@@ -246,16 +246,16 @@ export default function OrgList({
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="font-bold text-gray-900">{org.name}</p>
-                      {!org.is_active && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Inactive</span>}
+                      {!org.is_active && <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">Inactive</span>}
                     </div>
-                    {org.group_name && <p className="text-xs text-gray-400">{org.group_name}</p>}
-                    {org.description && <p className="text-xs text-gray-400 mt-0.5 max-w-md">{org.description}</p>}
+                    {org.group_name && <p className="text-xs text-gray-500">{org.group_name}</p>}
+                    {org.description && <p className="text-xs text-gray-500 mt-0.5 max-w-md">{org.description}</p>}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
                     <p className="text-xs font-semibold text-gray-700">{totalFacil} facilit{totalFacil !== 1 ? "ies" : "y"}</p>
-                    <p className="text-[10px] text-gray-400">{countries.length} countr{countries.length !== 1 ? "ies" : "y"} · {totalNurses} nurses</p>
+                    <p className="text-[10px] text-gray-500">{countries.length} countr{countries.length !== 1 ? "ies" : "y"} · {totalNurses} nurses</p>
                   </div>
                   <span className={`text-[10px] font-bold px-2 py-1 rounded-lg capitalize ${TYPE_COLORS[org.type] ?? "bg-gray-100 text-gray-600"}`}>
                     {org.type.replace("_"," ")}
@@ -279,9 +279,9 @@ export default function OrgList({
                           <div className="flex items-center gap-2">
                             <span>🌍</span>
                             <p className="text-sm font-semibold text-gray-700">{country}</p>
-                            <span className="text-[10px] text-gray-400">{facs.length} facilit{facs.length !== 1 ? "ies" : "y"}</span>
+                            <span className="text-[10px] text-gray-500">{facs.length} facilit{facs.length !== 1 ? "ies" : "y"}</span>
                           </div>
-                          <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                          <div className="flex items-center gap-3 text-[10px] text-gray-500">
                             {cNurses > 0 && <span>{cNurses} nurses</span>}
                             {cAssessors > 0 && <span>{cAssessors} assessors</span>}
                           </div>
@@ -293,17 +293,17 @@ export default function OrgList({
                               <span className="text-base">{FACILITY_ICON[f.type] ?? "🏥"}</span>
                               <div className="flex-1">
                                 <p className="text-sm text-gray-800 font-medium">{f.name}</p>
-                                <p className="text-[10px] text-gray-400">{f.city ? `${f.city} · ` : ""}{f.type?.replace("_"," ")}</p>
+                                <p className="text-[10px] text-gray-500">{f.city ? `${f.city} · ` : ""}{f.type?.replace("_"," ")}</p>
                               </div>
-                              <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                              <div className="flex items-center gap-3 text-[10px] text-gray-500">
                                 {(fs.nurse ?? 0) > 0 && <span>{fs.nurse} nurses</span>}
                                 {(fs.assessor ?? 0) > 0 && <span>{fs.assessor} assessors</span>}
                               </div>
-                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded capitalize ${TIER_BADGE[f.tier] ?? "bg-gray-100 text-gray-500"}`}>
+                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded capitalize ${TIER_BADGE[f.tier] ?? "bg-gray-100 text-gray-600"}`}>
                                 {f.tier}
                               </span>
                               <button onClick={() => openEditFac(f)}
-                                className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                                className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300 transition-colors">
                                 Edit
                               </button>
                             </div>
@@ -314,7 +314,7 @@ export default function OrgList({
                   })}
                 </div>
               ) : (
-                <div className="px-5 py-4 pl-14 text-xs text-gray-400 italic">
+                <div className="px-5 py-4 pl-14 text-xs text-gray-500 italic">
                   No facilities linked yet — use &quot;+ Add&quot; → Facility to add one
                 </div>
               )}
@@ -327,7 +327,7 @@ export default function OrgList({
           <div className="bg-white rounded-xl border border-dashed border-gray-200 overflow-hidden">
             <div className="px-5 py-3 border-b border-gray-100 bg-[var(--cmp-surface-warning)]/30">
               <p className="text-xs font-semibold text-[var(--cmp-text-warning)]">⚠ Unlinked Facilities</p>
-              <p className="text-[10px] text-gray-400 mt-0.5">These facilities are not linked to any organisation group</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">These facilities are not linked to any organisation group</p>
             </div>
             {Object.entries(facilityByOrg["__none__"]).map(([country, facs]) => (
               <div key={country}>
@@ -339,11 +339,11 @@ export default function OrgList({
                     <span>{FACILITY_ICON[f.type] ?? "🏥"}</span>
                     <div className="flex-1">
                       <p className="text-sm text-gray-700">{f.name}</p>
-                      <p className="text-[10px] text-gray-400">{f.city}</p>
+                      <p className="text-[10px] text-gray-500">{f.city}</p>
                     </div>
                     <span className="text-[10px] text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] px-2 py-0.5 rounded">No org linked</span>
                     <button onClick={() => openEditFac(f)}
-                      className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50 hover:border-gray-300 transition-colors">
+                      className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:border-gray-300 transition-colors">
                       Edit
                     </button>
                   </div>
@@ -357,7 +357,7 @@ export default function OrgList({
           <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
             <p className="text-3xl mb-3">🏛️</p>
             <p className="text-gray-500 text-sm font-medium">No organisations yet</p>
-            <p className="text-gray-400 text-xs mt-1">Click &quot;+ Add&quot; to create your first organisation group.</p>
+            <p className="text-gray-500 text-xs mt-1">Click &quot;+ Add&quot; to create your first organisation group.</p>
           </div>
         )}
       </div>

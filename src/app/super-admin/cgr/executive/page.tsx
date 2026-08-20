@@ -38,7 +38,7 @@ export default async function ExecutiveAssurancePage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-029 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Executive Assurance &amp; Strategic Decision Intelligence</h1>
-          <p className="text-gray-400 text-sm mt-0.5">The board-level competency-governance assurance statement — can leadership be assured the workforce competency system is sound, and where should investment go?</p>
+          <p className="text-gray-500 text-sm mt-0.5">The board-level competency-governance assurance statement — can leadership be assured the workforce competency system is sound, and where should investment go?</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/hospital-executive" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Executive workspace →</Link>
@@ -47,7 +47,7 @@ export default async function ExecutiveAssurancePage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No governance data to report on yet — the board assurance statement computes once competencies are under governance.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No governance data to report on yet — the board assurance statement computes once competencies are under governance.</p></div>
       ) : (
         <div className="space-y-4">
           {/* Board assurance statement */}
@@ -87,7 +87,7 @@ export default async function ExecutiveAssurancePage() {
             {/* Strategic risk register */}
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                <p className="text-sm font-bold text-gray-800">Strategic risk register <span className="text-[10px] font-normal text-gray-400">(§5.3)</span></p>
+                <p className="text-sm font-bold text-gray-800">Strategic risk register <span className="text-[10px] font-normal text-gray-500">(§5.3)</span></p>
                 <Link href="/super-admin/cgr/risk" className="text-[10px] text-[var(--cmp-text-success)] hover:underline">full register →</Link>
               </div>
               {d.strategic.length === 0 ? (
@@ -98,7 +98,7 @@ export default async function ExecutiveAssurancePage() {
                     <div key={i} className="flex items-start justify-between gap-3 px-4 py-2.5">
                       <div className="min-w-0">
                         <p className="text-[12px] font-medium text-gray-800 truncate">{s.name}</p>
-                        <p className="text-[10px] text-gray-400">{s.domain ?? "—"} · {s.why}</p>
+                        <p className="text-[10px] text-gray-500">{s.domain ?? "—"} · {s.why}</p>
                       </div>
                       <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 capitalize shrink-0 ${RISK_META[s.risk] ?? RISK_META.high}`}>{s.risk}</span>
                     </div>
@@ -110,7 +110,7 @@ export default async function ExecutiveAssurancePage() {
             {/* Investment priorities */}
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                <p className="text-sm font-bold text-gray-800">Investment priorities <span className="text-[10px] font-normal text-gray-400">(§5.4)</span></p>
+                <p className="text-sm font-bold text-gray-800">Investment priorities <span className="text-[10px] font-normal text-gray-500">(§5.4)</span></p>
                 <Link href="/super-admin/cgr/analytics" className="text-[10px] text-[var(--cmp-text-success)] hover:underline">improvement engine →</Link>
               </div>
               {d.invest.length === 0 ? (
@@ -123,7 +123,7 @@ export default async function ExecutiveAssurancePage() {
                         <p className="text-[12px] font-semibold text-gray-800">{v.ask}</p>
                         <span className="text-[9px] font-bold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 shrink-0">{v.lever}</span>
                       </div>
-                      <p className="text-[10px] text-gray-400 mt-0.5">{v.detail}</p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">{v.detail}</p>
                     </div>
                   ))}
                 </div>
@@ -151,7 +151,7 @@ export default async function ExecutiveAssurancePage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the assurance rating is derived from the live governance registry and the evidence lines behind it are the actual governance criteria (ownership, regulatory alignment, review currency, evidence, council oversight); the strategic risk register lists real high/critical-risk competencies that are ungoverned, unowned or overdue. This is the <span className="font-medium">governance</span> assurance position for the board; broad executive intelligence — financial, operational and workforce — is owned by the <Link href="/hospital-executive" className="text-[var(--cmp-text-success)] hover:underline">Hospital Executive workspace</Link>. Per the CGR mandate, AI may summarise insights and recommend priorities but never makes executive decisions, approves investment or replaces governance accountability.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every figure is real — the assurance rating is derived from the live governance registry and the evidence lines behind it are the actual governance criteria (ownership, regulatory alignment, review currency, evidence, council oversight); the strategic risk register lists real high/critical-risk competencies that are ungoverned, unowned or overdue. This is the <span className="font-medium">governance</span> assurance position for the board; broad executive intelligence — financial, operational and workforce — is owned by the <Link href="/hospital-executive" className="text-[var(--cmp-text-success)] hover:underline">Hospital Executive workspace</Link>. Per the CGR mandate, AI may summarise insights and recommend priorities but never makes executive decisions, approves investment or replaces governance accountability.</p>
         </div>
       )}
     </div>

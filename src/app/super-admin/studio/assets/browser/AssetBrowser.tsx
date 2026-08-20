@@ -16,7 +16,7 @@ const STATUS_STYLE: Record<string, string> = {
   approved: "text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border-[var(--cmp-color-information)]",
   published: "text-teal-700 bg-teal-50 border-teal-100",
   active: "text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]",
-  archived: "text-gray-400 bg-gray-50 border-gray-100",
+  archived: "text-gray-500 bg-gray-50 border-gray-100",
 };
 
 function StatusBadge({ s }: { s: string | null }) {
@@ -91,7 +91,7 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
         <div className="flex items-center justify-between mb-2">
           <div>
             <h2 className="font-semibold text-gray-900 text-sm">Governed index</h2>
-            <p className="text-[11px] text-gray-400">{status.total} assets across {status.types} types · last refreshed {fmtDate(status.lastIndexedAt)}</p>
+            <p className="text-[11px] text-gray-500">{status.total} assets across {status.types} types · last refreshed {fmtDate(status.lastIndexedAt)}</p>
           </div>
           <button onClick={refresh} disabled={busy} className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-4 py-2">{busy ? "Refreshing…" : "Refresh index"}</button>
         </div>
@@ -103,15 +103,15 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
         </div>
         {Object.keys(overlays).length > 0 && (
           <div className="mt-3 pt-3 border-t border-gray-50">
-            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Overlays linked to the header</p>
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Overlays linked to the header</p>
             <div className="flex flex-wrap gap-1.5">
               {Object.entries(overlays).map(([label, o]) => {
                 const pct = o.total ? Math.round((o.linked / o.total) * 100) : 0;
-                const tone = o.total === 0 ? "text-gray-300 border-gray-100" : o.linked === o.total ? "text-teal-700 bg-teal-50 border-teal-100" : "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]";
+                const tone = o.total === 0 ? "text-gray-500 border-gray-100" : o.linked === o.total ? "text-teal-700 bg-teal-50 border-teal-100" : "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]";
                 return <span key={label} className={`text-[10px] font-semibold border rounded px-2 py-1 ${tone}`}>{label} {o.linked}/{o.total}{o.total ? ` · ${pct}%` : ""}</span>;
               })}
             </div>
-            <p className="text-[10px] text-gray-400 mt-1.5">A real cap_asset_id FK — rows whose type has no asset counterpart (policy, guideline, learning-pathway) stay unlinked by design.</p>
+            <p className="text-[10px] text-gray-500 mt-1.5">A real cap_asset_id FK — rows whose type has no asset counterpart (policy, guideline, learning-pathway) stay unlinked by design.</p>
           </div>
         )}
       </div>
@@ -136,12 +136,12 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
         </div>
         {orgOptions.length > 0 && (
           <div className="flex items-center gap-2 pt-2 border-t border-gray-50">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide shrink-0">Organisation</span>
+            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide shrink-0">Organisation</span>
             <select value={org} onChange={e => { setOrg(e.target.value); load({ org: e.target.value, page: 1 }); }} className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-teal-400">
               <option value="">All organisations</option>
               {orgOptions.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
-            <span className="text-[10px] text-gray-400 hidden sm:inline">rolls assets up to the org that owns their hospital · visibility, not an access boundary</span>
+            <span className="text-[10px] text-gray-500 hidden sm:inline">rolls assets up to the org that owns their hospital · visibility, not an access boundary</span>
           </div>
         )}
       </div>
@@ -149,17 +149,17 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
       {/* Results */}
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50">
-          <p className="text-[11px] text-gray-400">{total} result{total === 1 ? "" : "s"}{loading ? " · loading…" : ""}</p>
+          <p className="text-[11px] text-gray-500">{total} result{total === 1 ? "" : "s"}{loading ? " · loading…" : ""}</p>
           {pages > 1 && (
             <div className="flex items-center gap-2">
               <button onClick={() => page > 1 && load({ page: page - 1 })} disabled={page <= 1} className="text-[11px] font-semibold text-gray-500 disabled:opacity-30 hover:text-teal-700">← Prev</button>
-              <span className="text-[11px] text-gray-400">{page}/{pages}</span>
+              <span className="text-[11px] text-gray-500">{page}/{pages}</span>
               <button onClick={() => page < pages && load({ page: page + 1 })} disabled={page >= pages} className="text-[11px] font-semibold text-gray-500 disabled:opacity-30 hover:text-teal-700">Next →</button>
             </div>
           )}
         </div>
         {rows.length === 0 ? (
-          <p className="text-xs text-gray-400 px-4 py-8 text-center">{empty ? "No indexed assets yet." : "No assets match these filters."}</p>
+          <p className="text-xs text-gray-500 px-4 py-8 text-center">{empty ? "No indexed assets yet." : "No assets match these filters."}</p>
         ) : (
           <div className="divide-y divide-gray-50">
             {rows.map(r => (
@@ -169,8 +169,8 @@ export default function AssetBrowser({ initialRows, initialTotal, initialFacets,
                     <span className="text-[9px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 shrink-0 w-28 text-center truncate">{TYPE_LABEL[r.object_type] ?? r.object_type}</span>
                     <span className="text-sm font-medium text-gray-800 group-hover:text-teal-700 truncate">{r.name || "Untitled"}</span>
                   </Link>
-                  <span className="text-[10px] text-gray-400 shrink-0 hidden sm:inline truncate max-w-[8rem]" title={r.hospital_id ? "Hospital-scoped" : "Global / shared"}>{!r.hospital_id ? "Global" : (r.organisation_id && orgName.get(r.organisation_id)) || "Hospital"}</span>
-                  <span className="text-[10px] text-gray-400 shrink-0 w-10 text-right tabular-nums hidden sm:inline">v{r.version ?? "1.0"}</span>
+                  <span className="text-[10px] text-gray-500 shrink-0 hidden sm:inline truncate max-w-[8rem]" title={r.hospital_id ? "Hospital-scoped" : "Global / shared"}>{!r.hospital_id ? "Global" : (r.organisation_id && orgName.get(r.organisation_id)) || "Hospital"}</span>
+                  <span className="text-[10px] text-gray-500 shrink-0 w-10 text-right tabular-nums hidden sm:inline">v{r.version ?? "1.0"}</span>
                   <StatusBadge s={r.status} />
                   <button onClick={() => setEditFor(editFor === r.id ? null : r.id)} className={`text-xs shrink-0 rounded px-1.5 py-0.5 border transition-colors ${editFor === r.id ? "bg-teal-50 border-teal-200" : "border-gray-200 hover:border-teal-200"}`} title="Govern status/version" aria-label="Edit status">✎</button>
                   <button onClick={() => setFilesFor(filesFor === r.id ? null : r.id)} className={`text-xs shrink-0 rounded px-1.5 py-0.5 border transition-colors ${filesFor === r.id ? "bg-teal-50 border-teal-200" : "border-gray-200 hover:border-teal-200"}`} title="Files" aria-label="Files">📎</button>

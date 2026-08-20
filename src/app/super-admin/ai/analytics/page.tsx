@@ -34,8 +34,8 @@ export default async function IntelligenceAnalytics() {
   const kpiCards = [
     { label: "Daily Active Users", value: dash(k.dau), icon: "👤", iconBg: "bg-[var(--cmp-surface-information)]" },
     { label: "AI Requests (24h)", value: dash(k.requests24h), icon: "📊", iconBg: "bg-violet-50" },
-    { label: "Acceptance", value: k.acceptance == null ? "—" : `${k.acceptance}%`, icon: "✅", iconBg: "bg-gray-50", tone: "text-gray-400" },
-    { label: "Accuracy", value: k.accuracy == null ? "—" : `${k.accuracy}%`, icon: "🎯", iconBg: "bg-gray-50", tone: "text-gray-400" },
+    { label: "Acceptance", value: k.acceptance == null ? "—" : `${k.acceptance}%`, icon: "✅", iconBg: "bg-gray-50", tone: "text-gray-500" },
+    { label: "Accuracy", value: k.accuracy == null ? "—" : `${k.accuracy}%`, icon: "🎯", iconBg: "bg-gray-50", tone: "text-gray-500" },
     { label: "Avg Latency", value: ms(k.avgLatencyMs), icon: "⚡", iconBg: "bg-teal-50" },
     { label: "Knowledge Coverage", value: k.knowledgeCoverage == null ? "—" : `${k.knowledgeCoverage}%`, icon: "📚", iconBg: "bg-[var(--cmp-surface-warning)]" },
     { label: "Est. Cost (24h)", value: money(k.cost24h), icon: "💵", iconBg: "bg-[var(--cmp-surface-success)]" },
@@ -45,7 +45,7 @@ export default async function IntelligenceAnalytics() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/ai" className="hover:text-teal-700">AI &amp; Intelligence</Link><span>/</span><span className="text-gray-600">Intelligence Analytics</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Intelligence Analytics</h1>
@@ -87,8 +87,8 @@ export default async function IntelligenceAnalytics() {
         {/* Usage trend */}
         <div className={`${card} p-5 lg:col-span-2`}>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900 text-[15px]">AI Usage Trend <span className="text-[10px] text-gray-400">last 7 days</span></h2>
-            <span className="text-[10px] text-gray-400">{d.wau} active users · 7d</span>
+            <h2 className="font-semibold text-gray-900 text-[15px]">AI Usage Trend <span className="text-[10px] text-gray-500">last 7 days</span></h2>
+            <span className="text-[10px] text-gray-500">{d.wau} active users · 7d</span>
           </div>
           <div className="flex items-end gap-2 h-32">
             {d.trend.map((t: any) => (
@@ -96,11 +96,11 @@ export default async function IntelligenceAnalytics() {
                 <div className="w-full bg-teal-100 rounded-t relative" style={{ height: `${(t.n / d.trendMax) * 100}%`, minHeight: t.n > 0 ? "4px" : "0" }}>
                   <div className="absolute inset-x-0 -top-4 text-[9px] text-gray-500 text-center tabular-nums">{t.n || ""}</div>
                 </div>
-                <span className="text-[9px] text-gray-400">{t.day}</span>
+                <span className="text-[9px] text-gray-500">{t.day}</span>
               </div>
             ))}
           </div>
-          {d.trendMax === 1 && <p className="text-[10px] text-gray-400 mt-2 text-center">No AI requests recorded in the last 7 days.</p>}
+          {d.trendMax === 1 && <p className="text-[10px] text-gray-500 mt-2 text-center">No AI requests recorded in the last 7 days.</p>}
         </div>
 
         {/* Cost & consumption */}
@@ -123,8 +123,8 @@ export default async function IntelligenceAnalytics() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Usage by model */}
         <div className={`${card} p-5`}>
-          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Usage by Model <span className="text-[10px] text-gray-400">24h</span></h2>
-          {d.byModel.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">No AI requests in 24h.</p> : (
+          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Usage by Model <span className="text-[10px] text-gray-500">24h</span></h2>
+          {d.byModel.length === 0 ? <p className="text-sm text-gray-500 py-4 text-center">No AI requests in 24h.</p> : (
             <div className="space-y-1.5">
               {d.byModel.map((m: any) => (
                 <div key={m.label} className="flex items-center justify-between text-xs"><span className="font-mono text-gray-700 truncate">{m.label}</span><span className="tabular-nums text-gray-500 shrink-0 ml-2">{m.n} · {money(m.cost)}</span></div>
@@ -135,8 +135,8 @@ export default async function IntelligenceAnalytics() {
 
         {/* Usage by operation */}
         <div className={`${card} p-5`}>
-          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Usage by Operation <span className="text-[10px] text-gray-400">24h</span></h2>
-          {d.byOperation.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">No attributed operations.</p> : (
+          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Usage by Operation <span className="text-[10px] text-gray-500">24h</span></h2>
+          {d.byOperation.length === 0 ? <p className="text-sm text-gray-500 py-4 text-center">No attributed operations.</p> : (
             <div className="space-y-1.5">
               {d.byOperation.map((o: any) => (
                 <div key={o.label} className="flex items-center justify-between text-xs"><span className="text-gray-700 truncate">{o.label}</span><span className="tabular-nums text-gray-500 shrink-0 ml-2">{o.n} · {money(o.cost)}</span></div>
@@ -157,7 +157,7 @@ export default async function IntelligenceAnalytics() {
               ["Source grounding", "—"],
               ["Confidence calibration", "—"],
             ].map(([l, v]: any) => (
-              <div key={l} className="flex items-center justify-between"><span className="text-gray-500">{l}</span><span className={`tabular-nums font-medium ${v === "—" ? "text-gray-400" : "text-gray-800"}`}>{v}</span></div>
+              <div key={l} className="flex items-center justify-between"><span className="text-gray-500">{l}</span><span className={`tabular-nums font-medium ${v === "—" ? "text-gray-500" : "text-gray-800"}`}>{v}</span></div>
             ))}
           </div>
         </div>
@@ -170,12 +170,12 @@ export default async function IntelligenceAnalytics() {
           <div className="grid grid-cols-3 gap-2">
             {d.recommendation.map((r: any) => (
               <div key={r.label} className="rounded-lg border border-gray-100 p-3 text-center">
-                <p className={`text-lg font-bold tabular-nums ${r.value == null ? "text-gray-300" : "text-gray-900"}`}>{dash(r.value)}</p>
+                <p className={`text-lg font-bold tabular-nums ${r.value == null ? "text-gray-500" : "text-gray-900"}`}>{dash(r.value)}</p>
                 <p className="text-[9px] text-gray-500 mt-0.5 leading-tight">{r.label}</p>
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">Generation is observable from the runtime gateway; the acceptance funnel (viewed → accepted → implemented) is stored as recommendation feedback is wired.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Generation is observable from the runtime gateway; the acceptance funnel (viewed → accepted → implemented) is stored as recommendation feedback is wired.</p>
         </div>
 
         {/* Responsible AI monitoring */}
@@ -185,15 +185,15 @@ export default async function IntelligenceAnalytics() {
             {d.responsible.map((r: any) => (
               <div key={r.label} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">
                 <span className="text-xs text-gray-600">{r.label}</span>
-                <span className={`text-sm font-bold tabular-nums ${r.value == null ? "text-gray-300" : r.ok === false ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{r.value == null ? "—" : r.value}</span>
+                <span className={`text-sm font-bold tabular-nums ${r.value == null ? "text-gray-500" : r.ok === false ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{r.value == null ? "—" : r.value}</span>
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">Errors and refusals are captured live at the generate() choke point. Bias, privacy, override and drift monitoring are honest “—” until those detectors are wired.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Errors and refusals are captured live at the generate() choke point. Bias, privacy, override and drift monitoring are honest “—” until those detectors are wired.</p>
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Intelligence Analytics measures usage, performance, safety and value. Usage, latency, cost, tokens and the model/operation/tier breakdowns are live from the AI runtime gateway (plat_ai_requests); knowledge coverage is live from the CKP knowledge base. Recommendation acceptance, model accuracy, source-grounding and outcome tracking show honest “—” until evaluation and feedback capture are wired — completing the responsible-AI measurement loop.</p>
+      <p className="text-[11px] text-gray-500 pb-4">Intelligence Analytics measures usage, performance, safety and value. Usage, latency, cost, tokens and the model/operation/tier breakdowns are live from the AI runtime gateway (plat_ai_requests); knowledge coverage is live from the CKP knowledge base. Recommendation acceptance, model accuracy, source-grounding and outcome tracking show honest “—” until evaluation and feedback capture are wired — completing the responsible-AI measurement loop.</p>
     </div>
   );
 }

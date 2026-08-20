@@ -18,7 +18,7 @@ const DIFFICULTY_UI: Record<string, { label: string; cls: string }> = {
 const STATUS_CLS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
   active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
-  retired: "bg-gray-100 text-gray-400",
+  retired: "bg-gray-100 text-gray-600",
 };
 
 export default function CaseLibrary({ cases }: { cases: ClinicalCase[] }) {
@@ -47,7 +47,7 @@ export default function CaseLibrary({ cases }: { cases: ClinicalCase[] }) {
       <div className="bg-white rounded-xl border border-gray-100 p-10 text-center">
         <p className="text-3xl mb-2">🧑‍⚕️</p>
         <p className="text-sm font-semibold text-gray-700">No case studies yet</p>
-        <p className="text-xs text-gray-400 mt-1">
+        <p className="text-xs text-gray-500 mt-1">
           Import a CPU document — its worked case studies are extracted automatically.
         </p>
       </div>
@@ -73,35 +73,35 @@ export default function CaseLibrary({ cases }: { cases: ClinicalCase[] }) {
                 <span className="text-lg">🧑‍⚕️</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">{c.title}
-                    {c.code && <span className="ml-2 text-[10px] font-mono text-gray-300">{c.code}</span>}
+                    {c.code && <span className="ml-2 text-[10px] font-mono text-gray-500">{c.code}</span>}
                   </p>
-                  <p className="text-[10px] text-gray-400 truncate">
+                  <p className="text-[10px] text-gray-500 truncate">
                     {c.cpuName ?? "unlinked"}{c.questions.length ? ` · ${c.questions.length} questions` : ""}
                     {c.learningPoints.length ? ` · ${c.learningPoints.length} learning points` : ""}
                   </p>
                 </div>
                 <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${d.cls}`}>{d.label}</span>
                 <span className={`text-[9px] font-bold px-2 py-0.5 rounded capitalize ${STATUS_CLS[c.status] ?? STATUS_CLS.draft}`}>{c.status}</span>
-                <span className="text-gray-300 text-xs">{isOpen ? "▲" : "▼"}</span>
+                <span className="text-gray-500 text-xs">{isOpen ? "▲" : "▼"}</span>
               </button>
 
               {isOpen && (
                 <div className="px-5 pb-5 bg-gray-50/40 border-t border-gray-50 pt-4">
                   {c.scenario && (
                     <section className="mb-4">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Clinical scenario</p>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Clinical scenario</p>
                       <p className="text-xs text-gray-700 whitespace-pre-line leading-relaxed">{c.scenario}</p>
                     </section>
                   )}
                   {c.findings && (
                     <section className="mb-4">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Assessment findings</p>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Assessment findings</p>
                       <p className="text-xs text-gray-700 whitespace-pre-line leading-relaxed">{c.findings}</p>
                     </section>
                   )}
                   {c.questions.length > 0 && (
                     <section className="mb-4">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Questions</p>
+                      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Questions</p>
                       <ol className="text-xs text-gray-700 list-decimal ml-4 space-y-0.5">
                         {c.questions.map((x, i) => <li key={i}>{x}</li>)}
                       </ol>
@@ -148,7 +148,7 @@ export default function CaseLibrary({ cases }: { cases: ClinicalCase[] }) {
                       {Object.entries(DIFFICULTY_UI).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                     </select>
                     <button disabled={busy} onClick={() => patch(c.id, { status: "retired" })}
-                      className="text-xs text-gray-400 hover:text-red-500 px-3 py-1.5 rounded-lg ml-auto">Retire</button>
+                      className="text-xs text-gray-500 hover:text-red-500 px-3 py-1.5 rounded-lg ml-auto">Retire</button>
                   </div>
                 </div>
               )}

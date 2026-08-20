@@ -29,7 +29,7 @@ function Panel({ title, href, linkLabel, children, className = "", info }: { tit
   return (
     <div className={`${card} p-5 ${className}`}>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-gray-900 text-[15px]">{title}{info && <span className="ml-1.5 text-gray-300" title={info}>ⓘ</span>}</h2>
+        <h2 className="font-semibold text-gray-900 text-[15px]">{title}{info && <span className="ml-1.5 text-gray-500" title={info}>ⓘ</span>}</h2>
         {href && <Link href={href} className="text-xs text-teal-700 hover:underline shrink-0">{linkLabel ?? "View all"} →</Link>}
       </div>
       {children}
@@ -101,7 +101,7 @@ export default async function EnterpriseAdministration() {
               <span className={`w-7 h-7 rounded-lg ${k.iconBg} flex items-center justify-center text-sm shrink-0`}>{k.icon}</span>
             </div>
             <p className={`text-2xl font-bold mt-1.5 tabular-nums ${k.tone ?? "text-gray-900"}`}>{k.n == null ? "—" : fmt(k.n)}</p>
-            {k.sub && <p className="text-[10px] text-gray-400 mt-0.5">{k.sub}</p>}
+            {k.sub && <p className="text-[10px] text-gray-500 mt-0.5">{k.sub}</p>}
           </div>
         ))}
       </div>
@@ -119,7 +119,7 @@ export default async function EnterpriseAdministration() {
             {pipeline.map(p => (
               <div key={p.stage} className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-gray-50">
                 <span className="flex items-center gap-2.5 text-sm text-gray-600"><span className="text-base">{p.icon}</span>{p.stage}</span>
-                <span className="text-sm font-bold tabular-nums text-gray-900">{p.n} <span className="text-[10px] font-normal text-gray-400">org{p.n === 1 ? "" : "s"}</span></span>
+                <span className="text-sm font-bold tabular-nums text-gray-900">{p.n} <span className="text-[10px] font-normal text-gray-500">org{p.n === 1 ? "" : "s"}</span></span>
               </div>
             ))}
           </div>
@@ -131,8 +131,8 @@ export default async function EnterpriseAdministration() {
               <Link key={s.key} href={s.href} className="flex items-center justify-between gap-2 px-2 py-2 rounded-lg hover:bg-gray-50 group">
                 <span className="text-sm text-gray-600 group-hover:text-gray-900">{s.label}</span>
                 {s.n == null
-                  ? <span className="text-[10px] text-gray-300 shrink-0">n/a</span>
-                  : <span className={`text-sm font-bold tabular-nums shrink-0 ${s.n ? TONE[s.tone] ?? "text-gray-900" : "text-gray-300"}`}>{s.n}</span>}
+                  ? <span className="text-[10px] text-gray-500 shrink-0">n/a</span>
+                  : <span className={`text-sm font-bold tabular-nums shrink-0 ${s.n ? TONE[s.tone] ?? "text-gray-900" : "text-gray-500"}`}>{s.n}</span>}
               </Link>
             ))}
           </div>
@@ -143,14 +143,14 @@ export default async function EnterpriseAdministration() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Panel title="Recent Activity" href="/super-admin/audit" linkLabel="View all">
           {!activityReady || activity.length === 0 ? (
-            <p className="text-sm text-gray-400 py-6 text-center">{activityReady ? "No recorded activity yet." : "Activity feed activates with the audit log."}</p>
+            <p className="text-sm text-gray-500 py-6 text-center">{activityReady ? "No recorded activity yet." : "Activity feed activates with the audit log."}</p>
           ) : (
             <div className="space-y-2.5 max-h-80 overflow-y-auto">
               {activity.slice(0, 8).map((a, i) => (
                 <div key={i} className="flex items-start gap-2.5">
                   <span className="text-sm mt-0.5">{a.icon}</span>
-                  <div className="flex-1 min-w-0"><p className="text-sm text-gray-800 truncate">{a.title}</p>{a.detail && <p className="text-[10px] text-gray-400 truncate capitalize">{a.detail}</p>}</div>
-                  <span className="text-[10px] text-gray-400 shrink-0 tabular-nums">{relTime(a.at)}</span>
+                  <div className="flex-1 min-w-0"><p className="text-sm text-gray-800 truncate">{a.title}</p>{a.detail && <p className="text-[10px] text-gray-500 truncate capitalize">{a.detail}</p>}</div>
+                  <span className="text-[10px] text-gray-500 shrink-0 tabular-nums">{relTime(a.at)}</span>
                 </div>
               ))}
             </div>
@@ -163,25 +163,25 @@ export default async function EnterpriseAdministration() {
               <Link key={a.label} href={a.href} className="flex flex-col gap-1 rounded-lg border border-gray-100 p-3 hover:border-teal-300 hover:bg-teal-50/40 transition-colors">
                 <span className="text-lg">{a.icon}</span>
                 <span className="text-xs font-semibold text-gray-700 leading-tight">{a.label}</span>
-                <span className="text-[10px] text-gray-400 leading-tight">{a.desc}</span>
+                <span className="text-[10px] text-gray-500 leading-tight">{a.desc}</span>
               </Link>
             ))}
           </div>
         </Panel>
 
         <Panel title="Top Organisations by Activity" href="/super-admin/enterprise/organisations" linkLabel="View all">
-          {topOrgs.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No organisations yet.</p> : (
+          {topOrgs.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No organisations yet.</p> : (
             <div className="space-y-2.5">
               {topOrgs.map(o => (
                 <div key={o.id} className="flex items-center gap-2.5">
                   <span className="text-sm">🏛️</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-800 truncate">{o.name}</p>
-                    <p className="text-[10px] text-gray-400 truncate">{o.country} · {fmt(o.users)} users · {o.facilities} facilit{o.facilities === 1 ? "y" : "ies"}</p>
+                    <p className="text-[10px] text-gray-500 truncate">{o.country} · {fmt(o.users)} users · {o.facilities} facilit{o.facilities === 1 ? "y" : "ies"}</p>
                   </div>
                   <div className="w-16 shrink-0">
                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-teal-500 rounded-full" style={{ width: `${Math.max(o.score, 3)}%` }} /></div>
-                    <p className="text-[9px] text-gray-400 text-right mt-0.5 tabular-nums">{o.score}%</p>
+                    <p className="text-[9px] text-gray-500 text-right mt-0.5 tabular-nums">{o.score}%</p>
                   </div>
                 </div>
               ))}
@@ -198,7 +198,7 @@ export default async function EnterpriseAdministration() {
               <span className="w-9 h-9 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center text-base shrink-0">{m.icon}</span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-gray-400">{m.n}</span>
+                  <span className="text-[10px] font-bold text-gray-500">{m.n}</span>
                   <span className="text-sm font-semibold text-gray-900">{m.label}</span>
                   {!m.live && <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] font-medium">Next phase</span>}
                 </div>
@@ -229,7 +229,7 @@ export default async function EnterpriseAdministration() {
                 <div className="text-center w-24">
                   <div className="w-10 h-10 mx-auto rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center text-base">{st.icon}</div>
                   <p className="text-[10px] font-semibold text-gray-700 mt-1">{st.n} {st.l}</p>
-                  <p className="text-[9px] text-gray-400">{st.s}</p>
+                  <p className="text-[9px] text-gray-500">{st.s}</p>
                 </div>
                 {i < arr.length - 1 && <span className="text-gray-200">→</span>}
               </div>

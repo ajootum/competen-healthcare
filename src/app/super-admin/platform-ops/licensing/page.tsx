@@ -23,7 +23,7 @@ export default async function LicensingCentre() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/platform-ops" className="hover:text-teal-700">Platform Operations</Link><span>/</span><span className="text-gray-600">Licensing &amp; Subscription</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Licensing &amp; Subscription Centre</h1>
@@ -35,14 +35,14 @@ export default async function LicensingCentre() {
           { label: "Plans", n: fmt(summary.plans), tone: "text-gray-900" },
           { label: "Active subscriptions", n: fmt(summary.subscriptions), tone: "text-[var(--cmp-text-success)]" },
           { label: "Total seats", n: fmt(summary.seats), tone: "text-[var(--cmp-text-information)]" },
-          { label: "Trials", n: fmt(summary.trials), tone: summary.trials ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
-          { label: "Renewing ≤30d", n: fmt(summary.renewingSoon), tone: summary.renewingSoon ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
+          { label: "Trials", n: fmt(summary.trials), tone: summary.trials ? "text-[var(--cmp-text-warning)]" : "text-gray-500" },
+          { label: "Renewing ≤30d", n: fmt(summary.renewingSoon), tone: summary.renewingSoon ? "text-[var(--cmp-text-warning)]" : "text-gray-500" },
           { label: `MRR (${summary.currency})`, n: fmt(summary.mrr), tone: "text-violet-600", sub: summary.mrr === 0 ? "list price 0" : undefined },
         ].map(k => (
           <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-4">
             <p className={`text-2xl font-bold tabular-nums ${k.tone}`}>{k.n}</p>
             <p className="text-[11px] text-gray-500 mt-0.5">{k.label}</p>
-            {(k as any).sub && <p className="text-[9px] text-gray-400">{(k as any).sub}</p>}
+            {(k as any).sub && <p className="text-[9px] text-gray-500">{(k as any).sub}</p>}
           </div>
         ))}
       </div>

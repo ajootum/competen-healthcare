@@ -52,7 +52,7 @@ export default async function AssessmentMethodsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Assessment Methods</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Configure which of the 7 methods apply to each framework or competency</p>
+          <p className="text-gray-500 text-sm mt-0.5">Configure which of the 7 methods apply to each framework or competency</p>
         </div>
         <MethodsManager frameworks={frameworks ?? []} />
       </div>
@@ -74,14 +74,14 @@ export default async function AssessmentMethodsPage() {
       {/* Framework-level configs */}
       {Object.keys(byFramework).length > 0 && (
         <div className="mb-6">
-          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Framework-level configurations</h2>
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Framework-level configurations</h2>
           <div className="flex flex-col gap-2">
             {Object.entries(byFramework).map(([fw, configs]) => (
               <div key={fw} className="bg-white rounded-xl border border-gray-100 px-5 py-3">
                 <p className="text-sm font-semibold text-gray-800 mb-2">{fw}</p>
                 <div className="flex flex-wrap gap-2">
                   {(configs ?? []).map(c => {
-                    const m = METHOD_LABELS[c.method] ?? { label: c.method, icon: "•", color: "bg-gray-100 text-gray-500" };
+                    const m = METHOD_LABELS[c.method] ?? { label: c.method, icon: "•", color: "bg-gray-100 text-gray-600" };
                     return (
                       <div key={c.id} className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-lg ${m.color}`}>
                         <span>{m.icon}</span>
@@ -101,7 +101,7 @@ export default async function AssessmentMethodsPage() {
       {!(methods ?? []).length && (
         <div className="bg-white rounded-xl border border-gray-100 p-10 text-center">
           <p className="text-2xl mb-2">🩺</p>
-          <p className="text-gray-400 text-sm">No method configurations yet. Use &quot;+ Configure Method&quot; to assign assessment methods to frameworks.</p>
+          <p className="text-gray-500 text-sm">No method configurations yet. Use &quot;+ Configure Method&quot; to assign assessment methods to frameworks.</p>
         </div>
       )}
     </div>

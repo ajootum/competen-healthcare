@@ -79,8 +79,8 @@ export default function ReleaseManager({ releases, objects }: { releases: Releas
       <div className={`${card} p-4`}>
         <p className="text-[11px] font-semibold text-gray-500 mb-2">Releases ({releases.length})</p>
         <div className="space-y-1 max-h-[300px] overflow-y-auto mb-3">
-          {releases.map(r => <button key={r.release_key} onClick={() => pick(r)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === r.release_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}><p className="text-xs font-medium text-gray-800 truncate flex items-center gap-1.5">{r.name}<span className={`text-[8px] px-1 py-px rounded ${ST[r.status] ?? ST.draft}`}>{r.status}</span></p><p className="text-[10px] text-gray-400 truncate">{r.channel} · {(r.objects?.length ?? 0)} object(s)</p></button>)}
-          {releases.length === 0 && <p className="text-[11px] text-gray-400 py-2">No releases yet.</p>}
+          {releases.map(r => <button key={r.release_key} onClick={() => pick(r)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === r.release_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}><p className="text-xs font-medium text-gray-800 truncate flex items-center gap-1.5">{r.name}<span className={`text-[8px] px-1 py-px rounded ${ST[r.status] ?? ST.draft}`}>{r.status}</span></p><p className="text-[10px] text-gray-500 truncate">{r.channel} · {(r.objects?.length ?? 0)} object(s)</p></button>)}
+          {releases.length === 0 && <p className="text-[11px] text-gray-500 py-2">No releases yet.</p>}
         </div>
         <div className="border-t border-gray-100 pt-3 space-y-1.5">
           <p className="text-[11px] font-semibold text-gray-500">New release</p>
@@ -91,13 +91,13 @@ export default function ReleaseManager({ releases, objects }: { releases: Releas
       </div>
 
       <div className={`${card} p-5 lg:col-span-3`}>
-        {!selR ? <p className="text-sm text-gray-400 py-16 text-center">Select or create a release.</p> : (
+        {!selR ? <p className="text-sm text-gray-500 py-16 text-center">Select or create a release.</p> : (
           <>
-            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">{selR.name}<span className={`text-[10px] px-1.5 py-0.5 rounded ${ST[status] ?? ST.draft}`}>{status}</span></h3><span className="text-[10px] text-gray-400 font-mono">{selR.release_key}</span></div>
+            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">{selR.name}<span className={`text-[10px] px-1.5 py-0.5 rounded ${ST[status] ?? ST.draft}`}>{status}</span></h3><span className="text-[10px] text-gray-500 font-mono">{selR.release_key}</span></div>
 
             {/* Pipeline */}
             <div className="flex items-center gap-1 mb-4">
-              {STAGES.map((s, i) => <span key={s} className="flex items-center gap-1"><span className={`text-[10px] px-2 py-0.5 rounded-full ${i <= cur ? (status === "failed" && i === 0 ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-[var(--cmp-surface-success)] text-emerald-700") : "bg-gray-100 text-gray-400"}`}>{s}</span>{i < STAGES.length - 1 && <span className="text-gray-300 text-[10px]">→</span>}</span>)}
+              {STAGES.map((s, i) => <span key={s} className="flex items-center gap-1"><span className={`text-[10px] px-2 py-0.5 rounded-full ${i <= cur ? (status === "failed" && i === 0 ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : "bg-[var(--cmp-surface-success)] text-emerald-700") : "bg-gray-100 text-gray-600"}`}>{s}</span>{i < STAGES.length - 1 && <span className="text-gray-500 text-[10px]">→</span>}</span>)}
             </div>
 
             {/* Settings */}
@@ -111,7 +111,7 @@ export default function ReleaseManager({ releases, objects }: { releases: Releas
               <div>
                 <div className="flex items-center justify-between mb-1.5"><p className="text-[11px] font-semibold text-gray-500">Objects ({sel.size})</p><input className={`${input} w-28`} value={q} onChange={e => setQ(e.target.value)} placeholder="search…" /></div>
                 <div className="space-y-2 max-h-56 overflow-y-auto border border-gray-100 rounded-lg p-2">
-                  {groups.map(g => <div key={g}><p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">{g}</p>{filtered.filter(o => o.object_type === g).map(o => <label key={o.object_key} className="flex items-center gap-1.5 text-xs py-0.5 cursor-pointer"><input type="checkbox" checked={sel.has(o.object_key)} onChange={() => toggle(o.object_key)} /><span className="text-gray-700 truncate">{o.display_name}</span></label>)}</div>)}
+                  {groups.map(g => <div key={g}><p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wide mb-0.5">{g}</p>{filtered.filter(o => o.object_type === g).map(o => <label key={o.object_key} className="flex items-center gap-1.5 text-xs py-0.5 cursor-pointer"><input type="checkbox" checked={sel.has(o.object_key)} onChange={() => toggle(o.object_key)} /><span className="text-gray-700 truncate">{o.display_name}</span></label>)}</div>)}
                 </div>
               </div>
               <div>
@@ -124,7 +124,7 @@ export default function ReleaseManager({ releases, objects }: { releases: Releas
                 )}
                 {events.length > 0 && <>
                   <p className="text-[11px] font-semibold text-gray-500 mb-1.5">Timeline</p>
-                  <div className="space-y-1 max-h-40 overflow-y-auto">{events.map((e, i) => <div key={i} className="flex items-center gap-2 text-[10px]"><span className="text-gray-700 font-medium w-16">{e.event}</span><span className="text-gray-400 flex-1 truncate">{e.actor_name ?? "—"}</span><span className="text-gray-300">{(() => { try { return new Date(e.created_at).toLocaleDateString(); } catch { return ""; } })()}</span></div>)}</div>
+                  <div className="space-y-1 max-h-40 overflow-y-auto">{events.map((e, i) => <div key={i} className="flex items-center gap-2 text-[10px]"><span className="text-gray-700 font-medium w-16">{e.event}</span><span className="text-gray-500 flex-1 truncate">{e.actor_name ?? "—"}</span><span className="text-gray-500">{(() => { try { return new Date(e.created_at).toLocaleDateString(); } catch { return ""; } })()}</span></div>)}</div>
                 </>}
               </div>
             </div>

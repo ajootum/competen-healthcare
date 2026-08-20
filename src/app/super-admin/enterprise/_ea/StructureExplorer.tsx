@@ -16,12 +16,12 @@ function Node({ label, kind, depth, badge, badgeTone, hasChildren, open, onToggl
   return (
     <div className={`flex items-center gap-1.5 py-1.5 pr-2 rounded-md ${onToggle ? "cursor-pointer hover:bg-gray-50" : ""}`}
       style={{ paddingLeft: `${depth * 16 + 4}px` }} onClick={onToggle}>
-      <span className={`text-gray-300 text-[10px] w-3 shrink-0 ${hasChildren ? "" : "opacity-0"}`}>{open ? "▾" : "▸"}</span>
+      <span className={`text-gray-500 text-[10px] w-3 shrink-0 ${hasChildren ? "" : "opacity-0"}`}>{open ? "▾" : "▸"}</span>
       <span className="text-sm leading-none">{ICON[kind]}</span>
       {href
         ? <Link href={href} onClick={e => e.stopPropagation()} className={`truncate ${kind === "network" || kind === "organisation" ? "font-semibold text-gray-900" : "text-gray-700"} hover:text-teal-700 hover:underline`}>{label}</Link>
         : <span className={`truncate ${kind === "network" || kind === "organisation" ? "font-semibold text-gray-900" : "text-gray-700"}`}>{label}</span>}
-      {badge && <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${badgeTone ?? "bg-gray-100 text-gray-500"}`}>{badge}</span>}
+      {badge && <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${badgeTone ?? "bg-gray-100 text-gray-600"}`}>{badge}</span>}
     </div>
   );
 }
@@ -55,7 +55,7 @@ export default function StructureExplorer({ networks, standalone }: { networks: 
   const empty = networks.length === 0 && standalone.length === 0;
   return (
     <div className="text-sm">
-      {empty && <p className="text-gray-400 py-6 text-center">No organisational structure registered yet.</p>}
+      {empty && <p className="text-gray-500 py-6 text-center">No organisational structure registered yet.</p>}
       {networks.map(n => (
         <div key={n.id}>
           <Node label={n.name} kind="network" depth={0} hasChildren={n.organisations.length > 0} open={open[n.id]} onToggle={() => t(n.id)}

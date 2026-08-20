@@ -22,7 +22,7 @@ export default async function StructureModule({ searchParams }: { searchParams: 
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/enterprise" className="hover:text-teal-700">Enterprise Administration</Link><span>/</span><span className="text-gray-600">Departments, Units &amp; Services</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Structure Builder</h1>

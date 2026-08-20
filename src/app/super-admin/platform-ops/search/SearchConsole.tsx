@@ -41,11 +41,11 @@ export default function SearchConsole({ sources }: { sources: { type: string; ic
           placeholder="Search tenants, users, organisations, frameworks, competencies, workspaces, activity…"
           className="w-full text-sm rounded-xl border border-gray-200 pl-10 pr-4 py-3 focus:border-teal-400 focus:outline-none"
         />
-        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
-        {busy && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] text-gray-400">searching…</span>}
+        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500">🔍</span>
+        {busy && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] text-gray-500">searching…</span>}
       </div>
 
-      {total !== null && !busy && <p className="text-xs text-gray-400">{total} result{total === 1 ? "" : "s"} for “{q}”.</p>}
+      {total !== null && !busy && <p className="text-xs text-gray-500">{total} result{total === 1 ? "" : "s"} for “{q}”.</p>}
 
       {total === null ? (
         <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -58,11 +58,11 @@ export default function SearchConsole({ sources }: { sources: { type: string; ic
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {groups.map(g => (
             <div key={g.type} className="bg-white rounded-xl border border-gray-200 p-4">
-              <h3 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-1.5"><span>{g.icon}</span>{g.type}<span className="text-[10px] text-gray-400 font-normal">({g.hits.length})</span></h3>
+              <h3 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-1.5"><span>{g.icon}</span>{g.type}<span className="text-[10px] text-gray-500 font-normal">({g.hits.length})</span></h3>
               <div className="space-y-1">{g.hits.map((h, i) => (
                 <Link key={i} href={h.href} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-teal-50/50 text-xs">
                   <span className="text-gray-800 font-medium flex-1 truncate">{h.label}</span>
-                  {h.sub && <span className="text-gray-400 truncate max-w-[45%]">{h.sub}</span>}
+                  {h.sub && <span className="text-gray-500 truncate max-w-[45%]">{h.sub}</span>}
                 </Link>
               ))}</div>
             </div>

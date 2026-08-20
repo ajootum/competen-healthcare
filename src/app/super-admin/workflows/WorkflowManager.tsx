@@ -53,7 +53,7 @@ export default function WorkflowManager() {
           <input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
             placeholder="Description" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Trigger</label>
+            <label className="text-xs text-gray-500 mb-1 block">Trigger</label>
             <select value={form.trigger_type} onChange={e => setForm(p => ({ ...p, trigger_type: e.target.value }))}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
               <option value="assessment_complete">Assessment Complete</option>
@@ -71,14 +71,14 @@ export default function WorkflowManager() {
           {steps.map((step, i) => (
             <div key={i} className="bg-gray-50 rounded-lg p-3 flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-gray-400">Step {step.order}</span>
+                <span className="text-xs font-bold text-gray-500">Step {step.order}</span>
                 {steps.length > 1 && (
                   <button onClick={() => removeStep(i)} className="text-[10px] text-red-400 hover:text-[var(--cmp-text-critical)]">Remove</button>
                 )}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-gray-400 mb-0.5 block">Role</label>
+                  <label className="text-[10px] text-gray-500 mb-0.5 block">Role</label>
                   <select value={step.role} onChange={e => updateStep(i, "role", e.target.value)}
                     className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none">
                     <option value="assessor">Assessor</option>
@@ -88,7 +88,7 @@ export default function WorkflowManager() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[10px] text-gray-400 mb-0.5 block">Action</label>
+                  <label className="text-[10px] text-gray-500 mb-0.5 block">Action</label>
                   <select value={step.action} onChange={e => updateStep(i, "action", e.target.value)}
                     className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none">
                     <option value="complete_assessment">Complete Assessment</option>
@@ -102,7 +102,7 @@ export default function WorkflowManager() {
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex-1">
-                  <label className="text-[10px] text-gray-400 mb-0.5 block">Deadline (days)</label>
+                  <label className="text-[10px] text-gray-500 mb-0.5 block">Deadline (days)</label>
                   <input type="number" min={1} value={step.deadline_days}
                     onChange={e => updateStep(i, "deadline_days", parseInt(e.target.value))}
                     className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none" />

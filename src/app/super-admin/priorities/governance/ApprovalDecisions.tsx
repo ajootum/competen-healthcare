@@ -29,7 +29,7 @@ export default function ApprovalDecisions({ id }: { id: string }) {
         <input value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason (optional)" autoFocus
           className="flex-1 min-w-[120px] border border-gray-200 rounded-md px-2 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-teal-500/30" />
         <button onClick={() => decide(mode, reason)} disabled={!!busy} className={`${btn} ${mode === "reject" ? "text-[var(--cmp-text-error)] border-[var(--cmp-color-error)] hover:bg-[var(--cmp-surface-error)]" : "text-[var(--cmp-text-warning)] border-[var(--cmp-color-warning)] hover:bg-[var(--cmp-surface-warning)]"}`}>{busy ? "…" : "Confirm"}</button>
-        <button onClick={() => { setMode(null); setReason(""); setErr(null); }} className="text-[11px] text-gray-400 hover:text-gray-600">Cancel</button>
+        <button onClick={() => { setMode(null); setReason(""); setErr(null); }} className="text-[11px] text-gray-500 hover:text-gray-600">Cancel</button>
         {err && <span className="text-[10px] text-[var(--cmp-text-error)]">{err}</span>}
       </div>
     );

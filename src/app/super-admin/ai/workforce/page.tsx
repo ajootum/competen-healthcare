@@ -43,7 +43,7 @@ export default async function WorkforceIntelligence() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/ai" className="hover:text-teal-700">AI &amp; Intelligence</Link><span>/</span><span className="text-gray-600">Workforce Intelligence</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Workforce Intelligence</h1>
@@ -79,7 +79,7 @@ export default async function WorkforceIntelligence() {
         {/* Skill-gap analysis */}
         <div className={`${card} p-5 lg:col-span-2`}>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900 text-[15px]">Skill-Gap Analysis <span className="text-[10px] text-gray-400">validated coverage by domain</span></h2>
+            <h2 className="font-semibold text-gray-900 text-[15px]">Skill-Gap Analysis <span className="text-[10px] text-gray-500">validated coverage by domain</span></h2>
             <Link href="/super-admin/ckp/competency" className="text-xs text-teal-700 hover:underline">Competency Centre →</Link>
           </div>
           <div className="flex items-center gap-4 mb-4">
@@ -92,11 +92,11 @@ export default async function WorkforceIntelligence() {
               <p className="mt-1"><span className="tabular-nums">{d.coverage.anyScored}</span> scored at least once · <span className="tabular-nums text-[var(--cmp-text-error)]">{dash(k.openSkillGaps)}</span> with no validated coverage.</p>
             </div>
           </div>
-          {d.domainGaps.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">{d.coverage.total ? "All domains fully covered." : "No competency data yet."}</p> : (
+          {d.domainGaps.length === 0 ? <p className="text-sm text-gray-500 py-4 text-center">{d.coverage.total ? "All domains fully covered." : "No competency data yet."}</p> : (
             <div className="space-y-2">
               {d.domainGaps.map((g: any) => (
                 <div key={g.name}>
-                  <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600 truncate">{g.name}</span><span className="tabular-nums text-gray-400 shrink-0 ml-2">{g.covered}/{g.total} · {g.coverage}%</span></div>
+                  <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600 truncate">{g.name}</span><span className="tabular-nums text-gray-500 shrink-0 ml-2">{g.covered}/{g.total} · {g.coverage}%</span></div>
                   <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${g.coverage < 50 ? "bg-[var(--cmp-color-error)]" : g.coverage < 80 ? "bg-[var(--cmp-color-warning)]" : "bg-teal-500"}`} style={{ width: `${g.coverage}%` }} /></div>
                 </div>
               ))}
@@ -107,7 +107,7 @@ export default async function WorkforceIntelligence() {
         {/* Workforce risk centre */}
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Workforce Risk Centre</h2>
-          {d.risks.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No workforce risks detected.</p> : (
+          {d.risks.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No workforce risks detected.</p> : (
             <div className="space-y-2">
               {d.risks.map((r: any) => (
                 <Link key={r.title} href={r.href} className="block rounded-lg border border-gray-100 p-2.5 hover:border-teal-300 hover:bg-teal-50/40 transition-colors">
@@ -127,7 +127,7 @@ export default async function WorkforceIntelligence() {
         {/* Roster intelligence */}
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Roster Intelligence</h2>
-          {!d.roster.ready ? <p className="text-sm text-gray-400 py-6 text-center">Roster data not available.</p> : (
+          {!d.roster.ready ? <p className="text-sm text-gray-500 py-6 text-center">Roster data not available.</p> : (
             <>
               <div className="grid grid-cols-3 gap-2 mb-3">
                 {[["Total", d.roster.total], ["Upcoming", d.roster.upcoming], ["Unstaffed", d.roster.unstaffed]].map(([l, n]: any) => (
@@ -136,12 +136,12 @@ export default async function WorkforceIntelligence() {
               </div>
               <div className="space-y-1">
                 {Object.entries(d.roster.status).slice(0, 5).map(([s, n]: any) => (
-                  <div key={s} className="flex items-center justify-between text-xs"><span className="text-gray-500 capitalize">{s.replace(/_/g, " ")}</span><span className="tabular-nums text-gray-400">{n}</span></div>
+                  <div key={s} className="flex items-center justify-between text-xs"><span className="text-gray-500 capitalize">{s.replace(/_/g, " ")}</span><span className="tabular-nums text-gray-500">{n}</span></div>
                 ))}
               </div>
             </>
           )}
-          <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">AI never publishes a roster autonomously — recommendations require human authorisation.</p>
+          <p className="text-[10px] text-gray-500 mt-3 pt-2 border-t border-gray-50">AI never publishes a roster autonomously — recommendations require human authorisation.</p>
         </div>
 
         {/* Burnout & fatigue */}
@@ -151,7 +151,7 @@ export default async function WorkforceIntelligence() {
             <p className={`text-4xl font-bold tabular-nums ${d.roster.highLoadStaff > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{d.roster.ready ? d.roster.highLoadStaff : "—"}</p>
             <p className="text-xs text-gray-500 mt-1">staff on ≥{d.roster.fatigueThreshold} shifts in 14 days</p>
           </div>
-          <p className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-50">An operational load indicator derived from shift assignments — not a medical judgement. Presented for supervisor review; excessive consecutive shifts, incomplete breaks and redeployment refine this signal as those fields are wired.</p>
+          <p className="text-[10px] text-gray-500 mt-2 pt-2 border-t border-gray-50">An operational load indicator derived from shift assignments — not a medical judgement. Presented for supervisor review; excessive consecutive shifts, incomplete breaks and redeployment refine this signal as those fields are wired.</p>
         </div>
 
         {/* Capabilities */}
@@ -165,11 +165,11 @@ export default async function WorkforceIntelligence() {
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">{dash(d.succession.positions)} positions tracked · succession readiness &amp; critical-role vacancies land as role-successor mapping is modelled.</p>
+          <p className="text-[10px] text-gray-500 mt-3 pt-2 border-t border-gray-50">{dash(d.succession.positions)} positions tracked · succession readiness &amp; critical-role vacancies land as role-successor mapping is modelled.</p>
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Workforce Intelligence computes real coverage from validated competency scores, roster coverage risk from upcoming shifts with no assigned staff, and an operational shift-load indicator — all fail-soft. Skill gaps, coverage and the risk centre are live; roster publishing stays human-authorised, and succession readiness / critical-role vacancies are honest “—” until role-successor mapping is modelled.</p>
+      <p className="text-[11px] text-gray-500 pb-4">Workforce Intelligence computes real coverage from validated competency scores, roster coverage risk from upcoming shifts with no assigned staff, and an operational shift-load indicator — all fail-soft. Skill gaps, coverage and the risk centre are live; roster publishing stays human-authorised, and succession readiness / critical-role vacancies are honest “—” until role-successor mapping is modelled.</p>
     </div>
   );
 }

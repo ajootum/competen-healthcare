@@ -32,14 +32,14 @@ export default async function WorkflowsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Workflow Templates</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Configure approval chains, validation steps, and notification rules</p>
+          <p className="text-gray-500 text-sm mt-0.5">Configure approval chains, validation steps, and notification rules</p>
         </div>
         <WorkflowManager />
       </div>
 
       <div className="flex flex-col gap-4">
         {(workflows ?? []).map(wf => {
-          const trigger = TRIGGER_LABELS[wf.trigger_type] ?? { label: wf.trigger_type, color: "bg-gray-100 text-gray-500" };
+          const trigger = TRIGGER_LABELS[wf.trigger_type] ?? { label: wf.trigger_type, color: "bg-gray-100 text-gray-600" };
           const steps = (wf.steps as Step[]) ?? [];
           return (
             <div key={wf.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
@@ -47,11 +47,11 @@ export default async function WorkflowsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-semibold text-gray-900">{wf.name}</p>
-                    {wf.description && <p className="text-xs text-gray-400 mt-0.5">{wf.description}</p>}
+                    {wf.description && <p className="text-xs text-gray-500 mt-0.5">{wf.description}</p>}
                   </div>
                   <div className="flex items-center gap-2">
                     {(wf.hospitals as unknown as { name: string } | null)?.name && (
-                      <span className="text-[10px] text-gray-400">🏥 {(wf.hospitals as unknown as { name: string }).name}</span>
+                      <span className="text-[10px] text-gray-500">🏥 {(wf.hospitals as unknown as { name: string }).name}</span>
                     )}
                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${trigger.color}`}>{trigger.label}</span>
                   </div>
@@ -65,7 +65,7 @@ export default async function WorkflowsPage() {
                         {i > 0 && <span className="text-gray-200 text-sm">→</span>}
                         <div className="bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1.5 text-center">
                           <p className="text-[10px] font-semibold text-gray-700 capitalize">{step.role}</p>
-                          <p className="text-[9px] text-gray-400 capitalize">{step.action}</p>
+                          <p className="text-[9px] text-gray-500 capitalize">{step.action}</p>
                           {step.deadline_days && <p className="text-[9px] text-teal-500">{step.deadline_days}d deadline</p>}
                         </div>
                       </div>
@@ -80,7 +80,7 @@ export default async function WorkflowsPage() {
         {!(workflows ?? []).length && (
           <div className="bg-white rounded-xl border border-gray-100 p-10 text-center">
             <p className="text-2xl mb-2">⚡</p>
-            <p className="text-gray-400 text-sm">No workflow templates yet — click &quot;+ Add Workflow&quot; to create one</p>
+            <p className="text-gray-500 text-sm">No workflow templates yet — click &quot;+ Add Workflow&quot; to create one</p>
           </div>
         )}
       </div>

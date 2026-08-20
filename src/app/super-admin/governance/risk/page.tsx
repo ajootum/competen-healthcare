@@ -16,10 +16,10 @@ export const dynamic = "force-dynamic";
 const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const BAND_TONE: Record<string, string> = { low: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
-const EFF_TONE: Record<string, string> = { effective: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", partially_effective: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", ineffective: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", not_tested: "bg-gray-100 text-gray-500" };
+const EFF_TONE: Record<string, string> = { effective: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", partially_effective: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", ineffective: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", not_tested: "bg-gray-100 text-gray-600" };
 // Cell colour by inherent score band (likelihood × impact).
 const cellTone = (score: number, n: number) => {
-  if (n === 0) return "bg-gray-50 text-gray-300";
+  if (n === 0) return "bg-gray-50 text-gray-500";
   if (score >= 16) return "bg-[var(--cmp-color-error)] text-white";
   if (score >= 10) return "bg-[var(--cmp-color-warning)] text-white";
   if (score >= 5) return "bg-amber-300 text-gray-800";
@@ -49,7 +49,7 @@ export default async function RiskInternalControls() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/governance" className="hover:text-teal-700">Governance &amp; Compliance</Link><span>/</span><span className="text-gray-600">Risk &amp; Internal Controls</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Risk &amp; Internal Controls</h1>
@@ -81,10 +81,10 @@ export default async function RiskInternalControls() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* 5×5 heat map */}
         <div className={`${card} p-5`}>
-          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Risk Heat Map <span className="text-[10px] text-gray-400">{d.openCount} open risk{d.openCount === 1 ? "" : "s"}</span></h2>
+          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Risk Heat Map <span className="text-[10px] text-gray-500">{d.openCount} open risk{d.openCount === 1 ? "" : "s"}</span></h2>
           <div className="flex gap-1.5">
             <div className="flex flex-col justify-between py-0.5 pr-1">
-              <span className="text-[8px] text-gray-400 -rotate-90 origin-center whitespace-nowrap h-full flex items-center">Impact →</span>
+              <span className="text-[8px] text-gray-500 -rotate-90 origin-center whitespace-nowrap h-full flex items-center">Impact →</span>
             </div>
             <div className="flex-1">
               {[5, 4, 3, 2, 1].map(impact => (
@@ -96,28 +96,28 @@ export default async function RiskInternalControls() {
                 </div>
               ))}
               <div className="flex gap-1 mt-0.5">
-                {[1, 2, 3, 4, 5].map(l => <span key={l} className="flex-1 text-center text-[8px] text-gray-400">{l}</span>)}
+                {[1, 2, 3, 4, 5].map(l => <span key={l} className="flex-1 text-center text-[8px] text-gray-500">{l}</span>)}
               </div>
-              <p className="text-center text-[8px] text-gray-400 mt-0.5">Likelihood →</p>
+              <p className="text-center text-[8px] text-gray-500 mt-0.5">Likelihood →</p>
             </div>
           </div>
-          <p className="text-[10px] text-gray-400 mt-2">Open risks plotted at inherent likelihood × impact. 1–4 low · 5–9 medium · 10–15 high · 16–25 critical.</p>
+          <p className="text-[10px] text-gray-500 mt-2">Open risks plotted at inherent likelihood × impact. 1–4 low · 5–9 medium · 10–15 high · 16–25 critical.</p>
         </div>
 
         {/* Top risks */}
         <div className={`${card} p-5 lg:col-span-2`}>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900 text-[15px]">Top Risks <span className="text-[10px] text-gray-400">by residual (falls back to inherent)</span></h2>
-            <span className="text-[10px] text-gray-400">{d.closedCount} closed</span>
+            <h2 className="font-semibold text-gray-900 text-[15px]">Top Risks <span className="text-[10px] text-gray-500">by residual (falls back to inherent)</span></h2>
+            <span className="text-[10px] text-gray-500">{d.closedCount} closed</span>
           </div>
-          {d.topRisks.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">{d.ready ? "No risks registered yet — add the first one above." : "Activates with migration 060."}</p> : (
+          {d.topRisks.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">{d.ready ? "No risks registered yet — add the first one above." : "Activates with migration 060."}</p> : (
             <div className="divide-y divide-gray-50">
               {d.topRisks.map((r: any) => (
                 <div key={r.id} className="flex items-center gap-3 py-2.5">
                   <span className={`text-[11px] font-bold px-2 py-1 rounded shrink-0 tabular-nums ${BAND_TONE[r.band]}`}>{r.residual ?? r.inherent}</span>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-gray-800 leading-tight truncate">{r.title}{r.overdue && <span className="text-[9px] font-semibold text-[var(--cmp-text-error)] ml-1.5">REVIEW OVERDUE</span>}</p>
-                    <p className="text-[10px] text-gray-400 capitalize">{String(r.category).replace(/_/g, " ")} · {r.scope} · treat: {r.treatment}{r.residual != null ? ` · inherent ${r.inherent} → residual ${r.residual}` : ""}</p>
+                    <p className="text-[10px] text-gray-500 capitalize">{String(r.category).replace(/_/g, " ")} · {r.scope} · treat: {r.treatment}{r.residual != null ? ` · inherent ${r.inherent} → residual ${r.residual}` : ""}</p>
                   </div>
                   <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 capitalize ${r.status === "escalated" ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : r.status === "mitigating" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-100 text-gray-600"}`}>{r.status}</span>
                 </div>
@@ -131,12 +131,12 @@ export default async function RiskInternalControls() {
         {/* Controls library */}
         <div className={`${card} p-5 lg:col-span-2`}>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900 text-[15px]">Controls Library <span className="text-[10px] text-gray-400">{dash(d.controls.total)} controls · {d.controls.notTested} untested</span></h2>
+            <h2 className="font-semibold text-gray-900 text-[15px]">Controls Library <span className="text-[10px] text-gray-500">{dash(d.controls.total)} controls · {d.controls.notTested} untested</span></h2>
           </div>
-          {d.controls.list.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">{d.controlsReady ? "No controls yet — add the first one above." : "Activates with migration 060."}</p> : (
+          {d.controls.list.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">{d.controlsReady ? "No controls yet — add the first one above." : "Activates with migration 060."}</p> : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-100">
                   <th className="px-3 py-2 font-semibold">Control</th><th className="px-3 py-2 font-semibold">Type</th><th className="px-3 py-2 font-semibold">Frequency</th><th className="px-3 py-2 font-semibold">Linked risk</th><th className="px-3 py-2 font-semibold text-right">Last tested</th><th className="px-3 py-2 font-semibold text-right">Effectiveness</th>
                 </tr></thead>
                 <tbody>
@@ -160,7 +160,7 @@ export default async function RiskInternalControls() {
         <div className="space-y-4">
           <div className={`${card} p-5`}>
             <h2 className="font-semibold text-gray-900 text-[15px] mb-3">By Category</h2>
-            {d.byCategory.length === 0 ? <p className="text-xs text-gray-400">No open risks.</p> : (
+            {d.byCategory.length === 0 ? <p className="text-xs text-gray-500">No open risks.</p> : (
               <div className="space-y-1.5">
                 {d.byCategory.map((c: any) => (
                   <div key={c.category} className="flex items-center justify-between text-xs"><span className="text-gray-600 capitalize">{String(c.category).replace(/_/g, " ")}</span><span className="tabular-nums text-gray-500">{c.n}</span></div>
@@ -170,17 +170,17 @@ export default async function RiskInternalControls() {
           </div>
           <div className={`${card} p-5`}>
             <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Treatment Mix</h2>
-            {Object.keys(d.byTreatment).length === 0 ? <p className="text-xs text-gray-400">No open risks.</p> : (
+            {Object.keys(d.byTreatment).length === 0 ? <p className="text-xs text-gray-500">No open risks.</p> : (
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(d.byTreatment).map(([t, n]: any) => <span key={t} className="text-[10px] text-gray-600 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">{t} · {n}</span>)}
               </div>
             )}
-            <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">Risk appetite thresholds and control-testing workflows deepen in a later phase; escalated risks surface on the Governance Dashboard.</p>
+            <p className="text-[10px] text-gray-500 mt-3 pt-2 border-t border-gray-50">Risk appetite thresholds and control-testing workflows deepen in a later phase; escalated risks surface on the Governance Dashboard.</p>
           </div>
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Risk &amp; Internal Controls is the ERM module — a real 5×5 register (inherent = likelihood × impact; residual scored after treatment) and a controls library with effectiveness ratings from testing. The heat map, bands, top-risks and control effectiveness are all computed from the live register; every write is audit-logged and tenant scope is bound server-side. Platform risks registered here complement the derived operational indicators on the Governance Dashboard.</p>
+      <p className="text-[11px] text-gray-500 pb-4">Risk &amp; Internal Controls is the ERM module — a real 5×5 register (inherent = likelihood × impact; residual scored after treatment) and a controls library with effectiveness ratings from testing. The heat map, bands, top-risks and control effectiveness are all computed from the live register; every write is audit-logged and tenant scope is bound server-side. Platform risks registered here complement the derived operational indicators on the Governance Dashboard.</p>
     </div>
   );
 }

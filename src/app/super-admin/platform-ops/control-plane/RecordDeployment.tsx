@@ -41,8 +41,8 @@ export default function RecordDeployment({ version }: { version: string }) {
               <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Version *</label><input value={form.version} onChange={set("version")} className={input} placeholder="0.1.0" /></div>
               <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Channel</label><select value={form.channel} onChange={set("channel")} className={input}>{CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
             </div>
-            <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Git commit <span className="text-gray-300">(optional)</span></label><input value={form.git_commit} onChange={set("git_commit")} className={input} placeholder="short sha" /></div>
-            <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Notes <span className="text-gray-300">(optional)</span></label><textarea value={form.notes} onChange={set("notes")} rows={2} className={input} /></div>
+            <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Git commit <span className="text-gray-500">(optional)</span></label><input value={form.git_commit} onChange={set("git_commit")} className={input} placeholder="short sha" /></div>
+            <div><label className="text-xs font-semibold text-gray-600 mb-1 block">Notes <span className="text-gray-500">(optional)</span></label><textarea value={form.notes} onChange={set("notes")} rows={2} className={input} /></div>
             {err && <p className="text-xs text-[var(--cmp-text-critical)] bg-[var(--cmp-surface-critical)] rounded-lg px-3 py-2">{err}</p>}
             <div className="flex gap-2 pt-1">
               <button onClick={() => setOpen(false)} className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>

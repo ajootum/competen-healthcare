@@ -31,7 +31,7 @@ export default async function MigrationPage() {
 
   const header = (
     <>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Migration Toolkit</span>
@@ -39,7 +39,7 @@ export default async function MigrationPage() {
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">🚚</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Migration Toolkit <span className="text-gray-300 font-medium text-lg">(NCP-020)</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Migration Toolkit <span className="text-gray-500 font-medium text-lg">(NCP-020)</span></h1>
           <p className="text-sm text-gray-500">Move configuration between environments and tenants — export dependency-closed bundles, import with a dry-run and rollback.</p>
         </div>
       </div>
@@ -57,7 +57,7 @@ export default async function MigrationPage() {
         <Stat label="Exports" value={exports} tone="text-[var(--cmp-text-information)]" sub="bundles built" />
       </div>
       <MigrationToolkit objects={(objects ?? []) as any[]} jobs={listJ} />
-      <p className="text-[11px] text-gray-400">Exports close over dependencies so bundles are self-contained; imports validate schema + prerequisites, apply in dependency order, snapshot every touched object and are fully rollback-capable. Cross-region transfer, encrypted transfer and cryptographic signing (NCP-020 §6/§12) are next-phase.</p>
+      <p className="text-[11px] text-gray-500">Exports close over dependencies so bundles are self-contained; imports validate schema + prerequisites, apply in dependency order, snapshot every touched object and are fully rollback-capable. Cross-region transfer, encrypted transfer and cryptographic signing (NCP-020 §6/§12) are next-phase.</p>
     </div>
   );
 }

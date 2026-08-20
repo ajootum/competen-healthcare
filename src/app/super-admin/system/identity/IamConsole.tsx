@@ -93,7 +93,7 @@ export default function IamConsole({ users }: { users: Picker[] }) {
             <div><label className={label}>Full name *</label><input value={form.full_name ?? ""} onChange={set("full_name")} className={input} placeholder="e.g. Jane Mutoni" /></div>
             <div><label className={label}>Portal role</label><select value={form.role ?? "nurse"} onChange={set("role")} className={input}>{Object.entries(PORTALS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
             <div><label className={label}>Mode</label><select value={form.mode ?? "invite"} onChange={set("mode")} className={input}><option value="invite">Invite — user sets password via email</option><option value="password">Temporary password — shown once</option></select></div>
-            <p className="sm:col-span-2 text-[11px] text-gray-400">Creates the auth identity and profile together (rolled back atomically on failure). Fine-grained org roles are assigned afterwards in Enterprise → People.</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-500">Creates the auth identity and profile together (rolled back atomically on failure). Fine-grained org roles are assigned afterwards in Enterprise → People.</p>
           </div>
         )}
 
@@ -101,14 +101,14 @@ export default function IamConsole({ users }: { users: Picker[] }) {
           <div className="grid sm:grid-cols-2 gap-3">
             <div><label className={label}>User *</label><select value={form.userId ?? ""} onChange={set("userId")} className={input}><option value="">— Select user —</option>{users.map(u => <option key={u.id} value={u.id}>{u.label}</option>)}</select></div>
             <div><label className={label}>Action *</label><select value={form.action ?? ""} onChange={set("action")} className={input}><option value="">— Select action —</option>{Object.entries(ACTIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-            <p className="sm:col-span-2 text-[11px] text-gray-400">Suspension is a real Supabase Auth ban — sign-in is genuinely blocked until reinstated. You cannot suspend your own account (server-enforced). All actions are audit-logged.</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-500">Suspension is a real Supabase Auth ban — sign-in is genuinely blocked until reinstated. You cannot suspend your own account (server-enforced). All actions are audit-logged.</p>
           </div>
         )}
 
         <div className="flex items-center gap-2 mt-4">
           <button onClick={act} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Working…" : TABS.find(t => t.key === tab)!.label}</button>
           <button onClick={() => { setForm({}); setMsg(null); }} className="text-sm text-gray-500 hover:text-gray-700 px-2">Clear</button>
-          <span className="text-[11px] text-gray-400 ml-auto">Real identity lifecycle — audit-logged.</span>
+          <span className="text-[11px] text-gray-500 ml-auto">Real identity lifecycle — audit-logged.</span>
         </div>
       </div>
     </div>

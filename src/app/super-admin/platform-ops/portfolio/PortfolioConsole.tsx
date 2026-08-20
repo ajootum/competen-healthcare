@@ -44,15 +44,15 @@ export default function PortfolioConsole({ data }: { data: any }) {
           <button onClick={() => f.pfName && call("POST", { body: { type: "portfolio", name: f.pfName } })} disabled={pending || !f.pfName} className={`${btn} bg-[var(--cmp-color-information)] text-white hover:bg-[var(--cmp-color-information)] disabled:opacity-40`}>+ Portfolio</button>
         </div>
 
-        {data.tree.length === 0 && <p className="text-sm text-gray-400 py-6 text-center">No portfolios yet — create one above to begin packaging products into suites.</p>}
+        {data.tree.length === 0 && <p className="text-sm text-gray-500 py-6 text-center">No portfolios yet — create one above to begin packaging products into suites.</p>}
         <div className="space-y-4">
           {data.tree.map((pf: any) => (
             <div key={pf.id} className="border border-gray-100 rounded-xl p-3">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-sm font-semibold text-gray-800">🗂️ {pf.name}</span>
-                <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${pf.status === "active" ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-gray-100 text-gray-500"}`}>{pf.status}</span>
+                <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${pf.status === "active" ? "bg-[var(--cmp-surface-success)] text-emerald-700" : "bg-gray-100 text-gray-600"}`}>{pf.status}</span>
                 <span className="flex-1" />
-                {pf.status === "active" && <button onClick={() => call("DELETE", { query: `type=portfolio&id=${pf.id}` })} disabled={pending} className="text-[11px] text-gray-400 hover:text-[var(--cmp-text-error)]">Archive</button>}
+                {pf.status === "active" && <button onClick={() => call("DELETE", { query: `type=portfolio&id=${pf.id}` })} disabled={pending} className="text-[11px] text-gray-500 hover:text-[var(--cmp-text-error)]">Archive</button>}
               </div>
 
               {/* suites */}
@@ -61,10 +61,10 @@ export default function PortfolioConsole({ data }: { data: any }) {
                   <div key={s.id} className="bg-gray-50/50 rounded-lg p-2.5">
                     <div className="flex items-center gap-2">
                       <span className="text-[13px] font-medium text-gray-800" style={{ color: s.color ?? undefined }}>{s.icon ?? "📦"} {s.name}</span>
-                      {s.code && <span className="text-[10px] text-gray-400 font-mono">{s.code}</span>}
+                      {s.code && <span className="text-[10px] text-gray-500 font-mono">{s.code}</span>}
                       <span className="text-[10px] rounded px-1 bg-white border border-gray-200 text-gray-500">{s.visibility}</span>
                       <span className="flex-1" />
-                      <button onClick={() => call("DELETE", { query: `type=suite&id=${s.id}` })} disabled={pending} className="text-[10px] text-gray-400 hover:text-[var(--cmp-text-error)]">Archive</button>
+                      <button onClick={() => call("DELETE", { query: `type=suite&id=${s.id}` })} disabled={pending} className="text-[10px] text-gray-500 hover:text-[var(--cmp-text-error)]">Archive</button>
                     </div>
                     {/* products in suite */}
                     <div className="mt-2 space-y-1.5">
@@ -92,7 +92,7 @@ export default function PortfolioConsole({ data }: { data: any }) {
         <h2 className="text-sm font-semibold text-gray-900 mb-1">Licensing Matrix</h2>
         <p className="text-[11px] text-gray-500 mb-3">Tenant × product. A ticked cell licenses that product for the tenant — which unlocks the product&apos;s mapped workspaces (fail-open: unmapped workspaces stay free).</p>
         {data.products.length === 0 || data.tenants.length === 0 ? (
-          <p className="text-sm text-gray-400 py-4 text-center">{data.products.length === 0 ? "Create products first." : "No tenants."}</p>
+          <p className="text-sm text-gray-500 py-4 text-center">{data.products.length === 0 ? "Create products first." : "No tenants."}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="text-[12px] border-collapse">
@@ -104,7 +104,7 @@ export default function PortfolioConsole({ data }: { data: any }) {
                     {data.products.map((p: any) => {
                       const on = licensed.has(`${t.id}:${p.code}`);
                       return <td key={p.code} className="px-2 py-1 text-center">
-                        <button onClick={() => call(on ? "DELETE" : "POST", on ? { query: `type=license&tenant_id=${t.id}&product_code=${encodeURIComponent(p.code)}` } : { body: { type: "license", tenant_id: t.id, product_code: p.code } })} disabled={pending} className={`w-5 h-5 rounded ${on ? "bg-[var(--cmp-color-success)] text-white" : "bg-gray-100 text-gray-300 hover:bg-gray-200"}`}>{on ? "✓" : ""}</button>
+                        <button onClick={() => call(on ? "DELETE" : "POST", on ? { query: `type=license&tenant_id=${t.id}&product_code=${encodeURIComponent(p.code)}` } : { body: { type: "license", tenant_id: t.id, product_code: p.code } })} disabled={pending} className={`w-5 h-5 rounded ${on ? "bg-[var(--cmp-color-success)] text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>{on ? "✓" : ""}</button>
                       </td>;
                     })}
                   </tr>
@@ -126,11 +126,11 @@ function ProductRow({ p, data, call, pending }: any) {
     <div className="bg-white border border-gray-100 rounded p-2">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-[12px] font-medium text-gray-800">{p.name}</span>
-        <span className="text-[9px] font-mono text-gray-400">{p.code}</span>
+        <span className="text-[9px] font-mono text-gray-500">{p.code}</span>
         <span className="text-[9px] rounded px-1 bg-[var(--cmp-surface-information)] text-blue-700">{p.is_core ? "core" : "add-on"}</span>
-        <span className="text-[9px] text-gray-400">{p.licensedTenants} licensed · {p.workspaces.length} workspace{p.workspaces.length === 1 ? "" : "s"}</span>
+        <span className="text-[9px] text-gray-500">{p.licensedTenants} licensed · {p.workspaces.length} workspace{p.workspaces.length === 1 ? "" : "s"}</span>
         <span className="flex-1" />
-        <button onClick={() => call("DELETE", { query: `type=product&code=${encodeURIComponent(p.code)}` })} disabled={pending} className="text-[9px] text-gray-400 hover:text-[var(--cmp-text-error)]" title="Remove from suite (keeps the catalogue entry)">Unassign</button>
+        <button onClick={() => call("DELETE", { query: `type=product&code=${encodeURIComponent(p.code)}` })} disabled={pending} className="text-[9px] text-gray-500 hover:text-[var(--cmp-text-error)]" title="Remove from suite (keeps the catalogue entry)">Unassign</button>
       </div>
       <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
         {p.workspaces.map((k: string) => (

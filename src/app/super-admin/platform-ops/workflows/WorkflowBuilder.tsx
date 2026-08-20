@@ -62,21 +62,21 @@ export default function WorkflowBuilder({ workflows }: { workflows: Wf[] }) {
   }
 
   const card = "bg-white rounded-xl border border-gray-200";
-  if (!workflows.length) return <div className={`${card} p-8 text-center`}><p className="text-sm text-gray-500">No workflow objects yet.</p><p className="text-xs text-gray-400 mt-1">Author a <b>Workflow</b> in the <a href="/super-admin/platform-ops/studio" className="text-indigo-700 underline">Configuration Studio</a> first, then design it here.</p></div>;
+  if (!workflows.length) return <div className={`${card} p-8 text-center`}><p className="text-sm text-gray-500">No workflow objects yet.</p><p className="text-xs text-gray-500 mt-1">Author a <b>Workflow</b> in the <a href="/super-admin/platform-ops/studio" className="text-indigo-700 underline">Configuration Studio</a> first, then design it here.</p></div>;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
       <div className={`${card} p-4`}>
         <p className="text-[11px] font-semibold text-gray-500 mb-2">Workflows ({workflows.length})</p>
         <div className="space-y-1 max-h-[460px] overflow-y-auto">
-          {workflows.map(w => <button key={w.object_key} onClick={() => pick(w.object_key)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === w.object_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}><p className="text-xs font-medium text-gray-800 truncate">{w.display_name}</p><p className="text-[10px] text-gray-400 truncate">{(w.definition?.nodes?.length ?? 0)} node(s)</p></button>)}
+          {workflows.map(w => <button key={w.object_key} onClick={() => pick(w.object_key)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === w.object_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}><p className="text-xs font-medium text-gray-800 truncate">{w.display_name}</p><p className="text-[10px] text-gray-500 truncate">{(w.definition?.nodes?.length ?? 0)} node(s)</p></button>)}
         </div>
       </div>
 
       <div className={`${card} p-5 lg:col-span-3`}>
-        {!selW ? <p className="text-sm text-gray-400 py-16 text-center">Select a workflow.</p> : (
+        {!selW ? <p className="text-sm text-gray-500 py-16 text-center">Select a workflow.</p> : (
           <>
-            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-gray-900">{selW.display_name}</h3><span className="text-[10px] text-gray-400 font-mono">{selW.object_key}</span></div>
+            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-gray-900">{selW.display_name}</h3><span className="text-[10px] text-gray-500 font-mono">{selW.object_key}</span></div>
 
             {/* Add node */}
             <div className="flex items-end gap-2 mb-3">
@@ -86,15 +86,15 @@ export default function WorkflowBuilder({ workflows }: { workflows: Wf[] }) {
             </div>
 
             {/* Nodes */}
-            {d.nodes.length === 0 ? <p className="text-xs text-gray-400 py-4 text-center">Add nodes to build the flow.</p> : (
+            {d.nodes.length === 0 ? <p className="text-xs text-gray-500 py-4 text-center">Add nodes to build the flow.</p> : (
               <div className="space-y-1.5 mb-4">
                 {d.nodes.map((n, i) => (
                   <div key={n.key} className="flex items-center gap-2 border border-gray-100 rounded-lg px-2.5 py-1.5">
                     <span className="text-sm w-5 text-center shrink-0" title={TM[n.type]?.label}>{TM[n.type]?.icon}</span>
                     <input className={`${input} flex-1`} value={n.label} onChange={e => setNode(i, { label: e.target.value })} />
                     {TM[n.type]?.cfg && <input className={`${input} w-40`} value={n.config?.[TM[n.type].cfg!] ?? ""} onChange={e => setCfg(i, TM[n.type].cfg!, e.target.value)} placeholder={TM[n.type].ph} />}
-                    <span className="text-[9px] text-gray-300 font-mono shrink-0">{n.key}</span>
-                    <button onClick={() => rmNode(i)} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs shrink-0">✕</button>
+                    <span className="text-[9px] text-gray-500 font-mono shrink-0">{n.key}</span>
+                    <button onClick={() => rmNode(i)} className="text-gray-500 hover:text-[var(--cmp-text-error)] text-xs shrink-0">✕</button>
                   </div>
                 ))}
               </div>
@@ -106,12 +106,12 @@ export default function WorkflowBuilder({ workflows }: { workflows: Wf[] }) {
                 <p className="text-[11px] font-semibold text-gray-500 mb-1.5">Transitions</p>
                 <div className="flex items-end gap-1.5 mb-2 flex-wrap">
                   <select className={`${input} w-32`} value={tr.from} onChange={e => setTr(p => ({ ...p, from: e.target.value }))}><option value="">from…</option>{d.nodes.map(n => <option key={n.key} value={n.key}>{n.label}</option>)}</select>
-                  <span className="text-gray-300 text-xs pb-1.5">→</span>
+                  <span className="text-gray-500 text-xs pb-1.5">→</span>
                   <select className={`${input} w-32`} value={tr.to} onChange={e => setTr(p => ({ ...p, to: e.target.value }))}><option value="">to…</option>{d.nodes.map(n => <option key={n.key} value={n.key}>{n.label}</option>)}</select>
                   <input className={`${input} w-28`} value={tr.condition} onChange={e => setTr(p => ({ ...p, condition: e.target.value }))} placeholder="condition (opt)" />
                   <button onClick={addTrans} disabled={!tr.from || !tr.to} className="text-xs font-medium text-indigo-700 border border-indigo-200 rounded-lg px-2.5 py-1.5 disabled:opacity-40 hover:bg-indigo-50">+ Link</button>
                 </div>
-                <div className="space-y-1">{d.transitions.map((t, i) => <div key={i} className="flex items-center gap-2 text-[11px] text-gray-600"><span>{nlabel(t.from)}</span><span className="text-gray-300">→{t.condition ? ` [${t.condition}]` : ""} →</span><span>{nlabel(t.to)}</span><button onClick={() => rmTrans(i)} className="text-gray-300 hover:text-[var(--cmp-text-error)] ml-1">✕</button></div>)}</div>
+                <div className="space-y-1">{d.transitions.map((t, i) => <div key={i} className="flex items-center gap-2 text-[11px] text-gray-600"><span>{nlabel(t.from)}</span><span className="text-gray-500">→{t.condition ? ` [${t.condition}]` : ""} →</span><span>{nlabel(t.to)}</span><button onClick={() => rmTrans(i)} className="text-gray-500 hover:text-[var(--cmp-text-error)] ml-1">✕</button></div>)}</div>
               </div>
             )}
 
@@ -123,7 +123,7 @@ export default function WorkflowBuilder({ workflows }: { workflows: Wf[] }) {
                   {d.nodes.map(n => { const out = d.transitions.filter(t => t.from === n.key); return (
                     <div key={n.key} className="text-[11px]">
                       <span className="font-medium text-gray-700">{TM[n.type]?.icon} {n.label}</span>
-                      {out.length > 0 && <span className="text-gray-400"> {out.map((t, i) => <span key={i}>→{t.condition ? ` [${t.condition}]` : ""} {nlabel(t.to)}{i < out.length - 1 ? " ;" : ""}</span>)}</span>}
+                      {out.length > 0 && <span className="text-gray-500"> {out.map((t, i) => <span key={i}>→{t.condition ? ` [${t.condition}]` : ""} {nlabel(t.to)}{i < out.length - 1 ? " ;" : ""}</span>)}</span>}
                     </div>
                   ); })}
                 </div>

@@ -122,7 +122,7 @@ export default function UserRoleEditor({
         <Modal open title="Edit User" onClose={() => setOpen(false)} width="lg">
           {/* Who is being edited moves into the body: Modal's header takes a name, not a name and a
               subtitle, and the subtitle is the more useful of the two to keep next to the fields. */}
-          <p className="text-sm text-gray-400 -mt-2 mb-4">{user.full_name} · {user.email}</p>
+          <p className="text-sm text-gray-500 -mt-2 mb-4">{user.full_name} · {user.email}</p>
           <div className="flex flex-col gap-5">
               {/* Competen super admin toggle */}
               <div className={`rounded-xl border-2 transition-all ${isSuperAdmin ? "border-violet-500 bg-violet-50" : "border-gray-100 hover:border-gray-200"}`}>
@@ -133,7 +133,7 @@ export default function UserRoleEditor({
                     <span className="text-xl">🛡️</span>
                     <div>
                       <p className="text-sm font-semibold text-gray-800">Competen Staff</p>
-                      <p className="text-xs text-gray-400">Platform-level access — no org restriction</p>
+                      <p className="text-xs text-gray-500">Platform-level access — no org restriction</p>
                     </div>
                   </div>
                   <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 ${isSuperAdmin ? "bg-violet-500 border-violet-500" : "border-gray-300"}`}>
@@ -153,7 +153,7 @@ export default function UserRoleEditor({
                           <span className="text-base">{cfg.icon}</span>
                           <div className="flex-1">
                             <p className={`text-xs font-semibold ${platformRole === key ? "text-violet-800" : "text-gray-700"}`}>{cfg.label}</p>
-                            <p className="text-[10px] text-gray-400">{cfg.description}</p>
+                            <p className="text-[10px] text-gray-500">{cfg.description}</p>
                           </div>
                           <div className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${platformRole === key ? "bg-violet-500 border-violet-500" : "border-gray-300"}`} />
                         </button>
@@ -168,7 +168,7 @@ export default function UserRoleEditor({
                   {/* Tenant assignment */}
                   <div className="flex flex-col gap-3">
                     <div>
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 block">Organisation (Tenant)</label>
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Organisation (Tenant)</label>
                       <select value={organisationId} onChange={e => setOrganisationId(e.target.value)}
                         className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
                         <option value="">— Not assigned to an organisation —</option>
@@ -176,7 +176,7 @@ export default function UserRoleEditor({
                       </select>
                     </div>
                     <div>
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 block">Facility</label>
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Facility</label>
                       <select value={hospitalId} onChange={e => { setHospitalId(e.target.value); setDepartmentId(""); }}
                         className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
                         <option value="">— Not assigned to a facility —</option>
@@ -185,7 +185,7 @@ export default function UserRoleEditor({
                     </div>
                     {hospitalId && depsForHospital.length > 0 && (
                       <div>
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1.5 block">Department</label>
+                        <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5 block">Department</label>
                         <select value={departmentId} onChange={e => setDepartmentId(e.target.value)}
                           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
                           <option value="">— Not assigned to a department —</option>
@@ -198,21 +198,21 @@ export default function UserRoleEditor({
                   {/* Org role picker */}
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Organisation Roles</label>
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Organisation Roles</label>
                       {orgRoles.length > 0 && (
                         <button type="button" onClick={() => setOrgRoles([])}
-                          className="text-[10px] text-gray-400 hover:text-red-500 transition-colors">
+                          className="text-[10px] text-gray-500 hover:text-red-500 transition-colors">
                           Clear all
                         </button>
                       )}
                     </div>
-                    <p className="text-[11px] text-gray-400 mb-3">Select one or more roles — the user can switch between the portals they&apos;re assigned to.</p>
+                    <p className="text-[11px] text-gray-500 mb-3">Select one or more roles — the user can switch between the portals they&apos;re assigned to.</p>
                     <div className="flex flex-col gap-4">
                       {ORG_ROLE_GROUPS.map(group => {
                         const gc = ROLE_CONFIG[group.portalRole];
                         return (
                           <div key={group.label}>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1 mb-1.5">
+                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-1 mb-1.5">
                               {group.label}
                               <span className="ml-1.5 normal-case font-semibold text-gray-500">→ {gc.icon} {gc.label} portal</span>
                             </p>
@@ -228,7 +228,7 @@ export default function UserRoleEditor({
                                     <span className="text-lg">{cfg.icon}</span>
                                     <div className="flex-1">
                                       <p className={`text-sm font-semibold ${active ? "text-teal-800" : "text-gray-700"}`}>{cfg.label}</p>
-                                      <p className="text-[10px] text-gray-400">{cfg.description}</p>
+                                      <p className="text-[10px] text-gray-500">{cfg.description}</p>
                                     </div>
                                     <div className={`w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center ${active ? "bg-teal-500 border-teal-500" : "border-gray-300"}`}>
                                       {active && <span className="text-white text-[9px] font-bold leading-none">✓</span>}
@@ -246,7 +246,7 @@ export default function UserRoleEditor({
                   {/* Direct assessor grant — shown only when org roles don't already give assessor */}
                   {!orgRolesGiveAssessor(orgRoles) && (
                     <div>
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Additional Access</label>
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 block">Additional Access</label>
                       <button type="button" onClick={() => setDirectAssessor(v => !v)}
                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${
                           directAssessor ? "border-indigo-500 bg-indigo-50" : "border-gray-100 hover:border-gray-200 bg-white"
@@ -256,7 +256,7 @@ export default function UserRoleEditor({
                           <p className={`text-sm font-semibold ${directAssessor ? "text-indigo-800" : "text-gray-700"}`}>
                             Assessor Portal Access
                           </p>
-                          <p className="text-[10px] text-gray-400">
+                          <p className="text-[10px] text-gray-500">
                             Grant assessor portal access regardless of org role — for senior staff who conduct peer assessments
                           </p>
                         </div>
@@ -274,7 +274,7 @@ export default function UserRoleEditor({
                 <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
                   <p className="text-xs font-semibold text-gray-500 mb-2">Portal access granted</p>
                   {portals.length === 0 ? (
-                    <p className="text-xs text-gray-400">No roles selected</p>
+                    <p className="text-xs text-gray-500">No roles selected</p>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {portals.map(p => {
@@ -288,7 +288,7 @@ export default function UserRoleEditor({
                     </div>
                   )}
                   {portals.length > 1 && (
-                    <p className="text-[10px] text-gray-400 mt-2">Primary portal (highest role): {ROLE_CONFIG[primaryPortal]?.label}</p>
+                    <p className="text-[10px] text-gray-500 mt-2">Primary portal (highest role): {ROLE_CONFIG[primaryPortal]?.label}</p>
                   )}
                 </div>
               )}

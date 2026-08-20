@@ -10,7 +10,7 @@ import { requireHqCapability } from "@/lib/hq/context";
 export const dynamic = "force-dynamic";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const CORR: Record<string, string> = { emerald: "text-[var(--cmp-text-success)]", rose: "text-[var(--cmp-text-error)]", gray: "text-gray-400" };
+const CORR: Record<string, string> = { emerald: "text-[var(--cmp-text-success)]", rose: "text-[var(--cmp-text-error)]", gray: "text-gray-500" };
 const CORRBG: Record<string, string> = { emerald: "border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)]", rose: "border-[var(--cmp-color-error)] bg-[var(--cmp-surface-error)]", gray: "border-gray-200 bg-gray-50" };
 
 export default async function OutcomeCorrelationPage() {
@@ -35,7 +35,7 @@ export default async function OutcomeCorrelationPage() {
         <div>
           <p className="text-[11px] font-semibold text-sky-500 uppercase tracking-widest mb-0.5">CAPM-005 · Competency Performance</p>
           <h1 className="text-xl font-bold text-gray-900">Competency-to-Outcome Correlation</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Does higher competency go with better outcomes? Each department&apos;s competency coverage set against its real safety outcomes.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Does higher competency go with better outcomes? Each department&apos;s competency coverage set against its real safety outcomes.</p>
         </div>
         <Link href="/super-admin/performance" className="text-xs font-semibold text-gray-500 hover:text-[var(--cmp-text-information)] border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Performance</Link>
       </div>
@@ -43,7 +43,7 @@ export default async function OutcomeCorrelationPage() {
       {!q.provisioned ? (
         <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-4"><p className="text-[13px] text-amber-900">Operational observation data isn&apos;t available — correlation reads <code className="text-[11px]">op_observations</code> (department-grain) against <code className="text-[11px]">competency_decisions</code>.</p></div>
       ) : q.empty ? (
-        <div className="bg-white border border-gray-100 rounded-xl p-6"><p className="text-sm text-gray-400">No department competency + observation data to correlate yet.</p></div>
+        <div className="bg-white border border-gray-100 rounded-xl p-6"><p className="text-sm text-gray-500">No department competency + observation data to correlate yet.</p></div>
       ) : q.insufficient ? (
         <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl p-5"><p className="text-[13px] text-amber-900 font-semibold mb-1">Not enough departments to correlate yet</p><p className="text-[12px] text-amber-800">A correlation needs at least 3 departments that each have enough competency decisions and observations. Currently {q.n} qualify. As more departments accrue data, the coefficient computes automatically.</p></div>
       ) : (
@@ -72,7 +72,7 @@ export default async function OutcomeCorrelationPage() {
               { label: "Avg compliance", value: `${q.kpis.avgCompliance}%`, sub: "observations" },
               { label: "Competency spread", value: `${q.kpis.spread} pts`, sub: "min→max" },
             ].map(k => (
-              <div key={k.label} className={`${card} p-3.5`}><p className="text-xl font-bold tabular-nums text-gray-900">{k.value}</p><p className="text-[10px] text-gray-400 font-medium mt-0.5">{k.label}</p><p className="text-[9px] text-gray-300">{k.sub}</p></div>
+              <div key={k.label} className={`${card} p-3.5`}><p className="text-xl font-bold tabular-nums text-gray-900">{k.value}</p><p className="text-[10px] text-gray-500 font-medium mt-0.5">{k.label}</p><p className="text-[9px] text-gray-500">{k.sub}</p></div>
             ))}
           </div>
 
@@ -90,7 +90,7 @@ export default async function OutcomeCorrelationPage() {
                   <circle key={i} cx={sx(p.competency)} cy={sy(p.compliance)} r={5} fill="#0ea5e9" opacity={0.7}><title>{p.department}: {p.competency}% competency, {p.compliance}% compliance</title></circle>
                 ))}
               </svg>
-              <p className="text-[10px] text-gray-400 mt-1">y = observation compliance %. Each dot is a department.</p>
+              <p className="text-[10px] text-gray-500 mt-1">y = observation compliance %. Each dot is a department.</p>
             </div>
 
             {/* Per-department table */}
@@ -98,11 +98,11 @@ export default async function OutcomeCorrelationPage() {
               <div className="px-4 py-2.5 border-b border-gray-50"><p className="text-[11px] font-semibold text-gray-500">By department — competency vs outcomes</p></div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead><tr className="text-left text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-50"><th className="py-2 px-4 font-medium">Department</th><th className="py-2 px-2 font-medium text-right">Comp.</th><th className="py-2 px-2 font-medium text-right">Compliance</th><th className="py-2 px-4 font-medium text-right">Escal.</th></tr></thead>
+                  <thead><tr className="text-left text-[10px] uppercase tracking-wide text-gray-500 border-b border-gray-50"><th className="py-2 px-4 font-medium">Department</th><th className="py-2 px-2 font-medium text-right">Comp.</th><th className="py-2 px-2 font-medium text-right">Compliance</th><th className="py-2 px-4 font-medium text-right">Escal.</th></tr></thead>
                   <tbody className="divide-y divide-gray-50">
                     {q.points.map((p: any, i: number) => (
                       <tr key={i}>
-                        <td className="py-2 px-4 text-gray-800 truncate max-w-[160px]">{p.department}<span className="text-[9px] text-gray-400 ml-1">n{p.staff}</span></td>
+                        <td className="py-2 px-4 text-gray-800 truncate max-w-[160px]">{p.department}<span className="text-[9px] text-gray-500 ml-1">n{p.staff}</span></td>
                         <td className="py-2 px-2 tabular-nums text-right font-medium text-[var(--cmp-text-information)]">{p.competency}%</td>
                         <td className="py-2 px-2 tabular-nums text-right text-gray-700">{p.compliance}%</td>
                         <td className={`py-2 px-4 tabular-nums text-right ${p.escalationRate > 20 ? "text-[var(--cmp-text-error)]" : "text-gray-500"}`}>{p.escalationRate}%</td>
@@ -114,7 +114,7 @@ export default async function OutcomeCorrelationPage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">This is an <span className="font-semibold">ecological</span> correlation over department aggregates — it shows association, not per-nurse causation, and with a small number of departments it is directional/indicative, not conclusive. Competency = achieved share of the department&apos;s latest competency decisions; outcomes from department observation records. A strong positive compliance correlation (and negative escalation correlation) is evidence that validated competency is translating into safer practice.</p>
+          <p className="text-[11px] text-gray-500 mt-4 leading-relaxed">This is an <span className="font-semibold">ecological</span> correlation over department aggregates — it shows association, not per-nurse causation, and with a small number of departments it is directional/indicative, not conclusive. Competency = achieved share of the department&apos;s latest competency decisions; outcomes from department observation records. A strong positive compliance correlation (and negative escalation correlation) is evidence that validated competency is translating into safer practice.</p>
         </>
       )}
     </div>

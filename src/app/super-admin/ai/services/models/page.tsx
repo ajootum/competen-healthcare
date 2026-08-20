@@ -31,14 +31,14 @@ export default async function ModelsPage() {
       </div>
 
       {d.providers.map((p: any) => (
-        <Card key={p.code} title={p.name} right={<div className="flex items-center gap-1.5">{p.live && <Pill text="configured" tone="emerald" />}<Pill text={p.status} tone={p.status === "active" ? "blue" : "slate"} /><span className="text-[11px] text-gray-400">{p.modelCount} models</span></div>}>
+        <Card key={p.code} title={p.name} right={<div className="flex items-center gap-1.5">{p.live && <Pill text="configured" tone="emerald" />}<Pill text={p.status} tone={p.status === "active" ? "blue" : "slate"} /><span className="text-[11px] text-gray-500">{p.modelCount} models</span></div>}>
           {p.models.length ? (
             <div className="overflow-x-auto">
               <div className="min-w-[820px] space-y-1">
-                <div className="flex items-center text-[10px] text-gray-400 uppercase tracking-wide px-2"><span className="w-44">Model</span><span className="flex-1">Capabilities</span><span className="w-20">Tier</span><span className="w-24 text-right">In / Out ($/1M)</span><span className="w-20 text-right">Context</span><span className="w-24 text-right">Usage (24h)</span><span className="w-20 text-right">Status</span></div>
+                <div className="flex items-center text-[10px] text-gray-500 uppercase tracking-wide px-2"><span className="w-44">Model</span><span className="flex-1">Capabilities</span><span className="w-20">Tier</span><span className="w-24 text-right">In / Out ($/1M)</span><span className="w-20 text-right">Context</span><span className="w-24 text-right">Usage (24h)</span><span className="w-20 text-right">Status</span></div>
                 {p.models.map((m: any) => (
                   <div key={m.id} className="flex items-center px-2 py-1.5 rounded-lg border border-gray-100 text-[12px]">
-                    <span className="w-44"><span className="text-gray-900 font-medium">{m.display_name}</span>{m.is_default && <span className="ml-1 text-[8px] text-violet-600 font-bold uppercase">default</span>}<br /><span className="text-[10px] text-gray-400 font-mono">{m.model_id}</span></span>
+                    <span className="w-44"><span className="text-gray-900 font-medium">{m.display_name}</span>{m.is_default && <span className="ml-1 text-[8px] text-violet-600 font-bold uppercase">default</span>}<br /><span className="text-[10px] text-gray-500 font-mono">{m.model_id}</span></span>
                     <span className="flex-1 flex flex-wrap gap-1">{(m.capabilities ?? []).slice(0, 4).map((c: string) => <span key={c} className="text-[9px] bg-gray-50 border border-gray-100 rounded px-1 py-0.5 text-gray-500">{c}</span>)}</span>
                     <span className="w-20"><Pill text={m.tier} tone={TIER_TONE[m.tier]} /></span>
                     <span className="w-24 text-right tabular-nums text-gray-700">{price(m.input_price)} / {price(m.output_price)}</span>
@@ -49,7 +49,7 @@ export default async function ModelsPage() {
                 ))}
               </div>
             </div>
-          ) : <p className="text-sm text-gray-400 py-3 text-center">No models registered.</p>}
+          ) : <p className="text-sm text-gray-500 py-3 text-center">No models registered.</p>}
         </Card>
       ))}
 

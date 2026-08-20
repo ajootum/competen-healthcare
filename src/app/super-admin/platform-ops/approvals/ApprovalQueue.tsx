@@ -41,7 +41,7 @@ export default function ApprovalQueue({ queue, workflows, canAct }: { queue: any
   return (
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100">
-        <h2 className="font-semibold text-gray-900 mr-auto">Approval Queue <span className="text-gray-400 font-normal text-sm">({queue.length})</span></h2>
+        <h2 className="font-semibold text-gray-900 mr-auto">Approval Queue <span className="text-gray-500 font-normal text-sm">({queue.length})</span></h2>
         {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
         {canAct && (
           <div className="flex items-center gap-2">
@@ -52,7 +52,7 @@ export default function ApprovalQueue({ queue, workflows, canAct }: { queue: any
         )}
       </div>
 
-      {queue.length === 0 ? <p className="text-sm text-gray-400 py-10 text-center">✅ No pending approvals.</p> : (
+      {queue.length === 0 ? <p className="text-sm text-gray-500 py-10 text-center">✅ No pending approvals.</p> : (
         <div className="divide-y divide-gray-50">
           {queue.map((item: any) => (
             <div key={`${item.source}:${item.id}`} className="flex items-center gap-3 px-4 py-3">
@@ -61,16 +61,16 @@ export default function ApprovalQueue({ queue, workflows, canAct }: { queue: any
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-medium text-gray-900 truncate">{item.entityName ?? item.workflow}</span>
                   <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{item.workflow}</span>
-                  <span className="text-[10px] text-gray-400">{item.step}</span>
+                  <span className="text-[10px] text-gray-500">{item.step}</span>
                 </div>
-                <p className="text-[11px] text-gray-400 truncate">{(item.entityType ?? "").replace(/_/g, " ")}{item.requestedBy ? ` · by ${item.requestedBy}` : ""}</p>
+                <p className="text-[11px] text-gray-500 truncate">{(item.entityType ?? "").replace(/_/g, " ")}{item.requestedBy ? ` · by ${item.requestedBy}` : ""}</p>
               </div>
               {canAct ? (
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button onClick={() => act(item, "approved")} disabled={busy?.startsWith(item.id)} className="text-[11px] font-medium rounded-lg border border-[var(--cmp-color-success)] text-[var(--cmp-text-success)] hover:bg-[var(--cmp-surface-success)] px-2.5 py-1 disabled:opacity-40">Approve</button>
                   <button onClick={() => act(item, "rejected")} disabled={busy?.startsWith(item.id)} className="text-[11px] font-medium rounded-lg border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] hover:bg-[var(--cmp-surface-error)] px-2.5 py-1 disabled:opacity-40">Reject</button>
                 </div>
-              ) : <span className="text-[10px] text-gray-400 shrink-0">pending</span>}
+              ) : <span className="text-[10px] text-gray-500 shrink-0">pending</span>}
             </div>
           ))}
         </div>

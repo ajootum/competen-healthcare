@@ -40,7 +40,7 @@ export default async function RootCausePage() {
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-[10px] font-bold text-gray-300 tracking-widest">QIE-005</p>
+          <p className="text-[10px] font-bold text-gray-500 tracking-widest">QIE-005</p>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Root Cause &amp; Causal Intelligence</h1>
           <p className="text-sm text-gray-500">Explain why events happen, not just that they did.</p>
         </div>
@@ -75,7 +75,7 @@ export default async function RootCausePage() {
               </p>
             )}
             {s.analysisRate === null && (
-              <p className="text-[11px] text-gray-400 mt-3">
+              <p className="text-[11px] text-gray-500 mt-3">
                 No incidents recorded, so there is no rate to show. A 0% here would be a made-up number, not an empty one.
               </p>
             )}
@@ -91,14 +91,14 @@ export default async function RootCausePage() {
               <span className="text-[11px] text-gray-500 shrink-0">{v.unanalysed.length}</span>
             </div>
             {v.unanalysed.length === 0 ? (
-              <p className="text-[11px] text-gray-400">Every recorded incident has an investigation.</p>
+              <p className="text-[11px] text-gray-500">Every recorded incident has an investigation.</p>
             ) : (
               <div className="divide-y divide-gray-50">
                 {v.unanalysed.slice(0, 25).map(i => (
                   <div key={i.id} className="py-2.5 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm text-gray-800 truncate">{i.description ?? i.incident_type ?? "Incident"}</p>
-                      <p className="text-[10px] text-gray-400">{i.incident_type ?? "—"} · {new Date(i.created_at).toLocaleDateString()}</p>
+                      <p className="text-[10px] text-gray-500">{i.incident_type ?? "—"} · {new Date(i.created_at).toLocaleDateString()}</p>
                     </div>
                     <span className="flex items-center gap-2 shrink-0">
                       {i.severity && (
@@ -109,7 +109,7 @@ export default async function RootCausePage() {
                   </div>
                 ))}
                 {v.unanalysed.length > 25 && (
-                  <p className="text-[10px] text-gray-400 pt-2">… and {v.unanalysed.length - 25} more. Not truncated silently: this is the count.</p>
+                  <p className="text-[10px] text-gray-500 pt-2">… and {v.unanalysed.length - 25} more. Not truncated silently: this is the count.</p>
                 )}
               </div>
             )}
@@ -125,9 +125,9 @@ export default async function RootCausePage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {s.factorsByCategory.map(c => (
                 <div key={c.category} className={`rounded-lg border p-2.5 ${c.total > 0 ? "border-gray-200 bg-white" : "border-dashed border-gray-200 bg-gray-50/60"}`}>
-                  <p className={`text-lg font-bold leading-none tabular-nums ${c.total > 0 ? "text-gray-900" : "text-gray-300"}`}>{c.total}</p>
+                  <p className={`text-lg font-bold leading-none tabular-nums ${c.total > 0 ? "text-gray-900" : "text-gray-500"}`}>{c.total}</p>
                   <p className="text-[11px] text-gray-600 mt-1">{c.label}</p>
-                  <p className="text-[9px] text-gray-400">{c.root} root cause{c.root === 1 ? "" : "s"}</p>
+                  <p className="text-[9px] text-gray-500">{c.root} root cause{c.root === 1 ? "" : "s"}</p>
                 </div>
               ))}
             </div>
@@ -139,7 +139,7 @@ export default async function RootCausePage() {
               <span className="text-[11px] text-gray-500 shrink-0">{s.open} open · {s.completed} completed</span>
             </div>
             {v.investigations.length === 0 ? (
-              <p className="text-[11px] text-gray-400">
+              <p className="text-[11px] text-gray-500">
                 None yet. The store exists and is empty — which is the true state, not a rendering of nothing.
               </p>
             ) : (
@@ -149,7 +149,7 @@ export default async function RootCausePage() {
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-gray-900">{inv.title}</p>
-                        <p className="text-[10px] text-gray-400">
+                        <p className="text-[10px] text-gray-500">
                           {inv.method.replace(/_/g, " ")} · opened {new Date(inv.opened_at).toLocaleDateString()}
                           {inv.opened_by_name ? ` by ${inv.opened_by_name}` : ""}
                           {inv.confidence ? ` · confidence ${inv.confidence}` : ""}

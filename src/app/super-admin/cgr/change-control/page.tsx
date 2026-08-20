@@ -48,7 +48,7 @@ export default async function ChangeControlPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-004 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Change Control &amp; Lifecycle</h1>
-          <p className="text-gray-400 text-sm mt-0.5">What changed, why, who is affected, and how it&apos;s safely implemented — controlled change with impact assessment and version integrity.</p>
+          <p className="text-gray-500 text-sm mt-0.5">What changed, why, who is affected, and how it&apos;s safely implemented — controlled change with impact assessment and version integrity.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/competency-office/lifecycle-state" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Lifecycle →</Link>
@@ -57,7 +57,7 @@ export default async function ChangeControlPage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No change requests or frameworks yet — change control, impact and version history compute once competencies exist and changes are raised.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No change requests or frameworks yet — change control, impact and version history compute once competencies exist and changes are raised.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -74,14 +74,14 @@ export default async function ChangeControlPage() {
             <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="text-sm font-bold text-gray-800">Change Log</p>
-                <p className="text-[10px] text-gray-400">controlled-change register · recent</p>
+                <p className="text-[10px] text-gray-500">controlled-change register · recent</p>
               </div>
               {d.changeLog.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-sm text-gray-400">No change requests raised yet. <Link href="/competency-office/review-board" className="text-[var(--cmp-text-success)] hover:underline">Raise a change →</Link></p></div>
+                <div className="p-6 text-center"><p className="text-sm text-gray-500">No change requests raised yet. <Link href="/competency-office/review-board" className="text-[var(--cmp-text-success)] hover:underline">Raise a change →</Link></p></div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[640px]">
-                    <thead><tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                    <thead><tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
                       <th className="text-left py-2 pl-4 pr-2">Change</th>
                       <th className="text-left py-2 px-2">Kind</th>
                       <th className="text-left py-2 px-2">Impact</th>
@@ -93,10 +93,10 @@ export default async function ChangeControlPage() {
                         <tr key={c.id} className="border-t border-gray-50">
                           <td className="py-2 pl-4 pr-2">
                             <p className="text-[12px] font-medium text-gray-800 leading-tight">{c.name}</p>
-                            <p className="text-[10px] text-gray-400 line-clamp-1">{c.entityType}{c.rationale ? ` · ${c.rationale}` : ""}</p>
+                            <p className="text-[10px] text-gray-500 line-clamp-1">{c.entityType}{c.rationale ? ` · ${c.rationale}` : ""}</p>
                           </td>
                           <td className="py-2 px-2"><span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 capitalize ${KIND_META[c.kind] ?? KIND_META.revision}`}>{c.kind}</span></td>
-                          <td className="py-2 px-2">{c.hasImpact ? <span className="text-[10px] text-[var(--cmp-text-success)] font-semibold">assessed</span> : <span className="text-[10px] text-gray-300">—</span>}</td>
+                          <td className="py-2 px-2">{c.hasImpact ? <span className="text-[10px] text-[var(--cmp-text-success)] font-semibold">assessed</span> : <span className="text-[10px] text-gray-500">—</span>}</td>
                           <td className="py-2 px-2 text-[11px] text-gray-500 tabular-nums">{c.effectiveDate ?? "—"}</td>
                           <td className="py-2 pr-4 pl-2"><span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${(CR_STATUS_META[c.status] ?? CR_STATUS_META.open).cls}`}>{(CR_STATUS_META[c.status] ?? CR_STATUS_META.open).label}</span></td>
                         </tr>
@@ -110,7 +110,7 @@ export default async function ChangeControlPage() {
             {/* Status + kind breakdown */}
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Change breakdown</p>
-              <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1.5">By status</p>
+              <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1.5">By status</p>
               <div className="space-y-1 mb-3">
                 {[["open", "bg-[var(--cmp-color-warning)]"], ["approved", "bg-[var(--cmp-color-success)]"], ["implemented", "bg-[var(--cmp-color-success)]"], ["rejected", "bg-[var(--cmp-color-error)]"]].map(([s, tone]) => (
                   <div key={s} className="flex items-center gap-2">
@@ -120,12 +120,12 @@ export default async function ChangeControlPage() {
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1.5">By kind</p>
+              <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1.5">By kind</p>
               <div className="flex gap-2">
                 {["major", "minor", "revision"].map((kd) => (
                   <div key={kd} className="flex-1 border border-gray-100 rounded-lg p-2 text-center">
                     <p className="text-lg font-bold text-gray-800 tabular-nums">{d.byKind[kd]}</p>
-                    <p className="text-[10px] text-gray-400 capitalize">{kd}</p>
+                    <p className="text-[10px] text-gray-500 capitalize">{kd}</p>
                   </div>
                 ))}
               </div>
@@ -136,10 +136,10 @@ export default async function ChangeControlPage() {
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <p className="text-sm font-bold text-gray-800">Impact Assessment — change blast radius</p>
-              <p className="text-[10px] text-gray-400">frameworks with open changes first · <Link href="/super-admin/studio/dependencies" className="text-[var(--cmp-text-success)] hover:underline">dependency graph →</Link></p>
+              <p className="text-[10px] text-gray-500">frameworks with open changes first · <Link href="/super-admin/studio/dependencies" className="text-[var(--cmp-text-success)] hover:underline">dependency graph →</Link></p>
             </div>
             {d.impacts.length === 0 ? (
-              <div className="p-6 text-center"><p className="text-sm text-gray-400">No frameworks to assess yet.</p></div>
+              <div className="p-6 text-center"><p className="text-sm text-gray-500">No frameworks to assess yet.</p></div>
             ) : (
               <div className="p-3 space-y-2">
                 {d.impacts.map((im: any) => (
@@ -149,7 +149,7 @@ export default async function ChangeControlPage() {
                         <p className="text-[13px] font-semibold text-gray-800 truncate">{im.name}</p>
                         {im.hasOpenChange && <span className="text-[9px] font-bold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded px-1.5 py-0.5 shrink-0">open change</span>}
                       </div>
-                      <span className="text-[11px] text-gray-400 shrink-0"><span className="font-bold text-gray-700 tabular-nums">{im.blastRadius}</span> objects affected{im.edges > 0 && ` · ${im.edges} edges`}</span>
+                      <span className="text-[11px] text-gray-500 shrink-0"><span className="font-bold text-gray-700 tabular-nums">{im.blastRadius}</span> objects affected{im.edges > 0 && ` · ${im.edges} edges`}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full bg-[var(--cmp-color-success)]" style={{ width: `${(im.blastRadius / impactMax) * 100}%` }} /></div>
@@ -177,16 +177,16 @@ export default async function ChangeControlPage() {
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] text-gray-400 mt-2.5">{k.retired} archived (retired). Per-worker competency lifecycle → <Link href="/competency-office/lifecycle-state" className="text-[var(--cmp-text-success)] hover:underline">state machine</Link>.</p>
+              <p className="text-[10px] text-gray-500 mt-2.5">{k.retired} archived (retired). Per-worker competency lifecycle → <Link href="/competency-office/lifecycle-state" className="text-[var(--cmp-text-success)] hover:underline">state machine</Link>.</p>
             </div>
 
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="text-sm font-bold text-gray-800">Version Integrity</p>
-                <p className="text-[10px] text-gray-400">overdue reviews first</p>
+                <p className="text-[10px] text-gray-500">overdue reviews first</p>
               </div>
               {d.versions.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-[12px] text-gray-400">No frameworks to version.</p></div>
+                <div className="p-6 text-center"><p className="text-[12px] text-gray-500">No frameworks to version.</p></div>
               ) : (
                 <div className="max-h-[260px] overflow-y-auto">
                   <table className="w-full">
@@ -196,7 +196,7 @@ export default async function ChangeControlPage() {
                           <td className="py-2 pl-4 pr-2 text-[12px] font-medium text-gray-800">{v.name}</td>
                           <td className="py-2 px-2"><span className="text-[11px] font-mono text-gray-500">v{v.version}</span></td>
                           <td className="py-2 px-2"><span className="inline-flex items-center gap-1 text-[10px] text-gray-500"><span className={`w-1.5 h-1.5 rounded-full ${(PUB_META[v.pubStatus] ?? PUB_META.draft).dot}`} />{(PUB_META[v.pubStatus] ?? PUB_META.draft).label}</span></td>
-                          <td className="py-2 pr-4 pl-2 text-right text-[10px] tabular-nums">{v.reviewDate ? <span className={v.reviewOverdue ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}>{v.reviewDate}{v.reviewOverdue && " ⚠"}</span> : <span className="text-gray-300">no review</span>}</td>
+                          <td className="py-2 pr-4 pl-2 text-right text-[10px] tabular-nums">{v.reviewDate ? <span className={v.reviewOverdue ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-500"}>{v.reviewDate}{v.reviewOverdue && " ⚠"}</span> : <span className="text-gray-500">no review</span>}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -206,7 +206,7 @@ export default async function ChangeControlPage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is live: the change log is the controlled-change register (change_requests), impact is computed by walking the real governed hierarchy + dependency graph, and version integrity comes from the framework semantic versions + lifecycle status. This is the change-control <span className="font-medium">workspace</span> — raising and approving changes happens in <Link href="/competency-office/review-board" className="text-[var(--cmp-text-success)] hover:underline">the review board</Link> and <Link href="/competency-office/lifecycle-state" className="text-[var(--cmp-text-success)] hover:underline">lifecycle management</Link>, where controlled change, version integrity and safe transition are enforced. Per the CGR mandate, AI may summarise impacts but never retires competencies or approves changes.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every figure is live: the change log is the controlled-change register (change_requests), impact is computed by walking the real governed hierarchy + dependency graph, and version integrity comes from the framework semantic versions + lifecycle status. This is the change-control <span className="font-medium">workspace</span> — raising and approving changes happens in <Link href="/competency-office/review-board" className="text-[var(--cmp-text-success)] hover:underline">the review board</Link> and <Link href="/competency-office/lifecycle-state" className="text-[var(--cmp-text-success)] hover:underline">lifecycle management</Link>, where controlled change, version integrity and safe transition are enforced. Per the CGR mandate, AI may summarise impacts but never retires competencies or approves changes.</p>
         </div>
       )}
     </div>

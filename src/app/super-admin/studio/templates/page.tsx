@@ -27,7 +27,7 @@ export default async function StudioTemplatesPage() {
         <div>
           <p className="text-[11px] font-semibold text-rose-500 uppercase tracking-widest mb-0.5">CST-102 · Template Library</p>
           <h1 className="text-xl font-bold text-gray-900">Template Library</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Reusable competency assets — frameworks, skills, question banks, checklists and CPUs — ready to clone.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Reusable competency assets — frameworks, skills, question banks, checklists and CPUs — ready to clone.</p>
         </div>
         <Link href="/super-admin/studio" className="text-xs font-semibold text-gray-500 hover:text-teal-700 border border-gray-200 rounded-lg px-3 py-2">← Studio</Link>
       </div>
@@ -36,18 +36,18 @@ export default async function StudioTemplatesPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <div className="bg-white rounded-xl border border-gray-100 p-3.5">
           <p className="text-xl font-bold text-gray-900">{total}</p>
-          <p className="text-[10px] text-gray-400 font-medium mt-0.5">Reusable assets</p>
+          <p className="text-[10px] text-gray-500 font-medium mt-0.5">Reusable assets</p>
         </div>
         {libraryBreakdown.map(b => (
           <div key={b.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
             <p className="text-xl font-bold text-gray-900">{b.n}</p>
-            <p className="text-[10px] text-gray-400 font-medium mt-0.5">{b.label} frameworks</p>
+            <p className="text-[10px] text-gray-500 font-medium mt-0.5">{b.label} frameworks</p>
           </div>
         ))}
       </div>
 
       {/* Template categories */}
-      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Template categories</h2>
+      <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Template categories</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 mb-6">
         {categories.map(c => (
           <Link key={c.key} href={c.href} className="bg-white rounded-xl border border-gray-100 p-5 hover:border-teal-200 hover:shadow-sm transition-all group block">
@@ -56,7 +56,7 @@ export default async function StudioTemplatesPage() {
               <p className="font-bold text-gray-900 text-sm group-hover:text-teal-700">{c.label}</p>
               <span className="ml-auto text-lg font-bold text-gray-900">{c.n}</span>
             </div>
-            <p className="text-[11px] text-gray-400 leading-relaxed mb-2">{c.desc}</p>
+            <p className="text-[11px] text-gray-500 leading-relaxed mb-2">{c.desc}</p>
             {c.breakdown && (
               <div className="flex gap-1.5 mb-2">
                 {c.breakdown.map(b => <span key={b.label} className="text-[10px] font-semibold text-gray-600 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">{b.label} {b.n}</span>)}
@@ -79,7 +79,7 @@ export default async function StudioTemplatesPage() {
             {featured.map(f => (
               <Link key={f.id} href={`/super-admin/content/${f.id}`} className="border border-gray-100 rounded-lg p-3 hover:border-teal-200 transition-colors">
                 <p className="text-xs font-semibold text-gray-800 truncate">{f.name}</p>
-                <p className="text-[10px] text-gray-400 mt-0.5">{f.kind}</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">{f.kind}</p>
               </Link>
             ))}
           </div>

@@ -37,7 +37,7 @@ function Card({ title, tag, children }: { title: string; tag?: string; children:
     <div className="bg-white rounded-xl border border-gray-100 p-4">
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">{title}</p>
-        {tag && <span className="text-[9px] font-semibold text-gray-400 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">{tag}</span>}
+        {tag && <span className="text-[9px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">{tag}</span>}
       </div>
       {children}
     </div>
@@ -69,7 +69,7 @@ export default async function GovernanceDashboardPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-006 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Governance Dashboard &amp; Intelligence</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Is our organisation assured that the workforce is competent, the competency systems are governed, and the risks are visible? Every metric derives from the live registry and shows its contributing factors.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Is our organisation assured that the workforce is competent, the competency systems are governed, and the risks are visible? Every metric derives from the live registry and shows its contributing factors.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/super-admin/cgr/registry" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2">Registry →</Link>
@@ -78,7 +78,7 @@ export default async function GovernanceDashboardPage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No competency definitions yet — once the registry has competencies, the governance dashboard computes here.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No competency definitions yet — once the registry has competencies, the governance dashboard computes here.</p></div>
       ) : (
         <div className="space-y-4">
           {/* Assurance score + maturity + dimensions */}
@@ -87,7 +87,7 @@ export default async function GovernanceDashboardPage() {
               <div className="flex items-center gap-4">
                 <div className="shrink-0">
                   <p className={`text-4xl font-bold tabular-nums ${scoreTone(d.assurance)}`}>{d.assurance}</p>
-                  <p className="text-[10px] text-gray-400">/100 composite</p>
+                  <p className="text-[10px] text-gray-500">/100 composite</p>
                 </div>
                 <div className="flex-1 space-y-1.5">{d.dimensions.map((dim: any) => <DimBar key={dim.label} label={dim.label} pct={dim.pct} />)}</div>
               </div>
@@ -96,14 +96,14 @@ export default async function GovernanceDashboardPage() {
             <Card title="Organisational Maturity" tag="§7">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-2xl font-bold text-emerald-700">L{d.maturity.num}</span>
-                <div><p className="text-sm font-bold text-gray-900">{d.maturity.label}</p><p className="text-[10px] text-gray-400">{d.maturity.desc}</p></div>
+                <div><p className="text-sm font-bold text-gray-900">{d.maturity.label}</p><p className="text-[10px] text-gray-500">{d.maturity.desc}</p></div>
               </div>
               <div className="flex gap-1">
                 {d.maturityModel.slice().reverse().map((m: any) => (
                   <div key={m.num} className={`flex-1 h-1.5 rounded-full ${m.num <= d.maturity.num ? "bg-[var(--cmp-color-success)]" : "bg-gray-100"}`} title={`L${m.num} ${m.label}`} />
                 ))}
               </div>
-              <p className="text-[10px] text-gray-400 mt-1.5">Reactive → Predictive · derived from the assurance score</p>
+              <p className="text-[10px] text-gray-500 mt-1.5">Reactive → Predictive · derived from the assurance score</p>
             </Card>
 
             <Card title="Risk Exposure" tag="§6.3">
@@ -121,10 +121,10 @@ export default async function GovernanceDashboardPage() {
             <Card title="Regulatory Readiness" tag="§6.2">
               <div className="flex items-baseline gap-2 mb-3">
                 <span className={`text-2xl font-bold tabular-nums ${scoreTone(d.regulatoryReadiness)}`}>{d.regulatoryReadiness}%</span>
-                <span className="text-[11px] text-gray-400">of competencies mapped to a standard</span>
+                <span className="text-[11px] text-gray-500">of competencies mapped to a standard</span>
               </div>
               {d.bodies.length === 0 ? (
-                <p className="text-[12px] text-gray-400">No standard mappings yet. <Link href="/super-admin/studio/standards" className="text-[var(--cmp-text-success)] hover:underline">Map standards →</Link></p>
+                <p className="text-[12px] text-gray-500">No standard mappings yet. <Link href="/super-admin/studio/standards" className="text-[var(--cmp-text-success)] hover:underline">Map standards →</Link></p>
               ) : (
                 <div className="space-y-1.5">
                   {d.bodies.map((b: any) => (
@@ -138,7 +138,7 @@ export default async function GovernanceDashboardPage() {
                       <span className="text-[11px] text-gray-500 tabular-nums w-20 shrink-0 text-right">{b.competencies} comp · {b.mappings}</span>
                     </div>
                   ))}
-                  <div className="flex gap-3 pt-1 text-[9px] text-gray-400">
+                  <div className="flex gap-3 pt-1 text-[9px] text-gray-500">
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />full</span>
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-warning)]" />partial</span>
                     <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300" />reference</span>
@@ -156,7 +156,7 @@ export default async function GovernanceDashboardPage() {
               </div>
               <DimBar label={`Decision validation rate (${d.decValidated}/${d.decTotal})`} pct={d.validationRate} />
               {d.change.total > 0 && (
-                <p className="text-[10px] text-gray-400 mt-2">Change requests by kind — major {d.change.major} · minor {d.change.minor} · revision {d.change.revision}. <Link href="/competency-office/lifecycle-state" className="text-[var(--cmp-text-success)] hover:underline">Change control →</Link></p>
+                <p className="text-[10px] text-gray-500 mt-2">Change requests by kind — major {d.change.major} · minor {d.change.minor} · revision {d.change.revision}. <Link href="/competency-office/lifecycle-state" className="text-[var(--cmp-text-success)] hover:underline">Change control →</Link></p>
               )}
             </Card>
           </div>
@@ -164,11 +164,11 @@ export default async function GovernanceDashboardPage() {
           {/* Domain portfolio */}
           <Card title="Domain Governance Portfolio" tag="Nursing Director lens · worst-governed first">
             {d.domains.length === 0 ? (
-              <p className="text-[12px] text-gray-400">No domains to profile.</p>
+              <p className="text-[12px] text-gray-500">No domains to profile.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[600px]">
-                  <thead><tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                  <thead><tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
                     <th className="text-left py-1.5 pr-3">Clinical domain</th>
                     <th className="text-center py-1.5 px-2">Competencies</th>
                     <th className="text-center py-1.5 px-2">Owned</th>
@@ -181,7 +181,7 @@ export default async function GovernanceDashboardPage() {
                         <td className="py-2 pr-3 text-[12px] font-medium text-gray-800">{dm.domain}</td>
                         <td className="py-2 px-2 text-center text-[12px] text-gray-600 tabular-nums">{dm.total}</td>
                         <td className="py-2 px-2 text-center text-[12px] tabular-nums text-gray-600">{dm.ownerPct}%</td>
-                        <td className="py-2 px-2 text-center text-[12px] tabular-nums"><span className={dm.atRisk ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}>{dm.atRisk}</span></td>
+                        <td className="py-2 px-2 text-center text-[12px] tabular-nums"><span className={dm.atRisk ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-500"}>{dm.atRisk}</span></td>
                         <td className="py-2 pl-2">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${barTone(dm.score)}`} style={{ width: `${dm.score}%` }} /></div>
@@ -204,20 +204,20 @@ export default async function GovernanceDashboardPage() {
                   <div key={r.id} className="flex items-center justify-between gap-2 border border-gray-50 rounded-lg px-3 py-2">
                     <div className="min-w-0">
                       <p className="text-[12px] font-medium text-gray-800 truncate">{r.name}</p>
-                      <p className="text-[10px] text-gray-400">{r.domain ?? "—"}</p>
+                      <p className="text-[10px] text-gray-500">{r.domain ?? "—"}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <span className={`text-[10px] font-bold ${STATE_META[r.state].text}`}>{STATE_META[r.state].label}</span>
-                      <p className="text-[10px] text-gray-400">{gapsOf(r)}</p>
+                      <p className="text-[10px] text-gray-500">{gapsOf(r)}</p>
                     </div>
                   </div>
                 ))}
               </div>
-              <p className="text-[10px] text-gray-400 mt-2.5"><Link href="/super-admin/cgr/ai" className="text-[var(--cmp-text-success)] hover:underline">Ask the governance copilot to prioritise these →</Link></p>
+              <p className="text-[10px] text-gray-500 mt-2.5"><Link href="/super-admin/cgr/ai" className="text-[var(--cmp-text-success)] hover:underline">Ask the governance copilot to prioritise these →</Link></p>
             </Card>
           )}
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is live: the assurance score and its dimensions come from the CGR-001 registry, regulatory readiness from the Standards Mapping Centre, governance performance from change control + competency decisions + governance councils, and the domain portfolio from the registry grouped by clinical domain. Nothing is fabricated — absent facts (unmapped, unowned, no evidence) render as real gaps.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every figure is live: the assurance score and its dimensions come from the CGR-001 registry, regulatory readiness from the Standards Mapping Centre, governance performance from change control + competency decisions + governance councils, and the domain portfolio from the registry grouped by clinical domain. Nothing is fabricated — absent facts (unmapped, unowned, no evidence) render as real gaps.</p>
         </div>
       )}
     </div>

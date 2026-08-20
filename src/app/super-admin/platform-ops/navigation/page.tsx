@@ -33,7 +33,7 @@ export default async function NavigationBuilder() {
 
   const header = (
     <>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Navigation &amp; Experience Designer</span>
@@ -41,7 +41,7 @@ export default async function NavigationBuilder() {
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">🧭</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Navigation &amp; Experience Designer <span className="text-gray-300 font-medium text-lg">(NCP-009)</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Navigation &amp; Experience Designer <span className="text-gray-500 font-medium text-lg">(NCP-009)</span></h1>
           <p className="text-sm text-gray-500">Compose role-aware menu trees whose items link to real modules, pages and dashboards, then preview per role.</p>
         </div>
       </div>
@@ -59,7 +59,7 @@ export default async function NavigationBuilder() {
         <Stat label="Menu Items" value={totalItems} sub="across all sections" />
       </div>
       <NavigationDesigner navs={listN} targets={(targets ?? []) as any[]} />
-      <p className="text-[11px] text-gray-400">Menu tree + landing + quick actions persist onto the object (linked modules/pages/dashboards become NAV_TARGET dependencies). The runtime navigation resolver (&lt;300ms), breadcrumb + search-navigation services, personalisation and responsive rendering (NCP-009 §3/§7/§8) are next-phase.</p>
+      <p className="text-[11px] text-gray-500">Menu tree + landing + quick actions persist onto the object (linked modules/pages/dashboards become NAV_TARGET dependencies). The runtime navigation resolver (&lt;300ms), breadcrumb + search-navigation services, personalisation and responsive rendering (NCP-009 §3/§7/§8) are next-phase.</p>
     </div>
   );
 }

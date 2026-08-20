@@ -108,12 +108,12 @@ export default function AttestControl({ controlId, controlLabel, alreadyAttested
           </select>
         </label>
         <label className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">
-          Evidence <span className="font-normal normal-case text-gray-400">(optional)</span>
+          Evidence <span className="font-normal normal-case text-gray-500">(optional)</span>
           <input className={`${FIELD} mt-0.5 font-normal normal-case`} value={evidenceRef} disabled={busy}
             onChange={e => setEvidenceRef(e.target.value)} placeholder="a link, a document, a run id" />
         </label>
         <label className="text-[10.5px] font-semibold uppercase tracking-wide text-gray-500">
-          Note <span className="font-normal normal-case text-gray-400">(optional)</span>
+          Note <span className="font-normal normal-case text-gray-500">(optional)</span>
           <input className={`${FIELD} mt-0.5 font-normal normal-case`} value={note} disabled={busy}
             onChange={e => setNote(e.target.value)} placeholder="what a later reader needs to know" />
         </label>

@@ -27,7 +27,7 @@ export default async function TranslationsPage() {
         <div>
           <p className="text-[11px] font-semibold text-rose-500 uppercase tracking-widest mb-0.5">CAP-012 · Translation & Localisation</p>
           <h1 className="text-xl font-bold text-gray-900">Localisation Engine</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Track translations of competency assets into target locales — coverage, status and translators.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Track translations of competency assets into target locales — coverage, status and translators.</p>
         </div>
         <Link href="/super-admin/studio/assets" className="text-xs font-semibold text-gray-500 hover:text-teal-700 border border-gray-200 rounded-lg px-3 py-2">← Asset Repository</Link>
       </div>
@@ -45,7 +45,7 @@ export default async function TranslationsPage() {
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-0.5">{k.label}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-0.5">{k.label}</p>
               </div>
             ))}
           </div>
@@ -54,7 +54,7 @@ export default async function TranslationsPage() {
             <div className="grid md:grid-cols-2 gap-5 mb-5">
               <div className="bg-white rounded-xl border border-gray-100 p-5">
                 <h2 className="font-semibold text-gray-900 text-sm mb-3">By locale</h2>
-                {tr.localeDist.length === 0 ? <p className="text-xs text-gray-400">No translations yet.</p> : tr.localeDist.map(l => (
+                {tr.localeDist.length === 0 ? <p className="text-xs text-gray-500">No translations yet.</p> : tr.localeDist.map(l => (
                   <div key={l.key} className="flex items-center gap-3 py-1.5 text-xs">
                     <span className="text-gray-600 w-24">{l.label}</span>
                     <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden"><div className="h-full rounded-full bg-teal-500" style={{ width: `${tr.kpis.total ? Math.round((l.n / tr.kpis.total) * 100) : 0}%` }} /></div>
@@ -65,7 +65,7 @@ export default async function TranslationsPage() {
               </div>
               <div className="bg-white rounded-xl border border-gray-100 p-5">
                 <h2 className="font-semibold text-gray-900 text-sm mb-3">By status</h2>
-                {tr.statusDist.length === 0 ? <p className="text-xs text-gray-400">No translations yet.</p> : tr.statusDist.map(s => (
+                {tr.statusDist.length === 0 ? <p className="text-xs text-gray-500">No translations yet.</p> : tr.statusDist.map(s => (
                   <div key={s.key} className="flex items-center gap-2.5 py-1.5 text-xs">
                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
                     <span className="text-gray-600 flex-1">{s.label}</span>

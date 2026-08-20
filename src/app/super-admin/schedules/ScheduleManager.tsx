@@ -47,7 +47,7 @@ export default function ScheduleManager({ frameworks }: { frameworks: Framework[
           <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
             placeholder="Schedule name *" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Cycle Type</label>
+            <label className="text-xs text-gray-500 mb-1 block">Cycle Type</label>
             <select value={form.cycle_type} onChange={e => setForm(p => ({ ...p, cycle_type: e.target.value }))}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
               <option value="orientation">Orientation</option>
@@ -59,18 +59,18 @@ export default function ScheduleManager({ frameworks }: { frameworks: Framework[
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Frequency (months)</label>
+              <label className="text-xs text-gray-500 mb-1 block">Frequency (months)</label>
               <input type="number" min={1} value={form.frequency_months} onChange={e => setForm(p => ({ ...p, frequency_months: e.target.value }))}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Grace Period (days)</label>
+              <label className="text-xs text-gray-500 mb-1 block">Grace Period (days)</label>
               <input type="number" min={0} value={form.grace_period_days} onChange={e => setForm(p => ({ ...p, grace_period_days: e.target.value }))}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Link to Framework (optional)</label>
+            <label className="text-xs text-gray-500 mb-1 block">Link to Framework (optional)</label>
             <select value={form.framework_id} onChange={e => setForm(p => ({ ...p, framework_id: e.target.value }))}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
               <option value="">All frameworks (global)</option>

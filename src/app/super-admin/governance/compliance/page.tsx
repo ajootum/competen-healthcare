@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
-const STATUS_BADGE: Record<string, string> = { compliant: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", at_risk: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", non_compliant: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", not_assessed: "bg-gray-100 text-gray-500", waived: "bg-violet-50 text-violet-700" };
+const STATUS_BADGE: Record<string, string> = { compliant: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", at_risk: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", non_compliant: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", not_assessed: "bg-gray-100 text-gray-600", waived: "bg-violet-50 text-violet-700" };
 const RISK_BADGE: Record<string, string> = { low: "bg-gray-100 text-gray-600", medium: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", high: "bg-[var(--cmp-surface-warning)] text-orange-700", critical: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 
 export default async function ComplianceManagement() {
@@ -34,14 +34,14 @@ export default async function ComplianceManagement() {
     { label: "Compliant", value: dash(k.compliant), icon: "✅", iconBg: "bg-[var(--cmp-surface-success)]", tone: "text-[var(--cmp-text-success)]" },
     { label: "At Risk", value: dash(k.atRisk), icon: "⚠️", iconBg: "bg-[var(--cmp-surface-warning)]", tone: (k.atRisk ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : undefined },
     { label: "Non-Compliant", value: dash(k.nonCompliant), icon: "🛑", iconBg: "bg-[var(--cmp-surface-error)]", tone: (k.nonCompliant ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : undefined },
-    { label: "Not Assessed", value: dash(k.notAssessed), icon: "❔", iconBg: "bg-gray-50", tone: "text-gray-400" },
+    { label: "Not Assessed", value: dash(k.notAssessed), icon: "❔", iconBg: "bg-gray-50", tone: "text-gray-500" },
     { label: "Expiring (30d)", value: dash(k.expiringSoon), icon: "🕓", iconBg: "bg-[var(--cmp-surface-warning)]", tone: (k.expiringSoon ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : undefined },
   ];
 
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/governance" className="hover:text-teal-700">Governance &amp; Compliance</Link><span>/</span><span className="text-gray-600">Compliance Management</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Compliance Management</h1>
@@ -75,12 +75,12 @@ export default async function ComplianceManagement() {
         <div className={`${card} p-5 lg:col-span-2`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 text-[15px]">Obligations Register</h2>
-            <span className="text-[10px] text-gray-400">{dash(d.waived)} waived · {dash(d.expired)} expired</span>
+            <span className="text-[10px] text-gray-500">{dash(d.waived)} waived · {dash(d.expired)} expired</span>
           </div>
-          {d.register.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">{d.ready ? "No obligations registered yet — add the first one above." : "Activates with migration 059."}</p> : (
+          {d.register.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">{d.ready ? "No obligations registered yet — add the first one above." : "Activates with migration 059."}</p> : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-100">
                   <th className="px-3 py-2 font-semibold">Obligation</th><th className="px-3 py-2 font-semibold">Authority</th><th className="px-3 py-2 font-semibold">Domain</th><th className="px-3 py-2 font-semibold">Scope</th><th className="px-3 py-2 font-semibold text-right">Expiry</th><th className="px-3 py-2 font-semibold text-right">Risk</th><th className="px-3 py-2 font-semibold text-right">Status</th>
                 </tr></thead>
                 <tbody>
@@ -104,12 +104,12 @@ export default async function ComplianceManagement() {
         {/* Compliance calendar */}
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Compliance Calendar</h2>
-          {d.calendar.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No dated obligations or policy reviews.</p> : (
+          {d.calendar.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No dated obligations or policy reviews.</p> : (
             <div className="space-y-2">
               {d.calendar.map((c: any, i: number) => (
                 <div key={i} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5">
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 tabular-nums ${c.overdue ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : c.dueSoon ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-gray-50 text-gray-500"}`}>{c.date}</span>
-                  <div className="min-w-0 flex-1"><p className="text-xs text-gray-700 truncate">{c.title}</p><p className="text-[9px] text-gray-400 capitalize">{c.kind}</p></div>
+                  <div className="min-w-0 flex-1"><p className="text-xs text-gray-700 truncate">{c.title}</p><p className="text-[9px] text-gray-500 capitalize">{c.kind}</p></div>
                   {c.overdue && <span className="text-[9px] font-semibold text-[var(--cmp-text-error)] shrink-0">OVERDUE</span>}
                 </div>
               ))}
@@ -121,22 +121,22 @@ export default async function ComplianceManagement() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Derived domain compliance */}
         <div className={`${card} p-5 lg:col-span-2`}>
-          <h2 className="font-semibold text-gray-900 text-[15px] mb-1">Compliance by Domain <span className="text-[10px] text-gray-400">derived from live signals</span></h2>
-          <p className="text-[11px] text-gray-400 mb-3">Computed directly from operational records — independent of the register.</p>
+          <h2 className="font-semibold text-gray-900 text-[15px] mb-1">Compliance by Domain <span className="text-[10px] text-gray-500">derived from live signals</span></h2>
+          <p className="text-[11px] text-gray-500 mb-3">Computed directly from operational records — independent of the register.</p>
           <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
             {d.derivedDomains.map((dom: any) => (
               <div key={dom.label}>
-                <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600">{dom.label}</span><span className={`tabular-nums ${dom.value == null ? "text-gray-300" : "text-gray-700"}`}>{dom.value == null ? "n/a" : `${dom.value}%`}</span></div>
+                <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600">{dom.label}</span><span className={`tabular-nums ${dom.value == null ? "text-gray-500" : "text-gray-700"}`}>{dom.value == null ? "n/a" : `${dom.value}%`}</span></div>
                 <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">{dom.value != null && <div className={`h-full rounded-full ${dom.value >= 80 ? "bg-[var(--cmp-color-success)]" : dom.value >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${dom.value}%` }} />}</div>
                 {/* The caveat travels with the number. A learner-reported figure shown bare next to audit
                     compliance reads as equally measured, which is the whole defect being corrected. */}
-                {dom.note && <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{dom.note}</p>}
+                {dom.note && <p className="text-[10px] text-gray-500 mt-0.5 leading-tight">{dom.note}</p>}
               </div>
             ))}
           </div>
           {d.byDomain.length > 0 && (
             <div className="mt-4 pt-3 border-t border-gray-50">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1.5">Registered obligations by domain</p>
+              <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1.5">Registered obligations by domain</p>
               <div className="flex flex-wrap gap-1.5">
                 {d.byDomain.map((b: any) => <span key={b.domain} className="text-[10px] text-gray-600 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 capitalize">{String(b.domain).replace(/_/g, " ")} · {b.n}</span>)}
               </div>
@@ -153,14 +153,14 @@ export default async function ComplianceManagement() {
           </div>
           <div className="space-y-1 mt-2">
             {Object.entries(d.evidence.kinds).map(([kind, n]: any) => (
-              <div key={kind} className="flex items-center justify-between text-xs"><span className="text-gray-500 capitalize">{String(kind).replace(/_/g, " ")}</span><span className="tabular-nums text-gray-400">{n}</span></div>
+              <div key={kind} className="flex items-center justify-between text-xs"><span className="text-gray-500 capitalize">{String(kind).replace(/_/g, " ")}</span><span className="tabular-nums text-gray-500">{n}</span></div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">Today’s evidence store holds clinical files (logbook/credential documents). Attaching evidence directly to obligations and CAPAs — GRC evidence — lands with the evidence-linkage phase.</p>
+          <p className="text-[10px] text-gray-500 mt-3 pt-2 border-t border-gray-50">Today’s evidence store holds clinical files (logbook/credential documents). Attaching evidence directly to obligations and CAPAs — GRC evidence — lands with the evidence-linkage phase.</p>
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Compliance Management keeps the obligations register (real rows, audit-logged status changes, waivers require justification) alongside a derived multi-domain compliance view computed from live operational records — clinical audits, training pathway items, validated competency coverage and policy currency. The calendar merges obligation expiries with policy reviews. Automated reminders and GRC evidence attachments arrive with the notification wiring and evidence-linkage phases.</p>
+      <p className="text-[11px] text-gray-500 pb-4">Compliance Management keeps the obligations register (real rows, audit-logged status changes, waivers require justification) alongside a derived multi-domain compliance view computed from live operational records — clinical audits, training pathway items, validated competency coverage and policy currency. The calendar merges obligation expiries with policy reviews. Automated reminders and GRC evidence attachments arrive with the notification wiring and evidence-linkage phases.</p>
     </div>
   );
 }

@@ -78,7 +78,7 @@ export default async function AssurancePlatformPage() {
         <div>
           <p className="text-[11px] font-semibold text-indigo-500 uppercase tracking-widest mb-0.5">CAPA-000 · Competency Assurance Platform</p>
           <h1 className="text-xl font-bold text-gray-900">Competency Assurance</h1>
-          <p className="text-gray-400 text-sm mt-0.5">The assurance layer — continuously checking that the competency machinery itself stays valid, reliable and compliant. Studio authors, Delivery runs, the Office governs, and Assurance verifies it all holds.</p>
+          <p className="text-gray-500 text-sm mt-0.5">The assurance layer — continuously checking that the competency machinery itself stays valid, reliable and compliant. Studio authors, Delivery runs, the Office governs, and Assurance verifies it all holds.</p>
         </div>
         <Link href="/super-admin" className="text-xs font-semibold text-gray-500 hover:text-indigo-700 border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Mission Control</Link>
       </div>
@@ -87,7 +87,7 @@ export default async function AssurancePlatformPage() {
         {STATS.map(s => (
           <div key={s.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
             <div className="flex items-center justify-between mb-1"><span className="text-sm">{s.icon}</span><p className="text-lg font-bold text-gray-900">{s.value}</p></div>
-            <p className="text-[10px] text-gray-400 font-medium leading-tight">{s.label}</p>
+            <p className="text-[10px] text-gray-500 font-medium leading-tight">{s.label}</p>
           </div>
         ))}
       </div>
@@ -96,7 +96,7 @@ export default async function AssurancePlatformPage() {
         {nReal > 0 && <span className="font-semibold text-teal-700 bg-teal-50 border border-teal-100 rounded-lg px-2.5 py-1">{nReal} live</span>}
         {nLinked > 0 && <span className="font-semibold text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-lg px-2.5 py-1">{nLinked} linked (existing surface)</span>}
         {nPartial > 0 && <span className="font-semibold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-2.5 py-1">{nPartial} partial</span>}
-        {nGap > 0 && <span className="font-semibold text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{nGap} planned</span>}
+        {nGap > 0 && <span className="font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{nGap} planned</span>}
       </div>
 
       <Layer accent="indigo" title="Rules & Audit · CAPA-001/002" mods={RULES_AUDIT} />

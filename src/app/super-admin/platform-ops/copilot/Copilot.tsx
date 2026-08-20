@@ -62,7 +62,7 @@ export default function Copilot({ configured }: { configured: boolean }) {
         </div>
         <div className="flex items-center gap-3 mt-3">
           <button onClick={generate} disabled={busy || !prompt.trim()} className="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-4 py-2 disabled:opacity-50">{busy ? "Thinking…" : "✨ Generate"}</button>
-          {result?.usage && <span className="text-[10px] text-gray-400">{result.model} · {result.usage.input}+{result.usage.output} tok</span>}
+          {result?.usage && <span className="text-[10px] text-gray-500">{result.model} · {result.usage.input}+{result.usage.output} tok</span>}
         </div>
       </div>
 
@@ -72,8 +72,8 @@ export default function Copilot({ configured }: { configured: boolean }) {
         <div className={`${card} p-5`}>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-semibold">{a.object_type}</span>
-            <h3 className="text-sm font-semibold text-gray-900">{a.display_name || <span className="text-gray-300">untitled</span>}</h3>
-            <span className="text-[10px] text-gray-400 font-mono ml-auto">{a.object_key}</span>
+            <h3 className="text-sm font-semibold text-gray-900">{a.display_name || <span className="text-gray-500">untitled</span>}</h3>
+            <span className="text-[10px] text-gray-500 font-mono ml-auto">{a.object_key}</span>
           </div>
           {result.rationale && <p className="text-[11px] text-gray-500 mb-3 italic">{result.rationale}</p>}
 
@@ -85,7 +85,7 @@ export default function Copilot({ configured }: { configured: boolean }) {
           <pre className="text-[11px] bg-gray-50 border border-gray-100 rounded-lg p-3 overflow-x-auto text-gray-700 max-h-72">{JSON.stringify(a.definition, null, 2)}</pre>
 
           <div className="flex items-center justify-between mt-4">
-            <p className="text-[10px] text-gray-400">Authoring creates a governed DRAFT — it flows through governance, the dependency gate and version history before going live.</p>
+            <p className="text-[10px] text-gray-500">Authoring creates a governed DRAFT — it flows through governance, the dependency gate and version history before going live.</p>
             {authored ? (
               <a href={HREF[a.object_type] ?? "/super-admin/platform-ops/registry"} className="text-sm font-medium text-emerald-700 border border-[var(--cmp-color-success)] rounded-lg px-4 py-2 hover:bg-[var(--cmp-surface-success)]">Open in designer →</a>
             ) : (

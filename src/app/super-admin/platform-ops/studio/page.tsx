@@ -32,7 +32,7 @@ export default async function ConfigurationStudio() {
 
   const header = (
     <>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Configuration Studio</span>
@@ -56,23 +56,23 @@ export default async function ConfigurationStudio() {
 
       <div className={`${card} p-5`}>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900 text-sm">Studio-authored objects <span className="text-gray-300 font-normal">({drafts.length})</span></h2>
+          <h2 className="font-semibold text-gray-900 text-sm">Studio-authored objects <span className="text-gray-500 font-normal">({drafts.length})</span></h2>
           <Link href="/super-admin/platform-ops/registry" className="text-[11px] text-indigo-700 hover:underline">Open Registry →</Link>
         </div>
         {drafts.length ? (
           <div className="divide-y divide-gray-50">
             {drafts.map(o => (
               <div key={o.object_key} className="flex items-center gap-2 py-2">
-                <span className="text-[9px] font-semibold rounded px-1.5 py-0.5 bg-gray-100 text-gray-500 shrink-0">{OBJECT_TYPE_LABEL[o.object_type] ?? o.object_type}</span>
-                <div className="flex-1 min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{o.display_name}</p><p className="text-[10px] text-gray-400 font-mono truncate">{o.object_key}</p></div>
-                <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 ${STATUS_TONE[o.status] ?? "bg-gray-100 text-gray-500"}`}>{String(o.status).replace(/_/g, " ")}</span>
+                <span className="text-[9px] font-semibold rounded px-1.5 py-0.5 bg-gray-100 text-gray-600 shrink-0">{OBJECT_TYPE_LABEL[o.object_type] ?? o.object_type}</span>
+                <div className="flex-1 min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{o.display_name}</p><p className="text-[10px] text-gray-500 font-mono truncate">{o.object_key}</p></div>
+                <span className={`text-[10px] font-semibold rounded-full px-2 py-0.5 shrink-0 ${STATUS_TONE[o.status] ?? "bg-gray-100 text-gray-600"}`}>{String(o.status).replace(/_/g, " ")}</span>
               </div>
             ))}
           </div>
-        ) : <p className="text-xs text-gray-400 py-6 text-center">No objects authored here yet. Create one above — it will appear as a governed draft.</p>}
+        ) : <p className="text-xs text-gray-500 py-6 text-center">No objects authored here yet. Create one above — it will appear as a governed draft.</p>}
       </div>
 
-      <p className="text-[11px] text-gray-400">Type-specific visual designers — form fields (NCP-003), metric formulas (NCP-005), workflow nodes (NCP-004), rule tables (NCP-007), layout canvas (NCP-001) — are the next-phase depth on top of this governed authoring core.</p>
+      <p className="text-[11px] text-gray-500">Type-specific visual designers — form fields (NCP-003), metric formulas (NCP-005), workflow nodes (NCP-004), rule tables (NCP-007), layout canvas (NCP-001) — are the next-phase depth on top of this governed authoring core.</p>
     </div>
   );
 }

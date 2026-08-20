@@ -20,7 +20,7 @@ const fmt = (n: number) => n.toLocaleString();
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const pct = (n: number | null | undefined) => (n == null ? "—" : `${n}%`);
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
-const scoreTone = (n: number | null) => (n == null ? "text-gray-300" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-teal-600" : n >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
+const scoreTone = (n: number | null) => (n == null ? "text-gray-500" : n >= 90 ? "text-[var(--cmp-text-success)]" : n >= 75 ? "text-teal-600" : n >= 50 ? "text-[var(--cmp-text-warning)]" : "text-[var(--cmp-text-error)]");
 const CAPA_TONE: Record<string, string> = { open: "text-[var(--cmp-text-error)]", in_progress: "text-[var(--cmp-text-warning)]", completed: "text-teal-600", verified: "text-[var(--cmp-text-success)]", closed: "text-[var(--cmp-text-success)]" };
 
 export default async function GovernanceDashboard() {
@@ -40,7 +40,7 @@ export default async function GovernanceDashboard() {
     { label: "Open Risks", value: dash(k.openRisks), icon: "⚠️", tone: (k.openRisks ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900" },
     { label: "Audit Completion", value: pct(k.auditCompletion), icon: "📋", tone: "text-gray-900" },
     { label: "Policies Due / Overdue", value: dash(k.policiesDue), icon: "📄", tone: (k.policiesDue ?? 0) > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900" },
-    { label: "Regulatory Alerts", value: dash(k.regulatoryAlerts), icon: "🔔", tone: (k.regulatoryAlerts ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : k.regulatoryAlerts == null ? "text-gray-400" : "text-gray-900" },
+    { label: "Regulatory Alerts", value: dash(k.regulatoryAlerts), icon: "🔔", tone: (k.regulatoryAlerts ?? 0) > 0 ? "text-[var(--cmp-text-error)]" : k.regulatoryAlerts == null ? "text-gray-500" : "text-gray-900" },
   ];
 
   const actions = [
@@ -59,7 +59,7 @@ export default async function GovernanceDashboard() {
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Governance &amp; Compliance</h1>
           <p className="text-sm text-gray-500">Enterprise governance, risk, compliance, audit and accreditation oversight across all organisations.</p>
         </div>
-        <span className="text-xs text-gray-400 tabular-nums">Updated {new Date(g.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+        <span className="text-xs text-gray-500 tabular-nums">Updated {new Date(g.generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
       </div>
 
       {/* KPI ribbon */}
@@ -78,23 +78,23 @@ export default async function GovernanceDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Governance scorecard dimensions */}
         <div className={`${card} p-5`}>
-          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Governance Scorecard <span className="text-[10px] text-gray-400">measured dimensions</span></h2>
+          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Governance Scorecard <span className="text-[10px] text-gray-500">measured dimensions</span></h2>
           <div className="space-y-2.5">
             {g.dims.map((d: any) => (
               <div key={d.label}>
-                <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600">{d.label}</span><span className={`tabular-nums ${d.value == null ? "text-gray-300" : "text-gray-700"}`}>{d.value == null ? "n/a" : `${d.value}%`}</span></div>
+                <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600">{d.label}</span><span className={`tabular-nums ${d.value == null ? "text-gray-500" : "text-gray-700"}`}>{d.value == null ? "n/a" : `${d.value}%`}</span></div>
                 <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">{d.value != null && <div className={`h-full rounded-full ${d.value >= 80 ? "bg-[var(--cmp-color-success)]" : d.value >= 50 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${d.value}%` }} />}</div>
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">Governance Score = mean of the measured dimensions. Sourced from audits, CAPA, policies and findings — no fabricated composites.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Governance Score = mean of the measured dimensions. Sourced from audits, CAPA, policies and findings — no fabricated composites.</p>
         </div>
 
         {/* Compliance by organisation */}
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Compliance by Organisation</h2>
           <div className="grid grid-cols-2 gap-2 mb-3">
-            {[["Compliant (≥90%)", g.orgCompliance.compliant, "text-[var(--cmp-text-success)]"], ["Partial (70–89%)", g.orgCompliance.partial, "text-[var(--cmp-text-warning)]"], ["Non-compliant", g.orgCompliance.non, "text-[var(--cmp-text-error)]"], ["Not assessed", g.orgCompliance.notAssessed, "text-gray-400"]].map(([l, n, tone]: any) => (
+            {[["Compliant (≥90%)", g.orgCompliance.compliant, "text-[var(--cmp-text-success)]"], ["Partial (70–89%)", g.orgCompliance.partial, "text-[var(--cmp-text-warning)]"], ["Non-compliant", g.orgCompliance.non, "text-[var(--cmp-text-error)]"], ["Not assessed", g.orgCompliance.notAssessed, "text-gray-500"]].map(([l, n, tone]: any) => (
               <div key={l} className="rounded-lg border border-gray-100 p-2.5 text-center"><p className={`text-xl font-bold tabular-nums ${tone}`}>{fmt(n)}</p><p className="text-[9px] text-gray-500 leading-tight">{l}</p></div>
             ))}
           </div>
@@ -105,13 +105,13 @@ export default async function GovernanceDashboard() {
               ))}
             </div>
           )}
-          <p className="text-[10px] text-gray-400 mt-2">Facility average of audit compliance_pct.</p>
+          <p className="text-[10px] text-gray-500 mt-2">Facility average of audit compliance_pct.</p>
         </div>
 
         {/* Executive alerts (spec §D) — every line derives from a live register */}
         <div className={`${card} p-5`}>
-          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Executive Alerts <span className="text-[10px] text-gray-400">live from the GRC registers</span></h2>
-          {g.executiveAlerts.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">✅ No urgent governance issues.</p> : (
+          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Executive Alerts <span className="text-[10px] text-gray-500">live from the GRC registers</span></h2>
+          {g.executiveAlerts.length === 0 ? <p className="text-sm text-gray-500 py-4 text-center">✅ No urgent governance issues.</p> : (
             <div className="space-y-1.5 mb-3">
               {g.executiveAlerts.map((a: any) => (
                 <Link key={a.label} href={a.href} className="flex items-center justify-between rounded-lg border border-gray-100 px-2.5 py-1.5 hover:border-teal-300 hover:bg-teal-50/40 transition-colors">
@@ -123,13 +123,13 @@ export default async function GovernanceDashboard() {
           )}
           {g.highRiskOrgs.length > 0 && (
             <div className="space-y-1 pt-2 border-t border-gray-50">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase">High-risk organisations</p>
+              <p className="text-[10px] font-semibold text-gray-500 uppercase">High-risk organisations</p>
               {g.highRiskOrgs.map((o: any) => (
                 <div key={o.id} className="flex items-center justify-between text-xs"><span className="text-gray-600 truncate">{o.name}</span><span className="tabular-nums text-[var(--cmp-text-error)] shrink-0 ml-2">{o.highCapa} high CAPA{o.avg != null ? ` · ${o.avg}%` : ""}</span></div>
               ))}
             </div>
           )}
-          <p className="text-[10px] text-gray-400 mt-2">{g.registers.risksReady ? `${dash(g.riskIndicators.registeredOpen)} open registered risk${g.riskIndicators.registeredOpen === 1 ? "" : "s"} (${dash(g.riskIndicators.registeredHighCritical)} high/critical) · plus ${dash(g.riskIndicators.safetyAlerts)} safety alert${g.riskIndicators.safetyAlerts === 1 ? "" : "s"} and ${dash(g.riskIndicators.escalations)} escalation${g.riskIndicators.escalations === 1 ? "" : "s"} from operations.` : "Risk register not enabled — run migration 060."}</p>
+          <p className="text-[10px] text-gray-500 mt-2">{g.registers.risksReady ? `${dash(g.riskIndicators.registeredOpen)} open registered risk${g.riskIndicators.registeredOpen === 1 ? "" : "s"} (${dash(g.riskIndicators.registeredHighCritical)} high/critical) · plus ${dash(g.riskIndicators.safetyAlerts)} safety alert${g.riskIndicators.safetyAlerts === 1 ? "" : "s"} and ${dash(g.riskIndicators.escalations)} escalation${g.riskIndicators.escalations === 1 ? "" : "s"} from operations.` : "Risk register not enabled — run migration 060."}</p>
         </div>
       </div>
 
@@ -137,7 +137,7 @@ export default async function GovernanceDashboard() {
         {/* Approval queue */}
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900 text-[15px]">Approval Queue <span className="text-[10px] text-gray-400">{dash(g.pendingApprovals)} pending</span></h2>
+            <h2 className="font-semibold text-gray-900 text-[15px]">Approval Queue <span className="text-[10px] text-gray-500">{dash(g.pendingApprovals)} pending</span></h2>
             <Link href="/super-admin/platform-ops/approvals" className="text-xs text-teal-700 hover:underline">Decide →</Link>
           </div>
           {/* Decide in place — approve/reject without leaving the dashboard */}
@@ -148,14 +148,14 @@ export default async function GovernanceDashboard() {
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 text-[15px]">Recent Audit Findings</h2>
-            <span className="text-[10px] text-gray-400">not-met items</span>
+            <span className="text-[10px] text-gray-500">not-met items</span>
           </div>
-          {g.recentFindings.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No unmet findings recorded.</p> : (
+          {g.recentFindings.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No unmet findings recorded.</p> : (
             <div className="divide-y divide-gray-50">
               {g.recentFindings.map((f: any, i: number) => (
                 <div key={i} className="flex items-start gap-2 py-2">
                   <span className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${f.is_critical ? "bg-[var(--cmp-color-error)]" : "bg-[var(--cmp-color-warning)]"}`} />
-                  <div className="min-w-0 flex-1"><p className="text-xs text-gray-800 leading-tight">{f.item_text}</p><p className="text-[10px] text-gray-400">{f.is_critical ? "critical · " : ""}{relTime(f.created_at)}</p></div>
+                  <div className="min-w-0 flex-1"><p className="text-xs text-gray-800 leading-tight">{f.item_text}</p><p className="text-[10px] text-gray-500">{f.is_critical ? "critical · " : ""}{relTime(f.created_at)}</p></div>
                 </div>
               ))}
             </div>
@@ -165,9 +165,9 @@ export default async function GovernanceDashboard() {
         {/* CAPA progress */}
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900 text-[15px]">CAPA Progress <span className="text-[10px] text-gray-400">{fmt(g.capaTotal)} total</span></h2>
+            <h2 className="font-semibold text-gray-900 text-[15px]">CAPA Progress <span className="text-[10px] text-gray-500">{fmt(g.capaTotal)} total</span></h2>
           </div>
-          {g.capaTotal === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No corrective actions yet.</p> : (
+          {g.capaTotal === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No corrective actions yet.</p> : (
             <div className="space-y-2">
               {["open", "in_progress", "completed", "verified", "closed"].map(status => [status, g.capaProgress[status] ?? 0] as const).filter(([, n]) => n > 0).map(([status, n]) => (
                 <div key={status}>
@@ -184,31 +184,31 @@ export default async function GovernanceDashboard() {
         {/* Accreditation frameworks */}
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Accreditation Frameworks</h2>
-          {g.frameworks.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No frameworks configured.</p> : (
+          {g.frameworks.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No frameworks configured.</p> : (
             <div className="space-y-2">
               {g.frameworks.map((f: any) => (
                 <div key={f.code} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5">
                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${f.type === "accreditation" ? "bg-violet-50 text-violet-700" : f.type === "regulatory" ? "bg-[var(--cmp-surface-information)] text-blue-700" : "bg-gray-100 text-gray-600"}`}>{f.code}</span>
                   <span className="text-sm text-gray-800 flex-1 truncate">{f.name}</span>
-                  <span className="text-[10px] text-gray-400 tabular-nums shrink-0">{f.standards} mapped</span>
+                  <span className="text-[10px] text-gray-500 tabular-nums shrink-0">{f.standards} mapped</span>
                 </div>
               ))}
             </div>
           )}
-          <p className="text-[10px] text-gray-400 mt-3">EQOS quality frameworks with mapped standards; per-standard readiness scoring lands in module 6.</p>
+          <p className="text-[10px] text-gray-500 mt-3">EQOS quality frameworks with mapped standards; per-standard readiness scoring lands in module 6.</p>
         </div>
 
         {/* Recent audits */}
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 text-[15px]">Recent Audits</h2>
-            <span className="text-[10px] text-gray-400">planning lands in module 5</span>
+            <span className="text-[10px] text-gray-500">planning lands in module 5</span>
           </div>
-          {g.recentAudits.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No audits recorded yet.</p> : (
+          {g.recentAudits.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No audits recorded yet.</p> : (
             <div className="divide-y divide-gray-50">
               {g.recentAudits.map((a: any, i: number) => (
                 <div key={i} className="flex items-center gap-2 py-2">
-                  <div className="min-w-0 flex-1"><p className="text-sm text-gray-800 leading-tight truncate">{a.title}</p><p className="text-[10px] text-gray-400 capitalize">{a.type}{a.org ? ` · ${a.org}` : ""} · {relTime(a.at)}</p></div>
+                  <div className="min-w-0 flex-1"><p className="text-sm text-gray-800 leading-tight truncate">{a.title}</p><p className="text-[10px] text-gray-500 capitalize">{a.type}{a.org ? ` · ${a.org}` : ""} · {relTime(a.at)}</p></div>
                   <span className={`text-sm font-bold tabular-nums shrink-0 ${scoreTone(a.pct == null ? null : Math.round(a.pct))}`}>{a.pct == null ? "—" : `${Math.round(a.pct)}%`}</span>
                 </div>
               ))}
@@ -223,12 +223,12 @@ export default async function GovernanceDashboard() {
             <Link href="/super-admin/audit" className="text-xs text-teal-700 hover:underline">Full trail →</Link>
           </div>
           <p className="text-[11px] text-gray-500 mb-2">{dash(g.committees.count)} committees · {dash(g.committees.members)} members · {fmt(g.policyStats.total)} active policies{g.policyStats.overdue ? ` · ${g.policyStats.overdue} overdue review` : ""}</p>
-          {g.activity.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">No governance actions recorded.</p> : (
+          {g.activity.length === 0 ? <p className="text-sm text-gray-500 py-4 text-center">No governance actions recorded.</p> : (
             <div className="divide-y divide-gray-50">
               {g.activity.slice(0, 6).map((a: any, i: number) => (
                 <div key={i} className="py-1.5">
                   <p className="text-xs text-gray-700 truncate">{a.entity_name || (a.action ?? "").replace(/_/g, " ")}</p>
-                  <p className="text-[10px] text-gray-400">{(a.action ?? "").replace(/_/g, " ")}{a.actor_name ? ` · ${a.actor_name}` : ""} · {relTime(a.created_at)}</p>
+                  <p className="text-[10px] text-gray-500">{(a.action ?? "").replace(/_/g, " ")}{a.actor_name ? ` · ${a.actor_name}` : ""} · {relTime(a.created_at)}</p>
                 </div>
               ))}
             </div>
@@ -248,7 +248,7 @@ export default async function GovernanceDashboard() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The Governance Dashboard is the command centre over the full GRC platform. Every figure is live: the scorecard now spans seven measured dimensions (audits, CAPA, policies, findings, control effectiveness from the controls library, accreditation readiness from standard self-assessments), Open Risks reads the 5×5 register, Regulatory Alerts derives from regulatory/licence obligations that are non-compliant, at risk or expiring within 30 days (the register — not an external feed), executive alerts aggregate every register’s urgent items, and the approval queue is decidable in place with per-step audit. Modules 2–6 hold the full workspaces behind each number.</p>
+      <p className="text-[11px] text-gray-500 pb-4">The Governance Dashboard is the command centre over the full GRC platform. Every figure is live: the scorecard now spans seven measured dimensions (audits, CAPA, policies, findings, control effectiveness from the controls library, accreditation readiness from standard self-assessments), Open Risks reads the 5×5 register, Regulatory Alerts derives from regulatory/licence obligations that are non-compliant, at risk or expiring within 30 days (the register — not an external feed), executive alerts aggregate every register’s urgent items, and the approval queue is decidable in place with per-step audit. Modules 2–6 hold the full workspaces behind each number.</p>
     </div>
   );
 }

@@ -79,7 +79,7 @@ export default async function DeliveryPlatformPage() {
         <div>
           <p className="text-[11px] font-semibold text-violet-500 uppercase tracking-widest mb-0.5">CDP-000 · Competency Delivery Platform</p>
           <h1 className="text-xl font-bold text-gray-900">Competency Delivery</h1>
-          <p className="text-gray-400 text-sm mt-0.5">The runtime layer — the right competency to the right learner at the right time. Studio authors, the Office governs, Delivery runs it, workspaces consume.</p>
+          <p className="text-gray-500 text-sm mt-0.5">The runtime layer — the right competency to the right learner at the right time. Studio authors, the Office governs, Delivery runs it, workspaces consume.</p>
         </div>
         <Link href="/super-admin" className="text-xs font-semibold text-gray-500 hover:text-violet-700 border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Mission Control</Link>
       </div>
@@ -89,7 +89,7 @@ export default async function DeliveryPlatformPage() {
         {STATS.map(s => (
           <div key={s.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
             <div className="flex items-center justify-between mb-1"><span className="text-sm">{s.icon}</span><p className="text-lg font-bold text-gray-900">{s.value}</p></div>
-            <p className="text-[10px] text-gray-400 font-medium leading-tight">{s.label}</p>
+            <p className="text-[10px] text-gray-500 font-medium leading-tight">{s.label}</p>
           </div>
         ))}
       </div>
@@ -98,7 +98,7 @@ export default async function DeliveryPlatformPage() {
       <div className="flex items-center gap-2 mb-5 text-[11px]">
         <span className="font-semibold text-teal-700 bg-teal-50 border border-teal-100 rounded-lg px-2.5 py-1">{nReal} live</span>
         {nPartial > 0 && <span className="font-semibold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-2.5 py-1">{nPartial} partial (runtime loop)</span>}
-        <span className="font-semibold text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{nGap} planned (net-new)</span>
+        <span className="font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{nGap} planned (net-new)</span>
       </div>
 
       <Layer accent="violet" title="Orchestration & Governance · CDP-001/008/014/015" mods={ORCHESTRATION} />

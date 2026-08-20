@@ -40,5 +40,5 @@ export function DeleteComment({ id }: { id: string }) {
     setBusy(false);
     if (res.ok) router.refresh();
   }
-  return <button onClick={del} disabled={busy} className="text-[10px] text-gray-300 hover:text-rose-500 disabled:opacity-50" title="Soft-delete (moderation)">✕</button>;
+  return <button onClick={del} disabled={busy} className="text-[10px] text-gray-500 hover:text-rose-500 disabled:opacity-50" title="Soft-delete (moderation)">✕</button>;
 }

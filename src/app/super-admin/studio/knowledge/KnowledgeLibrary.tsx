@@ -13,7 +13,7 @@ type Cpu = { id: string; name: string };
 const STATUS_CLS: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
   active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
-  retired: "bg-gray-100 text-gray-400",
+  retired: "bg-gray-100 text-gray-600",
 };
 
 export default function KnowledgeLibrary({ objects, cpus }: { objects: KO[]; cpus: Cpu[] }) {
@@ -115,7 +115,7 @@ export default function KnowledgeLibrary({ objects, cpus }: { objects: KO[]; cpu
             {objects.length === 0 ? "No knowledge objects yet" : "No matches"}
           </p>
           {objects.length === 0 && (
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-gray-500 mt-1">
               Import a CPU document — its anatomy, physiology and reasoning sections become knowledge objects automatically.
             </p>
           )}
@@ -132,14 +132,14 @@ export default function KnowledgeLibrary({ objects, cpus }: { objects: KO[]; cpu
                   <span className="text-lg">{ui.icon}</span>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{k.title}
-                      {k.code && <span className="ml-2 text-[10px] font-mono text-gray-300">{k.code}</span>}
+                      {k.code && <span className="ml-2 text-[10px] font-mono text-gray-500">{k.code}</span>}
                     </p>
-                    <p className="text-[10px] text-gray-400 truncate">
+                    <p className="text-[10px] text-gray-500 truncate">
                       {ui.label}{k.cpuName ? ` · ${k.cpuName}` : ""}{k.source ? ` · ${k.source}` : ""}
                     </p>
                   </div>
                   <span className={`text-[9px] font-bold px-2 py-0.5 rounded capitalize ${STATUS_CLS[k.status] ?? STATUS_CLS.draft}`}>{k.status}</span>
-                  <span className="text-gray-300 text-xs">{isOpen ? "▲" : "▼"}</span>
+                  <span className="text-gray-500 text-xs">{isOpen ? "▲" : "▼"}</span>
                 </button>
                 {isOpen && (
                   <div className="px-5 pb-4 bg-gray-50/40">
@@ -158,7 +158,7 @@ export default function KnowledgeLibrary({ objects, cpus }: { objects: KO[]; cpu
                         </button>
                       )}
                       <button disabled={busy} onClick={() => api("PATCH", { status: "retired" }, k.id)}
-                        className="text-xs text-gray-400 hover:text-red-500 px-3 py-1.5 rounded-lg">Retire</button>
+                        className="text-xs text-gray-500 hover:text-red-500 px-3 py-1.5 rounded-lg">Retire</button>
                     </div>
                   </div>
                 )}
@@ -167,7 +167,7 @@ export default function KnowledgeLibrary({ objects, cpus }: { objects: KO[]; cpu
           })}
         </div>
       )}
-      <p className="text-[11px] text-gray-400">
+      <p className="text-[11px] text-gray-500">
         Published knowledge objects are searchable in the Clinical Library and citable by the AI assistant.
       </p>
     </div>

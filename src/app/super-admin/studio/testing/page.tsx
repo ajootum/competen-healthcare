@@ -35,15 +35,15 @@ export default async function StudioTestingPage() {
         <div>
           <p className="text-[11px] font-semibold text-rose-500 uppercase tracking-widest mb-0.5">CST-010 · Testing &amp; Sandbox</p>
           <h1 className="text-xl font-bold text-gray-900">Release Readiness</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Validate frameworks before publication — completeness, coverage, structure and dependency integrity in one gate.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Validate frameworks before publication — completeness, coverage, structure and dependency integrity in one gate.</p>
         </div>
         <Link href="/super-admin/studio" className="text-xs font-semibold text-gray-500 hover:text-teal-700 border border-gray-200 rounded-lg px-3 py-2">← Studio</Link>
       </div>
 
       {!rr.provisioned ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-400">Content tables are not available in this environment.</div>
+        <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-500">Content tables are not available in this environment.</div>
       ) : rr.empty ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-400">No frameworks to validate yet — author competencies in the Studio first.</div>
+        <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-500">No frameworks to validate yet — author competencies in the Studio first.</div>
       ) : (
         <>
           {/* KPI row */}
@@ -52,13 +52,13 @@ export default async function StudioTestingPage() {
               { label: "Frameworks", value: rr.kpis.frameworks, tone: "text-gray-900" },
               { label: "Ready", value: rr.kpis.ready, tone: "text-teal-600" },
               { label: "Needs work", value: rr.kpis.needsWork, tone: "text-[var(--cmp-text-warning)]" },
-              { label: "Blocked", value: rr.kpis.blocked, tone: rr.kpis.blocked > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-300" },
-              { label: "Prerequisite cycles", value: rr.kpis.cycles, tone: rr.kpis.cycles > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-300" },
-              { label: "High QA issues", value: rr.kpis.highIssues, tone: rr.kpis.highIssues > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
+              { label: "Blocked", value: rr.kpis.blocked, tone: rr.kpis.blocked > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-500" },
+              { label: "Prerequisite cycles", value: rr.kpis.cycles, tone: rr.kpis.cycles > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-500" },
+              { label: "High QA issues", value: rr.kpis.highIssues, tone: rr.kpis.highIssues > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-500" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-0.5">{k.label}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-0.5">{k.label}</p>
               </div>
             ))}
           </div>
@@ -76,7 +76,7 @@ export default async function StudioTestingPage() {
           <div className="bg-white rounded-xl border border-gray-100 p-5">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold text-gray-900 text-sm">Framework readiness</h2>
-              <span className="text-[9px] text-gray-400">blocked &amp; lowest first</span>
+              <span className="text-[9px] text-gray-500">blocked &amp; lowest first</span>
             </div>
             <div className="flex flex-col gap-2.5">
               {rr.frameworks.map(f => {
@@ -85,7 +85,7 @@ export default async function StudioTestingPage() {
                   <div key={f.id} className="border border-gray-100 rounded-lg p-3">
                     <div className="flex items-center gap-2 flex-wrap mb-2">
                       <Link href={`/super-admin/content/${f.id}`} className="text-sm font-semibold text-gray-800 hover:text-teal-700 truncate max-w-[40%]">{f.name}</Link>
-                      <span className="text-[10px] text-gray-400">{f.competencies} competenc{f.competencies === 1 ? "y" : "ies"}</span>
+                      <span className="text-[10px] text-gray-500">{f.competencies} competenc{f.competencies === 1 ? "y" : "ies"}</span>
                       <span className={`ml-auto text-[9px] font-bold uppercase tracking-wide px-2 py-0.5 rounded border ${v.cls}`}>{v.label}</span>
                     </div>
                     <div className="flex flex-wrap gap-x-4 gap-y-1">

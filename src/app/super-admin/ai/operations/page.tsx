@@ -18,9 +18,9 @@ const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleSt
 const ms = (n: number | null) => (n == null ? "—" : n >= 1000 ? `${(n / 1000).toFixed(1)} s` : `${n} ms`);
 const pct = (n: number | null) => (n == null ? "—" : `${n}%`);
 
-const SVC_TONE = (ok: boolean | null) => (ok == null ? "bg-gray-100 text-gray-400" : ok ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]");
+const SVC_TONE = (ok: boolean | null) => (ok == null ? "bg-gray-100 text-gray-600" : ok ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]");
 const JOB_TONE: Record<string, string> = { running: "bg-[var(--cmp-surface-information)] text-blue-700", success: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", failed: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
-const STATUS_TONE: Record<string, string> = { ok: "text-[var(--cmp-text-success)]", refusal: "text-[var(--cmp-text-warning)]", error: "text-[var(--cmp-text-error)]", not_configured: "text-gray-400" };
+const STATUS_TONE: Record<string, string> = { ok: "text-[var(--cmp-text-success)]", refusal: "text-[var(--cmp-text-warning)]", error: "text-[var(--cmp-text-error)]", not_configured: "text-gray-500" };
 
 export default async function AiOperationsCentre() {
   const supabase = await createClient();
@@ -34,7 +34,7 @@ export default async function AiOperationsCentre() {
   const k = d.kpis;
 
   const kpiCards = [
-    { label: "AI Health", value: pct(k.aiHealth), icon: "🛡️", iconBg: "bg-[var(--cmp-surface-success)]", tone: k.aiHealth != null && k.aiHealth >= 95 ? "text-[var(--cmp-text-success)]" : k.aiHealth == null ? "text-gray-400" : "text-[var(--cmp-text-warning)]" },
+    { label: "AI Health", value: pct(k.aiHealth), icon: "🛡️", iconBg: "bg-[var(--cmp-surface-success)]", tone: k.aiHealth != null && k.aiHealth >= 95 ? "text-[var(--cmp-text-success)]" : k.aiHealth == null ? "text-gray-500" : "text-[var(--cmp-text-warning)]" },
     { label: "Running Agents", value: dash(k.runningAgents), icon: "🤖", iconBg: "bg-[var(--cmp-surface-information)]" },
     { label: "Models Online", value: dash(k.modelsOnline), icon: "🧠", iconBg: "bg-violet-50" },
     { label: "Queued Jobs", value: dash(k.queuedJobs), icon: "🗂️", iconBg: "bg-[var(--cmp-surface-information)]" },
@@ -47,7 +47,7 @@ export default async function AiOperationsCentre() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/ai" className="hover:text-teal-700">AI &amp; Intelligence</Link><span>/</span><span className="text-gray-600">AI Operations Centre</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">AI Operations Centre</h1>
@@ -79,7 +79,7 @@ export default async function AiOperationsCentre() {
               <div key={sv.name} className="flex items-center gap-3 py-2.5">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-800 leading-tight">{sv.name}</p>
-                  <p className="text-[10px] text-gray-400 font-mono leading-tight">{sv.desc}</p>
+                  <p className="text-[10px] text-gray-500 font-mono leading-tight">{sv.desc}</p>
                 </div>
                 <span className="text-[11px] text-gray-500 tabular-nums hidden sm:block truncate max-w-[45%] text-right">{sv.detail}</span>
                 <span className={`text-[10px] font-semibold px-2 py-0.5 rounded shrink-0 ${SVC_TONE(sv.ok)}`}>{sv.status}</span>
@@ -94,32 +94,32 @@ export default async function AiOperationsCentre() {
             <h2 className="font-semibold text-gray-900 text-[15px]">Model Registry</h2>
             <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${d.provider.configured ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{d.provider.configured ? d.provider.provider : "no provider"}</span>
           </div>
-          {d.models.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No provider configured.</p> : (
+          {d.models.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No provider configured.</p> : (
             <div className="space-y-2.5">
               {d.models.map((m: any) => (
                 <div key={m.tier}>
                   <div className="flex items-center justify-between text-sm">
                     <span className="capitalize text-gray-600 text-xs font-semibold">{m.tier}</span>
-                    <span className="tabular-nums text-[10px] text-gray-400">{m.requests} req · {m.tokens.toLocaleString()}t</span>
+                    <span className="tabular-nums text-[10px] text-gray-500">{m.requests} req · {m.tokens.toLocaleString()}t</span>
                   </div>
                   <span className="font-mono text-[11px] text-gray-800 truncate block">{m.model}</span>
                 </div>
               ))}
             </div>
           )}
-          <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">Tiers resolve per job; override with AI_MODEL_* env vars.</p>
+          <p className="text-[10px] text-gray-500 mt-3 pt-2 border-t border-gray-50">Tiers resolve per job; override with AI_MODEL_* env vars.</p>
         </div>
       </div>
 
       {/* Agents & copilots */}
       <div className={`${card} p-5`}>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900 text-[15px]">Agents &amp; Copilots <span className="text-[10px] text-gray-400">usage today · live</span></h2>
+          <h2 className="font-semibold text-gray-900 text-[15px]">Agents &amp; Copilots <span className="text-[10px] text-gray-500">usage today · live</span></h2>
           <Link href="/super-admin/assistant" className="text-xs text-teal-700 hover:underline">Open Assistant →</Link>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+            <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-100">
               <th className="px-3 py-2 font-semibold">Agent / Copilot</th><th className="px-3 py-2 font-semibold">Model</th>
               <th className="px-3 py-2 font-semibold text-right">Requests</th><th className="px-3 py-2 font-semibold text-right">Accuracy</th><th className="px-3 py-2 font-semibold text-right">Escalations</th><th className="px-3 py-2 font-semibold text-right">Status</th>
             </tr></thead>
@@ -129,15 +129,15 @@ export default async function AiOperationsCentre() {
                   <td className="px-3 py-2"><span className="flex items-center gap-2"><span>{a.icon}</span><span className="text-gray-800 font-medium">{a.name}</span></span></td>
                   <td className="px-3 py-2 font-mono text-[11px] text-gray-500 truncate">{a.model ?? "—"}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-gray-700">{a.usageToday.toLocaleString()}</td>
-                  <td className="px-3 py-2 text-right text-gray-300">—</td>
-                  <td className="px-3 py-2 text-right text-gray-300">—</td>
-                  <td className="px-3 py-2 text-right"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${a.status === "running" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{a.status}</span></td>
+                  <td className="px-3 py-2 text-right text-gray-500">—</td>
+                  <td className="px-3 py-2 text-right text-gray-500">—</td>
+                  <td className="px-3 py-2 text-right"><span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${a.status === "running" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-600"}`}>{a.status}</span></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="text-[10px] text-gray-400 mt-2">Copilots map to the real server-side AI operations recorded by the runtime gateway. Accuracy &amp; escalations are not yet metered — Intelligence Analytics wires evaluation later.</p>
+        <p className="text-[10px] text-gray-500 mt-2">Copilots map to the real server-side AI operations recorded by the runtime gateway. Accuracy &amp; escalations are not yet metered — Intelligence Analytics wires evaluation later.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -155,14 +155,14 @@ export default async function AiOperationsCentre() {
               </div>
             ))}
           </div>
-          {!d.jobs.summary.ready ? <p className="text-sm text-gray-400 py-4 text-center">Job runner not ready — run migration 054.</p> : d.jobs.recent.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">No job runs yet.</p> : (
+          {!d.jobs.summary.ready ? <p className="text-sm text-gray-500 py-4 text-center">Job runner not ready — run migration 054.</p> : d.jobs.recent.length === 0 ? <p className="text-sm text-gray-500 py-4 text-center">No job runs yet.</p> : (
             <div className="divide-y divide-gray-50">
               {d.jobs.recent.slice(0, 6).map((r: any, i: number) => (
                 <div key={i} className="flex items-center gap-3 py-2 text-sm">
                   <span className="text-gray-700 flex-1 truncate">{r.job_key}</span>
-                  <span className="text-[10px] text-gray-400">{r.trigger}</span>
-                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${JOB_TONE[r.status] ?? "bg-gray-100 text-gray-500"}`}>{r.status}</span>
-                  <span className="text-[10px] text-gray-400 w-14 text-right tabular-nums">{relTime(r.started_at)}</span>
+                  <span className="text-[10px] text-gray-500">{r.trigger}</span>
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${JOB_TONE[r.status] ?? "bg-gray-100 text-gray-600"}`}>{r.status}</span>
+                  <span className="text-[10px] text-gray-500 w-14 text-right tabular-nums">{relTime(r.started_at)}</span>
                 </div>
               ))}
             </div>
@@ -185,7 +185,7 @@ export default async function AiOperationsCentre() {
               </Link>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">Prompt Library &amp; AI Policies as dedicated registries land with AI Studio. Prompt operations = distinct attributed operations in 24h.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Prompt Library &amp; AI Policies as dedicated registries land with AI Studio. Prompt operations = distinct attributed operations in 24h.</p>
         </div>
       </div>
 
@@ -195,26 +195,26 @@ export default async function AiOperationsCentre() {
       {/* Recent AI requests / audit */}
       <div className={`${card} p-5`}>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900 text-[15px]">Recent AI Requests <span className="text-[10px] text-gray-400">audit trail</span></h2>
+          <h2 className="font-semibold text-gray-900 text-[15px]">Recent AI Requests <span className="text-[10px] text-gray-500">audit trail</span></h2>
           <Link href="/super-admin/audit" className="text-xs text-teal-700 hover:underline">Full audit →</Link>
         </div>
-        {d.recent.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No AI requests recorded yet — usage appears here as soon as a copilot runs.</p> : (
+        {d.recent.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No AI requests recorded yet — usage appears here as soon as a copilot runs.</p> : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+              <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-100">
                 <th className="px-3 py-2 font-semibold">Operation</th><th className="px-3 py-2 font-semibold">Model</th><th className="px-3 py-2 font-semibold">Tier</th>
                 <th className="px-3 py-2 font-semibold text-right">Tokens</th><th className="px-3 py-2 font-semibold text-right">Latency</th><th className="px-3 py-2 font-semibold text-right">Status</th><th className="px-3 py-2 font-semibold text-right">When</th>
               </tr></thead>
               <tbody>
                 {d.recent.map((r: any, i: number) => (
                   <tr key={i} className="border-b border-gray-50">
-                    <td className="px-3 py-2 text-gray-700">{r.operation ?? <span className="text-gray-300">—</span>}</td>
+                    <td className="px-3 py-2 text-gray-700">{r.operation ?? <span className="text-gray-500">—</span>}</td>
                     <td className="px-3 py-2 font-mono text-[11px] text-gray-600">{r.model}</td>
                     <td className="px-3 py-2 text-gray-500 capitalize">{r.tier}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-gray-600">{(r.tokens ?? 0).toLocaleString()}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-gray-500">{r.latency == null ? "—" : `${r.latency}ms`}</td>
                     <td className={`px-3 py-2 text-right capitalize ${STATUS_TONE[r.status] ?? "text-gray-500"}`}>{r.status}</td>
-                    <td className="px-3 py-2 text-right text-[11px] text-gray-400">{relTime(r.at)}</td>
+                    <td className="px-3 py-2 text-right text-[11px] text-gray-500">{relTime(r.at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -223,7 +223,7 @@ export default async function AiOperationsCentre() {
         )}
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The AI Operations Centre operates every AI capability. Service health, agent usage, the model registry and the job queue are live from the AI runtime gateway (plat_ai_requests), the job runner (plat_job_runs) and the approval engine. Services without a dedicated telemetry surface (vector DB, embeddings) show honest “Not instrumented” states; a standalone Prompt Library and AI Policy registry arrive with AI Studio &amp; Automation.</p>
+      <p className="text-[11px] text-gray-500 pb-4">The AI Operations Centre operates every AI capability. Service health, agent usage, the model registry and the job queue are live from the AI runtime gateway (plat_ai_requests), the job runner (plat_job_runs) and the approval engine. Services without a dedicated telemetry surface (vector DB, embeddings) show honest “Not instrumented” states; a standalone Prompt Library and AI Policy registry arrive with AI Studio &amp; Automation.</p>
     </div>
   );
 }

@@ -38,7 +38,7 @@ export default async function PageComposerPage() {
 
   const header = (
     <>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Page & Layout Composer</span>
@@ -46,7 +46,7 @@ export default async function PageComposerPage() {
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">🧱</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Page &amp; Layout Composer <span className="text-gray-300 font-medium text-lg">(NCP-001)</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Page &amp; Layout Composer <span className="text-gray-500 font-medium text-lg">(NCP-001)</span></h1>
           <p className="text-sm text-gray-500">Compose each governed page on a 12-column grid — rows of proportional columns holding widgets or structural components.</p>
         </div>
       </div>
@@ -64,7 +64,7 @@ export default async function PageComposerPage() {
         <Stat label="Widget Palette" value={palette.length} sub="widgets + components" />
       </div>
       <PageComposer pages={list} palette={palette} />
-      <p className="text-[11px] text-gray-400">The grid layout persists onto the page object and referenced widgets wire into its dependencies. Free-form positioning, per-breakpoint responsive overrides, theme references and the runtime layout renderer (NCP-001 §8/§13) are next-phase.</p>
+      <p className="text-[11px] text-gray-500">The grid layout persists onto the page object and referenced widgets wire into its dependencies. Free-form positioning, per-breakpoint responsive overrides, theme references and the runtime layout renderer (NCP-001 §8/§13) are next-phase.</p>
     </div>
   );
 }

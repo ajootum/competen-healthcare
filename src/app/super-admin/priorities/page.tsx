@@ -38,7 +38,7 @@ export default async function StrategyManagerPage() {
       </div>
 
       {/* Strategic themes */}
-      <Card title="Strategic Themes" right={<span className="text-[11px] text-gray-400">platform pillars</span>}>
+      <Card title="Strategic Themes" right={<span className="text-[11px] text-gray-500">platform pillars</span>}>
         {d.themeCards.length ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
             {d.themeCards.map((t: any) => (
@@ -47,16 +47,16 @@ export default async function StrategyManagerPage() {
                 <p className="text-[11px] text-gray-500 mt-1 line-clamp-2 min-h-[28px]">{t.description}</p>
                 <div className="flex items-center justify-between text-[11px] text-gray-500 mt-2"><span>{t.objectives} objectives</span><span className="font-semibold text-gray-700">{t.progress}%</span></div>
                 <Progress pct={t.progress} />
-                <div className="flex gap-2 mt-2 text-[10px] text-gray-400"><span>{t.priorities} priorities</span><span>·</span><span>{t.campaigns} campaigns</span></div>
+                <div className="flex gap-2 mt-2 text-[10px] text-gray-500"><span>{t.priorities} priorities</span><span>·</span><span>{t.campaigns} campaigns</span></div>
               </div>
             ))}
           </div>
-        ) : <p className="text-sm text-gray-400 py-6 text-center">No strategic themes yet.</p>}
+        ) : <p className="text-sm text-gray-500 py-6 text-center">No strategic themes yet.</p>}
       </Card>
 
       {/* Objectives register + KR rollup */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <Card title="Objectives & OKRs" className="xl:col-span-2" right={<span className="text-[11px] text-gray-400">{d.objectives.length} objectives</span>}>
+        <Card title="Objectives & OKRs" className="xl:col-span-2" right={<span className="text-[11px] text-gray-500">{d.objectives.length} objectives</span>}>
           <div className="space-y-2">
             {d.objectives.slice(0, 10).map((o: any) => (
               <div key={o.id} className="border border-gray-100 rounded-lg p-3 hover:border-gray-200">
@@ -111,34 +111,34 @@ export default async function StrategyManagerPage() {
 
       {/* Cascade + governance */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <Card title="Cascade & Alignment" className="xl:col-span-2" right={<span className="text-[11px] text-gray-400">strategy → local delivery</span>}>
+        <Card title="Cascade & Alignment" className="xl:col-span-2" right={<span className="text-[11px] text-gray-500">strategy → local delivery</span>}>
           {d.cascade.length ? (
             <div className="space-y-3">
               {d.cascade.map((r: any) => (
                 <div key={r.id}>
-                  <div className="flex items-center gap-1.5"><Pill text={r.scope_type} tone="teal" /><p className="text-[13px] font-medium text-gray-900">{r.title}</p><span className="text-[11px] text-gray-400 tabular-nums ml-auto">{Math.round(Number(r.progress_pct))}%</span></div>
+                  <div className="flex items-center gap-1.5"><Pill text={r.scope_type} tone="teal" /><p className="text-[13px] font-medium text-gray-900">{r.title}</p><span className="text-[11px] text-gray-500 tabular-nums ml-auto">{Math.round(Number(r.progress_pct))}%</span></div>
                   {r.children.length > 0 && (
                     <div className="ml-4 mt-1.5 border-l-2 border-gray-100 pl-3 space-y-1.5">
                       {r.children.map((c: any) => (
-                        <div key={c.id} className="flex items-center gap-1.5"><span className="text-gray-300">↳</span><Pill text={c.scope_type} tone="blue" /><p className="text-[12px] text-gray-700">{c.title}</p><span className="text-[11px] text-gray-400 tabular-nums ml-auto">{Math.round(Number(c.progress_pct))}%</span></div>
+                        <div key={c.id} className="flex items-center gap-1.5"><span className="text-gray-500">↳</span><Pill text={c.scope_type} tone="blue" /><p className="text-[12px] text-gray-700">{c.title}</p><span className="text-[11px] text-gray-500 tabular-nums ml-auto">{Math.round(Number(c.progress_pct))}%</span></div>
                       ))}
                     </div>
                   )}
                 </div>
               ))}
-              {d.orphans.length > 0 && <p className="text-[11px] text-gray-400 pt-1 border-t border-gray-100">+ {d.orphans.length} local objective(s) not yet linked to a platform parent.</p>}
+              {d.orphans.length > 0 && <p className="text-[11px] text-gray-500 pt-1 border-t border-gray-100">+ {d.orphans.length} local objective(s) not yet linked to a platform parent.</p>}
             </div>
-          ) : <p className="text-sm text-gray-400 py-6 text-center">No cascade defined.</p>}
+          ) : <p className="text-sm text-gray-500 py-6 text-center">No cascade defined.</p>}
         </Card>
 
-        <Card title="Review & Governance" right={<span className="text-[11px] text-gray-400">{d.pendingApprovals.length} pending</span>}>
+        <Card title="Review & Governance" right={<span className="text-[11px] text-gray-500">{d.pendingApprovals.length} pending</span>}>
           {d.pendingApprovals.length ? (
             <div className="space-y-2 mb-3">
               {d.pendingApprovals.map((a: any) => (
-                <div key={a.id} className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="text-[12px] text-gray-800 leading-tight truncate">{a.entity_title}</p><p className="text-[10px] text-gray-400 capitalize">{a.entity_type} · step {a.step}/{a.total_steps}</p></div><Pill text={a.state} tone={STATUS_TONE[a.state]} /></div>
+                <div key={a.id} className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="text-[12px] text-gray-800 leading-tight truncate">{a.entity_title}</p><p className="text-[10px] text-gray-500 capitalize">{a.entity_type} · step {a.step}/{a.total_steps}</p></div><Pill text={a.state} tone={STATUS_TONE[a.state]} /></div>
               ))}
             </div>
-          ) : <p className="text-[12px] text-gray-400 mb-3">No pending approvals.</p>}
+          ) : <p className="text-[12px] text-gray-500 mb-3">No pending approvals.</p>}
           <p className="text-[11px] font-semibold text-gray-500 mb-1.5 border-t border-gray-100 pt-2">Recent activity</p>
           <div className="space-y-1.5">
             {d.recentAudit.slice(0, 5).map((a: any) => (

@@ -9,7 +9,7 @@ import { Modal } from "@/components/ui/interactive";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const TYPES = ["hospital", "clinic", "health_center", "nursing_home", "diagnostic_center"];
-const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", onboarding: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", archived: "bg-gray-100 text-gray-500" };
+const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", onboarding: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", archived: "bg-gray-100 text-gray-600" };
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 
 export default function FacilityDirectory({ rows, orgs }: { rows: any[]; orgs: any[] }) {
@@ -41,7 +41,7 @@ export default function FacilityDirectory({ rows, orgs }: { rows: any[]; orgs: a
   return (
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100">
-        <h2 className="font-semibold text-gray-900 mr-auto">Facilities <span className="text-gray-400 font-normal text-sm">({filtered.length})</span></h2>
+        <h2 className="font-semibold text-gray-900 mr-auto">Facilities <span className="text-gray-500 font-normal text-sm">({filtered.length})</span></h2>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search facilities…" className={`${input} w-52`} />
         <select value={type} onChange={e => setType(e.target.value)} className={`${input} w-40`}>
           <option value="all">All types</option>
@@ -52,16 +52,16 @@ export default function FacilityDirectory({ rows, orgs }: { rows: any[]; orgs: a
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+          <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-100">
             <th className="px-4 py-2.5 font-semibold">Facility</th><th className="px-4 py-2.5 font-semibold">Organisation</th><th className="px-4 py-2.5 font-semibold">Type</th>
             <th className="px-4 py-2.5 font-semibold">Location</th><th className="px-4 py-2.5 font-semibold">Status</th><th className="px-4 py-2.5 font-semibold text-right">Depts</th><th className="px-4 py-2.5 font-semibold text-right">Users</th>
           </tr></thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No facilities match.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">No facilities match.</td></tr>}
             {filtered.map(r => (
               <tr key={r.id} onClick={() => router.push(`/super-admin/enterprise/facilities/${r.id}`)} className="border-b border-gray-50 hover:bg-gray-50/60 cursor-pointer">
-                <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-[var(--cmp-surface-information)] flex items-center justify-center text-sm shrink-0">🏥</span><div className="min-w-0"><p className="font-medium text-gray-900 truncate">{r.name}</p>{r.code && <p className="text-[10px] text-gray-400">{r.code}</p>}</div></div></td>
-                <td className="px-4 py-3 text-gray-500">{r.org ?? <span className="text-gray-300">Unlinked</span>}</td>
+                <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-[var(--cmp-surface-information)] flex items-center justify-center text-sm shrink-0">🏥</span><div className="min-w-0"><p className="font-medium text-gray-900 truncate">{r.name}</p>{r.code && <p className="text-[10px] text-gray-500">{r.code}</p>}</div></div></td>
+                <td className="px-4 py-3 text-gray-500">{r.org ?? <span className="text-gray-500">Unlinked</span>}</td>
                 <td className="px-4 py-3 text-gray-600 capitalize">{(r.type ?? "").replace(/_/g, " ")}</td>
                 <td className="px-4 py-3 text-gray-600">{[r.city, r.country].filter(Boolean).join(", ")}</td>
                 <td className="px-4 py-3"><span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded ${STATUS_BADGE[r.status] ?? "bg-gray-100 text-gray-600"}`}>{!r.hasAdmin && r.status !== "archived" && <span title="No administrator" className="text-red-500">●</span>}{r.status}</span></td>

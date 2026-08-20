@@ -46,21 +46,21 @@ function Row({ r }: { r: GovRecord }) {
     <tr className="border-t border-gray-50 hover:bg-gray-50/60">
       <td className="py-2 pr-3">
         <p className="text-[13px] font-semibold text-gray-900 leading-tight">{r.name}</p>
-        <p className="text-[10px] text-gray-400 mt-0.5">{r.code ? `${r.code} · ` : ""}{r.domain ?? "—"}{r.framework ? ` · ${r.framework}` : ""}</p>
+        <p className="text-[10px] text-gray-500 mt-0.5">{r.code ? `${r.code} · ` : ""}{r.domain ?? "—"}{r.framework ? ` · ${r.framework}` : ""}</p>
       </td>
       <td className="py-2 px-2"><span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 capitalize ${RISK_META[r.risk] ?? RISK_META.standard}`}>{r.risk}</span></td>
       <td className="py-2 px-2">
         {r.owner ? <span className="text-[12px] text-gray-700">{r.owner}</span> : <span className="text-[11px] font-semibold text-[var(--cmp-text-error)]">Unowned</span>}
-        {r.governanceRoles > 0 && <span className="text-[10px] text-gray-400 ml-1">+{r.governanceRoles}</span>}
+        {r.governanceRoles > 0 && <span className="text-[10px] text-gray-500 ml-1">+{r.governanceRoles}</span>}
       </td>
       <td className="py-2 px-2 text-center">
-        {r.standards > 0 ? <span className="text-[12px] text-gray-700 tabular-nums">{r.standards}<span className="text-gray-300">/</span><span className="text-[var(--cmp-text-success)]">{r.standardsFull}</span></span> : <span className="text-[11px] text-gray-300">—</span>}
+        {r.standards > 0 ? <span className="text-[12px] text-gray-700 tabular-nums">{r.standards}<span className="text-gray-500">/</span><span className="text-[var(--cmp-text-success)]">{r.standardsFull}</span></span> : <span className="text-[11px] text-gray-500">—</span>}
       </td>
       <td className="py-2 px-2 text-center">
-        {r.decisions > 0 ? <span className="text-[12px] text-gray-700 tabular-nums">{r.decisions}{r.latestVersion > 0 && <span className="text-[10px] text-gray-400"> ·v{r.latestVersion}</span>}</span> : <span className="text-[11px] text-gray-300">—</span>}
+        {r.decisions > 0 ? <span className="text-[12px] text-gray-700 tabular-nums">{r.decisions}{r.latestVersion > 0 && <span className="text-[10px] text-gray-500"> ·v{r.latestVersion}</span>}</span> : <span className="text-[11px] text-gray-500">—</span>}
       </td>
       <td className="py-2 px-2">
-        {r.reviewDue ? <span className={`text-[11px] tabular-nums ${r.reviewOverdue ? "font-bold text-[var(--cmp-text-error)]" : "text-gray-500"}`}>{r.reviewDue}{r.reviewOverdue && " ⚠"}</span> : <span className="text-[11px] text-gray-300">not set</span>}
+        {r.reviewDue ? <span className={`text-[11px] tabular-nums ${r.reviewOverdue ? "font-bold text-[var(--cmp-text-error)]" : "text-gray-500"}`}>{r.reviewDue}{r.reviewOverdue && " ⚠"}</span> : <span className="text-[11px] text-gray-500">not set</span>}
         {r.openChanges > 0 && <span className="ml-1 text-[9px] font-bold text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded px-1">{r.openChanges} CR</span>}
       </td>
       <td className="py-2 px-2"><ScoreBar v={r.score} /></td>
@@ -86,14 +86,14 @@ export default async function GovernanceRegistryPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-001 · Competency Governance Registry</p>
           <h1 className="text-xl font-bold text-gray-900">Governance Registry &amp; Master Control</h1>
-          <p className="text-gray-400 text-sm mt-0.5">One governance record per competency — who owns it, what evidence and standards back it, when it&apos;s due for review, and its risk. The single source of truth for competency governance.</p>
+          <p className="text-gray-500 text-sm mt-0.5">One governance record per competency — who owns it, what evidence and standards back it, when it&apos;s due for review, and its risk. The single source of truth for competency governance.</p>
         </div>
         <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2 shrink-0">← CGR Platform</Link>
       </div>
 
       {!d.provisioned ? (
         <div className="bg-white border border-gray-200 rounded-xl p-8 text-center">
-          <p className="text-sm text-gray-400">No competency definitions found yet. Once the framework library holds competencies, each becomes a governance record here — scored on ownership, regulatory alignment, review currency and evidence.</p>
+          <p className="text-sm text-gray-500">No competency definitions found yet. Once the framework library holds competencies, each becomes a governance record here — scored on ownership, regulatory alignment, review currency and evidence.</p>
         </div>
       ) : (
         <>
@@ -111,7 +111,7 @@ export default async function GovernanceRegistryPage() {
           <div className="bg-white rounded-xl border border-gray-100 p-4 mb-5">
             <div className="flex items-center justify-between mb-2.5">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Governance state</p>
-              <p className="text-[10px] text-gray-400">across {d.loaded} records</p>
+              <p className="text-[10px] text-gray-500">across {d.loaded} records</p>
             </div>
             <div className="flex h-3 rounded-full overflow-hidden bg-gray-100 mb-2.5">
               {(["governed", "monitor", "at_risk", "ungoverned"] as GovState[]).map((s) => {
@@ -134,16 +134,16 @@ export default async function GovernanceRegistryPage() {
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <p className="text-sm font-bold text-gray-800">Registry Explorer</p>
-              <p className="text-[10px] text-gray-400">highest-risk first · {d.loaded} records</p>
+              <p className="text-[10px] text-gray-500">highest-risk first · {d.loaded} records</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px]">
                 <thead>
-                  <tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                  <tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
                     <th className="text-left py-2 pr-3 pl-4">Competency</th>
                     <th className="text-left py-2 px-2">Risk</th>
                     <th className="text-left py-2 px-2">Owner</th>
-                    <th className="text-center py-2 px-2">Std<span className="text-gray-300">/full</span></th>
+                    <th className="text-center py-2 px-2">Std<span className="text-gray-500">/full</span></th>
                     <th className="text-center py-2 px-2">Decisions</th>
                     <th className="text-left py-2 px-2">Review</th>
                     <th className="text-left py-2 px-2">Governance</th>

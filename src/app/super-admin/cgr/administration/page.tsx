@@ -42,7 +42,7 @@ export default async function GovernanceAdminPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-015 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Platform Administration &amp; Configuration</h1>
-          <p className="text-gray-400 text-sm mt-0.5">How the governance platform is configured, maintained and operated safely — no-code governance configuration with safe defaults and controlled, traceable change.</p>
+          <p className="text-gray-500 text-sm mt-0.5">How the governance platform is configured, maintained and operated safely — no-code governance configuration with safe defaults and controlled, traceable change.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/super-admin/platform-ops/control-plane" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Control plane →</Link>
@@ -51,7 +51,7 @@ export default async function GovernanceAdminPage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No governance configuration recorded yet. Governance behaviour is configured no-code in the <Link href="/super-admin/platform-ops/control-plane" className="text-[var(--cmp-text-success)] hover:underline">control plane</Link>; once config keys exist, the inventory and inheritance hierarchy compute here.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No governance configuration recorded yet. Governance behaviour is configured no-code in the <Link href="/super-admin/platform-ops/control-plane" className="text-[var(--cmp-text-success)] hover:underline">control plane</Link>; once config keys exist, the inventory and inheritance hierarchy compute here.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -68,7 +68,7 @@ export default async function GovernanceAdminPage() {
             <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 p-4">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Configuration by domain (§5)</p>
               {d.categories.length === 0 ? (
-                <p className="text-[12px] text-gray-400">No configuration keys recorded.</p>
+                <p className="text-[12px] text-gray-500">No configuration keys recorded.</p>
               ) : (
                 <div className="space-y-1.5">
                   {d.categories.map((c: any) => (
@@ -93,25 +93,25 @@ export default async function GovernanceAdminPage() {
                 <div className="flex items-center justify-between"><span className="flex items-center gap-1.5 text-[11px] text-gray-600"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-success)]" />Inherited (safe defaults)</span><span className="text-[11px] font-bold text-gray-700 tabular-nums">{k.inherited}</span></div>
                 <div className="flex items-center justify-between"><span className="flex items-center gap-1.5 text-[11px] text-gray-600"><span className="w-2 h-2 rounded-full bg-[var(--cmp-color-warning)]" />Local (tenant override)</span><span className="text-[11px] font-bold text-gray-700 tabular-nums">{k.local}</span></div>
               </div>
-              <p className="text-[10px] text-gray-400 mt-2.5">Local customisation cannot reduce platform minimum governance controls (§4.3 / §6 inheritance).</p>
+              <p className="text-[10px] text-gray-500 mt-2.5">Local customisation cannot reduce platform minimum governance controls (§4.3 / §6 inheritance).</p>
             </div>
           </div>
 
           {/* AI governance recommendations */}
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-              <p className="text-sm font-bold text-gray-800">AI governance recommendations <span className="text-[10px] font-normal text-gray-400">— advisory (§12)</span></p>
-              {d.recommendations.open > 0 && <p className="text-[10px] text-gray-400">high {d.recommendations.byImpact.high} · med {d.recommendations.byImpact.medium} · low {d.recommendations.byImpact.low}</p>}
+              <p className="text-sm font-bold text-gray-800">AI governance recommendations <span className="text-[10px] font-normal text-gray-500">— advisory (§12)</span></p>
+              {d.recommendations.open > 0 && <p className="text-[10px] text-gray-500">high {d.recommendations.byImpact.high} · med {d.recommendations.byImpact.medium} · low {d.recommendations.byImpact.low}</p>}
             </div>
             {d.recommendations.list.length === 0 ? (
-              <div className="p-6 text-center"><p className="text-sm text-gray-400">No open AI recommendations. AI may suggest configuration improvements but never deploys uncontrolled changes.</p></div>
+              <div className="p-6 text-center"><p className="text-sm text-gray-500">No open AI recommendations. AI may suggest configuration improvements but never deploys uncontrolled changes.</p></div>
             ) : (
               <div className="divide-y divide-gray-50">
                 {d.recommendations.list.map((r: any, i: number) => (
                   <div key={i} className="flex items-center justify-between gap-3 px-4 py-2.5">
                     <div className="min-w-0">
                       <p className="text-[12px] font-medium text-gray-800 truncate">{r.title}</p>
-                      <p className="text-[10px] text-gray-400 capitalize">{r.category}{r.confidence != null ? ` · ${r.confidence}% confidence` : ""}</p>
+                      <p className="text-[10px] text-gray-500 capitalize">{r.category}{r.confidence != null ? ` · ${r.confidence}% confidence` : ""}</p>
                     </div>
                     <span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 shrink-0 ${(IMPACT_META[r.impact] ?? IMPACT_META.low).cls}`}>{(IMPACT_META[r.impact] ?? IMPACT_META.low).label}</span>
                   </div>
@@ -122,18 +122,18 @@ export default async function GovernanceAdminPage() {
 
           {/* Config lifecycle reference */}
           <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Configuration lifecycle <span className="font-normal normal-case text-gray-300">(§8, controlled change)</span></p>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Configuration lifecycle <span className="font-normal normal-case text-gray-500">(§8, controlled change)</span></p>
             <div className="flex items-center flex-wrap gap-1">
               {LIFECYCLE.map((s, i) => (
                 <div key={s} className="flex items-center">
                   <span className="text-[11px] font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{s}</span>
-                  {i < LIFECYCLE.length - 1 && <span className="text-gray-300 mx-0.5">→</span>}
+                  {i < LIFECYCLE.length - 1 && <span className="text-gray-500 mx-0.5">→</span>}
                 </div>
               ))}
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the governance configuration keys and their inherit-vs-override source, and the advisory AI recommendations. This is the governance configuration layer; the full no-code administration console, versioning and rollback are owned by the <Link href="/super-admin/platform-ops/control-plane" className="text-[var(--cmp-text-success)] hover:underline">Control Plane</Link>, and rule authoring &amp; testing by <Link href="/super-admin/cgr/policy-rules" className="text-[var(--cmp-text-success)] hover:underline">Policy &amp; Rules</Link>. Per the CGR mandate, AI may recommend configuration improvements and flag unused config but never deploys uncontrolled changes or modifies governance rules without approval.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every figure is real — the governance configuration keys and their inherit-vs-override source, and the advisory AI recommendations. This is the governance configuration layer; the full no-code administration console, versioning and rollback are owned by the <Link href="/super-admin/platform-ops/control-plane" className="text-[var(--cmp-text-success)] hover:underline">Control Plane</Link>, and rule authoring &amp; testing by <Link href="/super-admin/cgr/policy-rules" className="text-[var(--cmp-text-success)] hover:underline">Policy &amp; Rules</Link>. Per the CGR mandate, AI may recommend configuration improvements and flag unused config but never deploys uncontrolled changes or modifies governance rules without approval.</p>
         </div>
       )}
     </div>

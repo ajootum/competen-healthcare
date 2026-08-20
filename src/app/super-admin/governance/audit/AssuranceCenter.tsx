@@ -91,7 +91,7 @@ export default function AssuranceCenter({ openCapas }: { openCapas: Picker[] }) 
             <div><label className={label}>Area / department</label><input value={form.area ?? ""} onChange={set("area")} className={input} placeholder="e.g. ICU" /></div>
             <div><label className={label}>Planned for</label><input type="date" value={form.planned_for ?? ""} onChange={set("planned_for")} className={input} /></div>
             <div className="sm:col-span-2"><label className={label}>Scope / note</label><textarea value={form.note ?? ""} onChange={set("note")} rows={2} className={input} /></div>
-            <p className="sm:col-span-2 text-[11px] text-gray-400">Schedules the audit as <span className="font-medium text-gray-500">planned</span>. Conducting it (checklist responses, findings, auto-CAPA on critical fails) happens through the assessor cockpit’s governed flow.</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-500">Schedules the audit as <span className="font-medium text-gray-500">planned</span>. Conducting it (checklist responses, findings, auto-CAPA on critical fails) happens through the assessor cockpit’s governed flow.</p>
           </div>
         )}
 
@@ -110,14 +110,14 @@ export default function AssuranceCenter({ openCapas }: { openCapas: Picker[] }) 
             <div><label className={label}>Advance to *</label><select value={form.status ?? ""} onChange={set("status")} className={input}><option value="">— Select status —</option>{Object.entries(CAPA_STATUSES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
             <div className="sm:col-span-2"><label className={label}>Evidence note</label><textarea value={form.evidence_note ?? ""} onChange={set("evidence_note")} rows={2} className={input} placeholder="What was done / how effectiveness was verified" /></div>
             {openCapas.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No open corrective actions.</p>}
-            <p className="sm:col-span-2 text-[11px] text-gray-400">The workflow is forward-only (open → in progress → completed → verified → closed); the server rejects backwards moves.</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-500">The workflow is forward-only (open → in progress → completed → verified → closed); the server rejects backwards moves.</p>
           </div>
         )}
 
         <div className="flex items-center gap-2 mt-4">
           <button onClick={act} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Working…" : TABS.find(t => t.key === tab)!.label}</button>
           <button onClick={() => setForm({})} className="text-sm text-gray-500 hover:text-gray-700 px-2">Clear</button>
-          <span className="text-[11px] text-gray-400 ml-auto">Real assurance actions — audit-logged.</span>
+          <span className="text-[11px] text-gray-500 ml-auto">Real assurance actions — audit-logged.</span>
         </div>
       </div>
     </div>

@@ -44,7 +44,7 @@ export default async function ClinicalIntelligence() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/ai" className="hover:text-teal-700">AI &amp; Intelligence</Link><span>/</span><span className="text-gray-600">Clinical Intelligence</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Clinical Intelligence</h1>
@@ -86,11 +86,11 @@ export default async function ClinicalIntelligence() {
               {d.clinicalOps.slice(0, 5).map((o: any) => (
                 <div key={o.label} className="flex items-center justify-between text-xs">
                   <span className="text-gray-600 truncate">{o.label}</span>
-                  <span className="tabular-nums text-gray-400 shrink-0 ml-2">{o.n} · {o.tokens.toLocaleString()}t</span>
+                  <span className="tabular-nums text-gray-500 shrink-0 ml-2">{o.n} · {o.tokens.toLocaleString()}t</span>
                 </div>
               ))}
             </div>
-          ) : <p className="text-xs text-gray-400 mb-3">{d.aiReady ? "No clinical AI activity in the last 24h." : "AI usage telemetry off."}</p>}
+          ) : <p className="text-xs text-gray-500 mb-3">{d.aiReady ? "No clinical AI activity in the last 24h." : "AI usage telemetry off."}</p>}
           <Link href="/super-admin/assistant" className="mt-auto text-center text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3.5 py-2">Open Clinical Assistant</Link>
         </div>
 
@@ -98,22 +98,22 @@ export default async function ClinicalIntelligence() {
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 text-[15px]">Approved Knowledge</h2>
-            <span className="text-[10px] text-gray-400">{dash(k.knowledgeTotal)} objects</span>
+            <span className="text-[10px] text-gray-500">{dash(k.knowledgeTotal)} objects</span>
           </div>
-          {d.composition.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No knowledge objects yet.</p> : (
+          {d.composition.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No knowledge objects yet.</p> : (
             <div className="space-y-2">
               {d.composition.slice(0, 8).map((c: any) => {
                 const total = k.knowledgeTotal || 1;
                 return (
                   <div key={c.label}>
-                    <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600 capitalize">{String(c.label).replace(/_/g, " ")}</span><span className="tabular-nums text-gray-400">{c.n}</span></div>
+                    <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-600 capitalize">{String(c.label).replace(/_/g, " ")}</span><span className="tabular-nums text-gray-500">{c.n}</span></div>
                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-teal-500 rounded-full" style={{ width: `${(c.n / total) * 100}%` }} /></div>
                   </div>
                 );
               })}
             </div>
           )}
-          <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">{dash(k.cpus)} CPUs · {dash(k.cases)} clinical cases · {dash(k.policies)} policies.</p>
+          <p className="text-[10px] text-gray-500 mt-3 pt-2 border-t border-gray-50">{dash(k.cpus)} CPUs · {dash(k.cases)} clinical cases · {dash(k.policies)} policies.</p>
         </div>
 
         {/* High-risk & escalations */}
@@ -122,13 +122,13 @@ export default async function ClinicalIntelligence() {
             <h2 className="font-semibold text-gray-900 text-[15px]">High-Risk &amp; Escalations</h2>
             <Link href="/super-admin/platform-ops/monitoring" className="text-xs text-teal-700 hover:underline">Monitor →</Link>
           </div>
-          {d.escalations.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No open escalations.</p> : (
+          {d.escalations.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No open escalations.</p> : (
             <div className="divide-y divide-gray-50">
               {d.escalations.map((e: any) => (
                 <div key={e.id} className="flex items-start gap-2 py-2">
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-gray-800 leading-tight truncate">{e.summary || e.escalation_type || "Escalation"}</p>
-                    <p className="text-[10px] text-gray-400">{e.escalation_type ?? "—"} · {relTime(e.created_at)}</p>
+                    <p className="text-[10px] text-gray-500">{e.escalation_type ?? "—"} · {relTime(e.created_at)}</p>
                   </div>
                   {(e.severity || e.level) && <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${SEV_TONE[String(e.severity ?? e.level).toLowerCase()] ?? "bg-gray-100 text-gray-600"}`}>{e.severity ?? `L${e.level}`}</span>}
                 </div>
@@ -155,7 +155,7 @@ export default async function ClinicalIntelligence() {
         {/* Safety controls */}
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-1">Safety Controls</h2>
-          <p className="text-[11px] text-gray-400 mb-3">Non-negotiable clinical guardrails.</p>
+          <p className="text-[11px] text-gray-500 mb-3">Non-negotiable clinical guardrails.</p>
           <div className="space-y-1.5">
             {d.safety.map((s: string) => (
               <p key={s} className="text-xs text-gray-600 flex items-start gap-1.5"><span className="text-green-500 shrink-0">✓</span><span>{s}</span></p>
@@ -164,7 +164,7 @@ export default async function ClinicalIntelligence() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Clinical Intelligence supports — never replaces — professional clinical judgement. Clinical AI usage, high-risk safety alerts and open escalations are live (plat_ai_requests, op_safety_alerts, op_escalations); the approved-knowledge composition and review queue are live from the knowledge schema. Every AI recommendation must show its evidence, source, confidence and required review. Recommendation acceptance and outcome tracking are metered in Intelligence Analytics as evaluation is wired.</p>
+      <p className="text-[11px] text-gray-500 pb-4">Clinical Intelligence supports — never replaces — professional clinical judgement. Clinical AI usage, high-risk safety alerts and open escalations are live (plat_ai_requests, op_safety_alerts, op_escalations); the approved-knowledge composition and review queue are live from the knowledge schema. Every AI recommendation must show its evidence, source, confidence and required review. Recommendation acceptance and outcome tracking are metered in Intelligence Analytics as evaluation is wired.</p>
     </div>
   );
 }

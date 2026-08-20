@@ -25,7 +25,7 @@ export default async function AssetSearchPage() {
         <div>
           <p className="text-[11px] font-semibold text-rose-500 uppercase tracking-widest mb-0.5">CAP-006 · Search & Discovery</p>
           <h1 className="text-xl font-bold text-gray-900">Asset Search</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Hybrid keyword + semantic search across every competency asset in the repository.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Hybrid keyword + semantic search across every competency asset in the repository.</p>
         </div>
         <Link href="/super-admin/studio/assets" className="text-xs font-semibold text-gray-500 hover:text-teal-700 border border-gray-200 rounded-lg px-3 py-2">← Asset Repository</Link>
       </div>

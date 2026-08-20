@@ -34,7 +34,7 @@ export default async function CompetencyTwinPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-024 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Digital Competency Twin</h1>
-          <p className="text-gray-400 text-sm mt-0.5">What is the current competency state of the workforce — not just who is signed off, but how confident that signature is. Modelled at individual, team and organisational level.</p>
+          <p className="text-gray-500 text-sm mt-0.5">What is the current competency state of the workforce — not just who is signed off, but how confident that signature is. Modelled at individual, team and organisational level.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/competency-office/readiness-states" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Readiness states →</Link>
@@ -43,7 +43,7 @@ export default async function CompetencyTwinPage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No competency decisions recorded yet — the twin models current state from real decisions, so it computes once assessments exist.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No competency decisions recorded yet — the twin models current state from real decisions, so it computes once assessments exist.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -59,14 +59,14 @@ export default async function CompetencyTwinPage() {
           <div className="bg-white rounded-xl border border-gray-100 p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Competency state model (§6)</p>
-              <span className="text-[10px] text-gray-400">Capability + Evidence confidence + Recency + Practice exposure + Risk</span>
+              <span className="text-[10px] text-gray-500">Capability + Evidence confidence + Recency + Practice exposure + Risk</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
               {d.factors.map((f: any) => (
                 <div key={f.label} className={`border rounded-lg p-3 ${f.value == null ? "border-dashed border-gray-200 bg-gray-50/50" : "border-gray-100"}`}>
-                  <p className={`text-xl font-bold tabular-nums ${f.value == null ? "text-gray-300" : tone(f.value)}`}>{f.value == null ? "—" : f.value}</p>
+                  <p className={`text-xl font-bold tabular-nums ${f.value == null ? "text-gray-500" : tone(f.value)}`}>{f.value == null ? "—" : f.value}</p>
                   <p className="text-[11px] font-medium text-gray-700 leading-tight">{f.label}</p>
-                  <p className="text-[10px] text-gray-400 leading-snug mt-0.5">{f.note}</p>
+                  <p className="text-[10px] text-gray-500 leading-snug mt-0.5">{f.note}</p>
                 </div>
               ))}
             </div>
@@ -76,11 +76,11 @@ export default async function CompetencyTwinPage() {
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <p className="text-sm font-bold text-gray-800">Team competency twins (§5.2)</p>
-              <p className="text-[10px] text-gray-400">weakest first</p>
+              <p className="text-[10px] text-gray-500">weakest first</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[620px]">
-                <thead><tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                <thead><tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
                   <th className="text-left py-2 pl-4 pr-2">Team / department</th>
                   <th className="text-center py-2 px-2">People</th>
                   <th className="text-center py-2 px-2">States</th>
@@ -94,8 +94,8 @@ export default async function CompetencyTwinPage() {
                       <td className="py-2 pl-4 pr-2 text-[12px] font-medium text-gray-800">{t.name}</td>
                       <td className="py-2 px-2 text-center text-[12px] text-gray-600 tabular-nums">{t.people}</td>
                       <td className="py-2 px-2 text-center text-[11px] text-gray-500 tabular-nums">{t.records}</td>
-                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={t.unvalidated ? "text-[var(--cmp-text-warning)] font-semibold" : "text-gray-400"}>{t.unvalidated}</span></td>
-                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={t.criticalWeak ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}>{t.criticalWeak}</span></td>
+                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={t.unvalidated ? "text-[var(--cmp-text-warning)] font-semibold" : "text-gray-500"}>{t.unvalidated}</span></td>
+                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={t.criticalWeak ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-500"}>{t.criticalWeak}</span></td>
                       <td className="py-2 pr-4 pl-2">
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${bar(t.state)}`} style={{ width: `${t.state}%` }} /></div>
@@ -113,11 +113,11 @@ export default async function CompetencyTwinPage() {
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <p className="text-sm font-bold text-gray-800">Individual competency twins (§5.1)</p>
-              <p className="text-[10px] text-gray-400">lowest state first · {d.individualsTotal} people</p>
+              <p className="text-[10px] text-gray-500">lowest state first · {d.individualsTotal} people</p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px]">
-                <thead><tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                <thead><tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
                   <th className="text-left py-2 pl-4 pr-2">Person</th>
                   <th className="text-left py-2 px-2">Department</th>
                   <th className="text-center py-2 px-2">Comps</th>
@@ -132,8 +132,8 @@ export default async function CompetencyTwinPage() {
                       <td className="py-2 pl-4 pr-2 text-[12px] font-medium text-gray-800">{p.name}{p.criticalWeak > 0 && <span className="ml-1.5 text-[9px] font-bold text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] rounded px-1">{p.criticalWeak} critical</span>}</td>
                       <td className="py-2 px-2 text-[11px] text-gray-500">{p.department ?? "—"}</td>
                       <td className="py-2 px-2 text-center text-[12px] text-gray-600 tabular-nums">{p.competencies}</td>
-                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={p.unvalidated ? "text-[var(--cmp-text-warning)]" : "text-gray-400"}>{p.unvalidated}</span></td>
-                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={p.stale ? "text-[var(--cmp-text-warning)]" : "text-gray-400"}>{p.stale}</span></td>
+                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={p.unvalidated ? "text-[var(--cmp-text-warning)]" : "text-gray-500"}>{p.unvalidated}</span></td>
+                      <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className={p.stale ? "text-[var(--cmp-text-warning)]" : "text-gray-500"}>{p.stale}</span></td>
                       <td className="py-2 px-2">
                         <span className="text-[11px] text-gray-600">{p.weakest.competency}</span>
                         <span className={`ml-1 text-[9px] font-bold border rounded px-1 capitalize ${RISK_META[p.weakest.risk] ?? RISK_META.standard}`}>{p.weakest.risk}</span>
@@ -158,7 +158,7 @@ export default async function CompetencyTwinPage() {
             </p>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">This is deliberately <span className="font-medium">not</span> the same view as <Link href="/competency-office/readiness-states" className="text-[var(--cmp-text-success)] hover:underline">Readiness States (COMP-019)</Link>, which resolves outcome + expiry into seven categorical states. Two people can both read &ldquo;Ready&rdquo; there while one holds a validated expert decision on a low-risk competency and the other an unvalidated novice decision on a critical one — the twin separates them. Per the CGR mandate, AI may model and predict but never determines competence without evidence or replaces the assessment process.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">This is deliberately <span className="font-medium">not</span> the same view as <Link href="/competency-office/readiness-states" className="text-[var(--cmp-text-success)] hover:underline">Readiness States (COMP-019)</Link>, which resolves outcome + expiry into seven categorical states. Two people can both read &ldquo;Ready&rdquo; there while one holds a validated expert decision on a low-risk competency and the other an unvalidated novice decision on a critical one — the twin separates them. Per the CGR mandate, AI may model and predict but never determines competence without evidence or replaces the assessment process.</p>
         </div>
       )}
     </div>

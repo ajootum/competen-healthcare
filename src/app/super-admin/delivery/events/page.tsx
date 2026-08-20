@@ -42,7 +42,7 @@ export default async function EventsPage() {
         <div>
           <p className="text-[11px] font-semibold text-violet-500 uppercase tracking-widest mb-0.5">CDP-015 · APIs & Event Bus</p>
           <h1 className="text-xl font-bold text-gray-900">Event Consumer</h1>
-          <p className="text-gray-400 text-sm mt-0.5">The reactive side of the outbox — drains delivery events and auto-remediates failed assessments.</p>
+          <p className="text-gray-500 text-sm mt-0.5">The reactive side of the outbox — drains delivery events and auto-remediates failed assessments.</p>
         </div>
         <Link href="/super-admin/delivery" className="text-xs font-semibold text-gray-500 hover:text-violet-700 border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Delivery</Link>
       </div>
@@ -60,7 +60,7 @@ export default async function EventsPage() {
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-0.5">{k.label}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-0.5">{k.label}</p>
               </div>
             ))}
           </div>
@@ -69,24 +69,24 @@ export default async function EventsPage() {
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <h2 className="font-semibold text-gray-900 text-sm">Process the outbox</h2>
-                <p className="text-[11px] text-gray-400">Drains pending delivery events: a failed assessment queues remediation (a nudge + a reinforcement card); known events are acknowledged; unknown types are left for other consumers. Runs hourly via the <code className="text-[10px]">delivery_event_consumer</code> cron.</p>
+                <p className="text-[11px] text-gray-500">Drains pending delivery events: a failed assessment queues remediation (a nudge + a reinforcement card); known events are acknowledged; unknown types are left for other consumers. Runs hourly via the <code className="text-[10px]">delivery_event_consumer</code> cron.</p>
               </div>
               <EventConsumerRunner pending={q.kpis.pending} />
             </div>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-gray-50"><p className="text-[11px] text-gray-400">Recent events</p></div>
+            <div className="px-4 py-2.5 border-b border-gray-50"><p className="text-[11px] text-gray-500">Recent events</p></div>
             {q.recent.length === 0 ? (
-              <p className="text-xs text-gray-400 px-4 py-8 text-center">No domain events emitted yet.</p>
+              <p className="text-xs text-gray-500 px-4 py-8 text-center">No domain events emitted yet.</p>
             ) : (
               <div className="divide-y divide-gray-50">
                 {q.recent.map((e, idx) => (
                   <div key={idx} className="flex items-center gap-3 px-4 py-2.5">
                     <span className="text-[11px] font-semibold text-gray-700 font-mono truncate flex-1">{e.event_type}</span>
-                    <span className="text-[10px] text-gray-400 shrink-0 hidden sm:inline">{e.subject_type}</span>
+                    <span className="text-[10px] text-gray-500 shrink-0 hidden sm:inline">{e.subject_type}</span>
                     <span className={`text-[8px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 shrink-0 ${STATUS[e.status] ?? STATUS.pending}`}>{e.status}</span>
-                    <span className="text-[10px] text-gray-400 shrink-0 w-16 text-right">{e.occurred_at ? ago(e.occurred_at) : ""}</span>
+                    <span className="text-[10px] text-gray-500 shrink-0 w-16 text-right">{e.occurred_at ? ago(e.occurred_at) : ""}</span>
                   </div>
                 ))}
               </div>

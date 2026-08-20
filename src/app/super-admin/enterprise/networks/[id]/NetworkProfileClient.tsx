@@ -35,7 +35,7 @@ export default function NetworkProfileClient({ data, available }: { data: any; a
 
   return (
     <div data-wide className="space-y-4">
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/enterprise" className="hover:text-teal-700">Enterprise Administration</Link><span>/</span>
         <Link href="/super-admin/enterprise/networks" className="hover:text-teal-700">Networks</Link><span>/</span><span className="text-gray-600 truncate">{network.name}</span>
       </div>
@@ -45,7 +45,7 @@ export default function NetworkProfileClient({ data, available }: { data: any; a
           <span className="w-11 h-11 rounded-xl bg-indigo-50 flex items-center justify-center text-xl shrink-0">🌐</span>
           <div>
             <div className="flex items-center gap-2 flex-wrap"><h1 className="text-xl font-bold text-gray-900">{network.name}</h1>
-              <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${network.status === "active" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>{network.status}</span></div>
+              <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${network.status === "active" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-600"}`}>{network.status}</span></div>
             <p className="text-xs text-gray-500 mt-0.5 capitalize">{(network.type ?? "").replace(/_/g, " ")} · HQ {network.hq}</p>
           </div>
         </div>
@@ -74,7 +74,7 @@ export default function NetworkProfileClient({ data, available }: { data: any; a
           </div>
           <div className={card}><h3 className="font-semibold text-gray-900 mb-2">Inheritance &amp; shared standards</h3>
             <p className="text-sm text-gray-500 leading-relaxed">Shared competency frameworks, policies, assessment templates, branding and governance rules propagate to member organisations from here.</p>
-            <p className="text-[11px] text-gray-400 mt-2">Inheritance controls (mandatory / local-override / optional) are provisioned with the Shared Governance module.</p>
+            <p className="text-[11px] text-gray-500 mt-2">Inheritance controls (mandatory / local-override / optional) are provisioned with the Shared Governance module.</p>
           </div>
         </div>
       )}
@@ -83,14 +83,14 @@ export default function NetworkProfileClient({ data, available }: { data: any; a
         <div className={card}>
           <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900">Member organisations ({members.length})</h3>
             <button onClick={() => setAddOpen(true)} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3 py-1.5">+ Add organisation</button></div>
-          {members.length === 0 ? <p className="text-sm text-gray-400">No member organisations. Add one to build the network.</p> : (
+          {members.length === 0 ? <p className="text-sm text-gray-500">No member organisations. Add one to build the network.</p> : (
             <div className="divide-y divide-gray-50">
               {members.map((m: any) => (
                 <div key={m.id} className="flex items-center gap-3 py-2.5">
                   <span className="text-base">🏛️</span>
-                  <Link href={`/super-admin/enterprise/organisations/${m.id}`} className="flex-1 min-w-0 hover:text-teal-700"><p className="text-sm text-gray-800 truncate">{m.name}</p><p className="text-[10px] text-gray-400 capitalize">{(m.type ?? "").replace(/_/g, " ")} · {m.country}</p></Link>
+                  <Link href={`/super-admin/enterprise/organisations/${m.id}`} className="flex-1 min-w-0 hover:text-teal-700"><p className="text-sm text-gray-800 truncate">{m.name}</p><p className="text-[10px] text-gray-500 capitalize">{(m.type ?? "").replace(/_/g, " ")} · {m.country}</p></Link>
                   <span className={`text-[10px] px-2 py-0.5 rounded ${ORG_BADGE[m.status] ?? "bg-gray-100 text-gray-600"}`}>{m.status}</span>
-                  <button onClick={() => member("remove_member", m.id)} disabled={busy} className="text-[11px] text-gray-400 hover:text-[var(--cmp-text-error)] disabled:opacity-40">Remove</button>
+                  <button onClick={() => member("remove_member", m.id)} disabled={busy} className="text-[11px] text-gray-500 hover:text-[var(--cmp-text-error)] disabled:opacity-40">Remove</button>
                 </div>
               ))}
             </div>
@@ -101,10 +101,10 @@ export default function NetworkProfileClient({ data, available }: { data: any; a
       {tab === "Countries" && (
         <div className={card}>
           <h3 className="font-semibold text-gray-900 mb-3">Countries &amp; regions</h3>
-          {countries.length === 0 ? <p className="text-sm text-gray-400">No member organisations yet.</p> : (
+          {countries.length === 0 ? <p className="text-sm text-gray-500">No member organisations yet.</p> : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {countries.map((c: any) => (
-                <div key={c.country} className="rounded-lg border border-gray-100 p-3"><p className="text-sm font-medium text-gray-800">{c.country}</p><p className="text-[11px] text-gray-400">{c.orgs} organisation{c.orgs === 1 ? "" : "s"}</p></div>
+                <div key={c.country} className="rounded-lg border border-gray-100 p-3"><p className="text-sm font-medium text-gray-800">{c.country}</p><p className="text-[11px] text-gray-500">{c.orgs} organisation{c.orgs === 1 ? "" : "s"}</p></div>
               ))}
             </div>
           )}
@@ -114,15 +114,15 @@ export default function NetworkProfileClient({ data, available }: { data: any; a
       {tab === "Governance" && (
         <div className={card}><h3 className="font-semibold text-gray-900 mb-2">Governance</h3>
           <p className="text-sm text-gray-500 leading-relaxed">Central governance across {counts.members} member organisation{counts.members === 1 ? "" : "s"} in {counts.countries} countr{counts.countries === 1 ? "y" : "ies"}.</p>
-          <p className="text-[11px] text-gray-400 mt-2">Network owner, shared policies, shared frameworks and governance workflows are captured when the Shared Governance module is provisioned.</p>
+          <p className="text-[11px] text-gray-500 mt-2">Network owner, shared policies, shared frameworks and governance workflows are captured when the Shared Governance module is provisioned.</p>
         </div>
       )}
 
       {tab === "Audit" && (
         <div className={card}><h3 className="font-semibold text-gray-900 mb-3">Audit history</h3>
-          {!auditReady || audit.length === 0 ? <p className="text-sm text-gray-400">{auditReady ? "No audit entries for this network yet." : "Audit log not available."}</p> : (
+          {!auditReady || audit.length === 0 ? <p className="text-sm text-gray-500">{auditReady ? "No audit entries for this network yet." : "Audit log not available."}</p> : (
             <div className="space-y-2">{audit.map((a: any, i: number) => (
-              <div key={i} className="flex items-center gap-2.5 text-sm"><span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" /><span className="text-gray-700 capitalize">{(a.action ?? "").replace(/_/g, " ")}</span><span className="text-gray-400 text-xs ml-auto">{a.actor_name} · {relTime(a.created_at)}</span></div>
+              <div key={i} className="flex items-center gap-2.5 text-sm"><span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" /><span className="text-gray-700 capitalize">{(a.action ?? "").replace(/_/g, " ")}</span><span className="text-gray-500 text-xs ml-auto">{a.actor_name} · {relTime(a.created_at)}</span></div>
             ))}</div>
           )}
         </div>
@@ -131,7 +131,7 @@ export default function NetworkProfileClient({ data, available }: { data: any; a
       {addOpen && (
         <Modal open title="Add organisation to network" onClose={() => setAddOpen(false)}>
           <div className="flex flex-col gap-3">
-            {available.length === 0 ? <p className="text-sm text-gray-400">All organisations are already assigned to a network.</p> : (
+            {available.length === 0 ? <p className="text-sm text-gray-500">All organisations are already assigned to a network.</p> : (
               <>
                 <select value={pick} onChange={e => setPick(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                   <option value="">Select an organisation…</option>

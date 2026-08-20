@@ -28,8 +28,8 @@ export default async function ModuleWidgetCatalogue() {
 
   const header = (
     <div>
-      <div className="flex items-center gap-2 text-xs text-gray-400"><Link href="/super-admin/platform-ops" className="hover:text-teal-700">Platform Operations</Link><span>/</span><span className="text-gray-600">Module &amp; Widget Catalogue</span></div>
-      <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Module &amp; Widget Catalogue <span className="text-sm font-medium text-gray-400">WCE-005</span></h1>
+      <div className="flex items-center gap-2 text-xs text-gray-500"><Link href="/super-admin/platform-ops" className="hover:text-teal-700">Platform Operations</Link><span>/</span><span className="text-gray-600">Module &amp; Widget Catalogue</span></div>
+      <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Module &amp; Widget Catalogue <span className="text-sm font-medium text-gray-500">WCE-005</span></h1>
       <p className="text-sm text-gray-500">The detailed catalogue of every configurable module and widget — configuration contracts, data sources, safety class and completeness. Registered into WCE-002, exposed via WCE-003.</p>
     </div>
   );
@@ -57,13 +57,13 @@ export default async function ModuleWidgetCatalogue() {
 
       {/* Module completeness (§46) */}
       <div className={`${card} p-5`}>
-        <h2 className="text-sm font-bold text-gray-900 mb-3">Module Catalogue Completeness <span className="text-[10px] text-gray-400 font-normal">lowest first</span></h2>
-        {d.modules.length === 0 ? <p className="text-sm text-gray-400 py-4">No modules registered yet — sync the registry.</p> : (
+        <h2 className="text-sm font-bold text-gray-900 mb-3">Module Catalogue Completeness <span className="text-[10px] text-gray-500 font-normal">lowest first</span></h2>
+        {d.modules.length === 0 ? <p className="text-sm text-gray-500 py-4">No modules registered yet — sync the registry.</p> : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1.5">{d.modules.slice(0, 20).map((m: any) => (
             <div key={m.key} className="flex items-center gap-2 text-xs"><span className="text-gray-700 truncate flex-1" title={m.key}>{m.name}</span><div className="w-20 h-1.5 rounded-full bg-gray-100 overflow-hidden shrink-0"><div className="h-full rounded-full" style={{ width: `${m.completeness}%`, background: m.completeness >= 85 ? "#10b981" : m.completeness >= 70 ? "#f59e0b" : "#ef4444" }} /></div><b className={`tabular-nums w-9 text-right ${pctTone(m.completeness)}`}>{m.completeness}%</b></div>
           ))}</div>
         )}
-        <p className="text-[10px] text-gray-400 mt-3">Completeness (§46) = identity + ownership + placement + configurability + safety + data-source elements defined. Data-source binding is a registry next-phase item, so module scores are expected below 100% until sources are registered.</p>
+        <p className="text-[10px] text-gray-500 mt-3">Completeness (§46) = identity + ownership + placement + configurability + safety + data-source elements defined. Data-source binding is a registry next-phase item, so module scores are expected below 100% until sources are registered.</p>
       </div>
 
       {/* Honest next-phase */}
@@ -77,11 +77,11 @@ export default async function ModuleWidgetCatalogue() {
             ["Test-requirement records (§45)", "Per-object required tests feeding WCE-004 governance gates."],
             ["Completeness gate on publish (§46)", "Block publishing objects below the completeness threshold."],
             ["Shared-object reuse graph (§5)", "Which workspaces reference each shared widget, without duplication."],
-          ].map(([t, x]) => <div key={t}><p className="text-xs font-semibold text-gray-600">{t}</p><p className="text-[10px] text-gray-400">{x}</p></div>)}
+          ].map(([t, x]) => <div key={t}><p className="text-xs font-semibold text-gray-600">{t}</p><p className="text-[10px] text-gray-500">{x}</p></div>)}
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">WCE-005 MVP: the code-defined catalogue of the platform&apos;s {s.widgetsCatalogued} real widget primitives with their configuration contracts (category, layout constraints, data source, filters, thresholds, display modes, actions, safety class — §12) plus the module catalogue, with a completeness score (§46) per object. The widget records register into the WCE-002 registry (a registry sync adds them under the shared widget library) and are exposed through WCE-003. Like the workspace catalogue, contracts are code-defined so they never drift from the running components. The per-object property / metric / data-source / test-requirement tables (§45) are honest next-phase. Super-admin gated.</p>
+      <p className="text-[11px] text-gray-500 pb-4">WCE-005 MVP: the code-defined catalogue of the platform&apos;s {s.widgetsCatalogued} real widget primitives with their configuration contracts (category, layout constraints, data source, filters, thresholds, display modes, actions, safety class — §12) plus the module catalogue, with a completeness score (§46) per object. The widget records register into the WCE-002 registry (a registry sync adds them under the shared widget library) and are exposed through WCE-003. Like the workspace catalogue, contracts are code-defined so they never drift from the running components. The per-object property / metric / data-source / test-requirement tables (§45) are honest next-phase. Super-admin gated.</p>
     </div>
   );
 }

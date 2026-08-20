@@ -35,12 +35,12 @@ export default function LogExplorer({ events }: { events: Event[] }) {
           <option value="">All categories</option>
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <span className="text-[10px] text-gray-400 tabular-nums">{filtered.length}/{events.length}</span>
+        <span className="text-[10px] text-gray-500 tabular-nums">{filtered.length}/{events.length}</span>
       </div>
-      {filtered.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No matching events.</p> : (
+      {filtered.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No matching events.</p> : (
         <div className="overflow-x-auto max-h-96 overflow-y-auto">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-white"><tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+            <thead className="sticky top-0 bg-white"><tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-100">
               <th className="px-3 py-2 font-semibold">Action</th><th className="px-3 py-2 font-semibold">Category</th><th className="px-3 py-2 font-semibold">Actor</th><th className="px-3 py-2 font-semibold">Target</th><th className="px-3 py-2 font-semibold text-right">When</th>
             </tr></thead>
             <tbody>
@@ -49,15 +49,15 @@ export default function LogExplorer({ events }: { events: Event[] }) {
                   <td className="px-3 py-1.5 text-gray-700 capitalize">{(e.action ?? "").replace(/_/g, " ")}</td>
                   <td className="px-3 py-1.5"><span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${CAT_TONE[e.category] ?? "bg-gray-100 text-gray-600"}`}>{e.category}</span></td>
                   <td className="px-3 py-1.5 text-gray-500 text-[12px]">{e.actor}</td>
-                  <td className="px-3 py-1.5 text-gray-500 text-[12px] truncate max-w-[220px]">{e.entity || <span className="text-gray-300">—</span>}</td>
-                  <td className="px-3 py-1.5 text-right text-[11px] text-gray-400 tabular-nums">{relTime(e.at)}</td>
+                  <td className="px-3 py-1.5 text-gray-500 text-[12px] truncate max-w-[220px]">{e.entity || <span className="text-gray-500">—</span>}</td>
+                  <td className="px-3 py-1.5 text-right text-[11px] text-gray-500 tabular-nums">{relTime(e.at)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
-      <p className="text-[10px] text-gray-400 mt-2">Instant client-side filter over the most recent events. Scoped server-side search across the full immutable trail is a later phase.</p>
+      <p className="text-[10px] text-gray-500 mt-2">Instant client-side filter over the most recent events. Scoped server-side search across the full immutable trail is a later phase.</p>
     </div>
   );
 }

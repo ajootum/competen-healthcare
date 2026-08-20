@@ -34,7 +34,7 @@ export default async function StudioDependenciesPage() {
         <div>
           <p className="text-[11px] font-semibold text-rose-500 uppercase tracking-widest mb-0.5">CST-105 · Dependency Manager</p>
           <h1 className="text-xl font-bold text-gray-900">Competency Dependencies</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Prerequisite, co-requisite, recommended and inherited relationships — the progression graph, cycle-checked.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Prerequisite, co-requisite, recommended and inherited relationships — the progression graph, cycle-checked.</p>
         </div>
         <Link href="/super-admin/studio" className="text-xs font-semibold text-gray-500 hover:text-teal-700 border border-gray-200 rounded-lg px-3 py-2">← Studio</Link>
       </div>
@@ -52,11 +52,11 @@ export default async function StudioDependenciesPage() {
               { label: "Recommended", value: dep.kpis.recommended, tone: "text-teal-600" },
               { label: "Inherited", value: dep.kpis.inherited, tone: "text-violet-600" },
               { label: "Competencies w/ deps", value: dep.kpis.sourced, tone: "text-gray-900" },
-              { label: "Cycles", value: dep.kpis.cycles, tone: dep.kpis.cycles > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-300" },
+              { label: "Cycles", value: dep.kpis.cycles, tone: dep.kpis.cycles > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-500" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-0.5">{k.label}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-0.5">{k.label}</p>
               </div>
             ))}
           </div>
@@ -79,7 +79,7 @@ export default async function StudioDependenciesPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-5 md:col-span-2">
               <h2 className="font-semibold text-gray-900 text-sm mb-3">By relationship type</h2>
               {dep.distribution.length === 0 ? (
-                <p className="text-xs text-gray-400">No dependencies defined yet.</p>
+                <p className="text-xs text-gray-500">No dependencies defined yet.</p>
               ) : dep.distribution.map(d => {
                 const pct = dep.kpis.total ? Math.round((d.n / dep.kpis.total) * 100) : 0;
                 return (
@@ -93,10 +93,10 @@ export default async function StudioDependenciesPage() {
               })}
             </div>
             <Link href="/competency-office/recognition" className="bg-white rounded-xl border border-gray-100 p-5 hover:border-teal-200 transition-colors block">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Cross-reference</p>
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Cross-reference</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">{dep.kpis.equivalencies}</p>
               <p className="text-xs text-gray-500 mt-0.5">Equivalency rules</p>
-              <p className="text-[10px] text-gray-400 mt-2">Equivalency &amp; recognition is governed separately in Mobility &amp; Recognition (COMP-024) →</p>
+              <p className="text-[10px] text-gray-500 mt-2">Equivalency &amp; recognition is governed separately in Mobility &amp; Recognition (COMP-024) →</p>
             </Link>
           </div>
 

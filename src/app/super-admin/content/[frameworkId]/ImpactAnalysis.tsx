@@ -46,10 +46,10 @@ export default function ImpactAnalysis({ frameworkId }: { frameworkId: string })
         <Modal open title="Change Impact Analysis" onClose={() => setOpen(false)} width="lg">
           {/* The strapline moves into the body: Modal's header takes an accessible name, not a name and a
               description, and this sentence is what tells you what the list below actually is. */}
-          <p className="text-sm text-gray-400 -mt-2 mb-4">Downstream objects a change to this framework would affect</p>
+          <p className="text-sm text-gray-500 -mt-2 mb-4">Downstream objects a change to this framework would affect</p>
           <div>
               {loading ? (
-                <p className="text-center text-sm text-gray-400 py-8">Computing dependency graph…</p>
+                <p className="text-center text-sm text-gray-500 py-8">Computing dependency graph…</p>
               ) : report ? (
                 <div className="flex flex-col gap-3">
                   <div className="bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-xl px-4 py-3">
@@ -65,7 +65,7 @@ export default function ImpactAnalysis({ frameworkId }: { frameworkId: string })
                         <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{a.count}</span>
                       </div>
                       {a.items.length > 0 && (
-                        <p className="text-[10px] text-gray-400 mt-1 line-clamp-2">{a.items.slice(0, 12).join(" · ")}{a.items.length > 12 ? " …" : ""}</p>
+                        <p className="text-[10px] text-gray-500 mt-1 line-clamp-2">{a.items.slice(0, 12).join(" · ")}{a.items.length > 12 ? " …" : ""}</p>
                       )}
                     </div>
                   ))}
@@ -74,7 +74,7 @@ export default function ImpactAnalysis({ frameworkId }: { frameworkId: string })
                       <p className="text-xs font-semibold text-indigo-700">{report.edges.length} explicit graph link{report.edges.length !== 1 ? "s" : ""}</p>
                     </div>
                   )}
-                  <p className="text-[10px] text-gray-400 mt-1">
+                  <p className="text-[10px] text-gray-500 mt-1">
                     Review this before publishing changes — existing competency decisions remain linked to the version active at assessment time.
                   </p>
 
@@ -94,7 +94,7 @@ export default function ImpactAnalysis({ frameworkId }: { frameworkId: string })
                   </div>
                 </div>
               ) : (
-                <p className="text-center text-sm text-gray-400 py-8">No data.</p>
+                <p className="text-center text-sm text-gray-500 py-8">No data.</p>
               )}
           </div>
         </Modal>

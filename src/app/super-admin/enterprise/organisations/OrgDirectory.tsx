@@ -12,7 +12,7 @@ const ORG_TYPES = ["government", "private", "ngo", "faith_based", "academic"];
 const STATUSES = ["draft", "onboarding", "active", "suspended", "restricted", "archived", "closed"];
 export const STATUS_BADGE: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600", onboarding: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
-  suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", restricted: "bg-[var(--cmp-surface-warning)] text-orange-700", archived: "bg-gray-100 text-gray-500", closed: "bg-gray-100 text-gray-500",
+  suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", restricted: "bg-[var(--cmp-surface-warning)] text-orange-700", archived: "bg-gray-100 text-gray-600", closed: "bg-gray-100 text-gray-600",
 };
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 
@@ -45,7 +45,7 @@ export default function OrgDirectory({ rows, networks }: { rows: any[]; networks
   return (
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100">
-        <h2 className="font-semibold text-gray-900 mr-auto">Organisations <span className="text-gray-400 font-normal text-sm">({filtered.length})</span></h2>
+        <h2 className="font-semibold text-gray-900 mr-auto">Organisations <span className="text-gray-500 font-normal text-sm">({filtered.length})</span></h2>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search organisations…" className={`${input} w-56`} />
         <select value={status} onChange={e => setStatus(e.target.value)} className={`${input} w-40`}>
           <option value="all">All statuses</option>
@@ -57,7 +57,7 @@ export default function OrgDirectory({ rows, networks }: { rows: any[]; networks
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+            <tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-100">
               <th className="px-4 py-2.5 font-semibold">Name</th>
               <th className="px-4 py-2.5 font-semibold">Type</th>
               <th className="px-4 py-2.5 font-semibold">Country</th>
@@ -68,7 +68,7 @@ export default function OrgDirectory({ rows, networks }: { rows: any[]; networks
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No organisations match.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">No organisations match.</td></tr>}
             {filtered.map(r => (
               <tr key={r.id} onClick={() => router.push(`/super-admin/enterprise/organisations/${r.id}`)} className="border-b border-gray-50 hover:bg-gray-50/60 cursor-pointer">
                 <td className="px-4 py-3">
@@ -76,13 +76,13 @@ export default function OrgDirectory({ rows, networks }: { rows: any[]; networks
                     <span className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center text-sm shrink-0">🏛️</span>
                     <div className="min-w-0">
                       <p className="font-medium text-gray-900 truncate">{r.name}</p>
-                      {r.code && <p className="text-[10px] text-gray-400">{r.code}</p>}
+                      {r.code && <p className="text-[10px] text-gray-500">{r.code}</p>}
                     </div>
                   </div>
                 </td>
                 <td className="px-4 py-3 text-gray-600 capitalize">{(r.type ?? "").replace(/_/g, " ")}</td>
                 <td className="px-4 py-3 text-gray-600">{r.country}</td>
-                <td className="px-4 py-3 text-gray-500">{r.network ?? <span className="text-gray-300">—</span>}</td>
+                <td className="px-4 py-3 text-gray-500">{r.network ?? <span className="text-gray-500">—</span>}</td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded ${STATUS_BADGE[r.status] ?? "bg-gray-100 text-gray-600"}`}>
                     {!r.hasAdmin && r.status !== "archived" && <span title="No administrator" className="text-red-500">●</span>}{r.status}

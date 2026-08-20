@@ -62,7 +62,7 @@ export default function CommitteesManager({ initialCommittees, staff }: { initia
               <div className="flex items-center gap-2">
                 <p className="font-semibold text-gray-900 text-sm">{c.name}</p>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded capitalize ${LEVEL_CLS[c.level] ?? "bg-gray-100 text-gray-600"}`}>{c.level}</span>
-                <span className="text-[10px] text-gray-400">quorum {c.quorum}</span>
+                <span className="text-[10px] text-gray-500">quorum {c.quorum}</span>
               </div>
               <div className="flex items-center gap-2">
                 <select defaultValue={c.level} disabled={busy}
@@ -83,7 +83,7 @@ export default function CommitteesManager({ initialCommittees, staff }: { initia
                       className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-[var(--cmp-text-critical)] transition-opacity leading-none px-0.5">×</button>
                   </span>
                 ))}
-                {!members.length && <p className="text-[11px] text-gray-300 italic">No members yet</p>}
+                {!members.length && <p className="text-[11px] text-gray-500 italic">No members yet</p>}
               </div>
               {addMemberFor === c.id ? (
                 <select autoFocus defaultValue="" disabled={busy}
@@ -103,7 +103,7 @@ export default function CommitteesManager({ initialCommittees, staff }: { initia
       {!initialCommittees.length && (
         <div className="bg-white rounded-xl border border-gray-100 p-10 text-center">
           <p className="text-2xl mb-2">⚖️</p>
-          <p className="text-gray-400 text-sm">No committees yet — create one to formalise content governance.</p>
+          <p className="text-gray-500 text-sm">No committees yet — create one to formalise content governance.</p>
         </div>
       )}
     </div>

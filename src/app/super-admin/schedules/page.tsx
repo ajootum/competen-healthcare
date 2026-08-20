@@ -31,7 +31,7 @@ export default async function SchedulesPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Reassessment Schedules</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Configure when competencies are reassessed and what triggers a new cycle</p>
+          <p className="text-gray-500 text-sm mt-0.5">Configure when competencies are reassessed and what triggers a new cycle</p>
         </div>
         <ScheduleManager frameworks={frameworks ?? []} />
       </div>
@@ -47,13 +47,13 @@ export default async function SchedulesPage() {
                 <div>
                   <p className="font-semibold text-gray-900 text-sm">{s.name}</p>
                   {(s.frameworks as { name: string } | null)?.name && (
-                    <p className="text-[10px] text-gray-400 mt-0.5">Linked to: {(s.frameworks as { name: string }).name}</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">Linked to: {(s.frameworks as { name: string }).name}</p>
                   )}
                 </div>
               </div>
               <div className="text-right">
                 <p className="text-sm font-semibold text-gray-700">Every {s.frequency_months} month{s.frequency_months > 1 ? "s" : ""}</p>
-                <p className="text-[10px] text-gray-400">{s.grace_period_days}d grace period</p>
+                <p className="text-[10px] text-gray-500">{s.grace_period_days}d grace period</p>
               </div>
             </div>
             <div className="flex gap-3 mt-3 pt-3 border-t border-gray-50">
@@ -61,7 +61,7 @@ export default async function SchedulesPage() {
               {s.trigger_on_expiry && <span className="text-[10px] bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] px-2 py-0.5 rounded">Triggers on expiry</span>}
               {s.trigger_on_role_change && <span className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded">Triggers on role change</span>}
               {s.auto_create_cycle && <span className="text-[10px] bg-teal-50 text-teal-600 px-2 py-0.5 rounded">Auto-creates cycle</span>}
-              {!s.is_active && <span className="text-[10px] bg-gray-100 text-gray-400 px-2 py-0.5 rounded">Inactive</span>}
+              {!s.is_active && <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Inactive</span>}
             </div>
           </div>
         ))}

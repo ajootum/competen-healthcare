@@ -104,7 +104,7 @@ export default function StudioBuilder({ domains }: { domains: { id: string; labe
         <div className="flex items-center gap-2 mt-4">
           <button onClick={create} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Creating…" : "Create draft"}</button>
           <button onClick={() => setForm({})} className="text-sm text-gray-500 hover:text-gray-700 px-2">Clear</button>
-          <span className="text-[11px] text-gray-400 ml-auto">Creates a real draft asset via the content API.</span>
+          <span className="text-[11px] text-gray-500 ml-auto">Creates a real draft asset via the content API.</span>
         </div>
       </div>
     </div>

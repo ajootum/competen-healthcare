@@ -87,7 +87,7 @@ export default function PolicyCenter({ frameworks, policies }: { frameworks: Pic
             <div><label className={label}>Effective date</label><input type="date" value={form.effective_date ?? ""} onChange={set("effective_date")} className={input} /></div>
             <div><label className={label}>Review date</label><input type="date" value={form.review_date ?? ""} onChange={set("review_date")} className={input} /></div>
             <div className="sm:col-span-2"><label className={label}>Content</label><textarea value={form.content ?? ""} onChange={set("content")} rows={4} className={input} placeholder="Policy body (markdown supported)" /></div>
-            <p className="sm:col-span-2 text-[11px] text-gray-400">Created by a platform super admin → the policy is <span className="font-medium text-gray-500">platform-wide</span> (tenant scope is bound server-side, never client-supplied).</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-500">Created by a platform super admin → the policy is <span className="font-medium text-gray-500">platform-wide</span> (tenant scope is bound server-side, never client-supplied).</p>
           </div>
         )}
 
@@ -95,14 +95,14 @@ export default function PolicyCenter({ frameworks, policies }: { frameworks: Pic
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="sm:col-span-2"><label className={label}>Policy *</label><select value={form.policy_id ?? ""} onChange={set("policy_id")} className={input}><option value="">— Select policy —</option>{policies.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
             {policies.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No active policies yet — create one first.</p>}
-            <p className="sm:col-span-2 text-[11px] text-gray-400">Opens a governed 2-step approval (technical review → governance approval) in the platform engine, with per-step decision audit. Decide it in Platform Ops → Approvals.</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-500">Opens a governed 2-step approval (technical review → governance approval) in the platform engine, with per-step decision audit. Decide it in Platform Ops → Approvals.</p>
           </div>
         )}
 
         <div className="flex items-center gap-2 mt-4">
           <button onClick={act} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Working…" : tab === "create" ? "Create policy" : "Submit for approval"}</button>
           <button onClick={() => setForm({})} className="text-sm text-gray-500 hover:text-gray-700 px-2">Clear</button>
-          <span className="text-[11px] text-gray-400 ml-auto">Real policy actions via the live APIs.</span>
+          <span className="text-[11px] text-gray-500 ml-auto">Real policy actions via the live APIs.</span>
         </div>
       </div>
     </div>

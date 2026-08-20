@@ -17,7 +17,7 @@ const card = "bg-white rounded-xl border border-gray-200";
 const fmt = (n: number) => n.toLocaleString();
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
 
-const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", in_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", approved: "bg-[var(--cmp-surface-information)] text-blue-700", published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", retired: "bg-gray-100 text-gray-400", archived: "bg-gray-100 text-gray-400" };
+const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", in_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", approved: "bg-[var(--cmp-surface-information)] text-blue-700", published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", retired: "bg-gray-100 text-gray-600", archived: "bg-gray-100 text-gray-600" };
 
 // Asset builders → the real authoring surface each opens. `soon` = no surface yet.
 const BUILDERS = [
@@ -49,14 +49,14 @@ export default async function KnowledgeStudio() {
     { label: "Draft Assets", value: fmt(k.drafts), icon: "📝", iconBg: "bg-gray-50" },
     { label: "Awaiting Review", value: fmt(k.awaitingReview), icon: "👀", iconBg: "bg-[var(--cmp-surface-warning)]", tone: k.awaitingReview ? "text-[var(--cmp-text-warning)]" : undefined },
     { label: "Published", value: fmt(k.published), icon: "✅", iconBg: "bg-[var(--cmp-surface-success)]", tone: "text-[var(--cmp-text-success)]" },
-    { label: "Archived", value: fmt(k.archived), icon: "🗄️", iconBg: "bg-gray-50", tone: "text-gray-400" },
+    { label: "Archived", value: fmt(k.archived), icon: "🗄️", iconBg: "bg-gray-50", tone: "text-gray-500" },
     { label: "AI Suggestions", value: fmt(k.suggestions), icon: "✨", iconBg: "bg-teal-50", tone: k.suggestions ? "text-teal-600" : undefined },
   ];
 
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/ckp" className="hover:text-teal-700">Clinical Knowledge Platform</Link><span>/</span><span className="text-gray-600">Knowledge Studio</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Knowledge Studio</h1>
@@ -115,21 +115,21 @@ export default async function KnowledgeStudio() {
           <h2 className="font-semibold text-gray-900 text-[15px]">Recent Work</h2>
           <Link href="/super-admin/studio" className="text-xs text-teal-700 hover:underline">Open Studio →</Link>
         </div>
-        {s.recent.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No knowledge assets authored yet.</p> : (
+        {s.recent.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No knowledge assets authored yet.</p> : (
           <div className="divide-y divide-gray-50">
             {s.recent.map((r: any, i: number) => (
               <div key={i} className="flex items-center gap-3 py-2.5">
                 <span className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-sm shrink-0">{r.icon}</span>
-                <div className="min-w-0 flex-1"><p className="text-sm text-gray-800 truncate">{r.title}</p><p className="text-[10px] text-gray-400">{r.type}</p></div>
+                <div className="min-w-0 flex-1"><p className="text-sm text-gray-800 truncate">{r.title}</p><p className="text-[10px] text-gray-500">{r.type}</p></div>
                 <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${STATUS_BADGE[r.status] ?? "bg-gray-100 text-gray-600"}`}>{(r.status ?? "").replace(/_/g, " ")}</span>
-                <span className="text-[10px] text-gray-400 shrink-0 tabular-nums w-16 text-right">{relTime(r.at)}</span>
+                <span className="text-[10px] text-gray-500 shrink-0 tabular-nums w-16 text-right">{relTime(r.at)}</span>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Knowledge Studio is the single authoring environment for every asset type. The builder canvas creates real draft CKOs, competencies, frameworks and policies in-place via the content APIs; full surfaces open the rich multi-step authoring tools. Authoring-status counts and recent work are live from the knowledge schema.</p>
+      <p className="text-[11px] text-gray-500 pb-4">Knowledge Studio is the single authoring environment for every asset type. The builder canvas creates real draft CKOs, competencies, frameworks and policies in-place via the content APIs; full surfaces open the rich multi-step authoring tools. Authoring-status counts and recent work are live from the knowledge schema.</p>
     </div>
   );
 }

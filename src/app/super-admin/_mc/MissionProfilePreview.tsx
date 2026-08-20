@@ -18,7 +18,7 @@ export default function MissionProfilePreview({ profiles }: { profiles: MissionP
     <div className="bg-white rounded-xl border border-gray-200 p-4">
       <div className="flex items-baseline justify-between gap-3 mb-2">
         <h2 className="font-semibold text-gray-900 text-[15px]">Preview a governance dashboard</h2>
-        <span className="text-[11px] text-gray-400">view only — your authority is unchanged</span>
+        <span className="text-[11px] text-gray-500">view only — your authority is unchanged</span>
       </div>
       <p className="text-xs text-gray-500 mb-3">
         See the Mission Control a position resolves to, without being appointed to it.
@@ -33,7 +33,7 @@ export default function MissionProfilePreview({ profiles }: { profiles: MissionP
               className="text-xs px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
             >
               {p.name}
-              {line && <span className="text-gray-400"> · {line.name}</span>}
+              {line && <span className="text-gray-500"> · {line.name}</span>}
             </Link>
           );
         })}

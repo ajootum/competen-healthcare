@@ -30,7 +30,7 @@ export default async function SchemaPage() {
 
   return (
     <div className="space-y-5 max-w-6xl">
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Schema &amp; Object Model</span>
@@ -38,7 +38,7 @@ export default async function SchemaPage() {
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">🗂️</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Schema &amp; Object Model <span className="text-gray-300 font-medium text-lg">(NCP-016)</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Schema &amp; Object Model <span className="text-gray-500 font-medium text-lg">(NCP-016)</span></h1>
           <p className="text-sm text-gray-500">The canonical contract every configurable object conforms to — the single source of truth the builders, runtime, migration and AI all validate against.</p>
         </div>
       </div>
@@ -50,7 +50,7 @@ export default async function SchemaPage() {
       </div>
 
       <SchemaExplorer schemas={OBJECT_SCHEMAS} counts={counts} />
-      <p className="text-[11px] text-gray-400">The schemas here are the portable contract; the live per-type validators in the objects API enforce the same rules at author time. Schema-version migration, the compatibility matrix and signed schema packages (NCP-016 §7/§9) are next-phase.</p>
+      <p className="text-[11px] text-gray-500">The schemas here are the portable contract; the live per-type validators in the objects API enforce the same rules at author time. Schema-version migration, the compatibility matrix and signed schema packages (NCP-016 §7/§9) are next-phase.</p>
     </div>
   );
 }

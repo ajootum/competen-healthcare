@@ -10,7 +10,7 @@ const GROUPS = [
 ];
 const SCALES = [{ v: "likert5", label: "5-point Likert" }, { v: "likert3", label: "3-point" }, { v: "bars", label: "BARS" }, { v: "global", label: "Global rating" }, { v: "binary", label: "Binary" }];
 const groupLabel = (g: string) => GROUPS.find(x => x.v === g)?.label ?? g;
-const STATUS_TONE: Record<string, string> = { draft: "text-gray-500 bg-gray-50 border-gray-200", active: "text-teal-600 bg-teal-50 border-teal-200", archived: "text-gray-400 bg-gray-50 border-gray-200" };
+const STATUS_TONE: Record<string, string> = { draft: "text-gray-500 bg-gray-50 border-gray-200", active: "text-teal-600 bg-teal-50 border-teal-200", archived: "text-gray-500 bg-gray-50 border-gray-200" };
 
 export default function ThreeSixtyManager({ assessments }: { assessments: any[] }) {
   const router = useRouter();
@@ -52,18 +52,18 @@ export default function ThreeSixtyManager({ assessments }: { assessments: any[] 
       </div>
 
       {assessments.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-6 text-center text-xs text-gray-400">No 360° assessments yet — create one, then add weighted respondent groups (they should sum to 100%).</div>
+        <div className="bg-white rounded-xl border border-gray-100 p-6 text-center text-xs text-gray-500">No 360° assessments yet — create one, then add weighted respondent groups (they should sum to 100%).</div>
       ) : assessments.map((a: any) => (
         <div key={a.id} className="bg-white rounded-xl border border-gray-100 p-4">
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => setOpen(open === a.id ? null : a.id)} className="text-sm font-bold text-gray-900 hover:text-teal-700">{open === a.id ? "▾" : "▸"} {a.name}</button>
             <span className="text-[10px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">{a.scaleLabel}</span>
-            {a.anonymous && <span className="text-[10px] text-gray-400">anonymous · min {a.minRaters}</span>}
+            {a.anonymous && <span className="text-[10px] text-gray-500">anonymous · min {a.minRaters}</span>}
             <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${STATUS_TONE[a.status] ?? STATUS_TONE.draft}`}>{a.status}</span>
             <div className="ml-auto flex items-center gap-2 text-xs">
-              <span className={a.balanced ? "text-teal-600 font-semibold" : a.weightSum > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-400"}>{a.weightSum}% weighted{a.balanced ? " ✓" : ""}</span>
-              <span className="text-gray-400">{a.groups.length} group{a.groups.length === 1 ? "" : "s"}</span>
-              <button onClick={() => del(a.id)} disabled={busy} className="text-gray-300 hover:text-red-500" title="Delete">✕</button>
+              <span className={a.balanced ? "text-teal-600 font-semibold" : a.weightSum > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-500"}>{a.weightSum}% weighted{a.balanced ? " ✓" : ""}</span>
+              <span className="text-gray-500">{a.groups.length} group{a.groups.length === 1 ? "" : "s"}</span>
+              <button onClick={() => del(a.id)} disabled={busy} className="text-gray-500 hover:text-red-500" title="Delete">✕</button>
             </div>
           </div>
 
@@ -76,7 +76,7 @@ export default function ThreeSixtyManager({ assessments }: { assessments: any[] 
                       <span className="font-semibold text-gray-700 w-32">{groupLabel(g.group_type)}</span>
                       <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden max-w-[240px]"><div className="h-full rounded-full bg-teal-500" style={{ width: `${Math.min(100, g.weight)}%` }} /></div>
                       <span className="font-semibold text-gray-900 w-10 text-right tabular-nums">{g.weight}%</span>
-                      <button onClick={() => removeG(g.id)} disabled={busy} className="text-gray-300 hover:text-red-500 shrink-0" title="Remove">✕</button>
+                      <button onClick={() => removeG(g.id)} disabled={busy} className="text-gray-500 hover:text-red-500 shrink-0" title="Remove">✕</button>
                     </div>
                   ))}
                   <div className="flex items-center gap-3 py-1.5 text-xs font-semibold">
@@ -92,7 +92,7 @@ export default function ThreeSixtyManager({ assessments }: { assessments: any[] 
                 <input value={gWeight} onChange={e => setGWeight(e.target.value)} type="number" min="0" max="100" placeholder="Weight %" className={`${inp} sm:w-28`} />
                 <button onClick={() => addG(a.id)} disabled={busy} className="text-xs font-semibold text-teal-700 border border-teal-200 bg-teal-50 hover:bg-teal-100 rounded-lg px-3 py-2 whitespace-nowrap">Add group</button>
                 {a.balanced && a.status !== "active" && <button onClick={() => setStatus(a.id, "active")} disabled={busy} className="text-[11px] font-semibold text-teal-700 hover:underline sm:ml-2">Activate →</button>}
-                {a.status === "active" && <button onClick={() => setStatus(a.id, "archived")} disabled={busy} className="text-[11px] font-semibold text-gray-400 hover:underline sm:ml-2">Archive</button>}
+                {a.status === "active" && <button onClick={() => setStatus(a.id, "archived")} disabled={busy} className="text-[11px] font-semibold text-gray-500 hover:underline sm:ml-2">Archive</button>}
               </div>
               {!a.balanced && a.weightSum !== 100 && <p className="text-[10px] text-[var(--cmp-text-warning)] mt-1">Respondent-group weights sum to {a.weightSum}% — adjust to 100% to activate.</p>}
             </div>

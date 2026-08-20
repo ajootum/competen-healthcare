@@ -48,7 +48,7 @@ export default async function CpuBuilderPage({ params }: { params: Promise<{ fra
 
   return (
     <div className="max-w-5xl">
-      <div className="flex items-center gap-2 text-xs text-gray-400 mb-4">
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-4">
         <Link href="/super-admin/content" className="hover:text-gray-600">Content Builder</Link>
         <span>/</span>
         <Link href={`/super-admin/content/${frameworkId}`} className="hover:text-gray-600">{framework.name}</Link>
@@ -63,7 +63,7 @@ export default async function CpuBuilderPage({ params }: { params: Promise<{ fra
             {LIB_LABEL[framework.library] ?? framework.library}
           </span>
         </div>
-        <p className="text-gray-400 text-sm mt-0.5">
+        <p className="text-gray-500 text-sm mt-0.5">
           Organise competencies into <span className="font-medium text-gray-600">Practices → Clinical Practice Units</span> and configure each CPU&apos;s assessment blueprint (Book I).
         </p>
       </div>

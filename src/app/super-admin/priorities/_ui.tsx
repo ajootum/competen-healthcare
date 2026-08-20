@@ -51,7 +51,7 @@ export function ModuleNav({ active }: { active: string }) {
     <div className="flex gap-1 overflow-x-auto border-b border-gray-200 pb-px">
       {MODULES.map(([code, label, href]) => (
         <Link key={code} href={href} className={`shrink-0 px-3 py-1.5 text-xs font-medium rounded-t-lg border-b-2 -mb-px transition-colors ${active === code ? "border-teal-500 text-teal-700 bg-teal-50/50" : "border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50"}`}>
-          <span className="text-gray-300 mr-1">{code}</span>{label}
+          <span className="text-gray-500 mr-1">{code}</span>{label}
         </Link>
       ))}
     </div>
@@ -63,7 +63,7 @@ export function Stat({ label, value, sub, tone }: { label: string; value: any; s
     <div className="bg-white border border-gray-200 rounded-xl p-3.5">
       <p className="text-[11px] text-gray-500 uppercase tracking-wide truncate">{label}</p>
       <p className={`text-2xl font-bold tabular-nums mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[11px] text-gray-400 mt-0.5">{sub}</p>}
+      {sub && <p className="text-[11px] text-gray-500 mt-0.5">{sub}</p>}
     </div>
   );
 }

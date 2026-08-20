@@ -95,7 +95,7 @@ export default async function CgrPlatformPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-000 · Competency Governance &amp; Regulation</p>
           <h1 className="text-xl font-bold text-gray-900">Competency Governance &amp; Regulation</h1>
-          <p className="text-gray-400 text-sm mt-0.5">The governance operating system — can we trust that every competency is valid, owned, evidence-backed and regulatory-aligned? Studio authors, Delivery runs, Assurance verifies, Performance measures — and Governance proves integrity.</p>
+          <p className="text-gray-500 text-sm mt-0.5">The governance operating system — can we trust that every competency is valid, owned, evidence-backed and regulatory-aligned? Studio authors, Delivery runs, Assurance verifies, Performance measures — and Governance proves integrity.</p>
         </div>
         <Link href="/super-admin" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Mission Control</Link>
       </div>
@@ -104,7 +104,7 @@ export default async function CgrPlatformPage() {
         {STATS.map(s => (
           <div key={s.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
             <div className="flex items-center justify-between mb-1"><span className="text-sm">{s.icon}</span><p className="text-lg font-bold text-gray-900">{s.value}</p></div>
-            <p className="text-[10px] text-gray-400 font-medium leading-tight">{s.label}</p>
+            <p className="text-[10px] text-gray-500 font-medium leading-tight">{s.label}</p>
           </div>
         ))}
       </div>
@@ -113,7 +113,7 @@ export default async function CgrPlatformPage() {
         {nReal > 0 && <span className="font-semibold text-emerald-700 bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-lg px-2.5 py-1">{nReal} live</span>}
         {nLinked > 0 && <span className="font-semibold text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded-lg px-2.5 py-1">{nLinked} linked (existing surface)</span>}
         {nPartial > 0 && <span className="font-semibold text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded-lg px-2.5 py-1">{nPartial} partial</span>}
-        {nGap > 0 && <span className="font-semibold text-gray-400 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{nGap} planned</span>}
+        {nGap > 0 && <span className="font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{nGap} planned</span>}
       </div>
 
       <Layer accent="emerald" title="Core Governance · CGR-001 … 007" mods={CORE} />

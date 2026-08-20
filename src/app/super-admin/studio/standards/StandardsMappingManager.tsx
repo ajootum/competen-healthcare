@@ -67,19 +67,19 @@ export default function StandardsMappingManager({ options, rows }: { options: { 
       </div>
 
       <div className="mt-5 border-t border-gray-50 pt-4">
-        <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Mappings ({rows.length})</h3>
+        <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2">Mappings ({rows.length})</h3>
         {rows.length === 0 ? (
-          <p className="text-xs text-gray-400">No standards mapped yet — add the first above. The unmapped count shows the gap to close.</p>
+          <p className="text-xs text-gray-500">No standards mapped yet — add the first above. The unmapped count shows the gap to close.</p>
         ) : (
           <div className="flex flex-col divide-y divide-gray-50">
             {rows.map((r: any) => (
               <div key={r.id} className="flex items-center gap-2 py-2 text-xs">
                 <span className="font-semibold text-gray-800 truncate max-w-[30%]" title={r.ctx ?? ""}>{r.competency}</span>
-                <span className="text-gray-300 shrink-0">↔</span>
+                <span className="text-gray-500 shrink-0">↔</span>
                 <span className="text-[10px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 shrink-0">{r.bodyLabel}</span>
                 <span className="text-gray-700 font-medium truncate max-w-[26%]">{r.ref}{r.title ? ` — ${r.title}` : ""}</span>
                 <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0" style={{ color: r.coverageColor, backgroundColor: `${r.coverageColor}14` }}>{r.coverageLabel}</span>
-                <button onClick={() => remove(r.id)} disabled={busy} className="ml-auto text-gray-300 hover:text-red-500 shrink-0" title="Remove">✕</button>
+                <button onClick={() => remove(r.id)} disabled={busy} className="ml-auto text-gray-500 hover:text-red-500 shrink-0" title="Remove">✕</button>
               </div>
             ))}
           </div>

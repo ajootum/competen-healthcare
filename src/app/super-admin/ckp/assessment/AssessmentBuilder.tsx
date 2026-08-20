@@ -134,14 +134,14 @@ export default function AssessmentBuilder({ cpus, skills, frameworks }: { cpus: 
             <div><label className={label}>Programme</label><input value={form.programme ?? ""} onChange={set("programme")} className={input} placeholder="e.g. ICU Orientation" /></div>
             <div><label className={label}>Exam date</label><input type="date" value={form.exam_date ?? ""} onChange={set("exam_date")} className={input} /></div>
             <div className="sm:col-span-2"><label className={label}>Notes</label><textarea value={form.notes ?? ""} onChange={set("notes")} rows={2} className={input} /></div>
-            <p className="sm:col-span-2 text-[11px] text-gray-400">Creates the exam as a draft — add stations and candidates in the OSCE workspace.</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-500">Creates the exam as a draft — add stations and candidates in the OSCE workspace.</p>
           </div>
         )}
 
         <div className="flex items-center gap-2 mt-4">
           <button onClick={create} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Creating…" : `Create ${TABS.find(t => t.key === tab)!.label.toLowerCase()}`}</button>
           <button onClick={() => setForm({})} className="text-sm text-gray-500 hover:text-gray-700 px-2">Clear</button>
-          <span className="text-[11px] text-gray-400 ml-auto">Creates a real assessment asset via the live APIs.</span>
+          <span className="text-[11px] text-gray-500 ml-auto">Creates a real assessment asset via the live APIs.</span>
         </div>
       </div>
     </div>

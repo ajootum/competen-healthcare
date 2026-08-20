@@ -55,7 +55,7 @@ export default async function GovernanceAIAgentsPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-023 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">AI Agent &amp; Autonomous Assurance</h1>
-          <p className="text-gray-400 text-sm mt-0.5">How AI continuously supports governance while accountable professionals keep authority — governed agents, explainable recommendations, and a strict human-in-the-loop boundary.</p>
+          <p className="text-gray-500 text-sm mt-0.5">How AI continuously supports governance while accountable professionals keep authority — governed agents, explainable recommendations, and a strict human-in-the-loop boundary.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/super-admin/ai/services" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">AI services →</Link>
@@ -67,7 +67,7 @@ export default async function GovernanceAIAgentsPage() {
       <div className="bg-white rounded-xl border border-gray-100 p-4 mb-4">
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Governance AI agents (§5)</p>
-          <span className="text-[10px] text-gray-400">{liveAgents} of {AGENTS.length} live</span>
+          <span className="text-[10px] text-gray-500">{liveAgents} of {AGENTS.length} live</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
           {AGENTS.map((a) => (
@@ -76,14 +76,14 @@ export default async function GovernanceAIAgentsPage() {
                 <span className={`text-[9px] font-bold uppercase rounded px-1.5 py-0.5 ${a.live ? "text-emerald-700 bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)]" : "text-gray-500 bg-gray-50 border border-gray-100"}`}>{a.live ? "Live" : "Assist"}</span>
               </div>
               <p className="text-[12px] font-bold text-gray-800 group-hover:text-emerald-700 leading-tight">{a.name}</p>
-              <p className="text-[10px] text-gray-400 leading-snug mt-0.5">{a.fn}</p>
+              <p className="text-[10px] text-gray-500 leading-snug mt-0.5">{a.fn}</p>
             </Link>
           ))}
         </div>
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-6 text-center"><p className="text-sm text-gray-400">No governed AI activity recorded yet. As governance copilots and agents run through the AI gateway, activity and model health appear here. The agent map above is grounded in the live surfaces each operates over.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-6 text-center"><p className="text-sm text-gray-500">No governed AI activity recorded yet. As governance copilots and agents run through the AI gateway, activity and model health appear here. The agent map above is grounded in the live surfaces each operates over.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -98,14 +98,14 @@ export default async function GovernanceAIAgentsPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Operations */}
             <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 p-4">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">AI activity by operation <span className="font-normal normal-case text-gray-300">— governance highlighted</span></p>
-              {d.operations.length === 0 ? <p className="text-[12px] text-gray-400">No AI requests recorded.</p> : <Bars rows={d.operations.map((o: any) => ({ label: o.op, count: o.count, hi: o.governance }))} max={opMax} />}
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">AI activity by operation <span className="font-normal normal-case text-gray-500">— governance highlighted</span></p>
+              {d.operations.length === 0 ? <p className="text-[12px] text-gray-500">No AI requests recorded.</p> : <Bars rows={d.operations.map((o: any) => ({ label: o.op, count: o.count, hi: o.governance }))} max={opMax} />}
             </div>
 
             {/* Providers + tiers */}
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Providers &amp; tiers</p>
-              {d.providers.length === 0 ? <p className="text-[12px] text-gray-400">—</p> : <Bars rows={d.providers.map((p: any) => ({ label: p.provider, count: p.count }))} max={provMax} tone="bg-indigo-400" />}
+              {d.providers.length === 0 ? <p className="text-[12px] text-gray-500">—</p> : <Bars rows={d.providers.map((p: any) => ({ label: p.provider, count: p.count }))} max={provMax} tone="bg-indigo-400" />}
               <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-gray-100">
                 {d.tiers.map((t: any) => <span key={t.tier} className="text-[10px] text-gray-600 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 capitalize">{t.tier} <span className="font-semibold">{t.count}</span></span>)}
               </div>
@@ -117,12 +117,12 @@ export default async function GovernanceAIAgentsPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Model registry (§8)</p>
-                {d.models.defaultModel && <span className="text-[10px] text-gray-400">default: {d.models.defaultModel}</span>}
+                {d.models.defaultModel && <span className="text-[10px] text-gray-500">default: {d.models.defaultModel}</span>}
               </div>
               <div className="grid grid-cols-4 gap-2">
                 {(["active", "preview", "deprecated", "retired"] as const).map((s) => (
                   <div key={s} className="border border-gray-100 rounded-lg p-2 text-center">
-                    <p className={`text-lg font-bold tabular-nums ${s === "active" ? "text-[var(--cmp-text-success)]" : s === "retired" || s === "deprecated" ? "text-gray-400" : "text-gray-900"}`}>{d.models.status[s]}</p>
+                    <p className={`text-lg font-bold tabular-nums ${s === "active" ? "text-[var(--cmp-text-success)]" : s === "retired" || s === "deprecated" ? "text-gray-500" : "text-gray-900"}`}>{d.models.status[s]}</p>
                     <p className="text-[10px] text-gray-500 capitalize">{s}</p>
                   </div>
                 ))}
@@ -138,7 +138,7 @@ export default async function GovernanceAIAgentsPage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the AI activity is the governed gateway request log (all AI runs through it), and the model registry is live. The agent map is grounded in the surfaces each agent operates over: the Governance Assistant is the live <Link href="/super-admin/cgr/ai" className="text-[var(--cmp-text-success)] hover:underline">governance copilot</Link>, Change Impact the <Link href="/super-admin/cgr/change-control" className="text-[var(--cmp-text-success)] hover:underline">blast-radius engine</Link>, and Risk the <Link href="/super-admin/cgr/risk" className="text-[var(--cmp-text-success)] hover:underline">escalation engine</Link>. Model management and AI operations are owned by the <Link href="/super-admin/ai/services" className="text-[var(--cmp-text-success)] hover:underline">AI Services platform</Link>. Per the CGR mandate every recommendation is explainable (evidence, reasoning, confidence) and a human always approves.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every figure is real — the AI activity is the governed gateway request log (all AI runs through it), and the model registry is live. The agent map is grounded in the surfaces each agent operates over: the Governance Assistant is the live <Link href="/super-admin/cgr/ai" className="text-[var(--cmp-text-success)] hover:underline">governance copilot</Link>, Change Impact the <Link href="/super-admin/cgr/change-control" className="text-[var(--cmp-text-success)] hover:underline">blast-radius engine</Link>, and Risk the <Link href="/super-admin/cgr/risk" className="text-[var(--cmp-text-success)] hover:underline">escalation engine</Link>. Model management and AI operations are owned by the <Link href="/super-admin/ai/services" className="text-[var(--cmp-text-success)] hover:underline">AI Services platform</Link>. Per the CGR mandate every recommendation is explainable (evidence, reasoning, confidence) and a human always approves.</p>
         </div>
       )}
     </div>

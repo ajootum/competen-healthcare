@@ -33,7 +33,7 @@ export default async function StudioPackagesPage() {
         <div>
           <p className="text-[11px] font-semibold text-rose-500 uppercase tracking-widest mb-0.5">CST-109 · Package Manager</p>
           <h1 className="text-xl font-bold text-gray-900">Competency Packages</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Bundle competencies and assets into versioned, deployable packages — the unit the Marketplace distributes.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Bundle competencies and assets into versioned, deployable packages — the unit the Marketplace distributes.</p>
         </div>
         <Link href="/super-admin/studio" className="text-xs font-semibold text-gray-500 hover:text-teal-700 border border-gray-200 rounded-lg px-3 py-2">← Studio</Link>
       </div>
@@ -47,19 +47,19 @@ export default async function StudioPackagesPage() {
               { label: "Packages", value: pkg.kpis.total, tone: "text-gray-900" },
               { label: "Published", value: pkg.kpis.published, tone: "text-teal-600" },
               { label: "Draft", value: pkg.kpis.draft, tone: "text-gray-500" },
-              { label: "Archived", value: pkg.kpis.archived, tone: "text-gray-400" },
+              { label: "Archived", value: pkg.kpis.archived, tone: "text-gray-500" },
               { label: "Bundled items", value: pkg.kpis.items, tone: "text-gray-900" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-0.5">{k.label}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-0.5">{k.label}</p>
               </div>
             ))}
           </div>
 
           {pkg.typeDist.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-100 p-4 mb-5">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">By package type</p>
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">By package type</p>
               <div className="flex flex-wrap gap-1.5">
                 {pkg.typeDist.map(t => <span key={t.key} className="text-[11px] font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded-full px-2.5 py-1">{t.label} <b className="text-gray-900">{t.n}</b></span>)}
               </div>

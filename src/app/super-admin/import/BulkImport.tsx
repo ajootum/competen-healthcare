@@ -160,15 +160,15 @@ export default function BulkImport({ hospitals }: { hospitals: Hospital[] }) {
       <details className="bg-white border border-gray-100 rounded-xl overflow-hidden">
         <summary className="px-5 py-3 cursor-pointer text-sm font-semibold text-gray-700 hover:bg-gray-50 list-none flex items-center justify-between">
           <span>Available facility names ({hospitals.length})</span>
-          <span className="text-gray-400 text-xs">Click to expand</span>
+          <span className="text-gray-500 text-xs">Click to expand</span>
         </summary>
         <div className="px-5 pb-4 pt-2 flex flex-wrap gap-2">
           {hospitals.map(h => (
             <span key={h.id} className="text-xs bg-gray-50 border border-gray-100 px-2.5 py-1 rounded-lg text-gray-600">
-              {h.name} <span className="text-gray-400">({h.country})</span>
+              {h.name} <span className="text-gray-500">({h.country})</span>
             </span>
           ))}
-          {!hospitals.length && <p className="text-xs text-gray-400">No facilities yet — add them under Organisations first.</p>}
+          {!hospitals.length && <p className="text-xs text-gray-500">No facilities yet — add them under Organisations first.</p>}
         </div>
       </details>
 
@@ -182,7 +182,7 @@ export default function BulkImport({ hospitals }: { hospitals: Hospital[] }) {
         >
           <p className="text-3xl mb-3">📄</p>
           <p className="text-sm font-semibold text-gray-700 mb-1">Drop your CSV file here, or click to browse</p>
-          <p className="text-xs text-gray-400">Supports .csv files · Excel: save as CSV before uploading</p>
+          <p className="text-xs text-gray-500">Supports .csv files · Excel: save as CSV before uploading</p>
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
         </div>
@@ -200,7 +200,7 @@ export default function BulkImport({ hospitals }: { hospitals: Hospital[] }) {
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
             <div>
               <p className="font-semibold text-gray-900 text-sm">Preview — {filename}</p>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-gray-500 mt-0.5">
                 {validCount} valid row{validCount !== 1 ? "s" : ""} will be updated
                 {errorCount > 0 && <span className="text-red-500 ml-2">· {errorCount} row{errorCount !== 1 ? "s" : ""} with errors (skipped)</span>}
               </p>
@@ -220,28 +220,28 @@ export default function BulkImport({ hospitals }: { hospitals: Hospital[] }) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/50">
-                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">#</th>
-                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Email</th>
-                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Name</th>
-                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Hospital / Facility</th>
-                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Role</th>
-                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Sub-Role</th>
-                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Status</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">#</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Email</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Name</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Hospital / Facility</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Role</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Sub-Role</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {preview.map((row, i) => (
                   <tr key={i} className={row._valid ? "hover:bg-gray-50/30" : "bg-[var(--cmp-surface-critical)]/40"}>
-                    <td className="px-4 py-2.5 text-gray-400">{i + 1}</td>
+                    <td className="px-4 py-2.5 text-gray-500">{i + 1}</td>
                     <td className="px-4 py-2.5 font-medium text-gray-800">{row.email}</td>
-                    <td className="px-4 py-2.5 text-gray-600">{row.full_name ?? <span className="text-gray-300">—</span>}</td>
-                    <td className="px-4 py-2.5 text-gray-600">{row.hospital ?? <span className="text-gray-300">—</span>}</td>
+                    <td className="px-4 py-2.5 text-gray-600">{row.full_name ?? <span className="text-gray-500">—</span>}</td>
+                    <td className="px-4 py-2.5 text-gray-600">{row.hospital ?? <span className="text-gray-500">—</span>}</td>
                     <td className="px-4 py-2.5">
                       {row.role
                         ? <span className="px-1.5 py-0.5 rounded bg-teal-100 text-teal-700 font-semibold">{row.role}</span>
-                        : <span className="text-gray-300">—</span>}
+                        : <span className="text-gray-500">—</span>}
                     </td>
-                    <td className="px-4 py-2.5 text-gray-600">{row.org_role ?? <span className="text-gray-300">—</span>}</td>
+                    <td className="px-4 py-2.5 text-gray-600">{row.org_role ?? <span className="text-gray-500">—</span>}</td>
                     <td className="px-4 py-2.5">
                       {row._valid
                         ? <span className="text-teal-600 font-medium">Ready</span>
@@ -284,9 +284,9 @@ export default function BulkImport({ hospitals }: { hospitals: Hospital[] }) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/50">
-                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Email</th>
-                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Status</th>
-                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Details</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Email</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Details</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">

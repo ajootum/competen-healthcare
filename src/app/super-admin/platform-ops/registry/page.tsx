@@ -28,8 +28,8 @@ export default async function ConfigurationRegistry() {
 
   const header = (
     <div>
-      <div className="flex items-center gap-2 text-xs text-gray-400"><Link href="/super-admin/platform-ops" className="hover:text-teal-700">Platform Operations</Link><span>/</span><span className="text-gray-600">Configuration Registry</span></div>
-      <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Platform Configuration Registry <span className="text-sm font-medium text-gray-400">WCE-002</span></h1>
+      <div className="flex items-center gap-2 text-xs text-gray-500"><Link href="/super-admin/platform-ops" className="hover:text-teal-700">Platform Operations</Link><span>/</span><span className="text-gray-600">Configuration Registry</span></div>
+      <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Platform Configuration Registry <span className="text-sm font-medium text-gray-500">WCE-002</span></h1>
       <p className="text-sm text-gray-500">The authoritative catalogue of every configurable platform object — keys, hierarchy, configurability, safety class, override policy and dependencies. Feeds WCE-001 / WCE-003.</p>
     </div>
   );
@@ -51,8 +51,8 @@ export default async function ConfigurationRegistry() {
         <Stat label="Total Objects" value={s.total} />
         <Stat label="Active" value={s.active} tone="text-[var(--cmp-text-success)]" />
         <Stat label="Draft / Review" value={s.draft} tone={s.draft ? "text-[var(--cmp-text-warning)]" : undefined} />
-        <Stat label="Deprecated" value={s.deprecated} tone={s.deprecated ? "text-[var(--cmp-text-warning)]" : "text-gray-400"} />
-        <Stat label="Retired" value={s.retired} tone="text-gray-400" />
+        <Stat label="Deprecated" value={s.deprecated} tone={s.deprecated ? "text-[var(--cmp-text-warning)]" : "text-gray-500"} />
+        <Stat label="Retired" value={s.retired} tone="text-gray-500" />
         <Stat label="Workspaces" value={s.workspaces} />
       </div>
 
@@ -78,15 +78,15 @@ export default async function ConfigurationRegistry() {
             <Flag label="Unresolved dependencies" n={s.unresolvedDeps} />
             <Flag label="Orphaned (parent not registered)" n={s.orphaned} />
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">Data-source binding is next-phase — modules will reference a registered DATA_SOURCE object (§16). Until then the “missing data source” flag is expected.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Data-source binding is next-phase — modules will reference a registered DATA_SOURCE object (§16). Until then the “missing data source” flag is expected.</p>
         </div>
 
         {/* Recent changes */}
         <div className={`${card} p-5`}>
           <h2 className="text-sm font-bold text-gray-900 mb-3">Recent Registry Changes</h2>
-          {reg.auditRecent.length === 0 ? <p className="text-sm text-gray-400 py-4">No registry changes yet — run a sync to populate.</p> : (
+          {reg.auditRecent.length === 0 ? <p className="text-sm text-gray-500 py-4">No registry changes yet — run a sync to populate.</p> : (
             <div className="space-y-1.5">{reg.auditRecent.map((a: any, i: number) => (
-              <div key={i} className="flex items-center gap-2 text-xs"><span className="px-1.5 py-0.5 rounded font-semibold bg-teal-50 text-teal-700">{a.action}</span><span className="text-gray-600 truncate flex-1">{a.object_key ?? "registry"}</span><span className="text-gray-400 shrink-0">{a.actor_name ?? "—"} · {relTime(a.created_at)}</span></div>
+              <div key={i} className="flex items-center gap-2 text-xs"><span className="px-1.5 py-0.5 rounded font-semibold bg-teal-50 text-teal-700">{a.action}</span><span className="text-gray-600 truncate flex-1">{a.object_key ?? "registry"}</span><span className="text-gray-500 shrink-0">{a.actor_name ?? "—"} · {relTime(a.created_at)}</span></div>
             ))}</div>
           )}
         </div>
@@ -106,11 +106,11 @@ export default async function ConfigurationRegistry() {
             ["Data-source registration (§16)", "DATA_SOURCE objects; widgets bound only to registered sources."],
             ["Conflict detection (§18)", "Blocking-error / warning classification before publish."],
             ["Impact analysis (§29)", "Tenants / templates / APIs affected before a registry change."],
-          ].map(([t, d]) => <div key={t}><p className="text-xs font-semibold text-gray-600">{t}</p><p className="text-[10px] text-gray-400">{d}</p></div>)}
+          ].map(([t, d]) => <div key={t}><p className="text-xs font-semibold text-gray-600">{t}</p><p className="text-[10px] text-gray-500">{d}</p></div>)}
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">WCE-002 MVP: a data-backed registry (configuration_registry_objects + immutable audit, migration 092) seeded from the real in-code WORKSPACE_CATALOG via an idempotent “sync from catalogue” — so every workspace, section and module carries a permanent object key, configurability class, safety classification, override policy and dependency set, browsable and searchable here. It is the authoritative catalogue WCE-001 resolves against; the schema/property editor, dependency graph, lifecycle workflow, data-source binding, conflict detection and impact analysis are honest next-phase rather than fabricated. Super-admin gated; every write audited.</p>
+      <p className="text-[11px] text-gray-500 pb-4">WCE-002 MVP: a data-backed registry (configuration_registry_objects + immutable audit, migration 092) seeded from the real in-code WORKSPACE_CATALOG via an idempotent “sync from catalogue” — so every workspace, section and module carries a permanent object key, configurability class, safety classification, override policy and dependency set, browsable and searchable here. It is the authoritative catalogue WCE-001 resolves against; the schema/property editor, dependency graph, lifecycle workflow, data-source binding, conflict detection and impact analysis are honest next-phase rather than fabricated. Super-admin gated; every write audited.</p>
     </div>
   );
 }

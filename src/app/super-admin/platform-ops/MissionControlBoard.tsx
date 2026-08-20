@@ -9,7 +9,7 @@ import { cardClass } from "@/components/ui/primitives";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const DOT: Record<string, string> = { ok: "bg-[var(--cmp-color-success)]", warn: "bg-[var(--cmp-color-warning)]", down: "bg-[var(--cmp-color-error)]", na: "bg-gray-300" };
-const VAL: Record<string, string> = { ok: "text-gray-900", warn: "text-[var(--cmp-text-warning)]", down: "text-[var(--cmp-text-error)]", na: "text-gray-400" };
+const VAL: Record<string, string> = { ok: "text-gray-900", warn: "text-[var(--cmp-text-warning)]", down: "text-[var(--cmp-text-error)]", na: "text-gray-500" };
 const ICON: Record<string, string> = { health: "💚", alerts: "🚨", tenants: "🏢", users: "👥", ai: "🧠", approvals: "✅", deployments: "🚀", jobs: "⚙️" };
 
 export default function MissionControlBoard({ initial }: { initial: any }) {
@@ -41,8 +41,8 @@ export default function MissionControlBoard({ initial }: { initial: any }) {
   return (
     <div className={cardClass}>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-gray-900 text-[15px]">Mission Control <span className="ml-2 text-[10px] font-medium text-gray-400">{data?.summary?.live}/{data?.summary?.total} live · POS-001</span></h2>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <h2 className="font-semibold text-gray-900 text-[15px]">Mission Control <span className="ml-2 text-[10px] font-medium text-gray-500">{data?.summary?.live}/{data?.summary?.total} live · POS-001</span></h2>
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <span className="inline-flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full ${live ? "bg-[var(--cmp-color-success)] animate-pulse" : "bg-[var(--cmp-color-warning)]"}`} />{live ? "live" : "reconnecting"}</span>
           {time && <span className="tabular-nums">· {time}</span>}
           <button onClick={refresh} disabled={busy} className="rounded-lg border border-gray-200 px-2 py-0.5 font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40">↻</button>
@@ -56,11 +56,11 @@ export default function MissionControlBoard({ initial }: { initial: any }) {
               <span className="text-sm shrink-0">{ICON[w.key] ?? "•"}</span>
             </div>
             <p className={`text-2xl font-bold tabular-nums capitalize leading-tight ${VAL[w.status] ?? "text-gray-900"}`}>{w.value}</p>
-            <p className="text-[10px] text-gray-400 truncate mt-0.5 flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${DOT[w.status] ?? "bg-gray-300"}`} />{w.detail}</p>
+            <p className="text-[10px] text-gray-500 truncate mt-0.5 flex items-center gap-1"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${DOT[w.status] ?? "bg-gray-300"}`} />{w.detail}</p>
           </div>
         ))}
       </div>
-      <p className="text-[10px] text-gray-400 mt-3">Streamed live over SSE from <code className="font-mono">/api/platform/operations/stream</code> — the server pushes updates, no client polling. Grey tiles are outputs this deployment does not yet meter.</p>
+      <p className="text-[10px] text-gray-500 mt-3">Streamed live over SSE from <code className="font-mono">/api/platform/operations/stream</code> — the server pushes updates, no client polling. Grey tiles are outputs this deployment does not yet meter.</p>
     </div>
   );
 }

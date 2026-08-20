@@ -420,7 +420,7 @@ export default function PracticeOpsConsole({ callerId, callerName, initial, canR
                     <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.appointments ?? "0"}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.patients ?? "0"}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.encounters ?? "0"}</td>
-                    <td className={`py-1.5 pr-3 text-right tabular-nums font-semibold ${(w.counts.signed ?? "0") !== "0" ? "text-[var(--cmp-text-success)]" : "text-gray-300"}`}>{w.counts.signed ?? "0"}</td>
+                    <td className={`py-1.5 pr-3 text-right tabular-nums font-semibold ${(w.counts.signed ?? "0") !== "0" ? "text-[var(--cmp-text-success)]" : "text-gray-500"}`}>{w.counts.signed ?? "0"}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.invoices ?? "0"}</td>
                     <td className="py-1.5 pr-3 text-right tabular-nums text-gray-700">{w.counts.payments ?? "0"}</td>
                     <td className="py-1.5 font-mono text-gray-500">{String(w.created_at).slice(0, 10)}</td>

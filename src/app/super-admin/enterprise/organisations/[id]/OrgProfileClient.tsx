@@ -12,7 +12,7 @@ import { Row } from "../../../_kit";
 
 const BADGE: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600", onboarding: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
-  suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", restricted: "bg-[var(--cmp-surface-warning)] text-orange-700", archived: "bg-gray-100 text-gray-500", closed: "bg-gray-100 text-gray-500",
+  suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", restricted: "bg-[var(--cmp-surface-warning)] text-orange-700", archived: "bg-gray-100 text-gray-600", closed: "bg-gray-100 text-gray-600",
 };
 const TABS = ["Overview", "Structure", "Facilities", "Users", "Subscription", "Governance", "Audit"] as const;
 const card = cardClass;
@@ -45,7 +45,7 @@ export default function OrgProfileClient({ data }: { data: any }) {
   return (
     <div data-wide className="space-y-4">
       {/* Breadcrumb + header */}
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/enterprise" className="hover:text-teal-700">Enterprise Administration</Link><span>/</span>
         <Link href="/super-admin/enterprise/organisations" className="hover:text-teal-700">Organisations</Link><span>/</span><span className="text-gray-600 truncate">{org.name}</span>
       </div>
@@ -106,19 +106,19 @@ export default function OrgProfileClient({ data }: { data: any }) {
               <div key={l as string} className="rounded-lg border border-gray-100 p-4 text-center"><p className="text-2xl font-bold text-gray-900 tabular-nums">{n as number}</p><p className="text-[11px] text-gray-500">{l}</p></div>
             ))}
           </div>
-          <p className="text-[11px] text-gray-400 mt-3">The interactive department/unit/service builder for this organisation ships with the Structure Builder module (next phase).</p>
+          <p className="text-[11px] text-gray-500 mt-3">The interactive department/unit/service builder for this organisation ships with the Structure Builder module (next phase).</p>
         </div>
       )}
 
       {tab === "Facilities" && (
         <div className={card}>
           <h3 className="font-semibold text-gray-900 mb-3">Facilities ({facilities.length})</h3>
-          {facilities.length === 0 ? <p className="text-sm text-gray-400">No facilities linked to this organisation.</p> : (
+          {facilities.length === 0 ? <p className="text-sm text-gray-500">No facilities linked to this organisation.</p> : (
             <div className="divide-y divide-gray-50">
               {facilities.map((f: any) => (
                 <Link key={f.id} href="/super-admin/hospitals" className="flex items-center gap-3 py-2.5 hover:bg-gray-50/60 -mx-2 px-2 rounded">
                   <span className="text-base">🏥</span>
-                  <div className="flex-1 min-w-0"><p className="text-sm text-gray-800 truncate">{f.name}</p><p className="text-[10px] text-gray-400 capitalize">{(f.type ?? "").replace(/_/g, " ")} · {[f.city, f.country].filter(Boolean).join(", ")}</p></div>
+                  <div className="flex-1 min-w-0"><p className="text-sm text-gray-800 truncate">{f.name}</p><p className="text-[10px] text-gray-500 capitalize">{(f.type ?? "").replace(/_/g, " ")} · {[f.city, f.country].filter(Boolean).join(", ")}</p></div>
                   <span className={`text-[10px] px-2 py-0.5 rounded ${f.hasAdmin ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"}`}>{f.status}</span>
                 </Link>
               ))}
@@ -132,13 +132,13 @@ export default function OrgProfileClient({ data }: { data: any }) {
           <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-gray-900">Users ({userCount})</h3>
             <div className="flex flex-wrap gap-1.5">{Object.entries(roleTally).slice(0, 6).map(([r, n]) => <span key={r} className="text-[10px] bg-gray-100 text-gray-600 rounded px-1.5 py-0.5 capitalize">{r.replace(/_/g, " ")}: {n as number}</span>)}</div>
           </div>
-          {users.length === 0 ? <p className="text-sm text-gray-400">No users in this organisation.</p> : (
+          {users.length === 0 ? <p className="text-sm text-gray-500">No users in this organisation.</p> : (
             <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
-              {userCount > 100 && <p className="text-[10px] text-gray-400 pb-1">Showing first 100 of {userCount}.</p>}
+              {userCount > 100 && <p className="text-[10px] text-gray-500 pb-1">Showing first 100 of {userCount}.</p>}
               {users.slice(0, 100).map((u: any) => (
                 <div key={u.id} className="flex items-center gap-3 py-2">
                   <span className="w-7 h-7 rounded-full bg-[var(--cmp-surface-information)] flex items-center justify-center text-xs">{(u.name ?? "?")[0]}</span>
-                  <div className="flex-1 min-w-0"><p className="text-sm text-gray-800 truncate">{u.name}</p><p className="text-[10px] text-gray-400 truncate">{u.email}</p></div>
+                  <div className="flex-1 min-w-0"><p className="text-sm text-gray-800 truncate">{u.name}</p><p className="text-[10px] text-gray-500 truncate">{u.email}</p></div>
                   <span className="text-[10px] text-gray-500 capitalize">{u.roles.map((r: string) => r.replace(/_/g, " ")).slice(0, 2).join(", ")}</span>
                 </div>
               ))}
@@ -153,7 +153,7 @@ export default function OrgProfileClient({ data }: { data: any }) {
           {subscription ? (
             <><Row label="Status" value={<span className="capitalize">{subscription.status}</span>} /><Row label="Seats purchased" value={subscription.seats_purchased} />
               <Row label="Renews" value={subscription.renews_at ? new Date(subscription.renews_at).toLocaleDateString() : null} /><Row label="Trial ends" value={subscription.trial_ends_at ? new Date(subscription.trial_ends_at).toLocaleDateString() : null} /></>
-          ) : <p className="text-sm text-gray-400">No subscription record for this organisation&apos;s tenant. Provisioning runs through the Platform Control Plane.</p>}
+          ) : <p className="text-sm text-gray-500">No subscription record for this organisation&apos;s tenant. Provisioning runs through the Platform Control Plane.</p>}
         </div>
       )}
 
@@ -162,18 +162,18 @@ export default function OrgProfileClient({ data }: { data: any }) {
           <h3 className="font-semibold text-gray-900 mb-2">Governance</h3>
           <Row label="Organisation administrator" value={admins[0]?.name} />
           {admins.length > 1 && <Row label="Additional administrators" value={admins.slice(1).map((a: any) => a.name).join(", ")} />}
-          <p className="text-[11px] text-gray-400 mt-3">Executive sponsor, data-protection, clinical-governance, quality and billing contacts are captured when the governance contacts module is provisioned.</p>
+          <p className="text-[11px] text-gray-500 mt-3">Executive sponsor, data-protection, clinical-governance, quality and billing contacts are captured when the governance contacts module is provisioned.</p>
         </div>
       )}
 
       {tab === "Audit" && (
         <div className={card}>
           <h3 className="font-semibold text-gray-900 mb-3">Audit history</h3>
-          {!auditReady || audit.length === 0 ? <p className="text-sm text-gray-400">{auditReady ? "No audit entries for this organisation yet." : "Audit log not available."}</p> : (
+          {!auditReady || audit.length === 0 ? <p className="text-sm text-gray-500">{auditReady ? "No audit entries for this organisation yet." : "Audit log not available."}</p> : (
             <div className="space-y-2">{audit.map((a: any, i: number) => (
               <div key={i} className="flex items-center gap-2.5 text-sm"><span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" />
                 <span className="text-gray-700 capitalize">{(a.action ?? "").replace(/_/g, " ")}</span>
-                <span className="text-gray-400 text-xs ml-auto">{a.actor_name} · {relTime(a.created_at)}</span></div>
+                <span className="text-gray-500 text-xs ml-auto">{a.actor_name} · {relTime(a.created_at)}</span></div>
             ))}</div>
           )}
         </div>

@@ -42,7 +42,7 @@ export default async function CgrAiPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-007 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Governance Intelligence &amp; Predictive Risk</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Ask the governance copilot — it flags ownership, regulatory, review and evidence gaps and prioritises risk over the live registry. It recommends; it never approves or changes standards.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Ask the governance copilot — it flags ownership, regulatory, review and evidence gaps and prioritises risk over the live registry. It recommends; it never approves or changes standards.</p>
         </div>
         <Link href="/super-admin/cgr" className="text-xs font-semibold text-gray-500 hover:text-emerald-700 border border-gray-200 rounded-lg px-3 py-2 shrink-0">← CGR Platform</Link>
       </div>
@@ -60,7 +60,7 @@ export default async function CgrAiPage() {
         <div className={`${card} p-5 lg:col-span-2`}>
           <p className="text-[11px] font-semibold text-gray-500 mb-3">Signal in context — governance registry</p>
           {!d.provisioned ? (
-            <p className="text-sm text-gray-400">No competency definitions yet — the copilot will say so rather than overclaim.</p>
+            <p className="text-sm text-gray-500">No competency definitions yet — the copilot will say so rather than overclaim.</p>
           ) : (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
@@ -71,19 +71,19 @@ export default async function CgrAiPage() {
               </div>
               {flagged.length > 0 ? (
                 <div>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Most at-risk it flags</p>
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Most at-risk it flags</p>
                   <div className="space-y-1">
                     {flagged.map((r) => (
                       <div key={r.id} className="flex items-center justify-between gap-2 text-[11px] border border-gray-50 rounded-lg px-2.5 py-1.5">
                         <span className="font-medium text-gray-700 truncate">{r.name}</span>
-                        <span className="text-gray-400 shrink-0">{r.risk} · {gapsOf(r)}</span>
+                        <span className="text-gray-500 shrink-0">{r.risk} · {gapsOf(r)}</span>
                       </div>
                     ))}
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-2"><Link href="/super-admin/cgr/registry" className="text-[var(--cmp-text-success)] hover:underline">Full registry →</Link></p>
+                  <p className="text-[10px] text-gray-500 mt-2"><Link href="/super-admin/cgr/registry" className="text-[var(--cmp-text-success)] hover:underline">Full registry →</Link></p>
                 </div>
               ) : (
-                <p className="text-[11px] text-gray-400">No competencies currently at governance risk.</p>
+                <p className="text-[11px] text-gray-500">No competencies currently at governance risk.</p>
               )}
             </>
           )}
@@ -95,11 +95,11 @@ export default async function CgrAiPage() {
           <div className="flex flex-wrap gap-1.5">
             {AGENTS.map((a) => <span key={a} className="text-[10px] text-emerald-700 bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-full px-2 py-0.5">{a}</span>)}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">The copilot reasons over the governance registry, then explains and prioritises in plain language.</p>
+          <p className="text-[10px] text-gray-500 mt-3">The copilot reasons over the governance registry, then explains and prioritises in plain language.</p>
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">The copilot answers only from the live governance registry — it never invents competencies, owners or scores. Per the CGR mandate it may recommend, detect and flag risk, but it cannot approve competencies, change standards or override governance decisions; acting routes through the responsible owner or authority. Every call logs to the AI gateway.</p>
+      <p className="text-[11px] text-gray-500 mt-4 leading-relaxed">The copilot answers only from the live governance registry — it never invents competencies, owners or scores. Per the CGR mandate it may recommend, detect and flag risk, but it cannot approve competencies, change standards or override governance decisions; acting routes through the responsible owner or authority. Every call logs to the AI gateway.</p>
     </div>
   );
 }

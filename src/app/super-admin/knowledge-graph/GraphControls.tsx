@@ -29,7 +29,7 @@ export default function GraphControls({
           { label: "Embedded", value: `${embeddingTotal ? Math.round((embeddingDone / embeddingTotal) * 100) : 0}%`, color: "text-violet-600" },
         ].map(s => (
           <div key={s.label} className="bg-white rounded-xl p-4 border border-gray-100">
-            <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-1">{s.label}</p>
+            <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">{s.label}</p>
             <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
           </div>
         ))}
@@ -41,7 +41,7 @@ export default function GraphControls({
         </button>
         {msg && <span className="text-xs text-gray-500">{msg}</span>}
       </div>
-      <p className="text-[10px] text-gray-400 mt-2">
+      <p className="text-[10px] text-gray-500 mt-2">
         Rebuild derives edges deterministically from the framework → domain → practice → CPU → competency → skill hierarchy plus resource and curriculum links. No AI required.
       </p>
     </div>

@@ -26,7 +26,7 @@ export default async function ImportPage() {
     <div className="max-w-4xl">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">Bulk Import Users</h1>
-        <p className="text-gray-400 text-sm mt-0.5">
+        <p className="text-gray-500 text-sm mt-0.5">
           Assign users to facilities and update their roles in bulk across any facility on the platform.
         </p>
       </div>

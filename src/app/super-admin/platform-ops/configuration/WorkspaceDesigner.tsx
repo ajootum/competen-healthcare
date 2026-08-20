@@ -47,13 +47,13 @@ export default function WorkspaceDesigner({ catalog, rows, versions, hospitals, 
     const has = !!overrideAt(rows, scopeType, scopeRef, path);
     return (
       <div className="flex items-center gap-2">
-        <span className={`text-[9px] px-1 py-0.5 rounded ${has ? "bg-violet-50 text-violet-600" : "bg-gray-100 text-gray-400"}`}>{has ? "overridden" : "inherited"}</span>
+        <span className={`text-[9px] px-1 py-0.5 rounded ${has ? "bg-violet-50 text-violet-600" : "bg-gray-100 text-gray-600"}`}>{has ? "overridden" : "inherited"}</span>
         <button disabled={!canDisable || busy} onClick={() => toggle(path, eff.enabled)}
           className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${!canDisable ? "bg-gray-100 cursor-not-allowed" : eff.enabled ? "bg-teal-500" : "bg-gray-300"}`} title={canDisable ? (eff.enabled ? "Enabled — click to disable" : "Disabled — click to enable") : "Cannot be disabled"}>
           <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${eff.enabled ? "left-[18px]" : "left-0.5"}`} />
         </button>
-        <button onClick={() => rename(path, fallback)} disabled={busy} className="text-[11px] text-gray-400 hover:text-teal-600" title="Rename">✎</button>
-        {has && <button onClick={() => reset(path)} disabled={busy} className="text-[11px] text-gray-400 hover:text-[var(--cmp-text-error)]" title="Reset to inherited">↺</button>}
+        <button onClick={() => rename(path, fallback)} disabled={busy} className="text-[11px] text-gray-500 hover:text-teal-600" title="Rename">✎</button>
+        {has && <button onClick={() => reset(path)} disabled={busy} className="text-[11px] text-gray-500 hover:text-[var(--cmp-text-error)]" title="Reset to inherited">↺</button>}
       </div>
     );
   };
@@ -75,12 +75,12 @@ export default function WorkspaceDesigner({ catalog, rows, versions, hospitals, 
               {hospitals.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
             </select>
           )}
-          <span className="text-[10px] text-gray-400">Unit / Role / User scopes: engine-supported, surfaced here in a later phase.</span>
+          <span className="text-[10px] text-gray-500">Unit / Role / User scopes: engine-supported, surfaced here in a later phase.</span>
         </div>
         <div className="ml-auto flex items-center gap-2">
           {unpublished > 0 && <span className="text-[11px] text-[var(--cmp-text-warning)] font-medium">{unpublished} unpublished change{unpublished > 1 ? "s" : ""}</span>}
           <button onClick={() => post({ action: "publish", label: `Publish ${new Date().toISOString().slice(0, 16).replace("T", " ")}` })} disabled={busy || !provisioned || unpublished === 0}
-            className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${unpublished > 0 && provisioned ? "bg-teal-600 text-white hover:bg-teal-700" : "bg-gray-100 text-gray-400"}`}>Publish</button>
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${unpublished > 0 && provisioned ? "bg-teal-600 text-white hover:bg-teal-700" : "bg-gray-100 text-gray-600"}`}>Publish</button>
         </div>
       </div>
       {err && <div className="rounded-lg bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)] text-[var(--cmp-text-error)] text-xs px-3 py-2">{err}</div>}
@@ -96,11 +96,11 @@ export default function WorkspaceDesigner({ catalog, rows, versions, hospitals, 
 
       {/* Config tree */}
       <div className={`${card} p-5`}>
-        {!ws ? <p className="text-sm text-gray-400">Select a workspace.</p> : (
+        {!ws ? <p className="text-sm text-gray-500">Select a workspace.</p> : (
           <>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-bold text-gray-900">{ws.label}</h2>
-              <span className="text-[11px] text-gray-400">{ws.wired ? "Runtime enforcement LIVE — disabling hides it from the app" : "Config stored & versioned; runtime enforcement rolls out per phase"}</span>
+              <span className="text-[11px] text-gray-500">{ws.wired ? "Runtime enforcement LIVE — disabling hides it from the app" : "Config stored & versioned; runtime enforcement rolls out per phase"}</span>
             </div>
             <div className="space-y-3">
               {ws.sections.map(s => (
@@ -115,7 +115,7 @@ export default function WorkspaceDesigner({ catalog, rows, versions, hospitals, 
                         <div key={mod.path} className="flex items-center justify-between px-3 py-2 pl-6">
                           <div className="min-w-0">
                             <p className="text-xs text-gray-700">{resolveSettings(rows, ctx, mod.path, "draft").label ?? mod.label}</p>
-                            {mod.note && <p className="text-[10px] text-gray-400">{mod.note}</p>}
+                            {mod.note && <p className="text-[10px] text-gray-500">{mod.note}</p>}
                           </div>
                           <Toggle path={mod.path} canDisable={mod.canDisable !== false} fallback={mod.label} />
                         </div>
@@ -132,13 +132,13 @@ export default function WorkspaceDesigner({ catalog, rows, versions, hospitals, 
       {/* Version history / rollback */}
       <div className={`${card} p-5`}>
         <h2 className="text-sm font-bold text-gray-900 mb-3">Published Versions — {scopeType === "platform" ? "Platform" : `Hospital ${scopeRef.slice(0, 8)}`}</h2>
-        {scopeVersions.length === 0 ? <p className="text-sm text-gray-400">No versions published for this scope yet. Make changes, then Publish.</p> : (
+        {scopeVersions.length === 0 ? <p className="text-sm text-gray-500">No versions published for this scope yet. Make changes, then Publish.</p> : (
           <div className="space-y-1.5">
             {scopeVersions.map((v: any) => (
               <div key={v.id} className="flex items-center gap-2 text-xs">
                 <span className={`px-1.5 py-0.5 rounded ${v.status === "rolled_back" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"}`}>{v.status}</span>
                 <span className="text-gray-700">{v.label ?? "Version"}</span>
-                <span className="text-gray-400">· {v.published_by_name ?? "—"} · {formatDateTime(v.created_at)}</span>
+                <span className="text-gray-500">· {v.published_by_name ?? "—"} · {formatDateTime(v.created_at)}</span>
                 <button onClick={() => post({ action: "rollback", version_id: v.id })} disabled={busy || !provisioned} className="ml-auto text-[11px] text-teal-700 hover:underline">Roll back to this →</button>
               </div>
             ))}

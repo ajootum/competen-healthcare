@@ -34,7 +34,7 @@ export default async function ReportsBuilder() {
 
   const header = (
     <>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Report &amp; Dashboard Builder</span>
@@ -42,7 +42,7 @@ export default async function ReportsBuilder() {
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">📊</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Report &amp; Dashboard Builder <span className="text-gray-300 font-medium text-lg">(NCP-006)</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Report &amp; Dashboard Builder <span className="text-gray-500 font-medium text-lg">(NCP-006)</span></h1>
           <p className="text-sm text-gray-500">Compose governed dashboards from metric-bound visualisation tiles, and reports from ordered sections.</p>
         </div>
       </div>
@@ -60,7 +60,7 @@ export default async function ReportsBuilder() {
         <Stat label="Composed" value={composed} tone="text-[var(--cmp-text-success)]" sub={`of ${list.length} with blocks`} />
       </div>
       <ReportDashboardBuilder objects={list} metrics={(metrics ?? []) as any[]} />
-      <p className="text-[11px] text-gray-400">Tiles/sections + bound metrics persist onto the object (bound metrics become METRIC_REF dependencies). The runtime rendering, drill-through, export service (PDF/DOCX/XLSX/CSV), scheduler and AI narrative engine (NCP-006 §4/§9) are next-phase.</p>
+      <p className="text-[11px] text-gray-500">Tiles/sections + bound metrics persist onto the object (bound metrics become METRIC_REF dependencies). The runtime rendering, drill-through, export service (PDF/DOCX/XLSX/CSV), scheduler and AI narrative engine (NCP-006 §4/§9) are next-phase.</p>
     </div>
   );
 }

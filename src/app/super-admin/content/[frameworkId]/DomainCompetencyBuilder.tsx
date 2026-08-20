@@ -96,7 +96,7 @@ export default function DomainCompetencyBuilder({ frameworkId, domains }: { fram
             <div className="flex items-center justify-between px-5 py-3.5 bg-gray-50/60 border-b border-gray-100">
               <div>
                 <p className="font-semibold text-gray-900 text-sm">{domain.name}</p>
-                <p className="text-[10px] text-gray-400">{domain.framework_competencies?.length ?? 0} competencies</p>
+                <p className="text-[10px] text-gray-500">{domain.framework_competencies?.length ?? 0} competencies</p>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => openEdit({ type: "edit-domain", id: domain.id, name: domain.name })}
@@ -121,7 +121,7 @@ export default function DomainCompetencyBuilder({ frameworkId, domains }: { fram
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <p className="text-sm font-medium text-gray-800">{comp.name}</p>
-                      <p className="text-[10px] text-gray-400">{comp.competency_skills?.length ?? 0} skills</p>
+                      <p className="text-[10px] text-gray-500">{comp.competency_skills?.length ?? 0} skills</p>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 ml-4">
                       <button
@@ -162,13 +162,13 @@ export default function DomainCompetencyBuilder({ frameworkId, domains }: { fram
                       </span>
                     ))}
                     {!(comp.competency_skills ?? []).length && (
-                      <p className="text-xs text-gray-300 italic">No skills yet</p>
+                      <p className="text-xs text-gray-500 italic">No skills yet</p>
                     )}
                   </div>
                 </div>
               ))}
               {!(domain.framework_competencies ?? []).length && (
-                <p className="px-8 py-3 text-xs text-gray-400 italic">No competencies yet</p>
+                <p className="px-8 py-3 text-xs text-gray-500 italic">No competencies yet</p>
               )}
             </div>
           </div>
@@ -176,7 +176,7 @@ export default function DomainCompetencyBuilder({ frameworkId, domains }: { fram
 
         {!domains.length && (
           <div className="bg-white rounded-xl border border-gray-100 p-10 text-center">
-            <p className="text-gray-400 text-sm">No domains yet — click &quot;+ Add Domain&quot; to start building</p>
+            <p className="text-gray-500 text-sm">No domains yet — click &quot;+ Add Domain&quot; to start building</p>
           </div>
         )}
       </div>

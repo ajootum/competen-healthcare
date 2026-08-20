@@ -54,7 +54,7 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
     <Modal open title="Configure CPU" onClose={onClose} width="2xl">
       {/* Which CPU moves into the body: Modal's header takes an accessible name, and "Configure CPU" is
           the name of the dialog while this is the name of the thing being configured. */}
-      <p className="text-sm text-gray-400 -mt-2">{cpu.name}</p>
+      <p className="text-sm text-gray-500 -mt-2">{cpu.name}</p>
 
       <div className="flex gap-1 pt-4">
           {([["blueprint", "Assessment Blueprint"], ["evidence", "Evidence Matrix"], ["critical", "Critical Failures"]] as const).map(([k, label]) => (
@@ -66,7 +66,7 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
         </div>
 
         {loading ? (
-          <div className="p-10 text-center text-sm text-gray-400">Loading…</div>
+          <div className="p-10 text-center text-sm text-gray-500">Loading…</div>
         ) : (
           <div className="p-6">
             {/* ── BLUEPRINT ── */}
@@ -99,7 +99,7 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Required Methods &amp; Weighting</p>
+                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Required Methods &amp; Weighting</p>
                     <span className={`text-[10px] font-semibold ${totalMethodWeight === 100 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}`}>Total: {totalMethodWeight}%</span>
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -111,14 +111,14 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
                           <label className="flex items-center gap-1.5 flex-1 cursor-pointer">
                             <input type="checkbox" checked={enabled} className="accent-teal-500"
                               onChange={e => e.target.checked ? patch({ type: "method", method: m, weight: 0 }) : del("method", m)} />
-                            <span className={`text-xs ${enabled ? "text-gray-800" : "text-gray-400"}`}>{METHOD_LABELS[m as keyof typeof METHOD_LABELS]}</span>
+                            <span className={`text-xs ${enabled ? "text-gray-800" : "text-gray-500"}`}>{METHOD_LABELS[m as keyof typeof METHOD_LABELS]}</span>
                           </label>
                           {enabled && (
                             <input type="number" min={0} max={100} defaultValue={cfg!.weight} title="Weight %"
                               onBlur={e => patch({ type: "method", method: m, weight: parseInt(e.target.value) || 0, is_required: cfg!.is_required, min_evidence: cfg!.min_evidence })}
                               className="w-16 border border-gray-200 rounded px-2 py-1 text-xs text-right" />
                           )}
-                          {enabled && <span className="text-[10px] text-gray-400">%</span>}
+                          {enabled && <span className="text-[10px] text-gray-500">%</span>}
                         </div>
                       );
                     })}
@@ -131,7 +131,7 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
             {tab === "evidence" && (
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs text-gray-400">Required evidence per CKCM hierarchy (strongest first)</p>
+                  <p className="text-xs text-gray-500">Required evidence per CKCM hierarchy (strongest first)</p>
                   <span className={`text-[10px] font-semibold ${totalEvidenceWeight === 100 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}`}>Total: {totalEvidenceWeight}%</span>
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -144,8 +144,8 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
                           <label className="flex items-center gap-1.5 flex-1 cursor-pointer">
                             <input type="checkbox" checked={enabled} className="accent-teal-500"
                               onChange={e => e.target.checked ? patch({ type: "evidence", evidence_type: et.key }) : del("evidence", et.key)} />
-                            <span className={`text-xs font-medium ${enabled ? "text-gray-800" : "text-gray-400"}`}>{et.label}</span>
-                            <span className="text-[9px] text-gray-400">({et.strength})</span>
+                            <span className={`text-xs font-medium ${enabled ? "text-gray-800" : "text-gray-500"}`}>{et.label}</span>
+                            <span className="text-[9px] text-gray-500">({et.strength})</span>
                           </label>
                           {enabled && (
                             <label className="flex items-center gap-1 text-[10px] text-gray-500">
@@ -172,7 +172,7 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
             {/* ── CRITICAL FAILURES ── */}
             {tab === "critical" && (
               <div>
-                <p className="text-xs text-gray-400 mb-3">Non-negotiable safety failures that block competency regardless of overall score.</p>
+                <p className="text-xs text-gray-500 mb-3">Non-negotiable safety failures that block competency regardless of overall score.</p>
                 <div className="flex flex-col gap-1.5 mb-3">
                   {critical.map(c => (
                     <div key={c.id} className="flex items-center justify-between gap-2 rounded-lg border border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)]/40 px-3 py-2">
@@ -180,7 +180,7 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
                       <button onClick={() => del("critical", c.id)} className="text-red-400 hover:text-[var(--cmp-text-critical)] text-sm leading-none">×</button>
                     </div>
                   ))}
-                  {!critical.length && <p className="text-[11px] text-gray-300 italic">None defined</p>}
+                  {!critical.length && <p className="text-[11px] text-gray-500 italic">None defined</p>}
                 </div>
                 <button
                   onClick={() => { const d = prompt("Critical failure (e.g. Wrong patient identification):"); if (d?.trim()) patch({ type: "critical", description: d.trim() }); }}
@@ -198,7 +198,7 @@ export default function CpuConfigPanel({ cpu, onClose }: { cpu: Cpu; onClose: ()
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wide block mb-1">{label}</label>
+      <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wide block mb-1">{label}</label>
       {children}
     </div>
   );

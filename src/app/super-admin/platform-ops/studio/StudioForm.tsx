@@ -40,7 +40,7 @@ export default function StudioForm({ existingKeys, sources }: { existingKeys: st
   return (
     <div className={cardClass}>
       <h2 className="font-semibold text-gray-900 text-sm mb-1">Author a Configuration Object</h2>
-      <p className="text-[11px] text-gray-400 mb-4">Create a governed object of any builder type. It enters the registry as a <b>draft</b> and a change request is raised — it goes active only through governance + the dependency gate.</p>
+      <p className="text-[11px] text-gray-500 mb-4">Create a governed object of any builder type. It enters the registry as a <b>draft</b> and a change request is raised — it goes active only through governance + the dependency gate.</p>
 
       {done && (
         <div className="mb-4 rounded-lg bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] p-3 text-[12px] text-emerald-800">
@@ -52,10 +52,10 @@ export default function StudioForm({ existingKeys, sources }: { existingKeys: st
         <label className={label}>Object Type<select className={input} value={f.object_type} onChange={e => set("object_type", e.target.value)}>{TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
         <label className={label}>Display Name<input className={input} value={f.display_name} onChange={e => set("display_name", e.target.value)} placeholder="e.g. Falls per 1000 bed-days" /></label>
         <label className={label}>Object Key<input className={input} value={f.object_key} onChange={e => set("object_key", e.target.value)} placeholder="workspace.ward.falls_rate" /></label>
-        <label className={label}>Parent Object <span className="font-normal text-gray-400">(optional)</span><input className={input} list="reg-keys" value={f.parent_object_key} onChange={e => set("parent_object_key", e.target.value)} placeholder="workspace.unit-manager.quality" /></label>
+        <label className={label}>Parent Object <span className="font-normal text-gray-500">(optional)</span><input className={input} list="reg-keys" value={f.parent_object_key} onChange={e => set("parent_object_key", e.target.value)} placeholder="workspace.unit-manager.quality" /></label>
         <label className={label}>Configurability<select className={input} value={f.configurability_class} onChange={e => set("configurability_class", e.target.value)}>{CLASSES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
         <label className={label}>Safety Classification<select className={input} value={f.safety_classification} onChange={e => set("safety_classification", e.target.value)}>{SAFETY.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
-        <label className={label}>Data Source <span className="font-normal text-gray-400">(optional)</span><input className={input} list="src-keys" value={f.data_source_key} onChange={e => set("data_source_key", e.target.value)} placeholder="op_incidents" /></label>
+        <label className={label}>Data Source <span className="font-normal text-gray-500">(optional)</span><input className={input} list="src-keys" value={f.data_source_key} onChange={e => set("data_source_key", e.target.value)} placeholder="op_incidents" /></label>
         <label className={`${label} sm:col-span-2`}>Description<textarea className={input} rows={2} value={f.description} onChange={e => set("description", e.target.value)} placeholder="What this object represents." /></label>
       </div>
       <datalist id="reg-keys">{existingKeys.slice(0, 400).map(k => <option key={k} value={k} />)}</datalist>

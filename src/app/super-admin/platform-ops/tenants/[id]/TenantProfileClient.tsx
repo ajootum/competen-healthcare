@@ -10,8 +10,8 @@ import { Row } from "../../../_kit";
 // per-tenant feature toggles, with tabbed detail.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const BADGE: Record<string, string> = { prospect: "bg-gray-100 text-gray-600", trial: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", archived: "bg-gray-100 text-gray-500", deleted: "bg-gray-100 text-gray-400" };
-const HEALTH_TONE: Record<string, string> = { Healthy: "text-[var(--cmp-text-success)]", Trial: "text-[var(--cmp-text-warning)]", "Over limit": "text-[var(--cmp-text-warning)]", Suspended: "text-[var(--cmp-text-error)]", Inactive: "text-gray-400" };
+const BADGE: Record<string, string> = { prospect: "bg-gray-100 text-gray-600", trial: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", active: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", suspended: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", archived: "bg-gray-100 text-gray-600", deleted: "bg-gray-100 text-gray-600" };
+const HEALTH_TONE: Record<string, string> = { Healthy: "text-[var(--cmp-text-success)]", Trial: "text-[var(--cmp-text-warning)]", "Over limit": "text-[var(--cmp-text-warning)]", Suspended: "text-[var(--cmp-text-error)]", Inactive: "text-gray-500" };
 const TABS = ["Overview", "Subscription", "Usage & Features", "Facilities", "Audit"] as const;
 const card = cardClass;
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 3600) return `${Math.floor(s / 60)} min ago`; if (s < 86400) return `${Math.floor(s / 3600)} hr ago`; return `${Math.floor(s / 86400)} d ago`; };
@@ -42,7 +42,7 @@ export default function TenantProfileClient({ data }: { data: any }) {
 
   return (
     <div data-wide className="space-y-4">
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-teal-700">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/tenants" className="hover:text-teal-700">Tenants</Link><span>/</span><span className="text-gray-600 truncate">{tenant.name}</span>
       </div>
@@ -53,7 +53,7 @@ export default function TenantProfileClient({ data }: { data: any }) {
           <div>
             <div className="flex items-center gap-2 flex-wrap"><h1 className="text-xl font-bold text-gray-900">{tenant.name}</h1>
               <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${BADGE[tenant.status] ?? "bg-gray-100 text-gray-600"}`}>{tenant.status}</span>
-              <span className={`text-[10px] font-medium ${HEALTH_TONE[tenant.health] ?? "text-gray-400"}`}>• {tenant.health}</span></div>
+              <span className={`text-[10px] font-medium ${HEALTH_TONE[tenant.health] ?? "text-gray-500"}`}>• {tenant.health}</span></div>
             <p className="text-xs text-gray-500 mt-0.5 capitalize">{(tenant.type ?? "").replace(/_/g, " ")} · {tenant.country ?? "—"}{plan ? ` · ${plan.name} plan` : " · Unplanned"}</p>
           </div>
         </div>
@@ -100,7 +100,7 @@ export default function TenantProfileClient({ data }: { data: any }) {
                 <div key={l as string} className="rounded-lg border border-gray-100 p-3"><p className="text-sm font-semibold text-gray-900">{v as any}</p><p className="text-[10px] text-gray-500">{l}</p></div>
               ))}
             </div>
-          ) : <p className="text-sm text-gray-400">No plan assigned. Select one above.</p>}
+          ) : <p className="text-sm text-gray-500">No plan assigned. Select one above.</p>}
         </div>
       )}
 
@@ -114,20 +114,20 @@ export default function TenantProfileClient({ data }: { data: any }) {
                 return (
                   <div key={u.label}>
                     <div className="flex items-center justify-between text-xs mb-0.5"><span className="text-gray-700">{u.label}</span>
-                      <span className={`tabular-nums ${over ? "text-[var(--cmp-text-warning)] font-medium" : "text-gray-500"}`}>{u.used == null ? <span className="text-gray-400">{u.note}</span> : `${u.used}${u.limit != null ? ` / ${u.limit}` : ""}`}{u.limit == null && u.used != null ? " (∞)" : ""}</span></div>
+                      <span className={`tabular-nums ${over ? "text-[var(--cmp-text-warning)] font-medium" : "text-gray-500"}`}>{u.used == null ? <span className="text-gray-500">{u.note}</span> : `${u.used}${u.limit != null ? ` / ${u.limit}` : ""}`}{u.limit == null && u.used != null ? " (∞)" : ""}</span></div>
                     {pct != null && <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${over ? "bg-[var(--cmp-color-warning)]" : "bg-teal-500"}`} style={{ width: `${pct}%` }} /></div>}
                   </div>
                 );
               })}
             </div>
-            <p className="text-[10px] text-gray-400 mt-3">Storage &amp; AI-credit metering activates with the monitoring agent — limits shown from the plan.</p>
+            <p className="text-[10px] text-gray-500 mt-3">Storage &amp; AI-credit metering activates with the monitoring agent — limits shown from the plan.</p>
           </div>
           <div className={card}><h3 className="font-semibold text-gray-900 mb-3">Feature flags</h3>
-            {features.length === 0 ? <p className="text-sm text-gray-400">No feature flags registered.</p> : (
+            {features.length === 0 ? <p className="text-sm text-gray-500">No feature flags registered.</p> : (
               <div className="space-y-1.5 max-h-72 overflow-y-auto">
                 {features.map((f: any) => (
                   <div key={f.key} className="flex items-center justify-between gap-2 py-1">
-                    <div className="min-w-0"><p className="text-sm text-gray-800 truncate">{f.key}</p>{f.description && <p className="text-[10px] text-gray-400 truncate">{f.description}</p>}</div>
+                    <div className="min-w-0"><p className="text-sm text-gray-800 truncate">{f.key}</p>{f.description && <p className="text-[10px] text-gray-500 truncate">{f.description}</p>}</div>
                     <button onClick={() => patch({ action: "toggle_feature", flag_key: f.key, enabled: !f.enabled }, `Feature ${f.enabled ? "disabled" : "enabled"}`)} disabled={busy}
                       className={`text-[11px] font-medium rounded-full px-2.5 py-0.5 border shrink-0 disabled:opacity-40 ${f.enabled ? "bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)] text-[var(--cmp-text-success)]" : "bg-gray-50 border-gray-200 text-gray-500"}`}>
                       {f.enabled ? "On" : "Off"}{f.overridden && <span className="text-[8px] ml-1 opacity-70">·override</span>}
@@ -143,10 +143,10 @@ export default function TenantProfileClient({ data }: { data: any }) {
       {tab === "Facilities" && (
         <div className={card}>
           <h3 className="font-semibold text-gray-900 mb-3">Organisations &amp; facilities</h3>
-          {orgs.length === 0 && facilities.length === 0 ? <p className="text-sm text-gray-400">No organisations or facilities under this tenant.</p> : (
+          {orgs.length === 0 && facilities.length === 0 ? <p className="text-sm text-gray-500">No organisations or facilities under this tenant.</p> : (
             <div className="grid sm:grid-cols-2 gap-4">
-              <div><p className="text-[11px] font-semibold text-gray-400 uppercase mb-1">Organisations ({orgs.length})</p>{orgs.map((o: any) => <p key={o.id} className="text-sm text-gray-700 py-1 border-b border-gray-50">🏛️ {o.name}</p>)}{orgs.length === 0 && <p className="text-sm text-gray-300">—</p>}</div>
-              <div><p className="text-[11px] font-semibold text-gray-400 uppercase mb-1">Facilities ({facilities.length})</p>{facilities.map((f: any) => <p key={f.id} className="text-sm text-gray-700 py-1 border-b border-gray-50 flex justify-between">🏥 {f.name}<span className={`text-[10px] ${f.hasAdmin ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}`}>{f.hasAdmin ? "active" : "pending"}</span></p>)}{facilities.length === 0 && <p className="text-sm text-gray-300">—</p>}</div>
+              <div><p className="text-[11px] font-semibold text-gray-500 uppercase mb-1">Organisations ({orgs.length})</p>{orgs.map((o: any) => <p key={o.id} className="text-sm text-gray-700 py-1 border-b border-gray-50">🏛️ {o.name}</p>)}{orgs.length === 0 && <p className="text-sm text-gray-500">—</p>}</div>
+              <div><p className="text-[11px] font-semibold text-gray-500 uppercase mb-1">Facilities ({facilities.length})</p>{facilities.map((f: any) => <p key={f.id} className="text-sm text-gray-700 py-1 border-b border-gray-50 flex justify-between">🏥 {f.name}<span className={`text-[10px] ${f.hasAdmin ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-warning)]"}`}>{f.hasAdmin ? "active" : "pending"}</span></p>)}{facilities.length === 0 && <p className="text-sm text-gray-500">—</p>}</div>
             </div>
           )}
         </div>
@@ -154,9 +154,9 @@ export default function TenantProfileClient({ data }: { data: any }) {
 
       {tab === "Audit" && (
         <div className={card}><h3 className="font-semibold text-gray-900 mb-3">Audit history</h3>
-          {!auditReady || audit.length === 0 ? <p className="text-sm text-gray-400">{auditReady ? "No audit entries for this tenant yet." : "Audit log not available."}</p> : (
+          {!auditReady || audit.length === 0 ? <p className="text-sm text-gray-500">{auditReady ? "No audit entries for this tenant yet." : "Audit log not available."}</p> : (
             <div className="space-y-2">{audit.map((a: any, i: number) => (
-              <div key={i} className="flex items-center gap-2.5 text-sm"><span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" /><span className="text-gray-700 capitalize">{(a.action ?? "").replace(/_/g, " ")}</span><span className="text-gray-400 text-xs ml-auto">{a.actor_name ? `${a.actor_name} · ` : ""}{relTime(a.created_at)}</span></div>
+              <div key={i} className="flex items-center gap-2.5 text-sm"><span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" /><span className="text-gray-700 capitalize">{(a.action ?? "").replace(/_/g, " ")}</span><span className="text-gray-500 text-xs ml-auto">{a.actor_name ? `${a.actor_name} · ` : ""}{relTime(a.created_at)}</span></div>
             ))}</div>
           )}
         </div>

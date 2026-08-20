@@ -27,11 +27,11 @@ export default async function PromptsPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <Card title="Prompt Templates" className="xl:col-span-2" right={<span className="text-[11px] text-gray-400">by usage</span>}>
+        <Card title="Prompt Templates" className="xl:col-span-2" right={<span className="text-[11px] text-gray-500">by usage</span>}>
           <div className="space-y-1">
-            <div className="flex items-center text-[10px] text-gray-400 uppercase tracking-wide px-1"><span className="flex-1">Template</span><span className="w-24">Workspace</span><span className="w-24">Category</span><span className="w-20">Model</span><span className="w-16 text-right">Version</span><span className="w-20 text-right">Usage</span></div>
+            <div className="flex items-center text-[10px] text-gray-500 uppercase tracking-wide px-1"><span className="flex-1">Template</span><span className="w-24">Workspace</span><span className="w-24">Category</span><span className="w-20">Model</span><span className="w-16 text-right">Version</span><span className="w-20 text-right">Usage</span></div>
             {d.templates.map((t: any) => (
-              <div key={t.id} className="flex items-center px-1 py-1.5 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{t.name}</span><span className="w-24 text-gray-500 text-[11px]">{t.workspace}</span><span className="w-24 text-gray-500 text-[11px]">{t.category}</span><span className="w-20"><Pill text={t.model_hint} tone={t.model_hint === "heavy" ? "violet" : t.model_hint === "cheap" ? "emerald" : "blue"} /></span><span className="w-16 text-right text-gray-400 tabular-nums">v{t.version}</span><span className="w-20 text-right text-gray-900 tabular-nums font-semibold">{Number(t.usage).toLocaleString()}</span></div>
+              <div key={t.id} className="flex items-center px-1 py-1.5 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{t.name}</span><span className="w-24 text-gray-500 text-[11px]">{t.workspace}</span><span className="w-24 text-gray-500 text-[11px]">{t.category}</span><span className="w-20"><Pill text={t.model_hint} tone={t.model_hint === "heavy" ? "violet" : t.model_hint === "cheap" ? "emerald" : "blue"} /></span><span className="w-16 text-right text-gray-500 tabular-nums">v{t.version}</span><span className="w-20 text-right text-gray-900 tabular-nums font-semibold">{Number(t.usage).toLocaleString()}</span></div>
             ))}
           </div>
         </Card>
@@ -43,13 +43,13 @@ export default async function PromptsPage() {
         </Card>
       </div>
 
-      <Card title="Personas" right={<span className="text-[11px] text-gray-400">{d.personas.length} behaviour packages</span>}>
+      <Card title="Personas" right={<span className="text-[11px] text-gray-500">{d.personas.length} behaviour packages</span>}>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
           {d.personas.map((p: any) => (
             <div key={p.id} className="border border-gray-200 rounded-lg p-3">
               <div className="flex items-center justify-between"><p className="text-[13px] font-semibold text-gray-900">{p.name}</p><Pill text={p.workspace} tone="violet" /></div>
               <p className="text-[11px] text-gray-500 mt-0.5">{p.description}</p>
-              <p className="text-[10px] text-gray-400 mt-1">Tone: {p.tone}</p>
+              <p className="text-[10px] text-gray-500 mt-1">Tone: {p.tone}</p>
             </div>
           ))}
         </div>

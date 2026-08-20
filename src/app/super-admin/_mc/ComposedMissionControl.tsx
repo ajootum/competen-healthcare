@@ -23,13 +23,13 @@ function WidgetBody({ result }: { result: WidgetResult }) {
   if (result.state === "forbidden")
     // Reached only if the composition and the source disagree, which is exactly the case worth showing
     // rather than hiding -- it means one of the two is wrong.
-    return <p className="text-sm text-gray-400">Not available to your position.</p>;
+    return <p className="text-sm text-gray-500">Not available to your position.</p>;
 
   if (result.state === "unavailable")
     return (
       <div>
         <p className="text-sm font-medium text-[var(--cmp-text-warning)]">Could not be read</p>
-        <p className="text-[11px] text-gray-400 mt-1 break-words">{result.reason}</p>
+        <p className="text-[11px] text-gray-500 mt-1 break-words">{result.reason}</p>
       </div>
     );
 
@@ -54,13 +54,13 @@ function WidgetBody({ result }: { result: WidgetResult }) {
               <span className="text-gray-700">{r.label}</span>
               <span className={r.on
                 ? "text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"
-                : "text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500"}>
+                : "text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"}>
                 {r.on ? "on" : "off"}
               </span>
             </li>
           ))}
         </ul>
-        <p className="text-[11px] text-gray-400 mt-2">{v.caption}</p>
+        <p className="text-[11px] text-gray-500 mt-2">{v.caption}</p>
       </div>
     );
 
@@ -74,7 +74,7 @@ function WidgetBody({ result }: { result: WidgetResult }) {
           </li>
         ))}
       </ul>
-      <p className="text-[11px] text-gray-400 mt-2">{v.caption}</p>
+      <p className="text-[11px] text-gray-500 mt-2">{v.caption}</p>
     </div>
   );
 }
@@ -166,7 +166,7 @@ export default async function ComposedMissionControl({ composition, admin, isOwn
           <p className="text-sm text-gray-600">
             This profile is configured with no widgets yet.
           </p>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-gray-500 mt-1">
             {composition.profile.description ?? "Widgets are registered in hq_mission_widget and bound to a profile in hq_profile_widget."}
           </p>
         </div>

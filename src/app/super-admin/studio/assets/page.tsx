@@ -19,12 +19,12 @@ function EngineCard({ m }: { m: Mod }) {
       <div className="flex items-center gap-2.5 mb-1.5">
         <span className="text-xl shrink-0">{m.icon}</span>
         <div className="min-w-0">
-          <p className="text-[9px] font-bold text-gray-300 tracking-widest">{m.code}</p>
+          <p className="text-[9px] font-bold text-gray-500 tracking-widest">{m.code}</p>
           <p className={`font-bold text-sm leading-tight ${m.planned ? "text-gray-500" : "text-gray-900 group-hover:text-teal-700"}`}>{m.label}</p>
         </div>
         {m.planned && <span className="ml-auto shrink-0 text-[8px] font-bold uppercase tracking-wide text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] px-1.5 py-0.5 rounded">Planned</span>}
       </div>
-      <p className="text-[11px] text-gray-400 leading-relaxed">{m.desc}</p>
+      <p className="text-[11px] text-gray-500 leading-relaxed">{m.desc}</p>
     </>
   );
   const base = "bg-white rounded-xl border border-gray-100 p-4 block";
@@ -34,7 +34,7 @@ function EngineCard({ m }: { m: Mod }) {
 function Layer({ title, mods }: { title: string; mods: Mod[] }) {
   return (
     <>
-      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">{title}</h2>
+      <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">{title}</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 mb-7">{mods.map(m => <EngineCard key={m.code} m={m} />)}</div>
     </>
   );
@@ -112,7 +112,7 @@ export default async function AssetPlatformPage() {
         <div>
           <p className="text-[11px] font-semibold text-rose-500 uppercase tracking-widest mb-0.5">CAP-000 · Competency Asset Platform</p>
           <h1 className="text-xl font-bold text-gray-900">Asset Repository</h1>
-          <p className="text-gray-400 text-sm mt-0.5">The single source of truth — every competency asset, governed once and reused everywhere across the ecosystem.</p>
+          <p className="text-gray-500 text-sm mt-0.5">The single source of truth — every competency asset, governed once and reused everywhere across the ecosystem.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Link href="/super-admin/studio/assets/browser" className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3 py-2">Browse assets →</Link>
@@ -122,18 +122,18 @@ export default async function AssetPlatformPage() {
 
       {/* Repository summary */}
       <div className="grid grid-cols-3 gap-3 mb-5">
-        <div className="bg-white rounded-xl border border-gray-100 p-3.5"><p className="text-xl font-bold text-gray-900">{totalAssets}</p><p className="text-[10px] text-gray-400 font-medium mt-0.5">Total assets</p></div>
-        <div className="bg-white rounded-xl border border-gray-100 p-3.5"><p className="text-xl font-bold text-gray-900">{assetTypes}</p><p className="text-[10px] text-gray-400 font-medium mt-0.5">Asset types</p></div>
-        <div className="bg-white rounded-xl border border-gray-100 p-3.5"><p className="text-xl font-bold text-teal-600">{publications}</p><p className="text-[10px] text-gray-400 font-medium mt-0.5">Published</p></div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3.5"><p className="text-xl font-bold text-gray-900">{totalAssets}</p><p className="text-[10px] text-gray-500 font-medium mt-0.5">Total assets</p></div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3.5"><p className="text-xl font-bold text-gray-900">{assetTypes}</p><p className="text-[10px] text-gray-500 font-medium mt-0.5">Asset types</p></div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3.5"><p className="text-xl font-bold text-teal-600">{publications}</p><p className="text-[10px] text-gray-500 font-medium mt-0.5">Published</p></div>
       </div>
 
       {/* Managed asset catalogue */}
-      <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Managed assets</h2>
+      <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Managed assets</h2>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-7">
         {ASSETS.map(a => (
           <Link key={a.label} href={a.href} className="bg-white rounded-xl border border-gray-100 p-3.5 hover:border-teal-200 transition-colors">
             <div className="flex items-center justify-between mb-1"><span className="text-sm">{a.icon}</span><p className="text-lg font-bold text-gray-900">{a.value}</p></div>
-            <p className="text-[10px] text-gray-400 font-medium">{a.label}</p>
+            <p className="text-[10px] text-gray-500 font-medium">{a.label}</p>
           </Link>
         ))}
       </div>

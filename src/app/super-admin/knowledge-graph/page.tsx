@@ -28,7 +28,7 @@ export default async function KnowledgeGraphPage() {
     <div className="max-w-4xl">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">Knowledge Graph</h1>
-        <p className="text-gray-400 text-sm mt-0.5">
+        <p className="text-gray-500 text-sm mt-0.5">
           The semantic backbone connecting every governed object — the substrate for AI retrieval and impact analysis (Book IV Ch.2–5).
         </p>
       </div>
@@ -60,10 +60,10 @@ export default async function KnowledgeGraphPage() {
 
       {/* Relationship breakdown */}
       <div className="mt-6">
-        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Relationships</h2>
+        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Relationships</h2>
         {stats.totalEdges === 0 ? (
           <div className="bg-white rounded-xl border border-gray-100 p-8 text-center">
-            <p className="text-gray-400 text-sm">Graph is empty — click <span className="font-semibold">Rebuild Graph</span> to derive edges from your competency hierarchy.</p>
+            <p className="text-gray-500 text-sm">Graph is empty — click <span className="font-semibold">Rebuild Graph</span> to derive edges from your competency hierarchy.</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden divide-y divide-gray-50">

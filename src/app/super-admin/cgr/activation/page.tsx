@@ -19,7 +19,7 @@ const VERDICT: Record<string, { label: string; cls: string }> = {
   not_ready: { label: "NOT READY", cls: "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)]" },
 };
 const STATUS_META: Record<string, string> = {
-  draft: "text-gray-500 bg-gray-50 border-gray-200", active: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]", retired: "text-gray-400 bg-gray-50 border-gray-100",
+  draft: "text-gray-500 bg-gray-50 border-gray-200", active: "text-emerald-700 bg-[var(--cmp-surface-success)] border-[var(--cmp-color-success)]", retired: "text-gray-500 bg-gray-50 border-gray-100",
 };
 const lvl = (l: string | null) => (l ? l.replace(/_/g, " ") : "any");
 
@@ -43,7 +43,7 @@ export default async function ActivationReadinessPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-028 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Service Activation Readiness</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Are we ready to safely deliver this service? A profile states what the service requires; the gate evaluates every department&apos;s real workforce against it.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Are we ready to safely deliver this service? A profile states what the service requires; the gate evaluates every department&apos;s real workforce against it.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/super-admin/cgr/executive" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Org readiness →</Link>
@@ -71,7 +71,7 @@ export default async function ActivationReadinessPage() {
           {d.profiles.length === 0 ? (
             <div className="bg-white border border-gray-200 rounded-xl p-6">
               <p className="text-[13px] text-gray-600 font-medium mb-1">No service profiles defined yet.</p>
-              <p className="text-[12px] text-gray-400 leading-relaxed">Defining what a service requires is a clinical governance decision the platform cannot derive — that is exactly why this store did not exist until now. Define the first profile above (e.g. an ICU service requiring sepsis recognition for 4 staff at proficient, ventilation management for 2, critical), activate it, and every department is evaluated against it from real competency decisions.</p>
+              <p className="text-[12px] text-gray-500 leading-relaxed">Defining what a service requires is a clinical governance decision the platform cannot derive — that is exactly why this store did not exist until now. Define the first profile above (e.g. an ICU service requiring sepsis recognition for 4 staff at proficient, ventilation management for 2, critical), activate it, and every department is evaluated against it from real competency decisions.</p>
             </div>
           ) : (
             d.profiles.map((p: any) => (
@@ -79,12 +79,12 @@ export default async function ActivationReadinessPage() {
                 <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 flex-wrap">
                   <div className="flex items-center gap-2 min-w-0">
                     <p className="text-sm font-bold text-gray-800 truncate">{p.name}</p>
-                    {p.code && <span className="text-[10px] font-mono text-gray-400">{p.code}</span>}
+                    {p.code && <span className="text-[10px] font-mono text-gray-500">{p.code}</span>}
                     <span className={`text-[9px] font-bold uppercase border rounded px-1.5 py-0.5 ${STATUS_META[p.status] ?? STATUS_META.draft}`}>{p.status}</span>
                     {p.shared && <span className="text-[9px] font-bold text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded px-1.5 py-0.5">shared template</span>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-[10px] text-gray-400">{p.requirements.length} requirements · {p.criticalCount} critical · by {p.createdBy}</span>
+                    <span className="text-[10px] text-gray-500">{p.requirements.length} requirements · {p.criticalCount} critical · by {p.createdBy}</span>
                     <ProfileStatus id={p.id} status={p.status} />
                   </div>
                 </div>
@@ -98,13 +98,13 @@ export default async function ActivationReadinessPage() {
                 </div>
 
                 {p.status !== "active" ? (
-                  <div className="px-4 py-3"><p className="text-[11px] text-gray-400">{p.status === "draft" ? "Draft — not evaluated. Activation is a governance act; the gate never evaluates an ungoverned requirements set." : "Retired — no longer gating."}</p></div>
+                  <div className="px-4 py-3"><p className="text-[11px] text-gray-500">{p.status === "draft" ? "Draft — not evaluated. Activation is a governance act; the gate never evaluates an ungoverned requirements set." : "Retired — no longer gating."}</p></div>
                 ) : p.evaluations.length === 0 ? (
-                  <div className="px-4 py-3"><p className="text-[11px] text-gray-400">No departments with assigned staff to evaluate.</p></div>
+                  <div className="px-4 py-3"><p className="text-[11px] text-gray-500">No departments with assigned staff to evaluate.</p></div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[760px]">
-                      <thead><tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                      <thead><tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
                         <th className="text-left py-2 pl-4 pr-2">Department</th>
                         <th className="text-center py-2 px-2">Staff</th>
                         <th className="text-center py-2 px-2">Assessors</th>
@@ -126,7 +126,7 @@ export default async function ActivationReadinessPage() {
                             </td>
                             <td className="py-2 px-2">
                               <div className="flex flex-wrap gap-1">
-                                {e.unmet.length === 0 ? <span className="text-[10px] text-gray-300">—</span> : e.unmet.map((u: any, i: number) => (
+                                {e.unmet.length === 0 ? <span className="text-[10px] text-gray-500">—</span> : e.unmet.map((u: any, i: number) => (
                                   <span key={i} className={`text-[9px] border rounded px-1 py-0.5 ${u.critical ? "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border-[var(--cmp-color-error)] font-semibold" : "text-[var(--cmp-text-warning)] bg-[var(--cmp-surface-warning)] border-[var(--cmp-color-warning)]"}`}>{u.name} {u.have}/{u.need}</span>
                                 ))}
                               </div>
@@ -142,7 +142,7 @@ export default async function ActivationReadinessPage() {
             ))
           )}
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every evaluation is real: a requirement is met only by staff in that department holding a <span className="font-medium">current</span> competent decision on that competency at the required level, and assessor capacity is the live authorisation register for that department&apos;s staff. Level convention, stated: a decision without recorded maturity counts as &ldquo;competent&rdquo; (the outcome asserts it) — requirements above competent therefore need recorded maturity. An unmet <span className="font-medium">critical</span> requirement blocks readiness regardless of coverage. Safety context lives in <Link href="/super-admin/cgr/clinical" className="text-[var(--cmp-text-success)] hover:underline">Clinical Intelligence</Link>; org-level assurance in the <Link href="/super-admin/cgr/executive" className="text-[var(--cmp-text-success)] hover:underline">board statement</Link>. Per the CGR mandate, this gate informs the decision — it never declares a service safe by itself, and clinical governance approval remains with accountable leaders.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every evaluation is real: a requirement is met only by staff in that department holding a <span className="font-medium">current</span> competent decision on that competency at the required level, and assessor capacity is the live authorisation register for that department&apos;s staff. Level convention, stated: a decision without recorded maturity counts as &ldquo;competent&rdquo; (the outcome asserts it) — requirements above competent therefore need recorded maturity. An unmet <span className="font-medium">critical</span> requirement blocks readiness regardless of coverage. Safety context lives in <Link href="/super-admin/cgr/clinical" className="text-[var(--cmp-text-success)] hover:underline">Clinical Intelligence</Link>; org-level assurance in the <Link href="/super-admin/cgr/executive" className="text-[var(--cmp-text-success)] hover:underline">board statement</Link>. Per the CGR mandate, this gate informs the decision — it never declares a service safe by itself, and clinical governance approval remains with accountable leaders.</p>
         </div>
       )}
     </div>

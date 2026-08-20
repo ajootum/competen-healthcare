@@ -52,10 +52,10 @@ export default function AssetSearch() {
           <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && run()} placeholder="Search competency assets — natural language or keywords…" className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-teal-400" />
           <button onClick={run} disabled={searching} className="text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-50 rounded-lg px-5">{searching ? "…" : "Search"}</button>
         </div>
-        {note && <p className="text-[11px] text-gray-400 mt-2">{note}</p>}
+        {note && <p className="text-[11px] text-gray-500 mt-2">{note}</p>}
         {hits.length > 0 && (
           <div className="mt-3 flex flex-col divide-y divide-gray-50">
-            <p className="text-[10px] text-gray-400 mb-1">{hits.length} result{hits.length === 1 ? "" : "s"} · {semantic ? "hybrid (keyword + semantic)" : "keyword"}</p>
+            <p className="text-[10px] text-gray-500 mb-1">{hits.length} result{hits.length === 1 ? "" : "s"} · {semantic ? "hybrid (keyword + semantic)" : "keyword"}</p>
             {hits.map((h, i) => (
               <Link key={i} href={hrefFor(h.objectType, h.objectId)} className="py-2.5 group">
                 <div className="flex items-center gap-2 mb-0.5">
@@ -66,7 +66,7 @@ export default function AssetSearch() {
                     {h.matched?.includes("keyword") && <span className="text-[8px] font-bold uppercase text-[var(--cmp-text-information)] bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] rounded px-1 py-0.5">keyword</span>}
                   </span>
                 </div>
-                {h.snippet && <p className="text-[11px] text-gray-400 leading-relaxed line-clamp-2">{h.snippet}</p>}
+                {h.snippet && <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-2">{h.snippet}</p>}
               </Link>
             ))}
           </div>
@@ -82,17 +82,17 @@ export default function AssetSearch() {
         {status ? (
           <>
             <div className="grid grid-cols-3 gap-3 mb-3">
-              <div><p className="text-lg font-bold text-gray-900">{status.total}</p><p className="text-[10px] text-gray-400">Indexed rows</p></div>
-              <div><p className="text-lg font-bold text-teal-600">{status.embedded}</p><p className="text-[10px] text-gray-400">Embedded</p></div>
-              <div><p className="text-lg font-bold text-[var(--cmp-text-warning)]">{status.queued}</p><p className="text-[10px] text-gray-400">Queued</p></div>
+              <div><p className="text-lg font-bold text-gray-900">{status.total}</p><p className="text-[10px] text-gray-500">Indexed rows</p></div>
+              <div><p className="text-lg font-bold text-teal-600">{status.embedded}</p><p className="text-[10px] text-gray-500">Embedded</p></div>
+              <div><p className="text-lg font-bold text-[var(--cmp-text-warning)]">{status.queued}</p><p className="text-[10px] text-gray-500">Queued</p></div>
             </div>
             <div className="flex gap-2">
               <button onClick={() => reindex("enqueue")} disabled={busy} className="text-xs font-semibold text-gray-700 border border-gray-200 hover:bg-gray-50 rounded-lg px-3 py-1.5">1 · Enqueue assets</button>
               <button onClick={() => reindex("embed")} disabled={busy || !status.configured} className="text-xs font-semibold text-teal-700 border border-teal-200 bg-teal-50 hover:bg-teal-100 disabled:opacity-40 rounded-lg px-3 py-1.5" title={status.configured ? "" : "Set an embedding provider key first"}>2 · Embed a batch</button>
             </div>
-            <p className="text-[10px] text-gray-400 mt-2">Enqueue registers asset content for indexing; embedding runs only with a provider key (dormant otherwise). Repeat “Embed a batch” until the queue is drained. Search works on keyword alone until then.</p>
+            <p className="text-[10px] text-gray-500 mt-2">Enqueue registers asset content for indexing; embedding runs only with a provider key (dormant otherwise). Repeat “Embed a batch” until the queue is drained. Search works on keyword alone until then.</p>
           </>
-        ) : <p className="text-xs text-gray-400">Loading index status…</p>}
+        ) : <p className="text-xs text-gray-500">Loading index status…</p>}
       </div>
     </div>
   );

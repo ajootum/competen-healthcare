@@ -31,7 +31,7 @@ export default function JobRunner({ jobs, title = "Run Automation" }: { jobs: Jo
   return (
     <div className={cardClass}>
       <h2 className="font-semibold text-gray-900 text-[15px] mb-3">{title}</h2>
-      {runnable.length === 0 ? <p className="text-sm text-gray-400">No on-demand automations registered.</p> : (
+      {runnable.length === 0 ? <p className="text-sm text-gray-500">No on-demand automations registered.</p> : (
         <div className="flex flex-wrap items-center gap-2">
           <select value={key} onChange={e => setKey(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40 min-w-[220px]">
             {runnable.map(j => <option key={j.key} value={j.key}>{j.name}</option>)}
@@ -40,7 +40,7 @@ export default function JobRunner({ jobs, title = "Run Automation" }: { jobs: Jo
           {result && <span className={`text-xs rounded-lg px-2.5 py-1.5 ${result.ok ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{result.text}</span>}
         </div>
       )}
-      <p className="text-[11px] text-gray-400 mt-3">Runs the selected job immediately and records it to the job history. Handler-backed jobs do real, safe, idempotent work.</p>
+      <p className="text-[11px] text-gray-500 mt-3">Runs the selected job immediately and records it to the job history. Handler-backed jobs do real, safe, idempotent work.</p>
     </div>
   );
 }

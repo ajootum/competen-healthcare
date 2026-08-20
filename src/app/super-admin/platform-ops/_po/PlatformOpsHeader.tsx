@@ -14,7 +14,7 @@ export default function PlatformOpsHeader({ generatedAt }: { generatedAt: string
         <h1 className="text-2xl font-bold text-gray-900">Platform Operations</h1>
         <p className="text-sm text-gray-500">Operate, monitor and optimize the Competen platform.</p>
       </div>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <span className="tabular-nums">Last updated: {time}</span>
         <button onClick={() => { setBusy(true); router.refresh(); setTimeout(() => setBusy(false), 800); }}
           className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 font-medium text-gray-600 hover:bg-gray-50">

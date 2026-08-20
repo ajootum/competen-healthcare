@@ -33,10 +33,10 @@ export default async function LocalizationConsole({ searchParams }: { searchPara
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">Locales</p><p className="text-2xl font-bold text-gray-900 mt-0.5">{cat.locales.length}</p><p className="text-[10px] text-gray-400">Supported</p></div>
-        <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">Base Keys</p><p className="text-2xl font-bold text-gray-900 mt-0.5">{cat.totalKeys}</p><p className="text-[10px] text-gray-400">In {cat.namespaces.length} namespaces</p></div>
-        <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">Base Locale</p><p className="text-2xl font-bold text-gray-900 mt-0.5 uppercase">{cat.baseLocale}</p><p className="text-[10px] text-gray-400">Fallback source</p></div>
-        <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">RTL Locales</p><p className="text-2xl font-bold text-gray-900 mt-0.5">{cat.locales.filter(l => l.dir === "rtl").length}</p><p className="text-[10px] text-gray-400">Right-to-left</p></div>
+        <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">Locales</p><p className="text-2xl font-bold text-gray-900 mt-0.5">{cat.locales.length}</p><p className="text-[10px] text-gray-500">Supported</p></div>
+        <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">Base Keys</p><p className="text-2xl font-bold text-gray-900 mt-0.5">{cat.totalKeys}</p><p className="text-[10px] text-gray-500">In {cat.namespaces.length} namespaces</p></div>
+        <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">Base Locale</p><p className="text-2xl font-bold text-gray-900 mt-0.5 uppercase">{cat.baseLocale}</p><p className="text-[10px] text-gray-500">Fallback source</p></div>
+        <div className={`${card} p-3.5`}><p className="text-[10px] text-gray-500 uppercase tracking-wide">RTL Locales</p><p className="text-2xl font-bold text-gray-900 mt-0.5">{cat.locales.filter(l => l.dir === "rtl").length}</p><p className="text-[10px] text-gray-500">Right-to-left</p></div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -46,7 +46,7 @@ export default async function LocalizationConsole({ searchParams }: { searchPara
             <div key={l.code} className="text-xs">
               <div className="flex items-center justify-between mb-0.5">
                 <span className="text-gray-700 flex items-center gap-1.5"><span className="font-mono text-[10px] bg-gray-100 rounded px-1">{l.code}</span>{l.native}{l.dir === "rtl" && <span className="text-[9px] text-violet-600">RTL</span>}{l.base && <span className="text-[9px] text-teal-600">base</span>}</span>
-                <span className="text-gray-400">{l.translatedKeys}/{cat.totalKeys} · {l.coverage}%</span>
+                <span className="text-gray-500">{l.translatedKeys}/{cat.totalKeys} · {l.coverage}%</span>
               </div>
               <div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full rounded-full ${l.coverage >= 100 ? "bg-[var(--cmp-color-success)]" : l.coverage >= 60 ? "bg-teal-500" : l.coverage >= 30 ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} style={{ width: `${l.coverage}%` }} /></div>
             </div>
@@ -56,11 +56,11 @@ export default async function LocalizationConsole({ searchParams }: { searchPara
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
             <h3 className="text-sm font-bold text-gray-900">Resource Bundle Preview</h3>
-            <div className="flex gap-1 flex-wrap">{cat.locales.map(l => <Link key={l.code} href={`/super-admin/platform-ops/localization?locale=${l.code}`} className={`text-[10px] px-2 py-0.5 rounded-full ${bundle.locale.code === l.code ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>{l.code}</Link>)}</div>
+            <div className="flex gap-1 flex-wrap">{cat.locales.map(l => <Link key={l.code} href={`/super-admin/platform-ops/localization?locale=${l.code}`} className={`text-[10px] px-2 py-0.5 rounded-full ${bundle.locale.code === l.code ? "bg-teal-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>{l.code}</Link>)}</div>
           </div>
           <div className="overflow-x-auto" dir={bundle.locale.dir}>
             <table className="w-full text-xs">
-              <thead><tr className="text-gray-400 text-left border-b border-gray-100"><th className="py-1.5 pr-3 font-medium" dir="ltr">Key</th><th className="py-1.5 pr-3 font-medium">{bundle.locale.native}</th><th className="py-1.5 font-medium" dir="ltr">Source</th></tr></thead>
+              <thead><tr className="text-gray-500 text-left border-b border-gray-100"><th className="py-1.5 pr-3 font-medium" dir="ltr">Key</th><th className="py-1.5 pr-3 font-medium">{bundle.locale.native}</th><th className="py-1.5 font-medium" dir="ltr">Source</th></tr></thead>
               <tbody>
                 {bundle.entries.map(e => (
                   <tr key={e.key} className="border-b border-gray-50">
@@ -75,7 +75,7 @@ export default async function LocalizationConsole({ searchParams }: { searchPara
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The Localization Resource Service (PFS-000 Localization) provides the i18n layer the conformance map flagged as missing: a locale catalogue (name, native name, text direction, formats), namespaced resource bundles, and a resolver with base-locale fallback and <code>{"{var}"}</code> interpolation, plus measured coverage per locale. Bundles are a code-defined seed set that grows; a translation-management workflow (import/export, professional translation, per-tenant overrides) is an honest next-phase gap. Tenant language/timezone/currency selection already exists and resolves through this service.</p>
+      <p className="text-[11px] text-gray-500 pb-4">The Localization Resource Service (PFS-000 Localization) provides the i18n layer the conformance map flagged as missing: a locale catalogue (name, native name, text direction, formats), namespaced resource bundles, and a resolver with base-locale fallback and <code>{"{var}"}</code> interpolation, plus measured coverage per locale. Bundles are a code-defined seed set that grows; a translation-management workflow (import/export, professional translation, per-tenant overrides) is an honest next-phase gap. Tenant language/timezone/currency selection already exists and resolves through this service.</p>
     </div>
   );
 }

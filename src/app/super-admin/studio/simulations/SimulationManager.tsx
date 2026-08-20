@@ -14,7 +14,7 @@ const DIFF = [{ v: "beginner", label: "Beginner", color: "#10b981" }, { v: "inte
 const typeLabel = (t: string) => TYPES.find(x => x.v === t)?.label ?? t;
 const diffColor = (d: string) => DIFF.find(x => x.v === d)?.color ?? "#9ca3af";
 const diffLabel = (d: string) => DIFF.find(x => x.v === d)?.label ?? d;
-const STATUS_TONE: Record<string, string> = { draft: "text-gray-500 bg-gray-50 border-gray-200", published: "text-teal-600 bg-teal-50 border-teal-200", archived: "text-gray-400 bg-gray-50 border-gray-200" };
+const STATUS_TONE: Record<string, string> = { draft: "text-gray-500 bg-gray-50 border-gray-200", published: "text-teal-600 bg-teal-50 border-teal-200", archived: "text-gray-500 bg-gray-50 border-gray-200" };
 
 export default function SimulationManager({ scenarios, competencyOptions }: { scenarios: any[]; competencyOptions: { id: string; label: string }[] }) {
   const router = useRouter();
@@ -60,24 +60,24 @@ export default function SimulationManager({ scenarios, competencyOptions }: { sc
       </div>
 
       {scenarios.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-6 text-center text-xs text-gray-400">No scenarios yet — author one above. The branching flow-builder is the next-phase layer on top of this store.</div>
+        <div className="bg-white rounded-xl border border-gray-100 p-6 text-center text-xs text-gray-500">No scenarios yet — author one above. The branching flow-builder is the next-phase layer on top of this store.</div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-100 p-5">
-          <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Scenarios ({scenarios.length})</h3>
+          <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-widest mb-2">Scenarios ({scenarios.length})</h3>
           <div className="flex flex-col divide-y divide-gray-50">
             {scenarios.map((s: any) => (
               <div key={s.id} className="flex items-center gap-2 py-2 text-xs flex-wrap">
                 <span className="font-semibold text-gray-800 truncate max-w-[30%]">{s.name}</span>
                 <span className="text-[10px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 shrink-0">{typeLabel(s.scenario_type)}</span>
                 <span className="text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0" style={{ color: diffColor(s.difficulty), backgroundColor: `${diffColor(s.difficulty)}14` }}>{diffLabel(s.difficulty)}</span>
-                {s.competency_name && <span className="text-[10px] text-gray-400 truncate max-w-[24%] hidden md:inline">↔ {s.competency_name}</span>}
-                <span className="text-[10px] text-gray-400">{s.participants ?? 1}p{s.duration_min ? ` · ${s.duration_min}m` : ""}</span>
+                {s.competency_name && <span className="text-[10px] text-gray-500 truncate max-w-[24%] hidden md:inline">↔ {s.competency_name}</span>}
+                <span className="text-[10px] text-gray-500">{s.participants ?? 1}p{s.duration_min ? ` · ${s.duration_min}m` : ""}</span>
                 <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${STATUS_TONE[s.status] ?? STATUS_TONE.draft}`}>{s.status}</span>
                 <div className="ml-auto flex items-center gap-1.5">
                   {s.status !== "published" && <button onClick={() => setStatus(s.id, "published")} disabled={busy} className="text-[10px] font-semibold text-teal-700 hover:underline">Publish</button>}
-                  {s.status !== "archived" ? <button onClick={() => setStatus(s.id, "archived")} disabled={busy} className="text-[10px] font-semibold text-gray-400 hover:underline">Archive</button>
+                  {s.status !== "archived" ? <button onClick={() => setStatus(s.id, "archived")} disabled={busy} className="text-[10px] font-semibold text-gray-500 hover:underline">Archive</button>
                     : <button onClick={() => setStatus(s.id, "draft")} disabled={busy} className="text-[10px] font-semibold text-gray-500 hover:underline">Restore</button>}
-                  <button onClick={() => del(s.id)} disabled={busy} className="text-gray-300 hover:text-red-500" title="Delete">✕</button>
+                  <button onClick={() => del(s.id)} disabled={busy} className="text-gray-500 hover:text-red-500" title="Delete">✕</button>
                 </div>
               </div>
             ))}

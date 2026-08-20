@@ -34,7 +34,7 @@ export default async function AnalyticsPage() {
 
   const header = (
     <>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Analytics &amp; Optimisation</span>
@@ -42,7 +42,7 @@ export default async function AnalyticsPage() {
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">📉</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Analytics &amp; Optimisation <span className="text-gray-300 font-medium text-lg">(NCP-013)</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Analytics &amp; Optimisation <span className="text-gray-500 font-medium text-lg">(NCP-013)</span></h1>
           <p className="text-sm text-gray-500">Continuous health, adoption and optimisation intelligence across the configuration estate.</p>
         </div>
       </div>
@@ -70,13 +70,13 @@ export default async function AnalyticsPage() {
       {/* Recommendations — the optimisation core */}
       <div className={`${card} p-5`}>
         <h2 className="font-semibold text-gray-900 text-sm mb-1">Optimisation Recommendations</h2>
-        <p className="text-[11px] text-gray-400 mb-3">Rule-based and explainable — each derived from the live dependency graph, registry and governance state.</p>
+        <p className="text-[11px] text-gray-500 mb-3">Rule-based and explainable — each derived from the live dependency graph, registry and governance state.</p>
         <div className="space-y-2">
           {a.recommendations.map((r: any, i: number) => (
             <Link key={i} href={r.href} className={`flex items-start gap-2.5 rounded-lg border p-3 ${sevTone[r.severity]} hover:brightness-[0.98] transition`}>
               <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${sevDot[r.severity]}`} />
               <div><p className="text-xs font-semibold text-gray-800">{r.title}</p><p className="text-[11px] text-gray-500">{r.why}</p></div>
-              <span className="ml-auto text-gray-300 text-xs">→</span>
+              <span className="ml-auto text-gray-500 text-xs">→</span>
             </Link>
           ))}
         </div>
@@ -97,7 +97,7 @@ export default async function AnalyticsPage() {
           {a.health.worst.length > 0 && <>
             <p className="text-[11px] font-semibold text-gray-500 mb-1.5">Lowest scoring</p>
             <div className="space-y-1">{a.health.worst.map((w: any) => (
-              <div key={w.key} className="flex items-center gap-2 text-[11px]"><span className={`w-8 font-bold tabular-nums ${healthTone(w.score)}`}>{w.score}</span><span className="text-gray-700 truncate flex-1">{w.name}</span><span className="text-gray-400 truncate max-w-[10rem]">{w.reasons.join(", ")}</span></div>
+              <div key={w.key} className="flex items-center gap-2 text-[11px]"><span className={`w-8 font-bold tabular-nums ${healthTone(w.score)}`}>{w.score}</span><span className="text-gray-700 truncate flex-1">{w.name}</span><span className="text-gray-500 truncate max-w-[10rem]">{w.reasons.join(", ")}</span></div>
             ))}</div>
           </>}
         </div>
@@ -115,10 +115,10 @@ export default async function AnalyticsPage() {
         {/* Hotspots */}
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-sm mb-1">Dependency Hotspots</h2>
-          <p className="text-[11px] text-gray-400 mb-3">Highest blast radius — most downstream objects affected if changed.</p>
-          {a.hotspots.length === 0 ? <p className="text-[11px] text-gray-400">No dependency edges yet.</p> : (
+          <p className="text-[11px] text-gray-500 mb-3">Highest blast radius — most downstream objects affected if changed.</p>
+          {a.hotspots.length === 0 ? <p className="text-[11px] text-gray-500">No dependency edges yet.</p> : (
             <div className="space-y-1">{a.hotspots.map((h: any) => (
-              <Link key={h.key} href="/super-admin/platform-ops/dependencies" className="flex items-center gap-2 text-[11px] hover:bg-gray-50 rounded px-1 py-0.5"><span className="w-8 text-right font-bold tabular-nums text-indigo-600">{h.impact}</span><span className="text-gray-700 truncate flex-1">{h.label}</span><span className="text-[9px] text-gray-400 font-mono">{h.type}</span></Link>
+              <Link key={h.key} href="/super-admin/platform-ops/dependencies" className="flex items-center gap-2 text-[11px] hover:bg-gray-50 rounded px-1 py-0.5"><span className="w-8 text-right font-bold tabular-nums text-indigo-600">{h.impact}</span><span className="text-gray-700 truncate flex-1">{h.label}</span><span className="text-[9px] text-gray-500 font-mono">{h.type}</span></Link>
             ))}</div>
           )}
         </div>
@@ -126,8 +126,8 @@ export default async function AnalyticsPage() {
         {/* Churn */}
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-sm mb-1">Most-Changed Objects</h2>
-          <p className="text-[11px] text-gray-400 mb-3">Version churn — objects with the most snapshots.</p>
-          {a.churn.length === 0 ? <p className="text-[11px] text-gray-400">No version history yet.</p> : (
+          <p className="text-[11px] text-gray-500 mb-3">Version churn — objects with the most snapshots.</p>
+          {a.churn.length === 0 ? <p className="text-[11px] text-gray-500">No version history yet.</p> : (
             <div className="space-y-1">{a.churn.map((cn: any) => (
               <Link key={cn.key} href="/super-admin/platform-ops/versions" className="flex items-center gap-2 text-[11px] hover:bg-gray-50 rounded px-1 py-0.5"><span className="w-8 text-right font-bold tabular-nums text-[var(--cmp-text-warning)]">{cn.versions}</span><span className="text-gray-700 truncate flex-1">{cn.name}</span></Link>
             ))}</div>
@@ -138,24 +138,24 @@ export default async function AnalyticsPage() {
       {/* Activity + unused */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className={`${card} p-5`}>
-          <h2 className="font-semibold text-gray-900 text-sm mb-1">Change Activity <span className="text-gray-300 font-normal">· 14 days</span></h2>
-          <p className="text-[11px] text-gray-400 mb-3">{a.activity.last7} changes in the last 7 days · <span className={momentum >= 0 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}>{momentum >= 0 ? "▲" : "▼"} {Math.abs(momentum)}</span> vs prior 7</p>
+          <h2 className="font-semibold text-gray-900 text-sm mb-1">Change Activity <span className="text-gray-500 font-normal">· 14 days</span></h2>
+          <p className="text-[11px] text-gray-500 mb-3">{a.activity.last7} changes in the last 7 days · <span className={momentum >= 0 ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}>{momentum >= 0 ? "▲" : "▼"} {Math.abs(momentum)}</span> vs prior 7</p>
           <div className="flex items-end gap-1 h-16 mb-3">{a.activity.series.map((n: number, i: number) => <div key={i} className="flex-1 bg-indigo-300 rounded-t" style={{ height: `${Math.max(4, (n / maxSpark) * 100)}%` }} title={`${n}`} />)}</div>
           {a.activity.byAction.length > 0 && <div className="flex flex-wrap gap-1.5">{a.activity.byAction.slice(0, 6).map(([act, n]: [string, number]) => <span key={act} className="text-[10px] bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 text-gray-600">{act} · {n}</span>)}</div>}
         </div>
 
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-sm mb-1">Unused Assets</h2>
-          <p className="text-[11px] text-gray-400 mb-3">Draft objects nothing depends on — candidates to publish or retire.</p>
-          {a.unused.length === 0 ? <p className="text-[11px] text-gray-400">None — every draft is referenced or in flight.</p> : (
+          <p className="text-[11px] text-gray-500 mb-3">Draft objects nothing depends on — candidates to publish or retire.</p>
+          {a.unused.length === 0 ? <p className="text-[11px] text-gray-500">None — every draft is referenced or in flight.</p> : (
             <div className="space-y-1">{a.unused.map((u: any) => (
-              <div key={u.key} className="flex items-center gap-2 text-[11px]"><span className="text-[9px] px-1 py-px rounded bg-gray-100 text-gray-500">{u.type}</span><span className="text-gray-700 truncate flex-1">{u.name}</span></div>
+              <div key={u.key} className="flex items-center gap-2 text-[11px]"><span className="text-[9px] px-1 py-px rounded bg-gray-100 text-gray-600">{u.type}</span><span className="text-gray-700 truncate flex-1">{u.name}</span></div>
             ))}</div>
           )}
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400">Health scoring, hotspots, churn and recommendations are computed live from the registry, dependency graph, version snapshots and governance. Predictive forecasting, cross-tenant benchmarking and model-based (vs rule-based) recommendations (NCP-013 §6/§7) are next-phase.</p>
+      <p className="text-[11px] text-gray-500">Health scoring, hotspots, churn and recommendations are computed live from the registry, dependency graph, version snapshots and governance. Predictive forecasting, cross-tenant benchmarking and model-based (vs rule-based) recommendations (NCP-013 §6/§7) are next-phase.</p>
     </div>
   );
 }

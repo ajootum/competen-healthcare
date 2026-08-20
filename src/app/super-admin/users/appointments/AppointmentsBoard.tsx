@@ -58,9 +58,9 @@ function HolderRow({ h, canAppoint, onEnd, busy }: {
   const [status, setStatus] = useState<string>("removed");
   return (
     <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-t border-gray-50 first:border-0">
-      <span className="font-medium text-gray-900 text-sm">{h.personName ?? <span className="text-gray-400">Name not recorded</span>}</span>
+      <span className="font-medium text-gray-900 text-sm">{h.personName ?? <span className="text-gray-500">Name not recorded</span>}</span>
       <StatusBadge status={h.status} grantsAccess={h.grantsAccess} />
-      <span className="text-[11px] text-gray-400">
+      <span className="text-[11px] text-gray-500">
         {h.termStart ? `from ${h.termStart}` : "no start date recorded"}
         {h.termEnd ? ` to ${h.termEnd}` : ""}
         {h.appointedBy ? ` · appointed by ${h.appointedBy}` : ""}
@@ -130,7 +130,7 @@ function PositionCard({ p, canAppoint, people, busy, onAppoint, onEnd, spaceStaf
             <ul className="mt-2 space-y-1">
               {p.capabilities.value.map(c => (
                 <li key={c.code} className="flex flex-wrap items-baseline gap-2 text-[12px]">
-                  <code className={c.inWindow ? "text-gray-800" : "text-gray-400 line-through"}>{c.code}</code>
+                  <code className={c.inWindow ? "text-gray-800" : "text-gray-500 line-through"}>{c.code}</code>
                   {c.label && <span className="text-gray-500">{c.label}</span>}
                   {!c.inWindow && (
                     <span className="text-[10px] text-amber-800">
@@ -148,7 +148,7 @@ function PositionCard({ p, canAppoint, people, busy, onAppoint, onEnd, spaceStaf
       <div className="border-t border-gray-100">
         {!holders.ok ? <div className="p-3"><Unreadable what="Who holds this position" error={holders.error} /></div>
           : holders.value.length === 0
-            ? <p className="px-4 py-3 text-[12px] text-gray-400">Nobody has ever been appointed to this position.</p>
+            ? <p className="px-4 py-3 text-[12px] text-gray-500">Nobody has ever been appointed to this position.</p>
             : <div>{holders.value.map(h => <HolderRow key={h.appointmentId} h={h} canAppoint={canAppoint} busy={busy} onEnd={onEnd} />)}</div>}
       </div>
 
@@ -173,7 +173,7 @@ function PositionCard({ p, canAppoint, people, busy, onAppoint, onEnd, spaceStaf
                   type="date" value={termEnd} onChange={e => setTermEnd(e.target.value)}
                   className="border border-gray-300 rounded-lg px-2 py-1 text-[11px]"
                 />
-                <span className="text-gray-400">(optional)</span>
+                <span className="text-gray-500">(optional)</span>
               </label>
               <button
                 onClick={() => onAppoint(p.code, person, termEnd)}
@@ -206,12 +206,12 @@ function Figure({ n, one, many, rows }: { n: number | null; one: string; many: s
         <span className="font-bold text-lg text-gray-900">{n}</span>{" "}
         <span className="text-gray-600">{n === 1 ? one : many}</span>
       </summary>
-      {rows.length === 0 ? <p className="mt-2 text-[12px] text-gray-400">The list is empty.</p> : (
+      {rows.length === 0 ? <p className="mt-2 text-[12px] text-gray-500">The list is empty.</p> : (
         <ul className="mt-2 space-y-1">
           {rows.map(r => (
             <li key={r.h.appointmentId} className="text-[12px] text-gray-700 flex flex-wrap items-center gap-2">
               <span className="font-medium">{r.h.personName ?? "Name not recorded"}</span>
-              <span className="text-gray-400">{r.position} · {r.space}</span>
+              <span className="text-gray-500">{r.position} · {r.space}</span>
               <StatusBadge status={r.h.status} grantsAccess={r.h.grantsAccess} />
             </li>
           ))}
@@ -226,7 +226,7 @@ function SpaceSection({ s, ...rest }:{ s: HqSpaceView } & Omit<Parameters<typeof
     <section className="space-y-3">
       <div className="flex flex-wrap items-baseline gap-2">
         <h2 className="text-base font-bold text-gray-900">{s.label} space</h2>
-        <span className="text-[11px] text-gray-400">
+        <span className="text-[11px] text-gray-500">
           {s.officeId ? `${s.officeName ?? "office"} · ${s.officeStatus ?? "status not recorded"}` : "no office row"}
         </span>
         {!s.officeUsable && (
@@ -238,7 +238,7 @@ function SpaceSection({ s, ...rest }:{ s: HqSpaceView } & Omit<Parameters<typeof
       {s.officeNote && <p className="text-[12px] text-amber-900 bg-[var(--cmp-surface-warning)] rounded-lg px-3 py-2">{s.officeNote}</p>}
       {!s.positions.ok ? <Unreadable what={`Positions in the ${s.label} space`} error={s.positions.error} />
         : s.positions.value.length === 0
-          ? <p className="text-[12px] text-gray-400">No position is defined in this space.</p>
+          ? <p className="text-[12px] text-gray-500">No position is defined in this space.</p>
           : <div className="space-y-3">
               {s.positions.value.map(p => <PositionCard key={p.code} p={p} spaceStaffable={s.officeUsable} {...rest} />)}
             </div>}
@@ -358,13 +358,13 @@ export default function AppointmentsBoard({ board, people, canAppoint, viewerId,
               </span>
             </summary>
             {board.orphans.value.length === 0
-              ? <p className="mt-2 text-[12px] text-gray-400">The list is empty. Every appointment in an HQ space names a real position.</p>
+              ? <p className="mt-2 text-[12px] text-gray-500">The list is empty. Every appointment in an HQ space names a real position.</p>
               : <ul className="mt-2 space-y-1">
                   {board.orphans.value.map(o => (
                     <li key={o.appointmentId} className="text-[12px] text-gray-700 flex flex-wrap items-center gap-2">
                       <span className="font-medium">{o.personName ?? "Name not recorded"}</span>
                       <code className="bg-gray-50 rounded px-1">{o.role ?? "no role"}</code>
-                      <span className="text-gray-400">{o.spaceLabel}</span>
+                      <span className="text-gray-500">{o.spaceLabel}</span>
                       <StatusBadge status={o.status} grantsAccess={o.grantsAccess} />
                       <span className="text-amber-800">grants no HQ capability</span>
                     </li>

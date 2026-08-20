@@ -31,7 +31,7 @@ export default async function AdaptivePage() {
         <div>
           <p className="text-[11px] font-semibold text-rose-500 uppercase tracking-widest mb-0.5">CST-036 · Adaptive Examination</p>
           <h1 className="text-xl font-bold text-gray-900">Adaptive Exam Designer</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Blueprint adaptive exams — item pool, length, difficulty progression and mastery stopping rules.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Blueprint adaptive exams — item pool, length, difficulty progression and mastery stopping rules.</p>
         </div>
         <Link href="/super-admin/studio/assessment" className="text-xs font-semibold text-gray-500 hover:text-teal-700 border border-gray-200 rounded-lg px-3 py-2">← Assessment</Link>
       </div>
@@ -45,11 +45,11 @@ export default async function AdaptivePage() {
               { label: "Adaptive exams", value: ad.kpis.total, tone: "text-gray-900" },
               { label: "Published", value: ad.kpis.active, tone: "text-teal-600" },
               { label: "Draft", value: ad.kpis.draft, tone: "text-gray-500" },
-              { label: "Pool warnings", value: ad.kpis.poolWarnings, tone: ad.kpis.poolWarnings > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-300" },
+              { label: "Pool warnings", value: ad.kpis.poolWarnings, tone: ad.kpis.poolWarnings > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-500" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-0.5">{k.label}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-0.5">{k.label}</p>
               </div>
             ))}
           </div>

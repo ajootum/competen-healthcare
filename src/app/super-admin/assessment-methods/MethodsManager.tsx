@@ -44,7 +44,7 @@ export default function MethodsManager({ frameworks }: { frameworks: Framework[]
         <Modal open title="Configure Assessment Method" onClose={() => setOpen(false)}>
         <div className="flex flex-col gap-3">
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Apply to Framework *</label>
+            <label className="text-xs text-gray-500 mb-1 block">Apply to Framework *</label>
             <select value={form.framework_id} onChange={e => setForm(p => ({ ...p, framework_id: e.target.value }))}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
               <option value="">Select framework…</option>
@@ -52,7 +52,7 @@ export default function MethodsManager({ frameworks }: { frameworks: Framework[]
             </select>
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Method *</label>
+            <label className="text-xs text-gray-500 mb-1 block">Method *</label>
             <select value={form.method} onChange={e => setForm(p => ({ ...p, method: e.target.value }))}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
               <option value="knowledge">Knowledge Assessment</option>
@@ -66,12 +66,12 @@ export default function MethodsManager({ frameworks }: { frameworks: Framework[]
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Min Assessors</label>
+              <label className="text-xs text-gray-500 mb-1 block">Min Assessors</label>
               <input type="number" min={1} value={form.min_assessors} onChange={e => setForm(p => ({ ...p, min_assessors: e.target.value }))}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Score Weight</label>
+              <label className="text-xs text-gray-500 mb-1 block">Score Weight</label>
               <input type="number" min={0.1} step={0.1} value={form.weight} onChange={e => setForm(p => ({ ...p, weight: e.target.value }))}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>

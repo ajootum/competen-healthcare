@@ -26,7 +26,7 @@ export default function CatalogueBrowser({ widgets, categories }: { widgets: any
   return (
     <div className={cardClass}>
       <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-        <h2 className="text-sm font-bold text-gray-900">Widget Library <span className="text-[10px] text-gray-400 font-normal">{widgets.length} catalogued primitives</span></h2>
+        <h2 className="text-sm font-bold text-gray-900">Widget Library <span className="text-[10px] text-gray-500 font-normal">{widgets.length} catalogued primitives</span></h2>
         <div className="flex items-center gap-2">
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search widgets…" className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40 w-48" />
           <select value={cat} onChange={e => setCat(e.target.value)} className="border border-gray-300 rounded-lg px-2.5 py-1.5 text-sm"><option value="">All categories</option>{categories.map(c => <option key={c} value={c}>{c}</option>)}</select>
@@ -35,24 +35,24 @@ export default function CatalogueBrowser({ widgets, categories }: { widgets: any
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="max-h-[28rem] overflow-y-auto pr-1 space-y-0.5">
-          {filtered.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No widgets match.</p> : filtered.map(w => (
+          {filtered.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No widgets match.</p> : filtered.map(w => (
             <button key={w.key} onClick={() => setSel(w)} className={`w-full text-left rounded-lg px-2.5 py-1.5 hover:bg-gray-50 ${sel?.key === w.key ? "bg-teal-50/60 ring-1 ring-teal-200" : ""}`}>
               <div className="flex items-center gap-2">
                 <span className={`text-[9px] font-semibold rounded px-1.5 py-0.5 shrink-0 ${catTone(w.category)}`}>{w.category}</span>
                 <span className="text-xs font-medium text-gray-800 truncate flex-1">{w.name}</span>
-                {w.registered ? <span className="text-[9px] text-[var(--cmp-text-success)] shrink-0" title="Registered in WCE-002">● {w.completeness}%</span> : <span className="text-[9px] text-gray-300 shrink-0" title="Not yet synced to the registry">○ unsynced</span>}
+                {w.registered ? <span className="text-[9px] text-[var(--cmp-text-success)] shrink-0" title="Registered in WCE-002">● {w.completeness}%</span> : <span className="text-[9px] text-gray-500 shrink-0" title="Not yet synced to the registry">○ unsynced</span>}
               </div>
             </button>
           ))}
         </div>
 
         <div className="border border-gray-100 rounded-lg p-4 max-h-[28rem] overflow-y-auto">
-          {!sel ? <p className="text-sm text-gray-400 py-10 text-center">Select a widget to inspect its configuration contract.</p> : (
+          {!sel ? <p className="text-sm text-gray-500 py-10 text-center">Select a widget to inspect its configuration contract.</p> : (
             <div className="space-y-3">
               <div>
                 <div className="flex items-center gap-2 mb-1"><span className={`text-[9px] font-semibold rounded px-1.5 py-0.5 ${catTone(sel.category)}`}>{sel.category}</span><span className={`text-[9px] font-semibold rounded px-1.5 py-0.5 ${safetyTone(sel.safety)}`}>{safetyLabel[sel.safety] ?? sel.safety}</span>{sel.thresholds && <span className="text-[9px] rounded px-1.5 py-0.5 bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]">thresholds</span>}</div>
                 <h3 className="text-sm font-bold text-gray-900">{sel.name}</h3>
-                <p className="text-[10px] text-gray-400 font-mono break-all">{sel.key}</p>
+                <p className="text-[10px] text-gray-500 font-mono break-all">{sel.key}</p>
                 <p className="text-xs text-gray-600 mt-1">{sel.description}</p>
               </div>
               <dl className="text-xs space-y-1">
@@ -64,7 +64,7 @@ export default function CatalogueBrowser({ widgets, categories }: { widgets: any
                 <Row k="Mandatory" v={sel.mandatory ? "Yes" : "No"} />
                 <Row k="Registered" v={sel.registered ? `Yes · ${sel.completeness}% complete` : "No — run a registry sync"} />
               </dl>
-              <p className="text-[10px] text-gray-400 border-t border-gray-100 pt-2">Data-source footnote standard (§13): every rendered instance shows its source service, calculation basis, refresh time and scope.</p>
+              <p className="text-[10px] text-gray-500 border-t border-gray-100 pt-2">Data-source footnote standard (§13): every rendered instance shows its source service, calculation basis, refresh time and scope.</p>
             </div>
           )}
         </div>
@@ -74,5 +74,5 @@ export default function CatalogueBrowser({ widgets, categories }: { widgets: any
 }
 
 function Row({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
-  return <div className="flex items-start gap-2"><dt className="text-gray-400 w-24 shrink-0">{k}</dt><dd className={`text-gray-700 break-words ${mono ? "font-mono text-[10px]" : ""}`}>{v}</dd></div>;
+  return <div className="flex items-start gap-2"><dt className="text-gray-500 w-24 shrink-0">{k}</dt><dd className={`text-gray-700 break-words ${mono ? "font-mono text-[10px]" : ""}`}>{v}</dd></div>;
 }

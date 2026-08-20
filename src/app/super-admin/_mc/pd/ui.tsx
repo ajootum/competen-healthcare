@@ -115,7 +115,7 @@ export function ExplainDot({ label, anchor = "", children }: {
     <details>
       <summary
         title={label}
-        className={`${SUMMARY_BASE} ${anchor} inline-flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 hover:border-gray-400 hover:text-gray-700`}
+        className={`${SUMMARY_BASE} ${anchor} inline-flex h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:border-gray-400 hover:text-gray-700`}
       >
         <Icon name="info" className="h-3 w-3" />
         <span className="sr-only">{label}</span>
@@ -137,7 +137,7 @@ export function Explain({ summary, children, className = "" }: {
         title={summary}
         className={`${SUMMARY_BASE} flex items-center gap-1.5 px-1 py-0.5 text-[11px] font-semibold text-gray-600 hover:text-gray-900`}
       >
-        <Icon name="info" className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+        <Icon name="info" className="h-3.5 w-3.5 shrink-0 text-gray-500" />
         <span className="min-w-0">{summary}</span>
       </summary>
       <div className="mt-1.5 space-y-1 rounded-lg border border-gray-200 bg-[var(--cmp-surface-neutral)] p-2.5">
@@ -277,7 +277,7 @@ const TILE: Record<string, string> = {
   orange: "bg-orange-50 text-orange-600",
   sky: "bg-sky-50 text-sky-600",
   /** ⚠ THE TONE AN UNMEASURED FIGURE ALWAYS GETS. A green shield over "Not measured" is a claim. */
-  neutral: "bg-gray-100 text-gray-400",
+  neutral: "bg-gray-100 text-gray-600",
 };
 
 export type TileTone = keyof typeof TILE;

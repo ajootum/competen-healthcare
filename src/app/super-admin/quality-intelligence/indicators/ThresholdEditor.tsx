@@ -53,7 +53,7 @@ export default function ThresholdEditor({
 
   const field = (label: string, v: string, set: (s: string) => void) => (
     <label className="flex flex-col gap-0.5">
-      <span className="text-[9px] text-gray-400 uppercase tracking-wide">{label}</span>
+      <span className="text-[9px] text-gray-500 uppercase tracking-wide">{label}</span>
       <input value={v} onChange={e => set(e.target.value)} inputMode="decimal" placeholder="—"
         className="w-16 text-[11px] border border-gray-200 rounded px-1.5 py-1 bg-white tabular-nums focus:outline-none focus:ring-2 focus:ring-teal-500/30" />
     </label>
@@ -73,7 +73,7 @@ export default function ThresholdEditor({
         <button onClick={() => { setOpen(false); setErr(null); }}
           className="text-[11px] px-2 py-1 rounded-lg border border-gray-200 bg-white hover:bg-gray-50">Cancel</button>
       </div>
-      <p className="text-[9px] text-gray-400 mt-1.5">
+      <p className="text-[9px] text-gray-500 mt-1.5">
         {lowerBetter
           ? "Lower is better — red must be at or above amber."
           : "Higher is better — red must be at or below amber."}{" "}

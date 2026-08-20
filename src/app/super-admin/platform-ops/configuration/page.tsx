@@ -39,7 +39,7 @@ export default async function WorkspaceConfiguration() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/platform-ops" className="hover:text-teal-700">Platform Operations</Link><span>/</span><span className="text-gray-600">Workspace Configuration Engine</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Workspace Configuration Engine</h1>
@@ -57,14 +57,14 @@ export default async function WorkspaceConfiguration() {
       {/* Change audit */}
       <div className={`${card} p-5`}>
         <h2 className="text-sm font-bold text-gray-900 mb-3">Configuration Change Log</h2>
-        {audit.length === 0 ? <p className="text-sm text-gray-400">No configuration changes recorded yet.</p> : (
+        {audit.length === 0 ? <p className="text-sm text-gray-500">No configuration changes recorded yet.</p> : (
           <div className="space-y-1.5">
             {audit.map((a: any, i: number) => (
               <div key={i} className="flex items-center gap-2 text-xs">
-                <span className={`px-1.5 py-0.5 rounded font-semibold ${a.action === "publish" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : a.action === "rollback" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : a.action === "reset" ? "bg-gray-100 text-gray-500" : "bg-[var(--cmp-surface-information)] text-blue-700"}`}>{a.action}</span>
+                <span className={`px-1.5 py-0.5 rounded font-semibold ${a.action === "publish" ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : a.action === "rollback" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : a.action === "reset" ? "bg-gray-100 text-gray-600" : "bg-[var(--cmp-surface-information)] text-blue-700"}`}>{a.action}</span>
                 <span className="text-gray-700">{a.config_path ?? `${a.scope_type} scope`}</span>
-                <span className="text-gray-400">· {a.scope_type}{a.scope_ref && a.scope_type !== "platform" ? `:${String(a.scope_ref).slice(0, 8)}` : ""}</span>
-                <span className="ml-auto text-gray-400">{a.actor_name ?? "—"} · {relTime(a.created_at)}</span>
+                <span className="text-gray-500">· {a.scope_type}{a.scope_ref && a.scope_type !== "platform" ? `:${String(a.scope_ref).slice(0, 8)}` : ""}</span>
+                <span className="ml-auto text-gray-500">{a.actor_name ?? "—"} · {relTime(a.created_at)}</span>
               </div>
             ))}
           </div>
@@ -83,12 +83,12 @@ export default async function WorkspaceConfiguration() {
             ["Full metadata-driven rendering", "Every workspace renders from the engine (live now for Unit Manager; rolling out per workspace)."],
             ["Unit / user preference scopes", "Resolver + API already support them; Designer UI surfaces Platform & Hospital today."],
           ].map(([t, s]) => (
-            <div key={t}><p className="text-xs font-semibold text-gray-600">{t}</p><p className="text-[10px] text-gray-400">{s}</p></div>
+            <div key={t}><p className="text-xs font-semibold text-gray-600">{t}</p><p className="text-[10px] text-gray-500">{s}</p></div>
           ))}
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">WCE-001 delivers the engine core: a code-defined configurable-object catalogue + sparse DB overrides resolved along the Platform→Tenant→Hospital→Unit→Role→User hierarchy, with draft/published separation, version snapshots, one-click rollback and a full change audit — all behind a super-admin-gated, service-role API. Runtime enforcement is live for the Unit Manager sidebar; other workspaces are catalogued and their config is stored &amp; versioned now, with enforcement rolling out per workspace rather than fabricated as complete.</p>
+      <p className="text-[11px] text-gray-500 pb-4">WCE-001 delivers the engine core: a code-defined configurable-object catalogue + sparse DB overrides resolved along the Platform→Tenant→Hospital→Unit→Role→User hierarchy, with draft/published separation, version snapshots, one-click rollback and a full change audit — all behind a super-admin-gated, service-role API. Runtime enforcement is live for the Unit Manager sidebar; other workspaces are catalogued and their config is stored &amp; versioned now, with enforcement rolling out per workspace rather than fabricated as complete.</p>
     </div>
   );
 }

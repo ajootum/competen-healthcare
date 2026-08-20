@@ -52,7 +52,7 @@ export default async function CompetencyLibraryPage() {
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Global Competency Library</h1>
-          <p className="text-gray-400 text-sm mt-0.5">
+          <p className="text-gray-500 text-sm mt-0.5">
             {(frameworks ?? []).length} frameworks · {totalDomains} domains · {totalComps} competencies
           </p>
         </div>
@@ -64,7 +64,7 @@ export default async function CompetencyLibraryPage() {
 
       {Object.entries(grouped).map(([library, fws]) => (
         <div key={library} className="mb-8">
-          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">
             {LIBRARY_LABELS[library] ?? library} ({fws?.length ?? 0})
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -76,7 +76,7 @@ export default async function CompetencyLibraryPage() {
                   className={`rounded-xl border p-4 hover:shadow-sm transition-shadow group ${LIBRARY_COLORS[library] ?? "border-gray-100"}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <span className={`text-[9px] font-bold uppercase tracking-wider ${LIBRARY_BADGE[library] ?? "text-gray-400"}`}>
+                      <span className={`text-[9px] font-bold uppercase tracking-wider ${LIBRARY_BADGE[library] ?? "text-gray-500"}`}>
                         {LIBRARY_LABELS[library] ?? library}
                       </span>
                       <p className="font-semibold text-gray-900 text-sm mt-0.5">{f.name}</p>

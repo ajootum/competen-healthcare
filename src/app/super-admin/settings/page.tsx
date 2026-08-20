@@ -10,7 +10,7 @@ export default async function PlatformSettingsPage() {
     <div className="max-w-2xl">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">Platform Settings</h1>
-        <p className="text-gray-400 text-sm mt-0.5">Global configuration for Competen Healthcare.</p>
+        <p className="text-gray-500 text-sm mt-0.5">Global configuration for Competen Healthcare.</p>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl p-5 mb-4">
@@ -47,7 +47,7 @@ export default async function PlatformSettingsPage() {
           ].map(f => (
             <div key={f.label} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
               <span className="text-sm text-gray-700">{f.label}</span>
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${f.status ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-500"}`}>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${f.status ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-600"}`}>
                 {f.note}
               </span>
             </div>

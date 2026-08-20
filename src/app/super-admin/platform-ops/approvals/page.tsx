@@ -36,7 +36,7 @@ export default async function ApprovalsConsole() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/platform-ops" className="hover:text-teal-700">Platform Operations</Link><span>/</span><span className="text-gray-600">Workflow &amp; Approvals</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Workflow &amp; Approvals</h1>
@@ -56,8 +56,8 @@ export default async function ApprovalsConsole() {
               <span className="text-[11px] font-semibold text-gray-500 leading-tight">{k.label}</span>
               <span className={`w-7 h-7 rounded-lg ${k.iconBg} flex items-center justify-center text-sm shrink-0`}>{k.icon}</span>
             </div>
-            <p className={`text-2xl font-bold mt-1.5 tabular-nums ${(k as any).muted ? "text-gray-400" : (k as any).tone ?? "text-gray-900"}`}>{k.value}</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">{k.sub}</p>
+            <p className={`text-2xl font-bold mt-1.5 tabular-nums ${(k as any).muted ? "text-gray-500" : (k as any).tone ?? "text-gray-900"}`}>{k.value}</p>
+            <p className="text-[10px] text-gray-500 mt-0.5">{k.sub}</p>
           </div>
         ))}
       </div>
@@ -72,7 +72,7 @@ export default async function ApprovalsConsole() {
             {byWorkflow.map((w: any) => (
               <div key={w.key} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-3">
                 <span className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-sm shrink-0">{w.icon}</span>
-                <div className="min-w-0 flex-1"><p className="text-sm font-medium text-gray-800 truncate">{w.name}</p><p className="text-[10px] text-gray-400">{w.steps} step{w.steps === 1 ? "" : "s"}</p></div>
+                <div className="min-w-0 flex-1"><p className="text-sm font-medium text-gray-800 truncate">{w.name}</p><p className="text-[10px] text-gray-500">{w.steps} step{w.steps === 1 ? "" : "s"}</p></div>
                 {w.pending > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] shrink-0">{w.pending}</span>}
               </div>
             ))}
@@ -82,15 +82,15 @@ export default async function ApprovalsConsole() {
         {/* Recent decisions */}
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Recent Decisions</h2>
-          {!s.ready || recentDecisions.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">{s.ready ? "No decisions yet." : "Enable the engine to record decisions."}</p> : (
+          {!s.ready || recentDecisions.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">{s.ready ? "No decisions yet." : "Enable the engine to record decisions."}</p> : (
             <div className="space-y-2">
               {recentDecisions.map((d: any, i: number) => (
                 <div key={i} className="flex items-center gap-2.5 text-sm">
                   <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${d.status === "approved" ? "bg-[var(--cmp-color-success)]" : "bg-[var(--cmp-color-error)]"}`} />
                   <span className="text-gray-800 truncate">{d.entityName ?? d.workflow}</span>
-                  <span className="text-[10px] text-gray-400">{d.workflow}</span>
+                  <span className="text-[10px] text-gray-500">{d.workflow}</span>
                   <span className={`text-xs ml-auto capitalize ${d.status === "approved" ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{d.status}</span>
-                  <span className="text-[10px] text-gray-400 shrink-0">{relTime(d.at)}</span>
+                  <span className="text-[10px] text-gray-500 shrink-0">{relTime(d.at)}</span>
                 </div>
               ))}
             </div>
@@ -98,7 +98,7 @@ export default async function ApprovalsConsole() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Workflow definitions (types and ordered steps) live in application code; requests and per-step decisions are persisted and audited. The queue unifies engine requests with existing content change-requests so one console approves everything. Delegated/parallel approvers and SLA timers are the next layer.</p>
+      <p className="text-[11px] text-gray-500 pb-4">Workflow definitions (types and ordered steps) live in application code; requests and per-step decisions are persisted and audited. The queue unifies engine requests with existing content change-requests so one console approves everything. Delegated/parallel approvers and SLA timers are the next layer.</p>
     </div>
   );
 }

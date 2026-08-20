@@ -17,7 +17,7 @@ const card = "bg-white rounded-xl border border-gray-200";
 const dash = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
 const relTime = (iso?: string | null) => { if (!iso) return ""; const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000); if (s < 60) return "just now"; if (s < 3600) return `${Math.floor(s / 60)}m ago`; if (s < 86400) return `${Math.floor(s / 3600)}h ago`; return `${Math.floor(s / 86400)}d ago`; };
 const SVC_TONE: Record<string, string> = { operational: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", slow: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", degraded: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
-const W_TONE: Record<string, string> = { ok: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", warn: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", down: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", na: "bg-gray-100 text-gray-400" };
+const W_TONE: Record<string, string> = { ok: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", warn: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", down: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]", na: "bg-gray-100 text-gray-600" };
 const JOB_TONE: Record<string, string> = { running: "bg-[var(--cmp-surface-information)] text-blue-700", success: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", failed: "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" };
 
 export default async function InfrastructureServices() {
@@ -43,7 +43,7 @@ export default async function InfrastructureServices() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/system" className="hover:text-teal-700">System &amp; Security</Link><span>/</span><span className="text-gray-600">Infrastructure &amp; Services</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Infrastructure &amp; Services</h1>
@@ -71,27 +71,27 @@ export default async function InfrastructureServices() {
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 text-[15px]">Shared Services</h2>
-            <span className="text-[10px] text-gray-400">{d.avgProbeMs != null ? `${d.avgProbeMs}ms avg` : ""}</span>
+            <span className="text-[10px] text-gray-500">{d.avgProbeMs != null ? `${d.avgProbeMs}ms avg` : ""}</span>
           </div>
           <div className="space-y-1.5">
             {d.services.map((s: any) => (
               <div key={s.key ?? s.label} className="flex items-center justify-between">
                 <span className="text-xs text-gray-700">{s.label ?? s.name}</span>
                 <span className="flex items-center gap-2">
-                  {s.latencyMs != null && <span className="text-[10px] text-gray-400 tabular-nums">{s.latencyMs}ms</span>}
-                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${SVC_TONE[s.status] ?? "bg-gray-100 text-gray-500"}`}>{s.status}</span>
+                  {s.latencyMs != null && <span className="text-[10px] text-gray-500 tabular-nums">{s.latencyMs}ms</span>}
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${SVC_TONE[s.status] ?? "bg-gray-100 text-gray-600"}`}>{s.status}</span>
                 </span>
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">Timed liveness probes against the live database.</p>
+          <p className="text-[10px] text-gray-500 mt-3 pt-2 border-t border-gray-50">Timed liveness probes against the live database.</p>
         </div>
 
         {/* Runtime & environment */}
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 text-[15px]">Runtime</h2>
-            <span className="text-[10px] text-gray-400">{d.runtime.runtimeEnv ?? ""}</span>
+            <span className="text-[10px] text-gray-500">{d.runtime.runtimeEnv ?? ""}</span>
           </div>
           <div className="space-y-1.5">
             {d.runtime.widgets.map((w: any) => (
@@ -99,7 +99,7 @@ export default async function InfrastructureServices() {
                 <span className="text-xs text-gray-700 shrink-0">{w.label}</span>
                 <span className="flex items-center gap-2 min-w-0">
                   <span className="text-[10px] text-gray-500 truncate">{w.value}</span>
-                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${W_TONE[w.status] ?? "bg-gray-100 text-gray-500"}`}>{w.status}</span>
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${W_TONE[w.status] ?? "bg-gray-100 text-gray-600"}`}>{w.status}</span>
                 </span>
               </div>
             ))}
@@ -112,19 +112,19 @@ export default async function InfrastructureServices() {
             <h2 className="font-semibold text-gray-900 text-[15px]">Deployments</h2>
             <Link href="/super-admin/platform-ops/control-plane" className="text-xs text-teal-700 hover:underline">Control plane →</Link>
           </div>
-          {d.deployments.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No releases logged yet.</p> : (
+          {d.deployments.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No releases logged yet.</p> : (
             <div className="divide-y divide-gray-50">
               {d.deployments.map((dep: any, i: number) => (
                 <div key={i} className="flex items-center gap-2 py-2">
                   <span className="text-xs font-mono text-gray-800 shrink-0">{dep.version}</span>
                   <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 shrink-0">{dep.channel}</span>
-                  <span className="text-[10px] text-gray-400 flex-1 truncate">{dep.notes ?? dep.status}</span>
-                  <span className="text-[10px] text-gray-400 shrink-0">{relTime(dep.released_at ?? dep.created_at)}</span>
+                  <span className="text-[10px] text-gray-500 flex-1 truncate">{dep.notes ?? dep.status}</span>
+                  <span className="text-[10px] text-gray-500 shrink-0">{relTime(dep.released_at ?? dep.created_at)}</span>
                 </div>
               ))}
             </div>
           )}
-          <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">Release ledger from plat_deployments; logging a release is a landlord-plane action.</p>
+          <p className="text-[10px] text-gray-500 mt-3 pt-2 border-t border-gray-50">Release ledger from plat_deployments; logging a release is a landlord-plane action.</p>
         </div>
       </div>
 
@@ -135,16 +135,16 @@ export default async function InfrastructureServices() {
             <h2 className="font-semibold text-gray-900 text-[15px]">Automation Registry</h2>
             <Link href="/super-admin/platform-ops/monitoring" className="text-xs text-teal-700 hover:underline">Monitoring →</Link>
           </div>
-          {!d.jobs.summary.ready ? <p className="text-sm text-gray-400 py-4 text-center">Job runner not ready — run migration 054.</p> : (
+          {!d.jobs.summary.ready ? <p className="text-sm text-gray-500 py-4 text-center">Job runner not ready — run migration 054.</p> : (
             <div className="divide-y divide-gray-50">
               {d.jobs.list.map((j: any) => (
                 <div key={j.key} className="flex items-center gap-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-800 leading-tight">{j.name}</p>
-                    <p className="text-[10px] text-gray-400 leading-tight">{j.category} · <span className="font-mono">{j.schedule}</span>{j.runnable ? "" : " · external"}</p>
+                    <p className="text-[10px] text-gray-500 leading-tight">{j.category} · <span className="font-mono">{j.schedule}</span>{j.runnable ? "" : " · external"}</p>
                   </div>
-                  {j.last ? <span className={`text-[10px] font-semibold px-2 py-0.5 rounded shrink-0 ${JOB_TONE[j.last.status] ?? "bg-gray-100 text-gray-500"}`}>{j.last.status}</span> : <span className="text-[10px] text-gray-400 shrink-0">no runs</span>}
-                  <span className="text-[10px] text-gray-400 w-14 text-right shrink-0">{relTime(j.last?.started_at)}</span>
+                  {j.last ? <span className={`text-[10px] font-semibold px-2 py-0.5 rounded shrink-0 ${JOB_TONE[j.last.status] ?? "bg-gray-100 text-gray-600"}`}>{j.last.status}</span> : <span className="text-[10px] text-gray-500 shrink-0">no runs</span>}
+                  <span className="text-[10px] text-gray-500 w-14 text-right shrink-0">{relTime(j.last?.started_at)}</span>
                 </div>
               ))}
             </div>
@@ -154,11 +154,11 @@ export default async function InfrastructureServices() {
         {/* Regions + not provisioned */}
         <div className="space-y-4">
           <div className={`${card} p-5`}>
-            <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Regions <span className="text-[10px] text-gray-400">{d.activeRegions} active</span></h2>
-            {d.regions.length === 0 ? <p className="text-xs text-gray-400">No regions configured.</p> : (
+            <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Regions <span className="text-[10px] text-gray-500">{d.activeRegions} active</span></h2>
+            {d.regions.length === 0 ? <p className="text-xs text-gray-500">No regions configured.</p> : (
               <div className="flex flex-wrap gap-1.5">
                 {d.regions.map((r: any) => (
-                  <span key={r.code} className={`text-[10px] font-medium px-2 py-0.5 rounded border ${r.is_active ? "border-teal-200 bg-teal-50 text-teal-700" : "border-gray-200 bg-gray-50 text-gray-400"}`}>{r.code.toUpperCase()} · {r.name}</span>
+                  <span key={r.code} className={`text-[10px] font-medium px-2 py-0.5 rounded border ${r.is_active ? "border-teal-200 bg-teal-50 text-teal-700" : "border-gray-200 bg-gray-50 text-gray-500"}`}>{r.code.toUpperCase()} · {r.name}</span>
                 ))}
               </div>
             )}
@@ -167,15 +167,15 @@ export default async function InfrastructureServices() {
             <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Not Provisioned</h2>
             <div className="space-y-1.5">
               {d.notProvisioned.map((l: string) => (
-                <div key={l} className="flex items-center justify-between text-xs"><span className="text-gray-500">{l}</span><span className="text-[10px] font-medium text-gray-400">n/a</span></div>
+                <div key={l} className="flex items-center justify-between text-xs"><span className="text-gray-500">{l}</span><span className="text-[10px] font-medium text-gray-500">n/a</span></div>
               ))}
             </div>
-            <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">This deployment runs serverless on Vercel + managed Postgres — no self-managed clusters, containers or cache runtime to surface.</p>
+            <p className="text-[10px] text-gray-500 mt-3 pt-2 border-t border-gray-50">This deployment runs serverless on Vercel + managed Postgres — no self-managed clusters, containers or cache runtime to surface.</p>
           </div>
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Infrastructure &amp; Services shows the real environment: timed database and service probes, the runtime facts (region, version, release), the release ledger, the region catalogue and the automation registry — with on-demand job execution. Clusters, containers, load balancers and CPU/memory utilisation are honest “not provisioned” states because this deployment is serverless (Vercel) over managed Postgres, not a self-hosted cluster (SYS-002 AC-02).</p>
+      <p className="text-[11px] text-gray-500 pb-4">Infrastructure &amp; Services shows the real environment: timed database and service probes, the runtime facts (region, version, release), the release ledger, the region catalogue and the automation registry — with on-demand job execution. Clusters, containers, load balancers and CPU/memory utilisation are honest “not provisioned” states because this deployment is serverless (Vercel) over managed Postgres, not a self-hosted cluster (SYS-002 AC-02).</p>
     </div>
   );
 }

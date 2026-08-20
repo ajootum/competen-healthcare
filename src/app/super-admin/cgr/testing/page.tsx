@@ -42,7 +42,7 @@ export default async function GovernanceTestingPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-017 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Simulation, Testing &amp; Validation</h1>
-          <p className="text-gray-400 text-sm mt-0.5">What happens if we change a governance rule, workflow or policy before we release it? Test before release, predictable outcomes, evidence-based validation.</p>
+          <p className="text-gray-500 text-sm mt-0.5">What happens if we change a governance rule, workflow or policy before we release it? Test before release, predictable outcomes, evidence-based validation.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/super-admin/studio/testing" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Release readiness →</Link>
@@ -51,7 +51,7 @@ export default async function GovernanceTestingPage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No governance test suites yet. Configuration validation suites are authored in <Link href="/super-admin/studio/testing" className="text-[var(--cmp-text-success)] hover:underline">Studio Release Readiness</Link>; once they exist, release-readiness gating and run history compute here. For change blast-radius, see <Link href="/super-admin/cgr/change-control" className="text-[var(--cmp-text-success)] hover:underline">Change Control</Link>.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No governance test suites yet. Configuration validation suites are authored in <Link href="/super-admin/studio/testing" className="text-[var(--cmp-text-success)] hover:underline">Studio Release Readiness</Link>; once they exist, release-readiness gating and run history compute here. For change blast-radius, see <Link href="/super-admin/cgr/change-control" className="text-[var(--cmp-text-success)] hover:underline">Change Control</Link>.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -78,14 +78,14 @@ export default async function GovernanceTestingPage() {
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <p className="text-sm font-bold text-gray-800">Validation suites</p>
-              <p className="text-[10px] text-gray-400">failing first</p>
+              <p className="text-[10px] text-gray-500">failing first</p>
             </div>
             {d.suiteList.length === 0 ? (
-              <div className="p-6 text-center"><p className="text-[12px] text-gray-400">No test suites defined.</p></div>
+              <div className="p-6 text-center"><p className="text-[12px] text-gray-500">No test suites defined.</p></div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[620px]">
-                  <thead><tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                  <thead><tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
                     <th className="text-left py-2 pl-4 pr-2">Suite</th>
                     <th className="text-center py-2 px-2">Cases</th>
                     <th className="text-center py-2 px-2">Last run</th>
@@ -95,10 +95,10 @@ export default async function GovernanceTestingPage() {
                   <tbody>
                     {d.suiteList.map((s: any) => (
                       <tr key={s.key} className="border-t border-gray-50">
-                        <td className="py-2 pl-4 pr-2"><p className="text-[12px] font-medium text-gray-800">{s.name}</p><p className="text-[10px] text-gray-400 font-mono">{s.key}</p></td>
+                        <td className="py-2 pl-4 pr-2"><p className="text-[12px] font-medium text-gray-800">{s.name}</p><p className="text-[10px] text-gray-500 font-mono">{s.key}</p></td>
                         <td className="py-2 px-2 text-center text-[12px] text-gray-600 tabular-nums">{s.cases}</td>
-                        <td className="py-2 px-2 text-center text-[11px] tabular-nums">{s.lastTotal != null ? <span><span className="text-[var(--cmp-text-success)] font-semibold">{s.lastPassed}</span><span className="text-gray-300">/</span><span className={s.lastFailed ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-400"}>{s.lastFailed}</span> <span className="text-gray-300">of {s.lastTotal}</span></span> : <span className="text-gray-300">not run</span>}</td>
-                        <td className="py-2 px-2">{s.gate ? <span className={`text-[10px] font-bold ${s.gate === "pass" ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{s.gate === "pass" ? "✓ pass" : "⛔ blocked"}</span> : <span className="text-[10px] text-gray-300">—</span>}</td>
+                        <td className="py-2 px-2 text-center text-[11px] tabular-nums">{s.lastTotal != null ? <span><span className="text-[var(--cmp-text-success)] font-semibold">{s.lastPassed}</span><span className="text-gray-500">/</span><span className={s.lastFailed ? "text-[var(--cmp-text-error)] font-semibold" : "text-gray-500"}>{s.lastFailed}</span> <span className="text-gray-500">of {s.lastTotal}</span></span> : <span className="text-gray-500">not run</span>}</td>
+                        <td className="py-2 px-2">{s.gate ? <span className={`text-[10px] font-bold ${s.gate === "pass" ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{s.gate === "pass" ? "✓ pass" : "⛔ blocked"}</span> : <span className="text-[10px] text-gray-500">—</span>}</td>
                         <td className="py-2 pr-4 pl-2"><span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${(STATUS_META[s.status] ?? STATUS_META.draft).cls}`}>{(STATUS_META[s.status] ?? STATUS_META.draft).label}</span></td>
                       </tr>
                     ))}
@@ -113,17 +113,17 @@ export default async function GovernanceTestingPage() {
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-100"><p className="text-sm font-bold text-gray-800">Recent test runs</p></div>
               {d.runList.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-[12px] text-gray-400">No test runs recorded.</p></div>
+                <div className="p-6 text-center"><p className="text-[12px] text-gray-500">No test runs recorded.</p></div>
               ) : (
                 <div className="divide-y divide-gray-50 max-h-[280px] overflow-y-auto">
                   {d.runList.map((r: any, i: number) => (
                     <div key={i} className="flex items-center justify-between gap-2 px-4 py-2">
                       <div className="min-w-0">
                         <p className="text-[11px] font-mono text-gray-700 truncate">{r.suite}</p>
-                        <p className="text-[10px] text-gray-400">{r.by} · {fmt(r.at)}</p>
+                        <p className="text-[10px] text-gray-500">{r.by} · {fmt(r.at)}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[11px] tabular-nums"><span className="text-[var(--cmp-text-success)] font-semibold">{r.passed}</span><span className="text-gray-300">/</span><span className={r.failed ? "text-[var(--cmp-text-error)]" : "text-gray-400"}>{r.failed}</span></span>
+                        <span className="text-[11px] tabular-nums"><span className="text-[var(--cmp-text-success)] font-semibold">{r.passed}</span><span className="text-gray-500">/</span><span className={r.failed ? "text-[var(--cmp-text-error)]" : "text-gray-500"}>{r.failed}</span></span>
                         <span className={`text-[9px] font-bold rounded px-1.5 py-0.5 ${r.gate === "pass" ? "text-emerald-700 bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)]" : "text-[var(--cmp-text-error)] bg-[var(--cmp-surface-error)] border border-[var(--cmp-color-error)]"}`}>{r.gate}</span>
                       </div>
                     </div>
@@ -139,7 +139,7 @@ export default async function GovernanceTestingPage() {
                 {VALIDATION.map((v) => (
                   <div key={v.name} className="flex items-start gap-2">
                     <span className="text-[11px] font-semibold text-gray-700 w-24 shrink-0">{v.name}</span>
-                    <span className="text-[11px] text-gray-400 leading-snug">{v.q}</span>
+                    <span className="text-[11px] text-gray-500 leading-snug">{v.q}</span>
                   </div>
                 ))}
               </div>
@@ -149,7 +149,7 @@ export default async function GovernanceTestingPage() {
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the validation suites, their last-run pass/fail and gate, and the run history come straight from the configuration test-suite store. Authoring suites and executing tests happen in <Link href="/super-admin/studio/testing" className="text-[var(--cmp-text-success)] hover:underline">Studio Release Readiness</Link>; change blast-radius in <Link href="/super-admin/cgr/change-control" className="text-[var(--cmp-text-success)] hover:underline">Change Control</Link>. Per the CGR mandate, AI outputs themselves require validation (accuracy, explainability, bias) and AI never approves a release.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every figure is real — the validation suites, their last-run pass/fail and gate, and the run history come straight from the configuration test-suite store. Authoring suites and executing tests happen in <Link href="/super-admin/studio/testing" className="text-[var(--cmp-text-success)] hover:underline">Studio Release Readiness</Link>; change blast-radius in <Link href="/super-admin/cgr/change-control" className="text-[var(--cmp-text-success)] hover:underline">Change Control</Link>. Per the CGR mandate, AI outputs themselves require validation (accuracy, explainability, bias) and AI never approves a release.</p>
         </div>
       )}
     </div>

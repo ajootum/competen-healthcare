@@ -25,7 +25,7 @@ export default async function OrganisationsModule() {
     <div data-wide className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="flex items-center gap-2 text-xs text-gray-400">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
             <Link href="/super-admin/enterprise" className="hover:text-teal-700">Enterprise Administration</Link><span>/</span><span className="text-gray-600">Organisations</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Organisations</h1>
@@ -40,7 +40,7 @@ export default async function OrganisationsModule() {
           { label: "Onboarding", n: summary.onboarding, tone: "text-[var(--cmp-text-warning)]" },
           { label: "Suspended", n: summary.suspended, tone: "text-[var(--cmp-text-error)]" },
           { label: "Countries", n: summary.countries, tone: "text-indigo-600" },
-          { label: "No admin", n: summary.noAdmin, tone: summary.noAdmin ? "text-[var(--cmp-text-critical)]" : "text-gray-300" },
+          { label: "No admin", n: summary.noAdmin, tone: summary.noAdmin ? "text-[var(--cmp-text-critical)]" : "text-gray-500" },
         ].map(k => (
           <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-4">
             <p className={`text-2xl font-bold tabular-nums ${k.tone}`}>{k.n}</p>

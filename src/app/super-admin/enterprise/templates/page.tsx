@@ -21,7 +21,7 @@ export default async function TemplatesModule() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/enterprise" className="hover:text-teal-700">Enterprise Administration</Link><span>/</span><span className="text-gray-600">Enterprise Templates</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Enterprise Templates</h1>
@@ -33,7 +33,7 @@ export default async function TemplatesModule() {
           { label: "Templates", n: summary.total, tone: "text-gray-900" },
           { label: "Published", n: summary.published, tone: "text-[var(--cmp-text-success)]" },
           { label: "In progress", n: summary.draft, tone: "text-[var(--cmp-text-warning)]" },
-          { label: "Retired", n: summary.retired, tone: "text-gray-400" },
+          { label: "Retired", n: summary.retired, tone: "text-gray-500" },
           { label: "Types", n: summary.types, tone: "text-violet-600" },
         ].map(k => (
           <div key={k.label} className="bg-white rounded-xl border border-gray-200 p-4">

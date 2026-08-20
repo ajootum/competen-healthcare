@@ -29,7 +29,7 @@ export default async function PlatformSearchConsole() {
 
       <SearchConsole sources={SEARCH_SOURCES} />
 
-      <p className="text-[11px] text-gray-400 pb-4">Platform Search (PFS-000 Search / PCS-000 Search Index) runs one query across tenants, organisations, users, frameworks, competencies, workspaces and the audit trail using Postgres ILIKE — the stack&apos;s native full-text capability. Each source is fail-soft. A dedicated search engine (Elasticsearch / OpenSearch) with ranking, facets and typo-tolerance remains an honest infra-scale gap, not pretended-built.</p>
+      <p className="text-[11px] text-gray-500 pb-4">Platform Search (PFS-000 Search / PCS-000 Search Index) runs one query across tenants, organisations, users, frameworks, competencies, workspaces and the audit trail using Postgres ILIKE — the stack&apos;s native full-text capability. Each source is fail-soft. A dedicated search engine (Elasticsearch / OpenSearch) with ranking, facets and typo-tolerance remains an honest infra-scale gap, not pretended-built.</p>
     </div>
   );
 }

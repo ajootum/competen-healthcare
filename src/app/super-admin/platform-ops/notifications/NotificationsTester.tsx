@@ -9,7 +9,7 @@ import { cardClass } from "@/components/ui/primitives";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const DOT: Record<string, string> = { sent: "bg-[var(--cmp-color-success)]", failed: "bg-[var(--cmp-color-error)]", skipped: "bg-gray-300", queued: "bg-[var(--cmp-color-warning)]" };
-const TONE: Record<string, string> = { sent: "text-[var(--cmp-text-success)]", failed: "text-[var(--cmp-text-error)]", skipped: "text-gray-400", queued: "text-[var(--cmp-text-warning)]" };
+const TONE: Record<string, string> = { sent: "text-[var(--cmp-text-success)]", failed: "text-[var(--cmp-text-error)]", skipped: "text-gray-500", queued: "text-[var(--cmp-text-warning)]" };
 
 export default function NotificationsTester() {
   const router = useRouter();
@@ -42,12 +42,12 @@ export default function NotificationsTester() {
               <span className={`w-2 h-2 rounded-full shrink-0 ${DOT[d.status] ?? "bg-gray-300"}`} />
               <span className="text-gray-700 capitalize w-20">{d.channel.replace("_", "-")}</span>
               <span className={`capitalize font-medium ${TONE[d.status] ?? "text-gray-500"}`}>{d.status}</span>
-              <span className="text-[11px] text-gray-400 ml-auto truncate">{d.error ?? (d.provider ? `via ${d.provider}` : "")}</span>
+              <span className="text-[11px] text-gray-500 ml-auto truncate">{d.error ?? (d.provider ? `via ${d.provider}` : "")}</span>
             </div>
           ))}
         </div>
       )}
-      {!result && !err && <p className="text-[11px] text-gray-400">Sends across every channel and records the per-channel result. In-app delivers; provider-less channels report an honest skip.</p>}
+      {!result && !err && <p className="text-[11px] text-gray-500">Sends across every channel and records the per-channel result. In-app delivers; provider-less channels report an honest skip.</p>}
     </div>
   );
 }

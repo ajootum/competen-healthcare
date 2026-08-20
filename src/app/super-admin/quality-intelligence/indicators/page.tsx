@@ -39,7 +39,7 @@ export default async function IndicatorsPage() {
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-[10px] font-bold text-gray-300 tracking-widest">QIE-002 · QIE-003</p>
+          <p className="text-[10px] font-bold text-gray-500 tracking-widest">QIE-002 · QIE-003</p>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Metrics &amp; Indicator Registry</h1>
           <p className="text-sm text-gray-500">Every quality metric this platform calculates, and whether it warns you or reports on you.</p>
         </div>
@@ -59,8 +59,8 @@ export default async function IndicatorsPage() {
                 { n: s.total, l: "Indicators", c: "text-gray-900" },
                 { n: s.leading, l: "Leading", c: "text-[var(--cmp-text-information)]" },
                 { n: s.lagging, l: "Lagging", c: "text-gray-700" },
-                { n: s.unclassified, l: "Unclassified", c: s.unclassified ? "text-[var(--cmp-text-warning)]" : "text-gray-400" },
-                { n: s.breaches, l: "In breach", c: s.breaches ? "text-[var(--cmp-text-error)]" : "text-gray-400" },
+                { n: s.unclassified, l: "Unclassified", c: s.unclassified ? "text-[var(--cmp-text-warning)]" : "text-gray-500" },
+                { n: s.breaches, l: "In breach", c: s.breaches ? "text-[var(--cmp-text-error)]" : "text-gray-500" },
               ].map(x => (
                 <div key={x.l}>
                   <p className={`text-2xl font-bold leading-none tabular-nums ${x.c}`}>{x.n}</p>
@@ -92,7 +92,7 @@ export default async function IndicatorsPage() {
                 <div key={c.category} className="rounded-lg border border-gray-200 bg-white p-2.5">
                   <p className="text-lg font-bold text-gray-900 leading-none tabular-nums">{c.total}</p>
                   <p className="text-[11px] text-gray-600 mt-1 truncate" title={c.category}>{c.category}</p>
-                  <p className="text-[9px] text-gray-400">{c.leading} leading · {c.lagging} lagging</p>
+                  <p className="text-[9px] text-gray-500">{c.leading} leading · {c.lagging} lagging</p>
                 </div>
               ))}
             </div>
@@ -108,7 +108,7 @@ export default async function IndicatorsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="text-[10px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                  <tr className="text-[10px] uppercase tracking-wide text-gray-500 border-b border-gray-100">
                     <th className="py-2 pr-3 font-semibold">Indicator</th>
                     <th className="py-2 pr-3 font-semibold">Category</th>
                     <th className="py-2 pr-3 font-semibold text-right">Current</th>
@@ -123,17 +123,17 @@ export default async function IndicatorsPage() {
                     <tr key={i.id}>
                       <td className="py-2 pr-3">
                         <p className="text-[12px] font-medium text-gray-800">{i.name}</p>
-                        <p className="text-[9px] text-gray-400">{i.code ?? "—"} · {i.points} value{i.points === 1 ? "" : "s"} · {i.direction === "lower_better" ? "lower is better" : "higher is better"}</p>
+                        <p className="text-[9px] text-gray-500">{i.code ?? "—"} · {i.points} value{i.points === 1 ? "" : "s"} · {i.direction === "lower_better" ? "lower is better" : "higher is better"}</p>
                       </td>
                       <td className="py-2 pr-3 text-[11px] text-gray-500">{i.category ?? "—"}</td>
                       <td className="py-2 pr-3 text-[12px] text-gray-800 text-right tabular-nums">
-                        {i.current_value ?? "—"}{i.unit ? <span className="text-[9px] text-gray-400"> {i.unit}</span> : null}
+                        {i.current_value ?? "—"}{i.unit ? <span className="text-[9px] text-gray-500"> {i.unit}</span> : null}
                       </td>
                       <td className="py-2 pr-3 text-[11px] text-gray-500 whitespace-nowrap">{i.trend ? TREND[i.trend] : "—"}</td>
                       <td className="py-2 pr-3">
                         {i.status ? (
                           <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATUS[i.status].cls}`}>{STATUS[i.status].label}</span>
-                        ) : <span className="text-[10px] text-gray-400">no target</span>}
+                        ) : <span className="text-[10px] text-gray-500">no target</span>}
                       </td>
                       <td className="py-2 pr-3 align-top">
                         <p className="text-[10px] text-gray-500 tabular-nums whitespace-nowrap">
@@ -145,7 +145,7 @@ export default async function IndicatorsPage() {
                       <td className="py-2 align-top">
                         {v.classifiable
                           ? <ClassifyControl id={i.id} current={i.indicator_class} />
-                          : <span className="text-[10px] text-gray-400">unavailable</span>}
+                          : <span className="text-[10px] text-gray-500">unavailable</span>}
                       </td>
                     </tr>
                   ))}

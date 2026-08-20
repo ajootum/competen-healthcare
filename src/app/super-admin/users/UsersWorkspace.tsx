@@ -55,7 +55,7 @@ const relTime = (iso: string | null) => {
 };
 
 function Ring({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="text-[10px] text-gray-300" title="No assessment decisions yet">—</span>;
+  if (pct === null) return <span className="text-[10px] text-gray-500" title="No assessment decisions yet">—</span>;
   const r = 15, c = 2 * Math.PI * r;
   const color = pct >= 80 ? "#22c55e" : pct >= 50 ? "#f59e0b" : "#ef4444";
   return (
@@ -248,7 +248,7 @@ export default function UsersWorkspace({
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900">User Management</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Manage your platform users and workforce</p>
+          <p className="text-gray-500 text-sm mt-0.5">Manage your platform users and workforce</p>
         </div>
         <button onClick={() => { setAddOpen(true); setCreatedCreds(null); }}
           className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg">
@@ -340,9 +340,9 @@ export default function UsersWorkspace({
           )}
         </div>
         <div className="ml-auto flex items-center gap-3">
-          <span className="text-xs text-gray-400">{filtered.length} user{filtered.length === 1 ? "" : "s"} found</span>
+          <span className="text-xs text-gray-500">{filtered.length} user{filtered.length === 1 ? "" : "s"} found</span>
           <button onClick={() => router.refresh()} title="Refresh"
-            className="text-gray-400 hover:text-gray-600 text-sm">⟳</button>
+            className="text-gray-500 hover:text-gray-600 text-sm">⟳</button>
           <button onClick={() => exportCsv(filtered)} title="Export all filtered users"
             className="text-xs font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg">Export</button>
         </div>
@@ -358,7 +358,7 @@ export default function UsersWorkspace({
       <div className="bg-white rounded-xl border border-gray-100 overflow-x-auto">
         <table className="w-full text-sm min-w-[900px]">
           <thead>
-            <tr className="border-b border-gray-100 bg-gray-50/50 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+            <tr className="border-b border-gray-100 bg-gray-50/50 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
               <th className="px-4 py-3 w-8" />
               <th className="text-left px-2 py-3">User</th>
               <th className="text-left px-3 py-3">Roles</th>
@@ -372,7 +372,7 @@ export default function UsersWorkspace({
           </thead>
           <tbody className="divide-y divide-gray-50">
             {shown.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-gray-400">No users match the current filters.</td></tr>
+              <tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-gray-500">No users match the current filters.</td></tr>
             )}
             {shown.map(u => {
               const st = STATUS_UI[u.status];
@@ -388,7 +388,7 @@ export default function UsersWorkspace({
                       </div>
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900 truncate">{u.name}</p>
-                        <p className="text-[10px] text-gray-400 truncate">{u.email}</p>
+                        <p className="text-[10px] text-gray-500 truncate">{u.email}</p>
                       </div>
                     </div>
                   </td>
@@ -407,12 +407,12 @@ export default function UsersWorkspace({
                     </div>
                   </td>
                   <td className="px-3 py-3 text-xs text-gray-500">
-                    <p>{u.organisation ?? <span className="text-gray-300">—</span>}</p>
-                    <p className="text-[10px] text-gray-400">{u.facility ?? "—"}</p>
+                    <p>{u.organisation ?? <span className="text-gray-500">—</span>}</p>
+                    <p className="text-[10px] text-gray-500">{u.facility ?? "—"}</p>
                   </td>
                   <td className="px-3 py-3">
                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${st.pill}`}>{st.label}</span>
-                    <p className="text-[9px] text-gray-400 mt-1">{u.statusDetail}</p>
+                    <p className="text-[9px] text-gray-500 mt-1">{u.statusDetail}</p>
                   </td>
                   {/* Relative times drift between server render and hydration */}
                   <td className="px-3 py-3 text-xs text-gray-500" suppressHydrationWarning>{relTime(u.lastSignIn)}</td>
@@ -421,7 +421,7 @@ export default function UsersWorkspace({
                   <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                     <div className="relative inline-block">
                       <button onClick={() => setMenuFor(menuFor === u.id ? null : u.id)}
-                        className="text-gray-300 hover:text-gray-600 px-1.5 text-sm" title="Actions">⋮</button>
+                        className="text-gray-500 hover:text-gray-600 px-1.5 text-sm" title="Actions">⋮</button>
                       {menuFor === u.id && (
                         <>
                           <div className="fixed inset-0 z-20" onClick={() => setMenuFor(null)} />
@@ -465,7 +465,7 @@ export default function UsersWorkspace({
       {pages > 1 && (
         <div className="flex items-center justify-end gap-2 mt-3 text-xs">
           <button disabled={page === 0} onClick={() => setPage(p => p - 1)} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-40">‹ Prev</button>
-          <span className="text-gray-400">Page {page + 1} of {pages}</span>
+          <span className="text-gray-500">Page {page + 1} of {pages}</span>
           <button disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)} className="px-2 py-1 border border-gray-200 rounded disabled:opacity-40">Next ›</button>
         </div>
       )}
@@ -473,7 +473,7 @@ export default function UsersWorkspace({
       {/* Legend + progress explainer */}
       <div className="grid md:grid-cols-2 gap-4 mt-6">
         <div className="bg-white rounded-xl border border-gray-100 p-5">
-          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-3">Status legend</p>
+          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3">Status legend</p>
           <div className="flex flex-col gap-2 text-xs text-gray-600">
             <p><span className="inline-block w-2 h-2 rounded-full bg-[var(--cmp-color-success)] mr-2" /><b>Active</b> — user can sign in; email verified</p>
             <p><span className="inline-block w-2 h-2 rounded-full bg-[var(--cmp-color-warning)] mr-2" /><b>Pending</b> — invitation sent or email not yet verified</p>
@@ -481,16 +481,16 @@ export default function UsersWorkspace({
           </div>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-5">
-          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-3">Progress indicators</p>
+          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3">Progress indicators</p>
           <div className="flex flex-col gap-1.5 text-xs text-gray-600">
             <p><b>Competency</b> — share of assessed competencies decided competent or better</p>
             <p><b>Passport</b> — share of assessed competencies currently valid (not expired)</p>
             <div className="flex items-center gap-4 mt-1.5">
-              <span className="flex items-center gap-1.5"><Ring pct={92} /><span className="text-[10px] text-gray-400">High (80%+)</span></span>
-              <span className="flex items-center gap-1.5"><Ring pct={58} /><span className="text-[10px] text-gray-400">Medium (50–79%)</span></span>
-              <span className="flex items-center gap-1.5"><Ring pct={26} /><span className="text-[10px] text-gray-400">Low (&lt;50%)</span></span>
+              <span className="flex items-center gap-1.5"><Ring pct={92} /><span className="text-[10px] text-gray-500">High (80%+)</span></span>
+              <span className="flex items-center gap-1.5"><Ring pct={58} /><span className="text-[10px] text-gray-500">Medium (50–79%)</span></span>
+              <span className="flex items-center gap-1.5"><Ring pct={26} /><span className="text-[10px] text-gray-500">Low (&lt;50%)</span></span>
             </div>
-            <p className="text-[10px] text-gray-400 mt-1">“—” means the user has no assessment decisions yet — not 0%.</p>
+            <p className="text-[10px] text-gray-500 mt-1">“—” means the user has no assessment decisions yet — not 0%.</p>
           </div>
         </div>
       </div>
@@ -504,8 +504,8 @@ export default function UsersWorkspace({
               <>
                 <p className="text-xs text-gray-500 mb-4">Share these credentials securely — the password is shown only once.</p>
                 <div className="bg-gray-50 rounded-lg p-4 text-sm font-mono flex flex-col gap-1.5">
-                  <p><span className="text-gray-400 text-xs">Email:</span> {createdCreds.email}</p>
-                  <p><span className="text-gray-400 text-xs">Password:</span> {createdCreds.password}</p>
+                  <p><span className="text-gray-500 text-xs">Email:</span> {createdCreds.email}</p>
+                  <p><span className="text-gray-500 text-xs">Password:</span> {createdCreds.password}</p>
                 </div>
                 <div className="flex gap-2 mt-5">
                   <button onClick={() => navigator.clipboard.writeText(`Email: ${createdCreds.email}\nPassword: ${createdCreds.password}`)}
@@ -532,7 +532,7 @@ export default function UsersWorkspace({
                     <select value={addForm.role} onChange={e => setAddForm(p => ({ ...p, role: e.target.value }))} className={`${input} w-full`}>
                       {Object.entries(ROLE_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
                     </select>
-                    <p className="text-[10px] text-gray-400 mt-1">Fine-grained org roles can be set afterwards via Edit in the user drawer.</p>
+                    <p className="text-[10px] text-gray-500 mt-1">Fine-grained org roles can be set afterwards via Edit in the user drawer.</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
@@ -590,7 +590,7 @@ export default function UsersWorkspace({
                 {drawer.name[0]?.toUpperCase() ?? "?"}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs text-gray-400 truncate">{drawer.email}</p>
+                <p className="text-xs text-gray-500 truncate">{drawer.email}</p>
                 <span className={`inline-block mt-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded ${STATUS_UI[drawer.status].pill}`}>
                   {STATUS_UI[drawer.status].label} · {drawer.statusDetail}
                 </span>
@@ -609,7 +609,7 @@ export default function UsersWorkspace({
                 ["Active authorizations", String(drawer.activeAuthorizations)],
               ].map(([k, v]) => (
                 <div key={k}>
-                  <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">{k}</p>
+                  <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">{k}</p>
                   <p className="text-gray-700 mt-0.5" suppressHydrationWarning>{v}</p>
                 </div>
               ))}
@@ -617,7 +617,7 @@ export default function UsersWorkspace({
 
             <div className="p-5 border-b border-gray-50">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Roles & access</p>
+                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Roles & access</p>
                 <UserRoleEditor
                   user={editorUser}
                   hospitals={hospitals} organisations={organisations} departments={departments}
@@ -644,15 +644,15 @@ export default function UsersWorkspace({
             </div>
 
             <div className="p-5 border-b border-gray-50">
-              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-3">Competency readiness</p>
+              <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3">Competency readiness</p>
               <div className="flex items-center gap-6">
                 <div className="text-center">
                   <Ring pct={drawer.competencyPct} />
-                  <p className="text-[9px] text-gray-400 mt-1">Competency</p>
+                  <p className="text-[9px] text-gray-500 mt-1">Competency</p>
                 </div>
                 <div className="text-center">
                   <Ring pct={drawer.passportPct} />
-                  <p className="text-[9px] text-gray-400 mt-1">Passport</p>
+                  <p className="text-[9px] text-gray-500 mt-1">Passport</p>
                 </div>
                 <div className="text-xs text-gray-500 flex-1">
                   {drawer.decisionsTotal > 0
@@ -663,9 +663,9 @@ export default function UsersWorkspace({
             </div>
 
             <div className="p-5">
-              <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-3">Audit history (their actions)</p>
+              <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3">Audit history (their actions)</p>
               {(auditByActor[drawer.id] ?? []).length === 0
-                ? <p className="text-xs text-gray-400">No audited actions by this user yet.</p>
+                ? <p className="text-xs text-gray-500">No audited actions by this user yet.</p>
                 : (
                   <div className="flex flex-col gap-2">
                     {(auditByActor[drawer.id] ?? []).map(e => (
@@ -674,7 +674,7 @@ export default function UsersWorkspace({
                           <span className="font-medium">{e.action.replace(/_/g, " ")}</span>
                           {e.entityName ? <> — {e.entityName}</> : null}
                         </p>
-                        <p className="text-[9px] text-gray-400" suppressHydrationWarning>{formatDateTime(e.at)}{e.entityType ? ` · ${e.entityType}` : ""}</p>
+                        <p className="text-[9px] text-gray-500" suppressHydrationWarning>{formatDateTime(e.at)}{e.entityType ? ` · ${e.entityType}` : ""}</p>
                       </div>
                     ))}
                   </div>

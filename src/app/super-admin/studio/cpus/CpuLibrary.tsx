@@ -12,7 +12,7 @@ const STATUS_CLS: Record<string, string> = {
   in_review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
   approved: "bg-[var(--cmp-surface-information)] text-blue-700",
   published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",
-  archived: "bg-gray-100 text-gray-400",
+  archived: "bg-gray-100 text-gray-600",
 };
 
 type PracticeRow = {
@@ -50,14 +50,14 @@ export default function CpuLibrary({ practices, cpus }: { practices: PracticeRow
 
       {/* Clinical Practices */}
       <div>
-        <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Clinical Practices ({practices.length})</h2>
+        <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Clinical Practices ({practices.length})</h2>
         {practices.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-400">
+          <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-500">
             No practices yet — create them inside a framework in the Content Builder.
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-            <div className="grid grid-cols-[1fr_90px_110px_90px] gap-2 px-5 py-2 bg-gray-50/60 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+            <div className="grid grid-cols-[1fr_90px_110px_90px] gap-2 px-5 py-2 bg-gray-50/60 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
               <span>Practice</span><span className="text-right">CPUs</span><span className="text-right">Competencies</span><span className="text-right">Published</span>
             </div>
             <div className="divide-y divide-gray-50">
@@ -66,9 +66,9 @@ export default function CpuLibrary({ practices, cpus }: { practices: PracticeRow
                   className="grid grid-cols-[1fr_90px_110px_90px] gap-2 px-5 py-3 hover:bg-gray-50/50 transition-colors items-center">
                   <div className="min-w-0">
                     <p className="text-sm text-gray-800 truncate">{p.name}
-                      {p.code && <span className="ml-2 text-[10px] font-mono text-gray-300">{p.code}</span>}
+                      {p.code && <span className="ml-2 text-[10px] font-mono text-gray-500">{p.code}</span>}
                     </p>
-                    <p className="text-[10px] text-gray-400">{p.framework} · {p.domain}</p>
+                    <p className="text-[10px] text-gray-500">{p.framework} · {p.domain}</p>
                   </div>
                   <span className="text-sm font-bold text-gray-700 text-right">{p.cpuCount}</span>
                   <span className="text-sm font-bold text-gray-700 text-right">{p.compCount}</span>
@@ -83,17 +83,17 @@ export default function CpuLibrary({ practices, cpus }: { practices: PracticeRow
       {/* CPU library */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Clinical Practice Units ({cpus.length})</h2>
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Clinical Practice Units ({cpus.length})</h2>
           <input
             value={search} onChange={e => setSearch(e.target.value)} placeholder="Filter CPUs…"
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30 w-56"
           />
         </div>
         {visibleCpus.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-400">No CPUs match.</div>
+          <div className="bg-white rounded-xl border border-gray-100 p-8 text-center text-sm text-gray-500">No CPUs match.</div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-            <div className="hidden md:grid grid-cols-[1fr_110px_70px_70px_90px_95px_130px] gap-2 px-5 py-2 bg-gray-50/60 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+            <div className="hidden md:grid grid-cols-[1fr_110px_70px_70px_90px_95px_130px] gap-2 px-5 py-2 bg-gray-50/60 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
               <span>CPU</span><span className="text-right">Competencies</span><span className="text-right">Skills</span><span className="text-right">Methods</span><span>Risk</span><span>Status</span><span></span>
             </div>
             <div className="divide-y divide-gray-50">
@@ -103,9 +103,9 @@ export default function CpuLibrary({ practices, cpus }: { practices: PracticeRow
                   <div key={c.id} className="grid grid-cols-1 md:grid-cols-[1fr_110px_70px_70px_90px_95px_130px] gap-2 px-5 py-3 items-center">
                     <div className="min-w-0">
                       <p className="text-sm text-gray-800 truncate">{c.name}
-                        {c.code && <span className="ml-2 text-[10px] font-mono text-gray-300">{c.code}</span>}
+                        {c.code && <span className="ml-2 text-[10px] font-mono text-gray-500">{c.code}</span>}
                       </p>
-                      <p className="text-[10px] text-gray-400">{c.practice}</p>
+                      <p className="text-[10px] text-gray-500">{c.practice}</p>
                     </div>
                     <span className="text-sm font-bold text-gray-700 md:text-right">{c.competencies}</span>
                     <span className="text-sm font-bold text-gray-700 md:text-right">{c.skills}</span>

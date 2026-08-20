@@ -59,19 +59,19 @@ export default function StandardSettingManager({ studies, bankOptions }: { studi
       </div>
 
       {studies.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-6 text-center text-xs text-gray-400">No studies yet — create one above, link a bank, then record judge ratings to compute a defensible cut score.</div>
+        <div className="bg-white rounded-xl border border-gray-100 p-6 text-center text-xs text-gray-500">No studies yet — create one above, link a bank, then record judge ratings to compute a defensible cut score.</div>
       ) : studies.map((s: any) => (
         <div key={s.id} className="bg-white rounded-xl border border-gray-100 p-4">
           <div className="flex items-center gap-2 flex-wrap">
             <button onClick={() => setOpen(open === s.id ? null : s.id)} className="text-sm font-bold text-gray-900 hover:text-teal-700">{open === s.id ? "▾" : "▸"} {s.name}</button>
             <span className="text-[10px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">{s.methodLabel}</span>
-            {s.bankName && <span className="text-[10px] text-gray-400">↔ {s.bankName}</span>}
+            {s.bankName && <span className="text-[10px] text-gray-500">↔ {s.bankName}</span>}
             <span className={`text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border ${STATUS_TONE[s.status] ?? STATUS_TONE.draft}`}>{s.status.replace(/_/g, " ")}</span>
             <div className="ml-auto flex items-center gap-3 text-xs">
               <span className="text-gray-500">{s.judges} judge{s.judges === 1 ? "" : "s"} · {s.items} item{s.items === 1 ? "" : "s"}</span>
               {s.cutPct != null && <span className="font-bold text-gray-900">Cut {s.cutPct}%</span>}
               {s.impactPassRate != null && <span className="text-teal-600">{s.impactPassRate}% pass</span>}
-              <button onClick={() => del(s.id)} disabled={busy} className="text-gray-300 hover:text-red-500" title="Delete">✕</button>
+              <button onClick={() => del(s.id)} disabled={busy} className="text-gray-500 hover:text-red-500" title="Delete">✕</button>
             </div>
           </div>
 
@@ -80,7 +80,7 @@ export default function StandardSettingManager({ studies, bankOptions }: { studi
               {/* computed summary */}
               <div className="flex flex-wrap gap-4 mb-3 text-xs">
                 <span className="text-gray-500">Recommended cut: <b className="text-gray-900">{s.cutPct != null ? `${s.cutPct}%` : "—"}</b></span>
-                {s.impactPassRate != null ? <span className="text-gray-500">Impact: <b className="text-gray-900">{s.impactPassRate}% pass</b> of {s.impactAttempts} attempts</span> : s.bankName ? <span className="text-gray-400">No attempt data for impact yet</span> : <span className="text-gray-400">Link a bank to see pass-rate impact</span>}
+                {s.impactPassRate != null ? <span className="text-gray-500">Impact: <b className="text-gray-900">{s.impactPassRate}% pass</b> of {s.impactAttempts} attempts</span> : s.bankName ? <span className="text-gray-500">No attempt data for impact yet</span> : <span className="text-gray-500">Link a bank to see pass-rate impact</span>}
                 {s.finalCut != null && <span className="text-teal-600">Finalised at {s.finalCut}%</span>}
               </div>
               {/* judgements */}
@@ -91,7 +91,7 @@ export default function StandardSettingManager({ studies, bankOptions }: { studi
                       <span className="font-semibold text-gray-700 w-28 truncate">{j.judge_name}</span>
                       <span className="text-gray-500 flex-1 truncate">{j.item_label}</span>
                       <span className="font-semibold text-gray-900 tabular-nums">{Number(j.rating).toFixed(2)}</span>
-                      <button onClick={() => removeJ(j.id)} disabled={busy} className="text-gray-300 hover:text-red-500 shrink-0" title="Remove">✕</button>
+                      <button onClick={() => removeJ(j.id)} disabled={busy} className="text-gray-500 hover:text-red-500 shrink-0" title="Remove">✕</button>
                     </div>
                   ))}
                 </div>

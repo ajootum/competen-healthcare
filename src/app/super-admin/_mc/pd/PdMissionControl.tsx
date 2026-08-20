@@ -139,7 +139,7 @@ function PulseTile({ card }: { card: PulseCard }) {
             <div className="mt-1">
               <Delta comparison={card.comparison} unit="in this period" />
             </div>
-            <p title={card.window} className="mt-0.5 line-clamp-2 text-[10px] leading-tight text-gray-400">
+            <p title={card.window} className="mt-0.5 line-clamp-2 text-[10px] leading-tight text-gray-500">
               {card.window}
             </p>
           </div>
@@ -160,7 +160,7 @@ function TodayRow({ metric }: { metric: TodayMetric }) {
         href={metric.href}
         className="flex min-w-0 items-center gap-2.5 rounded-lg py-0.5 pr-6 transition-colors hover:text-teal-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
       >
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-500">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-600">
           <Icon name={TODAY_ICON[metric.key] ?? "queue"} className="h-3.5 w-3.5" />
         </span>
         <span className="min-w-[3.25rem] shrink-0">
@@ -213,7 +213,7 @@ export default async function PdMissionControl({
       <header className={`${CARD} px-4 py-3`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Competen Practice</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Competen Practice</p>
             <h1 className="mt-0.5 text-xl font-bold leading-tight text-gray-900">Product Mission Control</h1>
             <p className="mt-0.5 text-[12px] text-gray-600">
               {composition.profile.name}
@@ -233,7 +233,7 @@ export default async function PdMissionControl({
               behaviour; only its chrome and its position changed. */}
           <div className="flex flex-col items-end gap-1">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Updated</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Updated</span>
               <span className="text-[12px] tabular-nums text-gray-700">{utcStamp(m.freshness.generatedAt)}</span>
               <ExplainDot label="What this timestamp means">{m.freshness.note}</ExplainDot>
             </div>
@@ -345,7 +345,7 @@ export default async function PdMissionControl({
                     </div>
                     <p className="mt-0.5 text-[11px] leading-snug text-gray-600">{a.evidence}</p>
                     <div className="mt-1 flex items-end justify-between gap-2">
-                      <p className="min-w-0 text-[10px] leading-tight text-gray-400">
+                      <p className="min-w-0 text-[10px] leading-tight text-gray-500">
                         {a.scope}
                         {a.age ? ` · ${a.age}` : ""}
                       </p>
@@ -398,9 +398,9 @@ export default async function PdMissionControl({
           ) : (
             <>
               <div className="grid grid-cols-[minmax(0,1fr)_minmax(2.5rem,1.1fr)_auto] items-center gap-2 pb-1">
-                <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Stage</span>
-                <span className="text-right text-[9px] font-semibold uppercase tracking-wide text-gray-400">Count</span>
-                <span className="text-right text-[9px] font-semibold uppercase tracking-wide text-gray-400">From the stage before</span>
+                <span className="text-[9px] font-semibold uppercase tracking-wide text-gray-500">Stage</span>
+                <span className="text-right text-[9px] font-semibold uppercase tracking-wide text-gray-500">Count</span>
+                <span className="text-right text-[9px] font-semibold uppercase tracking-wide text-gray-500">From the stage before</span>
               </div>
               <ol>
                 {m.journey.stages.map(s => {
@@ -424,7 +424,7 @@ export default async function PdMissionControl({
                       </span>
                       <span className="text-right">
                         {s.from === null
-                          ? <span className="text-[10px] text-gray-400">First stage</span>
+                          ? <span className="text-[10px] text-gray-500">First stage</span>
                           : <Ratio n={s.reached} of={s.from} />}
                       </span>
                     </li>
@@ -592,7 +592,7 @@ export default async function PdMissionControl({
                       <SeverityChip severity={p.severity} />
                     </div>
                     <p className="mt-0.5 text-[11px] leading-snug text-gray-600">{p.reason}</p>
-                    <p className="mt-0.5 truncate text-[10px] text-gray-400">
+                    <p className="mt-0.5 truncate text-[10px] text-gray-500">
                       {p.lifecycle}
                       {p.market ? ` · ${p.market}` : ""}
                       {p.ownerName ? ` · owned by ${p.ownerName}` : " · owner not recorded"}
@@ -663,14 +663,14 @@ export default async function PdMissionControl({
                 href={s.href}
                 className="group flex items-center gap-2 rounded-lg px-1.5 py-1.5 transition-colors hover:bg-teal-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
               >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-500 group-hover:text-teal-700">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-600 group-hover:text-teal-700">
                   <Icon name={s.icon} className="h-3.5 w-3.5" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[12px] font-semibold text-gray-800 group-hover:text-teal-800">{s.label}</span>
                   <span className="block truncate text-[10px] text-gray-500">{s.note}</span>
                 </span>
-                <Icon name="chevron" className="h-3 w-3 shrink-0 text-gray-300 group-hover:text-teal-600" />
+                <Icon name="chevron" className="h-3 w-3 shrink-0 text-gray-500 group-hover:text-teal-600" />
               </Link>
             ))}
           </div>
@@ -701,7 +701,7 @@ export default async function PdMissionControl({
         </section>
       )}
 
-      <p className="pb-4 text-[10px] leading-relaxed text-gray-400">
+      <p className="pb-4 text-[10px] leading-relaxed text-gray-500">
         Mission Control summarises Competen Practice and routes to the module that owns each subject; it
         does not replace Product Operations, Product Intelligence, Product Health or Commercial. Every
         figure carries its period and its scope, and every figure it cannot produce says which fact is

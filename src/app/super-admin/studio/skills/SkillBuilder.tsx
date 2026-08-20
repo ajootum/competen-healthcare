@@ -68,7 +68,7 @@ export default function SkillBuilder({ skills, links, competencies }: {
   }
 
   const input = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30";
-  const label = "text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block";
+  const label = "text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 block";
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_280px] gap-5">
@@ -84,7 +84,7 @@ export default function SkillBuilder({ skills, links, competencies }: {
           {Object.entries(SKILL_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
         </select>
         <div className="flex flex-col gap-1 max-h-[26rem] overflow-y-auto">
-          {visible.length === 0 && <p className="text-xs text-gray-400 py-4 text-center">No skills yet — create the first one.</p>}
+          {visible.length === 0 && <p className="text-xs text-gray-500 py-4 text-center">No skills yet — create the first one.</p>}
           {visible.map(s => {
             const t = SKILL_TYPE_LABELS[s.skill_type] ?? SKILL_TYPE_LABELS.psychomotor;
             return (
@@ -104,7 +104,7 @@ export default function SkillBuilder({ skills, links, competencies }: {
 
       {/* MIDDLE — form */}
       <div className="bg-white rounded-xl border border-gray-100 p-5 self-start">
-        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">
           {selected ? "Edit skill" : "New skill"}
         </p>
         {error && <div className="bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)] text-sm rounded-lg px-3 py-2 mb-3">{error}</div>}
@@ -150,24 +150,24 @@ export default function SkillBuilder({ skills, links, competencies }: {
 
       {/* RIGHT — live relationships */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 self-start">
-        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Linked competencies</p>
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Linked competencies</p>
         {!selected ? (
-          <p className="text-xs text-gray-400">Select or create a skill to see and manage where it&apos;s used.</p>
+          <p className="text-xs text-gray-500">Select or create a skill to see and manage where it&apos;s used.</p>
         ) : (
           <>
             {selectedLinks.length === 0 ? (
-              <p className="text-xs text-gray-400 mb-3">Not attached anywhere yet.</p>
+              <p className="text-xs text-gray-500 mb-3">Not attached anywhere yet.</p>
             ) : (
               <div className="flex flex-col gap-1.5 mb-3">
                 {selectedLinks.map(l => (
                   <div key={l.id} className="flex items-start gap-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5">
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-gray-800 leading-tight">{l.competency_name}</p>
-                      <p className="text-[9px] text-gray-400">{l.framework_name}</p>
+                      <p className="text-[9px] text-gray-500">{l.framework_name}</p>
                     </div>
                     <button disabled={busy} title="Detach"
                       onClick={() => api({ kind: "detach_skill", competency_skill_id: l.id })}
-                      className="text-gray-300 hover:text-red-500 text-xs shrink-0">✕</button>
+                      className="text-gray-500 hover:text-red-500 text-xs shrink-0">✕</button>
                   </div>
                 ))}
               </div>

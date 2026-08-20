@@ -60,7 +60,7 @@ export function ProfileBuilder({ competencies }: { competencies: Competency[] })
     <div className="bg-white rounded-xl border border-[var(--cmp-color-success)] p-4">
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm font-bold text-gray-800">Define a service profile</p>
-        <button onClick={() => setOpen(false)} className="text-[11px] text-gray-400 hover:text-gray-600">Close</button>
+        <button onClick={() => setOpen(false)} className="text-[11px] text-gray-500 hover:text-gray-600">Close</button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
@@ -83,7 +83,7 @@ export function ProfileBuilder({ competencies }: { competencies: Competency[] })
             <label className="flex items-center gap-1 text-[11px] text-gray-600 cursor-pointer">
               <input type="checkbox" checked={r.is_critical} onChange={(e) => setRow(i, { is_critical: e.target.checked })} /> critical
             </label>
-            {rows.length > 1 && <button onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))} className="text-[11px] text-gray-300 hover:text-rose-500">✕</button>}
+            {rows.length > 1 && <button onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))} className="text-[11px] text-gray-500 hover:text-rose-500">✕</button>}
           </div>
         ))}
       </div>
@@ -91,7 +91,7 @@ export function ProfileBuilder({ competencies }: { competencies: Competency[] })
 
       <div className="flex items-center gap-2">
         <button onClick={submit} disabled={!valid || busy} className="text-[11px] font-semibold text-white bg-[var(--cmp-color-success)] hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-[var(--cmp-color-success)] rounded-lg px-3 py-1.5 transition-colors">{busy ? "Creating…" : "Create draft profile"}</button>
-        <span className="text-[10px] text-gray-400">Created as draft — activation is a separate governance act. Unmet critical requirements block activation readiness.</span>
+        <span className="text-[10px] text-gray-500">Created as draft — activation is a separate governance act. Unmet critical requirements block activation readiness.</span>
         {err && <span className="text-[11px] text-[var(--cmp-text-error)] font-medium">{err}</span>}
       </div>
     </div>

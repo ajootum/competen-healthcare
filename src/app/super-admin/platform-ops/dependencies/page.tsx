@@ -28,7 +28,7 @@ export default async function DependencyGraphPage() {
 
   const header = (
     <>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Dependency Manager</span>
@@ -36,7 +36,7 @@ export default async function DependencyGraphPage() {
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">🕸️</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Dependency Manager <span className="text-gray-300 font-medium text-lg">(NCP-017)</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Dependency Manager <span className="text-gray-500 font-medium text-lg">(NCP-017)</span></h1>
           <p className="text-sm text-gray-500">Trace configuration dependencies, analyse change impact (blast radius) and validate the graph — circular, broken and orphaned references — as the deployment guard for safe publishing.</p>
         </div>
       </div>
@@ -75,8 +75,8 @@ export default async function DependencyGraphPage() {
 
       {g.orphans.length > 0 && (
         <div className={`${card} p-4`}>
-          <p className="font-semibold text-gray-900 text-sm mb-1">Orphaned Objects <span className="text-gray-300 font-normal">— {g.orphans.length}</span></p>
-          <p className="text-[10px] text-gray-400 mb-3">Depend on nothing and nothing depends on them — wire them into a page/dashboard/menu, or retire.</p>
+          <p className="font-semibold text-gray-900 text-sm mb-1">Orphaned Objects <span className="text-gray-500 font-normal">— {g.orphans.length}</span></p>
+          <p className="text-[10px] text-gray-500 mb-3">Depend on nothing and nothing depends on them — wire them into a page/dashboard/menu, or retire.</p>
           <div className="flex flex-wrap gap-1.5">{g.orphans.map((o: any) => <span key={o.key} className="text-[11px] bg-[var(--cmp-surface-information)] border border-[var(--cmp-color-information)] text-[var(--cmp-text-information)] rounded px-2 py-0.5">{o.label} <span className="text-sky-400 text-[9px]">{o.type.replace(/_/g, " ")}</span></span>)}</div>
         </div>
       )}
@@ -84,17 +84,17 @@ export default async function DependencyGraphPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className={`${card} p-4 lg:col-span-1`}>
           <p className="font-semibold text-gray-900 text-sm mb-1">Highest Blast Radius</p>
-          <p className="text-[10px] text-gray-400 mb-3">Objects whose change affects the most others — review these carefully before editing.</p>
+          <p className="text-[10px] text-gray-500 mb-3">Objects whose change affects the most others — review these carefully before editing.</p>
           {g.topImpact.length ? (
             <div className="space-y-2">
               {g.topImpact.map((o: any) => (
                 <div key={o.key} className="flex items-center gap-2">
-                  <div className="flex-1 min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{o.label}</p><p className="text-[10px] text-gray-400">{o.type.replace(/_/g, " ")}</p></div>
+                  <div className="flex-1 min-w-0"><p className="text-xs font-medium text-gray-800 truncate">{o.label}</p><p className="text-[10px] text-gray-500">{o.type.replace(/_/g, " ")}</p></div>
                   <span className={`text-[11px] font-bold px-2 py-0.5 rounded tabular-nums ${impactTone(o.impact)}`}>{o.impact}</span>
                 </div>
               ))}
             </div>
-          ) : <p className="text-xs text-gray-400 py-6 text-center">No dependency edges yet.</p>}
+          ) : <p className="text-xs text-gray-500 py-6 text-center">No dependency edges yet.</p>}
         </div>
         <div className="lg:col-span-2">
           <p className="font-semibold text-gray-900 text-sm mb-2">Impact Explorer</p>

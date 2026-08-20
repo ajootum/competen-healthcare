@@ -27,13 +27,13 @@ function Donut({ segments, total }: { segments: { label: string; n: number; colo
           <circle cx="18" cy="18" r="15.5" fill="none" stroke="#f1f5f9" strokeWidth="4" />
           {arcs.map((a, i) => <circle key={i} cx="18" cy="18" r="15.5" fill="none" stroke={a.color} strokeWidth="4" strokeDasharray={`${a.dash} ${C - a.dash}`} strokeDashoffset={-a.offset} />)}
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center"><span className="text-xl font-bold text-gray-900 tabular-nums">{fmt(total)}</span><span className="text-[9px] text-gray-400">Total</span></div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center"><span className="text-xl font-bold text-gray-900 tabular-nums">{fmt(total)}</span><span className="text-[9px] text-gray-500">Total</span></div>
       </div>
       <div className="flex-1 space-y-1">
         {segments.map(s => (
           <div key={s.label} className="flex items-center justify-between text-xs">
             <span className="flex items-center gap-1.5 text-gray-600"><span className="w-2 h-2 rounded-sm" style={{ backgroundColor: s.color }} />{s.label}</span>
-            <span className="tabular-nums text-gray-700">{fmt(s.n)} <span className="text-gray-300">· {total ? Math.round((s.n / total) * 100) : 0}%</span></span>
+            <span className="tabular-nums text-gray-700">{fmt(s.n)} <span className="text-gray-500">· {total ? Math.round((s.n / total) * 100) : 0}%</span></span>
           </div>
         ))}
       </div>
@@ -79,7 +79,7 @@ export default async function AssessmentValidationCentre() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/ckp" className="hover:text-teal-700">Clinical Knowledge Platform</Link><span>/</span><span className="text-gray-600">Assessment &amp; Validation Centre</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Assessment &amp; Validation Centre</h1>
@@ -94,7 +94,7 @@ export default async function AssessmentValidationCentre() {
               <span className={`w-7 h-7 rounded-lg ${c.iconBg} flex items-center justify-center text-sm shrink-0`}>{c.icon}</span>
             </div>
             <p className="text-2xl font-bold mt-1.5 tabular-nums text-gray-900">{c.value}</p>
-            {(c as any).sub && <p className="text-[10px] text-gray-400 mt-0.5">{(c as any).sub}</p>}
+            {(c as any).sub && <p className="text-[10px] text-gray-500 mt-0.5">{(c as any).sub}</p>}
           </div>
         ))}
       </div>
@@ -106,7 +106,7 @@ export default async function AssessmentValidationCentre() {
         {/* Assessment overview donut */}
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Assessment Overview</h2>
-          {a.overview.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No assessment assets yet.</p> : <Donut segments={a.overview} total={a.overviewTotal} />}
+          {a.overview.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No assessment assets yet.</p> : <Donut segments={a.overview} total={a.overviewTotal} />}
         </div>
 
         {/* Blueprint coverage + method mix */}
@@ -121,7 +121,7 @@ export default async function AssessmentValidationCentre() {
           </div>
           {a.methodMix.length > 0 && (
             <div className="pt-2 border-t border-gray-50">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase mb-1">Blueprint Methods</p>
+              <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">Blueprint Methods</p>
               <div className="space-y-1 max-h-28 overflow-y-auto">
                 {a.methodMix.map((m: any) => <div key={m.method} className="flex items-center justify-between text-xs"><span className="text-gray-600 capitalize truncate">{m.method}</span><span className="text-gray-500 tabular-nums">{m.n}</span></div>)}
               </div>
@@ -133,7 +133,7 @@ export default async function AssessmentValidationCentre() {
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Validation Status</h2>
           {!a.validationReady ? (
-            <div className="py-6 text-center"><p className="text-sm text-gray-400">No validation records yet.</p><p className="text-[11px] text-gray-400 mt-1">Outcomes populate from competency decisions.</p></div>
+            <div className="py-6 text-center"><p className="text-sm text-gray-500">No validation records yet.</p><p className="text-[11px] text-gray-500 mt-1">Outcomes populate from competency decisions.</p></div>
           ) : (
             <div className="space-y-2">
               {Object.entries(a.validation).map(([outcome, n]) => (
@@ -156,7 +156,7 @@ export default async function AssessmentValidationCentre() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Everything related to assessment quality lives here — methods, rubrics, blueprints, scoring, OSCE, validation and reassessment. Counts, blueprint coverage and method mix are live; psychometrics and standard-setting analytics activate as assessment attempts accumulate.</p>
+      <p className="text-[11px] text-gray-500 pb-4">Everything related to assessment quality lives here — methods, rubrics, blueprints, scoring, OSCE, validation and reassessment. Counts, blueprint coverage and method mix are live; psychometrics and standard-setting analytics activate as assessment attempts accumulate.</p>
     </div>
   );
 }

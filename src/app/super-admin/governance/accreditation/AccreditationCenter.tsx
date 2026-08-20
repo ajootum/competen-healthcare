@@ -99,7 +99,7 @@ export default function AccreditationCenter({ frameworks, refsByFramework, surve
           <div className="grid sm:grid-cols-2 gap-3">
             <div><label className={label}>Framework *</label><select value={form.framework_id ?? ""} onChange={set("framework_id")} className={input}><option value="">— Select framework —</option>{frameworks.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}</select></div>
             <div>
-              <label className={label}>Reference code * <span className="font-normal text-gray-400">({knownRefs.length} known)</span></label>
+              <label className={label}>Reference code * <span className="font-normal text-gray-500">({knownRefs.length} known)</span></label>
               <input value={form.reference_code ?? ""} onChange={set("reference_code")} className={input} placeholder="e.g. IPSG.1" list="std-refs" />
               <datalist id="std-refs">{knownRefs.map(r => <option key={r} value={r} />)}</datalist>
             </div>
@@ -109,7 +109,7 @@ export default function AccreditationCenter({ frameworks, refsByFramework, surve
               <div className="sm:col-span-2"><label className={label}>Gap note *</label><textarea value={form.gap_note ?? ""} onChange={set("gap_note")} rows={2} className={input} placeholder="What is missing to fully meet this standard?" /></div>
             )}
             <div className="sm:col-span-2"><label className={label}>Evidence note</label><textarea value={form.evidence_note ?? ""} onChange={set("evidence_note")} rows={2} className={input} placeholder="Where the supporting evidence lives (documents, records, systems)" /></div>
-            <p className="sm:col-span-2 text-[11px] text-gray-400">Assessments are insert-only history — re-assessing the same standard supersedes the previous status and builds a readiness trail.</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-500">Assessments are insert-only history — re-assessing the same standard supersedes the previous status and builds a readiness trail.</p>
           </div>
         )}
 
@@ -129,7 +129,7 @@ export default function AccreditationCenter({ frameworks, refsByFramework, surve
           <div className="grid sm:grid-cols-2 gap-3">
             <div><label className={label}>Survey *</label><select value={form.survey_id ?? ""} onChange={set("survey_id")} className={input}><option value="">— Select survey —</option>{surveys.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
             <div><label className={label}>Advance to</label><select value={form.status ?? ""} onChange={set("status")} className={input}><option value="">— Unchanged —</option>{Object.entries(SURVEY_STATUSES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-            <div><label className={label}>Outcome <span className="font-normal text-gray-400">(completes the survey)</span></label><select value={form.outcome ?? ""} onChange={set("outcome")} className={input}><option value="">— Not yet —</option>{Object.entries(OUTCOMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
+            <div><label className={label}>Outcome <span className="font-normal text-gray-500">(completes the survey)</span></label><select value={form.outcome ?? ""} onChange={set("outcome")} className={input}><option value="">— Not yet —</option>{Object.entries(OUTCOMES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
             <div className="sm:col-span-2"><label className={label}>Result / findings note</label><textarea value={form.result_note ?? ""} onChange={set("result_note")} rows={2} className={input} placeholder="Preliminary findings, final results…" /></div>
             {surveys.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No active surveys — schedule one first.</p>}
           </div>
@@ -141,14 +141,14 @@ export default function AccreditationCenter({ frameworks, refsByFramework, surve
             <div><label className={label}>Priority</label><select value={form.priority ?? "medium"} onChange={set("priority")} className={input}>{PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
             <div><label className={label}>Due date</label><input type="date" value={form.due_date ?? ""} onChange={set("due_date")} className={input} /></div>
             <div className="sm:col-span-2"><label className={label}>Detail</label><textarea value={form.description ?? ""} onChange={set("description")} rows={2} className={input} /></div>
-            <p className="sm:col-span-2 text-[11px] text-gray-400">Accreditation actions reuse the CAPA workflow — they appear in module 5’s open list, ageing buckets and closure tracking.</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-500">Accreditation actions reuse the CAPA workflow — they appear in module 5’s open list, ageing buckets and closure tracking.</p>
           </div>
         )}
 
         <div className="flex items-center gap-2 mt-4">
           <button onClick={act} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Working…" : TABS.find(t => t.key === tab)!.label}</button>
           <button onClick={() => setForm({})} className="text-sm text-gray-500 hover:text-gray-700 px-2">Clear</button>
-          <span className="text-[11px] text-gray-400 ml-auto">Real readiness work — audit-logged.</span>
+          <span className="text-[11px] text-gray-500 ml-auto">Real readiness work — audit-logged.</span>
         </div>
       </div>
     </div>

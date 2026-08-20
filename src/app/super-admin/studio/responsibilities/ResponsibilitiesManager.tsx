@@ -90,7 +90,7 @@ export default function ResponsibilitiesManager({ rows, staff, objects }: {
 
       {/* Current responsibilities */}
       {rows.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-10 text-center text-sm text-gray-400">
+        <div className="bg-white rounded-xl border border-gray-100 p-10 text-center text-sm text-gray-500">
           No responsibilities assigned yet — start with a Product Owner for each published CPU.
         </div>
       ) : (
@@ -103,7 +103,7 @@ export default function ResponsibilitiesManager({ rows, staff, objects }: {
                   <p className="text-sm text-gray-800">
                     <b>{r.holder}</b> — {RESP_LABELS[r.responsibility_type] ?? r.responsibility_type}
                   </p>
-                  <p className="text-[10px] text-gray-400 capitalize">
+                  <p className="text-[10px] text-gray-500 capitalize">
                     {r.content_type.replace("_", " ")} · {r.content_name} · since {new Date(r.start_date).toLocaleDateString()}
                   </p>
                 </div>
@@ -113,7 +113,7 @@ export default function ResponsibilitiesManager({ rows, staff, objects }: {
                   </span>
                 )}
                 <button disabled={busy} onClick={() => end(r.id)}
-                  className="text-xs text-gray-400 hover:text-red-500 hover:bg-[var(--cmp-surface-critical)] px-2 py-1 rounded transition-colors">End</button>
+                  className="text-xs text-gray-500 hover:text-red-500 hover:bg-[var(--cmp-surface-critical)] px-2 py-1 rounded transition-colors">End</button>
               </div>
             );
           })}

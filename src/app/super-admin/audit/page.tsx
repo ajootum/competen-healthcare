@@ -50,14 +50,14 @@ export default async function AuditLogPage() {
     <div className="max-w-4xl">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-gray-900">Audit Log</h1>
-        <p className="text-gray-400 text-sm mt-0.5">All platform governance actions — who changed what and when.</p>
+        <p className="text-gray-500 text-sm mt-0.5">All platform governance actions — who changed what and when.</p>
       </div>
 
       {!(entries ?? []).length ? (
         <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
           <p className="text-3xl mb-3">🗒️</p>
           <p className="text-gray-500 text-sm">No audit entries yet.</p>
-          <p className="text-gray-400 text-xs mt-1">Actions on frameworks and content will appear here.</p>
+          <p className="text-gray-500 text-xs mt-1">Actions on frameworks and content will appear here.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-0">
@@ -83,10 +83,10 @@ export default async function AuditLogPage() {
                         <span className="text-sm text-gray-500"> · <span className="font-medium text-gray-700">{e.entity_name}</span></span>
                       )}
                     </div>
-                    <span className="text-[10px] text-gray-400 shrink-0">{fmt(e.created_at)}</span>
+                    <span className="text-[10px] text-gray-500 shrink-0">{fmt(e.created_at)}</span>
                   </div>
 
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-gray-500 mt-0.5">
                     {e.actor_name ?? "Unknown"} · {e.entity_type}
                   </p>
 
@@ -97,7 +97,7 @@ export default async function AuditLogPage() {
                           {Object.entries(e.old_value).map(([k, v]) => `${k}: ${v}`).join(", ")}
                         </span>
                       )}
-                      {e.old_value && e.new_value && <span className="text-gray-300">→</span>}
+                      {e.old_value && e.new_value && <span className="text-gray-500">→</span>}
                       {e.new_value && (
                         <span className="bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)] px-1.5 py-0.5 rounded font-mono">
                           {Object.entries(e.new_value).map(([k, v]) => `${k}: ${v}`).join(", ")}

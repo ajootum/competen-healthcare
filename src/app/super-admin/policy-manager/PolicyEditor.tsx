@@ -41,7 +41,7 @@ export default function PolicyEditor({ frameworks }: { frameworks: Framework[] }
             placeholder="Policy title *" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Type</label>
+              <label className="text-xs text-gray-500 mb-1 block">Type</label>
               <select value={form.policy_type} onChange={e => setForm(p => ({ ...p, policy_type: e.target.value }))}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                 <option value="clinical">Clinical</option>
@@ -53,13 +53,13 @@ export default function PolicyEditor({ frameworks }: { frameworks: Framework[] }
               </select>
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Version</label>
+              <label className="text-xs text-gray-500 mb-1 block">Version</label>
               <input value={form.version} onChange={e => setForm(p => ({ ...p, version: e.target.value }))}
                 placeholder="1.0" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Link to Framework (optional)</label>
+            <label className="text-xs text-gray-500 mb-1 block">Link to Framework (optional)</label>
             <select value={form.framework_id} onChange={e => setForm(p => ({ ...p, framework_id: e.target.value }))}
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
               <option value="">No framework link</option>
@@ -68,18 +68,18 @@ export default function PolicyEditor({ frameworks }: { frameworks: Framework[] }
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Effective Date</label>
+              <label className="text-xs text-gray-500 mb-1 block">Effective Date</label>
               <input type="date" value={form.effective_date} onChange={e => setForm(p => ({ ...p, effective_date: e.target.value }))}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Review Date</label>
+              <label className="text-xs text-gray-500 mb-1 block">Review Date</label>
               <input type="date" value={form.review_date} onChange={e => setForm(p => ({ ...p, review_date: e.target.value }))}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             </div>
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Policy Content</label>
+            <label className="text-xs text-gray-500 mb-1 block">Policy Content</label>
             <textarea value={form.content} onChange={e => setForm(p => ({ ...p, content: e.target.value }))}
               rows={6} placeholder="Enter the full policy text here…"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none" />

@@ -12,9 +12,9 @@
 export function Kpi({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: string }) {
   return (
     <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
+      <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wide leading-tight">{label}</p>
       <p className={`text-2xl font-bold mt-1 ${tone ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
+      {sub && <p className="text-[10px] text-gray-500 mt-0.5">{sub}</p>}
     </div>
   );
 }
@@ -24,9 +24,9 @@ export function Kpi({ label, value, sub, tone }: { label: string; value: string 
 export function KpiTile({ label, value, sub, t }: { label: string; value: string | number; sub?: string; t?: string }) {
   return (
     <div className="bg-white rounded-xl border border-gray-100 p-3.5">
-      <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wide leading-tight">{label}</p>
+      <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wide leading-tight">{label}</p>
       <p className={`text-2xl font-bold mt-1 ${t ?? "text-gray-900"}`}>{value}</p>
-      {sub && <p className="text-[10px] text-gray-400 mt-0.5">{sub}</p>}
+      {sub && <p className="text-[10px] text-gray-500 mt-0.5">{sub}</p>}
     </div>
   );
 }

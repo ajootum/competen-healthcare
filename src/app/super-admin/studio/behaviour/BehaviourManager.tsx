@@ -11,7 +11,7 @@ const DOMAINS = [
 ];
 const SCALES = [{ v: "bars", label: "BARS" }, { v: "likert5", label: "5-point Likert" }, { v: "likert3", label: "3-point" }, { v: "binary", label: "Binary" }, { v: "global", label: "Global rating" }];
 const domLabel = (d: string) => DOMAINS.find(x => x.v === d)?.label ?? d;
-const STATUS_TONE: Record<string, string> = { draft: "text-gray-500 bg-gray-50 border-gray-200", active: "text-teal-600 bg-teal-50 border-teal-200", archived: "text-gray-400 bg-gray-50 border-gray-200" };
+const STATUS_TONE: Record<string, string> = { draft: "text-gray-500 bg-gray-50 border-gray-200", active: "text-teal-600 bg-teal-50 border-teal-200", archived: "text-gray-500 bg-gray-50 border-gray-200" };
 
 export default function BehaviourManager({ assessments }: { assessments: any[] }) {
   const router = useRouter();
@@ -55,7 +55,7 @@ export default function BehaviourManager({ assessments }: { assessments: any[] }
       </div>
 
       {assessments.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-100 p-6 text-center text-xs text-gray-400">No behaviour assessments yet — create one, then add observable behaviour indicators across the professional domains.</div>
+        <div className="bg-white rounded-xl border border-gray-100 p-6 text-center text-xs text-gray-500">No behaviour assessments yet — create one, then add observable behaviour indicators across the professional domains.</div>
       ) : assessments.map((a: any) => (
         <div key={a.id} className="bg-white rounded-xl border border-gray-100 p-4">
           <div className="flex items-center gap-2 flex-wrap">
@@ -65,7 +65,7 @@ export default function BehaviourManager({ assessments }: { assessments: any[] }
             <div className="ml-auto flex items-center gap-2 text-xs text-gray-500">
               <span>{a.indicators.length} indicator{a.indicators.length === 1 ? "" : "s"} · {a.domains} domain{a.domains === 1 ? "" : "s"}</span>
               {a.critical > 0 && <span className="text-[var(--cmp-text-critical)]">{a.critical} critical</span>}
-              <button onClick={() => del(a.id)} disabled={busy} className="text-gray-300 hover:text-red-500" title="Delete">✕</button>
+              <button onClick={() => del(a.id)} disabled={busy} className="text-gray-500 hover:text-red-500" title="Delete">✕</button>
             </div>
           </div>
 
@@ -78,9 +78,9 @@ export default function BehaviourManager({ assessments }: { assessments: any[] }
                       <span className="text-[9px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5 shrink-0 mt-0.5 w-28 text-center">{domLabel(i.domain)}</span>
                       <div className="flex-1 min-w-0">
                         <p className="text-gray-800">{i.statement} {i.critical && <span className="text-[9px] font-bold text-[var(--cmp-text-critical)]">CRITICAL</span>}</p>
-                        {(i.positive || i.negative) && <p className="text-[10px] text-gray-400">{i.positive ? `＋ ${i.positive}` : ""}{i.positive && i.negative ? "  ·  " : ""}{i.negative ? `− ${i.negative}` : ""}</p>}
+                        {(i.positive || i.negative) && <p className="text-[10px] text-gray-500">{i.positive ? `＋ ${i.positive}` : ""}{i.positive && i.negative ? "  ·  " : ""}{i.negative ? `− ${i.negative}` : ""}</p>}
                       </div>
-                      <button onClick={() => removeI(i.id)} disabled={busy} className="text-gray-300 hover:text-red-500 shrink-0" title="Remove">✕</button>
+                      <button onClick={() => removeI(i.id)} disabled={busy} className="text-gray-500 hover:text-red-500 shrink-0" title="Remove">✕</button>
                     </div>
                   ))}
                 </div>
@@ -98,7 +98,7 @@ export default function BehaviourManager({ assessments }: { assessments: any[] }
                 </div>
               </div>
               {a.indicators.length > 0 && a.status !== "active" && <button onClick={() => setStatus(a.id, "active")} disabled={busy} className="mt-2 text-[11px] font-semibold text-teal-700 hover:underline">Activate →</button>}
-              {a.status === "active" && <button onClick={() => setStatus(a.id, "archived")} disabled={busy} className="mt-2 text-[11px] font-semibold text-gray-400 hover:underline">Archive</button>}
+              {a.status === "active" && <button onClick={() => setStatus(a.id, "archived")} disabled={busy} className="mt-2 text-[11px] font-semibold text-gray-500 hover:underline">Archive</button>}
             </div>
           )}
         </div>

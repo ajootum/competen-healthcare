@@ -43,7 +43,7 @@ export default function JobsPanel({ initial }: { initial: any }) {
     <div className={cardClass}>
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold text-gray-900 text-[15px]">Operational Jobs &amp; Backups
-          {s.ready && <span className="ml-2 text-[10px] font-medium text-gray-400">{s.runs24h} runs 24h{s.failed24h ? ` · ${s.failed24h} failed` : ""}</span>}
+          {s.ready && <span className="ml-2 text-[10px] font-medium text-gray-500">{s.runs24h} runs 24h{s.failed24h ? ` · ${s.failed24h} failed` : ""}</span>}
         </h2>
         {msg && <span className={`text-xs rounded-lg px-2.5 py-1 ${msg.k === "ok" ? "bg-[var(--cmp-surface-success)] text-green-800" : "bg-[var(--cmp-surface-warning)] text-amber-800"}`}>{msg.t}</span>}
       </div>
@@ -59,15 +59,15 @@ export default function JobsPanel({ initial }: { initial: any }) {
           <div key={j.key} className="flex items-center gap-3 py-1.5">
             <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS[j.last?.status]?.dot ?? "bg-gray-300"}`} />
             <div className="min-w-0 flex-1">
-              <p className="text-sm text-gray-800 truncate">{j.name} <span className="text-[10px] text-gray-400">· {j.category}</span></p>
-              <p className="text-[10px] text-gray-400 truncate">{j.last ? `${j.last.status} ${rel(j.last.started_at)}${j.last.detail ? ` · ${j.last.detail}` : ""}` : (j.runnable ? "not yet run" : "runs on its own cron")}</p>
+              <p className="text-sm text-gray-800 truncate">{j.name} <span className="text-[10px] text-gray-500">· {j.category}</span></p>
+              <p className="text-[10px] text-gray-500 truncate">{j.last ? `${j.last.status} ${rel(j.last.started_at)}${j.last.detail ? ` · ${j.last.detail}` : ""}` : (j.runnable ? "not yet run" : "runs on its own cron")}</p>
             </div>
             {j.runnable ? (
               <button onClick={() => run(j.key, j.name)} disabled={busy === j.key || !s.ready}
                 className="text-[11px] font-medium rounded-lg border border-gray-200 px-2.5 py-1 text-gray-600 hover:bg-gray-50 disabled:opacity-40 shrink-0">
                 {busy === j.key ? "Running…" : "Run"}
               </button>
-            ) : <span className="text-[10px] text-gray-400 shrink-0">cron</span>}
+            ) : <span className="text-[10px] text-gray-500 shrink-0">cron</span>}
           </div>
         ))}
       </div>
@@ -75,7 +75,7 @@ export default function JobsPanel({ initial }: { initial: any }) {
       <div className="mt-3 pt-3 border-t border-gray-50 flex items-center gap-2">
         <span className="text-lg">💾</span>
         <div><p className="text-sm font-medium text-gray-700">Database Backups</p><p className="text-[11px] text-gray-500">Managed by Supabase — run history not surfaced here.</p></div>
-        <span className="ml-auto text-[9px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">Not connected</span>
+        <span className="ml-auto text-[9px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">Not connected</span>
       </div>
     </div>
   );

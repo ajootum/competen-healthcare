@@ -38,7 +38,7 @@ export default async function CampaignsPage() {
         <div>
           <p className="text-[11px] font-semibold text-violet-500 uppercase tracking-widest mb-0.5">CDP-008 · Assignment & Campaign Manager</p>
           <h1 className="text-xl font-bold text-gray-900">Learning Campaigns</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Broadcast a competency initiative to a cohort with a deadline — and watch compliance climb, live.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Broadcast a competency initiative to a cohort with a deadline — and watch compliance climb, live.</p>
         </div>
         <Link href="/super-admin/delivery" className="text-xs font-semibold text-gray-500 hover:text-violet-700 border border-gray-200 rounded-lg px-3 py-2 shrink-0">← Delivery</Link>
       </div>
@@ -56,7 +56,7 @@ export default async function CampaignsPage() {
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-0.5">{k.label}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-0.5">{k.label}</p>
               </div>
             ))}
           </div>

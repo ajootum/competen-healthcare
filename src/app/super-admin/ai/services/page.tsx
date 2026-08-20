@@ -57,36 +57,36 @@ export default async function AiControlPlanePage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card title="Providers" right={<Link href="/super-admin/ai/services/models" className="text-[11px] text-violet-600 hover:underline">Registry →</Link>}>
           <div className="space-y-2">{d.providers.map((p: any) => (
-            <div key={p.code} className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${p.live ? "bg-[var(--cmp-color-success)]" : p.status === "active" ? "bg-[var(--cmp-color-information)]" : "bg-gray-300"}`} /><div className="min-w-0 flex-1"><p className="text-[12px] text-gray-800 leading-tight">{p.name}</p><p className="text-[10px] text-gray-400 font-mono">{p.code}</p></div>{p.live && <Pill text="configured" tone="emerald" />}<Pill text={p.status} tone={p.status === "active" ? "blue" : "slate"} /></div>
+            <div key={p.code} className="flex items-center gap-2"><span className={`w-2 h-2 rounded-full ${p.live ? "bg-[var(--cmp-color-success)]" : p.status === "active" ? "bg-[var(--cmp-color-information)]" : "bg-gray-300"}`} /><div className="min-w-0 flex-1"><p className="text-[12px] text-gray-800 leading-tight">{p.name}</p><p className="text-[10px] text-gray-500 font-mono">{p.code}</p></div>{p.live && <Pill text="configured" tone="emerald" />}<Pill text={p.status} tone={p.status === "active" ? "blue" : "slate"} /></div>
           ))}</div>
         </Card>
 
-        <Card title="Usage by Model" className="xl:col-span-2" right={<span className="text-[11px] text-gray-400">last 24h</span>}>
-          {d.byModel.length ? <Bars rows={d.byModel.map((m: any) => ({ label: m.label, n: m.n, extra: `${m.n} · $${m.cost}` }))} /> : <p className="text-sm text-gray-400 py-6 text-center">No AI calls in the last 24h — telemetry populates as the platform generates. Run the seed for demo data.</p>}
+        <Card title="Usage by Model" className="xl:col-span-2" right={<span className="text-[11px] text-gray-500">last 24h</span>}>
+          {d.byModel.length ? <Bars rows={d.byModel.map((m: any) => ({ label: m.label, n: m.n, extra: `${m.n} · $${m.cost}` }))} /> : <p className="text-sm text-gray-500 py-6 text-center">No AI calls in the last 24h — telemetry populates as the platform generates. Run the seed for demo data.</p>}
         </Card>
       </div>
 
-      <Card title="AI Services Platform — Module Delivery Status" right={<span className="text-[11px] text-gray-400">AIS-001…012</span>}>
+      <Card title="AI Services Platform — Module Delivery Status" right={<span className="text-[11px] text-gray-500">AIS-001…012</span>}>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
           {MODULE_MAP.map(([code, name, state, detail]) => { const t = MOD_TONE[state]; return (
             <div key={code} className="flex items-start gap-2 border border-gray-100 rounded-lg p-2.5">
               <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${t.dot}`} />
-              <div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><span className="text-[10px] text-gray-300 font-mono">AIS-{code}</span><p className="text-[12px] font-medium text-gray-900 leading-tight">{name}</p></div><p className="text-[10px] text-gray-400 mt-0.5">{detail}</p></div>
+              <div className="min-w-0 flex-1"><div className="flex items-center gap-1.5"><span className="text-[10px] text-gray-500 font-mono">AIS-{code}</span><p className="text-[12px] font-medium text-gray-900 leading-tight">{name}</p></div><p className="text-[10px] text-gray-500 mt-0.5">{detail}</p></div>
               <Pill text={t.label} tone={t.pill} />
             </div>
           ); })}
         </div>
-        <p className="text-[10px] text-gray-400 mt-2">🟢 live now · 🟡 registry/config (Phase 2) · 🔵 governance/eval (Phase 3) · ⚪ backend runtime epic (extends src/lib/ai/*, not a dashboard).</p>
+        <p className="text-[10px] text-gray-500 mt-2">🟢 live now · 🟡 registry/config (Phase 2) · 🔵 governance/eval (Phase 3) · ⚪ backend runtime epic (extends src/lib/ai/*, not a dashboard).</p>
       </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <Card title="Usage by Operation" right={<span className="text-[11px] text-gray-400">last 24h</span>}>
-          {d.byOperation.length ? <Bars rows={d.byOperation.map((o: any) => ({ label: o.label, n: o.n, extra: `${o.n} calls` }))} /> : <p className="text-sm text-gray-400 py-4 text-center">No operations recorded.</p>}
+        <Card title="Usage by Operation" right={<span className="text-[11px] text-gray-500">last 24h</span>}>
+          {d.byOperation.length ? <Bars rows={d.byOperation.map((o: any) => ({ label: o.label, n: o.n, extra: `${o.n} calls` }))} /> : <p className="text-sm text-gray-500 py-4 text-center">No operations recorded.</p>}
         </Card>
         <Card title="Recent AI Activity" right={<Link href="/super-admin/ai/services/observability" className="text-[11px] text-violet-600 hover:underline">Observability →</Link>}>
           {d.recent.length ? <div className="space-y-1">{d.recent.slice(0, 8).map((r: any, i: number) => (
-            <div key={i} className="flex items-center gap-2 text-[11px]"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.status === "ok" ? "bg-[var(--cmp-color-success)]" : r.status === "refusal" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} /><span className="text-gray-700 flex-1 truncate">{r.operation} · <span className="font-mono text-gray-400">{r.model}</span></span><span className="text-gray-400 tabular-nums">{r.tokens ?? "—"}t</span><span className="text-gray-400">{fmtT(r.at)}</span></div>
-          ))}</div> : <p className="text-sm text-gray-400 py-4 text-center">No recent activity.</p>}
+            <div key={i} className="flex items-center gap-2 text-[11px]"><span className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.status === "ok" ? "bg-[var(--cmp-color-success)]" : r.status === "refusal" ? "bg-[var(--cmp-color-warning)]" : "bg-[var(--cmp-color-error)]"}`} /><span className="text-gray-700 flex-1 truncate">{r.operation} · <span className="font-mono text-gray-500">{r.model}</span></span><span className="text-gray-500 tabular-nums">{r.tokens ?? "—"}t</span><span className="text-gray-500">{fmtT(r.at)}</span></div>
+          ))}</div> : <p className="text-sm text-gray-500 py-4 text-center">No recent activity.</p>}
         </Card>
       </div>
 

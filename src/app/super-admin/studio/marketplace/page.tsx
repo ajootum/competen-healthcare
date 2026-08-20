@@ -38,7 +38,7 @@ export default async function StudioMarketplacePage() {
         <div>
           <p className="text-[11px] font-semibold text-rose-500 uppercase tracking-widest mb-0.5">CST-110 · Marketplace</p>
           <h1 className="text-xl font-bold text-gray-900">Competency Marketplace</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Discover and adopt published competency packages across the enterprise.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Discover and adopt published competency packages across the enterprise.</p>
         </div>
         <Link href="/super-admin/studio/packages" className="text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg px-3 py-2">Publisher console →</Link>
       </div>
@@ -53,22 +53,22 @@ export default async function StudioMarketplacePage() {
               { label: "Published packages", value: published.length, tone: "text-teal-600" },
               { label: "Bundled items", value: bundledItems, tone: "text-gray-900" },
               { label: "Categories", value: PACKAGE_TYPES.filter(t => catByType(t.key) > 0).length, tone: "text-gray-900" },
-              { label: "In draft (not listed)", value: pkg.kpis.draft, tone: "text-gray-400" },
+              { label: "In draft (not listed)", value: pkg.kpis.draft, tone: "text-gray-500" },
             ].map(k => (
               <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className={`text-xl font-bold ${k.tone}`}>{k.value}</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-0.5">{k.label}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-0.5">{k.label}</p>
               </div>
             ))}
           </div>
 
           {/* Browse by category */}
-          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Browse by category</h2>
+          <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Browse by category</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
             {PACKAGE_TYPES.map(t => (
               <div key={t.key} className="bg-white rounded-xl border border-gray-100 p-3.5">
                 <p className="text-lg font-bold text-gray-900">{catByType(t.key)}</p>
-                <p className="text-[10px] text-gray-400 font-medium mt-0.5">{t.label}</p>
+                <p className="text-[10px] text-gray-500 font-medium mt-0.5">{t.label}</p>
               </div>
             ))}
           </div>
@@ -77,11 +77,11 @@ export default async function StudioMarketplacePage() {
           {published.length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-100 p-8 text-center">
               <p className="text-sm text-gray-500 font-medium">No published packages yet</p>
-              <p className="text-xs text-gray-400 mt-1">Build a package in the <Link href="/super-admin/studio/packages" className="text-teal-600 hover:underline">Package Manager</Link> and publish it — it will appear here for the enterprise to discover.</p>
+              <p className="text-xs text-gray-500 mt-1">Build a package in the <Link href="/super-admin/studio/packages" className="text-teal-600 hover:underline">Package Manager</Link> and publish it — it will appear here for the enterprise to discover.</p>
             </div>
           ) : (
             <>
-              <h2 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Catalogue</h2>
+              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Catalogue</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 mb-5">
                 {featured.map(p => (
                   <div key={p.id} className="bg-white rounded-xl border border-gray-100 p-5">
@@ -91,14 +91,14 @@ export default async function StudioMarketplacePage() {
                     </div>
                     <div className="flex items-center gap-1.5 mb-2">
                       <span className="text-[10px] font-semibold text-gray-500 bg-gray-50 border border-gray-100 rounded px-1.5 py-0.5">{PKG_TYPE_LABEL[p.package_type]}</span>
-                      <span className="text-[10px] text-gray-400">v{p.version}</span>
+                      <span className="text-[10px] text-gray-500">v{p.version}</span>
                     </div>
-                    {p.description && <p className="text-[11px] text-gray-400 leading-relaxed mb-2 line-clamp-2">{p.description}</p>}
+                    {p.description && <p className="text-[11px] text-gray-500 leading-relaxed mb-2 line-clamp-2">{p.description}</p>}
                     <div className="flex flex-wrap gap-1 mb-2">
                       {breakdown(p.items).map(b => <span key={b.label} className="text-[10px] font-medium text-teal-700 bg-teal-50 border border-teal-100 rounded px-1.5 py-0.5">{b.n} {b.label}{b.n === 1 ? "" : "s"}</span>)}
-                      {p.itemCount === 0 && <span className="text-[10px] text-gray-300">No items</span>}
+                      {p.itemCount === 0 && <span className="text-[10px] text-gray-500">No items</span>}
                     </div>
-                    <p className="text-[10px] text-gray-400">{p.itemCount} item{p.itemCount === 1 ? "" : "s"} · by {p.created_by_name ?? "—"}</p>
+                    <p className="text-[10px] text-gray-500">{p.itemCount} item{p.itemCount === 1 ? "" : "s"} · by {p.created_by_name ?? "—"}</p>
                   </div>
                 ))}
               </div>

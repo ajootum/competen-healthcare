@@ -114,7 +114,7 @@ export default function RecoveryConsole({ openEvents }: { openEvents: Picker[] }
         <div className="flex items-center gap-2 mt-4">
           <button onClick={act} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Working…" : TABS.find(t => t.key === tab)!.label}</button>
           <button onClick={() => setForm({})} className="text-sm text-gray-500 hover:text-gray-700 px-2">Clear</button>
-          <span className="text-[11px] text-gray-400 ml-auto">Real resilience evidence — audit-logged.</span>
+          <span className="text-[11px] text-gray-500 ml-auto">Real resilience evidence — audit-logged.</span>
         </div>
       </div>
     </div>

@@ -75,53 +75,53 @@ export default function NavigationDesigner({ navs, targets }: { navs: Obj[]; tar
   }
 
   const card = "bg-white rounded-xl border border-gray-200";
-  if (!navs.length) return <div className={`${card} p-8 text-center`}><p className="text-sm text-gray-500">No navigation sections yet.</p><p className="text-xs text-gray-400 mt-1">Author a <b>Navigation Section</b> in the <a href="/super-admin/platform-ops/studio" className="text-indigo-700 underline">Configuration Studio</a> first, then design it here.</p></div>;
+  if (!navs.length) return <div className={`${card} p-8 text-center`}><p className="text-sm text-gray-500">No navigation sections yet.</p><p className="text-xs text-gray-500 mt-1">Author a <b>Navigation Section</b> in the <a href="/super-admin/platform-ops/studio" className="text-indigo-700 underline">Configuration Studio</a> first, then design it here.</p></div>;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
       <div className={`${card} p-4`}>
         <p className="text-[11px] font-semibold text-gray-500 mb-2">Navigation sections ({navs.length})</p>
         <div className="space-y-1 max-h-[560px] overflow-y-auto">
-          {navs.map(o => <button key={o.object_key} onClick={() => pick(o.object_key)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === o.object_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}><p className="text-xs font-medium text-gray-800 truncate">{o.display_name}</p><p className="text-[10px] text-gray-400 truncate">{(o.definition?.items?.length ?? 0)} item(s)</p></button>)}
+          {navs.map(o => <button key={o.object_key} onClick={() => pick(o.object_key)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === o.object_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}><p className="text-xs font-medium text-gray-800 truncate">{o.display_name}</p><p className="text-[10px] text-gray-500 truncate">{(o.definition?.items?.length ?? 0)} item(s)</p></button>)}
         </div>
       </div>
 
       <div className={`${card} p-5 lg:col-span-3`}>
-        {!selO ? <p className="text-sm text-gray-400 py-16 text-center">Select a navigation section.</p> : (
+        {!selO ? <p className="text-sm text-gray-500 py-16 text-center">Select a navigation section.</p> : (
           <>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-900">{selO.display_name}</h3>
               <div className="flex items-center gap-2">
                 <select className={`${input} w-28`} value={d.navType ?? "sidebar"} onChange={e => setD(p => ({ ...p, navType: e.target.value }))}>{NAV.map(n => <option key={n.v} value={n.v}>{n.l}</option>)}</select>
-                <span className="text-[10px] text-gray-400 font-mono">{selO.object_key}</span>
+                <span className="text-[10px] text-gray-500 font-mono">{selO.object_key}</span>
               </div>
             </div>
 
             {/* Menu tree */}
-            <div className="flex items-center justify-between mb-2"><p className="text-[11px] font-semibold text-gray-500">Menu items <span className="font-normal text-gray-400">· one level of nesting</span></p><button onClick={addTop} className="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1">+ Item</button></div>
-            {items.length === 0 ? <p className="text-xs text-gray-400 py-3 text-center">Add items to compose the menu.</p> : (
+            <div className="flex items-center justify-between mb-2"><p className="text-[11px] font-semibold text-gray-500">Menu items <span className="font-normal text-gray-500">· one level of nesting</span></p><button onClick={addTop} className="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1">+ Item</button></div>
+            {items.length === 0 ? <p className="text-xs text-gray-500 py-3 text-center">Add items to compose the menu.</p> : (
               <div className="space-y-2 mb-4">
                 {items.map((it, i) => (
                   <div key={it.key} className="border border-gray-100 rounded-lg p-2">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <div className="flex flex-col leading-none"><button onClick={() => moveTop(i, -1)} disabled={i === 0} className="text-gray-300 hover:text-gray-600 disabled:opacity-30 text-[10px]">▲</button><button onClick={() => moveTop(i, 1)} disabled={i === items.length - 1} className="text-gray-300 hover:text-gray-600 disabled:opacity-30 text-[10px]">▼</button></div>
+                      <div className="flex flex-col leading-none"><button onClick={() => moveTop(i, -1)} disabled={i === 0} className="text-gray-500 hover:text-gray-600 disabled:opacity-30 text-[10px]">▲</button><button onClick={() => moveTop(i, 1)} disabled={i === items.length - 1} className="text-gray-500 hover:text-gray-600 disabled:opacity-30 text-[10px]">▼</button></div>
                       <input className={`${input} w-10 text-center`} value={it.icon ?? ""} onChange={e => patchTop(i, { icon: e.target.value })} placeholder="⬚" title="icon" />
                       <input className={`${input} flex-1 min-w-[6rem]`} value={it.label} onChange={e => patchTop(i, { label: e.target.value })} placeholder="Label" />
                       <LinkPicker item={it} onPatch={p => patchTop(i, p)} targets={targets} />
                       <input className={`${input} w-24`} value={it.roles ?? ""} onChange={e => patchTop(i, { roles: e.target.value })} placeholder="roles (opt)" />
                       <button onClick={() => addChild(i)} className="text-[10px] font-medium text-indigo-700 border border-indigo-200 rounded px-1.5 py-0.5 hover:bg-indigo-50">+ sub</button>
-                      <button onClick={() => rmTop(i)} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
+                      <button onClick={() => rmTop(i)} className="text-gray-500 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
                     </div>
                     {(it.children ?? []).length > 0 && (
                       <div className="mt-1.5 ml-6 space-y-1 border-l border-gray-100 pl-2">
                         {(it.children ?? []).map((c, ci) => (
                           <div key={c.key} className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-gray-300 text-[10px]">↳</span>
+                            <span className="text-gray-500 text-[10px]">↳</span>
                             <input className={`${input} w-10 text-center`} value={c.icon ?? ""} onChange={e => patchChild(i, ci, { icon: e.target.value })} placeholder="⬚" />
                             <input className={`${input} flex-1 min-w-[5rem]`} value={c.label} onChange={e => patchChild(i, ci, { label: e.target.value })} placeholder="Sub-item" />
                             <LinkPicker item={c} onPatch={p => patchChild(i, ci, p)} targets={targets} w="w-32" />
                             <input className={`${input} w-20`} value={c.roles ?? ""} onChange={e => patchChild(i, ci, { roles: e.target.value })} placeholder="roles" />
-                            <button onClick={() => rmChild(i, ci)} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
+                            <button onClick={() => rmChild(i, ci)} className="text-gray-500 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
                           </div>
                         ))}
                       </div>
@@ -150,7 +150,7 @@ export default function NavigationDesigner({ navs, targets }: { navs: Obj[]; tar
                     <div key={q.key} className="flex items-center gap-1.5">
                       <input className={`${input} flex-1`} value={q.label} onChange={e => setQAs(qq => qq.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} placeholder="Action label" />
                       <LinkPicker item={q} onPatch={p => setQAs(qq => qq.map((x, j) => j === i ? { ...x, ...p } : x))} targets={targets} w="w-28" />
-                      <button onClick={() => setQAs(qq => qq.filter((_, j) => j !== i))} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
+                      <button onClick={() => setQAs(qq => qq.filter((_, j) => j !== i))} className="text-gray-500 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
                     </div>
                   ))}
                 </div>
@@ -161,7 +161,7 @@ export default function NavigationDesigner({ navs, targets }: { navs: Obj[]; tar
             {items.length > 0 && (
               <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[11px] font-semibold text-gray-500">Preview <span className="font-normal text-gray-400">· {NAV.find(n => n.v === d.navType)?.l}</span></p>
+                  <p className="text-[11px] font-semibold text-gray-500">Preview <span className="font-normal text-gray-500">· {NAV.find(n => n.v === d.navType)?.l}</span></p>
                   <label className="flex items-center gap-1 text-[11px] text-gray-500">preview as role <input className={`${input} w-24`} value={asRole} onChange={e => setAsRole(e.target.value)} placeholder="e.g. nurse" /></label>
                 </div>
                 <div className="bg-white border border-gray-200 rounded-md p-2 max-w-xs">
@@ -169,8 +169,8 @@ export default function NavigationDesigner({ navs, targets }: { navs: Obj[]; tar
                     const vis = visibleFor(it);
                     return (
                       <div key={it.key} className={vis ? "" : "opacity-40"}>
-                        <div className="flex items-center gap-1.5 px-1.5 py-1 text-xs text-gray-700"><span className="w-4 text-center">{it.icon || "•"}</span><span className={vis ? "" : "line-through"}>{it.label || <span className="text-gray-300">untitled</span>}</span>{targetName(it.target) && <span className="text-[9px] text-indigo-400 ml-auto truncate max-w-[7rem]">{targetName(it.target)}</span>}</div>
-                        {(it.children ?? []).map(c => { const cv = visibleFor(c); return <div key={c.key} className={`flex items-center gap-1.5 pl-6 pr-1.5 py-0.5 text-[11px] text-gray-500 ${cv ? "" : "opacity-40"}`}><span className="w-3 text-center">{c.icon || "◦"}</span><span className={cv ? "" : "line-through"}>{c.label || <span className="text-gray-300">untitled</span>}</span></div>; })}
+                        <div className="flex items-center gap-1.5 px-1.5 py-1 text-xs text-gray-700"><span className="w-4 text-center">{it.icon || "•"}</span><span className={vis ? "" : "line-through"}>{it.label || <span className="text-gray-500">untitled</span>}</span>{targetName(it.target) && <span className="text-[9px] text-indigo-400 ml-auto truncate max-w-[7rem]">{targetName(it.target)}</span>}</div>
+                        {(it.children ?? []).map(c => { const cv = visibleFor(c); return <div key={c.key} className={`flex items-center gap-1.5 pl-6 pr-1.5 py-0.5 text-[11px] text-gray-500 ${cv ? "" : "opacity-40"}`}><span className="w-3 text-center">{c.icon || "◦"}</span><span className={cv ? "" : "line-through"}>{c.label || <span className="text-gray-500">untitled</span>}</span></div>; })}
                       </div>
                     );
                   })}

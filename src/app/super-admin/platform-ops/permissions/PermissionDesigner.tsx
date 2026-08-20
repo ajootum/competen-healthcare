@@ -77,25 +77,25 @@ export default function PermissionDesigner({ permissions }: { permissions: Obj[]
   }
 
   const card = "bg-white rounded-xl border border-gray-200";
-  if (!permissions.length) return <div className={`${card} p-8 text-center`}><p className="text-sm text-gray-500">No permission sets yet.</p><p className="text-xs text-gray-400 mt-1">Author a <b>Permission</b> object in the <a href="/super-admin/platform-ops/studio" className="text-indigo-700 underline">Configuration Studio</a> first, then design it here.</p></div>;
+  if (!permissions.length) return <div className={`${card} p-8 text-center`}><p className="text-sm text-gray-500">No permission sets yet.</p><p className="text-xs text-gray-500 mt-1">Author a <b>Permission</b> object in the <a href="/super-admin/platform-ops/studio" className="text-indigo-700 underline">Configuration Studio</a> first, then design it here.</p></div>;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
       <div className={`${card} p-4`}>
         <p className="text-[11px] font-semibold text-gray-500 mb-2">Permission sets ({permissions.length})</p>
         <div className="space-y-1 max-h-[560px] overflow-y-auto">
-          {permissions.map(o => <button key={o.object_key} onClick={() => pick(o.object_key)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === o.object_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}><p className="text-xs font-medium text-gray-800 truncate">{o.display_name}</p><p className="text-[10px] text-gray-400 truncate">{(o.definition?.grants?.length ?? 0)} grant(s)</p></button>)}
+          {permissions.map(o => <button key={o.object_key} onClick={() => pick(o.object_key)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === o.object_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}><p className="text-xs font-medium text-gray-800 truncate">{o.display_name}</p><p className="text-[10px] text-gray-500 truncate">{(o.definition?.grants?.length ?? 0)} grant(s)</p></button>)}
         </div>
       </div>
 
       <div className={`${card} p-5 lg:col-span-3`}>
-        {!selO ? <p className="text-sm text-gray-400 py-16 text-center">Select a permission set.</p> : (
+        {!selO ? <p className="text-sm text-gray-500 py-16 text-center">Select a permission set.</p> : (
           <>
-            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-gray-900">{selO.display_name}</h3><span className="text-[10px] text-gray-400 font-mono">{selO.object_key}</span></div>
+            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-gray-900">{selO.display_name}</h3><span className="text-[10px] text-gray-500 font-mono">{selO.object_key}</span></div>
 
             {/* Grants */}
-            <div className="flex items-center justify-between mb-2"><p className="text-[11px] font-semibold text-gray-500">Grants <span className="font-normal text-gray-400">· deny overrides allow</span></p><button onClick={addGrant} className="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1">+ Grant</button></div>
-            {grants.length === 0 ? <p className="text-xs text-gray-400 py-3 text-center">Add grants to define what this set permits.</p> : (
+            <div className="flex items-center justify-between mb-2"><p className="text-[11px] font-semibold text-gray-500">Grants <span className="font-normal text-gray-500">· deny overrides allow</span></p><button onClick={addGrant} className="text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-1">+ Grant</button></div>
+            {grants.length === 0 ? <p className="text-xs text-gray-500 py-3 text-center">Add grants to define what this set permits.</p> : (
               <div className="space-y-1.5 mb-4">
                 {grants.map((g, i) => (
                   <div key={g.key} className="flex items-center gap-1.5 border border-gray-100 rounded-lg px-2.5 py-1.5 flex-wrap">
@@ -103,24 +103,24 @@ export default function PermissionDesigner({ permissions }: { permissions: Obj[]
                     <select className={`${input} w-32`} value={g.resource} onChange={e => setGrants(gs => gs.map((x, j) => j === i ? { ...x, resource: e.target.value } : x))}>{RES.map(r => <option key={r} value={r}>{r}</option>)}</select>
                     <input className={`${input} w-32`} value={g.resourceKey ?? ""} onChange={e => setGrants(gs => gs.map((x, j) => j === i ? { ...x, resourceKey: e.target.value } : x))} placeholder="key (opt · * = any)" />
                     <select className={`${input} w-24`} value={g.action} onChange={e => setGrants(gs => gs.map((x, j) => j === i ? { ...x, action: e.target.value } : x))}>{ACT.map(a => <option key={a} value={a}>{a}</option>)}</select>
-                    <span className="text-[9px] text-gray-300 font-mono">{g.key}</span>
-                    <button onClick={() => setGrants(gs => gs.filter((_, j) => j !== i))} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs ml-auto">✕</button>
+                    <span className="text-[9px] text-gray-500 font-mono">{g.key}</span>
+                    <button onClick={() => setGrants(gs => gs.filter((_, j) => j !== i))} className="text-gray-500 hover:text-[var(--cmp-text-error)] text-xs ml-auto">✕</button>
                   </div>
                 ))}
               </div>
             )}
 
             {/* Visibility rules */}
-            <div className="flex items-center justify-between mb-2"><p className="text-[11px] font-semibold text-gray-500">Visibility rules <span className="font-normal text-gray-400">· ABAC · all must hold</span></p><button onClick={addRule} className="text-xs font-medium text-indigo-700 border border-indigo-200 rounded-lg px-2.5 py-1 hover:bg-indigo-50">+ Rule</button></div>
-            {rules.length === 0 ? <p className="text-xs text-gray-400 py-3 text-center">No rules — this set applies in every context.</p> : (
+            <div className="flex items-center justify-between mb-2"><p className="text-[11px] font-semibold text-gray-500">Visibility rules <span className="font-normal text-gray-500">· ABAC · all must hold</span></p><button onClick={addRule} className="text-xs font-medium text-indigo-700 border border-indigo-200 rounded-lg px-2.5 py-1 hover:bg-indigo-50">+ Rule</button></div>
+            {rules.length === 0 ? <p className="text-xs text-gray-500 py-3 text-center">No rules — this set applies in every context.</p> : (
               <div className="space-y-1.5 mb-4">
                 {rules.map((r, i) => (
                   <div key={r.key} className="flex items-center gap-1.5 border border-gray-100 rounded-lg px-2.5 py-1.5 flex-wrap">
                     <select className={`${input} w-36`} value={r.attribute} onChange={e => setRules(rs => rs.map((x, j) => j === i ? { ...x, attribute: e.target.value } : x))}>{ATTR.map(a => <option key={a} value={a}>{a}</option>)}</select>
                     <select className={`${input} w-28`} value={r.operator} onChange={e => setRules(rs => rs.map((x, j) => j === i ? { ...x, operator: e.target.value } : x))}>{OPS.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}</select>
                     {r.operator !== "exists" && <input className={`${input} flex-1 min-w-[6rem]`} value={r.value} onChange={e => setRules(rs => rs.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} placeholder="value" />}
-                    <span className="text-[9px] text-gray-300 font-mono">{r.key}</span>
-                    <button onClick={() => setRules(rs => rs.filter((_, j) => j !== i))} className="text-gray-300 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
+                    <span className="text-[9px] text-gray-500 font-mono">{r.key}</span>
+                    <button onClick={() => setRules(rs => rs.filter((_, j) => j !== i))} className="text-gray-500 hover:text-[var(--cmp-text-error)] text-xs">✕</button>
                   </div>
                 ))}
               </div>
@@ -130,17 +130,17 @@ export default function PermissionDesigner({ permissions }: { permissions: Obj[]
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <p className="text-[11px] font-semibold text-gray-500 mb-1.5">Inherits from</p>
-                {permissions.filter(p => p.object_key !== selO.object_key).length === 0 ? <p className="text-[11px] text-gray-400">No other sets to inherit.</p> : (
+                {permissions.filter(p => p.object_key !== selO.object_key).length === 0 ? <p className="text-[11px] text-gray-500">No other sets to inherit.</p> : (
                   <div className="space-y-1 max-h-28 overflow-y-auto">
                     {permissions.filter(p => p.object_key !== selO.object_key).map(p => <label key={p.object_key} className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={inherits.includes(p.object_key)} onChange={() => toggleInherit(p.object_key)} />{p.display_name}</label>)}
                   </div>
                 )}
               </div>
               <div>
-                <p className="text-[11px] font-semibold text-gray-500 mb-1.5">Effective window <span className="font-normal text-gray-400">· temporary access (opt)</span></p>
+                <p className="text-[11px] font-semibold text-gray-500 mb-1.5">Effective window <span className="font-normal text-gray-500">· temporary access (opt)</span></p>
                 <div className="flex items-center gap-1.5">
                   <input type="date" className={`${input} w-32`} value={d.effective?.from ?? ""} onChange={e => setD(p => ({ ...p, effective: { ...p.effective, from: e.target.value } }))} />
-                  <span className="text-gray-300 text-xs">→</span>
+                  <span className="text-gray-500 text-xs">→</span>
                   <input type="date" className={`${input} w-32`} value={d.effective?.to ?? ""} onChange={e => setD(p => ({ ...p, effective: { ...p.effective, to: e.target.value } }))} />
                 </div>
               </div>
@@ -148,19 +148,19 @@ export default function PermissionDesigner({ permissions }: { permissions: Obj[]
 
             {/* Policy simulation */}
             <div className="rounded-lg bg-gray-50 border border-gray-100 p-3">
-              <p className="text-[11px] font-semibold text-gray-500 mb-2">Policy simulation <span className="font-normal text-gray-400">· preview effective access for a context</span></p>
+              <p className="text-[11px] font-semibold text-gray-500 mb-2">Policy simulation <span className="font-normal text-gray-500">· preview effective access for a context</span></p>
               {attrsUsed.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-2.5">
                   {attrsUsed.map(a => <label key={a} className="flex items-center gap-1 text-[11px]"><span className="text-gray-500">{a}</span><input className={`${input} w-24`} value={ctx[a] ?? ""} onChange={e => setCtx(c => ({ ...c, [a]: e.target.value }))} placeholder="value" /></label>)}
                 </div>
               )}
               <div className={`text-xs font-medium mb-2 ${applies ? "text-emerald-700" : "text-[var(--cmp-text-error)]"}`}>{applies ? "✓ This set applies in this context" : `✕ Not applicable — ${failing.length} rule(s) not met (${failing.map(f => f.attribute).join(", ")})`}</div>
-              {applies && (effective.length === 0 ? <p className="text-[11px] text-gray-400">No grants defined.</p> : (
+              {applies && (effective.length === 0 ? <p className="text-[11px] text-gray-500">No grants defined.</p> : (
                 <div className="space-y-0.5">
-                  {effective.map(g => <div key={`${g.resource}|${g.resourceKey}|${g.action}`} className="flex items-center gap-2 text-[11px]"><span className={`font-semibold w-12 ${g.effect === "allow" ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{g.effect}</span><span className="text-gray-700">{g.action}</span><span className="text-gray-400">on</span><span className="text-gray-700">{g.resource}{g.resourceKey ? `:${g.resourceKey}` : ""}</span></div>)}
+                  {effective.map(g => <div key={`${g.resource}|${g.resourceKey}|${g.action}`} className="flex items-center gap-2 text-[11px]"><span className={`font-semibold w-12 ${g.effect === "allow" ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{g.effect}</span><span className="text-gray-700">{g.action}</span><span className="text-gray-500">on</span><span className="text-gray-700">{g.resource}{g.resourceKey ? `:${g.resourceKey}` : ""}</span></div>)}
                 </div>
               ))}
-              {inherits.length > 0 && <p className="text-[10px] text-gray-400 mt-2">+ {inherits.length} inherited set(s) layered at runtime (not shown here).</p>}
+              {inherits.length > 0 && <p className="text-[10px] text-gray-500 mt-2">+ {inherits.length} inherited set(s) layered at runtime (not shown here).</p>}
             </div>
 
             {msg && <p className={`text-xs mt-3 ${msg.startsWith("✓") ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>{msg}</p>}

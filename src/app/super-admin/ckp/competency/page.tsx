@@ -50,7 +50,7 @@ export default async function CompetencyFrameworkCentre() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/ckp" className="hover:text-teal-700">Clinical Knowledge Platform</Link><span>/</span><span className="text-gray-600">Competency &amp; Framework Centre</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Competency &amp; Framework Centre</h1>
@@ -65,7 +65,7 @@ export default async function CompetencyFrameworkCentre() {
               <span className={`w-7 h-7 rounded-lg ${c.iconBg} flex items-center justify-center text-sm shrink-0`}>{c.icon}</span>
             </div>
             <p className={`text-2xl font-bold mt-1.5 tabular-nums ${(c as any).tone ?? "text-gray-900"}`}>{c.value}</p>
-            {(c as any).sub && <p className="text-[10px] text-gray-400 mt-0.5">{(c as any).sub}</p>}
+            {(c as any).sub && <p className="text-[10px] text-gray-500 mt-0.5">{(c as any).sub}</p>}
           </div>
         ))}
       </div>
@@ -80,12 +80,12 @@ export default async function CompetencyFrameworkCentre() {
             <h2 className="font-semibold text-gray-900 text-[15px]">Framework Overview</h2>
             <Link href="/super-admin/content" className="text-xs text-teal-700 hover:underline">Manage →</Link>
           </div>
-          {cc.frameworkOverview.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No frameworks yet.</p> : (
+          {cc.frameworkOverview.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No frameworks yet.</p> : (
             <div className="space-y-3">
               {cc.frameworkOverview.map((f: any) => (
                 <div key={f.id}>
                   <div className="flex items-center justify-between text-sm mb-0.5">
-                    <span className="flex items-center gap-2 min-w-0"><span className="text-gray-800 font-medium truncate">{f.name}</span>{f.version && <span className="text-[10px] text-gray-400">{f.version}</span>}{f.library && <span className={`text-[9px] px-1.5 py-0.5 rounded ${LIB_BADGE[f.library] ?? "bg-gray-100 text-gray-500"}`}>{f.library}</span>}</span>
+                    <span className="flex items-center gap-2 min-w-0"><span className="text-gray-800 font-medium truncate">{f.name}</span>{f.version && <span className="text-[10px] text-gray-500">{f.version}</span>}{f.library && <span className={`text-[9px] px-1.5 py-0.5 rounded ${LIB_BADGE[f.library] ?? "bg-gray-100 text-gray-600"}`}>{f.library}</span>}</span>
                     <span className="text-gray-500 tabular-nums shrink-0">{f.competencies} · {f.coverage}%</span>
                   </div>
                   <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-teal-500 rounded-full" style={{ width: `${f.coverage}%` }} /></div>
@@ -98,14 +98,14 @@ export default async function CompetencyFrameworkCentre() {
         {/* Domain hierarchy */}
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900 text-[15px]">Domain Hierarchy <span className="text-[10px] text-gray-400">top {cc.domainHierarchy.length}</span></h2>
+            <h2 className="font-semibold text-gray-900 text-[15px]">Domain Hierarchy <span className="text-[10px] text-gray-500">top {cc.domainHierarchy.length}</span></h2>
             <Link href="/super-admin/content" className="text-xs text-teal-700 hover:underline">View all →</Link>
           </div>
-          {cc.domainHierarchy.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No domains yet.</p> : (
+          {cc.domainHierarchy.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No domains yet.</p> : (
             <div className="space-y-1.5 max-h-72 overflow-y-auto">
               {cc.domainHierarchy.map((d: any) => (
                 <div key={d.id} className="flex items-center justify-between text-sm py-1">
-                  <span className="flex items-center gap-2 min-w-0"><span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" /><span className="text-gray-700 truncate">{d.name}</span>{d.framework && <span className="text-[10px] text-gray-400 shrink-0">· {d.framework}</span>}</span>
+                  <span className="flex items-center gap-2 min-w-0"><span className="w-1.5 h-1.5 rounded-full bg-violet-400 shrink-0" /><span className="text-gray-700 truncate">{d.name}</span>{d.framework && <span className="text-[10px] text-gray-500 shrink-0">· {d.framework}</span>}</span>
                   <span className="text-gray-500 tabular-nums shrink-0">{d.competencies}</span>
                 </div>
               ))}
@@ -136,7 +136,7 @@ export default async function CompetencyFrameworkCentre() {
               <div key={l as string} className="rounded-lg border border-gray-100 p-3 text-center"><p className={`text-xl font-bold tabular-nums ${l === "Unmapped" && (n as number) > 0 ? "text-[var(--cmp-text-warning)]" : "text-gray-900"}`}>{fmt(n as number)}</p><p className="text-[10px] text-gray-500">{l}</p></div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">Mappings = competencies linked to a CPU; crosswalks come from the knowledge graph.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Mappings = competencies linked to a CPU; crosswalks come from the knowledge graph.</p>
         </div>
 
         {/* Components */}
@@ -152,7 +152,7 @@ export default async function CompetencyFrameworkCentre() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">The Competency & Framework Centre is the architecture layer — every competency belongs to a domain within a framework. The Architecture Builder creates real frameworks, domains and competencies in-place via the content APIs (each level feeds the next level&apos;s picker); counts, coverage and the domain hierarchy are live. Version history and crosswalks open the audit log and knowledge graph.</p>
+      <p className="text-[11px] text-gray-500 pb-4">The Competency & Framework Centre is the architecture layer — every competency belongs to a domain within a framework. The Architecture Builder creates real frameworks, domains and competencies in-place via the content APIs (each level feeds the next level&apos;s picker); counts, coverage and the domain hierarchy are live. Version history and crosswalks open the audit log and knowledge graph.</p>
     </div>
   );
 }

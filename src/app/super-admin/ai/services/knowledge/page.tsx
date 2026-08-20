@@ -27,18 +27,18 @@ export default async function KnowledgePage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <Card title="Knowledge Sources" className="xl:col-span-2" right={<span className="text-[11px] text-gray-400">by document count</span>}>
+        <Card title="Knowledge Sources" className="xl:col-span-2" right={<span className="text-[11px] text-gray-500">by document count</span>}>
           <div className="space-y-1">
-            <div className="flex items-center text-[10px] text-gray-400 uppercase tracking-wide px-1"><span className="flex-1">Source</span><span className="w-28">Domain</span><span className="w-40">System</span><span className="w-20 text-right">Docs</span><span className="w-24 text-right">Indexed</span></div>
+            <div className="flex items-center text-[10px] text-gray-500 uppercase tracking-wide px-1"><span className="flex-1">Source</span><span className="w-28">Domain</span><span className="w-40">System</span><span className="w-20 text-right">Docs</span><span className="w-24 text-right">Indexed</span></div>
             {d.sources.map((s: any) => (
-              <div key={s.id} className="flex items-center px-1 py-1.5 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{s.name}</span><span className="w-28"><Pill text={s.domain} tone={s.domain === "structured" ? "blue" : s.domain === "configuration" ? "violet" : "teal"} /></span><span className="w-40 text-gray-400 text-[10px] font-mono truncate">{s.source_type}</span><span className="w-20 text-right text-gray-900 tabular-nums font-semibold">{Number(s.doc_count).toLocaleString()}</span><span className="w-24 text-right text-[11px]">{s.indexed ? <span className="text-[var(--cmp-text-success)]">{fmtT(s.last_indexed)}</span> : <span className="text-[var(--cmp-text-warning)]">indexing…</span>}</span></div>
+              <div key={s.id} className="flex items-center px-1 py-1.5 text-[12px] border-b border-gray-50"><span className="flex-1 text-gray-800 truncate">{s.name}</span><span className="w-28"><Pill text={s.domain} tone={s.domain === "structured" ? "blue" : s.domain === "configuration" ? "violet" : "teal"} /></span><span className="w-40 text-gray-500 text-[10px] font-mono truncate">{s.source_type}</span><span className="w-20 text-right text-gray-900 tabular-nums font-semibold">{Number(s.doc_count).toLocaleString()}</span><span className="w-24 text-right text-[11px]">{s.indexed ? <span className="text-[var(--cmp-text-success)]">{fmtT(s.last_indexed)}</span> : <span className="text-[var(--cmp-text-warning)]">indexing…</span>}</span></div>
             ))}
           </div>
         </Card>
 
         <Card title="By Domain">
           <Bars rows={d.byDomain.map((x: any) => ({ label: x.label, n: x.n }))} />
-          <p className="text-[10px] text-gray-400 mt-3">structured = queryable stores · unstructured = documents/policies (embedded) · configuration = config registry. All retrieval is tenant-isolated and permission-filtered.</p>
+          <p className="text-[10px] text-gray-500 mt-3">structured = queryable stores · unstructured = documents/policies (embedded) · configuration = config registry. All retrieval is tenant-isolated and permission-filtered.</p>
         </Card>
       </div>
 

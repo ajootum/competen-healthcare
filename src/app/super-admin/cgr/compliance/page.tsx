@@ -39,7 +39,7 @@ export default async function ComplianceReportingPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-011 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Compliance Reporting &amp; Regulatory Assurance</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Can we demonstrate, through reliable evidence, that our competency system meets regulatory, organisational and professional requirements? Evidence-based, real-time, audit-ready.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Can we demonstrate, through reliable evidence, that our competency system meets regulatory, organisational and professional requirements? Evidence-based, real-time, audit-ready.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/quality-accreditation/accreditation" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Report builder →</Link>
@@ -48,7 +48,7 @@ export default async function ComplianceReportingPage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No competency or accreditation data to report on yet — the compliance score and regulatory assurance compute once competencies and accreditation requirements exist.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No competency or accreditation data to report on yet — the compliance score and regulatory assurance compute once competencies and accreditation requirements exist.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -83,14 +83,14 @@ export default async function ComplianceReportingPage() {
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="text-sm font-bold text-gray-800">Accreditation readiness by standard</p>
-                <p className="text-[10px] text-gray-400">weakest first</p>
+                <p className="text-[10px] text-gray-500">weakest first</p>
               </div>
               {d.standards.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-sm text-gray-400">No accreditation requirements recorded. <Link href="/competency-office/accreditation" className="text-[var(--cmp-text-success)] hover:underline">Map requirements →</Link></p></div>
+                <div className="p-6 text-center"><p className="text-sm text-gray-500">No accreditation requirements recorded. <Link href="/competency-office/accreditation" className="text-[var(--cmp-text-success)] hover:underline">Map requirements →</Link></p></div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[520px]">
-                    <thead><tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                    <thead><tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
                       <th className="text-left py-2 pl-4 pr-2">Standard</th>
                       <th className="text-center py-2 px-2">Reqs</th>
                       <th className="text-center py-2 px-2">✓/~/✕</th>
@@ -101,7 +101,7 @@ export default async function ComplianceReportingPage() {
                         <tr key={st.standard} className="border-t border-gray-50">
                           <td className="py-2 pl-4 pr-2 text-[12px] font-semibold text-gray-800">{st.standard}</td>
                           <td className="py-2 px-2 text-center text-[12px] text-gray-600 tabular-nums">{st.requirements}</td>
-                          <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className="text-[var(--cmp-text-success)] font-semibold">{st.compliant}</span><span className="text-gray-300">/</span><span className="text-[var(--cmp-text-warning)]">{st.partial}</span><span className="text-gray-300">/</span><span className="text-[var(--cmp-text-error)]">{st.gap}</span></td>
+                          <td className="py-2 px-2 text-center text-[11px] tabular-nums"><span className="text-[var(--cmp-text-success)] font-semibold">{st.compliant}</span><span className="text-gray-500">/</span><span className="text-[var(--cmp-text-warning)]">{st.partial}</span><span className="text-gray-500">/</span><span className="text-[var(--cmp-text-error)]">{st.gap}</span></td>
                           <td className="py-2 pr-4 pl-2">
                             <div className="flex items-center gap-2">
                               <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className={`h-full ${barTone(st.readiness)}`} style={{ width: `${st.readiness}%` }} /></div>
@@ -120,7 +120,7 @@ export default async function ComplianceReportingPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Evidence pack summary (§9)</p>
               {!s ? (
-                <p className="text-[12px] text-gray-400">Registry not provisioned — the evidence-pack numbers need competency definitions.</p>
+                <p className="text-[12px] text-gray-500">Registry not provisioned — the evidence-pack numbers need competency definitions.</p>
               ) : (
                 <>
                   <div className="grid grid-cols-2 gap-2">
@@ -129,7 +129,7 @@ export default async function ComplianceReportingPage() {
                     <div className="border border-gray-100 rounded-lg p-3"><p className="text-xl font-bold text-gray-900 tabular-nums">{s.regulatory}%</p><p className="text-[10px] text-gray-500">regulatory alignment</p></div>
                     <div className="border border-gray-100 rounded-lg p-3"><p className={`text-xl font-bold tabular-nums ${s.atRisk ? "text-[var(--cmp-text-error)]" : "text-gray-900"}`}>{s.atRisk}</p><p className="text-[10px] text-gray-500">at-risk / ungoverned</p></div>
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-3">An evidence package for accreditation includes competency records, approval history (<Link href="/super-admin/cgr/approvals" className="text-[var(--cmp-text-success)] hover:underline">CGR-003</Link>), audit results (<Link href="/super-admin/cgr/audit" className="text-[var(--cmp-text-success)] hover:underline">CGR-005</Link>) and improvement actions.</p>
+                  <p className="text-[10px] text-gray-500 mt-3">An evidence package for accreditation includes competency records, approval history (<Link href="/super-admin/cgr/approvals" className="text-[var(--cmp-text-success)] hover:underline">CGR-003</Link>), audit results (<Link href="/super-admin/cgr/audit" className="text-[var(--cmp-text-success)] hover:underline">CGR-005</Link>) and improvement actions.</p>
                 </>
               )}
             </div>
@@ -139,14 +139,14 @@ export default async function ComplianceReportingPage() {
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <p className="text-sm font-bold text-gray-800">Regulatory requirement register</p>
-              <p className="text-[10px] text-gray-400">requirement → evidence → status → action · non-compliant first</p>
+              <p className="text-[10px] text-gray-500">requirement → evidence → status → action · non-compliant first</p>
             </div>
             {d.requirements.length === 0 ? (
               <div className="p-6 text-center"><p className="text-sm text-[var(--cmp-text-success)] font-medium">{d.accreditation.total > 0 ? "Every recorded requirement is compliant." : "No accreditation requirements recorded yet."}</p></div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[680px]">
-                  <thead><tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                  <thead><tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
                     <th className="text-left py-2 pl-4 pr-2">Standard</th>
                     <th className="text-left py-2 px-2">Requirement</th>
                     <th className="text-left py-2 px-2">Mapped competency</th>
@@ -169,7 +169,7 @@ export default async function ComplianceReportingPage() {
             )}
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every compliance statement is traceable to source: the compliance score and dimensions are computed live from the governance registry, and the regulatory requirement register is the real accreditation store (requirement → mapped competency → evidence count → compliance status). Report building, accreditation surveys and regulatory submissions are owned by <Link href="/quality-accreditation/accreditation" className="text-[var(--cmp-text-success)] hover:underline">Quality &amp; Accreditation</Link>; competency accreditation mapping by the <Link href="/competency-office/accreditation" className="text-[var(--cmp-text-success)] hover:underline">Competency Office</Link>. Per the CGR mandate, AI may generate compliance summaries and prepare evidence packages but never declares compliance or approves submissions.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every compliance statement is traceable to source: the compliance score and dimensions are computed live from the governance registry, and the regulatory requirement register is the real accreditation store (requirement → mapped competency → evidence count → compliance status). Report building, accreditation surveys and regulatory submissions are owned by <Link href="/quality-accreditation/accreditation" className="text-[var(--cmp-text-success)] hover:underline">Quality &amp; Accreditation</Link>; competency accreditation mapping by the <Link href="/competency-office/accreditation" className="text-[var(--cmp-text-success)] hover:underline">Competency Office</Link>. Per the CGR mandate, AI may generate compliance summaries and prepare evidence packages but never declares compliance or approves submissions.</p>
         </div>
       )}
     </div>

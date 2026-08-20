@@ -35,11 +35,11 @@ export default async function DistributionPage() {
 
       {/* Cascade columns + effective set */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <Card title="Cascade by Scope" right={<span className="text-[11px] text-gray-400">broad → specific</span>}>
+        <Card title="Cascade by Scope" right={<span className="text-[11px] text-gray-500">broad → specific</span>}>
           <div className="space-y-3">
             {d.byScope.map((col: any) => (
               <div key={col.level}>
-                <div className="flex items-center gap-1.5 mb-1"><Pill text={col.label} tone="teal" /><span className="text-[11px] text-gray-400">{col.items.length}</span></div>
+                <div className="flex items-center gap-1.5 mb-1"><Pill text={col.label} tone="teal" /><span className="text-[11px] text-gray-500">{col.items.length}</span></div>
                 <div className="space-y-1">
                   {col.items.map((p: any) => (
                     <div key={p.id} className="flex items-center gap-2 border border-gray-100 rounded-lg px-2 py-1.5">
@@ -57,7 +57,7 @@ export default async function DistributionPage() {
           </div>
         </Card>
 
-        <Card title="Effective Priority Set" right={<span className="text-[11px] text-gray-400">{d.ctxLabel}</span>}>
+        <Card title="Effective Priority Set" right={<span className="text-[11px] text-gray-500">{d.ctxLabel}</span>}>
           <p className="text-[11px] text-gray-500 mb-2">Resolved &amp; ranked for this context — what the workspace runtime actually presents. Weight = base × urgency × mandatory boost.</p>
           <div className="space-y-1.5">
             {d.effective.map((p: any) => (
@@ -65,7 +65,7 @@ export default async function DistributionPage() {
                 <span className="w-6 h-6 rounded-full bg-teal-50 text-teal-700 text-[11px] font-bold flex items-center justify-center shrink-0">{p.rank}</span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: p.themeColor }} /><p className="text-[12px] font-medium text-gray-900 truncate">{p.title}</p>{p.mandatory && <span className="text-rose-500 text-[10px]">★</span>}</div>
-                  <p className="text-[10px] text-gray-400">from {p.sourceScope} · {p.themeName ?? "—"}</p>
+                  <p className="text-[10px] text-gray-500">from {p.sourceScope} · {p.themeName ?? "—"}</p>
                 </div>
                 <Pill text={p.urgency} tone={URGENCY_TONE[p.urgency]} />
                 <span className="text-sm font-bold text-gray-800 tabular-nums w-9 text-right">{p.weight}</span>
@@ -75,7 +75,7 @@ export default async function DistributionPage() {
           {d.suppressed.length > 0 && (
             <div className="mt-3 pt-3 border-t border-gray-100">
               <p className="text-[11px] font-semibold text-gray-500 mb-1.5">Suppressed by local override ({d.suppressed.length})</p>
-              {d.suppressed.map((p: any) => <div key={p.id} className="flex items-center gap-1.5 text-[11px] text-gray-400"><span className="line-through truncate">{p.title}</span><span className="text-gray-300">·</span><span>{p.sourceScope}</span></div>)}
+              {d.suppressed.map((p: any) => <div key={p.id} className="flex items-center gap-1.5 text-[11px] text-gray-500"><span className="line-through truncate">{p.title}</span><span className="text-gray-500">·</span><span>{p.sourceScope}</span></div>)}
             </div>
           )}
         </Card>
@@ -89,7 +89,7 @@ export default async function DistributionPage() {
               <div key={m.mode} className="flex items-center gap-2"><span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${PILL[MODE_TONE[m.mode]]}`}>{m.mode}</span><div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-teal-500" style={{ width: `${(m.n / k.published) * 100}%` }} /></div><span className="font-semibold text-gray-900 tabular-nums w-6 text-right">{m.n}</span></div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-2">cascade = flows down · reference = visible not enforced · local = context-only · block = suppresses broader priorities of the same theme.</p>
+          <p className="text-[10px] text-gray-500 mt-2">cascade = flows down · reference = visible not enforced · local = context-only · block = suppresses broader priorities of the same theme.</p>
         </Card>
         <Card title="Urgency Distribution">
           <div className="space-y-2 text-[12px]">

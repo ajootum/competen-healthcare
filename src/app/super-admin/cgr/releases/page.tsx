@@ -44,7 +44,7 @@ export default async function GovernanceReleasesPage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-018 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Deployment, Release &amp; Migration</h1>
-          <p className="text-gray-400 text-sm mt-0.5">How approved governance changes move from validation into live operation — controlled release, traceable deployment, minimal disruption and reversible rollback.</p>
+          <p className="text-gray-500 text-sm mt-0.5">How approved governance changes move from validation into live operation — controlled release, traceable deployment, minimal disruption and reversible rollback.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/super-admin/studio/packages" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Package manager →</Link>
@@ -53,7 +53,7 @@ export default async function GovernanceReleasesPage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No governance releases or migration jobs yet. Releases are built in the <Link href="/super-admin/studio/packages" className="text-[var(--cmp-text-success)] hover:underline">Package Manager</Link>; once they exist, the deployment pipeline and rollback tracking compute here.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No governance releases or migration jobs yet. Releases are built in the <Link href="/super-admin/studio/packages" className="text-[var(--cmp-text-success)] hover:underline">Package Manager</Link>; once they exist, the deployment pipeline and rollback tracking compute here.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -70,7 +70,7 @@ export default async function GovernanceReleasesPage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Pipeline by channel (§5.3)</p>
               {d.channels.length === 0 ? (
-                <p className="text-[12px] text-gray-400">No releases yet.</p>
+                <p className="text-[12px] text-gray-500">No releases yet.</p>
               ) : (
                 <div className="space-y-2">
                   {d.channels.map((c: any) => (
@@ -80,7 +80,7 @@ export default async function GovernanceReleasesPage() {
                       <span className="text-[11px] font-bold text-gray-600 tabular-nums w-6 text-right">{c.count}</span>
                     </div>
                   ))}
-                  <p className="text-[10px] text-gray-400 pt-1">Staged rollout: dev → qa → uat → pilot → production.</p>
+                  <p className="text-[10px] text-gray-500 pt-1">Staged rollout: dev → qa → uat → pilot → production.</p>
                 </div>
               )}
             </div>
@@ -89,7 +89,7 @@ export default async function GovernanceReleasesPage() {
             <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 p-4">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Migration jobs (§7 / §11)</p>
-                <span className="text-[10px] text-gray-400">accuracy {k.migAccuracy == null ? "—" : `${k.migAccuracy}%`}</span>
+                <span className="text-[10px] text-gray-500">accuracy {k.migAccuracy == null ? "—" : `${k.migAccuracy}%`}</span>
               </div>
               <div className="grid grid-cols-3 gap-2 mb-3">
                 {(["export", "import", "rollback"] as const).map((t) => (
@@ -103,15 +103,15 @@ export default async function GovernanceReleasesPage() {
                 <div className="divide-y divide-gray-50 max-h-[160px] overflow-y-auto">
                   {d.jobList.map((j: any, i: number) => (
                     <div key={i} className="flex items-center justify-between gap-2 py-1.5">
-                      <span className="text-[11px] text-gray-600 capitalize">{j.type} <span className="text-gray-400">· {j.objects} obj · {j.by}</span></span>
+                      <span className="text-[11px] text-gray-600 capitalize">{j.type} <span className="text-gray-500">· {j.objects} obj · {j.by}</span></span>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-[9px] text-gray-300 tabular-nums">{fmt(j.at)}</span>
+                        <span className="text-[9px] text-gray-500 tabular-nums">{fmt(j.at)}</span>
                         <span className={`text-[9px] font-bold border rounded px-1.5 py-0.5 ${STATUS_META[j.status] ?? STATUS_META.draft}`}>{cap(j.status)}</span>
                       </div>
                     </div>
                   ))}
                 </div>
-              ) : <p className="text-[12px] text-gray-400">No migration jobs recorded.</p>}
+              ) : <p className="text-[12px] text-gray-500">No migration jobs recorded.</p>}
             </div>
           </div>
 
@@ -119,11 +119,11 @@ export default async function GovernanceReleasesPage() {
           <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100"><p className="text-sm font-bold text-gray-800">Governance releases</p></div>
             {d.relList.length === 0 ? (
-              <div className="p-6 text-center"><p className="text-[12px] text-gray-400">No releases defined.</p></div>
+              <div className="p-6 text-center"><p className="text-[12px] text-gray-500">No releases defined.</p></div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[680px]">
-                  <thead><tr className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">
+                  <thead><tr className="text-[9px] font-bold text-gray-500 uppercase tracking-wide">
                     <th className="text-left py-2 pl-4 pr-2">Release</th>
                     <th className="text-left py-2 px-2">Channel</th>
                     <th className="text-left py-2 px-2">Rollout</th>
@@ -134,11 +134,11 @@ export default async function GovernanceReleasesPage() {
                   <tbody>
                     {d.relList.map((r: any) => (
                       <tr key={r.key} className="border-t border-gray-50">
-                        <td className="py-2 pl-4 pr-2"><p className="text-[12px] font-medium text-gray-800">{r.name}</p><p className="text-[10px] text-gray-400 font-mono">{r.key}</p></td>
+                        <td className="py-2 pl-4 pr-2"><p className="text-[12px] font-medium text-gray-800">{r.name}</p><p className="text-[10px] text-gray-500 font-mono">{r.key}</p></td>
                         <td className="py-2 px-2"><span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${CHANNEL_META[r.channel] ?? CHANNEL_META.dev}`}>{cap(r.channel)}</span></td>
                         <td className="py-2 px-2 text-[11px] text-gray-500 capitalize">{r.rollout}</td>
                         <td className="py-2 px-2 text-center text-[12px] text-gray-600 tabular-nums">{r.objects}</td>
-                        <td className="py-2 px-2 text-[10px] text-gray-400 tabular-nums">{fmt(r.at)}</td>
+                        <td className="py-2 px-2 text-[10px] text-gray-500 tabular-nums">{fmt(r.at)}</td>
                         <td className="py-2 pr-4 pl-2"><span className={`text-[10px] font-bold border rounded px-1.5 py-0.5 ${STATUS_META[r.status] ?? STATUS_META.draft}`}>{cap(r.status)}</span></td>
                       </tr>
                     ))}
@@ -150,18 +150,18 @@ export default async function GovernanceReleasesPage() {
 
           {/* Deployment lifecycle reference */}
           <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Deployment lifecycle <span className="font-normal normal-case text-gray-300">(§6)</span></p>
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Deployment lifecycle <span className="font-normal normal-case text-gray-500">(§6)</span></p>
             <div className="flex items-center flex-wrap gap-1">
               {LIFECYCLE.map((s, i) => (
                 <div key={s} className="flex items-center">
                   <span className="text-[11px] font-medium text-gray-600 bg-gray-50 border border-gray-100 rounded-lg px-2.5 py-1">{s}</span>
-                  {i < LIFECYCLE.length - 1 && <span className="text-gray-300 mx-0.5">→</span>}
+                  {i < LIFECYCLE.length - 1 && <span className="text-gray-500 mx-0.5">→</span>}
                 </div>
               ))}
             </div>
           </div>
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — the release pipeline, channels and rollout strategies from the configuration release store, and export/import/rollback jobs with their status from the migration store. Building releases, executing migrations and rollback live in the <Link href="/super-admin/studio/packages" className="text-[var(--cmp-text-success)] hover:underline">Package Manager</Link>; approved changes flow in from <Link href="/super-admin/cgr/change-control" className="text-[var(--cmp-text-success)] hover:underline">Change Control</Link> after passing <Link href="/super-admin/cgr/testing" className="text-[var(--cmp-text-success)] hover:underline">validation</Link>. Backward compatibility (§8) preserves previous competency records, assessments and governance decisions. Per the CGR mandate, AI may predict deployment risk but never deploys independently.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every figure is real — the release pipeline, channels and rollout strategies from the configuration release store, and export/import/rollback jobs with their status from the migration store. Building releases, executing migrations and rollback live in the <Link href="/super-admin/studio/packages" className="text-[var(--cmp-text-success)] hover:underline">Package Manager</Link>; approved changes flow in from <Link href="/super-admin/cgr/change-control" className="text-[var(--cmp-text-success)] hover:underline">Change Control</Link> after passing <Link href="/super-admin/cgr/testing" className="text-[var(--cmp-text-success)] hover:underline">validation</Link>. Backward compatibility (§8) preserves previous competency records, assessments and governance decisions. Per the CGR mandate, AI may predict deployment risk but never deploys independently.</p>
         </div>
       )}
     </div>

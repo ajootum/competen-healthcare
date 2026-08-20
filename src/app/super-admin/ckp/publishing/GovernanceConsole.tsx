@@ -116,7 +116,7 @@ export default function GovernanceConsole({ frameworks, knowledgeObjects, pendin
           <div className="grid sm:grid-cols-2 gap-3">
             <div><label className={label}>Framework *</label><select value={form.frameworkId ?? ""} onChange={set("frameworkId")} className={input}><option value="">— Select framework —</option>{frameworks.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}</select></div>
             <div><label className={label}>Action *</label><select value={form.action ?? ""} onChange={set("action")} className={input}><option value="">— Select action —</option>{Object.entries(LIFECYCLE_ACTIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-            <p className="sm:col-span-2 text-[11px] text-gray-400">Canonical flow: draft → submit for review → approve (Review tab) → publish → archive. Publishing snapshots the full framework into version history; submitting opens a pending review below.</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-500">Canonical flow: draft → submit for review → approve (Review tab) → publish → archive. Publishing snapshots the full framework into version history; submitting opens a pending review below.</p>
           </div>
         )}
 
@@ -126,7 +126,7 @@ export default function GovernanceConsole({ frameworks, knowledgeObjects, pendin
             <div><label className={label}>Decision *</label><select value={form.decision ?? ""} onChange={set("decision")} className={input}><option value="">— Select decision —</option><option value="approve">Approve (→ approved)</option><option value="reject">Reject (→ back to draft)</option></select></div>
             <div className="sm:col-span-2"><label className={label}>Comment{form.decision === "reject" ? " *" : ""}</label><textarea value={form.comment ?? ""} onChange={set("comment")} rows={2} className={input} placeholder="Review rationale — required when rejecting" /></div>
             {pendingReviews.length === 0 && <p className="sm:col-span-2 text-[11px] text-[var(--cmp-text-warning)]">No pending reviews — submit a framework for review in the Lifecycle tab first.</p>}
-            <p className="sm:col-span-2 text-[11px] text-gray-400">Separation of duties applies: the submitter cannot decide their own review.</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-500">Separation of duties applies: the submitter cannot decide their own review.</p>
           </div>
         )}
 
@@ -134,7 +134,7 @@ export default function GovernanceConsole({ frameworks, knowledgeObjects, pendin
           <div className="grid sm:grid-cols-2 gap-3">
             <div><label className={label}>Knowledge object *</label><select value={form.koId ?? ""} onChange={set("koId")} className={input}><option value="">— Select object —</option>{knowledgeObjects.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}</select></div>
             <div><label className={label}>New status *</label><select value={form.status ?? ""} onChange={set("status")} className={input}><option value="">— Select status —</option>{Object.entries(KO_STATUSES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-            <p className="sm:col-span-2 text-[11px] text-gray-400">Status changes are audit-logged (knowledge_draft / knowledge_active / knowledge_retired).</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-500">Status changes are audit-logged (knowledge_draft / knowledge_active / knowledge_retired).</p>
           </div>
         )}
 
@@ -142,14 +142,14 @@ export default function GovernanceConsole({ frameworks, knowledgeObjects, pendin
           <div className="grid sm:grid-cols-2 gap-3">
             <div><label className={label}>Workflow *</label><select value={form.workflow_key ?? ""} onChange={set("workflow_key")} className={input}><option value="">— Select workflow —</option>{Object.entries(WORKFLOWS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
             <div><label className={label}>Entity name *</label><input value={form.entity_name ?? ""} onChange={set("entity_name")} className={input} placeholder="e.g. Sepsis Bundle v2" /></div>
-            <p className="sm:col-span-2 text-[11px] text-gray-400">Opens a governed approval request in the platform engine (with per-step decision audit). Decide it in Platform Ops → Approvals; engine approval is bookkeeping — content state still changes via the Lifecycle/Review tabs.</p>
+            <p className="sm:col-span-2 text-[11px] text-gray-500">Opens a governed approval request in the platform engine (with per-step decision audit). Decide it in Platform Ops → Approvals; engine approval is bookkeeping — content state still changes via the Lifecycle/Review tabs.</p>
           </div>
         )}
 
         <div className="flex items-center gap-2 mt-4">
           <button onClick={act} disabled={busy} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-4 py-2 disabled:opacity-60">{busy ? "Applying…" : "Apply"}</button>
           <button onClick={() => setForm({})} className="text-sm text-gray-500 hover:text-gray-700 px-2">Clear</button>
-          <span className="text-[11px] text-gray-400 ml-auto">Real governance actions via the live APIs — all audit-logged.</span>
+          <span className="text-[11px] text-gray-500 ml-auto">Real governance actions via the live APIs — all audit-logged.</span>
         </div>
       </div>
     </div>

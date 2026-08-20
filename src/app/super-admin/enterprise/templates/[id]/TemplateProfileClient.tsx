@@ -11,7 +11,7 @@ import { Modal } from "@/components/ui/interactive";
 // deployment workflow (organisation templates provision a new organisation).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", approved: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", assigned: "bg-violet-50 text-violet-700", retired: "bg-gray-100 text-gray-400" };
+const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", approved: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", assigned: "bg-violet-50 text-violet-700", retired: "bg-gray-100 text-gray-600" };
 const TYPE_ICON: Record<string, string> = { organisation: "🏛️", facility: "🏥", department: "🗂️", unit: "🔹", role: "🪪", workspace: "🖥️", structure: "🏗️" };
 const card = cardClass;
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
@@ -45,7 +45,7 @@ export default function TemplateProfileClient({ data }: { data: any }) {
 
   return (
     <div data-wide className="space-y-4">
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/enterprise" className="hover:text-teal-700">Enterprise Administration</Link><span>/</span>
         <Link href="/super-admin/enterprise/templates" className="hover:text-teal-700">Templates</Link><span>/</span><span className="text-gray-600 truncate">{template.name}</span>
       </div>
@@ -83,19 +83,19 @@ export default function TemplateProfileClient({ data }: { data: any }) {
           <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
             {["draft", "review", "approved", "published", "assigned", "retired"].map((s, i, arr) => (
               <span key={s} className="flex items-center gap-1.5">
-                <span className={`px-2 py-0.5 rounded capitalize ${template.status === s ? "bg-teal-600 text-white font-medium" : "bg-gray-100 text-gray-500"}`}>{s}</span>
-                {i < arr.length - 1 && <span className="text-gray-300">→</span>}
+                <span className={`px-2 py-0.5 rounded capitalize ${template.status === s ? "bg-teal-600 text-white font-medium" : "bg-gray-100 text-gray-600"}`}>{s}</span>
+                {i < arr.length - 1 && <span className="text-gray-500">→</span>}
               </span>
             ))}
           </div>
-          <p className="text-[11px] text-gray-400 mt-3">An organisation already using a template is not changed automatically when the master is updated. {template.type === "organisation" ? "Publish, then Deploy to provision a new organisation." : "Deployment for this template type activates with the deployment engine."}</p>
+          <p className="text-[11px] text-gray-500 mt-3">An organisation already using a template is not changed automatically when the master is updated. {template.type === "organisation" ? "Publish, then Deploy to provision a new organisation." : "Deployment for this template type activates with the deployment engine."}</p>
         </div>
       </div>
 
       <div className={card}><h3 className="font-semibold text-gray-900 mb-3">Audit history</h3>
-        {!auditReady || audit.length === 0 ? <p className="text-sm text-gray-400">{auditReady ? "No audit entries for this template yet." : "Audit log not available."}</p> : (
+        {!auditReady || audit.length === 0 ? <p className="text-sm text-gray-500">{auditReady ? "No audit entries for this template yet." : "Audit log not available."}</p> : (
           <div className="space-y-2">{audit.map((a: any, i: number) => (
-            <div key={i} className="flex items-center gap-2.5 text-sm"><span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" /><span className="text-gray-700 capitalize">{(a.action ?? "").replace(/_/g, " ")}</span><span className="text-gray-400 text-xs ml-auto">{relTime(a.created_at)}</span></div>
+            <div key={i} className="flex items-center gap-2.5 text-sm"><span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" /><span className="text-gray-700 capitalize">{(a.action ?? "").replace(/_/g, " ")}</span><span className="text-gray-500 text-xs ml-auto">{relTime(a.created_at)}</span></div>
           ))}</div>
         )}
       </div>

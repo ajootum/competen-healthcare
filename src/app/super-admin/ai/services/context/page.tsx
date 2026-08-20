@@ -33,7 +33,7 @@ export default async function ContextPage() {
             {d.byDomain.map((x: any) => (
               <div key={x.domain} className="flex items-center gap-2 border border-gray-100 rounded-lg p-2.5">
                 <span className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center text-sm shrink-0">{DOMAIN_ICON[x.domain] ?? "•"}</span>
-                <div className="min-w-0 flex-1"><p className="text-[12px] font-medium text-gray-900 leading-tight">{x.source.name}</p><p className="text-[10px] text-gray-400">{x.source.source_system} · {x.source.refresh}</p></div>
+                <div className="min-w-0 flex-1"><p className="text-[12px] font-medium text-gray-900 leading-tight">{x.source.name}</p><p className="text-[10px] text-gray-500">{x.source.source_system} · {x.source.refresh}</p></div>
                 <Pill text={x.domain} tone="violet" />
               </div>
             ))}

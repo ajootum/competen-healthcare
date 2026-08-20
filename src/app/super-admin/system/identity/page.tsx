@@ -42,7 +42,7 @@ export default async function IdentityAccessManagement() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/system" className="hover:text-teal-700">System &amp; Security</Link><span>/</span><span className="text-gray-600">Identity &amp; Access Management</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Identity &amp; Access Management</h1>
@@ -75,19 +75,19 @@ export default async function IdentityAccessManagement() {
         {/* Directory (recent) */}
         <div className={`${card} p-5 lg:col-span-2`}>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900 text-[15px]">Directory <span className="text-[10px] text-gray-400">newest first</span></h2>
+            <h2 className="font-semibold text-gray-900 text-[15px]">Directory <span className="text-[10px] text-gray-500">newest first</span></h2>
             <Link href="/super-admin/users" className="text-xs text-teal-700 hover:underline">Full user manager →</Link>
           </div>
-          {d.recentUsers.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No identities.</p> : (
+          {d.recentUsers.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No identities.</p> : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+                <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-100">
                   <th className="px-3 py-2 font-semibold">User</th><th className="px-3 py-2 font-semibold">Portals</th><th className="px-3 py-2 font-semibold text-right">Last sign-in</th><th className="px-3 py-2 font-semibold text-right">Status</th>
                 </tr></thead>
                 <tbody>
                   {d.recentUsers.map((u: any) => (
                     <tr key={u.id} className="border-b border-gray-50">
-                      <td className="px-3 py-2"><p className="text-gray-800 leading-tight">{u.name ?? "—"}</p><p className="text-[10px] text-gray-400">{u.email}</p></td>
+                      <td className="px-3 py-2"><p className="text-gray-800 leading-tight">{u.name ?? "—"}</p><p className="text-[10px] text-gray-500">{u.email}</p></td>
                       <td className="px-3 py-2"><span className="flex flex-wrap gap-1">{u.roles.map((r: string) => <span key={r} className={`text-[9px] font-medium px-1.5 py-0.5 rounded ${ROLE_BADGE[r] ?? "bg-gray-100 text-gray-600"}`}>{r.replace(/_/g, " ")}</span>)}</span></td>
                       <td className="px-3 py-2 text-right text-[11px] text-gray-500 tabular-nums">{relTime(u.lastSignIn)}</td>
                       <td className="px-3 py-2 text-right"><span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${u.banned ? "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]" : u.neverSignedIn ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]" : "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]"}`}>{u.banned ? "suspended" : u.neverSignedIn ? "invited" : "active"}</span></td>
@@ -101,19 +101,19 @@ export default async function IdentityAccessManagement() {
 
         {/* Recent login activity (real) */}
         <div className={`${card} p-5`}>
-          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Recent Login Activity <span className="text-[10px] text-gray-400">live</span></h2>
-          {d.recentLogins.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No sign-ins recorded.</p> : (
+          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Recent Login Activity <span className="text-[10px] text-gray-500">live</span></h2>
+          {d.recentLogins.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No sign-ins recorded.</p> : (
             <div className="divide-y divide-gray-50">
               {d.recentLogins.map((u: any) => (
                 <div key={u.id} className="flex items-center gap-2.5 py-2">
                   <span className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-600 shrink-0">{(u.name ?? u.email ?? "?").slice(0, 1).toUpperCase()}</span>
-                  <div className="min-w-0 flex-1"><p className="text-xs text-gray-800 leading-tight truncate">{u.name ?? u.email}</p><p className="text-[9px] text-gray-400 capitalize">{(u.role ?? "").replace(/_/g, " ")}</p></div>
-                  <span className="text-[10px] text-gray-400 tabular-nums shrink-0">{relTime(u.lastSignIn)}</span>
+                  <div className="min-w-0 flex-1"><p className="text-xs text-gray-800 leading-tight truncate">{u.name ?? u.email}</p><p className="text-[9px] text-gray-500 capitalize">{(u.role ?? "").replace(/_/g, " ")}</p></div>
+                  <span className="text-[10px] text-gray-500 tabular-nums shrink-0">{relTime(u.lastSignIn)}</span>
                 </div>
               ))}
             </div>
           )}
-          <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">Genuine last_sign_in_at from the auth provider. Risky-sign-in scoring lands with the SOC module.</p>
+          <p className="text-[10px] text-gray-500 mt-3 pt-2 border-t border-gray-50">Genuine last_sign_in_at from the auth provider. Risky-sign-in scoring lands with the SOC module.</p>
         </div>
       </div>
 
@@ -129,7 +129,7 @@ export default async function IdentityAccessManagement() {
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">Multi-portal users count once per portal. Org-level roles are managed in Enterprise → People.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Multi-portal users count once per portal. Org-level roles are managed in Enterprise → People.</p>
         </div>
 
         {/* Authentication methods */}
@@ -145,7 +145,7 @@ export default async function IdentityAccessManagement() {
             ].map(([l, v, on]: any) => (
               <div key={l} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">
                 <span className="text-xs text-gray-700">{l}</span>
-                <span className={`text-[10px] font-medium ${on ? "text-[var(--cmp-text-success)]" : "text-gray-400"}`}>{v}</span>
+                <span className={`text-[10px] font-medium ${on ? "text-[var(--cmp-text-success)]" : "text-gray-500"}`}>{v}</span>
               </div>
             ))}
           </div>
@@ -155,24 +155,24 @@ export default async function IdentityAccessManagement() {
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 text-[15px]">SSO / IdP Configurations</h2>
-            <span className="text-[10px] text-gray-400">{dash(d.idpTotal)} total</span>
+            <span className="text-[10px] text-gray-500">{dash(d.idpTotal)} total</span>
           </div>
-          {d.idp.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No tenant IdP configurations yet.</p> : (
+          {d.idp.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No tenant IdP configurations yet.</p> : (
             <div className="space-y-2">
               {d.idp.map((c: any, i: number) => (
                 <div key={i} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5">
                   <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 uppercase shrink-0">{c.protocol}</span>
-                  <div className="min-w-0 flex-1"><p className="text-xs text-gray-800 truncate">{c.tenant}</p><p className="text-[9px] text-gray-400">{c.provider}{c.mfaRequired ? " · MFA required (config)" : ""}{c.scim ? " · SCIM" : ""}</p></div>
-                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${c.active ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-400"}`}>{c.active ? "active" : "saved"}</span>
+                  <div className="min-w-0 flex-1"><p className="text-xs text-gray-800 truncate">{c.tenant}</p><p className="text-[9px] text-gray-500">{c.provider}{c.mfaRequired ? " · MFA required (config)" : ""}{c.scim ? " · SCIM" : ""}</p></div>
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 ${c.active ? "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "bg-gray-100 text-gray-600"}`}>{c.active ? "active" : "saved"}</span>
                 </div>
               ))}
             </div>
           )}
-          <p className="text-[10px] text-gray-400 mt-3">Per-tenant configs managed in the Control Plane identity console; “saved” = stored but enforcement pending.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Per-tenant configs managed in the Control Plane identity console; “saved” = stored but enforcement pending.</p>
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">IAM reads the live auth directory — total identities, genuine last sign-ins, real ban state — merged with portal roles and tenant scope from profiles. The console performs real lifecycle actions: invitations, one-time temporary passwords, password resets and suspensions that genuinely block sign-in, all audit-logged. MFA enforcement, session inventory, access reviews and risky-sign-in scoring show honest states until their stores exist.</p>
+      <p className="text-[11px] text-gray-500 pb-4">IAM reads the live auth directory — total identities, genuine last sign-ins, real ban state — merged with portal roles and tenant scope from profiles. The console performs real lifecycle actions: invitations, one-time temporary passwords, password resets and suspensions that genuinely block sign-in, all audit-logged. MFA enforcement, session inventory, access reviews and risky-sign-in scoring show honest states until their stores exist.</p>
     </div>
   );
 }

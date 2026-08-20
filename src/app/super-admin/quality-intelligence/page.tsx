@@ -55,7 +55,7 @@ export default async function QualityIntelligencePage() {
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <p className="text-[10px] font-bold text-gray-300 tracking-widest">QIE-000</p>
+          <p className="text-[10px] font-bold text-gray-500 tracking-widest">QIE-000</p>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Quality Intelligence Engine</h1>
           <p className="text-sm text-gray-500">Operational events become quality intelligence. One trusted source, composed from the engines that already produce it.</p>
         </div>
@@ -68,7 +68,7 @@ export default async function QualityIntelligencePage() {
           {[
             { n: s.live, l: "Backed by real data", c: "text-[var(--cmp-text-success)]" },
             { n: s.empty, l: "Store exists, empty", c: "text-[var(--cmp-text-warning)]" },
-            { n: s.gap, l: "Not built", c: "text-gray-400" },
+            { n: s.gap, l: "Not built", c: "text-gray-500" },
             { n: s.total, l: "Engines in the spec", c: "text-gray-900" },
           ].map(x => (
             <div key={x.l}>
@@ -104,7 +104,7 @@ export default async function QualityIntelligencePage() {
               <div key={m.id} className="rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-3">
                 <p className="text-xs font-semibold text-gray-700">{m.id} — {m.name}</p>
                 <p className="text-[11px] text-gray-500 mt-0.5">{m.purpose}</p>
-                <p className="text-[10px] text-gray-400 mt-1">{m.detail}</p>
+                <p className="text-[10px] text-gray-500 mt-1">{m.detail}</p>
               </div>
             ))}
           </div>

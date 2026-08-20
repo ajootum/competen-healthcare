@@ -33,34 +33,34 @@ export default async function ReportTemplatesPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Report Templates</h1>
-          <p className="text-gray-400 text-sm mt-0.5">{(templates ?? []).length} templates — define what columns, filters, and groupings each report includes</p>
+          <p className="text-gray-500 text-sm mt-0.5">{(templates ?? []).length} templates — define what columns, filters, and groupings each report includes</p>
         </div>
       </div>
 
       <div className="flex flex-col gap-4">
         {(templates ?? []).map(t => {
           const cols = (t.columns as Column[]) ?? [];
-          const color = TYPE_COLORS[t.report_type] ?? "bg-gray-100 text-gray-500";
+          const color = TYPE_COLORS[t.report_type] ?? "bg-gray-100 text-gray-600";
           return (
             <div key={t.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="font-semibold text-gray-900">{t.name}</p>
-                    {t.is_global && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Global</span>}
+                    {t.is_global && <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">Global</span>}
                   </div>
-                  {t.description && <p className="text-xs text-gray-400 mt-0.5">{t.description}</p>}
+                  {t.description && <p className="text-xs text-gray-500 mt-0.5">{t.description}</p>}
                 </div>
                 <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${color}`}>
                   {t.report_type.replace(/_/g, " ")}
                 </span>
               </div>
               <div className="px-5 py-3">
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Columns</p>
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest mb-2">Columns</p>
                 <div className="flex flex-wrap gap-1.5">
                   {cols.map((col, i) => (
                     <span key={i} className="text-[10px] bg-gray-50 border border-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                      {col.label} <span className="text-gray-300">({col.type})</span>
+                      {col.label} <span className="text-gray-500">({col.type})</span>
                     </span>
                   ))}
                 </div>

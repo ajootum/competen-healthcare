@@ -31,7 +31,7 @@ export default async function PermissionsBuilder() {
 
   const header = (
     <>
-      <div className="flex items-center gap-2 text-xs text-gray-400">
+      <div className="flex items-center gap-2 text-xs text-gray-500">
         <Link href="/super-admin/platform-ops" className="hover:text-gray-600">Platform Operations</Link><span>/</span>
         <Link href="/super-admin/platform-ops/no-code-platform" className="hover:text-gray-600">No-Code Platform</Link><span>/</span>
         <span className="text-gray-700 font-medium">Role, Permission &amp; Visibility Designer</span>
@@ -39,7 +39,7 @@ export default async function PermissionsBuilder() {
       <div className="flex items-start gap-3">
         <span className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-xl">🔐</span>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Role, Permission &amp; Visibility Designer <span className="text-gray-300 font-medium text-lg">(NCP-008)</span></h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Role, Permission &amp; Visibility Designer <span className="text-gray-500 font-medium text-lg">(NCP-008)</span></h1>
           <p className="text-sm text-gray-500">Compose permission sets from RBAC grants and ABAC visibility rules, then simulate effective access for any context.</p>
         </div>
       </div>
@@ -57,7 +57,7 @@ export default async function PermissionsBuilder() {
         <Stat label="With Visibility Rules" value={withRules} tone={withRules ? "text-[var(--cmp-text-information)]" : undefined} sub="ABAC-scoped" />
       </div>
       <PermissionDesigner permissions={listP} />
-      <p className="text-[11px] text-gray-400">Grants + rules + inheritance persist onto the object (inherited sets become PERMISSION_REF dependencies). The authorization runtime (&lt;20ms decisions), visibility resolver, field masking, delegated administration and dual-approval publishing (NCP-008 §3/§8/§10) are next-phase.</p>
+      <p className="text-[11px] text-gray-500">Grants + rules + inheritance persist onto the object (inherited sets become PERMISSION_REF dependencies). The authorization runtime (&lt;20ms decisions), visibility resolver, field masking, delegated administration and dual-approval publishing (NCP-008 §3/§8/§10) are next-phase.</p>
     </div>
   );
 }

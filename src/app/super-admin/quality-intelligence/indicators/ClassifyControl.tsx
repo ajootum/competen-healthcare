@@ -37,7 +37,7 @@ export default function ClassifyControl({ id, current }: { id: string; current: 
         className={btn("lagging", "Lagging", "border-gray-300 bg-gray-100 text-gray-700")}>Lagging</button>
       {current && (
         <button disabled={busy} onClick={() => set(null)} title="Clear the classification"
-          className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 bg-white text-gray-400 hover:bg-gray-50">×</button>
+          className="text-[10px] px-1.5 py-0.5 rounded border border-gray-200 bg-white text-gray-500 hover:bg-gray-50">×</button>
       )}
       {err && <span className="text-[10px] text-[var(--cmp-text-error)]">failed</span>}
     </span>

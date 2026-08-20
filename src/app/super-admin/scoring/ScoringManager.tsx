@@ -52,8 +52,8 @@ export default function ScoringManager({ scales }: { scales: Scale[] }) {
         <Modal open title="Scoring Configuration" onClose={() => setOpen(false)}>
 
         <div className="flex gap-1 mb-5 bg-gray-100 rounded-lg p-1">
-          <button onClick={() => setTab("scale")} className={`flex-1 py-1.5 text-sm rounded-md font-medium transition-colors ${tab === "scale" ? "bg-white shadow-sm text-gray-800" : "text-gray-400"}`}>New Scale</button>
-          <button onClick={() => setTab("level")} className={`flex-1 py-1.5 text-sm rounded-md font-medium transition-colors ${tab === "level" ? "bg-white shadow-sm text-gray-800" : "text-gray-400"}`}>Add Level</button>
+          <button onClick={() => setTab("scale")} className={`flex-1 py-1.5 text-sm rounded-md font-medium transition-colors ${tab === "scale" ? "bg-white shadow-sm text-gray-800" : "text-gray-500"}`}>New Scale</button>
+          <button onClick={() => setTab("level")} className={`flex-1 py-1.5 text-sm rounded-md font-medium transition-colors ${tab === "level" ? "bg-white shadow-sm text-gray-800" : "text-gray-500"}`}>Add Level</button>
         </div>
 
         {tab === "scale" && (
@@ -64,12 +64,12 @@ export default function ScoringManager({ scales }: { scales: Scale[] }) {
               placeholder="Description" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Min Score</label>
+                <label className="text-xs text-gray-500 mb-1 block">Min Score</label>
                 <input type="number" value={scaleForm.min_score} onChange={e => setScaleForm(p => ({ ...p, min_score: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
               </div>
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Max Score</label>
+                <label className="text-xs text-gray-500 mb-1 block">Max Score</label>
                 <input type="number" value={scaleForm.max_score} onChange={e => setScaleForm(p => ({ ...p, max_score: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
               </div>
@@ -86,7 +86,7 @@ export default function ScoringManager({ scales }: { scales: Scale[] }) {
         {tab === "level" && (
           <div className="flex flex-col gap-3">
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Scale</label>
+              <label className="text-xs text-gray-500 mb-1 block">Scale</label>
               <select value={scaleId} onChange={e => setScaleId(e.target.value)}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
                 {scales.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -94,12 +94,12 @@ export default function ScoringManager({ scales }: { scales: Scale[] }) {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Score *</label>
+                <label className="text-xs text-gray-500 mb-1 block">Score *</label>
                 <input type="number" value={levelForm.score} onChange={e => setLevelForm(p => ({ ...p, score: e.target.value }))}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
               </div>
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Colour</label>
+                <label className="text-xs text-gray-500 mb-1 block">Colour</label>
                 <input type="color" value={levelForm.color} onChange={e => setLevelForm(p => ({ ...p, color: e.target.value }))}
                   className="w-full h-9 border border-gray-200 rounded-lg px-1 py-1 cursor-pointer" />
               </div>

@@ -36,7 +36,7 @@ export default async function GovernanceWorkforcePage() {
         <div>
           <p className="text-[11px] font-semibold text-[var(--cmp-text-success)] uppercase tracking-widest mb-0.5">CGR-025 · Competency Governance</p>
           <h1 className="text-xl font-bold text-gray-900">Governance Workforce Capability</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Do we have the capability to govern competency today, and is it sustainable? Governance load, key-person risk, succession exposure and assessor capacity.</p>
+          <p className="text-gray-500 text-sm mt-0.5">Do we have the capability to govern competency today, and is it sustainable? Governance load, key-person risk, succession exposure and assessor capacity.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Link href="/competency-office/workforce-mapping" className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 border border-[var(--cmp-color-success)] bg-[var(--cmp-surface-success)] rounded-lg px-3 py-2">Clinical capability →</Link>
@@ -45,7 +45,7 @@ export default async function GovernanceWorkforcePage() {
       </div>
 
       {!d.provisioned ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-400">No governance responsibilities or assessor authorisations recorded yet. Once ownership is assigned in <Link href="/super-admin/studio/responsibilities" className="text-[var(--cmp-text-success)] hover:underline">Ownership</Link>, governance workload and succession exposure compute here.</p></div>
+        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center"><p className="text-sm text-gray-500">No governance responsibilities or assessor authorisations recorded yet. Once ownership is assigned in <Link href="/super-admin/studio/responsibilities" className="text-[var(--cmp-text-success)] hover:underline">Ownership</Link>, governance workload and succession exposure compute here.</p></div>
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -73,10 +73,10 @@ export default async function GovernanceWorkforcePage() {
             <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="text-sm font-bold text-gray-800">Governance load by holder</p>
-                <p className="text-[10px] text-gray-400">heaviest first</p>
+                <p className="text-[10px] text-gray-500">heaviest first</p>
               </div>
               {d.holders.length === 0 ? (
-                <div className="p-6 text-center"><p className="text-[12px] text-gray-400">No governance responsibilities assigned.</p></div>
+                <div className="p-6 text-center"><p className="text-[12px] text-gray-500">No governance responsibilities assigned.</p></div>
               ) : (
                 <div className="p-3 space-y-1.5">
                   {d.holders.map((h: any) => (
@@ -84,7 +84,7 @@ export default async function GovernanceWorkforcePage() {
                       <span className="text-[12px] text-gray-700 w-40 shrink-0 truncate">{h.name}</span>
                       <div className="flex-1 h-2.5 rounded bg-gray-50 overflow-hidden"><div className="h-full bg-[var(--cmp-color-success)] rounded" style={{ width: `${(h.responsibilities / loadMax) * 100}%` }} /></div>
                       <span className="text-[11px] font-bold text-gray-600 tabular-nums w-6 text-right">{h.responsibilities}</span>
-                      <span className="text-[10px] text-gray-400 w-16 shrink-0 text-right">{h.objects} obj</span>
+                      <span className="text-[10px] text-gray-500 w-16 shrink-0 text-right">{h.objects} obj</span>
                     </div>
                   ))}
                 </div>
@@ -95,7 +95,7 @@ export default async function GovernanceWorkforcePage() {
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Assessor capacity (§5.1)</p>
               {d.assessorCapacity.active === 0 ? (
-                <p className="text-[12px] text-gray-400">No active assessor authorisations — assessment delivery capacity cannot be evidenced.</p>
+                <p className="text-[12px] text-gray-500">No active assessor authorisations — assessment delivery capacity cannot be evidenced.</p>
               ) : (
                 <>
                   <div className="space-y-2 mb-3">
@@ -119,19 +119,19 @@ export default async function GovernanceWorkforcePage() {
           {d.singlePointList.length > 0 && (
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                <p className="text-sm font-bold text-gray-800">Succession exposure <span className="text-[10px] font-normal text-gray-400">— governed by a single person (§8)</span></p>
-                <p className="text-[10px] text-gray-400">{k.singlePoint} total</p>
+                <p className="text-sm font-bold text-gray-800">Succession exposure <span className="text-[10px] font-normal text-gray-500">— governed by a single person (§8)</span></p>
+                <p className="text-[10px] text-gray-500">{k.singlePoint} total</p>
               </div>
               <div className="p-3 flex flex-wrap gap-1.5">
                 {d.singlePointList.map((o: any, i: number) => (
                   <span key={i} className="text-[11px] text-amber-800 bg-[var(--cmp-surface-warning)] border border-[var(--cmp-color-warning)] rounded px-2 py-0.5">{o.name} <span className="text-amber-400">· {o.type}</span></span>
                 ))}
-                {k.singlePoint > d.singlePointList.length && <span className="text-[11px] text-gray-400 px-2 py-0.5">+{k.singlePoint - d.singlePointList.length} more</span>}
+                {k.singlePoint > d.singlePointList.length && <span className="text-[11px] text-gray-500 px-2 py-0.5">+{k.singlePoint - d.singlePointList.length} more</span>}
               </div>
             </div>
           )}
 
-          <p className="text-[11px] text-gray-400 leading-relaxed">Every figure is real — governance load is the active content-responsibility assignments grouped by holder, key-person risk is the top-holder share of that load, succession exposure is objects where exactly one person holds all governance, and assessor capacity is the live authorisation register (independence, validity). This is the capability of the workforce that <span className="font-medium">governs</span> competency; <span className="font-medium">clinical</span> workforce capability — role→competency coverage, learning effectiveness and forecasting — is owned by <Link href="/competency-office/workforce-mapping" className="text-[var(--cmp-text-success)] hover:underline">Workforce Mapping</Link> and <Link href="/super-admin/performance" className="text-[var(--cmp-text-success)] hover:underline">Competency Performance</Link>. Per the CGR mandate, AI may forecast capability gaps but never makes employment decisions or determines competence without evidence.</p>
+          <p className="text-[11px] text-gray-500 leading-relaxed">Every figure is real — governance load is the active content-responsibility assignments grouped by holder, key-person risk is the top-holder share of that load, succession exposure is objects where exactly one person holds all governance, and assessor capacity is the live authorisation register (independence, validity). This is the capability of the workforce that <span className="font-medium">governs</span> competency; <span className="font-medium">clinical</span> workforce capability — role→competency coverage, learning effectiveness and forecasting — is owned by <Link href="/competency-office/workforce-mapping" className="text-[var(--cmp-text-success)] hover:underline">Workforce Mapping</Link> and <Link href="/super-admin/performance" className="text-[var(--cmp-text-success)] hover:underline">Competency Performance</Link>. Per the CGR mandate, AI may forecast capability gaps but never makes employment decisions or determines competence without evidence.</p>
         </div>
       )}
     </div>

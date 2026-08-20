@@ -35,14 +35,14 @@ export default async function PublishingGovernance() {
     { label: "Pending Approvals", value: fmt(k.pendingApprovals), icon: "✅", iconBg: "bg-[var(--cmp-surface-information)]", tone: k.pendingApprovals ? "text-[var(--cmp-text-information)]" : undefined },
     { label: "Published", value: fmt(k.published), icon: "🚀", iconBg: "bg-[var(--cmp-surface-success)]", tone: "text-[var(--cmp-text-success)]" },
     { label: "Published (30d)", value: k.publishedThisMonth == null ? "—" : fmt(k.publishedThisMonth), icon: "📈", iconBg: "bg-teal-50", muted: k.publishedThisMonth == null },
-    { label: "Archived", value: fmt(k.archived), icon: "🗄️", iconBg: "bg-gray-50", tone: "text-gray-400" },
+    { label: "Archived", value: fmt(k.archived), icon: "🗄️", iconBg: "bg-gray-50", tone: "text-gray-500" },
     { label: "Governance Committees", value: fmt(k.committees), icon: "⚖️", iconBg: "bg-violet-50" },
   ];
 
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/ckp" className="hover:text-teal-700">Clinical Knowledge Platform</Link><span>/</span><span className="text-gray-600">Knowledge Publishing &amp; Governance</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Knowledge Publishing &amp; Governance</h1>
@@ -56,7 +56,7 @@ export default async function PublishingGovernance() {
               <span className="text-[11px] font-semibold text-gray-500 leading-tight">{c.label}</span>
               <span className={`w-7 h-7 rounded-lg ${c.iconBg} flex items-center justify-center text-sm shrink-0`}>{c.icon}</span>
             </div>
-            <p className={`text-2xl font-bold mt-1.5 tabular-nums ${(c as any).muted ? "text-gray-400" : (c as any).tone ?? "text-gray-900"}`}>{c.value}</p>
+            <p className={`text-2xl font-bold mt-1.5 tabular-nums ${(c as any).muted ? "text-gray-500" : (c as any).tone ?? "text-gray-900"}`}>{c.value}</p>
           </div>
         ))}
       </div>
@@ -78,7 +78,7 @@ export default async function PublishingGovernance() {
                 <span className="text-xl font-bold text-gray-900 tabular-nums">{fmt(s.count)}</span>
                 <span className="text-[10px] text-gray-500 text-center leading-tight">{s.stage}</span>
               </div>
-              {i < p.pipeline.length - 1 && <span className="text-gray-300 shrink-0">→</span>}
+              {i < p.pipeline.length - 1 && <span className="text-gray-500 shrink-0">→</span>}
             </div>
           ))}
         </div>
@@ -89,15 +89,15 @@ export default async function PublishingGovernance() {
         <div className={`${card} p-5 lg:col-span-2`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-gray-900 text-[15px]">Recent Submissions</h2>
-            <span className="text-[10px] text-gray-400">from change requests</span>
+            <span className="text-[10px] text-gray-500">from change requests</span>
           </div>
-          {p.submissions.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No submissions in review. New change requests appear here.</p> : (
+          {p.submissions.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No submissions in review. New change requests appear here.</p> : (
             <div className="divide-y divide-gray-50">
               {p.submissions.map((s: any, i: number) => (
                 <div key={i} className="flex items-center gap-3 py-2.5">
-                  <div className="min-w-0 flex-1"><p className="text-sm text-gray-800 truncate">{s.title}</p><p className="text-[10px] text-gray-400 capitalize">{s.type}{s.kind ? ` · ${s.kind}` : ""}{s.by ? ` · ${s.by}` : ""}</p></div>
+                  <div className="min-w-0 flex-1"><p className="text-sm text-gray-800 truncate">{s.title}</p><p className="text-[10px] text-gray-500 capitalize">{s.type}{s.kind ? ` · ${s.kind}` : ""}{s.by ? ` · ${s.by}` : ""}</p></div>
                   <span className={`text-[10px] font-medium px-2 py-0.5 rounded shrink-0 ${STAGE_BADGE[s.stage] ?? "bg-gray-100 text-gray-600"}`}>{s.stage}</span>
-                  <span className="text-[10px] text-gray-400 shrink-0 tabular-nums w-16 text-right">{relTime(s.at)}</span>
+                  <span className="text-[10px] text-gray-500 shrink-0 tabular-nums w-16 text-right">{relTime(s.at)}</span>
                 </div>
               ))}
             </div>
@@ -112,7 +112,7 @@ export default async function PublishingGovernance() {
               <div key={l as string} className="flex items-center justify-between text-sm py-1 border-b border-gray-50 last:border-0"><span className="text-gray-600">{l}</span><span className="text-gray-800 font-medium tabular-nums">{fmt(n as number)}</span></div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">Version counts come from change requests by kind. Electronic signatures and release notes activate with the full publishing workflow.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Version counts come from change requests by kind. Electronic signatures and release notes activate with the full publishing workflow.</p>
         </div>
       </div>
 
@@ -130,13 +130,13 @@ export default async function PublishingGovernance() {
         {/* Governance committees */}
         <div className={`${card} p-5`}>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900 text-[15px]">Governance Committees <span className="text-[10px] text-gray-400">{p.memberCount} members</span></h2>
+            <h2 className="font-semibold text-gray-900 text-[15px]">Governance Committees <span className="text-[10px] text-gray-500">{p.memberCount} members</span></h2>
             <Link href="/super-admin/governance/committees" className="text-xs text-teal-700 hover:underline">Manage →</Link>
           </div>
-          {p.committees.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">No governance committees configured.</p> : (
+          {p.committees.length === 0 ? <p className="text-sm text-gray-500 py-4 text-center">No governance committees configured.</p> : (
             <div className="space-y-1.5">
               {p.committees.slice(0, 6).map((c: any, i: number) => (
-                <div key={i} className="flex items-center justify-between text-sm"><span className="flex items-center gap-2 min-w-0"><span className="text-gray-700 truncate">{c.name}</span>{c.level && <span className="text-[10px] text-gray-400">{c.level}</span>}</span><span className={`text-[10px] shrink-0 ${c.active ? "text-[var(--cmp-text-success)]" : "text-gray-400"}`}>{c.active ? "active" : "inactive"}</span></div>
+                <div key={i} className="flex items-center justify-between text-sm"><span className="flex items-center gap-2 min-w-0"><span className="text-gray-700 truncate">{c.name}</span>{c.level && <span className="text-[10px] text-gray-500">{c.level}</span>}</span><span className={`text-[10px] shrink-0 ${c.active ? "text-[var(--cmp-text-success)]" : "text-gray-500"}`}>{c.active ? "active" : "inactive"}</span></div>
               ))}
             </div>
           )}
@@ -148,12 +148,12 @@ export default async function PublishingGovernance() {
             <h2 className="font-semibold text-gray-900 text-[15px]">Audit Trail</h2>
             <Link href="/super-admin/audit" className="text-xs text-teal-700 hover:underline">View all →</Link>
           </div>
-          {!p.auditReady || p.audit.length === 0 ? <p className="text-sm text-gray-400 py-4 text-center">{p.auditReady ? "No recorded knowledge actions." : "Audit unavailable."}</p> : (
+          {!p.auditReady || p.audit.length === 0 ? <p className="text-sm text-gray-500 py-4 text-center">{p.auditReady ? "No recorded knowledge actions." : "Audit unavailable."}</p> : (
             <div className="space-y-2 max-h-56 overflow-y-auto">
               {p.audit.slice(0, 7).map((a: any, i: number) => (
                 <div key={i} className="flex items-start gap-2.5"><span className="text-sm mt-0.5">{a.icon}</span>
-                  <div className="flex-1 min-w-0"><p className="text-sm text-gray-800 truncate">{a.title}</p><p className="text-[10px] text-gray-400 truncate capitalize">{a.detail}</p></div>
-                  <span className="text-[10px] text-gray-400 shrink-0 tabular-nums">{relTime(a.at)}</span>
+                  <div className="flex-1 min-w-0"><p className="text-sm text-gray-800 truncate">{a.title}</p><p className="text-[10px] text-gray-500 truncate capitalize">{a.detail}</p></div>
+                  <span className="text-[10px] text-gray-500 shrink-0 tabular-nums">{relTime(a.at)}</span>
                 </div>
               ))}
             </div>
@@ -161,7 +161,7 @@ export default async function PublishingGovernance() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Knowledge moves safely into production here — draft → review → clinical/educational review → governance → publish → retire, with version control, approvals and an immutable audit trail. The pipeline, review queue and audit are live; electronic signatures, publishing schedules and rollback land with the full release-management workflow.</p>
+      <p className="text-[11px] text-gray-500 pb-4">Knowledge moves safely into production here — draft → review → clinical/educational review → governance → publish → retire, with version control, approvals and an immutable audit trail. The pipeline, review queue and audit are live; electronic signatures, publishing schedules and rollback land with the full release-management workflow.</p>
     </div>
   );
 }

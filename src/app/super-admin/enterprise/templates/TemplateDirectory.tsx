@@ -8,7 +8,7 @@ import { Modal } from "@/components/ui/interactive";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const TYPES = ["organisation", "facility", "department", "unit", "role", "workspace", "structure"];
-const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", approved: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", assigned: "bg-violet-50 text-violet-700", retired: "bg-gray-100 text-gray-400" };
+const STATUS_BADGE: Record<string, string> = { draft: "bg-gray-100 text-gray-600", review: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]", approved: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]", published: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]", assigned: "bg-violet-50 text-violet-700", retired: "bg-gray-100 text-gray-600" };
 const TYPE_ICON: Record<string, string> = { organisation: "🏛️", facility: "🏥", department: "🗂️", unit: "🔹", role: "🪪", workspace: "🖥️", structure: "🏗️" };
 const input = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/40";
 
@@ -38,7 +38,7 @@ export default function TemplateDirectory({ rows }: { rows: any[] }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200">
       <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100">
-        <h2 className="font-semibold text-gray-900 mr-auto">Templates library <span className="text-gray-400 font-normal text-sm">({filtered.length})</span></h2>
+        <h2 className="font-semibold text-gray-900 mr-auto">Templates library <span className="text-gray-500 font-normal text-sm">({filtered.length})</span></h2>
         <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search templates…" className={`${input} w-52`} />
         <select value={type} onChange={e => setType(e.target.value)} className={`${input} w-40`}><option value="all">All types</option>{TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
         <button onClick={() => { setOpen(true); setErr(""); }} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3.5 py-2">+ New Template</button>
@@ -46,20 +46,20 @@ export default function TemplateDirectory({ rows }: { rows: any[] }) {
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-400 border-b border-gray-100">
+          <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-100">
             <th className="px-4 py-2.5 font-semibold">Template</th><th className="px-4 py-2.5 font-semibold">Type</th><th className="px-4 py-2.5 font-semibold">Version</th><th className="px-4 py-2.5 font-semibold">Status</th><th className="px-4 py-2.5 font-semibold">Source</th>
           </tr></thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">No templates match.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">No templates match.</td></tr>}
             {filtered.map(r => {
               const clickable = r.source === "ent";
               return (
                 <tr key={`${r.source}-${r.id}`} onClick={clickable ? () => router.push(`/super-admin/enterprise/templates/${r.id}`) : undefined} className={`border-b border-gray-50 ${clickable ? "hover:bg-gray-50/60 cursor-pointer" : ""}`}>
-                  <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-gray-50 flex items-center justify-center text-sm shrink-0">{TYPE_ICON[r.type] ?? "📦"}</span><div><p className="font-medium text-gray-900">{r.name}</p>{r.code && <p className="text-[10px] text-gray-400">{r.code}</p>}</div></div></td>
+                  <td className="px-4 py-3"><div className="flex items-center gap-2"><span className="w-7 h-7 rounded-lg bg-gray-50 flex items-center justify-center text-sm shrink-0">{TYPE_ICON[r.type] ?? "📦"}</span><div><p className="font-medium text-gray-900">{r.name}</p>{r.code && <p className="text-[10px] text-gray-500">{r.code}</p>}</div></div></td>
                   <td className="px-4 py-3 text-gray-600 capitalize">{r.type}</td>
                   <td className="px-4 py-3 text-gray-600 tabular-nums">v{r.version}</td>
                   <td className="px-4 py-3"><span className={`text-[10px] font-medium px-2 py-0.5 rounded ${STATUS_BADGE[r.status] ?? "bg-gray-100 text-gray-600"}`}>{r.status}</span></td>
-                  <td className="px-4 py-3 text-gray-400 text-[11px]">{r.source === "ent" ? "Enterprise" : "Control-plane"}</td>
+                  <td className="px-4 py-3 text-gray-500 text-[11px]">{r.source === "ent" ? "Enterprise" : "Control-plane"}</td>
                 </tr>
               );
             })}

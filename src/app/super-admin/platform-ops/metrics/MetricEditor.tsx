@@ -76,7 +76,7 @@ export default function MetricEditor({ metrics }: { metrics: Metric[] }) {
   }
 
   const card = "bg-white rounded-xl border border-gray-200";
-  if (!metrics.length) return <div className={`${card} p-8 text-center`}><p className="text-sm text-gray-500">No metric objects yet.</p><p className="text-xs text-gray-400 mt-1">Author a <b>Metric</b> in the <a href="/super-admin/platform-ops/studio" className="text-indigo-700 underline">Configuration Studio</a> first, then define its formula here.</p></div>;
+  if (!metrics.length) return <div className={`${card} p-8 text-center`}><p className="text-sm text-gray-500">No metric objects yet.</p><p className="text-xs text-gray-500 mt-1">Author a <b>Metric</b> in the <a href="/super-admin/platform-ops/studio" className="text-indigo-700 underline">Configuration Studio</a> first, then define its formula here.</p></div>;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -86,24 +86,24 @@ export default function MetricEditor({ metrics }: { metrics: Metric[] }) {
           {metrics.map(m => (
             <button key={m.object_key} onClick={() => pick(m.object_key)} className={`w-full text-left rounded-lg px-2.5 py-1.5 transition-colors ${selKey === m.object_key ? "bg-indigo-50 ring-1 ring-indigo-200" : "hover:bg-gray-50"}`}>
               <p className="text-xs font-medium text-gray-800 truncate">{m.display_name}</p>
-              <p className="text-[10px] text-gray-400 font-mono truncate">{m.object_key}{m.definition?.formula ? "" : " · no formula"}</p>
+              <p className="text-[10px] text-gray-500 font-mono truncate">{m.object_key}{m.definition?.formula ? "" : " · no formula"}</p>
             </button>
           ))}
         </div>
       </div>
 
       <div className={`${card} p-5 lg:col-span-2`}>
-        {!sel ? <p className="text-sm text-gray-400 py-16 text-center">Select a metric.</p> : (
+        {!sel ? <p className="text-sm text-gray-500 py-16 text-center">Select a metric.</p> : (
           <>
             <h3 className="text-sm font-semibold text-gray-900">{sel.display_name}</h3>
-            <p className="text-[10px] text-gray-400 font-mono mb-4">{sel.object_key}{sel.data_source_key ? ` · source: ${sel.data_source_key}` : ""}</p>
+            <p className="text-[10px] text-gray-500 font-mono mb-4">{sel.object_key}{sel.data_source_key ? ` · source: ${sel.data_source_key}` : ""}</p>
 
             <label className={`${lbl} block`}>Formula
               <textarea className={`${input} font-mono`} rows={2} value={f.formula} onChange={e => set("formula", e.target.value)} placeholder="sum(op_incidents.falls) / op_patients.count * 1000" />
             </label>
             <div className={`text-[11px] mt-1 flex items-center gap-2 ${v.ok ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-error)]"}`}>
               <span>{v.ok ? "✓" : "✗"} {v.msg}</span>
-              {v.refs.length > 0 && <span className="text-gray-400">refs: {v.refs.join(", ")}</span>}
+              {v.refs.length > 0 && <span className="text-gray-500">refs: {v.refs.join(", ")}</span>}
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">

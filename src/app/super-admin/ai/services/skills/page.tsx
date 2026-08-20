@@ -28,16 +28,16 @@ export default async function SkillsPage() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <Card title="Skill Registry" className="xl:col-span-2" right={<span className="text-[11px] text-gray-400">by invocations</span>}>
+        <Card title="Skill Registry" className="xl:col-span-2" right={<span className="text-[11px] text-gray-500">by invocations</span>}>
           <div className="space-y-1">
-            <div className="flex items-center text-[10px] text-gray-400 uppercase tracking-wide px-1"><span className="w-40">Skill</span><span className="flex-1">Description</span><span className="w-20">Category</span><span className="w-16 text-center">Scope</span><span className="w-16 text-center">Approval</span><span className="w-20 text-right">Calls</span></div>
+            <div className="flex items-center text-[10px] text-gray-500 uppercase tracking-wide px-1"><span className="w-40">Skill</span><span className="flex-1">Description</span><span className="w-20">Category</span><span className="w-16 text-center">Scope</span><span className="w-16 text-center">Approval</span><span className="w-20 text-right">Calls</span></div>
             {d.skills.map((s: any) => (
               <div key={s.id} className="flex items-center px-1 py-1.5 text-[12px] border-b border-gray-50">
-                <span className="w-40"><span className="text-gray-900 font-medium">{s.name}</span><br /><span className="text-[10px] text-gray-400 font-mono">{s.code}</span></span>
+                <span className="w-40"><span className="text-gray-900 font-medium">{s.name}</span><br /><span className="text-[10px] text-gray-500 font-mono">{s.code}</span></span>
                 <span className="flex-1 text-gray-500 text-[11px] truncate pr-2">{s.description}</span>
                 <span className="w-20"><Pill text={s.category} tone={CAT_TONE[s.category]} /></span>
                 <span className="w-16 text-center"><Pill text={s.scope} tone={s.scope === "write" ? "amber" : "slate"} /></span>
-                <span className="w-16 text-center">{s.requires_approval ? <span className="text-violet-600 text-[11px]">✓</span> : <span className="text-gray-300">—</span>}</span>
+                <span className="w-16 text-center">{s.requires_approval ? <span className="text-violet-600 text-[11px]">✓</span> : <span className="text-gray-500">—</span>}</span>
                 <span className="w-20 text-right text-gray-900 tabular-nums font-semibold">{Number(s.invocations).toLocaleString()}</span>
               </div>
             ))}
@@ -46,7 +46,7 @@ export default async function SkillsPage() {
 
         <Card title="Skills by Category">
           <Bars rows={d.byCategory.map((c: any) => ({ label: c.label, n: c.n }))} />
-          <p className="text-[10px] text-gray-400 mt-3">internal = platform code · data = read queries · action = state changes · knowledge = RAG · external = third-party. Write + external skills require confirmation.</p>
+          <p className="text-[10px] text-gray-500 mt-3">internal = platform code · data = read queries · action = state changes · knowledge = RAG · external = third-party. Write + external skills require confirmation.</p>
         </Card>
       </div>
 

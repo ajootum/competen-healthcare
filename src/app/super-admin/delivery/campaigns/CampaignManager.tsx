@@ -11,7 +11,7 @@ type Opt = { id: string; name: string };
 const STATUS: Record<string, string> = {
   draft: "text-gray-500 bg-gray-50 border-gray-100",
   active: "text-teal-700 bg-teal-50 border-teal-100",
-  closed: "text-gray-400 bg-gray-50 border-gray-100",
+  closed: "text-gray-500 bg-gray-50 border-gray-100",
 };
 
 export default function CampaignManager({ campaigns, competencies, roles }: { campaigns: Camp[]; competencies: Opt[]; roles: string[] }) {
@@ -59,7 +59,7 @@ export default function CampaignManager({ campaigns, competencies, roles }: { ca
               </select>
             </div>
             <div className="flex items-center gap-4 flex-wrap">
-              <label className="flex items-center gap-2 text-xs text-gray-600"><span className="text-[10px] text-gray-400">Due</span><input type="date" value={due} onChange={e => setDue(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5" /></label>
+              <label className="flex items-center gap-2 text-xs text-gray-600"><span className="text-[10px] text-gray-500">Due</span><input type="date" value={due} onChange={e => setDue(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1.5" /></label>
               <label className="flex items-center gap-1.5 text-xs text-gray-600"><input type="checkbox" checked={mandatory} onChange={e => setMandatory(e.target.checked)} /> Mandatory</label>
               <button onClick={create} disabled={busy} className="ml-auto text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-50 rounded-lg px-4 py-1.5">Create draft</button>
             </div>
@@ -69,9 +69,9 @@ export default function CampaignManager({ campaigns, competencies, roles }: { ca
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-gray-50"><p className="text-[11px] text-gray-400">{campaigns.length} campaign{campaigns.length === 1 ? "" : "s"}</p></div>
+        <div className="px-4 py-2.5 border-b border-gray-50"><p className="text-[11px] text-gray-500">{campaigns.length} campaign{campaigns.length === 1 ? "" : "s"}</p></div>
         {campaigns.length === 0 ? (
-          <p className="text-xs text-gray-400 px-4 py-8 text-center">No campaigns yet. Create one to broadcast a competency initiative to a cohort.</p>
+          <p className="text-xs text-gray-500 px-4 py-8 text-center">No campaigns yet. Create one to broadcast a competency initiative to a cohort.</p>
         ) : (
           <div className="divide-y divide-gray-50">
             {campaigns.map(c => (
@@ -82,10 +82,10 @@ export default function CampaignManager({ campaigns, competencies, roles }: { ca
                   <span className={`text-[8px] font-bold uppercase tracking-wide border rounded px-1.5 py-0.5 ${STATUS[c.status] ?? STATUS.draft}`}>{c.status}</span>
                   <span className="ml-auto flex items-center gap-2 shrink-0">
                     {c.status === "draft" && <button onClick={() => post({ action: "launch", id: c.id })} disabled={busy} className="text-[11px] font-semibold text-violet-700 hover:underline disabled:opacity-50">Launch →</button>}
-                    {c.status === "active" && <button onClick={() => post({ action: "close", id: c.id })} disabled={busy} className="text-[11px] font-semibold text-gray-400 hover:text-gray-600 disabled:opacity-50">Close</button>}
+                    {c.status === "active" && <button onClick={() => post({ action: "close", id: c.id })} disabled={busy} className="text-[11px] font-semibold text-gray-500 hover:text-gray-600 disabled:opacity-50">Close</button>}
                   </span>
                 </div>
-                <p className="text-[11px] text-gray-400 mb-1.5">{c.competency} · {c.target} · {c.cohort} in cohort{c.dueOn ? ` · due ${c.dueOn}` : ""}</p>
+                <p className="text-[11px] text-gray-500 mb-1.5">{c.competency} · {c.target} · {c.cohort} in cohort{c.dueOn ? ` · due ${c.dueOn}` : ""}</p>
                 {c.compliance != null && (
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 flex-1 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-teal-500 rounded-full" style={{ width: `${c.compliance}%` }} /></div>

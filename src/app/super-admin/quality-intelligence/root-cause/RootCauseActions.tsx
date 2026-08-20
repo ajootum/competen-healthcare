@@ -113,7 +113,7 @@ export function InvestigationPanel({ id, status, hasRootCause }: { id: string; s
         <button onClick={addFactor} disabled={busy || !description.trim()}
           className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-50">Add</button>
       </div>
-      <p className="text-[10px] text-gray-400">
+      <p className="text-[10px] text-gray-500">
         A contributing factor is not a root cause. Tick the box only for the one (or few) you would act on.
       </p>
 
@@ -128,7 +128,7 @@ export function InvestigationPanel({ id, status, hasRootCause }: { id: string; s
         <button onClick={() => { setOpen(false); setNote(null); }}
           className="text-[11px] px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50">Close</button>
       </div>
-      <p className="text-[10px] text-gray-400">
+      <p className="text-[10px] text-gray-500">
         Completing with a root cause opens a corrective action automatically. Completing without one is allowed —
         &ldquo;no single cause&rdquo; is a real conclusion — and opens nothing.
       </p>

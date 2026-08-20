@@ -43,7 +43,7 @@ export default async function SecurityIntelligenceAudit() {
   return (
     <div data-wide className="space-y-4">
       <div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/system" className="hover:text-teal-700">System &amp; Security</Link><span>/</span><span className="text-gray-600">Security Intelligence &amp; Audit</span>
         </div>
         <h1 className="text-2xl font-bold text-gray-900 mt-0.5">Security Intelligence &amp; Audit</h1>
@@ -66,8 +66,8 @@ export default async function SecurityIntelligenceAudit() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Event categories */}
         <div className={`${card} p-5`}>
-          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Event Categories <span className="text-[10px] text-gray-400">recent</span></h2>
-          {d.categories.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No events.</p> : (
+          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Event Categories <span className="text-[10px] text-gray-500">recent</span></h2>
+          {d.categories.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No events.</p> : (
             <div className="space-y-2.5">
               {d.categories.map((c: any) => (
                 <div key={c.label}>
@@ -82,7 +82,7 @@ export default async function SecurityIntelligenceAudit() {
         {/* Top identities by activity */}
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Top Identities by Activity</h2>
-          {d.topActors.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">No attributed activity.</p> : (
+          {d.topActors.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">No attributed activity.</p> : (
             <div className="space-y-2">
               {d.topActors.map((a: any, i: number) => (
                 <div key={i} className="flex items-center gap-2.5">
@@ -93,18 +93,18 @@ export default async function SecurityIntelligenceAudit() {
               ))}
             </div>
           )}
-          <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">Privileged-access concentration is worth periodic review.</p>
+          <p className="text-[10px] text-gray-500 mt-3 pt-2 border-t border-gray-50">Privileged-access concentration is worth periodic review.</p>
         </div>
 
         {/* Critical / high-risk stream */}
         <div className={`${card} p-5`}>
           <h2 className="font-semibold text-gray-900 text-[15px] mb-3">High-Risk Event Stream</h2>
-          {d.highRisk.length === 0 ? <p className="text-sm text-gray-400 py-6 text-center">✅ No high-risk events.</p> : (
+          {d.highRisk.length === 0 ? <p className="text-sm text-gray-500 py-6 text-center">✅ No high-risk events.</p> : (
             <div className="divide-y divide-gray-50">
               {d.highRisk.map((e: any, i: number) => (
                 <div key={i} className="flex items-start gap-2 py-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--cmp-color-error)] mt-1.5 shrink-0" />
-                  <div className="min-w-0 flex-1"><p className="text-xs text-gray-800 leading-tight capitalize truncate">{(e.action ?? "").replace(/_/g, " ")}{e.entity ? ` · ${e.entity}` : ""}</p><p className="text-[9px] text-gray-400">{e.actor ?? "system"} · {relTime(e.at)}</p></div>
+                  <div className="min-w-0 flex-1"><p className="text-xs text-gray-800 leading-tight capitalize truncate">{(e.action ?? "").replace(/_/g, " ")}{e.entity ? ` · ${e.entity}` : ""}</p><p className="text-[9px] text-gray-500">{e.actor ?? "system"} · {relTime(e.at)}</p></div>
                 </div>
               ))}
             </div>
@@ -118,7 +118,7 @@ export default async function SecurityIntelligenceAudit() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* AI security insights */}
         <div className={`${card} p-5 lg:col-span-2`}>
-          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Security Insights <span className="text-[10px] text-gray-400">rule-derived from live events</span></h2>
+          <h2 className="font-semibold text-gray-900 text-[15px] mb-3">Security Insights <span className="text-[10px] text-gray-500">rule-derived from live events</span></h2>
           <div className="space-y-2">
             {d.insights.map((s: string, i: number) => (
               <div key={i} className="flex items-start gap-2 rounded-lg border border-gray-100 p-2.5">
@@ -127,7 +127,7 @@ export default async function SecurityIntelligenceAudit() {
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3">Derived from real event counts and clearly distinguished from verified facts. Behavioural anomaly detection and AI-generated summaries linked to source events are a later phase.</p>
+          <p className="text-[10px] text-gray-500 mt-3">Derived from real event counts and clearly distinguished from verified facts. Behavioural anomaly detection and AI-generated summaries linked to source events are a later phase.</p>
         </div>
 
         {/* Audit integrity & retention */}
@@ -137,15 +137,15 @@ export default async function SecurityIntelligenceAudit() {
             {d.integrity.map((it: any) => (
               <div key={it.label} className="flex items-center justify-between gap-2">
                 <span className="text-xs text-gray-700 shrink-0">{it.label}</span>
-                <span className={`text-[10px] font-medium text-right ${it.on === true ? "text-[var(--cmp-text-success)]" : it.on === false ? "text-rose-500" : "text-gray-400"}`}>{it.value}</span>
+                <span className={`text-[10px] font-medium text-right ${it.on === true ? "text-[var(--cmp-text-success)]" : it.on === false ? "text-rose-500" : "text-gray-500"}`}>{it.value}</span>
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-gray-400 mt-3 pt-2 border-t border-gray-50">Landlord severity: {fmt(d.severity.info)} info · {fmt(d.severity.warning)} warning · {fmt(d.severity.critical)} critical.</p>
+          <p className="text-[10px] text-gray-500 mt-3 pt-2 border-t border-gray-50">Landlord severity: {fmt(d.severity.info)} info · {fmt(d.severity.warning)} warning · {fmt(d.severity.critical)} critical.</p>
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 pb-4">Security Intelligence &amp; Audit completes the System &amp; Security Platform. It reads the real immutable trails — the app-wide audit log, the landlord-plane trail (actor, IP, reason) and system telemetry — into event KPIs, category analytics, top-identity activity, a high-risk stream, an instant log explorer and rule-derived insights. Tamper-evident hash-chaining, configurable retention by event class, packaged evidence export and behavioural anomaly detection are shown as honest gaps rather than fabricated, per SYS-002 AC-02.</p>
+      <p className="text-[11px] text-gray-500 pb-4">Security Intelligence &amp; Audit completes the System &amp; Security Platform. It reads the real immutable trails — the app-wide audit log, the landlord-plane trail (actor, IP, reason) and system telemetry — into event KPIs, category analytics, top-identity activity, a high-risk stream, an instant log explorer and rule-derived insights. Tamper-evident hash-chaining, configurable retention by event class, packaged evidence export and behavioural anomaly detection are shown as honest gaps rather than fabricated, per SYS-002 AC-02.</p>
     </div>
   );
 }
