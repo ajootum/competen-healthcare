@@ -152,9 +152,22 @@ async function main() {
     const probeBody = await probe.json().catch(() => ({}));
     if (probe.status === 403 && probeBody?.error?.code === "SIGNUP_CLOSED") {
       console.log("\n  SKIPPED from section 2 onwards -- the route still answers SIGNUP_CLOSED with the");
-      console.log("  launch flag ON, so a gate this harness does not control is refusing. Everything");
-      console.log("  below would be an echo of that one fact rather than thirteen findings.");
-      console.log("  Sections 1 and the restore still ran and are reported above.\n");
+      console.log("  launch flag ON. Everything below would be an echo of that one fact rather than");
+      console.log("  thirteen findings. Sections 1 and the restore still ran and are reported above.\n");
+      // ⚠ THE FIRST CAUSE TO RULE OUT IS A SPLIT-BRAIN FIXTURE, NOT A GATE, and this printout exists
+      // because I reported the wrong one. This harness flips the flag through its OWN admin client,
+      // which reads .env.local -- and it POSTs to whatever BASE_URL names, which may be a server started
+      // against a different project entirely. `npm run dev:staging` serves :3100 against STAGING by
+      // design (scripts/dev-staging.mjs, COMP-ENG-002G s4), so a flag set in production and a route
+      // reading staging disagree perfectly, and the symptom is exactly the one above. Both sides are
+      // printed so a reader compares them before going to look for a gate that may not exist.
+      const harnessRef = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "unknown")
+        .match(/https:\/\/([a-z0-9]+)\.supabase\.co/)?.[1] ?? "unknown";
+      console.log("  ⚠ CHECK THE ENVIRONMENTS BEFORE LOOKING FOR A GATE:");
+      console.log(`      the flag was set in : ${harnessRef}  (this harness, via .env.local)`);
+      console.log(`      the route answered  : ${BASE}  (whatever project THAT server was started with)`);
+      console.log("      :3100 is `npm run dev:staging` and reads STAGING; :3000 is `npm run dev` and");
+      console.log("      reads .env.local. Against :3100 this skip says nothing about the product.\n");
       // ⚠ THE SUMMARY IS PRINTED HERE RATHER THAN FALLING THROUGH TO THE ONE AT THE FOOT. A `return`
       // inside this try runs the finally -- which restores the flag and cleans up, and that MUST
       // happen -- and then leaves the function, so the tail below never executes. A skip that printed
