@@ -161,11 +161,34 @@ async function main() {
   // encounter.list so they can run the consultation queue at the desk -- an earlier version of this
   // assertion had that wrong and failed honestly. What they must not hold is the ability to write or
   // read the clinical record itself.
-  ok("...and NOT the clinical write capabilities, nor the record itself",
+  // ⚠ THIS FORBADE document.view AND THE OWNER GRANTED IT, WITH A DATE AND A SENTENCE.
+  //
+  // Migration 248 ("THE ASSISTANT CAN CLASSIFY A DOCUMENT BUT CANNOT OPEN THE WORKSPACE", CPR-DOC-002
+  // s13) gives practice_assistant document.view AND document.author, and its header records why it was
+  // not taken unilaterally: "Deliberately left for the user, because it widens what an assistant can SEE
+  // and that is a decision about a practice's privacy posture rather than a defect. Confirmed
+  // 2026-08-07: 'The assistant should be able to upload documents etc.'"
+  //
+  // So this assertion was holding a boundary the owner had moved. LOOSENING A SECURITY PIN IS THE ONE
+  // REPAIR THAT MUST NOT BE DONE ON A HUNCH, which is why the grant was traced to the migration that
+  // made it before a character of this changed -- not inferred from the capability list being longer
+  // than expected.
+  //
+  // ⚠ AND THE PIN IS TIGHTER NOW, NOT LOOSER. 248 is explicit that "the omissions are the point":
+  // document.sign is withheld because "an assistant who could sign would be attesting as a clinician",
+  // and inbox.review because judging whether a result matters is clinical. inbox.review was already
+  // here; document.sign was not, so the assertion did not test half the boundary the migration drew.
+  ok("...and NOT the clinical write capabilities, nor the acts that attest as a clinician",
     !joinerCaps.includes("encounter.edit") && !joinerCaps.includes("encounter.sign") &&
-    !joinerCaps.includes("document.view") && !joinerCaps.includes("procedure.record") &&
+    !joinerCaps.includes("document.sign") && !joinerCaps.includes("procedure.record") &&
     !joinerCaps.includes("inbox.review"),
     joinerCaps.join(","));
+  // ⚠ THE CONTROL FOR THE LOOSENING. If document.view ever stops being granted, that is a decision
+  // somebody took and this says so by name rather than the assertion above quietly passing for a new
+  // reason. It is the counterpart to the pin, not a duplicate of it.
+  ok("...and the assistant DOES hold what migration 248 granted -- view and author, so drafts can be prepared",
+    joinerCaps.includes("document.view") && joinerCaps.includes("document.author"),
+    joinerCaps.filter(c => c.startsWith("document.")).join(","));
 
   const reuse = await acceptInvitation(admin, { code: invite.data.code, userId: SECOND_JOINER, correlationId: "h" });
   ok("A CODE WORKS ONCE", !reuse.ok && reuse.code === "INVALID_CODE", reuse.ok ? "was allowed" : reuse.code);
