@@ -253,6 +253,170 @@ const dateOf = (iso: string | null | undefined): string => String(iso ?? "").sli
  * the encounter timeline, and a timeline missing its referrals must SAY it is missing them rather than
  * reading as a patient who was never referred anywhere.
  */
+/**
+ * WHERE EACH CONSULTATION HAPPENED, resolved once for every reader that needs it.
+ *
+ * ⚠ TWO SOURCES, IN THIS ORDER, AND THE ORDER IS THE RULE. practice_encounter.location_id is what THIS
+ * consultation recorded; the activity behind it is where the practitioner was that session. The
+ * encounter wins, because a consultation moved mid-session is the case worth being right about --
+ * launchEncounter's own comment says the activity is "a note about where the work STARTED, not a field
+ * that tracks where the practitioner currently is".
+ *
+ * ⚠ THE FACILITY IS THE HEADLINE AND THE ROOM IS THE DETAIL. "Aga Khan" distinguishes one consultation
+ * from another across a peripatetic week; "Clinic 2" does not, and a chip reading it on a timeline
+ * spanning three hospitals is worse than no chip. The location name is used only where no facility
+ * sits above it.
+ *
+ * ⚠ AND AN UNPLACED CONSULTATION RESOLVES TO null, NEVER TO A PLACEHOLDER. "Unknown" on every row of a
+ * single-site practice is noise that teaches people to stop reading the chips. `failed` is a separate
+ * answer again: a read that broke is not a practice with no facilities.
+ */
+async function resolvePlaces(
+  admin: any, workspaceId: string, encounters: any[],
+): Promise<{ of: (e: any) => string | null; failed: boolean }> {
+  const activityIds = [...new Set(encounters
+    .map(e => e.activity_id).filter((x: any): x is string => typeof x === "string"))];
+  const [locRes, facRes, actRes] = await Promise.all([
+    admin.from("practice_location").select("id, name, facility_id").eq("workspace_id", workspaceId),
+    admin.from("practice_facility").select("id, name").eq("workspace_id", workspaceId),
+    activityIds.length
+      ? admin.from("practice_activity").select("id, facility_id, location_id")
+        .eq("workspace_id", workspaceId).in("id", activityIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  const failed = !!((locRes as any).error || (facRes as any).error || (actRes as any).error);
+
+  const locById = new Map<string, { name: string; facilityId: string | null }>();
+  for (const l of (((locRes as any).data ?? []) as any[]))
+    locById.set(l.id as string, { name: String(l.name ?? ""), facilityId: l.facility_id ?? null });
+  const facById = new Map<string, string>();
+  for (const f of (((facRes as any).data ?? []) as any[])) facById.set(f.id as string, String(f.name ?? ""));
+  const actById = new Map<string, { facilityId: string | null; locationId: string | null }>();
+  for (const act of (((actRes as any).data ?? []) as any[]))
+    actById.set(act.id as string, { facilityId: act.facility_id ?? null, locationId: act.location_id ?? null });
+
+  const of = (e: any): string | null => {
+    const viaEncounter = typeof e.location_id === "string" ? locById.get(e.location_id) : undefined;
+    const act = typeof e.activity_id === "string" ? actById.get(e.activity_id) : undefined;
+    const viaActivityLoc = act?.locationId ? locById.get(act.locationId) : undefined;
+    const loc = viaEncounter ?? viaActivityLoc;
+    const facilityId = loc?.facilityId ?? act?.facilityId ?? null;
+    const facility = facilityId ? facById.get(facilityId) : undefined;
+    return (facility && facility.trim()) || (loc?.name && loc.name.trim()) || null;
+  };
+  return { of, failed };
+}
+
+/**
+ * CPR-OPT-001 D17 -- THE SAME PATIENT, SEEN IN MORE THAN ONE PLACE.
+ *
+ * ⚠⚠ IT SURFACES. IT DOES NOT JUDGE, AND THAT IS THE WHOLE DESIGN.
+ *
+ * The backlog asks for "You started X at Hospital A; Hospital B has them on Y" and calls it the
+ * strongest single marketing claim in the product, because no single-site EMR can produce it. It would
+ * also be the easiest place in this product to invent a clinical claim: deciding that two treatments
+ * CONFLICT is a judgement about medicine, and nothing here is qualified to make it. Same drug at two
+ * doses may be a taper. Two drugs for one problem may be deliberate. A gap may be a discontinuation
+ * nobody wrote down.
+ *
+ * So this returns WHAT WAS RECORDED WHERE, in date order, and says nothing about whether it is right.
+ * The practitioner has the training; the product has the two sites nobody else can see. There is no
+ * "conflict" field, no severity and no flag -- deliberately, so a screen cannot render one.
+ *
+ * ⚠ AND UNPLACED CARE IS COUNTED RATHER THAN DROPPED. Grouping by place silently loses every treatment
+ * whose consultation has no facility, and a panel that showed two hospitals while omitting a third of
+ * the record would be worse than no panel. `unplacedTreatments` travels so the screen can say so.
+ */
+export type CrossFacilityPlace = {
+  facility: string;
+  /** Calendar dates, first and last, of consultations recorded at this place. */
+  firstSeen: string;
+  lastSeen: string;
+  encounters: number;
+  /** What was recorded there. No judgement attached to any of it. */
+  treatments: { id: string; label: string; on: string }[];
+};
+
+export type CrossFacilityCare = {
+  permitted: boolean;
+  unavailable: boolean;
+  detail: string | null;
+  /** True only when care is recorded at MORE THAN ONE place. One place is not a story. */
+  multiSite: boolean;
+  places: CrossFacilityPlace[];
+  /** Treatments whose consultation carries no place. Disclosed, never silently omitted. */
+  unplacedTreatments: number;
+  /** Consultations with no place. Same reason. */
+  unplacedEncounters: number;
+};
+
+export async function crossFacilityCare(
+  admin: any, ctx: WorkspaceContext, patientId: string,
+): Promise<CrossFacilityCare> {
+  const empty = (over: Partial<CrossFacilityCare> = {}): CrossFacilityCare => ({
+    permitted: true, unavailable: false, detail: null, multiSite: false, places: [],
+    unplacedTreatments: 0, unplacedEncounters: 0, ...over,
+  });
+  if (!hasCapability(ctx, CAP_LIST_ENCOUNTERS))
+    return empty({ permitted: false });
+
+  const { data: encRows, error: encErr } = await admin.from("practice_encounter")
+    .select("id, started_at, activity_id, location_id")
+    .eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId)
+    .order("started_at", { ascending: true });
+  if (encErr) return empty({ unavailable: true, detail: encErr.message });
+  const encounters = (encRows ?? []) as any[];
+  if (encounters.length === 0) return empty();
+
+  const places = await resolvePlaces(admin, ctx.workspaceId, encounters);
+  // ⚠ A FAILED PLACE READ MUST NOT RENDER AS "SEEN AT ONE HOSPITAL". Every consultation would resolve
+  // to null, multiSite would be false, and the panel would disappear -- which is the answer a
+  // single-site patient gets, and the two are not the same.
+  if (places.failed)
+    return empty({ unavailable: true, detail: "the facilities and locations could not be read" });
+
+  const { data: txRows, error: txErr } = await admin.from("practice_treatment")
+    .select("id, label, encounter_id, created_at")
+    .eq("workspace_id", ctx.workspaceId).eq("patient_id", patientId)
+    .order("created_at", { ascending: true });
+  if (txErr) return empty({ unavailable: true, detail: txErr.message });
+
+  const placeByEnc = new Map<string, string | null>();
+  for (const e of encounters) placeByEnc.set(e.id as string, places.of(e));
+
+  const byPlace = new Map<string, CrossFacilityPlace>();
+  let unplacedEncounters = 0;
+  for (const e of encounters) {
+    const place = placeByEnc.get(e.id as string) ?? null;
+    if (!place) { unplacedEncounters++; continue; }
+    const on = String(e.started_at ?? "").slice(0, 10);
+    const slot = byPlace.get(place)
+      ?? { facility: place, firstSeen: on, lastSeen: on, encounters: 0, treatments: [] };
+    slot.encounters++;
+    if (on && on < slot.firstSeen) slot.firstSeen = on;
+    if (on && on > slot.lastSeen) slot.lastSeen = on;
+    byPlace.set(place, slot);
+  }
+
+  let unplacedTreatments = 0;
+  for (const t of (((txRows ?? []) as any[]))) {
+    const place = typeof t.encounter_id === "string" ? placeByEnc.get(t.encounter_id) ?? null : null;
+    if (!place) { unplacedTreatments++; continue; }
+    byPlace.get(place)?.treatments.push({
+      id: String(t.id), label: String(t.label ?? ""), on: String(t.created_at ?? "").slice(0, 10),
+    });
+  }
+
+  // Most recently seen first: the place a practitioner is asking about is usually the last one.
+  const list = [...byPlace.values()].sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
+  return empty({
+    multiSite: list.length > 1,
+    places: list,
+    unplacedTreatments,
+    unplacedEncounters,
+  });
+}
+
 export async function clinicalTimeline(
   admin: any, ctx: WorkspaceContext, patientId: string, opts: { limit?: number } = {},
 ): Promise<ClinicalTimeline> {
@@ -338,44 +502,12 @@ export async function clinicalTimeline(
   // chip reading "unknown" on every row of a single-site practice is noise that teaches people to stop
   // reading the chips. A FAILED read is different from an absent one and is named in
   // sourcesUnavailable, so the screen can say the places could not be read rather than showing none.
-  const activityIds = [...new Set(encounters
-    .map(e => e.activity_id).filter((x: any): x is string => typeof x === "string"))];
-  const [locRes, facRes, actRes] = await Promise.all([
-    admin.from("practice_location").select("id, name, facility_id").eq("workspace_id", ctx.workspaceId),
-    admin.from("practice_facility").select("id, name").eq("workspace_id", ctx.workspaceId),
-    activityIds.length
-      ? admin.from("practice_activity").select("id, facility_id, location_id")
-        .eq("workspace_id", ctx.workspaceId).in("id", activityIds)
-      : Promise.resolve({ data: [], error: null }),
-  ]);
-  if ((locRes as any).error || (facRes as any).error || (actRes as any).error) sourcesUnavailable.push("places");
-
-  const locById = new Map<string, { name: string; facilityId: string | null }>();
-  for (const l of (((locRes as any).data ?? []) as any[]))
-    locById.set(l.id as string, { name: String(l.name ?? ""), facilityId: l.facility_id ?? null });
-  const facById = new Map<string, string>();
-  for (const f of (((facRes as any).data ?? []) as any[])) facById.set(f.id as string, String(f.name ?? ""));
-  const actById = new Map<string, { facilityId: string | null; locationId: string | null }>();
-  for (const act of (((actRes as any).data ?? []) as any[]))
-    actById.set(act.id as string, { facilityId: act.facility_id ?? null, locationId: act.location_id ?? null });
-
-  /**
-   * The place one consultation happened, as one string, or null when nobody recorded one.
-   *
-   * ⚠ THE FACILITY IS THE HEADLINE AND THE ROOM IS THE DETAIL. "Aga Khan" is what distinguishes one
-   * consultation from another across a peripatetic week; "Clinic 2" does not, and a chip reading
-   * "Clinic 2" on a timeline spanning three hospitals is worse than no chip. So the facility name is
-   * used where there is one, and the location name only where there is no facility above it.
-   */
-  const placeOf = (e: any): string | null => {
-    const viaEncounter = typeof e.location_id === "string" ? locById.get(e.location_id) : undefined;
-    const act = typeof e.activity_id === "string" ? actById.get(e.activity_id) : undefined;
-    const viaActivityLoc = act?.locationId ? locById.get(act.locationId) : undefined;
-    const loc = viaEncounter ?? viaActivityLoc;
-    const facilityId = loc?.facilityId ?? act?.facilityId ?? null;
-    const facility = facilityId ? facById.get(facilityId) : undefined;
-    return (facility && facility.trim()) || (loc?.name && loc.name.trim()) || null;
-  };
+  // ⚠ ONE RESOLVER, TWO READERS. crossFacilityCare below groups the same patient's care by the same
+  // places, and a second copy of this ladder is how the timeline and the cross-facility panel come to
+  // disagree about which hospital a consultation was at.
+  const places = await resolvePlaces(admin, ctx.workspaceId, encounters);
+  if (places.failed) sourcesUnavailable.push("places");
+  const placeOf = places.of;
 
   const diagByEnc = new Map<string, any[]>();
   for (const d of ((diagRes as any).data ?? []) as any[]) {

@@ -38,7 +38,7 @@ import {
 import {
   patientSnapshot, clinicalTimeline, journeyCounts, recordMilestone, listMilestones,
   recordAllergyReview, addAllergy, setBloodGroup, problemHistory, treatmentHistory,
-  procedureHistory, outcomeHistory, followUpHistory, LONGITUDINAL_CAPABILITIES,
+  procedureHistory, outcomeHistory, followUpHistory, LONGITUDINAL_CAPABILITIES, crossFacilityCare,
 } from "../src/lib/practice/longitudinal";
 import { allergyLine, bloodGroupLine, JOURNEY_FILTER_CODES, MILESTONE_KIND_CODES } from "../src/lib/practice/longitudinal-constants";
 import { purgeWorkspacesOwnedBy } from "./_cleanup";
@@ -568,6 +568,52 @@ async function main() {
   ok("tl-P5. ⚠ a failed PLACE read is named, so the screen can say the places are missing",
     blindPlaces.sourcesUnavailable.includes("places"),
     JSON.stringify(blindPlaces.sourcesUnavailable));
+
+  // ── tl-X. CROSS-FACILITY CARE: CPR-OPT-001 D17, SURFACED AND NOT JUDGED ────────────────────────
+  //
+  // ⚠⚠ THE ASSERTION THAT MATTERS MOST HERE IS AN ABSENCE. The backlog asks for "you started X at
+  // Hospital A; Hospital B has them on Y" and this is the easiest place in the product to invent a
+  // clinical claim -- deciding two treatments CONFLICT is a judgement about medicine, and nothing here
+  // is qualified to make it. Same drug at two doses may be a taper. Two drugs for one problem may be
+  // deliberate. So tl-X4 asserts that no field ANYWHERE in the payload carries that vocabulary, which
+  // is what stops a screen rendering a flag nobody is entitled to.
+  const cross = await crossFacilityCare(admin, ctxA, patient);
+  ok("tl-X1. ⚠ the same patient is shown as seen at MORE THAN ONE place -- what no single-site EMR can do",
+    cross.permitted && !cross.unavailable && cross.multiSite === true && cross.places.length === 2,
+    JSON.stringify({ multi: cross.multiSite, places: cross.places.map(pl => pl.facility) }));
+  ok("tl-X2. each place carries what was recorded there, and when it was first and last seen",
+    cross.places.every(pl => /^\d{4}-\d{2}-\d{2}$/.test(pl.firstSeen) && /^\d{4}-\d{2}-\d{2}$/.test(pl.lastSeen)
+      && pl.encounters > 0),
+    JSON.stringify(cross.places.map(pl => ({ f: pl.facility, n: pl.encounters, first: pl.firstSeen, last: pl.lastSeen }))));
+  // ⚠ MOST RECENT FIRST -- the place a practitioner is asking about is usually the last one.
+  ok("tl-X3. the places are ordered by when the patient was last seen there",
+    cross.places.length < 2 || cross.places[0].lastSeen >= cross.places[1].lastSeen,
+    JSON.stringify(cross.places.map(pl => [pl.facility, pl.lastSeen])));
+  // ⚠ THE WHOLE PAYLOAD, SERIALISED, MUST NOT CONTAIN A JUDGEMENT. A field added later called
+  // `conflict` or `severity` would fail this without anybody having to remember the rule.
+  ok("tl-X4. ⚠⚠ NOTHING IN THE PAYLOAD JUDGES -- no conflict, discrepancy, severity, mismatch or flag",
+    !/conflict|discrepan|severity|mismatch|flagged|warning|risk/i.test(JSON.stringify(cross)),
+    JSON.stringify(cross).slice(0, 160));
+  // ⚠ CARE THE PRODUCT CANNOT PLACE IS COUNTED, NEVER DROPPED. Grouping by place silently loses every
+  // consultation with no facility, and a panel showing two hospitals while omitting a third of the
+  // record is worse than no panel. This fixture HAS unplaced consultations, so the count is non-zero
+  // and the assertion is not vacuous.
+  ok("tl-X5. ⚠ consultations the product cannot place are COUNTED and disclosed, not omitted",
+    cross.unplacedEncounters > 0 && typeof cross.unplacedTreatments === "number",
+    JSON.stringify({ enc: cross.unplacedEncounters, tx: cross.unplacedTreatments }));
+  // ⚠ A FAILED READ MUST NOT READ AS "SEEN AT ONE HOSPITAL". Every consultation would resolve to null,
+  // multiSite would be false, and the panel would vanish -- which is the answer a single-site patient
+  // gets, and the two are not the same fact.
+  const crossBlind = await crossFacilityCare(
+    failingOn("practice_facility", "simulated facility failure") as never, ctxA, patient);
+  ok("tl-X6. ⚠ a failed place read says UNAVAILABLE rather than quietly reporting one site",
+    crossBlind.unavailable === true && crossBlind.multiSite === false && crossBlind.detail !== null,
+    JSON.stringify({ u: crossBlind.unavailable, m: crossBlind.multiSite, d: crossBlind.detail }));
+  // ⚠ AND A CALLER WHO MAY NOT SEE CONSULTATIONS IS REFUSED, not shown an empty practice.
+  const crossDenied = await crossFacilityCare(admin, noEncounterCtx, patient);
+  ok("tl-X7. a caller without encounter.list is refused rather than told the patient has no history",
+    crossDenied.permitted === false && crossDenied.unavailable === false,
+    JSON.stringify(crossDenied));
 
   await cleanup();
   const { count: left } = await admin.from("practice_patient_milestone")
