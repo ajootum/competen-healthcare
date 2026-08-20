@@ -395,7 +395,20 @@ async function main() {
   ok("3c-control. a patient-channel rule admitting existing patients only is in force",
     eligibilityRule.ok, eligibilityRule.ok ? "" : (eligibilityRule as any).message);
 
-  const slotElig = new Date(Date.parse(slotA) + 25200000).toISOString();
+  // ⚠ +3h, NOT +7h, AND THE OLD OFFSET IS WHY THIS WAS RED. slotA is 08:00 UTC; +25200000ms is 15:00
+  // UTC, which is 18:00 in Kampala and outside the session this fixture opens -- so the booking was
+  // refused with TIME_NOT_OFFERED and never reached the eligibility rule at all.
+  //
+  // ⚠ THE DETAIL MESSAGE ALMOST SENT ME THE WRONG WAY, and that is worth recording. It read "if
+  // eligibility now applies, the gap has been closed and this assertion must be turned round" -- an
+  // instruction written for a refusal that never came. Printing the actual code showed
+  // TIME_NOT_OFFERED, which is a fixture fault and not the gap closing. A failure message that names
+  // the expected cause rather than the observed one will hand the next reader a conclusion.
+  //
+  // Every whole hour from +1h to +6h is already a named constant in this file (slotB, slotC, slotD,
+  // slotRevoked, slotExpired, slotWrongDest), and +3h collided with slotD the moment this booking
+  // started succeeding. +5.5h is inside the offered window and belongs to nothing else.
+  const slotElig = new Date(Date.parse(slotA) + 19800000).toISOString();
   const pairG = await freshPair();
   const eligResult = await submitBookingRequest(admin, {
     handle: HANDLE, token: pairG.token, intake: intake({ contactPhone: pairG.phone }),
@@ -403,7 +416,7 @@ async function main() {
   });
   ok("3c. ⚠ AN ELIGIBILITY RULE DOES NOT REFUSE AN ANONYMOUS BOOKING -- its criteria are facts about a patient record this intake never creates. Asserted so the gap is visible rather than assumed",
     eligResult.ok,
-    eligResult.ok ? "" : "it refused -- if eligibility now applies, the gap has been closed and this assertion must be turned round");
+    eligResult.ok ? "" : `REFUSED WITH ${(eligResult as any).code}: ${(eligResult as any).message}`);
   await admin.from("practice_booking_rule").delete()
     .eq("workspace_id", ws).eq("name", "Existing patients only");
 
@@ -500,16 +513,35 @@ async function main() {
   });
   ok("5c-control. a refusal exists for an override to try to lift, so 5c is not passing because there was nothing to override",
     reclose.ok, reclose.ok ? "" : (reclose as any).message);
+  // ⚠ THE INTAKE IS PASSED BECAUSE WITHOUT IT THE REFUSAL COMES FROM THE WRONG GUARD. bookUnderRules
+  // resolves required information for the patient_self channel and refuses INTAKE_INCOMPLETE, which is
+  // deliberately `overridable: false` -- "a missing date of birth is not a judgement... there is no
+  // information to be had". So the call was being refused BEFORE the override check and 5c has been
+  // reporting a refusal it did not test.
+  //
+  // ⚠ A REFUSAL FOR THE WRONG REASON IS NOT A PASS, WHICH IS WHY 5c NAMES ITS CODE. The property is not
+  // "a patient cannot book past a rule" -- it is that the OVERRIDE GUARD specifically is what stops
+  // them. With the intake complete, the request now reaches it.
   const overrideAttempt = await bookUnderRules(admin, patientCtx, {
     channel: "patient_self", patientName: "Amina Nabirye", appointmentType: "new_consultation",
     scheduledAt: slotC, locationId: locId,
     patientSessionToken: tokenF, patientContact: phoneF,
+    // ⚠ FIELD KEYS, NOT THE CAMEL-CASE SHAPE THE REST OF THIS FILE USES, AND THE DIFFERENCE IS REAL.
+    // submitBookingRequest takes the patient-facing shape and translates it (patient-booking.ts line
+    // 266: `given_name: i.givenName`). bookUnderRules is the layer BELOW that translation and reads
+    // required_information by its own field_key. Passing intake() here looked complete and left every
+    // required field blank, which is why the refusal was INTAKE_INCOMPLETE naming "First name and
+    // Family name" while the object plainly contained a first and family name.
+    intake: {
+      given_name: "Amina", family_name: "Nabirye", birth_date: "1994-03-02", sex: "female",
+      contact_phone: phoneF, reason_for_visit: "persistent headache",
+    },
     override: { reason: "let me through" },
     actorId: "patient", correlationId: CORR,
   });
   ok("5c. ⚠ a patient passing an OVERRIDE is refused -- s14's override needs practice.settings.manage, which no patient holds",
     !overrideAttempt.ok && (overrideAttempt as any).code === "OVERRIDE_NOT_PERMITTED",
-    overrideAttempt.ok ? "the override worked" : (overrideAttempt as any).code);
+    overrideAttempt.ok ? "the override worked" : `${(overrideAttempt as any).code}: ${(overrideAttempt as any).message}`);
 
   // ⚠ THE ENGINE'S OWN SESSION GUARD, EXERCISED DIRECTLY -- AND THIS ASSERTION EXISTS BECAUSE A
   // DELIBERATE BREAK FOUND NOTHING.

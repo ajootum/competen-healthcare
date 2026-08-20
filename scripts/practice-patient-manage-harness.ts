@@ -476,10 +476,31 @@ async function main() {
     cancelled.ok ? "" : `${(cancelled as any).code}: ${(cancelled as any).message}`);
   if (!cancelled.ok) return report();
 
-  ok("4c. ⚠ AND IT SAYS THE REASON IS NOT ON THE BOOKING. No column holds a patient cancellation reason; it went to the audit trail, and a payload that quietly dropped it would be the silent half of that",
-    cancelled.data.reasonStoredOnBooking === false && cancelled.data.confirmationSent === false
+  // ⚠ THIS REQUIRED reasonStoredOnBooking === false AND THE COLUMN NOW EXISTS. Migration 269 gave
+  // practice_appointment cancellation_reason, cancelled_by_kind, cancelled_within_notice and
+  // cancelled_at, and the engine was WRITTEN FOR THAT DAY -- its comment says "reasonStoredOnBooking
+  // below is now read from the attempt rather than hard-coded false, so the day the migration lands the
+  // sentence changes on its own". It did. This assertion did not change with it.
+  //
+  // ⚠ THE CLAIM WORTH KEEPING IS IN ITS OWN LAST CLAUSE: "a payload that quietly dropped it would be
+  // the silent half of that". The point was never that the column is absent -- it was that the FLAG
+  // MUST NOT LIE about the write, in either direction. So it is now checked against the row: whatever
+  // the payload says about storing the reason, the database must agree.
+  const { data: cancelRow } = await admin.from("practice_appointment")
+    .select("cancellation_reason, cancelled_by_kind").eq("id", cancelled.data.appointmentId).maybeSingle();
+  const reasonOnRow = (cancelRow as { cancellation_reason: string | null } | null)?.cancellation_reason ?? null;
+  ok("4c. ⚠ THE PAYLOAD DOES NOT LIE ABOUT THE WRITE -- reasonStoredOnBooking agrees with the row",
+    cancelled.data.reasonStoredOnBooking === (reasonOnRow !== null),
+    JSON.stringify({ flag: cancelled.data.reasonStoredOnBooking, onRow: reasonOnRow }));
+  ok("4c-b. and the reason the PATIENT gave is the one stored, attributed to the patient",
+    reasonOnRow === "I am away that week"
+    && (cancelRow as { cancelled_by_kind: string | null } | null)?.cancelled_by_kind === "patient",
+    JSON.stringify(cancelRow));
+  // Still true, and still the honest sentence: nothing can be sent because no provider is configured.
+  ok("4c-c. and no confirmation is claimed to have been sent, because none can be",
+    cancelled.data.confirmationSent === false
     && /no message has been sent/i.test(cancelled.data.confirmationNote),
-    JSON.stringify(cancelled.data));
+    cancelled.data.confirmationNote);
 
   const reopened = await bookableSlots(admin, { handle: HANDLE, appointmentType: "new_consultation", ...window() });
   ok("4d. ⚠ THE CANCELLED TIME IS OFFERED AGAIN. Migration 255's constraint is scoped to live statuses, so the capacity is freed by the status alone with nothing to clean up",
