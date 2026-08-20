@@ -131,8 +131,13 @@ export default async function Page() {
               ? null
               // !! NAMES WHO MAY, RATHER THAN OFFERING A CONTROL THAT WOULD REFUSE. s13 forbids a
               // placeholder that does nothing, and the reader still needs to know why they cannot.
-              : "You do not hold hq.practice.launch.attest, so no recording control is offered here. "
-                + "The capability is granted to the Practice Product Director position by migration 344."
+              // !! NO MIGRATION NUMBER IN A SENTENCE THE READER CANNOT AVOID. The first version of this
+              // line named the migration that granted the capability and pushed the screen-doctrine
+              // ratchet from 16 to 17. What the reader needs is WHO MAY ATTEST, not which migration
+              // created it -- the identifier belongs in Technical Operations, and the doctrine harness
+              // is what stopped it reaching the screen.
+              : "You do not hold the launch-attestation capability, so no recording control is offered "
+                + "here. It belongs to the Practice Product Director position."
           } />
       </Panel>
 
