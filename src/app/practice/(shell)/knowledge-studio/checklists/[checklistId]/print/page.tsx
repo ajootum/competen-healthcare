@@ -6,6 +6,7 @@ import { hasCapability } from "@/lib/practice/access";
 import { getChecklist } from "@/lib/practice/checklist";
 import { letterhead } from "@/lib/practice/document-generation";
 import { CHECKLIST_CAPABILITIES, CHECKLIST_ROUTE } from "@/lib/practice/checklist-constants";
+import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
 
 // /practice/knowledge-studio/checklists/[id]/print -- a blank copy, for the wall or the trolley.
 //
@@ -37,6 +38,9 @@ export default async function PrintChecklistPage({ params }: {
 
   const { checklistId } = await params;
   const admin = createAdminClient();
+  // The practice's own day for every date rendered below. These were UTC slices of timestamptz
+  // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
+  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
   const detail = await getChecklist(admin, shell.ctx.workspaceId, checklistId);
   if (detail.state !== "ok" || !detail.checklist) redirect(CHECKLIST_ROUTE);
 
@@ -156,7 +160,7 @@ export default async function PrintChecklistPage({ params }: {
           {detail.approval?.status === "APPROVED" ? (
             <p>
               Approved by {detail.approval.decidedByName ?? "a colleague"}
-              {detail.approval.decided_at ? ` on ${String(detail.approval.decided_at).slice(0, 10)}` : ""}
+              {detail.approval.decided_at ? ` on ${practiceDayOf(timezone, detail.approval.decided_at)}` : ""}
               , recorded in Competen Practice. This copy carries no handwritten signature.
             </p>
           ) : (

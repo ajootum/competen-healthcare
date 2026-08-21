@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   SERVICE_TYPES, PAYMENT_METHODS, COLLECTORS, PAYER_KINDS, ENTITLEMENT_KINDS, formatMinor,
 } from "@/lib/practice/billing-constants";
+import { practiceDayOf } from "@/lib/practice/practice-time";
 
 // CPR-PAY-001 s11 -- the Payments console. Overview | Transactions | Outstanding | Settlements | Fees.
 //
@@ -42,6 +43,8 @@ export default function PaymentsConsole(props: {
   canManageFees: boolean; canDraft: boolean; canIssue: boolean;
   canRecordPayment: boolean; canAdjust: boolean;
   receivables: any; settlements: any;
+  /** The PRACTICE's timezone, resolved by the server page -- the date a payment was received, on a screen that reconciles money. */
+  timezone: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -526,7 +529,7 @@ export default function PaymentsConsole(props: {
                         <li key={p.id} className="flex items-center gap-2 text-[12px]">
                           <input type="checkbox" checked={!!settleSel[p.id]}
                             onChange={e => setSettleSel(s => ({ ...s, [p.id]: e.target.checked }))} />
-                          <span className="text-gray-700">{String(p.paid_at).slice(0, 10)} · {p.method}</span>
+                          <span className="text-gray-700">{practiceDayOf(props.timezone, p.paid_at) ?? "date not recorded"} · {p.method}</span>
                           <span className="text-gray-500">collected {formatMinor(p.amount_minor, f.currency)}</span>
                           <span className="ml-auto font-semibold text-gray-800">
                             {p.entitlementMinor !== null ? `share ${formatMinor(p.entitlementMinor, f.currency)}` : (

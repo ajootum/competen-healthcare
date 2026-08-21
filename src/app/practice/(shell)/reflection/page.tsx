@@ -6,6 +6,7 @@ import {
   reflectionJournal, listReflections, REFLECTION_CATEGORIES, REFLECTION_PROMPTS, REFLECTION_LIMITS,
 } from "@/lib/practice/reflection";
 import ReflectionComposer from "./ReflectionComposer";
+import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
 
 // /practice/reflection -- CPR-230 CLINICAL REFLECTION.
 //
@@ -36,6 +37,9 @@ export default async function ReflectionPage({ searchParams }: {
 
   const { encounterId, mine, category } = await searchParams;
   const admin = createAdminClient();
+  // The practice's own day for every date rendered below. These were UTC slices of timestamptz
+  // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
+  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
 
   const [journal, reflections] = await Promise.all([
     reflectionJournal(admin, shell.ctx),
@@ -130,7 +134,7 @@ export default async function ReflectionPage({ searchParams }: {
                         </span>
                       )}
                       <span className="ml-auto text-[10px] text-gray-500">
-                        {r.authorName} &middot; {String(r.created_at).slice(0, 10)}
+                        {r.authorName} &middot; {practiceDayOf(timezone, r.created_at) ?? "\u2014"}
                       </span>
                     </div>
                     {[

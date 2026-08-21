@@ -7,6 +7,7 @@ import { letterhead } from "@/lib/practice/document-generation";
 import {
   CHECKLIST_CAPABILITIES, CHECKLIST_ROUTE, CHECKLIST_RESPONSE_SWATCH, checklistResponse,
 } from "@/lib/practice/checklist-constants";
+import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
 
 // /practice/knowledge-studio/checklists/[id]/runs/[runId]/print -- the completion record on paper.
 //
@@ -31,6 +32,9 @@ export default async function PrintChecklistRunPage({ params }: {
 
   const { checklistId, runId } = await params;
   const admin = createAdminClient();
+  // The practice's own day for every date rendered below. These were UTC slices of timestamptz
+  // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
+  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
   const detail = await getChecklistRun(admin, shell.ctx.workspaceId, runId);
   if (detail.state !== "ok" || !detail.run) redirect(`${CHECKLIST_ROUTE}/${checklistId}`);
 
@@ -140,7 +144,7 @@ export default async function PrintChecklistRunPage({ params }: {
           {closed ? (
             <p>
               Closed by {run.completedByName ?? "the person who completed it"}
-              {run.completed_at ? ` on ${String(run.completed_at).slice(0, 10)}` : ""}, recorded in
+              {run.completed_at ? ` on ${practiceDayOf(timezone, run.completed_at)}` : ""}, recorded in
               Competen Practice. This copy carries no handwritten signature, and no second person
               countersigned it.
             </p>

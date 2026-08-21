@@ -5,6 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { getThread, markThreadRead } from "@/lib/practice/communication";
 import Reply from "./Reply";
+import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
 
 // /practice/messages/{id} -- one conversation.
 //
@@ -26,6 +27,9 @@ export default async function ThreadPage({ params }: { params: Promise<{ threadI
 
   const { threadId } = await params;
   const admin = createAdminClient();
+  // The practice's own day for every date rendered below. These were UTC slices of timestamptz
+  // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
+  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
   const detail = await getThread(admin, shell.ctx.workspaceId, threadId);
   if (!detail) notFound();
 
@@ -45,7 +49,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ threadI
                   {thread.patient_name}
                 </Link>{" · "}</>
             )}
-            started {String(thread.created_at).slice(0, 10)}
+            started {practiceDayOf(timezone, thread.created_at) ?? "date not recorded"}
           </p>
         </div>
         <Link href="/practice/messages" className="text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">← Messages</Link>

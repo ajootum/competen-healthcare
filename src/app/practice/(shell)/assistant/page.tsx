@@ -9,6 +9,7 @@ import {
   ASSISTANT_TASKS, CONTEXT_KINDS, REFUSED, AI_NOTICE,
 } from "@/lib/practice/ai-assistant";
 import AssistantConsole from "./AssistantConsole";
+import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
 
 // /practice/assistant -- CPR-210 AI CLINICAL ASSISTANT.
 //
@@ -39,6 +40,9 @@ export default async function AssistantPage({ searchParams }: {
 
   const { encounterId, sessionId } = await searchParams;
   const admin = createAdminClient();
+  // The practice's own day for every date rendered below. These were UTC slices of timestamptz
+  // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
+  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
 
   const [settings, usage, sessions, conversation] = await Promise.all([
     assistantSettings(admin, shell.ctx.workspaceId),
@@ -246,7 +250,7 @@ export default async function AssistantPage({ searchParams }: {
                       {s.title ?? s.task}
                     </Link>
                     <span className="ml-auto shrink-0 text-[10px] text-gray-500">
-                      {String(s.created_at).slice(0, 10)}
+                      {practiceDayOf(timezone, s.created_at) ?? "\u2014"}
                     </span>
                   </li>
                 ))}

@@ -7,6 +7,7 @@ import { recentlyTouched } from "@/lib/practice/search";
 import { runSearch, listSavedSearches, recentSearches, quickSearches } from "@/lib/practice/saved-search";
 import SearchBox from "./SearchBox";
 import SearchSidebar from "./SearchSidebar";
+import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
 
 // /practice/search -- CPR-350.
 //
@@ -32,6 +33,9 @@ export default async function SearchPage({ searchParams }: {
 
   const { q, from: fromDay, to: toDay } = await searchParams;
   const admin = createAdminClient();
+  // The practice's own day for every date rendered below. These were UTC slices of timestamptz
+  // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
+  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
   const query = (q ?? "").trim();
 
   const from = (fromDay ?? "").trim() || null;
@@ -137,7 +141,7 @@ export default async function SearchPage({ searchParams }: {
                       {e.patient_name}
                     </Link>
                     <span className="truncate text-gray-600">{e.reason_for_visit}</span>
-                    <span className="ml-auto shrink-0 font-mono text-[10px] text-gray-400">{String(e.started_at).slice(0, 10)}</span>
+                    <span className="ml-auto shrink-0 font-mono text-[10px] text-gray-400">{practiceDayOf(timezone, e.started_at) ?? "\u2014"}</span>
                   </li>
                 ))}
               </ul>
@@ -152,7 +156,7 @@ export default async function SearchPage({ searchParams }: {
                     <Link href={`/practice/patients/${p.id}`} className="font-semibold text-gray-900 hover:underline">
                       {p.display_name}
                     </Link>
-                    <span className="ml-auto shrink-0 font-mono text-[10px] text-gray-400">{String(p.created_at).slice(0, 10)}</span>
+                    <span className="ml-auto shrink-0 font-mono text-[10px] text-gray-400">{practiceDayOf(timezone, p.created_at) ?? "\u2014"}</span>
                   </li>
                 ))}
               </ul>

@@ -18,6 +18,7 @@ import { useBodyScrollLock } from "../_responsive/use-body-scroll-lock";
 // with the max-md:* classes beside it. It belongs in _responsive/ eventually -- reported, not moved,
 // because that folder is not this phase's to edit.
 import { useBelowMd } from "../calendar/use-below-md";
+import { practiceDayOf } from "@/lib/practice/practice-time";
 
 // CPR-FUP-001 s4/s5 -- the summary cards, the saved views, and the work queue.
 //
@@ -85,8 +86,11 @@ const PRIORITY_CHIP: Record<string, string> = {
   routine: "bg-slate-100 text-slate-500",
 };
 
-const dueWord = (f: any) => {
-  if (f.closed) return f.closed_at ? String(f.closed_at).slice(0, 10) : "";
+const dueWord = (f: any, timezone: string) => {
+  // The practice closed it on the practice's day. The Completed CARD is counted on the server with
+  // the same rule (see follow-up-constants.ts); without this the row underneath showed a different
+  // date from the card that counted it.
+  if (f.closed) return f.closed_at ? practiceDayOf(timezone, f.closed_at) ?? "" : "";
   if (f.dueInDays === 0) return "Today";
   if (f.dueInDays === 1) return "Tomorrow";
   if (f.dueInDays < 0) return `${Math.abs(f.dueInDays)} ${Math.abs(f.dueInDays) === 1 ? "day" : "days"} overdue`;
@@ -487,7 +491,7 @@ export default function FollowUpsWorkspace({
                         <span className={`block text-[12.5px] font-semibold ${f.overdue ? "text-rose-700" : "text-gray-700"}`}>
                           {f.effectiveDueOn}
                         </span>
-                        <span className={`block text-[10.5px] ${f.overdue ? "text-rose-600" : "text-gray-400"}`}>{dueWord(f)}</span>
+                        <span className={`block text-[10.5px] ${f.overdue ? "text-rose-600" : "text-gray-400"}`}>{dueWord(f, workspace.timezone)}</span>
                       </td>
                       <td className="px-3 py-2.5">
                         <span className={`rounded px-1.5 py-0.5 text-[10.5px] font-bold capitalize ${PRIORITY_CHIP[f.priority] ?? PRIORITY_CHIP.routine}`}>
@@ -562,7 +566,7 @@ export default function FollowUpsWorkspace({
                     <span className={`text-[12.5px] font-semibold ${f.overdue ? "text-rose-700" : "text-gray-700"}`}>
                       {f.effectiveDueOn}
                     </span>
-                    <span className={`text-[11.5px] ${f.overdue ? "text-rose-600" : "text-gray-500"}`}>{dueWord(f)}</span>
+                    <span className={`text-[11.5px] ${f.overdue ? "text-rose-600" : "text-gray-500"}`}>{dueWord(f, workspace.timezone)}</span>
                     <span className={`rounded px-1.5 py-0.5 text-[10.5px] font-bold capitalize ${PRIORITY_CHIP[f.priority] ?? PRIORITY_CHIP.routine}`}>
                       {f.priority}
                     </span>

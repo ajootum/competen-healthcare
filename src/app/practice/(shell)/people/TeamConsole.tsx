@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { INVITABLE_ROLES } from "@/lib/practice/team-constants";
+import { practiceDayOf } from "@/lib/practice/practice-time";
 
 // The team console: invite, suspend, revoke, reinstate, delegate.
 //
@@ -16,8 +17,10 @@ import { INVITABLE_ROLES } from "@/lib/practice/team-constants";
 
 const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 
-export default function TeamConsole({ team, invitations, history, me, myCapabilities }: {
+export default function TeamConsole({ team, invitations, history, me, myCapabilities, timezone }: {
   team: any[]; invitations: any[]; history: any[]; me: string; myCapabilities: string[];
+  /** The PRACTICE's timezone, resolved by the server page -- when an invitation stops working, told to the person about to send it. */
+  timezone: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -238,7 +241,7 @@ export default function TeamConsole({ team, invitations, history, me, myCapabili
                 <span className={`text-[11px] ${i.usable ? "text-[var(--cmp-text-success)]" : "text-gray-400"}`}>
                   {i.status === "ACCEPTED" ? "accepted"
                     : i.status === "REVOKED" ? "revoked"
-                      : i.expired ? "expired" : `usable until ${String(i.expires_at).slice(0, 10)}`}
+                      : i.expired ? "expired" : `usable until ${practiceDayOf(timezone, i.expires_at)}`}
                 </span>
                 {i.usable && (
                   <button type="button" disabled={busy} onClick={() => send("PATCH", { revokeInvitation: i.id })}

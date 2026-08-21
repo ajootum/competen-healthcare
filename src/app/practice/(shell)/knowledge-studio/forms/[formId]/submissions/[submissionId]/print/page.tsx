@@ -6,6 +6,7 @@ import { getFormSubmission } from "@/lib/practice/forms";
 import { letterhead } from "@/lib/practice/document-generation";
 import { FORM_CAPABILITIES, FORM_ROUTE, FORM_ANSWER_SWATCH } from "@/lib/practice/form-constants";
 import { calculationNotice } from "@/lib/practice/form-field";
+import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
 
 // /practice/knowledge-studio/forms/[id]/submissions/[submissionId]/print -- a completed form on paper.
 //
@@ -32,6 +33,9 @@ export default async function PrintFormSubmissionPage({ params }: {
 
   const { formId, submissionId } = await params;
   const admin = createAdminClient();
+  // The practice's own day for every date rendered below. These were UTC slices of timestamptz
+  // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
+  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
   const detail = await getFormSubmission(admin, shell.ctx.workspaceId, submissionId);
   if (detail.state !== "ok" || !detail.submission) redirect(`${FORM_ROUTE}/${formId}`);
 
@@ -143,7 +147,7 @@ export default async function PrintFormSubmissionPage({ params }: {
           {closed ? (
             <p>
               Submitted by {sub.submittedByName ?? "the person who completed it"}
-              {sub.submitted_at ? ` on ${String(sub.submitted_at).slice(0, 10)}` : ""}, recorded in Competen
+              {sub.submitted_at ? ` on ${practiceDayOf(timezone, sub.submitted_at)}` : ""}, recorded in Competen
               Practice. ⚠ This copy carries no handwritten signature, nobody countersigned it, and nothing
               re-checked who was at the keyboard. It records that answers were typed, not that the person
               this form is about agreed to anything.

@@ -32,6 +32,7 @@ import { investigationCatalogue, encounterInvestigations } from "@/lib/practice/
 import { treatmentCapture } from "@/lib/practice/treatment-capture";
 import InvestigationCapture from "./InvestigationCapture";
 import TreatmentCapture from "./TreatmentCapture";
+import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
 
 // /practice/encounters/{id} -- CPR-ENC-003's Clinical Decision Workspace.
 //
@@ -88,6 +89,9 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
 
   const { encounterId } = await params;
   const admin = createAdminClient();
+  // The practice's own day for every date rendered below. These were UTC slices of timestamptz
+  // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
+  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
   const detail = await getEncounter(admin, shell.ctx.workspaceId, encounterId);
   if (!detail) notFound();
 
@@ -413,7 +417,7 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
                     {priors.map(p => (
                       <li key={p.id} className="border-l-2 border-gray-200 pl-2">
                         <Link href={`/practice/encounters/${p.id}`} className="text-[12px] font-semibold text-gray-800 hover:underline">
-                          {String(p.started_at).slice(0, 10)}
+                          {practiceDayOf(timezone, p.started_at) ?? "\u2014"}
                         </Link>
                         <span className={`ml-1.5 ${RAIL_META}`}>{p.status}</span>
                         {p.reason_for_visit && <p className="text-[11px] text-gray-600">{p.reason_for_visit}</p>}

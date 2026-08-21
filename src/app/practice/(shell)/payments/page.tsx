@@ -40,6 +40,9 @@ export default async function PaymentsPage({ searchParams }: {
   const patientId = one("patientId") ?? null;
 
   const admin = createAdminClient();
+  // The practice's zone, handed to the client console below -- a client component has no workspace
+  // clock of its own, and the browser's zone is the READER's, not the practice's.
+  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
   const clock = await workspaceClock(admin, shell.ctx.workspaceId);
   // Money answers "over what period" -- but the default is everything, the same protective default
   // the activity portfolio chose: a this-month default would hide every older balance on day one.
@@ -82,6 +85,7 @@ export default async function PaymentsPage({ searchParams }: {
       )}
 
       <PaymentsConsole
+        timezone={timezone}
         tab={tab}
         overview={overview}
         invoices={invoices}

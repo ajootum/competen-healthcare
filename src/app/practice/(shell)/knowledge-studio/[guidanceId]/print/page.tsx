@@ -6,6 +6,7 @@ import { hasCapability } from "@/lib/practice/access";
 import { getGuidance } from "@/lib/practice/knowledge";
 import { letterhead } from "@/lib/practice/document-generation";
 import { KNOWLEDGE_CAPABILITIES, GUIDANCE_ROUTE } from "@/lib/practice/knowledge-constants";
+import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
 
 // /practice/knowledge-studio/[id]/print -- CPR-KS-001's Publishing Engine, as much of it as is true.
 //
@@ -39,6 +40,9 @@ export default async function PrintGuidancePage({ params }: {
 
   const { guidanceId } = await params;
   const admin = createAdminClient();
+  // The practice's own day for every date rendered below. These were UTC slices of timestamptz
+  // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
+  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
   const detail = await getGuidance(admin, shell.ctx.workspaceId, guidanceId);
   if (detail.state !== "ok" || !detail.document) redirect(GUIDANCE_ROUTE);
 
@@ -112,7 +116,7 @@ export default async function PrintGuidancePage({ params }: {
           {detail.approval?.status === "APPROVED" ? (
             <p>
               Approved by {detail.approval.decidedByName ?? "a colleague"}
-              {detail.approval.decided_at ? ` on ${String(detail.approval.decided_at).slice(0, 10)}` : ""}
+              {detail.approval.decided_at ? ` on ${practiceDayOf(timezone, detail.approval.decided_at)}` : ""}
               , recorded in Competen Practice. This copy carries no handwritten signature.
             </p>
           ) : (

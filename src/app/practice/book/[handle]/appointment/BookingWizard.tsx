@@ -8,6 +8,7 @@ import {
 } from "@/lib/practice/booking-rule-constants";
 import { validateAnswer, isBlankAnswer } from "@/lib/practice/form-field";
 import { appointmentTypeLabel } from "@/lib/practice/practice-session-constants";
+import { practiceDayOf, practiceToday } from "@/lib/practice/practice-time";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -135,7 +136,17 @@ export default function BookingWizard(props: {
   }).filter(Boolean) as (ReturnType<typeof intakeField> & { is_core: boolean; condition?: unknown; _level: string })[],
   [questions]);
 
-  const onDate = chosen ? chosen.startsAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
+  // ⚠ THE DATE THE INTAKE RULES ARE EVALUATED ON, so it decides which questions this patient is
+  // asked -- a guardian question turns on whether they are a child ON THIS DATE. Both halves were
+  // the UTC day: a chosen slot at 21:30 Kampala sliced to the following date, and the no-slot case
+  // used the browser's UTC. The practice's zone is already in state below and is already shown to
+  // the patient in as many words ("Times are shown in this practice's own timezone").
+  //
+  // It starts as "UTC" until the practice's config arrives; the value corrects itself on that
+  // response, and no booking is submitted before it does.
+  const onDate = chosen
+    ? practiceDayOf(timezone, chosen.startsAt) ?? practiceToday(timezone)
+    : practiceToday(timezone);
 
   // ⚠ THE SERVER'S OWN EVALUATOR, OVER THE SERVER'S OWN DERIVED FACT. `_is_child` is computed by
   // intakeDerivedValues -- the same function the rule engine calls -- so a guardian question appears here

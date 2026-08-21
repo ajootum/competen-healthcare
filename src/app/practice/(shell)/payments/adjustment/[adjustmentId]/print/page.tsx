@@ -6,6 +6,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { audit } from "@/lib/practice/audit";
 import { formatMinor } from "@/lib/practice/billing-constants";
+import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
 
 // CREDIT / ADJUSTMENT NOTE and REFUND NOTE -- CPR-PAY-002 s3's two Conditional documents.
 //
@@ -37,6 +38,9 @@ export default async function AdjustmentNotePage({ params }: {
 
   const { adjustmentId } = await params;
   const admin = createAdminClient();
+  // The practice's own day for every date rendered below. These were UTC slices of timestamptz
+  // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
+  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
   // `as any`: the typed client cannot parse a concatenated select string with embeds.
   const { data: a }: { data: any } = await admin.from("practice_billing_adjustment")
     .select("id, kind, amount_minor, currency, reason, created_at, "
@@ -104,7 +108,7 @@ export default async function AdjustmentNotePage({ params }: {
       {a.kind === "refund" && pay && (
         <p className="mt-4 rounded-lg border border-gray-200 px-3 py-2.5 text-[11.5px] leading-relaxed text-gray-700">
           This refund reverses money against the payment of {formatMinor(pay.amount_minor, pay.currency)}
-          {" "}({pay.method}) received {String(pay.paid_at).slice(0, 10)}. <b>The original payment stands
+          {" "}({pay.method}) received {practiceDayOf(timezone, pay.paid_at) ?? "date not recorded"}. <b>The original payment stands
           on the record</b> &mdash; a refund is its own transaction and never erases what it reverses
           (CPR-PAY-002 s14).
         </p>

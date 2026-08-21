@@ -6,6 +6,7 @@ import { listTeam, listInvitations, membershipHistory } from "@/lib/practice/tea
 import { delegationBoard, workQueues, listApprovals, listRoleTemplates } from "@/lib/practice/delegation";
 import TeamConsole from "./TeamConsole";
 import DelegationConsole from "./DelegationConsole";
+import { workspaceClock } from "@/lib/practice/practice-time";
 
 // /practice/people -- CPR-310 TEAM AND DELEGATED ACCESS.
 //
@@ -35,6 +36,9 @@ export default async function TeamPage() {
 
   const canManage = hasCapability(ctx, "practice.members.manage");
   const admin = createAdminClient();
+  // The practice's zone, handed to the client console below -- a client component has no workspace
+  // clock of its own, and the browser's zone is the READER's, not the practice's.
+  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
 
   const [board, queues, approvals, templates, team, invitations, history, members] = await Promise.all([
     delegationBoard(admin, ctx.workspaceId),
@@ -87,6 +91,7 @@ export default async function TeamPage() {
             Every capability each person holds, and how it got there.
           </p>
           <TeamConsole
+        timezone={timezone}
             team={team}
             invitations={invitations}
             history={history}
