@@ -162,6 +162,28 @@ export const IDENTIFIER_LABELS: Record<string, string> = {
 };
 
 /**
+ * How a match is NAMED to a practitioner. Separate from MATCH_RANK, which orders hits: this is only
+ * ever read by a person, so it is written the way a person would say it.
+ *
+ * ⚠ THE FALLBACK IS THE POINT. Both search components used to end their label function with
+ * `return kind`, so any kind nobody had mapped printed its raw machine name -- a search on a patient
+ * number produced the chip "patient_number" on screen. An unmapped kind now loses its underscores
+ * instead of leaking them, so the worst case is plain and not a column name. Per CPR-HFE-REF-001.
+ */
+export const MATCH_KIND_LABELS: Record<string, string> = {
+  patient_number: "patient number",
+  name: "name",
+  name_partial: "name contains",
+  phone: "phone",
+  email: "email",
+};
+
+export function humaniseMatchKind(kind: string | undefined | null): string {
+  if (!kind) return "identifier";
+  return MATCH_KIND_LABELS[kind] ?? kind.replace(/_/g, " ");
+}
+
+/**
  * How a search hit was found. Ordered by confidence, highest first -- the same identity semantics
  * migration 193 and patients.ts already established, extended with the one route CPR-V5-006 adds.
  *

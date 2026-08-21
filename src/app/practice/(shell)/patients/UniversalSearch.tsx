@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { IDENTIFIER_LABELS } from "@/lib/practice/patient-workspace-constants";
+import { IDENTIFIER_LABELS, humaniseMatchKind } from "@/lib/practice/patient-workspace-constants";
 import { MIN_PICKER_QUERY } from "@/lib/practice/encounter-start";
 import { CARD } from "./Honesty";
 import type { SearchMatchView, SearchView } from "./types";
@@ -47,12 +47,13 @@ const PAUSE_MS = 350;
 
 function matchLabel(m: SearchMatchView): string {
   const [kind, detail] = m.matchedBy.split(":");
-  if (kind === "identifier") return IDENTIFIER_LABELS[detail] ?? detail ?? "identifier";
+  if (kind === "identifier") return IDENTIFIER_LABELS[detail] ?? humaniseMatchKind(detail);
   if (kind === "guardian_phone") return `${m.matchedGuardian?.relationshipLabel ?? "guardian"}'s phone`;
   if (kind === "guardian_email") return `${m.matchedGuardian?.relationshipLabel ?? "guardian"}'s email`;
   if (kind === "name") return "name";
   if (kind === "name_partial") return "name contains";
-  return kind;
+  // Never the raw kind: an unmapped one is humanised in the shared constants, not printed as a column.
+  return humaniseMatchKind(kind);
 }
 
 function inLens(m: SearchMatchView, lens: string): boolean {
