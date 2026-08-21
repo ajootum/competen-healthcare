@@ -181,6 +181,7 @@ export default function PaymentsConsole(props: {
           {props.encounterCharges.unavailable ? (
             <p className="mt-2 text-[12px] text-rose-800">The charges could not be read: {props.encounterCharges.detail}</p>
           ) : props.encounterCharges.items.length === 0 ? (
+            <>
             <div className="mt-2 flex items-end gap-2 flex-wrap">
               <label className="flex flex-col gap-1">
                 <span className="text-[11px] font-semibold text-gray-600">Charge from the fee catalogue</span>
@@ -196,6 +197,21 @@ export default function PaymentsConsole(props: {
               </button>
               <Link href="/practice/payments" className={QUIET}>Later</Link>
             </div>
+            {/* ⚠ AN EMPTY CATALOGUE RENDERED AS A NORMAL DROPDOWN WITH A DEAD BUTTON.
+                "Choose a fee" with nothing under it, and Raise charge permanently disabled, is
+                indistinguishable from a broken screen. The explanation existed -- "Set your fees under
+                Fees" -- but in a DIFFERENT card's empty state further down the page, which is not where
+                anybody looks when a button will not press.
+                The registration form on this same product already gets this right: "Still needs a phone
+                number or an email" sits directly under the button it disables. Same idiom here. */}
+            {(props.fees?.items ?? []).filter((f: any) => f.active).length === 0 && (
+              <p className="mt-1.5 w-full text-[11.5px] text-amber-800">
+                There are no fees in the catalogue yet, so there is nothing to charge from.{" "}
+                <Link href="/practice/payments?tab=fees" className="font-semibold underline">Set up a fee</Link>{" "}
+                and this consultation can be charged.
+              </p>
+            )}
+            </>
           ) : (
             <div className="mt-2">
               <ul className="flex flex-col gap-1">
