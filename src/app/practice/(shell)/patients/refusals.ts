@@ -63,12 +63,18 @@ export const SCREEN_REFUSES: readonly Refusal[] = [
   {
     key: "tag_search_and_control",
     state: "NOT_AVAILABLE_YET",
-    title: "Patient tags are not stored",
+    title: "Patient tags cannot be added or searched yet",
     reason:
-      "Patient tags are not currently stored in Competen Practice, so they cannot be shown, added or searched.",
+      "Nothing in Competen Practice yet lets you put a tag on a patient, show one or search by it.",
     internal: {
-      reasonCode: "NO_TAG_STORAGE",
+      reasonCode: "NO_TAG_UI",
       specReference: "CPR-PAT-002 s5",
+      source: "practice_patient.tags",
+      // ⚠ THE STORE EXISTS. Migration 221 adds `practice_patient.tags text[]` WITH A GIN INDEX for
+      // searching -- so the old reason code NO_TAG_STORAGE and the sentence "tags are not currently
+      // stored" were both false. Nothing reads or writes the column: no engine, no screen. The refusal
+      // stands, its reason does not. Renamed NO_TAG_UI so somebody diagnosing this is not sent looking
+      // for a migration that already ran.
       // The label this refusal used to show a practitioner, kept as provenance.
       technicalDetail:
         "The Tags button, and searching by tag or free keyword" + " -- " +
