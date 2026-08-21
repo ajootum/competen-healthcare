@@ -301,6 +301,22 @@ export async function fileOfflineCollection(admin: any, ctx: WorkspaceContext, a
   if (!PAYMENT_METHODS.some(([m]) => m === args.method))
     return { ok: false, status: 422, code: "BAD_METHOD", message: "This payment was recorded with a way of paying this practice does not recognise, so it cannot be filed as captured." };
 
+  // ⚠ THE CORRELATION ID IS AN IDEMPOTENCY KEY HERE, NOT A LABEL, AND THAT IS UNUSUAL.
+  // Everywhere else in this codebase correlationId is a human-readable breadcrumb -- "harness-bill",
+  // "practice-ui". Here it becomes the charge's `source_ref`, which ux_practice_charge_source folds
+  // into its unique key, so it MUST be a uuid. The sync applier passes tx.id and is correct.
+  //
+  // Unchecked, a non-uuid reached PostgREST and came back as a 500 REPLAY_CHECK_FAILED carrying a raw
+  // "invalid input syntax for type uuid" -- a database sentence, on the money path, in a function that
+  // answers every other bad input with a 422 and a real explanation. The type says `string` and cannot
+  // say otherwise without changing every caller, so the contract is stated here instead.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(args.correlationId ?? ""))
+    return {
+      ok: false, status: 422, code: "BAD_CORRELATION_ID",
+      message: "This filing did not carry the transaction identifier that makes it safe to retry. "
+        + "Without it a repeat could charge the patient twice, so it is refused rather than guessed.",
+    };
+
   // ⚠ Device time, required, never defaulted -- the doctrine every capture entity shares. Money taken
   // on Monday and synced on Thursday is paid_at Monday; the arrival gap is created_at's story.
   const collected = Date.parse(args.collectedAtIso ?? "");
