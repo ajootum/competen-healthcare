@@ -101,3 +101,42 @@ failed.
 - A next action appears only where a real route exists.
 - No practitioner screen renders a metric's source columns.
 - Internal provenance is retained on every refusal, and assertions 3c/3d prove it.
+
+---
+
+## The finding this arc did not go looking for: refusals rot
+
+Normalizing the *presentation* meant reading every refusal closely, and reading them closely showed that
+some were no longer **true**. Nine capability-absence claims were checked against the schema. **Four were
+false or misleading, and every false one understated the product.**
+
+| claim | what is actually there |
+|---|---|
+| `NO_TAG_STORAGE` — *"tags are not currently stored"* | `practice_patient.tags text[]` **with a GIN index** (migration 221) |
+| `NO_FILE_STORAGE` — *"does not store images"* | `practice-attachments` bucket (migration 336); the document library has a camera capture |
+| `SEARCH_SCOPE_LIMITED` — *"Search does not look inside diagnoses, treatments"* | CPR-350 global search queries **twelve** sources, including all of them |
+| notifications — *"nothing sends a message to a patient"* | `messaging.ts` sends appointment confirmation and cancellation today |
+
+Holding: orders, order-result linkage, relationship assertion, care setting, trajectory.
+
+**Why it happens.** A refusal is written once, when the absence is real, and the product grows past it.
+Nothing re-reads it — not the type system, not review, and **not this ratchet**, whose own header says it
+cannot tell whether a `reason` is true.
+
+⚠ **Two of the four were introduced or perpetuated by this very arc.** CPR-HFE-REF-001 s7's worked example
+supplies `reason_code=NO_TAG_STORAGE` and *"Patient tags are not currently stored in Competen Practice"* —
+written from the old refusal, which was already stale. Copying it in shipped the falsehood one layer
+deeper, with a spec's authority behind it.
+
+> A worked example in a spec illustrates the **format**. It is not a verified fact about the product.
+
+⚠ **The reason code matters more than the sentence.** `NO_FILE_STORAGE` sends the next engineer to build
+storage that already exists; `NO_TAG_STORAGE` sends them looking for a migration that already ran. Renamed
+to `NO_PATIENT_PHOTO_FIELD` and `NO_TAG_UI`.
+
+**How to check one:** name the table, column or bucket the refusal implies, then grep
+`supabase/migrations/`. Three of the four took one command each.
+
+**Not yet checked:** the absence claims outside these four registries — every `NotBuilt`, every "not
+available" sentence in Setup, Documents and the engines. The nine checked were the ones this arc happened
+to touch.
