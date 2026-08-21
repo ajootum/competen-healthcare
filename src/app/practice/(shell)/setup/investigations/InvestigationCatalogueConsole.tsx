@@ -236,7 +236,7 @@ export default function InvestigationCatalogueConsole({ library, canConfigure }:
         {rows.length === 0 ? (
           <p className="mt-3 text-[12px] text-gray-500">
             {library.all.length === 0
-              ? "There is nothing in the catalogue. If this deployment has not run migration 275 there is no store behind this page yet."
+              ? "Nothing has been added to the catalogue yet."
               : `Nothing matches “${query}”.`}
           </p>
         ) : (

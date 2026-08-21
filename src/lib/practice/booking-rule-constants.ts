@@ -481,7 +481,7 @@ export const BUILDER_SECTIONS = [
     key: "notifications", title: "Notifications", built: false, phase: null,
     alreadyBuilt: null,
     responsibility: "Trigger selection; templates and delivery remain in Notifications configuration",
-    note: "Nothing in this product sends a message to a patient. Offering triggers here would promise a notification nobody would receive.",
+    note: "Confirmation and cancellation messages already go to patients when a booking changes. What is not here is choosing, per rule, which message a booking sends -- so the triggers are not offered rather than offered and ignored.",
   },
   {
     key: "overrides", title: "Overrides", built: true, phase: null,

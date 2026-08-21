@@ -374,12 +374,12 @@ export default function PatientsScreen(props: {
       <Refusals
         refuses={SCREEN_REFUSES}
         title="What this screen will not draw"
-        blurb="Elements of the CPR-PAT-002 design and specification that this record cannot honestly support, each with the reason. None of them is silently missing."
+        blurb="Things this screen could show but will not, because the record cannot support them honestly. Each one says why. None is left out silently."
       />
       <Refusals
         refuses={props.lists.refuses}
         title="What the record itself cannot answer"
-        blurb="Limits of the patient workspace engine, carried with its own payload."
+        blurb="Limits of the patient record itself, carried with the information it returns."
       />
 
       <RegistrationDrawer

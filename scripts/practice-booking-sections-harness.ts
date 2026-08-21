@@ -135,14 +135,24 @@ function sectionOne() {
       s.built === true && (s.alreadyBuilt ?? "").length > 40, `built=${s.built}`);
   }
 
-  // ⚠ NOTIFICATIONS IS UNCHANGED, AND THAT IS ASSERTED RATHER THAN ASSUMED. It was explicitly excluded
-  // from this build. A later edit that quietly softened its sentence, added a "coming soon" or gave it
-  // a control would be caught here.
+  // ⚠ NOTIFICATIONS IS STILL NOT BUILT, AND THAT IS ASSERTED RATHER THAN ASSUMED. A later edit that
+  // quietly softened it, added a "coming soon" or gave it a control would be caught here.
+  //
+  // ⚠ IT USED TO PIN THE SENTENCE VERBATIM, AND THE SENTENCE HAD GONE FALSE. It read "Nothing in this
+  // product sends a message to a patient" -- but practice/messaging.ts sends appointment_confirmation
+  // and appointment_cancelled to patients today, template-closed and consent-gated, wired into both
+  // appointment routes. Pinning the prose meant this harness DEFENDED the false claim: correcting it
+  // turned the test red, which is exactly backwards.
+  //
+  // So the properties are pinned, not the words. What must stay true is that the section is not built,
+  // offers no control, and promises nothing -- none of which depends on the wording.
   const notif = BUILDER_SECTIONS.find(s => s.key === "notifications")!;
-  ok("notifications is STILL not built, on Phase 6, with its sentence untouched",
-    notif.built === false && notif.phase === "Phase 6" && notif.alreadyBuilt === null
-    && notif.note === "Nothing in this product sends a message to a patient. Offering triggers here would promise a notification nobody would receive.",
-    notif.note);
+  ok("notifications is STILL not built and STILL offers no control",
+    notif.built === false && notif.alreadyBuilt === null);
+  ok("⚠ and its sentence promises nothing -- no soon, no planned, no coming",
+    !/(soon|coming|planned|shortly|next release|will be)/i.test(notif.note), notif.note);
+  ok("and it still says something substantial rather than being emptied",
+    notif.note.length > 60, `${notif.note.length} chars`);
   ok("no notification trigger vocabulary was added anywhere",
     !/NOTIFICATION_TRIGGER|notificationTrigger|notification_triggers/.test(constantsSrc));
 

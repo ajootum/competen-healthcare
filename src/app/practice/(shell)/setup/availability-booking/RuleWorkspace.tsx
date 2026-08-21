@@ -170,7 +170,7 @@ export default function RuleWorkspace({
   // not be.
   const sectionsConfigurable = rules.length === 0 ? true : rules[0].sectionsConfigurable !== false;
   const absentNote: string = rules.find((r: any) => r.sectionsAbsentNote)?.sectionsAbsentNote
-    ?? "Migration 268 has not been applied, so there is nowhere to store this.";
+    ?? "Competen Practice cannot store this yet, so it cannot be set here.";
   /** The correction sentence for a section this screen once captioned NOT BUILT. */
   const sectionNote = (key: string) =>
     BUILDER_SECTIONS.find(s => s.key === key)?.alreadyBuilt ?? "";

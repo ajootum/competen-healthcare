@@ -116,7 +116,7 @@ export default async function PracticeSetupOverview() {
             </Link>
             {/* NOT A BUTTON. There is still no booking page to preview -- an address is not a page. */}
             <span className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3.5 py-2 text-[12px] font-semibold text-slate-500"
-              title="CPR-V5-007 Phase 4 — the public booking page, OTP verification and the publish state. Not started.">
+              title="The public booking page, the code patients confirm with, and publishing your practice. Not available yet.">
               No booking page to preview
             </span>
           </div>
