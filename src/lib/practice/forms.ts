@@ -12,6 +12,7 @@ import {
   fieldType, fieldOptions, fieldRules, PRACTICE_FIELD_TYPE_CODES, CALCULATION_CODES,
   type FormFieldLike, type CalculatedValue,
 } from "@/lib/practice/form-field";
+import { workspaceClock } from "@/lib/practice/practice-time";
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // CPR-KS-001 PHASE 3 -- PRACTICE FORMS. The engine.
@@ -917,7 +918,10 @@ export async function formLibrary(admin: any, workspaceId: string, opts: {
   }));
 
   // ⚠ COUNTED OFF THE ROWS ALREADY READ, not by a second query with a different filter.
-  const today = new Date().toISOString().slice(0, 10);
+      // ⚠ THE PRACTICE'S DAY, NOT THE SERVER'S. This decides whether a published form is shown as
+      // overdue for review. On the server's day the flag turned over three hours early or late, so an item
+      // due today read as overdue -- and the count above the list disagreed with the list for that window.
+      const { today } = await workspaceClock(admin, workspaceId);
   const reviewOverdue = items.filter(i => i.status === "published" && i.review_on && i.review_on < today);
 
   const counts = [

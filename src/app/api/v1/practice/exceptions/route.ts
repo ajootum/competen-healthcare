@@ -5,6 +5,7 @@ import {
   calculateImpact, commitScheduleChange, resolveAffectedBooking, affectedBookingQueue,
   recalculateImpact,
 } from "@/lib/practice/schedule-exceptions";
+import { workspaceClock, dueDateFrom } from "@/lib/practice/practice-time";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -30,8 +31,20 @@ import {
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
 const REGENERATE_DAYS = 90;
-const today = () => new Date().toISOString().slice(0, 10);
-const plusDays = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+/**
+ * ⚠ THE REGENERATION WINDOW IS THE PRACTICE'S, NOT THE SERVER'S.
+ *
+ * These were `today()` and `plusDays()` built from the server's UTC clock. The window they produce is
+ * written into availability rows a patient then books against, so a window that opens on the wrong day
+ * offers or withholds a day of appointments that the practice did not decide about.
+ *
+ * plusDays also added milliseconds to an instant rather than days to a calendar date; across a DST
+ * change those are different answers.
+ */
+const regenerationWindow = async (admin: any, workspaceId: string) => {
+  const { today } = await workspaceClock(admin, workspaceId);
+  return { fromDate: today, toDate: dueDateFrom(today, REGENERATE_DAYS) };
+};
 
 const str = (v: unknown) => (v === undefined || v === null || v === "" ? null : String(v));
 const num = (v: unknown) => (v === undefined || v === null || v === "" ? null : Number(v));
@@ -65,7 +78,7 @@ export async function POST(req: NextRequest) {
   const correlationId = auth.caller.traceId;
 
   const regenerate = async () => generateSlots(admin, ctx, {
-    fromDate: today(), toDate: plusDays(REGENERATE_DAYS), actorId, correlationId,
+    ...(await regenerationWindow(auth.caller.admin, ctx.workspaceId)), actorId, correlationId,
   });
 
   switch (body.action) {

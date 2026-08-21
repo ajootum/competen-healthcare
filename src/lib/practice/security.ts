@@ -6,6 +6,7 @@ import {
   resolveSessionLimits, ABSOLUTE_LIFETIME_NOT_ENFORCED, RESUME_METHODS_NOT_BUILT,
   LOCK_SCREEN_TRUTHS, CLINICAL_PAUSE,
 } from "@/lib/practice/session-engine";
+import { workspaceClock } from "@/lib/practice/practice-time";
 
 // CPR-370's five unbuilt capabilities: sessions, devices, consent, break-glass and the MFA policy.
 //
@@ -520,7 +521,9 @@ export async function recordConsent(admin: any, args: {
     if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v))
       return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `${label} must be a date (YYYY-MM-DD)` };
   }
-  const grantedOn = args.grantedOn ?? new Date().toISOString().slice(0, 10);
+  // The day the practice took the consent. It is written into the record and every expiry is measured
+  // from it, so the server's day would put a permission in the record on a date it was not given.
+  const grantedOn = args.grantedOn ?? (await workspaceClock(admin, args.workspaceId)).today;
   // A consent that expired before it was given is a transcription error, and storing it would put a
   // permission in the record that was never live for a moment.
   if (args.expiresOn && args.expiresOn <= grantedOn)
@@ -619,7 +622,10 @@ export async function withdrawConsent(admin: any, args: {
 export async function patientConsents(admin: any, workspaceId: string, patientId: string, today?: string): Promise<{
   readable: boolean; consents: any[];
 }> {
-  const on = today ?? new Date().toISOString().slice(0, 10);
+  // ⚠ `today` IS NEVER PASSED BY ANY CALLER, so this fallback is the live value, not a fallback. Whether
+  // a consent has expired is decided here; on the server's day a consent expiring today read as already
+  // expired for the three hours the two calendars disagree.
+  const on = today ?? (await workspaceClock(admin, workspaceId)).today;
   const { data, error } = await admin.from("practice_consent")
     .select("id, consent_type, scope, granted_on, expires_on, withdrawn_at, withdrawal_reason, evidence, created_at")
     .eq("workspace_id", workspaceId).eq("patient_id", patientId).order("granted_on", { ascending: false });
@@ -663,7 +669,8 @@ export type ConsentSummary = {
  * shown none, with nothing anywhere saying why.
  */
 export async function consentSummary(admin: any, workspaceId: string, today?: string): Promise<ConsentSummary> {
-  const on = today ?? new Date().toISOString().slice(0, 10);
+  // Same as patientConsents above: the argument exists but nothing passes it.
+  const on = today ?? (await workspaceClock(admin, workspaceId)).today;
   const { data, error } = await admin.from("practice_consent")
     .select("id, consent_type, expires_on, withdrawn_at").eq("workspace_id", workspaceId).limit(1000);
   if (error)

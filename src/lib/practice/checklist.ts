@@ -8,6 +8,7 @@ import {
   CHECKLIST_MODULE_NAME, CHECKLIST_ROUTE, checklistCanMove, checklistMovesFrom, checklistState,
   checklistKindLabel, checklistRunState, applicableItems,
 } from "@/lib/practice/checklist-constants";
+import { workspaceClock } from "@/lib/practice/practice-time";
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // CPR-KS-001 PHASE 2 -- PRACTICE CHECKLISTS. The engine.
@@ -824,7 +825,10 @@ export async function checklistLibrary(admin: any, workspaceId: string, opts: {
 
   // ⚠ COUNTED OFF THE ROWS ALREADY READ, not by a second query with a different filter. Two reads is how
   // a figure and the list it claims to describe come to disagree.
-  const today = new Date().toISOString().slice(0, 10);
+      // ⚠ THE PRACTICE'S DAY, NOT THE SERVER'S. This decides whether a published checklist is shown as
+      // overdue for review. On the server's day the flag turned over three hours early or late, so an item
+      // due today read as overdue -- and the count above the list disagreed with the list for that window.
+      const { today } = await workspaceClock(admin, workspaceId);
   const reviewOverdue = items.filter(i => i.status === "published" && i.review_on && i.review_on < today);
 
   const counts = [

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { bookAppointment, loadDay } from "@/lib/practice/scheduling";
 import { appointmentNotice } from "@/lib/practice/messaging";
-import { workspaceClock, instantInZone } from "@/lib/practice/practice-time";
+import { workspaceClock, instantInZone, dueDateFrom } from "@/lib/practice/practice-time";
 import { emitEvent } from "@/lib/mos/event";
 
 // GET  /api/v1/practice/appointments?date=YYYY-MM-DD -- the day's diary + live queue + blocks.
@@ -16,7 +16,10 @@ export async function GET(req: NextRequest) {
   const auth = await requirePracticeContext("practice.calendar.view");
   if (isDenied(auth)) return auth;
 
-  const date = req.nextUrl.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
+  // No ?date= means "today" -- and today is the practice's, not the server's. Asking this route for
+  // the day's appointments after 21:00 UTC in Kampala returned YESTERDAY's list with no indication.
+  const date = req.nextUrl.searchParams.get("date")
+    ?? (await workspaceClock(auth.caller.admin, auth.ctx.workspaceId)).today;
   if (!DAY.test(date)) return NextResponse.json({ error: "date must be YYYY-MM-DD" }, { status: 400 });
 
   const day = await loadDay(auth.caller.admin, auth.ctx.workspaceId, date);
