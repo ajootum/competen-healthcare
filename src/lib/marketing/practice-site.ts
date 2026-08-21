@@ -272,13 +272,24 @@ export const PRACTICE_LOGIN = {
     "Every sign-in that opens your practice is recorded, with the device it came from",
     "Devices are listed and can be locked out of your practice one at a time",
     "An idle sign-out limit your practice can set, or leave off",
+    "Two-factor authentication your practice can require, with somewhere for members to enrol",
   ],
   /**
    * Named in LP-DOC-001 as configurable or future, or -- for the lockout -- claimed as present and found
    * to be absent. Listed as such rather than shown as buttons or ticks.
    */
   planned: [
-    "Multi-factor authentication",
+    // ⚠ "Multi-factor authentication" WAS HERE AND HAD STOPPED BEING TRUE. It moved up into `security`
+    // on 2026-08-21. This list was written from LP-DOC-001, and MFA shipped afterwards: `mfa_required`
+    // is a per-practice policy field (practice/security.ts), the shell gates on it and routes
+    // MFA_REQUIRED away from every practice screen ((shell)/layout.tsx), /practice/two-factor enrols a
+    // factor, and the practice's own Privacy -> Security screen carries the switch that turns it on.
+    //
+    // The direction of the error is what makes it worth naming: the product was UNDERSTATING its own
+    // security to somebody deciding whether to trust it with patient data. A page that undersells a
+    // control is read as an honest limitation, so nobody questions it -- and no harness pinned this
+    // list, because the disclosure harness guards the ABSENCE of a fake sign-in form, not the
+    // truthfulness of what the lists claim.
     "Single sign-on",
     "Account lockout and brute-force protection",
   ],
