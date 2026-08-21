@@ -70,7 +70,7 @@ export default function RegistrationDrawer({ open, intent, onClose, children }: 
             </h2>
             <p className="text-[12px] text-gray-500">
               {walkIn
-                ? <>Same form. Finish with <span className="font-semibold text-violet-700">Register and add to the queue</span> &mdash; that is what puts the patient in today&rsquo;s clinic.</>
+                ? <>Same form. Finish with <span className="font-semibold text-violet-700">Add to today&rsquo;s queue</span> &mdash; that is what puts the patient in today&rsquo;s clinic.</>
                 : <>Search first &mdash; register only when nobody on the register matches.</>}
             </p>
           </div>
