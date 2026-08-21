@@ -145,14 +145,14 @@ export const PATIENT_JOURNEY = [
   { step: "Return", body: "Recalls bring them back when they are due, not when they remember." },
 ];
 
-// CPR-V2-000 "Primary User Roles". Organisation Administrator is marked optional in the specification and is
-// described that way here rather than being quietly promoted to a headline role.
-export const PRACTICE_ROLES = [
-  { role: "Healthcare professionals", body: "Your day, your diary, your patients -- on one screen.", icon: "\u{1FA7A}" },
-  { role: "Patients", body: "Book, prepare, upload and follow their own care.", icon: "\u{1F464}" },
-  { role: "Reception and practice assistants", body: "A front desk that can see everything it needs and nothing it should not.", icon: "\u{1F5C2}️" },
-  { role: "Practice administrators", body: "Locations, hours, users, templates and policy -- without a developer.", icon: "⚙️" },
-];
+// PRACTICE_ROLES LIVED HERE AND WAS RENDERED NOWHERE (removed 2026-08-21). CPR-V2-000's four primary
+// user roles, exported and imported by nothing -- confirmed against the whole tree, not just src/app.
+//
+// ⚠ IT WAS NOT HARMLESS. One line read "Patients -- Book, prepare, upload and follow their own care",
+// and there is no patient authentication of any kind in this product: no sign-in, no patient role,
+// nothing to upload with. Had anything rendered it, it would have promised a portal that does not
+// exist -- the opposite direction from every other copy defect found this week, and the dangerous one.
+// Dead code that makes a false claim is a claim waiting for a `git grep` and a good intention.
 
 /**
  * CPR-V2-020 integration domains, split by what CPR-V2-000's integration strategy places in Version 1. Everything
