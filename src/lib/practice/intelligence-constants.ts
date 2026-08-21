@@ -141,6 +141,14 @@ export {
 // number hides: "follow-up completion 75%" is the same sentence whether it is 3 of 4 or 750 of 1000, and
 // only one of those is worth changing a clinic over.
 //
+// ⚠ WHAT THIS DETECTOR GOVERNS, AND WHAT IT DOES NOT. It guards the ENGINE PAYLOAD -- the fields this
+// module hands to a screen. PI v2 s19 then permits a percentage AT RENDER, on two conditions the
+// payload cannot express: a registry entry governs the figure, and the fraction prints in the same
+// breath ("2 of 3 (67%)", never a bare "67%"). AreasV2's ofPct() is that rule, and it is the only place
+// a percentage is allowed to be born. So a bare "33%" is still a breach everywhere, and a screen
+// printing a governed fraction-with-percentage is NOT one -- do not "fix" ofPct() to match the sentence
+// above without reading v2 s19 first, because the two rules govern different layers.
+//
 // THIS DETECTOR IS EXPORTED SO THE HARNESS AND THE ENGINE SHARE ONE DEFINITION of what a rate looks
 // like. A harness with its own private regex proves that the harness's idea of a rate is absent, which
 // is not the same claim.
