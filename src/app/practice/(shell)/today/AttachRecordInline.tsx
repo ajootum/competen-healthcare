@@ -111,7 +111,17 @@ export default function AttachRecordInline({ entryId, prefillName }: {
       )}
       <p className="mt-1 text-[11px] text-gray-600">
         Genuinely new here?{" "}
-        <Link href="/practice/patients" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
+        {/* ⚠ THIS LANDED ON THE BARE REGISTER AND MADE THE PRACTITIONER HUNT FOR THE BUTTON.
+            They have just typed a name, been told "No registered patient matches", and pressed a link
+            that says Register them -- and arrived on a list of everybody with nothing open. The page
+            already documents the URL that opens the drawer, so use it: ?register=1 opens the form and
+            &intent=walkin gives it the walk-in wording, which is what this arrival is.
+
+            ⚠ THE NAME IS STILL NOT CARRIED. It is a dynamic template field rather than a prop, so
+            seeding it means threading initial values through RegistrationForm -- a real change, not a
+            query parameter. The retype remains, and is worth removing separately. */}
+        <Link href="/practice/patients?register=1&intent=walkin"
+          className="font-semibold text-[var(--cp-primary-deep)] hover:underline">
           Register them →
         </Link>{" "}
         then attach from this row.
