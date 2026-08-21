@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
@@ -6,6 +7,7 @@ import { hasCapability } from "@/lib/practice/access";
 import { securityPosture, listSessions, breakGlassLog } from "@/lib/practice/security";
 import SecurityConsole from "./SecurityConsole";
 import OfflineCacheSwitch from "./OfflineCacheSwitch";
+import { DEVICE_COOKIE } from "@/lib/practice/device-register";
 import { OFFLINE_PRACTICE_SWITCH } from "@/lib/practice/offline-gate";
 
 // /practice/privacy/security -- CPR-370's security surface.
@@ -49,7 +51,11 @@ export default async function SecurityPage() {
   const [posture, sessions, glass, offlineConfig] = await Promise.all([
     canManage ? securityPosture(admin, ctx.workspaceId) : Promise.resolve(null),
     // Everybody sees their OWN devices; the whole practice's is administration.
-    listSessions(admin, ctx.workspaceId, canManage ? {} : { userId: ctx.userId }),
+    // The device cookie is httpOnly, so only the server can answer "which of these is this browser".
+    listSessions(admin, ctx.workspaceId, {
+      ...(canManage ? {} : { userId: ctx.userId }),
+      currentDeviceId: (await cookies()).get(DEVICE_COOKIE)?.value ?? null,
+    }),
     canReview
       ? breakGlassLog(admin, ctx.workspaceId)
       : Promise.resolve({ readable: true, episodes: [], awaitingReview: 0, live: 0, namesReadable: true, truncated: false }),

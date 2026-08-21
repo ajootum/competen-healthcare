@@ -138,6 +138,11 @@ export default function SecurityConsole({
                   <span className="min-w-0">
                     <span className="block truncate text-[12px] font-semibold text-gray-800">
                       {s.device_label ?? "Unnamed device"}
+                      {s.isCurrentDevice && (
+                        <span className="ml-1 rounded bg-[var(--cp-primary)]/10 px-1.5 py-0.5 text-[10px] font-bold text-[var(--cp-primary-deep)]">
+                          this device
+                        </span>
+                      )}
                       {s.trusted && <span className="ml-1 text-[10px] font-normal text-gray-500">· trusted</span>}
                     </span>
                     <span className="block truncate text-[10px] text-gray-500">

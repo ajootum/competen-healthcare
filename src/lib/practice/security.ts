@@ -386,7 +386,11 @@ export type SessionList = {
  * `securityPosture` derived "0 devices signed in". A practice looking at that would conclude nothing was
  * connected. The read state now travels with the list.
  */
-export async function listSessions(admin: any, workspaceId: string, opts: { userId?: string } = {}): Promise<SessionList> {
+export async function listSessions(
+  admin: any,
+  workspaceId: string,
+  opts: { userId?: string; currentDeviceId?: string | null } = {},
+): Promise<SessionList> {
   const limit = 100;
   let q = admin.from("practice_session")
     .select("id, user_id, device_id, device_label, user_agent, trusted, first_seen_at, last_seen_at, revoked_at, revoked_reason")
@@ -411,7 +415,11 @@ export async function listSessions(admin: any, workspaceId: string, opts: { user
       ...r,
       name: nameOf.get(r.user_id) ?? null,
       // The device id is never returned: it is the cookie value, and a list that showed it would be a
-      // list of credentials.
+      // list of credentials. WHICH ROW IS YOURS is a different question, and it is answered here, by
+      // comparing against the cookie server-side and emitting a boolean -- the id itself still never
+      // leaves. Without this every row reads "Unnamed device" beside the same browser string, and the
+      // Lock out button next to each one is a coin toss that can lock you out of your own practice.
+      isCurrentDevice: opts.currentDeviceId != null && r.device_id === opts.currentDeviceId,
       device_id: undefined,
       live: !r.revoked_at,
     })),
