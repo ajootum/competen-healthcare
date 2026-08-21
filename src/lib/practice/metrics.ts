@@ -134,9 +134,22 @@ export type Metric = {
   excluded: number;
   /** Plain language, whenever `value` is null. Null when the value stands. */
   reason: string | null;
-  /** The calculation, in words. */
+  /**
+   * ⚠ WHAT THIS FIGURE COUNTS, FOR THE PERSON READING IT (CPR-HFE-REF-001 s5).
+   *
+   * `formula` and `sources` below are the ENGINEERING answer and they stay: s16 requires every metric
+   * to be traceable to source records and a documented formula, and that traceability is a property of
+   * the number rather than of a document somebody may never open.
+   *
+   * But they were what the Command Centre put in a tile's tooltip, so hovering a tile on the first
+   * screen after sign-in read "count of practice_patient rows created within the period whose status is
+   * not 'merged' Source: practice_patient.created_at, practice_patient.status." A practitioner deciding
+   * whether to trust a number needs to know what it counts, not which columns it was read from.
+   */
+  basis: string;
+  /** ⚠ ENGINEERING. The calculation, in words. Not rendered to a practitioner -- see `basis`. */
   formula: string;
-  /** table.column identifiers the value came from. */
+  /** ⚠ ENGINEERING. table.column identifiers the value came from. Not rendered to a practitioner. */
   sources: string[];
   scopeKind: MetricScopeKind;
 };
@@ -221,29 +234,70 @@ const LABELS: Record<MetricKey, string> = {
   average_wait_time: "Average Wait Time", clinic_delay: "Clinic Delay",
 };
 
+/**
+ * What each figure counts, said the way a practitioner would say it.
+ *
+ * Held beside LABELS rather than beside each formula on purpose: these are read together, and a
+ * basis that drifts from its neighbours is how thirteen tiles end up explained in thirteen voices.
+ * The exclusions that matter to a reader are stated HERE -- "counted once", "nothing is marked
+ * automatically" -- because that is the part a figure can mislead about.
+ */
+const BASIS: Record<MetricKey, string> = {
+  booked:
+    "Appointments scheduled for this period, however they were made.",
+  waiting:
+    "People who checked in today and have not been seen yet.",
+  completed:
+    "Consultations you finished in this period.",
+  walk_in:
+    "People seen without a booking. Somebody who appears both in the queue and in a consultation is counted once.",
+  cancelled:
+    "Appointments that were due in this period and were cancelled. Counted by when the appointment was for, not when it was cancelled.",
+  emergency:
+    "Consultations booked or run as an emergency. Nothing is inferred from what was written in the notes.",
+  follow_ups_due:
+    "Follow-ups falling due in this period. Ones already overdue are on the Command Centre rather than here.",
+  no_show:
+    "Appointments marked as a no-show. Nothing is marked automatically, so a missed appointment counts only once somebody records it.",
+  remaining:
+    "People still to see: those waiting now, plus appointments still to come in this period.",
+  patients_seen:
+    "How many different people you finished a consultation with. Somebody seen twice counts once.",
+  average_consult_time:
+    "The average length of your finished consultations, with any time you paused taken off.",
+  average_wait_time:
+    "The average time between a patient checking in and their consultation starting.",
+  clinic_delay:
+    "How far behind or ahead of the booked time you started. The middle value rather than the average, so one long case does not skew it.",
+};
+
 type Build = {
   key: MetricKey; unit: Metric["unit"]; formula: string; sources: string[]; scope: MetricScope;
 };
 
 const ok = (b: Build, value: number, observations: number, excluded = 0): Metric => ({
   key: b.key, label: LABELS[b.key], value, unit: b.unit, status: "ok",
+  basis: BASIS[b.key],
   observations, excluded, reason: null, formula: b.formula, sources: b.sources, scopeKind: b.scope.kind,
 });
 
 const unknowable = (b: Build, reason: string, observations: number | null = 0, excluded = 0): Metric => ({
   key: b.key, label: LABELS[b.key], value: null, unit: b.unit, status: "unknowable",
+  basis: BASIS[b.key],
   observations, excluded, reason, formula: b.formula, sources: b.sources, scopeKind: b.scope.kind,
 });
 
 const unreadable = (b: Build, detail: string): Metric => ({
   key: b.key, label: LABELS[b.key], value: null, unit: b.unit, status: "unreadable",
   observations: null, excluded: 0, reason: `could not be read: ${detail}`,
+  basis: BASIS[b.key],
   formula: b.formula, sources: b.sources, scopeKind: b.scope.kind,
 });
 
 const notPermitted = (b: Build, capability: string): Metric => ({
   key: b.key, label: LABELS[b.key], value: null, unit: b.unit, status: "not_permitted",
   observations: null, excluded: 0, reason: `${capability} is required to see this`,
+  basis: BASIS[b.key],
   formula: b.formula, sources: b.sources, scopeKind: b.scope.kind,
 });
 
@@ -486,6 +540,7 @@ export async function remainingPatients(admin: any, ctx: WorkspaceContext, scope
   if (waiting.status !== "ok" || waiting.value === null)
     return {
       ...waiting, key: "remaining", label: LABELS.remaining,
+      basis: BASIS[b.key],
       formula: b.formula, sources: b.sources,
       reason: waiting.reason ?? "the waiting half of this figure could not be computed",
     };

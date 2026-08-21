@@ -21,6 +21,7 @@
  * ────────────────────────────────────────────────────────────────────────────────────────────────
  */
 import { readFileSync, existsSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { join } from "node:path";
 import {
   REFUSAL_STATE_COPY, EMPTY_STATE_LOOKALIKES, INTERNAL_IDENTIFIER_RE, IMPLEMENTATION_JARGON_RE,
@@ -34,6 +35,16 @@ const ok = (name: string, cond: boolean, detail = "") => {
   if (cond) { pass++; console.log(`  PASS  ${name}`); }
   else { fail++; console.log(`  FAIL  ${name}${detail ? ` -- ${detail}` : ""}`); }
 };
+/**
+ * A practice table name is engineering vocabulary wherever it appears in prose.
+ *
+ * ⚠ THIS LINE ARRIVED THROUGH A SHELL HEREDOC AS TWO LITERAL BACKSPACE BYTES instead of two
+ * word-boundary escapes, so the pattern could never match anything. 9b went green -- nothing
+ * matched, so nothing leaked -- and 9b-control went red, which is the only reason it was noticed.
+ * A detector that cannot match is indistinguishable from a clean estate.
+ */
+const TABLE_RE = /\bpractice_[a-z_]+\b/;
+
 const section = (t: string) => console.log(`\n-- ${t} ${"-".repeat(Math.max(0, 78 - t.length))}`);
 
 /**
@@ -213,6 +224,57 @@ ok("8b-control. the section-number and build-phase detectors match real ones",
 ok("8c. NotBuilt no longer renders a build phase to a practitioner",
   !/\{phase\}\s*—\s*not built/.test(
     stripComments(readFileSync(join(process.cwd(), PROSE_SCREENS[0]), "utf8"))));
+
+// ══ 9. METRIC PROVENANCE IS THE SAME BOUNDARY ═════════════════════════════════════════════════
+//
+// s16 requires every metric to be traceable to source records and a documented formula, and s5 says who
+// may read what. Those two are not in tension -- `formula` and `sources` stay on the metric for Product
+// Director and Engineering; `basis` is the sentence a practitioner gets. The Command Centre used to put
+// formula and sources into a tile's title attribute, which is a tooltip a doctor hovers.
+section("9. metric provenance does not reach a practitioner surface");
+{
+  const metricsSrc = readFileSync(join(process.cwd(), "src", "lib", "practice", "metrics.ts"), "utf8");
+  const keys = [...(metricsSrc.match(/const LABELS: Record<MetricKey, string> = \{[\s\S]*?\};/)?.[0] ?? "")
+    .matchAll(/(\w+):\s*"/g)].map(m => m[1]);
+  const basisBlock = metricsSrc.match(/const BASIS: Record<MetricKey, string> = \{[\s\S]*?\n\};/)?.[0] ?? "";
+  const basisKeys = [...basisBlock.matchAll(/^\s{2}(\w+):/gm)].map(m => m[1]);
+  ok("9a. every metric has a practitioner basis", keys.length > 0 && keys.every(k => basisKeys.includes(k)),
+    `labels ${keys.length}, basis ${basisKeys.length}, missing: ${keys.filter(k => !basisKeys.includes(k)).join(", ")}`);
+
+  const bases = [...basisBlock.matchAll(/"([^"]{20,400})"/g)].map(m => m[1]);
+  const leaky = bases.filter(b => TABLE_RE.test(b) || IMPLEMENTATION_JARGON_RE.test(b) || /\b\w+\(\)/.test(b));
+  ok("9b. ⚠ no basis names a table, a column or a function", leaky.length === 0,
+    leaky.slice(0, 2).map(b => b.slice(0, 70)).join(" | "));
+  ok("9b-control. the table detector recognises one", TABLE_RE.test("count of practice_patient rows"));
+
+  // the render itself -- a tooltip is practitioner-facing, whatever it is called
+  const home = stripComments(readFileSync(
+    join(process.cwd(), "src", "app", "practice", "(shell)", "home", "page.tsx"), "utf8"));
+  ok("9c. ⚠ the Command Centre renders `basis`, not formula/sources",
+    /title=\{why \?\? t\.basis\}/.test(home) && !/t\.formula|t\.sources/.test(home));
+
+  // ⚠ 9d JUDGES `sources`, NOT `formula`, AND THAT IS A DISTINCTION RATHER THAN A COMPROMISE.
+  //
+  // Two populations wear the word "formula" here and only one is a leak. A CLINICAL formula -- the
+  // calculator on DocumentationTools, a derived parameter on MonitoringPlanPanel, a parameter in the
+  // library -- is something a clinician needs to see and would rightly object to losing. A METRIC
+  // formula is the query behind a figure. A regex cannot tell them apart, and an assertion banning both
+  // would either fail forever or push somebody to delete a clinical formula to make it green.
+  //
+  // `sources` carries no such ambiguity: it is always a list of table.column identifiers, and it is
+  // never the answer to a question a practitioner is asking. So that is what is banned.
+  const estate = execSync('git ls-files "src/app/practice/**/*.tsx"', { encoding: "utf8" })
+    .split("\n").filter(Boolean);
+  const SOURCE_RENDER = /\{[^}]*\.sources\b[^}]*\}|sources\.join\(/;
+  const renders = estate.filter(f => {
+    const src = stripComments(readFileSync(join(process.cwd(), f), "utf8"));
+    return SOURCE_RENDER.test(src);
+  });
+  ok("9d. no practitioner screen renders a metric's source columns",
+    renders.length === 0, renders.join(", "));
+  ok("9d-control. the detector recognises a real render of source columns",
+    SOURCE_RENDER.test('<p>From: {sources.join(" · ")}</p>'));
+}
 
 // ⚠ THE STRIPPER NEEDS ITS OWN CONTROL. One that blanked the whole file would make every 7a green,
 // and a green 7a is exactly what a broken stripper looks like from the outside.

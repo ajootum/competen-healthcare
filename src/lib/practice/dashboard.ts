@@ -54,6 +54,9 @@ export type GlanceTile = {
   status: Metric["status"];
   /** Why there is no number, in plain language. Null when the value stands. */
   reason: string | null;
+  /** What the figure counts, for the practitioner. This is the one the tile shows. */
+  basis: string;
+  /** ⚠ ENGINEERING, not rendered on a practitioner surface. */
   formula: string;
   sources: string[];
 };
@@ -245,7 +248,7 @@ export async function dashboardReadModel(
     ? GLANCE_TILES.map(({ key, href }) => {
         const m = metrics.value!.metrics[key];
         return { key, href, label: m.label, count: m.value, status: m.status,
-          reason: m.reason, formula: m.formula, sources: m.sources };
+          reason: m.reason, basis: m.basis, formula: m.formula, sources: m.sources };
       })
     : [];
 

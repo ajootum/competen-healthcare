@@ -73,8 +73,12 @@ export function ProvenanceChip({ kind }: { kind: keyof typeof PROVENANCE_BADGE }
  * Deliberately small and deliberately always present. A practitioner does not read this on a normal
  * Tuesday; they read it on the day the number surprises them, which is the only day it matters.
  */
-export function Provenance({ formula, sources, fromDay, toDay }: {
-  formula: string; sources: string[]; fromDay?: string | null; toDay?: string | null;
+export function Provenance({ formula, fromDay, toDay }: {
+  // ⚠ `sources` IS NOT TAKEN ANY MORE, NOT MERELY UNRENDERED. A component that accepts a value it
+  // does not use is one careless line away from showing it again, and every call site still passing
+  // it reads as though it were displayed. It stays on the metric for Product Director and
+  // Engineering; this component simply has no business with it.
+  formula: string; fromDay?: string | null; toDay?: string | null;
 }) {
   return (
     <details className="mt-2 group">
@@ -82,9 +86,13 @@ export function Provenance({ formula, sources, fromDay, toDay }: {
         {fromDay && toDay ? `${fromDay} to ${toDay}` : "as of now"} · how this is counted
       </summary>
       <p className="mt-1 text-[10px] leading-relaxed text-gray-500">{formula}</p>
-      {sources.length > 0 && (
-        <p className="mt-1 text-[10px] text-gray-400">From: {sources.join(" · ")}</p>
-      )}
+      {/* ⚠ THE "From: table.column" LINE IS GONE, AND ONLY FROM THE PRACTITIONER'S VIEW.
+          It rendered "From: practice_procedure.status · practice_procedure.performed_at" under a
+          disclosure a doctor opens to ask how a figure was counted. Column names answer a question
+          nobody on this screen is asking; CPR-HFE-REF-001 s5 gives source provenance to Product
+          Director and Engineering, and the practitioner a plain-language basis.
+          `sources` still travels on every metric -- s16's traceability is a property of the number and
+          is untouched. It is simply not rendered here. */}
     </details>
   );
 }
@@ -169,7 +177,7 @@ export function OpenableCountBlock({ item, figureClass, dense }: {
           None. {STATE_COPY.empty.body}
         </p>
       )}
-      <Provenance formula={item.formula} sources={item.sources} fromDay={item.fromDay} toDay={item.toDay} />
+      <Provenance formula={item.formula} fromDay={item.fromDay} toDay={item.toDay} />
     </div>
   );
 }

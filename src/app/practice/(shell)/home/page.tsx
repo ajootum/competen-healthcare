@@ -371,12 +371,19 @@ export default async function PracticeCommandCentre() {
                   // and the emergency tile disappears into the no-show tile beside it.
                   const s = GLANCE_SWATCH[t.key] ?? GLANCE_SWATCH.booked;
                   // s16 requires every metric to be "traceable to source records and a documented
-                  // formula". It travels WITH the number, so the tile can say where it came from
-                  // without anyone opening a spec -- and say why there is no number when there is not.
+                  // formula". That traceability travels WITH the number rather than living in a spec.
+                  //
+                  // ⚠ BUT IT USED TO BE THE TOOLTIP, AND THE TOOLTIP IS READ BY A DOCTOR. This said
+                  // `${t.formula} Source: ${t.sources.join(", ")}.` -- so hovering a tile on the first
+                  // screen after sign-in produced "count of practice_patient rows created within the
+                  // period whose status is not 'merged' Source: practice_patient.created_at,
+                  // practice_patient.status." Somebody deciding whether to trust a figure needs to know
+                  // what it COUNTS, not which columns it was read from. `basis` is that sentence;
+                  // formula and sources are still on the metric for Product Director and Engineering.
                   const why = t.count === null ? (t.reason ?? "No figure available.") : null;
                   return (
                     <Link key={t.key} href={t.href}
-                      title={why ?? `${t.formula} Source: ${t.sources.join(", ")}.`}
+                      title={why ?? t.basis}
                       className={`flex flex-col justify-center rounded-lg border px-2.5 py-2 transition-shadow hover:shadow-sm ${s.box}`}>
                       <span className="flex items-center justify-between gap-1">
                         {/* A NULL COUNT RENDERS AN EM DASH. "Could not read" and "none" are different

@@ -75,7 +75,7 @@ export function Distribution({ d, max }: { d: IntelDistribution; max?: number })
           )}
         </>
       )}
-      <Provenance formula={d.formula} sources={d.sources} />
+      <Provenance formula={d.formula} />
     </div>
   );
 }
@@ -93,7 +93,7 @@ export function Proportion({ p }: { p: IntelProportion }) {
       </div>
       <StateNote status={p.status} reason={p.reason} />
       {ok && p.caveat && <p className="mt-0.5 text-[10px] leading-relaxed text-amber-700">{p.caveat}</p>}
-      <Provenance formula={p.formula} sources={p.sources} />
+      <Provenance formula={p.formula} />
     </div>
   );
 }
@@ -114,7 +114,7 @@ export function MetricLine({ m, figureClass }: {
         </span>
       </div>
       {!ok && m.reason && <p className="text-[10px] leading-relaxed text-gray-500">{m.reason}</p>}
-      <Provenance formula={m.formula} sources={m.sources} />
+      <Provenance formula={m.formula} />
     </div>
   );
 }

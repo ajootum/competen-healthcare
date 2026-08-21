@@ -320,7 +320,7 @@ export function CohortsArea({ suite, query }: { suite: Suite; query: string }) {
               )}
             </>
           )}
-          <Provenance formula={d.formula} sources={d.sources} fromDay={d.fromDay} toDay={d.toDay} />
+          <Provenance formula={d.formula} fromDay={d.fromDay} toDay={d.toDay} />
           {/* ⚠ "SAVE COHORT" IS s9's ACTION AND IT IS NOT BUILT HERE. Saying so, rather than drawing a
               button that does nothing. */}
           <p className="mt-2 text-[10px] text-gray-400">
@@ -724,7 +724,7 @@ export function PerformanceArea({ suite, portfolio, exportHrefs }: {
                 <span className="text-[12px] text-gray-700">patients ever registered</span>
               </div>
               <StateNote status={growth.data.cumulativePatients.status} reason={growth.data.cumulativePatients.reason} />
-              <Provenance formula={growth.data.cumulativePatients.formula} sources={growth.data.cumulativePatients.sources} />
+              <Provenance formula={growth.data.cumulativePatients.formula} />
               <p className="mt-2 text-[11px] text-gray-500">
                 {growth.data.recordingSince
                   ? `Keeping records here since ${growth.data.recordingSince}. That date is what licenses any comparison at all.`
@@ -768,7 +768,7 @@ export function PerformanceArea({ suite, portfolio, exportHrefs }: {
                   )}
                 </>
               )}
-              <Provenance formula={locations.data.encounters.formula} sources={locations.data.encounters.sources} />
+              <Provenance formula={locations.data.encounters.formula} />
               <ModuleNote module={locations} />
             </>
           )}
@@ -888,7 +888,7 @@ export function ReportsArea({ suite }: { suite: Suite }) {
           )}
           {/* ⚠ THE PANEL THE COMP CALLS "RECENT REPORTS" IS A LIST OF INTENTIONS, AND IT SAYS SO. */}
           <p className="mt-2 text-[10px] leading-relaxed text-amber-700">{d.limitation}</p>
-          <Provenance formula={d.formula} sources={d.sources} />
+          <Provenance formula={d.formula} />
           <ModuleNote module={m} />
         </>
       )}
