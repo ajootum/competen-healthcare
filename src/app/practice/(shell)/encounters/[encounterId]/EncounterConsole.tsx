@@ -1051,7 +1051,16 @@ export default function EncounterConsole(props: {
   return (
     <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_320px]">
       {/* ══ CENTRE: CPR-ENC-003 s3's FOUR COGNITIVE BLOCKS ═══════════════════════════════════════ */}
-      <div className="flex flex-col gap-4">
+      {/* ⚠ min-w-0 IS LOAD-BEARING AND ITS ABSENCE MADE THE WHOLE PAGE SCROLL SIDEWAYS.
+
+          A grid item defaults to min-width:auto, so it refuses to shrink below its content. The tab
+          strip below has overflow-x-auto and min-width:0 and is correct -- but it never got the chance
+          to scroll, because THIS element grew to 821px inside a 340px cell and took the page with it.
+          Measured on a 400px viewport: document scrollWidth 843.
+
+          A horizontally scrolling page is the one layout failure CPR-MOB-001 does not tolerate, and it
+          is invisible at desktop width -- which is why it survived. */}
+      <div className="flex min-w-0 flex-col gap-4">
         {/* ⚠ max-md:hidden BECAUSE THE ANSWER MUST NOT ARRIVE OFFSCREEN. This paragraph is the ONLY
             thing that reports a refusal — every transition, every referral, every note save lands
             here, and `call()` reloads the page on success, so what a practitioner reads here is
