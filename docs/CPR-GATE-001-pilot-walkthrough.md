@@ -135,9 +135,9 @@ say something untrue, confusing, or missing?** A defect here is usually a SENTEN
 | 11 | Back in the cockpit: **Finish the session** | The two-step acknowledgement lists anything unresolved (it acknowledges, never blocks). Session Complete renders the summary. |
 | 12 | **Sign** the encounter, then try to edit it | Refused by the engine, and by the database trigger underneath. |
 | 13 | **Payments** workspace: Overview / Transactions / Outstanding | The day's money is there; print an invoice and the patient statement (print view IS the pdf). |
-| 14 | **Patients** -> the patient record | Timeline shows encounter, diagnosis, measurement, procedure, follow-up, charges. |
-| 15 | **Practice Intelligence** | Real denominators, the ONE approved percentage (attendance) and nothing else percent-shaped. |
-| 16 | **/practice/offline** (open it once online first, set the PIN when offered) | The offline reader with its four capture forms: reading, visit, follow-up, money -- each says "held on this device", never "saved". |
+| 14 | **Patients** -> the patient record | The record carries encounter, diagnosis, measurement, procedure, follow-up and charges. Note the **Clinical timeline** itself is encounters plus their diagnoses, and says so ("The 20 most recent encounters"); measurement, procedure, follow-up and charges each have their own panel on the same page. |
+| 15 | **Practice Intelligence** | Real denominators throughout. Every percentage is governed by the **PI v2 s19** rate registry and prints its fraction in the same breath -- "2 of 3 (67%)", never a bare "67%". A bare percentage anywhere is the defect. |
+| 16 | **/practice/offline** (open **/practice/today** online first and let it settle, then set the PIN when offered) | The reader holds the day, the session and published guidance, stamped in PRACTICE time. Its **list** deliberately accepts nothing -- every control that would write is disabled with a reason. The four capture forms (reading, visit, follow-up, money) are per-patient behind **Show this record**, and they need the device PIN: it is s5's seventh precondition, and without it the clinical pack is not cached, so there is no record to attach to. Each says "held on this device", never "saved". |
 | 17 | Airplane-mode one capture if you are feeling thorough, then reconnect | It files at sync; the receipt for money is numbered AT sync. |
 | 18 | **Privacy -> Security** | The posture states the retention POLICY (a decision of record, not a gap); the session panel shows your 30-minute idle rule live. |
 | 19 | Walk away 30 minutes (or use the console's preview) | The 60-second warning, then the cover; your password brings everything back. |
@@ -147,3 +147,20 @@ Steps 1-15 exercise everything CPR-BUILD-000 through the PAY arc shipped; 16-17 
 18-19 the security enforcement you switched on today. The walkthrough is DONE when you have either
 a list of sentences that need fixing, or the honest verdict that a stranger could run a day on this
 product without being lied to once.
+
+## Corrections, 2026-08-21
+
+Steps 14, 15 and 16 were corrected after being walked against production. In all three the BUILD was
+right and this document was wrong, and each was close enough to file as a defect before reading the
+source:
+
+- **14** asked for six event types in the Clinical timeline. The timeline is encounters plus their
+  diagnoses by design and says so in its own footnote; the other four live in their own panels.
+- **15** asked for one approved percentage (attendance). PI **v2 s19** supersedes that: a percentage is
+  allowed wherever a registry entry governs it AND its fraction prints beside it. Seven appear, all in
+  that form. The rule that still holds absolutely is that a BARE percentage is never allowed.
+- **16** placed the four capture forms on the reader's list. The list accepts nothing deliberately
+  (CP-OFFLINE-SURVEY-001 s3.8.7 design point 4); the forms are per-patient, and gated on the PIN.
+
+⚠ **A walkthrough sentence is evidence, not ground truth about the build** -- especially one written
+before the arc it describes finished. Read the source before writing a defect report against it.

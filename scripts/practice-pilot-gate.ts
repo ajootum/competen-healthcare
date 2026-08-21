@@ -266,9 +266,15 @@ async function main() {
   // names the expected cause instead of the observed one: it hands the next reader a conclusion.
   todo("Replace the public \"not open yet\" panel with live actions",
     flags.practice_sign_in
-      ? "DONE -- verified against the running server: /practice/login renders \"Sign in to your practice\" "
-        + "and /practice renders \"Create your practice\". The copy is read from practice_sign_in rather "
-        + "than written as prose, so the two cannot disagree again. Nothing to do; confirm and tick."
+      // ⚠ RE-VERIFIED 2026-08-21. This note used to say /practice renders "Create your practice".
+      // It no longer does, and neither does anywhere else: signup is shut by owner decision, the
+      // sign-in footer now reads "See how to get a Practice", and /practice/sign-up refuses honestly.
+      // The note was describing copy that had been deliberately removed -- which is the very defect
+      // the comment above it warns about, committed by the note itself.
+      ? "DONE -- verified 2026-08-21: /practice/sign-in renders the real form, and NO public surface "
+        + "offers to create a practice, because signup is closed by decision. The sign-in copy is read "
+        + "from practice_sign_in rather than written as prose, so those two cannot disagree again. "
+        + "Nothing to do; confirm and tick."
       : "do this only after the two items above pass.");
 
   report();
