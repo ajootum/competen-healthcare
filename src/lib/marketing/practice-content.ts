@@ -770,14 +770,31 @@ export const LP3_BENEFITS = [
   { title: "It follows you, not your employer", body: "Change jobs and the record goes with you. That is the whole point of it being personal." },
 ];
 
-/** CPR-V2-001 v3 s4 "AI Assistant section" -- rendered, and marked as not built. */
+/**
+ * CPR-V2-001 v3 s4 "AI Assistant section".
+ *
+ * ⚠ THIS SAID "Specified, not yet built" AND HAD STOPPED BEING TRUE. ai-assistant.ts is a 729-line
+ * engine; /practice/assistant and the Intelligence area both render it; practice-assistant-harness
+ * passes 51 assertions. It is a practice SETTING (setAssistantEnabled, gated on
+ * practice.settings.manage behind an acknowledged notice version), not an unbuilt module.
+ *
+ * ⚠ AND THE SECOND SENTENCE WAS STALE IN A WORSE WAY. "the modules you can use today are your home,
+ * your diary, your patients and your encounters" names FOUR. PRIMARY_ORDER in navigation.ts holds
+ * ELEVEN, and the four named omit Documents, Follow-ups, Payments, Intelligence and Reports -- entire
+ * arcs that shipped after this sentence was written. Both errors point the same way as the MFA one on
+ * /practice/login: the product describing itself as less than it is.
+ *
+ * WHAT IS STILL HONEST AND STAYS HONEST: the assistant only answers from the practice's own record and
+ * refuses when there is nothing to ground in, and a deployment without a usable model provider cannot
+ * generate at all. Neither is hidden here.
+ */
 export const LP3_AI = {
-  eyebrow: "In development",
+  eyebrow: "Built, and yours to switch on",
   title: "A practice assistant that learns from your own record",
   body:
-    "Specified, not yet built. It is named here because it is where the product is going, and marked so " +
-    "nobody plans around it: the modules you can use today are your home, your diary, your patients and " +
-    "your encounters.",
+    "It answers from your own record and nothing else -- no benchmark, no other practice, and no answer " +
+    "at all when there is nothing of yours to ground it in. It is off until you turn it on, and " +
+    "answering needs a model provider configured for your deployment.",
   points: [
     { title: "Insights from your own work", body: "Patterns in what you have managed, not somebody else's benchmark." },
     { title: "Document assistance", body: "Summarise and extract from what is already in your record." },
