@@ -11,6 +11,10 @@ import { practiceToday } from "@/lib/practice/practice-time";
 import { periodFromParams, allDatesTarget, periodLabel } from "@/lib/practice/period-range";
 import PaymentsConsole from "./PaymentsConsole";
 import PaymentsNavigator from "./PaymentsNavigator";
+import type { Metadata } from "next";
+
+/** The tab name, so a practitioner with several open can tell which is which. */
+export const metadata: Metadata = { title: "Payments" };
 
 // /practice/payments -- CPR-PAY-001 s11, the practitioner's money workspace, under HFE-001 v1.1's
 // PRACTICE section. Internal navigation: Overview | Transactions | Outstanding | Settlements | Fees.

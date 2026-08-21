@@ -10,6 +10,10 @@ import { periodFromParams, allDatesTarget } from "@/lib/practice/period-range";
 import FollowUpsWorkspace from "./FollowUpsWorkspace";
 import FollowUpsNavigator from "./FollowUpsNavigator";
 import RecallQueue from "./RecallQueue";
+import type { Metadata } from "next";
+
+/** The tab name, so a practitioner with several open can tell which is which. */
+export const metadata: Metadata = { title: "Follow-ups" };
 
 // /practice/follow-ups -- CPR-FUP-001, the continuity-of-care workspace.
 //

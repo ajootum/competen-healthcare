@@ -18,6 +18,10 @@ import { THEAD, TABLE_SCROLL } from "@/components/practice/PatientTable";
 import {
   CARD, Figure, PanelState, patientLabel, ContextStrip, WorkSection, AttentionPanel,
 } from "./Board";
+import type { Metadata } from "next";
+
+/** The tab name, so a practitioner with several open can tell which is which. */
+export const metadata: Metadata = { title: "Encounters" };
 
 // /practice/encounters -- CPR-ENC-LANDING-001, the Encounters landing page.
 //

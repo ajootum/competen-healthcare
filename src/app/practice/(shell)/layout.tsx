@@ -13,6 +13,26 @@ import PracticeSignOut from "./PracticeSignOut";
 import PracticeAppearance from "./PracticeAppearance";
 import PracticeShortcuts from "./PracticeShortcuts";
 import PracticeSessionGuard from "./PracticeSessionGuard";
+import type { Metadata } from "next";
+
+/**
+ * ⚠ EVERY SIGNED-IN PRACTICE SCREEN INHERITED THE MARKETING PAGE'S METADATA UNTIL NOW.
+ *
+ * The root layout sets a default title of "Competen — Healthcare. Empowered." and a description
+ * about students, professionals, practices and hospitals. The PUBLIC practice pages all override it
+ * -- sign-in, booking, offline, the product page. The pages behind the login did not, so a
+ * practitioner with several tabs open saw the company tagline on all of them and could not tell
+ * which one held their practice.
+ *
+ * The template matches the convention the public pages already use, so a page that sets its own
+ * title reads the same either side of the login.
+ */
+export const metadata: Metadata = {
+  title: { default: "Competen Practice", template: "%s · Competen Practice" },
+  description:
+    "Your clinical practice record: today's clinic, the people waiting, what is unsigned and what is due back.",
+};
+
 
 // CPR-V2-020 authenticated application shell (SHELL-001 s7, CPR-V2-020 V3).
 //

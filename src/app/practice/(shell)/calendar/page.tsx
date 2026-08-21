@@ -27,6 +27,10 @@ import AvailabilityRibbon from "./AvailabilityRibbon";
 import CalendarFooter from "./CalendarFooter";
 import WhereYouAre from "./WhereYouAre";
 import Timeline from "./Timeline";
+import type { Metadata } from "next";
+
+/** The tab name, so a practitioner with several open can tell which is which. */
+export const metadata: Metadata = { title: "Planner" };
 
 // /practice/calendar -- CPR-V5-005, THE PRACTICE PLANNER, compressed by CPR-PLN-002.
 //

@@ -8,6 +8,10 @@ import { periodFromParams, allDatesTarget, periodLabel } from "@/lib/practice/pe
 import WorkspaceHeader from "./_workspace/WorkspaceHeader";
 import OverviewBoard from "./_workspace/OverviewBoard";
 import DocumentsNavigator from "./DocumentsNavigator";
+import type { Metadata } from "next";
+
+/** The tab name, so a practitioner with several open can tell which is which. */
+export const metadata: Metadata = { title: "Documents" };
 
 // /practice/documents -- CPR-DOC-002 s4, THE OVERVIEW DASHBOARD.
 //

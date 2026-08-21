@@ -14,6 +14,10 @@ import { offlineCacheGate } from "@/lib/practice/offline-gate";
 import { BILLING_CAPTURE_CAPABILITIES } from "@/lib/practice/billing-constants";
 import { primaryNav } from "@/lib/practice/navigation";
 import { PANEL, GLANCE_SWATCH, QUICK_SWATCH, QUICK_ICON, SEVERITY } from "@/lib/practice/palette";
+import type { Metadata } from "next";
+
+/** The tab name, so a practitioner with several open can tell which is which. */
+export const metadata: Metadata = { title: "Command Centre" };
 
 // PRACTICE COMMAND CENTRE -- CPR-001_v4, SIMPLIFIED BY CPR-HFE-001 v1.1 s4 (2026-08-15).
 //

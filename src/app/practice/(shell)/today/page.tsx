@@ -17,6 +17,10 @@ import LiveRefresh from "../LiveRefresh";
 import OfflineCacheWriter from "../OfflineCacheWriter";
 import { offlineCacheGate } from "@/lib/practice/offline-gate";
 import { BILLING_CAPTURE_CAPABILITIES } from "@/lib/practice/billing-constants";
+import type { Metadata } from "next";
+
+/** The tab name, so a practitioner with several open can tell which is which. */
+export const metadata: Metadata = { title: "Current Session" };
 
 // /practice/today -- CPR-CUR-001 "Current Session", the operational cockpit for work happening NOW.
 // (Supersedes CPR-V5-004's arrangement of this screen; the lifecycle and engines it built remain.)

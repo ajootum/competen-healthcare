@@ -6,6 +6,10 @@ import { practiceSetup } from "@/lib/practice/setup";
 import {
   SETUP_DOMAIN_SWATCH, DOMAIN_STATE_CHIP, MODULE_STATE_CHIP, READINESS_SWATCH,
 } from "@/lib/practice/practice-session-constants";
+import type { Metadata } from "next";
+
+/** The tab name, so a practitioner with several open can tell which is which. */
+export const metadata: Metadata = { title: "Practice Setup" };
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // CPR-V5-008 PRACTICE SETUP WORKSPACE -- the three-domain landing page.

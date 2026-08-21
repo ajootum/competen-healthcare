@@ -29,6 +29,10 @@ import {
   BriefArea, ActivityPanel, TrendsPanel, PatientsArea, CohortsArea,
   ClinicalArea, PathwaysArea, PerformanceArea, ReportsArea, AiInsightPanel,
 } from "./Areas";
+import type { Metadata } from "next";
+
+/** The tab name, so a practitioner with several open can tell which is which. */
+export const metadata: Metadata = { title: "Practice Intelligence" };
 
 // /practice/intelligence -- CPR-PI-001 / CPR-PI-002 / CPR-PI-003, THE CONSOLIDATED SUITE.
 //

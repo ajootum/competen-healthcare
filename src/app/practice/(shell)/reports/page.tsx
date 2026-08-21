@@ -12,6 +12,10 @@ import ReportsNavigator from "./ReportsNavigator";
 import GenerateConsole from "./GenerateConsole";
 import MobileReportsLanding, { type MobileReportTemplate } from "./MobileReportsLanding";
 import { recentReports } from "./recent-reports";
+import type { Metadata } from "next";
+
+/** The tab name, so a practitioner with several open can tell which is which. */
+export const metadata: Metadata = { title: "Reports" };
 
 // /practice/reports -- CPR-330 REPORTS, DOCUMENTS & CORRESPONDENCE.
 //

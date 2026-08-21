@@ -16,6 +16,10 @@ import ContextPanel from "./ContextPanel";
 import type {
   CohortSortView, CohortView, FamilyView, ScreenCapabilities, SearchView, SummaryView, WorklistsView,
 } from "./types";
+import type { Metadata } from "next";
+
+/** The tab name, so a practitioner with several open can tell which is which. */
+export const metadata: Metadata = { title: "Patients" };
 
 // /practice/patients -- CPR-PAT-002, the Patients workspace dashboard (CPR-V5-006's engine, unchanged).
 //
