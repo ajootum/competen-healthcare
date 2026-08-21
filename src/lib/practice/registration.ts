@@ -513,7 +513,15 @@ export async function registerAndBook(
     if (code === "PGRST202" || /Could not find the function|does not exist/i.test(message))
       return {
         ok: false, status: 503, code: "TRANSACTION_UNAVAILABLE",
-        message: `this registration was not saved because the register-and-book transaction is not available -- migration 289 (which replaced the 276 function with the numbered signature) may not have been applied: ${message}`,
+        // ⚠ THE MIGRATION NUMBER LEFT THIS MESSAGE (CPR-HFE-REF-001 s5). A practitioner registering a
+        // patient cannot act on "migration 289 may not have been applied", and it reaches them at the
+        // moment they are least able to read past it. The diagnostic is the CODE --
+        // TRANSACTION_UNAVAILABLE -- which engineering already has, with the Postgres error in the logs.
+        //
+        // ⚠ WHAT THE MESSAGE MUST KEEP SAYING IS THAT NOTHING WAS WRITTEN. This whole function exists to
+        // prevent a half-written registration; a vague failure would send somebody to re-register a
+        // patient who may already be there.
+        message: "This registration was not saved. Nothing was written, so nothing is half-recorded -- try again, and tell whoever administers this practice if it keeps happening.",
       };
 
     // ⚠ THE RACE, CAUGHT BY THE DATABASE AND REPORTED AS WHAT IT IS. Nothing was written: no patient, no

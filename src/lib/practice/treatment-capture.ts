@@ -601,7 +601,7 @@ export async function recordTreatmentBatch(admin: any, ctx: WorkspaceContext, ar
     if (subErr) {
       const r = results.find(x => x.index === s.index);
       if (r) r.message = isMissingTable(subErr)
-        ? "recorded, with the detail as text only: the structured fields need migration 296, which is not applied here"
+        ? "recorded, with the detail as text only -- the structured fields cannot be stored on this deployment yet"
         : `recorded, with the detail as text only: the structured fields were refused (${subErr.message})`;
     }
   }

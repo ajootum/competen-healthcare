@@ -348,7 +348,7 @@ export async function issueIdentity(admin: any, args: {
     if (allocError || allocated == null)
       return {
         ok: false, status: 503, code: "ALLOCATOR_UNAVAILABLE",
-        message: `the practitioner number allocator is not available -- migration 220 may not have been applied: ${allocError?.message ?? "no value returned"}`,
+        message: "A practitioner number could not be allocated just now. Nothing was saved. Try again shortly.",
       };
 
     let practitionerNumber: string;
