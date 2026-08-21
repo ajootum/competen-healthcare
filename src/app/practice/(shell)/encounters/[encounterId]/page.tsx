@@ -239,7 +239,12 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
               {patient?.sex}
               {patient?.birth_date ? ` · b. ${patient.birth_date}` : patient?.age_estimate_years != null ? ` · ~${patient.age_estimate_years}y` : ""}
               {" · "}{String(encounter.entry_pathway).replace(/_/g, " ")}
-              {" · started "}{formatDayTime(encounter.started_at)}
+              {/* ⚠ THE PRACTICE'S CLOCK, NOT UTC. `timezone` is declared at the top of this function and
+                  these four calls ignored it, so a consultation started at 11:51 in Kampala displayed as
+                  08:51 -- three hours wrong, on the screen a doctor is looking at while with the patient,
+                  and on the SIGNED time of a locked clinical record. Found by starting an encounter and
+                  reading the header. */}
+              {" · started "}{formatDayTime(encounter.started_at, timezone)}
             </p>
             {/* The identifiers (CPR-ENC-003 s3's "multiple hospital identifiers"). ⚠ THE TYPE IS
                 LABELLED ABOVE THE VALUE rather than trailing it in nine-pixel grey: the comp draws
@@ -268,8 +273,8 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
               Patient record →
             </Link>
             <p className="text-[11px] text-gray-400">
-              {encounter.signed_at ? `Signed ${formatDayTime(encounter.signed_at)}`
-                : encounter.completed_at ? `Completed ${formatDayTime(encounter.completed_at)}`
+              {encounter.signed_at ? `Signed ${formatDayTime(encounter.signed_at, timezone)}`
+                : encounter.completed_at ? `Completed ${formatDayTime(encounter.completed_at, timezone)}`
                   : "Not yet completed"}
             </p>
           </div>
@@ -282,7 +287,7 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
             {encounter.status === "ENTERED_IN_ERROR" ? "Marked as entered in error." : "Signed and locked."}
           </p>
           <p className="mt-0.5 text-[11px] text-gray-700">
-            {encounter.signed_at ? `Signed ${formatDayTime(encounter.signed_at)}. ` : ""}
+            {encounter.signed_at ? `Signed ${formatDayTime(encounter.signed_at, timezone)}. ` : ""}
             The clinical content can no longer be edited. An amendment creates a governed new version;
             the database refuses any other change.
           </p>
