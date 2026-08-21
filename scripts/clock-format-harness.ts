@@ -90,6 +90,35 @@ function main() {
   })();
   ok("4a nothing requests a 12-hour clock", twelve.length === 0, twelve.slice(0, 3).join(" | "));
 
+  // ---- 5. ⚠ Every Practice clock names the PRACTICE's zone ------------------------------------
+  //
+  // formatDayTime's second argument is the timezone. Called with one argument it falls back to the
+  // runtime's zone -- the SERVER's on a server component, the DEVICE's on a client one. Neither is the
+  // practice's, and a consultation's clock is the practice's or it is wrong.
+  //
+  // This closes the practice-clock class rather than fixing it once: the 57-site sweep left four behind
+  // (ContextPanel x2, EncounterAttachments, EncounterConsole), and nothing would have caught a fifth.
+  //
+  // ⚠ Scope is src/app/practice only. Elsewhere in the estate a server-zone clock can be correct.
+  // ⚠ The pattern reads a single argument as "no comma before the closing paren", so a first
+  // argument containing its own call -- formatDayTime(pick(a, b)) -- would read as zoned. No call site
+  // has that shape today; if one appears, this needs a paren-matching scan instead of a regex.
+  const unzoned = (() => {
+    try {
+      return execSync(
+        `grep -rnE "formatDayTime\\([^,)]*\\)" src/app/practice --include=*.tsx`,
+        { encoding: "utf8" },
+      ).trim().split("\n").filter(Boolean);
+    } catch { return []; }
+  })();
+  ok("5a every Practice clock is formatted in the practice's timezone, never the runtime's",
+    unzoned.length === 0, unzoned.slice(0, 3).join(" | "));
+
+  const ZONED = /formatDayTime\([^,)]*\)/;
+  ok("5b CONTROL: the pattern catches a bare call and spares a zoned one",
+    ZONED.test("{formatDayTime(e.started_at)}")
+      && !ZONED.test("{formatDayTime(e.started_at, props.timezone)}"));
+
   console.log(`\n  ${pass} passed, ${fails.length} failed`);
   if (fails.length) { fails.forEach(f => console.log(`   - ${f}`)); process.exit(1); }
 }

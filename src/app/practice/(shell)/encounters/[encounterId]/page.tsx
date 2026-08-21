@@ -318,6 +318,7 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
             weight is recorded in the safety snapshot at the top, and the console that multiplies by it
             links straight back to that field. */}
         <EncounterConsole
+          timezone={timezone}
           measurements={<ParameterCollection collection={parameterCollection} locked={locked} />}
           medication={
             <MedicationConsole
@@ -395,6 +396,7 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
             <>
               <EncounterContextCard
                 encounter={encounter}
+                timezone={timezone}
                 sessionTitle={sessionRow?.title ?? null}
                 sessionUnavailable={sessionUnavailable}
                 facility={sessionRow?.practice_facility?.name ?? null}

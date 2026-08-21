@@ -250,6 +250,8 @@ export function PatientSafetyCard(props: {
  */
 export function EncounterContextCard(props: {
   encounter: any;
+  /** The PRACTICE's timezone. A consultation's own clock is the practice's, never the reader's device. */
+  timezone: string;
   sessionTitle: string | null;
   sessionUnavailable: boolean;
   facility: string | null;
@@ -268,7 +270,7 @@ export function EncounterContextCard(props: {
         </p>
         <p className="flex items-center gap-2">
           <span aria-hidden="true" className="text-gray-500">&#128197;</span>
-          {formatDayTime(e.started_at) ?? "—"}
+          {formatDayTime(e.started_at, props.timezone) ?? "—"}
         </p>
         {/* ⚠ THREE STATES, KEPT ON THE COMPRESSED LINE. "No session" is a true and ordinary answer --
             consultations happen on call, between clinics, at two in the morning against no plan at
@@ -294,7 +296,7 @@ export function EncounterContextCard(props: {
           started, not where you are now.
         </p>
         <div className="mt-2 flex flex-col gap-2.5">
-          <Fact label="Date & time" value={formatDayTime(e.started_at)} missing="—" />
+          <Fact label="Date & time" value={formatDayTime(e.started_at, props.timezone)} missing="—" />
           <Fact label="Location" value={props.facility} missing="Not recorded" />
           <Fact label="Encounter type" value={String(e.encounter_mode).replace(/_/g, " ")} missing="—" />
           <Fact label="Source" value={String(e.entry_pathway).replace(/_/g, " ")} missing="—" />

@@ -67,6 +67,8 @@ const sizeOf = (bytes: number) =>
 export default function EncounterAttachments(props: {
   encounterId: string;
   patientId: string;
+  /** The PRACTICE's timezone. A consultation's own clock is the practice's, never the reader's device. */
+  timezone: string;
   attachments: Attachment[];
   editable: boolean;
   /** THIS encounter's procedures, filtered by the caller -- the linking offer never reaches wider
@@ -232,7 +234,7 @@ export default function EncounterAttachments(props: {
     { key: "added", label: "Added", priority: "status",
       render: a => (
         <span className="text-[11.5px] text-gray-600">
-          {formatDayTime(a.created_at) ?? String(a.created_at).slice(0, 16).replace("T", " ")}
+          {formatDayTime(a.created_at, props.timezone) ?? String(a.created_at).slice(0, 16).replace("T", " ")}
         </span>
       ) },
   ];

@@ -314,6 +314,8 @@ const PLAN_SEGMENT: [string, string, string] = ["plan", "Next steps / Plan", "Wh
 
 export default function EncounterConsole(props: {
   encounterId: string; patientId: string; status: string; reasonForVisit: string | null;
+  /** The PRACTICE's timezone. A consultation's own clock is the practice's, never the reader's device. */
+  timezone: string;
   notes: any[]; diagnoses: any[]; treatments: any[];
   templates: any[]; history: Record<string, any[]>; documents: any[];
   followUps: any[];
@@ -1809,7 +1811,7 @@ export default function EncounterConsole(props: {
                             <button key={a.id} type="button" disabled={busy}
                               onClick={() => linkVisit(f.id, a.id)}
                               className={`rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/[0.07] disabled:opacity-50 ${TOUCH}`}>
-                              {formatDayTime(a.scheduled_at) ?? String(a.scheduled_at).slice(0, 16)}
+                              {formatDayTime(a.scheduled_at, props.timezone) ?? String(a.scheduled_at).slice(0, 16)}
                               <span className="ml-1 font-normal text-gray-500">
                                 {String(a.appointment_type ?? "").replace(/_/g, " ")}
                               </span>
@@ -2310,6 +2312,7 @@ export default function EncounterConsole(props: {
                     belong to this encounter?" was answered by a closed accordion beside clinical
                     calculators, on the tab named after them. */}
                 <EncounterAttachments
+                  timezone={props.timezone}
                   encounterId={props.encounterId}
                   patientId={props.patientId}
                   attachments={props.attachments}
