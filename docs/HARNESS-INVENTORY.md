@@ -212,7 +212,7 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `practice-cohort-harness.ts` | CPR-PI-001 v2 s6 harness -- the cohort engine: registered segments and saved populations. | privileged-live | CPR-PI-001, CPR-V2-005 | insert | yes | no |
 | `practice-command-centre-harness.ts` | CPR-001_v4 Practice Command Centre harness. Migration 229. | privileged-live | CPR-HFE-001, CPR-V5-001, CPR-300 | insert/update/delete | yes | no |
 | `practice-communication-harness.ts` | Practice communication harness -- CPR-320, exercised against the live database through the same | privileged-live | CPR-320 | insert/update | yes | no |
-| `practice-configuration-harness.ts` | Practice configuration harness -- CPR-360, exercised against the live database through the same | privileged-live | CPR-360, CPR-310, CPR-SET-004 | insert/delete | yes | no |
+| `practice-configuration-harness.ts` | Practice configuration harness -- CPR-360, exercised against the live database through the same | privileged-live | CPR-360, CPR-310, CPR-SET-004 | insert/update/delete | yes | no |
 | `practice-content-harness.ts` | Competen Practice public section harness (CPR-V2-000 .. CPR-V2-020). | privileged-live | CPR-V2-000, CPR-V2-020, CPR-V2-001 | read-only | n/a | no |
 | `practice-continuity-harness.ts` | Continuity of Care harness -- CPR-FUP-001 (the workspace) and CPR-FUP-002 (the engine), against the | privileged-live | CPR-FUP-001, CPR-FUP-002 | insert/update/delete | yes | no |
 | `practice-current-activity-harness.ts` | CPR-V3-001 Current Activity + CPR-V3-002 Today's Work harness. Migration 232. | privileged-live | CPR-V3-001, CPR-V3-002, CPR-V5-001 | insert/update/delete | yes | no |
@@ -230,11 +230,11 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `practice-encounters-landing-harness.ts` | THE ENCOUNTERS LANDING PAGE -- CPR-ENC-LANDING-001. | privileged-live | CPR-ENC-LANDING-001 | insert/delete | yes | no |
 | `practice-event-coverage-harness.ts` | practice-event-coverage (CPR-CORE-001 s9 / CORE-09) — does every type in the domain-event | pure/local | CPR-CORE-001 | read-only | n/a | no |
 | `practice-events-harness.ts` | CPR-CORE-001 s9/s9.1 domain event outbox harness. Migration 233, backlog CORE-09. | privileged-live | CPR-CORE-001 | insert/update/delete | yes | no |
-| `practice-facilities-harness.ts` | Facilities and facility identifiers harness -- CPR-PRM-001 s3, s7, s11. Migration 222. | privileged-live | CPR-PRM-001 | insert/update/delete | yes | no |
+| `practice-facilities-harness.ts` | Facilities and facility identifiers harness -- CPR-PRM-001 s3, s7, s11. Migration 222. | privileged-live | CPR-PRM-001, CPR-PID-001 | insert/update/delete | yes | no |
 | `practice-followup-plans-harness.ts` | Practice follow-up PLANS harness -- CPR-140's structural half, exercised against the live database | privileged-live | CPR-140 | insert/update/delete | yes | no |
 | `practice-followups-harness.ts` | Practice follow-up harness -- CPR-140 / PEN-004, exercised against the live database through the same | privileged-live | CPR-140, CPR-FUP-HFE-008 | insert/update | yes | no |
 | `practice-forms-harness.ts` | Practice Forms harness -- CPR-KS-001 Phase 3 (section 4, the Intelligent Forms Engine). | privileged-live | CPR-KS-001 | insert/update | yes | no |
-| `practice-generation-harness.ts` | Practice document-generation harness -- CPR-330, exercised against the live database through the same | privileged-live | CPR-330, CPR-130, CPR-210 | insert/update | yes | no |
+| `practice-generation-harness.ts` | Practice document-generation harness -- CPR-330, exercised against the live database through the same | privileged-live | CPR-330, CPR-130, CPR-PID-001 | insert/update | yes | no |
 | `practice-handle-reachability-harness.ts` | THE BOOKING ADDRESS: REACHABLE FROM THE SIDEBAR, AND OFFERED DURING ONBOARDING. | privileged-live | CPR-V5-002, CPR-HFE-001 | insert/update/delete | yes | no |
 | `practice-hfe-harness.ts` | CPR-HFE-001 v1.1 harness -- the harmonised shell (s14 orders 5-11), and its REFREEZE. | privileged-live | CPR-HFE-001, CPR-V5-004, CPR-CUR-001 | insert | yes | no |
 | `practice-hospital-booking-harness.ts` | Multi-hospital booking harness -- migration 228. | privileged-live | — | insert/update/delete | yes | no |
@@ -249,19 +249,20 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `practice-knowledge-harness.ts` | Practice Guidance harness -- CPR-KS-001 Phase 1 (Engine 4: Guideline & SOP, plus section 8's library). | privileged-live | CPR-KS-001 | insert/update | yes | no |
 | `practice-library-harness.ts` | Practice document-library harness -- CPR-320's library, folders, recycle bin and the correspondence | privileged-live | CPR-320 | insert | yes | no |
 | `practice-lifecycle-harness.ts` | CPR-LIFE-001 -- PRACTICE LIFECYCLE, THE SAFE SUBSET. On migration 247. | privileged-live | CPR-LIFE-001, CPR-PAY | insert/update/delete | no — verify | no |
-| `practice-longitudinal-harness.ts` | Longitudinal patient record harness -- CPR-ENC-003, on migration 238. | privileged-live | CPR-ENC-003 | insert | yes | no |
-| `practice-medication-harness.ts` | CPR-MED-001 -- the medication record, its timeline, reconciliation, monitoring and s3's dose | privileged-live | CPR-MED-001, CPR-LCP-001 | insert/update | yes | no |
+| `practice-longitudinal-harness.ts` | Longitudinal patient record harness -- CPR-ENC-003, on migration 238. | privileged-live | CPR-ENC-003, CPR-OPT-001 | insert/update | yes | no |
+| `practice-medication-harness.ts` | CPR-MED-001 -- the medication record, its timeline, reconciliation, monitoring and s3's dose | privileged-live | CPR-MED-001, CPR-HFE-REF-001, CPR-V5-002 | insert/update/delete | yes | no |
 | `practice-medication-weight-decision-harness.ts` | THE RULING OF 2026-08-08, END TO END: | privileged-live | CPR-V2-005 | insert/update | yes | no |
 | `practice-messaging-harness.ts` | Delivery channel harness -- PIS-000 s11/s14, IAM-000 s3/s7, CPR-PRM-001 s10. Migration 224. | privileged-live | CPR-PRM-001 | insert/update/delete | yes | no |
 | `practice-nav-discoverability-harness.ts` | PRACTICE SIDEBAR — DISCOVERABILITY, not reachability. | pure/local | CPR-HFE-001, CPR-ADOPT-001 | read-only | n/a | no |
 | `practice-offline-cache-harness.ts` | CP-OFFLINE-SURVEY-001 phase one — the read-only offline cache. | privileged-live | — | insert/update/delete | yes | no |
 | `practice-offline-clinical-harness.ts` | CP-OFFLINE-SURVEY-001 s9 — THE CLINICAL CARRY. | privileged-live | — | insert/update/delete | yes | no |
+| `practice-offline-filing-harness.ts` | CP-OFFLINE-SURVEY-001 s5 -- the FILING side of offline capture, which nothing tested. | privileged-live | CPR-GATE-001, CPR-V2-005 | insert/delete | yes | no |
 | `practice-offline-guidance-harness.ts` | CP-OFFLINE-SURVEY-001 s9 item 4 — THE CACHED GUIDANCE LIBRARY. | privileged-live | — | insert/delete | yes | no |
 | `practice-offline-lock-harness.ts` | PHASE TWO, PRECONDITION 0 — LOCAL RE-AUTHENTICATION (COMP-SEC-001 s4/s10). | pure/local | COMP-SEC-001 | read-only | n/a | no |
 | `practice-operations-harness.ts` | Practice operations-home harness -- CPR-300, plus the practice clock it shares with CPR-140. | privileged-live | CPR-300, CPR-140, CPR-AUDIT-001 | insert/update | yes | no |
 | `practice-outbox-durability-harness.ts` | CP-OFFLINE-SURVEY-001 s5 PRECONDITION 1 — "Durable local persistence that survives tab close, crash | pure/local | — | read-only | n/a | no |
 | `practice-outbox-harness.ts` | PHASE TWO, THE TRANSACTION OUTBOX — COMP-SYNC-001 s5/s9 and CP-OFFLINE-SURVEY-001 s5. | pure/local | COMP-SYNC-001 | read-only | n/a | no |
-| `practice-parameters-harness.ts` | CPR-LCP-001 -- configurable longitudinal clinical parameters and patient monitoring, on migration 246. | privileged-live | CPR-LCP-001, CPR-PIE-001, CPR-CPL-001 | insert | yes | no |
+| `practice-parameters-harness.ts` | CPR-LCP-001 -- configurable longitudinal clinical parameters and patient monitoring, on migration 246. | privileged-live | CPR-LCP-001, CPR-PIE-001, CPR-V5-002 | insert | yes | no |
 | `practice-pathways-harness.ts` | Continuity Pathways harness -- CPR-FUP-003 / migration 239, against the live database through the | privileged-live | CPR-FUP-003, CPR-FUP-001 | insert/update/delete | yes | no |
 | `practice-patient-access-harness.ts` | CPR-V5-007 PHASE 4 -- PATIENT BOOKING ACCESS, AND THE ONE-TIME CODE THAT PROTECTS IT. | privileged-live | CPR-V5-007 | insert/update/delete | yes | no |
 | `practice-patient-booking-screens-harness.ts` | THE PATIENT BOOKING SCREENS, AND THE SIX GUARDS AROUND THE UNVERIFIED REQUEST. | privileged-live | — | insert/update/delete | yes | no |
@@ -283,6 +284,7 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `practice-provisioning-harness.ts` | Practice provisioning harness -- CPR-PROV-001 section 20's end-to-end test, run against the live | privileged-live | CPR-PROV-001 | insert/update | yes | no |
 | `practice-recurrence-harness.ts` | CPR-RECUR-001 -- SESSIONS THAT DO NOT REPEAT EVERY WEEK. Migration 274. | privileged-live | CPR-RECUR-001 | insert/update/delete | yes | yes |
 | `practice-reflection-harness.ts` | Clinical Reflection harness -- CPR-230. Migration 216. | privileged-live | CPR-230, CPR-220 | insert | yes | no |
+| `practice-refusal-harness.ts` | ──────────────────────────────────────────────────────────────────────────────────────────────── | pure/local | CPR-HFE-REF-001, CPR-PAT-002, CPR-V5-006 | read-only | n/a | no |
 | `practice-registration-conditional-harness.ts` | Conditional registration fields, ON SCREEN -- CPR-PRM-001 s9. | privileged-live | CPR-PRM-001 | insert/delete | yes | no |
 | `practice-registration-config-harness.ts` | Registration configuration harness -- CPR-PRM-001 s2, s9. Migration 223. | privileged-live | CPR-PRM-001 | insert/update/delete | yes | no |
 | `practice-registration-harness.ts` | Registration act harness -- CPR-PRM-001 s4, s5, s6, s9. Migration 225. | privileged-live | CPR-PRM-001, CPR-REG-002, CPR-V5-006 | insert/delete | yes | no |
@@ -303,14 +305,15 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `practice-session-lifecycle-harness.ts` | CPR-V5-004 SESSION LIFECYCLE: Start, Run, PAUSE, RESUME, Close, Generate Summary. Migration 235. | privileged-live | CPR-V5-004, CPR-CORE-001 | insert/update/delete | yes | no |
 | `practice-setup-domains-harness.ts` | CPR-V5-008 -- Practice Setup workspace: three domains, progress, readiness, dependencies. No migration | privileged-live | CPR-V5-008, CPR-LCP-001, CPR-LIFE-001 | insert/update/delete | yes | no |
 | `practice-setup-harness.ts` | CPR-SETUP-001 v1 Practice Setup harness (seventeen modules). No migration. | privileged-live | CPR-SETUP-001, CPR-PAY, CPR-LCP-001 | insert/update/delete | yes | no |
-| `practice-signup-harness.ts` | Practice self-service signup harness -- CPR-IAM-001 s8 steps 1-4 and PROV-001 s10/s11, exercised | privileged-live | CPR-IAM-001 | update/delete | yes | no |
+| `practice-shell-harness.ts` | CPR-SHELL-001 -- Authenticated Practice Application Shell and Route Guard. | pure/local | CPR-SHELL-001, CPR-BUILD-000 | read-only | n/a | no |
+| `practice-signup-harness.ts` | Practice self-service signup harness -- CPR-IAM-001 s8 steps 1-4 and PROV-001 s10/s11, exercised | privileged-live | CPR-IAM-001, COMP-ENG-002G | update/delete | yes | no |
 | `practice-solo-approval-harness.ts` | SOLO-PRACTICE SELF-APPROVAL — the user's decision of 2026-08-10. | privileged-live | — | insert/delete | yes | no |
 | `practice-stream-harness.ts` | CPR-CORE-001 CORE-09, second half: the dashboard event stream. | privileged-live | CPR-CORE-001 | insert/update/delete | yes | no |
 | `practice-sync-harness.ts` | PHASE TWO, PRECONDITION 3 — IDEMPOTENT SERVER ACCEPTANCE, over migration 284. | privileged-live | COMP-SYNC-001, CPR-PAY-PBI-SURVEY-001 | insert/delete | yes | no |
 | `practice-task-orchestration-harness.ts` | Practice task-orchestration harness -- CPR-340's recurrence, templates, escalation and agenda. | privileged-live | CPR-340 | insert | yes | no |
 | `practice-tasks-harness.ts` | Practice task harness -- CPR-340, exercised against the live database through the same engine the | privileged-live | CPR-340 | insert/update | yes | no |
 | `practice-taxonomy-harness.ts` | Booking taxonomy harness (CP-BOOKING-TAXONOMY-001). No database. | pure/local | — | read-only | n/a | no |
-| `practice-team-harness.ts` | Practice team harness -- CPR-310, exercised against the live database through the same engine the | privileged-live | CPR-310, CPR-340 | insert/update | yes | no |
+| `practice-team-harness.ts` | Practice team harness -- CPR-310, exercised against the live database through the same engine the | privileged-live | CPR-310, CPR-340, CPR-DOC-002 | insert/update | yes | no |
 | `practice-timeline-harness.ts` | Timeline harness -- timelineDay(). | privileged-live | — | insert/update/delete | yes | no |
 | `practice-treatment-investigation-harness.ts` | RAPID TREATMENT AND INVESTIGATION CAPTURE -- CPR-TREAT-001, CPR-INV-001, CINV-CAP-001, migration 275. | privileged-live | CPR-TREAT-001, CPR-INV-001, CPR-PD-013 | insert/update/delete | yes | no |
 | `practice-v5007-phase56-harness.ts` | CPR-V5-007 PHASES 5 AND 6 -- FOLLOW-UPS AND WALK-INS, THEN PUBLISH READINESS. | privileged-live | CPR-V5-007, CPR-V2-005 | insert/update/delete | yes | no |
@@ -344,4 +347,5 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `xw-competency-harness.ts` | CROSS-WORKSPACE SWEEP, THE COMPETENCY AXIS: does competency actually change what happens on a shift? | privileged-live | COMP-027 | insert/update/delete | yes | no |
 | `xw-sweep-harness.ts` | CROSS-WORKSPACE VERIFICATION SWEEP. | privileged-live | — | insert/update/delete | no — verify | no |
 | `xw-uplift-harness.ts` | CROSS-WORKSPACE SWEEP, UPWARD: bedside -> supervisor -> unit manager -> executive. | privileged-live | — | insert/update/delete | no — verify | no |
+
 <!-- END GENERATED TABLE -->
