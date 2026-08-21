@@ -997,16 +997,16 @@ export async function clinicalActivityIntelligence(
     completed: metrics.metrics.completed,
     patientsSeen: metrics.metrics.patients_seen,
     byMode: build("by_mode", "How the patient was seen", r => r.encounter_mode, ENCOUNTER_MODES,
-      "count of encounters started in the period by practice_encounter.encounter_mode, cancelled and voided records excluded",
+      "count of encounters started in the period by how the consultation was held, cancelled and voided records excluded",
       ["practice_encounter.encounter_mode", "practice_encounter.started_at"]),
     byPathway: build("by_pathway", "How the patient arrived", r => r.entry_pathway, ENTRY_PATHWAYS,
-      "count of encounters started in the period by practice_encounter.entry_pathway, cancelled and voided records excluded",
+      "count of encounters started in the period by how the patient arrived, cancelled and voided records excluded",
       ["practice_encounter.entry_pathway", "practice_encounter.started_at"]),
     // Encounters launched outside any activity land in `unrecorded` -- see the module comment on why that
     // is disclosed rather than filed under "other".
     byActivityType: build("by_activity_type", "What the practitioner was doing",
       r => r.practice_activity?.activity_type, ACTIVITY_TYPES,
-      "count of encounters started in the period by the activity_type of the practice_activity they ran inside; encounters launched outside any activity are reported as unrecorded",
+      "count of encounters started in the period by the type of activity they ran inside; encounters launched outside any activity are reported as unrecorded",
       ["practice_encounter.activity_id", "practice_activity.activity_type"]),
   };
 
@@ -1090,7 +1090,7 @@ export async function patientIntelligence(
     "practice_patient.birth_date", "practice_patient.age_estimate_years",
     "practice_encounter.patient_id", "practice_encounter.started_at", "practice_diagnosis.label",
   ];
-  const registeredFormula = "count of practice_patient rows created within the period whose status is not 'merged'";
+  const registeredFormula = "patients first registered in the period, merged duplicates excluded";
   const registeredSources = ["practice_patient.created_at", "practice_patient.status"];
 
   if (!hasCapability(ctx, CAP_PATIENT_LIST))
@@ -1121,7 +1121,7 @@ export async function patientIntelligence(
   const newFormula = "of the distinct patients with a completed encounter in the period, those with no encounter of any status before the period began";
   const newSources = ["practice_encounter.patient_id", "practice_encounter.started_at"];
   const demographyFormula = (column: string) =>
-    `distribution of the distinct patients seen in the period by practice_patient.${column}; patients with nothing recorded are reported as unrecorded rather than assigned a value`;
+    `distribution of the distinct patients seen in the period by ${column}; patients with nothing recorded are reported as unrecorded rather than assigned a value`;
 
   const noSeen = (status: IntelStatus, reason: string): PatientIntelligenceData => ({
     patientsSeen: metrics.metrics.patients_seen,
@@ -1359,13 +1359,13 @@ export async function procedureIntelligence(
     procedureTotal: mix.procedureTotal,
     byCategory: distribution("by_category", "Procedures by category", read,
       r => r.practice_procedure_type?.category, PROCEDURE_CATEGORIES,
-      "count of practice_procedure rows performed in the period by the category of their catalogue entry; procedures typed freehand carry no catalogue entry and are reported as unrecorded",
+      "procedures performed in the period by the category of their catalogue entry; procedures typed freehand carry no catalogue entry and are reported as unrecorded",
       ["practice_procedure.procedure_type_id", "practice_procedure_type.category"], "procedures"),
     byConsent: distribution("by_consent", "Consent recorded", read, r => r.consent_status, CONSENT_STATUSES,
-      "count of practice_procedure rows performed in the period by practice_procedure.consent_status; 'not recorded' is not the same as 'not obtained' and is shown as its own slice",
+      "procedures performed in the period by whether consent was recorded; 'not recorded' is not the same as 'not obtained' and is shown as its own slice",
       ["practice_procedure.consent_status"], "procedures"),
     byLaterality: distribution("by_laterality", "Side", read, r => r.laterality, LATERALITIES,
-      "count of practice_procedure rows performed in the period by practice_procedure.laterality",
+      "procedures performed in the period by which side they were done on",
       ["practice_procedure.laterality"], "procedures"),
     abandoned: {
       key: "abandoned", label: "Procedures started and stopped",
@@ -1373,7 +1373,7 @@ export async function procedureIntelligence(
       status: abandonedCount === null ? "unreadable" : "ok",
       reason: abandonedCount === null ? (read.error ? `could not be read: ${read.error}` : overflowNote("procedures")) : null,
       caveat: "Abandoned means something was begun and stopped, which is a thing that happened to the patient. It is not a failure count and migration 197 does not record why.",
-      formula: "practice_procedure rows in the period with status ABANDONED, over all procedure rows in the period",
+      formula: "procedures in the period that were abandoned, over all procedures in the period",
       sources: ["practice_procedure.status", "practice_procedure.performed_at"],
     },
     complications: {
@@ -1383,7 +1383,7 @@ export async function procedureIntelligence(
       status: performed === 0 ? "unknowable" : "ok",
       reason: performed === 0 ? "no procedure was performed in this period, so there is nothing to report a complication against" : null,
       caveat: `A complication is discovered later, so the most recent procedures have had the least time to declare one and always look safest. ${performed - outcomes.procedures.outcomesRecorded} of ${performed} procedures in this period have no outcome recorded at all.`,
-      formula: "distinct practice_procedure ids with a practice_procedure_outcome row of outcome_type 'complication', over procedures performed in the period with status PERFORMED",
+      formula: "distinct procedures with a complication recorded against them, over procedures performed in the period with status PERFORMED",
       sources: ["practice_procedure_outcome.outcome_type", "practice_procedure.status"],
     },
   };
@@ -1462,8 +1462,8 @@ export async function followUpIntelligence(
     return intelUnavailable("followup_intelligence", "Follow-up Intelligence",
       `${CAP_FOLLOWUP_VIEW} is required to see this practice's follow-ups`, sources);
 
-  const overdueFormula = "count of practice_follow_up rows still OPEN or SCHEDULED whose due_on is before the practice's today; OVERDUE is not a stored status (migration 196 has none on purpose) so it is derived from the clock at read time";
-  const completionFormula = "of practice_follow_up rows CREATED within the period, those whose status is now COMPLETED; the cohort is what the period raised, not what fell due in it";
+  const overdueFormula = "follow-ups still open or scheduled whose due date is before the practice's today; OVERDUE is not a stored status (migration 196 has none on purpose) so it is derived from the clock at read time";
+  const completionFormula = "of the follow-ups raised within the period, those whose status is now COMPLETED; the cohort is what the period raised, not what fell due in it";
 
   const today = practiceToday(range.timezone);
   const [overdueRead, cohort] = await Promise.all([
@@ -1505,10 +1505,10 @@ export async function followUpIntelligence(
     concluded: outcomes.followUps,
     overdue, completion,
     byKind: distribution("by_kind", "What the follow-up is for", cohort, r => r.kind, FOLLOW_UP_KINDS,
-      "count of practice_follow_up rows raised in the period by practice_follow_up.kind",
+      "follow-ups raised in the period, by their type",
       ["practice_follow_up.kind", "practice_follow_up.created_at"], "follow-ups raised"),
     byPriority: distribution("by_priority", "How urgent", cohort, r => r.priority, FOLLOW_UP_PRIORITIES,
-      "count of practice_follow_up rows raised in the period by practice_follow_up.priority",
+      "follow-ups raised in the period, by their priority",
       ["practice_follow_up.priority", "practice_follow_up.created_at"], "follow-ups raised"),
   }, sources, problems);
 }
@@ -1573,7 +1573,7 @@ export async function documentIntelligence(
     "practice_clinical_document.doc_type", "practice_clinical_document.signed_at",
     "practice_incoming_document.received_on", "practice_incoming_document.status",
   ];
-  const incomingFormula = "count of practice_incoming_document rows received within the period by practice_incoming_document.status";
+  const incomingFormula = "documents received in the period, by their status";
   const incomingSources = ["practice_incoming_document.received_on", "practice_incoming_document.status"];
 
   if (!hasCapability(ctx, CAP_DOCUMENT_VIEW))
@@ -1614,15 +1614,15 @@ export async function documentIntelligence(
     signDelays.push((signed - created) / 86400000);
   }
 
-  const daysToSignFormula = `median of (practice_clinical_document.signed_at - .created_at) in days over documents created in the period and since signed; null below ${MIN_OBSERVATIONS_FOR_MEDIAN} valid observations. Measured from CREATION, which is what the record holds -- migration 195 has no authored_at, so a draft left open inflates this without anybody having been slow`;
+  const daysToSignFormula = `median of (signed date - created date) in days over documents created in the period and since signed; null below ${MIN_OBSERVATIONS_FOR_MEDIAN} valid observations. Measured from CREATION, which is what the record holds -- migration 195 has no authored_at, so a draft left open inflates this without anybody having been slow`;
   const daysToSignSources = ["practice_clinical_document.created_at", "practice_clinical_document.signed_at", "practice_clinical_document.status"];
 
   return intelModule("document_intelligence", "Document Intelligence", {
     byStatus: distribution("by_status", "Documents by status", read, r => r.status, DOCUMENT_STATUSES,
-      "count of practice_clinical_document rows created within the period by status",
+      "documents created in the period by status",
       ["practice_clinical_document.created_at", "practice_clinical_document.status"], "documents"),
     byType: distribution("by_type", "Documents by kind", read, r => r.doc_type, DOCUMENT_TYPES,
-      "count of practice_clinical_document rows created within the period by doc_type",
+      "documents created in the period, by their kind",
       ["practice_clinical_document.created_at", "practice_clinical_document.doc_type"], "documents"),
     unsigned: {
       key: "unsigned", label: "Documents written but not signed",
@@ -1631,7 +1631,7 @@ export async function documentIntelligence(
       status: unreadable ? "unreadable" : live.length === 0 ? "unknowable" : "ok",
       reason: unreadable ?? (live.length === 0 ? "no document was written in this period" : null),
       caveat: "A document created near the end of the period may simply not have been signed yet. Records voided as entered-in-error are excluded from both halves.",
-      formula: "practice_clinical_document rows created in the period whose status is DRAFT or FINAL, over all rows created in the period except ENTERED_IN_ERROR",
+      formula: "documents created in the period still in draft or final, over all documents created in the period except ENTERED_IN_ERROR",
       sources: ["practice_clinical_document.status", "practice_clinical_document.created_at"],
     },
     daysToSign: unreadable
@@ -1698,7 +1698,7 @@ export async function locationIntelligence(
     "practice_location.name", "practice_appointment.location_id",
     "practice_encounter.activity_id", "practice_activity.location_id",
   ];
-  const formula = "count of encounters started in the period grouped by the location of the practice_activity they ran inside; practice_encounter.location_id is deliberately NOT used because nothing in this product writes it";
+  const formula = "count of encounters started in the period grouped by the location of the activity they ran inside. The consultation's own location is not used, because nothing in this product records it";
   const encounterSources = ["practice_encounter.activity_id", "practice_activity.location_id", "practice_location.name"];
 
   if (!hasCapability(ctx, CAP_CALENDAR_VIEW))
@@ -1782,7 +1782,7 @@ export async function practiceGrowth(
   admin: any, ctx: WorkspaceContext, range: IntelRange, comparisons: IntelComparison[],
 ): Promise<IntelModule<PracticeGrowthData>> {
   const sources = ["practice_patient.created_at", "practice_patient.status", "practice_workspace.created_at"];
-  const cumulativeFormula = "count of all practice_patient rows whose status is not 'merged', with no date filter -- a running total, not a period count";
+  const cumulativeFormula = "every patient on the register, merged duplicates excluded, with no date filter -- a running total, not a period count";
   const cumulativeSources = ["practice_patient.status"];
 
   const problems: string[] = [];
@@ -2204,7 +2204,7 @@ export async function patientAttentionIntelligence(
   });
 
   const overdueProv = prov(
-    `count of DISTINCT patients holding at least one follow-up whose status is OPEN or SCHEDULED and whose due_on is earlier than ${today} in this practice's calendar; a patient owed three late reviews is counted once`,
+    `count of DISTINCT patients holding at least one follow-up whose status is OPEN or SCHEDULED and whose due date is earlier than ${today} in this practice's calendar; a patient owed three late reviews is counted once`,
     ["practice_follow_up.due_on", "practice_follow_up.status", "practice_follow_up.patient_id"],
   );
   const inactiveProv = prov(
@@ -2212,7 +2212,7 @@ export async function patientAttentionIntelligence(
     ["practice_patient.status", "practice_patient.created_at", "practice_encounter.started_at"],
   );
   const lostProv = prov(
-    `count of patients holding an OPEN or SCHEDULED follow-up whose due_on passed more than ${LOST_TO_FOLLOW_UP_AFTER_DAYS} days before ${today} AND who have had no encounter since that due date; ${LOST_TO_FOLLOW_UP_AFTER_DAYS} days is a choice made here, not a clinical standard`,
+    `count of patients holding an OPEN or SCHEDULED follow-up whose due date passed more than ${LOST_TO_FOLLOW_UP_AFTER_DAYS} days before ${today} AND who have had no encounter since that due date; ${LOST_TO_FOLLOW_UP_AFTER_DAYS} days is a choice made here, not a clinical standard`,
     ["practice_follow_up.due_on", "practice_follow_up.status", "practice_encounter.started_at"],
   );
 
@@ -2535,7 +2535,7 @@ export async function cohortIntelligence(
     if (!hasCapability(ctx, CAP_ENCOUNTER_LIST))
       return refuse(`${CAP_ENCOUNTER_LIST} is required to read diagnoses`);
     sources.push("practice_diagnosis.created_at", "practice_diagnosis.patient_id");
-    formula = `distinct patients holding a diagnosis recorded between ${range.period.fromDay} and ${range.period.toDay}, grouped by practice_diagnosis.label exactly as it was typed`;
+    formula = `distinct patients holding a diagnosis recorded between ${range.period.fromDay} and ${range.period.toDay}, grouped by the diagnosis exactly as it was typed`;
     read = await intelRows(inPeriod(admin.from("practice_diagnosis")
       .select("label, patient_id").eq("workspace_id", ctx.workspaceId), "created_at"));
     for (const r of read.rows) {
@@ -2564,8 +2564,8 @@ export async function cohortIntelligence(
     // list while wearing the label "this practice's patients".
     const bandedAt = practiceToday(range.timezone, atTime);
     formula = dim.key === "sex"
-      ? "every active patient on this practice's register, grouped by practice_patient.sex (migration 193's five values). Not scoped to the reporting period: sex is a property of a person, not of a visit"
-      : `every active patient on this practice's register, banded by age at ${bandedAt} from practice_patient.birth_date. Records with no date of birth are reported as unclassified rather than guessed at from an age estimate`;
+      ? "every active patient on this practice's register, grouped by the sex recorded for them (the five recorded values). Not scoped to the reporting period: sex is a property of a person, not of a visit"
+      : `every active patient on this practice's register, banded by age at ${bandedAt} from their date of birth. Records with no date of birth are reported as unclassified rather than guessed at from an age estimate`;
     read = await intelRows(admin.from("practice_patient")
       .select("id, sex, birth_date").eq("workspace_id", ctx.workspaceId).eq("status", "active"));
     const now = Date.parse(`${bandedAt}T00:00:00Z`);
@@ -2588,7 +2588,7 @@ export async function cohortIntelligence(
     if (!hasCapability(ctx, CAP_CALENDAR_VIEW))
       return refuse(`${CAP_CALENDAR_VIEW} is required to read the diary`);
     sources.push("practice_appointment.scheduled_at", "practice_appointment.patient_id", "practice_location.name");
-    formula = `distinct patients with an appointment scheduled between ${range.period.fromDay} and ${range.period.toDay}, grouped by practice_appointment.location_id; somebody seen at two sites is in both groups`;
+    formula = `distinct patients with an appointment scheduled between ${range.period.fromDay} and ${range.period.toDay}, grouped by where the appointment was; somebody seen at two sites is in both groups`;
     const [locRead, apptRead] = await Promise.all([
       intelRows(admin.from("practice_location").select("id, name").eq("workspace_id", ctx.workspaceId)),
       intelRows(inPeriod(admin.from("practice_appointment")
@@ -2807,7 +2807,7 @@ export async function recentReports(
   const base: RecentReportsData = {
     defined: [], status: "unknowable" as IntelStatus, reason: null,
     limitation: "These are report DEFINITIONS, not generated documents. Nothing here runs on a schedule: last run is set only when somebody presses Run now (migration 204).",
-    formula: "every practice_scheduled_report row for this practice, most recently run first",
+    formula: "every scheduled report for this practice, most recently run first",
     sources, fromDay: null, toDay: null, asOf: atTime.toISOString(), provenance: "computed",
   };
 
@@ -3214,8 +3214,8 @@ export async function referralIntelligence(
     asOf, provenance: "computed",
   });
 
-  const madeFormula = `count of practice_referral rows whose referred_on falls on or between ${range.period.fromDay} and ${range.period.toDay} in this practice's calendar; referred_on is a DATE column and is compared as days rather than as instants`;
-  const awaitingFormula = "count of practice_referral rows whose status is still `made`, whenever they were recorded; this is a live state as at now and is deliberately not windowed -- \"what have I heard nothing about\" does not stop being true because a reader picked a 30-day range";
+  const madeFormula = `referrals whose referral date falls on or between ${range.period.fromDay} and ${range.period.toDay} in this practice's calendar; referred_on is a DATE column and is compared as days rather than as instants`;
+  const awaitingFormula = "referrals whose status is still `made`, whenever they were recorded; this is a live state as at now and is deliberately not windowed -- \"what have I heard nothing about\" does not stop being true because a reader picked a 30-day range";
 
   const made = openable("referrals_made", "Referrals recorded in this period",
     `Referrals a practitioner wrote down between ${range.period.fromDay} and ${range.period.toDay}.`,
@@ -3228,7 +3228,7 @@ export async function referralIntelligence(
     made, byStatus: {
       key: "by_status", label: "What has since been heard", status: "unknowable", reason: null,
       slices: [], of: null, unrecorded: 0,
-      formula: "count of the period's practice_referral rows by practice_referral.status; the four are migration 238's CHECK constraint in full and every one is emitted even at zero",
+      formula: "the period's referrals, by their status; the four are the recorded statuses. Constraint in full and every one is emitted even at zero",
       sources: ["practice_referral.status", "practice_referral.referred_on"],
     },
     destinations: [], distinctDestinations: null, awaitingNews,
@@ -3423,10 +3423,10 @@ export async function medicationReview(
   });
 
   const dueFormula =
-    `count of practice_medication rows whose status is active or paused and whose next_review_on is on `
+    `medications that are active or paused and whose next_review_on is on `
     + `or before ${today} in the practice timezone (${range.timezone})`;
   const unscheduledFormula =
-    "count of practice_medication rows whose status is active or paused and whose next_review_on is null";
+    "medications that are active or paused and whose next_review_on is null";
 
   const dueForReview = openable("medication_due_for_review", "Medications due for review",
     `Still being taken, and the review date has arrived or passed as at ${today}.`,
@@ -3461,7 +3461,7 @@ export async function medicationReview(
     .some(e => typeof e === "string" && /does not exist|42P01|schema cache/i.test(e));
   if (storeAbsent)
     return intelUnavailable("medication_review", "Medication review",
-      "practice_medication does not exist on this deployment -- CPR-MED-001's store arrives with "
+      "medications are not stored on this deployment -- CPR-MED-001's store arrives with "
       + "migration 258, and it has not been applied here",
       sources);
 
@@ -3644,8 +3644,8 @@ export async function parameterAlertIntelligence(
   // OPEN IS A LIVE STATE AND IS NOT WINDOWED. An alert raised five weeks ago that nobody has
   // acknowledged is open now, and hiding it because a reader picked a 30-day range would make the
   // backlog shrink every time somebody narrowed the window.
-  const openFormula = "count of practice_parameter_alert rows whose status is `open` -- not acknowledged, not actioned, not overridden -- whenever they were raised; open is a live state and is deliberately not windowed";
-  const raisedFormula = `count of practice_parameter_alert rows whose raised_at falls inside ${range.period.label}`;
+  const openFormula = "alerts that are still open -- not acknowledged, not actioned, not overridden -- whenever they were raised; open is a live state and is deliberately not windowed";
+  const raisedFormula = `alerts raised inside ${range.period.label}`;
 
   const alertsHref = "/practice/patients";
   const open = openable("alerts_open", "Open parameter alerts",
@@ -3657,7 +3657,7 @@ export async function parameterAlertIntelligence(
       ["practice_parameter_alert.severity"], false));
   const vitalSigns = openable("alerts_vital_signs", "Open on a vital sign",
     "Open alerts whose parameter is categorised vital_sign. PIE §3 asks for vital-sign surveillance; this is what the parameter engine actually supports, and it covers only parameters somebody configured.",
-    alertsHref, prov(`${openFormula}, restricted to rows whose practice_parameter_definition.category is 'vital_sign'`,
+    alertsHref, prov(`${openFormula}, restricted to those measuring a vital sign`,
       ["practice_parameter_definition.category"], false));
   const actionable = ACTIONABLE_SEVERITIES.map(s => openable(
     `alerts_${s.key}`, s.label, s.definition, alertsHref,
@@ -3671,10 +3671,10 @@ export async function parameterAlertIntelligence(
   const data: ParameterAlertData = {
     open, notClassified, vitalSigns, actionable,
     bySeverity: emptyDistribution("by_severity", "How serious the rule said it was",
-      "count of OPEN practice_parameter_alert rows by practice_parameter_alert.severity; the four levels are migration 246's CHECK constraint in full and a NULL is counted under `not_classified`, which is a bucket rather than a level",
+      "open alerts, by their severity; the four levels are the recorded ones. Migration 246's CHECK constraint in full and a NULL is counted under `not_classified`, which is a bucket rather than a level",
       ["practice_parameter_alert.severity", "practice_parameter_alert.status"]),
     byType: emptyDistribution("by_type", "Which rule fired",
-      "count of OPEN practice_parameter_alert rows by practice_parameter_alert.alert_type; the seven are migration 246's CHECK constraint in full, which is LCP §7.2's list verbatim",
+      "open alerts, by their type; the seven are the recorded ones. Migration 246's CHECK constraint in full, which is LCP §7.2's list verbatim",
       ["practice_parameter_alert.alert_type", "practice_parameter_alert.status"]),
     acknowledged: {
       key: "acknowledged", label: "Alerts raised in this period that somebody has since answered",
