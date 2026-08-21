@@ -321,6 +321,23 @@ export default async function CurrentSessionPage() {
               Nothing is running right now. This page becomes your cockpit the moment you start an
               activity.
             </p>
+            {/* ⚠ PEOPLE WAITING ARE NOT A ZERO GRID, AND LEAVING THEM OUT MADE THIS A DEAD END.
+                The Planner links here in as many words -- "4 waiting · Manage in Current Session →" --
+                and with no session running this card said only "Nothing is running right now." Somebody
+                followed a pointer about four people and landed on a page that did not mention them.
+
+                This does not breach the rule the comment above states. That rule bans a large
+                operational dashboard of ZERO values wearing session clothes; a waiting count is a real,
+                non-zero, day-scoped fact, it renders only when there IS somebody waiting, and it says
+                what to do about it rather than sitting there as a figure. */}
+            {typeof m?.waiting.value === "number" && m.waiting.value > 0 && (
+              <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] font-semibold text-amber-900">
+                {m.waiting.value === 1
+                  ? "1 person is waiting."
+                  : `${m.waiting.value} people are waiting.`}{" "}
+                <span className="font-normal">Start an activity to open the queue.</span>
+              </p>
+            )}
             {(() => {
               // ⚠ THIS PREDICATE USED TO READ `startedAtIso`/`endedAtIso` -- fields PlannedActivity has
               // NEVER carried (they are startedAt/endedAt), behind an `(a: any)` that hid it. Both reads
