@@ -1,4 +1,4 @@
-import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
+import { practiceDayOf, practiceToday } from "@/lib/practice/practice-time";
 import { audit } from "@/lib/practice/audit";
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { type EngineResult } from "@/lib/practice/encounters";
@@ -1392,7 +1392,7 @@ export async function monitoringPlan(
     includeDefinitionIds?: string[];
   },
 ): Promise<MonitoringPlan> {
-  const today = options?.today ?? (await workspaceClock(admin, ctx.workspaceId)).today;
+  const today = options?.today ?? practiceToday(ctx.workspaceTimezone);
   const blank = (permitted: boolean, detail: string | null): MonitoringPlan => ({
     permitted,
     canRecord: permitted && hasCapability(ctx, CAP_RECORD),
@@ -1703,7 +1703,8 @@ export async function upsertPlanEntry(
   // server's day: one sliced a UTC timestamp, the other called todayIso(). In a practice three hours
   // ahead of UTC an evening entry set next_due_on a day early, so the plan asked for a repeat before
   // the interval it states had actually elapsed.
-  const { timezone: planTz, today: planToday } = await workspaceClock(admin, ctx.workspaceId);
+  const planTz = ctx.workspaceTimezone;
+  const planToday = practiceToday(planTz);
   const nextDueOn = computeNextDue({
     schedule: input.schedule ?? null,
     from: practiceDayOf(planTz, existing?.last_measured_at) ?? planToday,
@@ -2157,7 +2158,8 @@ export async function recordMeasurement(
   if (planRow) {
     // The day the practice measured it. effective_at is timestamptz; the comment above says the due
     // date is a fact about when it was last done, and that is the practice's calendar, not the server's.
-    const { timezone: measureTz, today: measureToday } = await workspaceClock(admin, ctx.workspaceId);
+    const measureTz = ctx.workspaceTimezone;
+  const measureToday = practiceToday(measureTz);
     const nextDue = computeNextDue({
       schedule: planRow.schedule,
       from: practiceDayOf(measureTz, row.effective_at as string) ?? measureToday,
@@ -2348,7 +2350,7 @@ export type EncounterCollection = {
 export async function encounterParameters(
   admin: any, ctx: WorkspaceContext, encounterId: string, options?: { today?: string },
 ): Promise<EncounterCollection> {
-  const today = options?.today ?? (await workspaceClock(admin, ctx.workspaceId)).today;
+  const today = options?.today ?? practiceToday(ctx.workspaceTimezone);
   const blank = (permitted: boolean, patientId: string | null, detail: string | null): EncounterCollection => ({
     permitted, canRecord: permitted && hasCapability(ctx, CAP_RECORD),
     canConfigure: permitted && hasCapability(ctx, CAP_CONFIGURE),

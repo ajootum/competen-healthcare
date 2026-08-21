@@ -46,6 +46,9 @@ const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const admin = createClient(url, key, { auth: { persistSession: false } });
 
 const ctxFor = (workspaceId: string, userId: string, caps: string[]): WorkspaceContext => ({
+  // ⚠ THE SAME SYMBOL THE WORKSPACE WAS PROVISIONED WITH, never a fresh literal -- a fixture
+  // whose ctx claims one zone while its row holds another tests a state that cannot exist.
+  workspaceTimezone: "Africa/Kampala",
   userId, workspaceId, workspaceName: "H", workspaceType: "individual_practice", workspaceStatus: "active",
   roleCodes: ["owner"], capabilities: caps, entitled: true, entitlementStatus: "trial",
   onboardingComplete: true, onboardingStep: null,

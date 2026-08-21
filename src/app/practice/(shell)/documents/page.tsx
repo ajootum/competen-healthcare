@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { documentsOverview } from "@/lib/practice/documents-workspace";
-import { workspaceClock } from "@/lib/practice/practice-time";
+import { practiceToday } from "@/lib/practice/practice-time";
 import { periodFromParams, allDatesTarget, periodLabel } from "@/lib/practice/period-range";
 import WorkspaceHeader from "./_workspace/WorkspaceHeader";
 import OverviewBoard from "./_workspace/OverviewBoard";
@@ -40,7 +40,7 @@ export default async function DocumentsOverviewPage({ searchParams }: {
   const sp = await searchParams;
   const one = (k: string) => { const v = sp[k]; return Array.isArray(v) ? v[0] : v; };
   const admin = createAdminClient();
-  const clock = await workspaceClock(admin, shell.ctx.workspaceId);
+  const clock = { timezone: shell.ctx.workspaceTimezone, today: practiceToday(shell.ctx.workspaceTimezone) };
 
   // ⚠ DEFAULT "All dates" -- this dashboard's existing behaviour, unchanged. See DocumentsNavigator.
   const period = periodFromParams(one, clock.today, allDatesTarget(clock.today));

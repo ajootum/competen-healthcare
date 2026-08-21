@@ -32,7 +32,7 @@ import { investigationCatalogue, encounterInvestigations } from "@/lib/practice/
 import { treatmentCapture } from "@/lib/practice/treatment-capture";
 import InvestigationCapture from "./InvestigationCapture";
 import TreatmentCapture from "./TreatmentCapture";
-import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
+import { practiceDayOf } from "@/lib/practice/practice-time";
 
 // /practice/encounters/{id} -- CPR-ENC-003's Clinical Decision Workspace.
 //
@@ -91,7 +91,7 @@ export default async function EncounterPage({ params }: { params: Promise<{ enco
   const admin = createAdminClient();
   // The practice's own day for every date rendered below. These were UTC slices of timestamptz
   // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
-  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
+  const timezone = shell.ctx.workspaceTimezone;
   const detail = await getEncounter(admin, shell.ctx.workspaceId, encounterId);
   if (!detail) notFound();
 

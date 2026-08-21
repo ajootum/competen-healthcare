@@ -5,7 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { reportsDashboard } from "@/lib/practice/document-generation";
 import { TEMPLATE_KINDS } from "@/lib/practice/document-constants";
-import { workspaceClock } from "@/lib/practice/practice-time";
+import { practiceToday } from "@/lib/practice/practice-time";
 import { periodFromParams, type PeriodTarget } from "@/lib/practice/period-range";
 import { REPORT_TEMPLATES, REPORT_CATEGORIES } from "@/lib/practice/report-templates";
 import ReportsNavigator from "./ReportsNavigator";
@@ -87,7 +87,7 @@ export default async function ReportsPage({ searchParams }: {
   const one = (k: string) => { const v = sp[k]; return Array.isArray(v) ? v[0] : v; };
   const from = one("from"), to = one("to"), days = one("days");
   const admin = createAdminClient();
-  const clock = await workspaceClock(admin, shell.ctx.workspaceId);
+  const clock = { timezone: shell.ctx.workspaceTimezone, today: practiceToday(shell.ctx.workspaceTimezone) };
 
   // ── THE PERIOD, AND WHY THE OLD PARAMETERS ARE READ FIRST ─────────────────────────────────────────
   //

@@ -672,6 +672,19 @@ async function main() {
   // A medication whose review falls due on the PRACTICE's today. On the server's day it is either
   // not yet due (zone ahead) or overdue by a day (zone behind) -- never exactly today.
   await admin.from("practice_workspace").update({ timezone: skewZone }).eq("id", wsA);
+  // ⚠ THE CONTEXT IS RE-RESOLVED, AND THE TEST IS WORTHLESS WITHOUT IT. WorkspaceContext now CARRIES
+  // the practice's timezone -- it is read from the membership join at authentication rather than fetched
+  // per call -- so medCtx above holds the zone as it was BEFORE this update. A real request resolves its
+  // context after the change; a fixture that reuses a stale one is testing the old zone and reporting
+  // the new one. This assertion passed for exactly that reason until the read moved onto the context.
+  const skewRes = await resolveWorkspaceContext(admin, USER_A, wsA);
+  if (!skewRes.ok) throw new Error("no context after skew");
+  const skewCtx: WorkspaceContext = {
+    ...skewRes.ctx, capabilities: [...new Set([...skewRes.ctx.capabilities, ...MEDICATION_CAPABILITIES])],
+  };
+  ok("10h-fixture-b. the re-resolved context carries the SKEWED zone, not the one it started with",
+    skewCtx.workspaceTimezone === skewZone,
+    `ctx says ${skewCtx.workspaceTimezone}, workspace was set to ${skewZone}`);
   const { data: dueMed, error: dueErr } = await admin.from(MEDICATION_TABLE).insert({
     workspace_id: wsA, patient_id: patient, generic_name: "ClockTestDrug",
     dose_text: "1 tab", status: "active", next_review_on: zoneDay,
@@ -681,11 +694,27 @@ async function main() {
   ok("10h-fixture. a medication exists with its review due on the practice's today",
     !!dueMed, dueErr ? `${dueErr.code}: ${dueErr.message}` : JSON.stringify(dueMed));
 
-  const skewed = await medicationWorklist(admin, medCtx);
+  const skewed = await medicationWorklist(admin, skewCtx);
   const dueIds = skewed.reviewsOverdue.permitted ? skewed.reviewsOverdue.items.map(r => r.id) : [];
   ok("10h. ⚠ a review due on the PRACTICE's today is on the worklist, whatever day the server is on",
     !!dueMed && dueIds.includes(dueMed.id),
     `worklist ran on ${skewZone}; server day ${utcDay}; ids ${JSON.stringify(dueIds)}`);
+
+  // ⚠ AND THE OTHER DIRECTION, BECAUSE 10h ALONE ONLY HAS TEETH ONE WAY. "Due today is listed" is
+  // satisfied by ANY zone whose day is at or past the fixture's -- so when the skew zone is BEHIND the
+  // stale one, a wrong zone passes it. A medication due TOMORROW in the practice's zone must not be
+  // listed, and that fails the moment the engine's day runs even one day ahead of the practice's. The
+  // pair pins the boundary exactly, at every hour, whichever way the skew points.
+  const { data: tomorrowMed, error: tomErr } = await admin.from(MEDICATION_TABLE).insert({
+    workspace_id: wsA, patient_id: patient, generic_name: "ClockTestTomorrow",
+    dose_text: "1 tab", status: "active",
+    next_review_on: new Date(Date.parse(`${zoneDay}T00:00:00Z`) + 86400000).toISOString().slice(0, 10),
+  }).select("id").maybeSingle();
+  const tomList = await medicationWorklist(admin, skewCtx);
+  const tomIds = tomList.reviewsOverdue.permitted ? tomList.reviewsOverdue.items.map(r => r.id) : [];
+  ok("10h-b. ⚠ a review due TOMORROW in the practice's zone is NOT on the worklist",
+    !!tomorrowMed && !tomIds.includes(tomorrowMed.id),
+    tomErr ? `${tomErr.code}: ${tomErr.message}` : JSON.stringify(tomIds));
 
   // CONTROL. 10h would pass against an engine that simply called everything due.
   const { data: futureMed, error: futureErr } = await admin.from(MEDICATION_TABLE).insert({
@@ -695,7 +724,7 @@ async function main() {
     // and a control that borrowed the engine's arithmetic would be the engine checking itself.
     next_review_on: new Date(Date.parse(`${zoneDay}T00:00:00Z`) + 3 * 86400000).toISOString().slice(0, 10),
   }).select("id").maybeSingle();
-  const after = await medicationWorklist(admin, medCtx);
+  const after = await medicationWorklist(admin, skewCtx);
   const afterIds = after.reviewsOverdue.permitted ? after.reviewsOverdue.items.map(r => r.id) : [];
   ok("10h-control-b. and one due three days out is NOT, so 10h is not counting everything",
     !!futureMed && !afterIds.includes(futureMed.id),
@@ -704,7 +733,7 @@ async function main() {
   // Put the fixture back, so nothing after this point inherits a skewed clock.
   await admin.from("practice_workspace").update({ timezone: "Africa/Kampala" }).eq("id", wsA);
   await admin.from(MEDICATION_TABLE).delete().in(
-    "id", [dueMed?.id, futureMed?.id].filter(Boolean) as string[]);
+    "id", [dueMed?.id, futureMed?.id, tomorrowMed?.id].filter(Boolean) as string[]);
 
   // ══ 11. TWO SUITES: the store-absent contract, or the full flow ═══════════════════════════════════
   if (!store.present) {

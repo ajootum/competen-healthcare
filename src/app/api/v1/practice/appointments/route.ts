@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { bookAppointment, loadDay } from "@/lib/practice/scheduling";
 import { appointmentNotice } from "@/lib/practice/messaging";
-import { workspaceClock, instantInZone, dueDateFrom } from "@/lib/practice/practice-time";
+import { instantInZone, dueDateFrom, practiceToday } from "@/lib/practice/practice-time";
 import { emitEvent } from "@/lib/mos/event";
 
 // GET  /api/v1/practice/appointments?date=YYYY-MM-DD -- the day's diary + live queue + blocks.
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   // No ?date= means "today" -- and today is the practice's, not the server's. Asking this route for
   // the day's appointments after 21:00 UTC in Kampala returned YESTERDAY's list with no indication.
   const date = req.nextUrl.searchParams.get("date")
-    ?? (await workspaceClock(auth.caller.admin, auth.ctx.workspaceId)).today;
+    ?? practiceToday(auth.ctx.workspaceTimezone);
   if (!DAY.test(date)) return NextResponse.json({ error: "date must be YYYY-MM-DD" }, { status: 400 });
 
   const day = await loadDay(auth.caller.admin, auth.ctx.workspaceId, date);
@@ -95,7 +95,7 @@ async function createAppointment(
   if (body.scheduledAt) {
     scheduledAt = String(body.scheduledAt);
   } else {
-    const { timezone } = await workspaceClock(auth.caller.admin, auth.ctx.workspaceId);
+    const timezone = auth.ctx.workspaceTimezone;
     const instant = instantInZone(String(body.date), String(body.time), timezone);
     if (!instant)
       return {

@@ -226,7 +226,7 @@ export async function createCharge(admin: any, ctx: WorkspaceContext, args: {
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 999)
     return fail(400, "VALIDATION_ERROR", "quantity must be between 1 and 999");
 
-  const chargedOn = args.chargedOn ?? practiceToday((await workspaceClock(admin, ctx.workspaceId)).timezone);
+  const chargedOn = args.chargedOn ?? practiceToday(ctx.workspaceTimezone);
   const { data, error } = await admin.from("practice_charge").insert({
     workspace_id: ctx.workspaceId, patient_id: patientId, encounter_id: encounterId,
     procedure_id: args.procedureId ?? null, service_fee_id: args.serviceFeeId ?? null,
@@ -342,7 +342,8 @@ export async function issueInvoice(admin: any, ctx: WorkspaceContext, args: {
   if (itemsErr) return fail(503, "ITEMS_UNAVAILABLE", `the line items could not be read: ${itemsErr.message}`);
   if ((items ?? []).length === 0) return fail(422, "EMPTY_INVOICE", "an invoice with no line items bills nobody for nothing");
 
-  const { timezone, today } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
+  const today = practiceToday(timezone);
   const year = Number(today.slice(0, 4));
   const { data: seq, error: seqErr } = await admin.rpc("practice_next_billing_number", {
     p_workspace_id: ctx.workspaceId, p_doc_kind: "invoice", p_doc_year: year,
@@ -491,7 +492,8 @@ export async function recordPayment(admin: any, ctx: WorkspaceContext, args: {
     return fail(400, "VALIDATION_ERROR", `the allocations were refused, so no payment was recorded: ${allocErr.message}`);
   }
 
-  const { timezone, today } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
+  const today = practiceToday(timezone);
   const year = Number(today.slice(0, 4));
   const { data: seq, error: seqErr } = await admin.rpc("practice_next_billing_number", {
     p_workspace_id: ctx.workspaceId, p_doc_kind: "receipt", p_doc_year: year,
@@ -600,14 +602,14 @@ export async function listInvoices(admin: any, ctx: WorkspaceContext, filter: {
     .select("id, invoice_number, status, patient_id, payer_kind, payer_label, currency, subtotal_minor, adjustment_total_minor, total_minor, issue_date, due_date, created_at, void_reason")
     .eq("workspace_id", ctx.workspaceId);
   if (filter.patientId) q = q.eq("patient_id", filter.patientId);
-  if (filter.fromDay) q = q.gte("created_at", zonedDayRange(filter.fromDay, (await workspaceClock(admin, ctx.workspaceId)).timezone).startIso);
-  if (filter.toDay) q = q.lt("created_at", zonedDayRange(filter.toDay, (await workspaceClock(admin, ctx.workspaceId)).timezone).endIso);
+  if (filter.fromDay) q = q.gte("created_at", zonedDayRange(filter.fromDay, ctx.workspaceTimezone).startIso);
+  if (filter.toDay) q = q.lt("created_at", zonedDayRange(filter.toDay, ctx.workspaceTimezone).endIso);
   const { data, error } = await q.order("created_at", { ascending: false }).limit(limit);
   if (error) return failed(`the invoices could not be read: ${error.message}`);
 
   const rows = (data ?? []) as any[];
   const allocated = await allocationsByInvoice(admin, ctx.workspaceId, rows.map(r => r.id));
-  const { today } = await workspaceClock(admin, ctx.workspaceId);
+  const today = practiceToday(ctx.workspaceTimezone);
   const withState = rows.map(r => ({
     ...r,
     allocatedMinor: allocated.get(r.id) ?? 0,
@@ -651,7 +653,8 @@ export async function paymentsOverview(admin: any, ctx: WorkspaceContext, opts: 
 } = {}) {
   if (!hasCapability(ctx, "billing.view"))
     return { permitted: false as const, unavailable: false, detail: null, byCurrency: [], recent: [] };
-  const { timezone, today } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
+  const today = practiceToday(timezone);
   const range = (col: string) => (q: any) => {
     let out = q;
     if (opts.fromDay) out = out.gte(col, zonedDayRange(opts.fromDay, timezone).startIso);
@@ -754,7 +757,7 @@ export async function outstandingBalances(admin: any, ctx: WorkspaceContext): Pr
 
   const rows = (data ?? []) as any[];
   const allocated = await allocationsByInvoice(admin, ctx.workspaceId, rows.map(r => r.id));
-  const { today } = await workspaceClock(admin, ctx.workspaceId);
+  const today = practiceToday(ctx.workspaceTimezone);
   const open = rows
     .map(r => ({ ...r, balanceMinor: Math.max(0, r.total_minor - (allocated.get(r.id) ?? 0)) }))
     .filter(r => r.balanceMinor > 0)
@@ -945,7 +948,8 @@ export async function recordSettlement(admin: any, ctx: WorkspaceContext, args: 
   }
   const rule = anyRuleSnapshot;
 
-  const { today, timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
+  const today = practiceToday(timezone);
   const year = Number(today.slice(0, 4));
   const { data: seq, error: seqErr } = await admin.rpc("practice_next_billing_number", {
     p_workspace_id: ctx.workspaceId, p_doc_kind: "settlement", p_doc_year: year,
@@ -1035,7 +1039,7 @@ export async function financialReportCsv(admin: any, ctx: WorkspaceContext, opts
   if (!hasCapability(ctx, "billing.export"))
     return fail(403, "FORBIDDEN", "exporting financial figures needs billing.export");
 
-  const { today } = await workspaceClock(admin, ctx.workspaceId);
+  const today = practiceToday(ctx.workspaceTimezone);
   const [overview, outstanding, settlements, receivables] = await Promise.all([
     paymentsOverview(admin, ctx, { fromDay: opts.fromDay, toDay: opts.toDay }),
     outstandingBalances(admin, ctx),

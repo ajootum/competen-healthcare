@@ -6,7 +6,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { audit } from "@/lib/practice/audit";
 import { formatMinor } from "@/lib/practice/billing-constants";
-import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
+import { practiceDayOf } from "@/lib/practice/practice-time";
 
 // CREDIT / ADJUSTMENT NOTE and REFUND NOTE -- CPR-PAY-002 s3's two Conditional documents.
 //
@@ -40,7 +40,7 @@ export default async function AdjustmentNotePage({ params }: {
   const admin = createAdminClient();
   // The practice's own day for every date rendered below. These were UTC slices of timestamptz
   // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
-  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
+  const timezone = shell.ctx.workspaceTimezone;
   // `as any`: the typed client cannot parse a concatenated select string with embeds.
   const { data: a }: { data: any } = await admin.from("practice_billing_adjustment")
     .select("id, kind, amount_minor, currency, reason, created_at, "

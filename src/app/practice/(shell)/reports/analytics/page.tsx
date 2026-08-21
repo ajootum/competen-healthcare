@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { practiceReport } from "@/lib/practice/reports";
-import { workspaceClock } from "@/lib/practice/practice-time";
+import { practiceToday } from "@/lib/practice/practice-time";
 import { periodFromParams, type PeriodTarget } from "@/lib/practice/period-range";
 import ReportsNavigator from "../ReportsNavigator";
 
@@ -38,7 +38,7 @@ export default async function ReportsPage({ searchParams }: {
   const one = (k: string) => { const v = sp[k]; return Array.isArray(v) ? v[0] : v; };
   const from = one("from"), to = one("to"), days = one("days");
   const admin = createAdminClient();
-  const clock = await workspaceClock(admin, shell.ctx.workspaceId);
+  const clock = { timezone: shell.ctx.workspaceTimezone, today: practiceToday(shell.ctx.workspaceTimezone) };
 
   // The same legacy mapping as /practice/reports, and for the same reason: `days=30` means THIRTY DAYS
   // INCLUSIVE in reports.ts, so it is a rolling window of twenty-nine BACK. See ReportsNavigator.

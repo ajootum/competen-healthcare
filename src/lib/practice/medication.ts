@@ -1,4 +1,4 @@
-import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
+import { practiceDayOf, practiceToday } from "@/lib/practice/practice-time";
 import { audit } from "@/lib/practice/audit";
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { type EngineResult } from "@/lib/practice/encounters";
@@ -686,7 +686,7 @@ export async function dosingMeasurement(
 export async function dosingWeight(
   admin: any, ctx: WorkspaceContext, patientId: string, todayIn?: string,
 ): Promise<{ verdict: WeightVerdict; measurement: DosingMeasurement }> {
-  const today = todayIn ?? (await workspaceClock(admin, ctx.workspaceId)).today;
+  const today = todayIn ?? practiceToday(ctx.workspaceTimezone);
   const measurement = await dosingMeasurement(admin, ctx, patientId, WEIGHT_PARAMETER_CODE);
   if (measurement.unavailable)
     return {
@@ -741,7 +741,7 @@ export async function dosingWeight(
 export async function dosingAge(
   admin: any, ctx: WorkspaceContext, patientId: string, todayIn?: string,
 ): Promise<AgeVerdict> {
-  const today = todayIn ?? (await workspaceClock(admin, ctx.workspaceId)).today;
+  const today = todayIn ?? practiceToday(ctx.workspaceTimezone);
   const { data, error } = await admin.from("practice_patient")
     .select("id, birth_date, age_estimate_years")
     .eq("id", patientId).eq("workspace_id", ctx.workspaceId).maybeSingle();
@@ -882,7 +882,7 @@ export async function patientMedications(
   // AND IT STAYS ABOVE THE CAPABILITY CHECK, unlike the three functions below, because the base payload
   // handed to a caller who is REFUSED carries the day itself in its weight and age lines. A refusal
   // still has to be coherent about what day it is.
-  const today = todayIn ?? (await workspaceClock(admin, ctx.workspaceId)).today;
+  const today = todayIn ?? practiceToday(ctx.workspaceTimezone);
   const base = {
     active: [] as MedicationRow[], past: [] as MedicationRow[],
     legacy: loaded<LegacyTreatment>([]),
@@ -1076,7 +1076,7 @@ export async function medicationTimeline(
     return { ...base, permitted: false, unavailable: false, detail: null, storeState: "present" };
 
   // After the refusal -- the base payload carries no date, so a denied caller costs no workspace read.
-  const today = todayIn ?? (await workspaceClock(admin, ctx.workspaceId)).today;
+  const today = todayIn ?? practiceToday(ctx.workspaceTimezone);
 
   const { data: med, error: mErr } = await admin.from(MEDICATION_TABLE)
     .select("*").eq("id", medicationId).eq("workspace_id", ctx.workspaceId).maybeSingle();
@@ -1161,7 +1161,7 @@ export async function medicationWorklist(
     };
 
   // After the refusal, for the same reason as the timeline above.
-  const today = todayIn ?? (await workspaceClock(admin, ctx.workspaceId)).today;
+  const today = todayIn ?? practiceToday(ctx.workspaceTimezone);
 
   const [reviewRes, verifyRes, overrideRes, nameRes] = await Promise.all([
     admin.from(MEDICATION_TABLE)
@@ -1299,7 +1299,7 @@ export async function recordMedication(
     duration_text: trim(input.durationText) || null, indication: trim(input.indication) || null,
     // The day the practice started it. started_on is permanent and every interval since is measured
     // from it, so a server day here shifts every review date that follows.
-    started_on: input.startedOn ?? (await workspaceClock(admin, ctx.workspaceId)).today,
+    started_on: input.startedOn ?? practiceToday(ctx.workspaceTimezone),
     prescriber: trim(input.prescriber) || null,
     recorded_source: source, status: "active",
     review_interval_days: input.reviewIntervalDays ?? null,
@@ -1386,7 +1386,7 @@ export async function changeMedication(
   if (!med) return fail(404, "NOT_FOUND", "no such medication");
 
   // The day the change happened, in the practice's calendar -- it lands in the append-only timeline.
-  const occurredOn = input.occurredOn ?? (await workspaceClock(admin, ctx.workspaceId)).today;
+  const occurredOn = input.occurredOn ?? practiceToday(ctx.workspaceTimezone);
   const patch: Record<string, unknown> = { updated_at: nowIso(), updated_by: input.actorId };
   const previous: Record<string, unknown> = {};
   const next: Record<string, unknown> = {};
@@ -1515,7 +1515,7 @@ export async function carryForwardTreatment(
 
   // The day the treatment was written, in the practice's zone. started_on lands in a permanent
   // clinical record; a consultation at 21:30 in Kampala would otherwise carry tomorrow's date.
-  const { timezone: carryTz } = await workspaceClock(admin, ctx.workspaceId);
+  const carryTz = ctx.workspaceTimezone;
 
   return await recordMedication(admin, ctx, {
     patientId: t.patient_id, encounterId: t.encounter_id, treatmentId: t.id,
@@ -1667,7 +1667,7 @@ export async function calculateDose(
     return fail(422, "VALIDATION_ERROR", `unknown dose basis "${input.basis}"`);
 
   // After the guards: a caller who is refused should not cost a workspace read.
-  const today = todayIn ?? (await workspaceClock(admin, ctx.workspaceId)).today;
+  const today = todayIn ?? practiceToday(ctx.workspaceTimezone);
 
   const basis = input.basis as DoseBasis;
   const needsWeight = (BASES_NEEDING_WEIGHT as readonly string[]).includes(basis);
@@ -1935,7 +1935,7 @@ export async function setMedicationReview(
   if (!med) return fail(404, "NOT_FOUND", "no such medication");
 
   const nextReviewOn = input.reviewIntervalDays
-    ? addDays(med.started_on ?? (await workspaceClock(admin, ctx.workspaceId)).today, input.reviewIntervalDays)
+    ? addDays(med.started_on ?? practiceToday(ctx.workspaceTimezone), input.reviewIntervalDays)
     : null;
 
   let followUpId: string | null = null;

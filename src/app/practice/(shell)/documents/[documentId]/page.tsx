@@ -11,7 +11,7 @@ import { LOCKED_DOCUMENT_STATUSES, DOC_TYPES } from "@/lib/practice/document-con
 import { logAccess } from "@/lib/practice/privacy";
 import DocumentConsole from "./DocumentConsole";
 import AiDraftPanel from "./AiDraftPanel";
-import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
+import { practiceDayOf } from "@/lib/practice/practice-time";
 
 // /practice/documents/{id} -- CPR-130's document workspace.
 //
@@ -38,7 +38,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ docum
   const admin = createAdminClient();
   // The practice's own day for every date rendered below. These were UTC slices of timestamptz
   // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
-  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
+  const timezone = shell.ctx.workspaceTimezone;
   const detail = await getDocument(admin, shell.ctx.workspaceId, documentId);
   if (!detail) notFound();
 

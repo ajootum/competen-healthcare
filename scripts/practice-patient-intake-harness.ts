@@ -501,6 +501,9 @@ async function main() {
   const { token: tokenF, phone: phoneF } = await freshPair();
   const slotC = new Date(Date.parse(slotA) + 7200000).toISOString();
   const patientCtx: WorkspaceContext = {
+    // ⚠ THE SAME SYMBOL THE WORKSPACE WAS PROVISIONED WITH, never a fresh literal -- a fixture
+    // whose ctx claims one zone while its row holds another tests a state that cannot exist.
+    workspaceTimezone: TZ,
     userId: "patient", workspaceId: ws, workspaceName: "", workspaceType: "", workspaceStatus: "active",
     roleCodes: [], capabilities: [], entitled: true, entitlementStatus: null,
     onboardingComplete: true, onboardingStep: null,

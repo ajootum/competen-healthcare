@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { offlineClinicalPayload } from "@/lib/practice/offline-clinical-source";
 import { offlineCacheGate } from "@/lib/practice/offline-gate";
-import { workspaceClock } from "@/lib/practice/practice-time";
+
 
 // GET /api/v1/practice/offline/clinical -- CP-OFFLINE-SURVEY-001 s9, the clinical carry.
 //
@@ -52,7 +52,7 @@ export async function GET() {
   // The practice's own clock, from the one helper that owns it. The horizon is a run of PRACTICE
   // calendar days, so a practitioner who has travelled two time zones still gets the same four days of
   // clinic rather than three and a bit.
-  const { timezone } = await workspaceClock(auth.caller.admin, auth.ctx.workspaceId);
+  const timezone = auth.ctx.workspaceTimezone;
   const result = await offlineClinicalPayload(auth.caller.admin, auth.ctx, { timezone });
 
   if (!result.ok)

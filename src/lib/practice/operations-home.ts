@@ -1,5 +1,5 @@
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
-import { workspaceClock, zonedDayRange, practiceDayOf } from "@/lib/practice/practice-time";
+import { zonedDayRange, practiceDayOf, practiceToday } from "@/lib/practice/practice-time";
 import { followUpBoard } from "@/lib/practice/follow-ups";
 import { taskBoard, listNotifications } from "@/lib/practice/tasks";
 import { unreviewedIncoming, unreadThreadCount } from "@/lib/practice/communication";
@@ -82,7 +82,8 @@ const ORDER: AttentionKind[] = [
 const daysSince = (iso: string, now: number) => Math.floor((now - Date.parse(iso)) / 86400000);
 
 export async function operationsHome(admin: any, ctx: WorkspaceContext) {
-  const { timezone, today } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
+  const today = practiceToday(timezone);
   const { startIso, endIso } = zonedDayRange(today, timezone);
   const now = Date.now();
 

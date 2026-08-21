@@ -1,7 +1,7 @@
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { LIVE_STATUSES } from "@/lib/practice/encounter-constants";
 import { todaysPlan } from "@/lib/practice/activity";
-import { workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
+import { zonedDayRange, practiceToday } from "@/lib/practice/practice-time";
 import { searchPatients } from "@/lib/practice/patients";
 import { logAccess } from "@/lib/practice/privacy";
 import { toTsQuery } from "@/lib/practice/search";
@@ -574,7 +574,7 @@ function resolveHistoryFilter(opts: LandingOptions, today: string): HistoryFilte
 export async function encountersLanding(
   admin: any, ctx: WorkspaceContext, opts: LandingOptions = {},
 ): Promise<EncountersLanding> {
-  const clock = await workspaceClock(admin, ctx.workspaceId);
+  const clock = { timezone: ctx.workspaceTimezone, today: practiceToday(ctx.workspaceTimezone) };
   const nowMs = (opts.at ?? new Date()).getTime();
   const can = (c: string) => hasCapability(ctx, c);
   const canList = can(CAP_LIST);

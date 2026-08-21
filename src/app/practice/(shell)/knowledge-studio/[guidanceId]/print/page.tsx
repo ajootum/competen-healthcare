@@ -6,7 +6,7 @@ import { hasCapability } from "@/lib/practice/access";
 import { getGuidance } from "@/lib/practice/knowledge";
 import { letterhead } from "@/lib/practice/document-generation";
 import { KNOWLEDGE_CAPABILITIES, GUIDANCE_ROUTE } from "@/lib/practice/knowledge-constants";
-import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
+import { practiceDayOf } from "@/lib/practice/practice-time";
 
 // /practice/knowledge-studio/[id]/print -- CPR-KS-001's Publishing Engine, as much of it as is true.
 //
@@ -42,7 +42,7 @@ export default async function PrintGuidancePage({ params }: {
   const admin = createAdminClient();
   // The practice's own day for every date rendered below. These were UTC slices of timestamptz
   // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
-  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
+  const timezone = shell.ctx.workspaceTimezone;
   const detail = await getGuidance(admin, shell.ctx.workspaceId, guidanceId);
   if (detail.state !== "ok" || !detail.document) redirect(GUIDANCE_ROUTE);
 

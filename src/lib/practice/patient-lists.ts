@@ -1,5 +1,5 @@
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
-import { workspaceClock, dueDateFrom, zonedDayRange } from "@/lib/practice/practice-time";
+import { dueDateFrom, zonedDayRange, practiceToday } from "@/lib/practice/practice-time";
 import { logAccess } from "@/lib/practice/privacy";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -108,7 +108,8 @@ export async function patientList(admin: any, ctx: WorkspaceContext, opts: {
   correlationId?: string;
 }): Promise<PatientListResult> {
   const view = opts.view === "seen" ? "seen" : "booked";
-  const { timezone, today } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
+  const today = practiceToday(timezone);
   const def = defaultWindow(view, today);
   const isDay = (d: unknown): d is string => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d);
   const fromDate = isDay(opts.fromDate) ? opts.fromDate : def.from;

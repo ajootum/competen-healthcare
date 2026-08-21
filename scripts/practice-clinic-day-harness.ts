@@ -51,7 +51,10 @@ const ALL_CAPS = [
 ];
 const ctx = (workspaceId: string, caps = ALL_CAPS): WorkspaceContext => ({
   userId: DOCTOR, workspaceId, workspaceName: "Clinic", workspaceType: "individual_practice",
-  workspaceStatus: "active", roleCodes: ["owner"], capabilities: caps, entitled: true,
+  workspaceStatus: "active",
+  // ⚠ THE SAME SYMBOL THE WORKSPACE WAS PROVISIONED WITH, never a fresh literal -- a fixture
+  // whose ctx claims one zone while its row holds another tests a state that cannot exist.
+  workspaceTimezone: TZ, roleCodes: ["owner"], capabilities: caps, entitled: true,
   entitlementStatus: "trial", onboardingComplete: true, onboardingStep: null,
 });
 

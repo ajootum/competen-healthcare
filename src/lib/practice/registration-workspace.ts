@@ -2,7 +2,7 @@ import { audit } from "@/lib/practice/audit";
 import { emitAudited } from "@/lib/practice/events";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { type WorkspaceContext } from "@/lib/practice/access";
-import { practiceToday, workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
+import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
 import { ageFrom, MAJORITY_AGE } from "@/lib/practice/relationships";
 import { resolveTemplate } from "@/lib/practice/registration-config";
 
@@ -63,7 +63,7 @@ export const REFUSED_ON_THIS_SCREEN = [
  * has nothing to replace it with rather than a substitute figure.
  */
 export async function registrationWorkspace(admin: any, ctx: WorkspaceContext) {
-  const { timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
   const today = practiceToday(timezone);
   const { startIso, endIso } = zonedDayRange(today, timezone);
 
@@ -286,7 +286,7 @@ export async function listDrafts(admin: any, ctx: WorkspaceContext) {
     .order("updated_at", { ascending: false }).limit(20);
   if (error) throw new Error(`drafts could not be read: ${error.message}`);
 
-  const { timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
   const today = practiceToday(timezone);
   return ((data ?? []) as any[]).map(d => ({
     ...d,

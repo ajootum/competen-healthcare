@@ -7,7 +7,7 @@ import {
   facilityReceivables, listSettlements,
 } from "@/lib/practice/billing";
 import { listLocations } from "@/lib/practice/configuration";
-import { workspaceClock } from "@/lib/practice/practice-time";
+import { practiceToday } from "@/lib/practice/practice-time";
 import { periodFromParams, allDatesTarget, periodLabel } from "@/lib/practice/period-range";
 import PaymentsConsole from "./PaymentsConsole";
 import PaymentsNavigator from "./PaymentsNavigator";
@@ -42,8 +42,8 @@ export default async function PaymentsPage({ searchParams }: {
   const admin = createAdminClient();
   // The practice's zone, handed to the client console below -- a client component has no workspace
   // clock of its own, and the browser's zone is the READER's, not the practice's.
-  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
-  const clock = await workspaceClock(admin, shell.ctx.workspaceId);
+  const timezone = shell.ctx.workspaceTimezone;
+  const clock = { timezone, today: practiceToday(timezone) };
   // Money answers "over what period" -- but the default is everything, the same protective default
   // the activity portfolio chose: a this-month default would hide every older balance on day one.
   const period = periodFromParams(one, clock.today, allDatesTarget(clock.today));

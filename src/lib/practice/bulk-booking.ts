@@ -2,7 +2,7 @@ import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { bookableTimes, type BookableSlot } from "@/lib/practice/patient-booking";
 import { bookAppointment } from "@/lib/practice/scheduling";
 import { loadTaxonomy, type Taxonomy } from "@/lib/practice/taxonomy";
-import { workspaceClock, dueDateFrom, zonedDayRange } from "@/lib/practice/practice-time";
+import { dueDateFrom, zonedDayRange, practiceToday } from "@/lib/practice/practice-time";
 import { isStaffBookableMode } from "@/lib/practice/practice-session-constants";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -100,7 +100,8 @@ export async function bulkAvailability(admin: any, ctx: WorkspaceContext, opts: 
   /** The visit type whose duration decides the slot length. Defaults to the practice default. */
   visitTypeId?: string | null;
 }): Promise<BulkAvailability> {
-  const { timezone, today } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
+  const today = practiceToday(timezone);
   const range = opts.preset && opts.preset !== "custom"
     ? presetRange(opts.preset, today)
     : { from: opts.fromDate ?? today, to: opts.toDate ?? dueDateFrom(today, 6) };

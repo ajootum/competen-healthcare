@@ -7,7 +7,7 @@ import { recentlyTouched } from "@/lib/practice/search";
 import { runSearch, listSavedSearches, recentSearches, quickSearches } from "@/lib/practice/saved-search";
 import SearchBox from "./SearchBox";
 import SearchSidebar from "./SearchSidebar";
-import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
+import { practiceDayOf } from "@/lib/practice/practice-time";
 
 // /practice/search -- CPR-350.
 //
@@ -35,7 +35,7 @@ export default async function SearchPage({ searchParams }: {
   const admin = createAdminClient();
   // The practice's own day for every date rendered below. These were UTC slices of timestamptz
   // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
-  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
+  const timezone = shell.ctx.workspaceTimezone;
   const query = (q ?? "").trim();
 
   const from = (fromDay ?? "").trim() || null;

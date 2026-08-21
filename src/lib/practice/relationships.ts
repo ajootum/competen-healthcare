@@ -1,7 +1,7 @@
 import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { type WorkspaceContext } from "@/lib/practice/access";
-import { practiceToday, workspaceClock } from "@/lib/practice/practice-time";
+import { practiceToday } from "@/lib/practice/practice-time";
 
 // CPR-PRM-001 s6 RELATIONSHIP MANAGEMENT, s10 CONSENT, s4 PREFERENCES AND TAGS.
 //
@@ -162,7 +162,7 @@ export async function patientRelationships(admin: any, ctx: WorkspaceContext, pa
     .eq("id", patientId).eq("workspace_id", ctx.workspaceId).maybeSingle();
   if (!patient) return null;
 
-  const { timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
   const today = practiceToday(timezone);
 
   const [{ data: relationships }, { data: consents }] = await Promise.all([
@@ -294,7 +294,7 @@ export async function endRelationship(admin: any, ctx: WorkspaceContext, args: {
     .select("id, patient_id, effective_from").eq("id", args.id).eq("workspace_id", ctx.workspaceId).maybeSingle();
   if (!r) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
-  const { timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
   const on = args.on ?? practiceToday(timezone);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(on))
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a date (YYYY-MM-DD) is required" };
@@ -416,7 +416,7 @@ export async function updatePatientAdmin(admin: any, ctx: WorkspaceContext, args
  * having run overnight.
  */
 export async function relationshipGaps(admin: any, ctx: WorkspaceContext, limit = 100) {
-  const { timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
   const today = practiceToday(timezone);
 
   const { data: patients } = await admin.from("practice_patient")

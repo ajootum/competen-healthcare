@@ -5,7 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { getThread, markThreadRead } from "@/lib/practice/communication";
 import Reply from "./Reply";
-import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
+import { practiceDayOf } from "@/lib/practice/practice-time";
 
 // /practice/messages/{id} -- one conversation.
 //
@@ -29,7 +29,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ threadI
   const admin = createAdminClient();
   // The practice's own day for every date rendered below. These were UTC slices of timestamptz
   // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
-  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
+  const timezone = shell.ctx.workspaceTimezone;
   const detail = await getThread(admin, shell.ctx.workspaceId, threadId);
   if (!detail) notFound();
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { locationForDay } from "@/lib/practice/session-location";
-import { workspaceClock } from "@/lib/practice/practice-time";
+
 
 // GET /api/v1/practice/follow-ups/place-for-day?date=YYYY-MM-DD
 //
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date))
     return NextResponse.json({ error: "date must be YYYY-MM-DD" }, { status: 400 });
 
-  const { timezone } = await workspaceClock(auth.caller.admin, auth.ctx.workspaceId);
+  const timezone = auth.ctx.workspaceTimezone;
   const place = await locationForDay(auth.caller.admin, auth.ctx.workspaceId, date, timezone);
 
   let facilityId: string | null = null;

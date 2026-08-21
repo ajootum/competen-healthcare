@@ -3,7 +3,7 @@ import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { editableEncounter, type EngineResult } from "@/lib/practice/encounters";
 import { LIVE_STATUSES, LOCKED_STATUSES } from "@/lib/practice/encounter-constants";
 import { todaysPlan } from "@/lib/practice/activity";
-import { workspaceClock } from "@/lib/practice/practice-time";
+import { practiceToday } from "@/lib/practice/practice-time";
 import {
   REFERRAL_STATUS_CODES, encounterWarnings, type EncounterWarning,
 } from "@/lib/practice/encounter-workspace-constants";
@@ -174,7 +174,7 @@ const ENCOUNTER_COLUMNS =
 export async function encountersDashboard(
   admin: any, ctx: WorkspaceContext, opts: { at?: Date; closedLimit?: number } = {},
 ): Promise<EncountersDashboard> {
-  const clock = await workspaceClock(admin, ctx.workspaceId);
+  const clock = { timezone: ctx.workspaceTimezone, today: practiceToday(ctx.workspaceTimezone) };
   const nowMs = (opts.at ?? new Date()).getTime();
   const can = (c: string) => hasCapability(ctx, c);
 

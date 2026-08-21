@@ -38,6 +38,9 @@ const ALL = ["practice.home.view", "appointment.manage", "task.view", "followup.
   "queue.manage", "practice.calendar.view", "inbox.record", "encounter.list"];
 
 const ctxFor = (workspaceId: string, caps: string[] = ALL): WorkspaceContext => ({
+  // ⚠ THE SAME SYMBOL THE WORKSPACE WAS PROVISIONED WITH, never a fresh literal -- a fixture
+  // whose ctx claims one zone while its row holds another tests a state that cannot exist.
+  workspaceTimezone: "Africa/Kampala",
   userId: USER, workspaceId, workspaceName: "H", workspaceType: "individual_practice",
   workspaceStatus: "active", roleCodes: ["owner"], capabilities: caps, entitled: true,
   entitlementStatus: "trial", onboardingComplete: true, onboardingStep: null,

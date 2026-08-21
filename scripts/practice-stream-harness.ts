@@ -38,6 +38,9 @@ const A = "00000000-0000-4000-8000-00000000f001";
 const B = "00000000-0000-4000-8000-00000000f002";
 
 const ctxFor = (workspaceId: string, userId: string): WorkspaceContext => ({
+  // ⚠ THE SAME SYMBOL THE WORKSPACE WAS PROVISIONED WITH, never a fresh literal -- a fixture
+  // whose ctx claims one zone while its row holds another tests a state that cannot exist.
+  workspaceTimezone: "Africa/Kampala",
   userId, workspaceId, workspaceName: "S", workspaceType: "individual_practice", workspaceStatus: "active",
   roleCodes: ["owner"], capabilities: ["practice.home.view"], entitled: true, entitlementStatus: "trial",
   onboardingComplete: true, onboardingStep: null,

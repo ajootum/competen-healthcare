@@ -9,7 +9,7 @@ import { loadTaxonomy, validateChoice, deriveBookingSource } from "@/lib/practic
 import { bookAppointment, checkPlacement } from "@/lib/practice/scheduling";
 import { bookableTimes, type BookableSlot } from "@/lib/practice/patient-booking";
 import { defaultAppointmentMinutes } from "@/lib/practice/configuration";
-import { practiceToday, workspaceClock } from "@/lib/practice/practice-time";
+import { practiceToday } from "@/lib/practice/practice-time";
 import { resolveTemplate, validateSubmission } from "@/lib/practice/registration-config";
 import { audit } from "@/lib/practice/audit";
 
@@ -79,7 +79,7 @@ export type RegistrationInput = {
 export async function registrationForm(admin: any, ctx: WorkspaceContext, context: {
   specialty?: string | null; country?: string | null; practiceType?: string | null;
 } = {}) {
-  const { timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
   const resolved = await resolveTemplate(admin, ctx, context);
   return {
     today: practiceToday(timezone),
@@ -100,7 +100,7 @@ export async function registrationForm(admin: any, ctx: WorkspaceContext, contex
  * differ.
  */
 export async function ageForForm(admin: any, ctx: WorkspaceContext, birthDate: string) {
-  const { timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
   const today = practiceToday(timezone);
   const age = ageFrom(birthDate, today);
   return { today, age, isMinor: age ? age.years < MAJORITY_AGE : null };
@@ -131,7 +131,7 @@ async function prepareRegistration(admin: any, ctx: WorkspaceContext, input: Reg
   if (!displayName)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a name is required" };
 
-  const { timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
   const today = practiceToday(timezone);
   const age = ageFrom(input.birthDate ?? null, today);
 

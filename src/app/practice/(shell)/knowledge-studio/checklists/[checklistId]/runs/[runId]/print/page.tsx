@@ -7,7 +7,7 @@ import { letterhead } from "@/lib/practice/document-generation";
 import {
   CHECKLIST_CAPABILITIES, CHECKLIST_ROUTE, CHECKLIST_RESPONSE_SWATCH, checklistResponse,
 } from "@/lib/practice/checklist-constants";
-import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
+import { practiceDayOf } from "@/lib/practice/practice-time";
 
 // /practice/knowledge-studio/checklists/[id]/runs/[runId]/print -- the completion record on paper.
 //
@@ -34,7 +34,7 @@ export default async function PrintChecklistRunPage({ params }: {
   const admin = createAdminClient();
   // The practice's own day for every date rendered below. These were UTC slices of timestamptz
   // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
-  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
+  const timezone = shell.ctx.workspaceTimezone;
   const detail = await getChecklistRun(admin, shell.ctx.workspaceId, runId);
   if (detail.state !== "ok" || !detail.run) redirect(`${CHECKLIST_ROUTE}/${checklistId}`);
 

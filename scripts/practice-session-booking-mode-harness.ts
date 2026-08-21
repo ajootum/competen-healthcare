@@ -322,6 +322,9 @@ async function main() {
   const bookAsPatient = async (scheduledAt: string, over: Record<string, any> = {}) => {
     const { token, phone, sessionId } = await freshPair(ws);
     const patientCtx: WorkspaceContext = {
+      // ⚠ THE SAME SYMBOL THE WORKSPACE WAS PROVISIONED WITH, never a fresh literal -- a fixture
+      // whose ctx claims one zone while its row holds another tests a state that cannot exist.
+      workspaceTimezone: TZ,
       userId: sessionId, workspaceId: ws, workspaceName: "", workspaceType: "", workspaceStatus: "active",
       roleCodes: [], capabilities: [], entitled: true, entitlementStatus: null,
       onboardingComplete: true, onboardingStep: null,

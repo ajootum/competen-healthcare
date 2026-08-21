@@ -1,5 +1,5 @@
 import { type WorkspaceContext } from "@/lib/practice/access";
-import { practiceToday, workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
+import { practiceToday, zonedDayRange } from "@/lib/practice/practice-time";
 import { ageFrom } from "@/lib/practice/relationships";
 import { channelSettings } from "@/lib/practice/messaging";
 
@@ -93,7 +93,7 @@ const asDuration = (mins: number) => {
  * fetches would let them disagree with each other mid-render.
  */
 export async function calendarDay(admin: any, ctx: WorkspaceContext, dayIso?: string) {
-  const { timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
   const today = practiceToday(timezone);
   const day = dayIso && /^\d{4}-\d{2}-\d{2}$/.test(dayIso) ? dayIso : today;
   // THE PRACTICE'S OWN DAY. See the header.
@@ -277,7 +277,7 @@ export async function patientDrawer(admin: any, ctx: WorkspaceContext, patientId
     .eq("id", patientId).eq("workspace_id", ctx.workspaceId).maybeSingle();
   if (!patient) return null;
 
-  const { timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
   const today = practiceToday(timezone);
 
   const [{ data: identifiers }, { data: contacts }, { data: encounters }, { data: diagnoses }, { data: followUps }] =

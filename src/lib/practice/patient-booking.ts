@@ -388,8 +388,10 @@ export async function submitBookingRequest(admin: any, args: {
   // ⚠ THE OPPOSITE DECISION FROM bookAppointment, DELIBERATELY, AND BOTH ARE THE OWNER'S. A
   // practitioner booking their own late clinic is ALLOWED AND WARNED -- refusing would argue with the
   // person who knows. A stranger asking for 22:00 on a Sunday is not offered one at all.
+  // Hoisted out of the block below because the patient context further down needs the same value --
+  // one workspace read, and the two cannot drift apart.
+  const { timezone } = await workspaceClock(admin, p.workspaceId);
   {
-    const { timezone } = await workspaceClock(admin, p.workspaceId);
     const where = await locationFromRegularWeek(admin, p.workspaceId, args.scheduledAt, timezone);
     if (where.outsideRegularWeek)
       return { ok: false, status: 422, code: "TIME_NOT_OFFERED", message: "that time is not offered here" };
@@ -409,6 +411,10 @@ export async function submitBookingRequest(admin: any, args: {
     userId: proof.proof.sessionId,
     workspaceId: p.workspaceId,
     workspaceName: "", workspaceType: "", workspaceStatus: "active",
+    // The practice's zone, resolved above for this same request. A patient booking is evaluated
+    // against rules that turn on dates -- whether they are a child today, most of all -- and those
+    // dates are the PRACTICE's, not the server's and not the patient's browser's.
+    workspaceTimezone: timezone,
     roleCodes: [],
     // ⚠ EMPTY, AND IT MUST STAY EMPTY. A patient holds no capability. bookUnderRules substitutes the
     // session proof for the capability test on this channel alone.

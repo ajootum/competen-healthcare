@@ -17,7 +17,7 @@ import { loadDay } from "@/lib/practice/scheduling";
 import { calendarDay, SLOT_KINDS } from "@/lib/practice/calendar";
 import { bookingLocations, locationDay } from "@/lib/practice/hospital-booking";
 import { timelineDay } from "@/lib/practice/timeline";
-import { workspaceClock, zonedDayRange } from "@/lib/practice/practice-time";
+import { zonedDayRange, practiceToday } from "@/lib/practice/practice-time";
 import { plannerHref } from "./planner-ui";
 import PlannerWorkspace from "./PlannerWorkspace";
 import MobileDefaultView from "./MobileDefaultView";
@@ -80,7 +80,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   // ⚠ THE PRACTICE'S TODAY, BEFORE ANYTHING ELSE. "This week" and "Today" are computed from the
   // practice's own calendar day, not the server's: in Kampala they are different days for three hours
   // every morning, and those are the three hours somebody opens this screen to see what is on.
-  const { today } = await workspaceClock(admin, shell.ctx.workspaceId);
+  const today = practiceToday(shell.ctx.workspaceTimezone);
 
   // ---- CP-PLAN-002 s3: WHICH DAYS ARE BEING LOOKED AT ----
   //

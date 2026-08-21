@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { recordProcedureBatch, MAX_PENDING_PROCEDURES } from "@/lib/practice/procedure-capture";
-import { workspaceClock, instantInZone } from "@/lib/practice/practice-time";
+import { instantInZone } from "@/lib/practice/practice-time";
 
 // POST /api/v1/practice/procedures/batch -- CP-ENC-PROC-001's working set.
 //
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   // `scheduledAt` is still accepted for a caller holding a REAL instant, exactly as bookAppointment
   // does -- but a refusal is returned rather than a guess when a wall clock cannot be read, because
   // the alternative is a procedure scheduled at a time nobody chose.
-  const { timezone } = await workspaceClock(auth.caller.admin, auth.ctx.workspaceId);
+  const timezone = auth.ctx.workspaceTimezone;
   const composed: (string | undefined)[] = [];
   for (const r of raw as Record<string, unknown>[]) {
     const asInstant = str(r.scheduledAt);

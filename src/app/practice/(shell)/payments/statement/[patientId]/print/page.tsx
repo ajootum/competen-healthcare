@@ -7,7 +7,7 @@ import { hasCapability } from "@/lib/practice/access";
 import { patientStatement } from "@/lib/practice/billing";
 import { audit } from "@/lib/practice/audit";
 import { formatMinor } from "@/lib/practice/billing-constants";
-import { workspaceClock } from "@/lib/practice/practice-time";
+import { practiceToday } from "@/lib/practice/practice-time";
 
 // The patient statement print view -- CPR-PAY-002 s10. THE PRINT VIEW IS THE PDF (the invoice
 // page's policy). A statement is a PERIOD SUMMARY derived at generation time from the same rows
@@ -34,7 +34,7 @@ export default async function StatementPrintPage({ params, searchParams }: {
   // ⚠ THE PERIOD PRINTED ON A STATEMENT, so it is the practice's calendar. With no ?from/?to this
   // defaults to "the first of this month, to today" -- on the server's day, a statement printed in the
   // small hours of the 1st in Kampala covered the whole of the PREVIOUS month and called it this one.
-  const { today } = await workspaceClock(admin, shell.ctx.workspaceId);
+  const today = practiceToday(shell.ctx.workspaceTimezone);
   const fromDay = isDay(sp.from) ? sp.from! : today.slice(0, 8) + "01";
   const toDay = isDay(sp.to) ? sp.to! : today;
   const result = await patientStatement(admin, shell.ctx, { patientId, fromDay, toDay });

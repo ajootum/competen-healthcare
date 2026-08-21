@@ -1,7 +1,7 @@
 import { audit } from "@/lib/practice/audit";
 import type { EngineResult } from "@/lib/practice/encounters";
 import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
-import { practiceToday, workspaceClock, practiceDayOf } from "@/lib/practice/practice-time";
+import { practiceToday, practiceDayOf } from "@/lib/practice/practice-time";
 
 // CPR-240 PROFESSIONAL PORTFOLIO.
 //
@@ -404,7 +404,7 @@ export async function removeEntry(admin: any, ctx: WorkspaceContext, args: {
  */
 async function coverage(admin: any, ctx: WorkspaceContext) {
   // The practice's own clock, for every date this function prints. See workspaceCreated below.
-  const { timezone: coverageTimezone } = await workspaceClock(admin, ctx.workspaceId);
+  const coverageTimezone = ctx.workspaceTimezone;
   const earliestOf = async (table: string, column: string, userColumn: string) => {
     const { data } = await admin.from(table).select(column)
       .eq("workspace_id", ctx.workspaceId).eq(userColumn, ctx.userId)
@@ -480,7 +480,7 @@ async function declaredEntries(admin: any, userId: string, today: string) {
 }
 
 export async function buildPortfolio(admin: any, ctx: WorkspaceContext) {
-  const { timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
   const today = practiceToday(timezone);
 
   const [

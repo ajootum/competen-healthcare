@@ -7,7 +7,7 @@ import {
   patientsWorkspace, worklists, myPatients, patientSummary, familyRelationships, universalSearch,
 } from "@/lib/practice/patient-workspace";
 import { WORKLIST_KEYS, DEFAULT_PAGE_SIZE } from "@/lib/practice/patient-workspace-constants";
-import { workspaceClock } from "@/lib/practice/practice-time";
+import { practiceToday } from "@/lib/practice/practice-time";
 import { PERIOD_PARAMS, periodFromParams, allDatesTarget } from "@/lib/practice/period-range";
 import PatientsScreen from "./PatientsScreen";
 import RegisterNavigator from "./RegisterNavigator";
@@ -85,7 +85,7 @@ export default async function PatientsPage({ searchParams }: {
   const admin = createAdminClient();
   const ctx = shell.ctx;
   const canCreate = hasCapability(ctx, "patient.create");
-  const clock = await workspaceClock(admin, ctx.workspaceId);
+  const clock = { timezone: ctx.workspaceTimezone, today: practiceToday(ctx.workspaceTimezone) };
 
   // ⚠ THE REGISTER'S PERIOD, ON REGISTRATION DATE, AND DEFAULTING TO "All dates" -- which is what this
   // screen has always shown. See RegisterNavigator: a patient is not an event, so this is the only date

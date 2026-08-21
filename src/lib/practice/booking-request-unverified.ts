@@ -182,6 +182,7 @@ import {
   type VerificationState, type QueuedRequest,
 } from "@/lib/practice/booking-request-constants";
 import type { WorkspaceContext } from "@/lib/practice/access";
+import { workspaceClock } from "@/lib/practice/practice-time";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -465,10 +466,15 @@ export async function submitUnverifiedRequest(
   // resolver existing. Its `refusals` are ignored on purpose -- see property 4 in this file's header --
   // but an `ok: false` is NOT ignored, because that is an outage, a rule conflict, or a practice that has
   // been archived or closed, and none of those may quietly become a stored request.
+  // The practice's zone. The rules this context is handed to resolve required_information, and some
+  // of that turns on a date -- so it has to be the practice's calendar even for a request from
+  // somebody who has proved nothing at all.
+  const { timezone: requestTz } = await workspaceClock(admin, p.workspaceId);
   const patientCtx: WorkspaceContext = {
     userId: "unverified-request",
     workspaceId: p.workspaceId,
     workspaceName: "", workspaceType: "", workspaceStatus: "active",
+    workspaceTimezone: requestTz,
     roleCodes: [],
     // ⚠ EMPTY, AND IT MUST STAY EMPTY. A patient holds no capability, and somebody who has proved nothing
     // at all holds even less.
@@ -642,6 +648,8 @@ export async function intakeQuestionsFor(admin: any, args: {
 
   const ctx: WorkspaceContext = {
     userId: "booking-form", workspaceId: p.workspaceId,
+    // Same reason as submitUnverifiedRequest above: the questions a form asks can depend on a date.
+    workspaceTimezone: (await workspaceClock(admin, p.workspaceId)).timezone,
     workspaceName: "", workspaceType: "", workspaceStatus: "active",
     roleCodes: [], capabilities: [],
     entitled: true, entitlementStatus: null, onboardingComplete: true, onboardingStep: null,

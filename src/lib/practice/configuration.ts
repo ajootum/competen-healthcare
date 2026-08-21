@@ -10,9 +10,17 @@ import { LOCATION_COLOR_SLOTS, isLocationColorSlot } from "@/lib/practice/planne
 //
 // This is the reason this module needed care rather than a form. The whole product derives from the
 // practice clock: CPR-140 computes overdue from due_on against today, CPR-300 builds the day window,
-// CPR-330 resolves reporting periods. All of them read practice_workspace.timezone AT READ TIME. So
-// correcting a timezone does not just change the future -- it changes what every one of those
-// calculations would have said, for every date already recorded.
+// CPR-330 resolves reporting periods. None of them store a day: every one derives it from the
+// practice's zone when it runs, so correcting a timezone does not just change the future -- it changes
+// what every one of those calculations would have said, for every date already recorded.
+//
+// ⚠ WHERE THAT ZONE COMES FROM CHANGED, AND THE DIFFERENCE IS ONE REQUEST WIDE. It used to be a
+// per-call workspaceClock() read; it is now WorkspaceContext.workspaceTimezone, resolved once from the
+// membership join that authenticates the request. Same value, 76 fewer reads -- but a context is a
+// SNAPSHOT taken before the handler runs, so a request that changes the zone and then reads it back in
+// the same breath would see the old one. Nothing does: this route returns the result and the next
+// request re-resolves. Anything added here that reads a date AFTER writing a zone must re-resolve the
+// context rather than reuse the one it was handed.
 //
 // That is still the right thing to allow. A practice provisioned into the wrong zone has had a wrong
 // clock since day one and no way to fix it, which is worse. But it must be LOUD: the change is

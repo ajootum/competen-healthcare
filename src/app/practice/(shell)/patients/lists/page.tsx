@@ -7,7 +7,7 @@ import {
   patientList, defaultWindow, attendance, patientListCounts,
   type PatientListResult, type Attendance,
 } from "@/lib/practice/patient-lists";
-import { workspaceClock } from "@/lib/practice/practice-time";
+import { practiceToday } from "@/lib/practice/practice-time";
 import { groupByDay } from "@/components/practice/PatientTable";
 import GroupedTable from "./GroupedTable";
 import ExportMenu from "./ExportMenu";
@@ -66,7 +66,8 @@ export default async function PatientListsPage({ searchParams }: {
   const sp = await searchParams;
   const view = one(sp.view) === "seen" ? "seen" : "booked";
   const admin = createAdminClient();
-  const { today, timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
+  const timezone = shell.ctx.workspaceTimezone;
+  const today = practiceToday(timezone);
   const def = defaultWindow(view, today);
 
   const result = await patientList(admin, shell.ctx, {

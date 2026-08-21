@@ -23,6 +23,8 @@ export type PracticeAccess = {
     workspaceName: string;
     workspaceType: string;
     workspaceStatus: string;
+    /** The practice's zone, carried through so resolveWorkspaceContext can hand it to the ctx. */
+    workspaceTimezone: string;
     roleCode: string;
   }[];
   /** Distinct workspaces the user can see, derived from active memberships. */
@@ -35,6 +37,22 @@ export type WorkspaceContext = {
   workspaceName: string;
   workspaceType: string;
   workspaceStatus: string;
+  /**
+   * ⚠ THE PRACTICE'S TIMEZONE, AND IT IS REQUIRED RATHER THAN OPTIONAL.
+   *
+   * Every timestamptz in the schema is UTC; every date a practitioner reads is a day in THEIR calendar,
+   * and the two disagree for three hours a day in Kampala. Making this optional would mean every reader
+   * writing `ctx.workspaceTimezone ?? "UTC"`, which is the exact defaulting that hid this bug in eleven
+   * places -- an argument nothing passes, silently standing in for the server's clock. Required, the
+   * compiler names every site that has to supply it.
+   *
+   * ⚠ IT IS A SNAPSHOT, TAKEN WHEN THIS CONTEXT WAS RESOLVED. That is right for a request -- the value
+   * cannot shift underneath a half-rendered page -- but it means a caller that CHANGES a practice's zone
+   * must re-resolve before reading a date, rather than reusing the context it was handed. The only
+   * writer is updateConfiguration, whose route returns without reading. A harness that skews a
+   * workspace's zone mid-test has the same obligation, and practice-medication-harness 10h does it.
+   */
+  workspaceTimezone: string;
   roleCodes: string[];
   capabilities: string[];
   entitled: boolean;
@@ -46,7 +64,10 @@ export type WorkspaceContext = {
 /** Every ACTIVE membership the user holds, grouped by workspace. */
 export async function resolvePracticeAccess(admin: any, userId: string): Promise<PracticeAccess> {
   const { data } = await admin.from("practice_membership")
-    .select("id, role_code, workspace_id, practice_workspace!workspace_id(id, name, type, status)")
+    // ⚠ timezone RIDES ALONG ON A JOIN THAT WAS ALREADY HAPPENING. It is not an extra query: this
+    // select already pulls the workspace row for name/type/status. Before it was here, every screen and
+    // engine that needed the practice's day paid its own workspaceClock() read to fetch this one column.
+    .select("id, role_code, workspace_id, practice_workspace!workspace_id(id, name, type, status, timezone)")
     .eq("user_id", userId).eq("status", "active");
 
   const memberships = ((data ?? []) as any[]).map(m => ({
@@ -55,6 +76,9 @@ export async function resolvePracticeAccess(admin: any, userId: string): Promise
     workspaceName: (m.practice_workspace?.name ?? "") as string,
     workspaceType: (m.practice_workspace?.type ?? "") as string,
     workspaceStatus: (m.practice_workspace?.status ?? "") as string,
+    // "UTC" only when the JOIN failed -- practice_workspace.timezone is `not null` (migration 191), so
+    // this is the missing-workspace case, not a missing value. Matches workspaceClock's own fallback.
+    workspaceTimezone: (m.practice_workspace?.timezone || "UTC") as string,
     roleCode: m.role_code as string,
   }));
 
@@ -141,6 +165,7 @@ export async function resolveWorkspaceContext(admin: any, userId: string, worksp
       workspaceName: mine[0].workspaceName,
       workspaceType: mine[0].workspaceType,
       workspaceStatus: wsStatus,
+      workspaceTimezone: mine[0].workspaceTimezone,
       roleCodes: mine.map(m => m.roleCode),
       capabilities: [...new Set(((caps ?? []) as any[]).map(c => c.capability_code as string))],
       entitled: true,

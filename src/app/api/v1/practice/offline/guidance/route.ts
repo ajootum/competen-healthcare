@@ -3,7 +3,7 @@ import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { offlineGuidancePayload } from "@/lib/practice/offline-guidance-source";
 import { offlineCacheGate } from "@/lib/practice/offline-gate";
 import { KNOWLEDGE_CAPABILITIES } from "@/lib/practice/knowledge-constants";
-import { workspaceClock } from "@/lib/practice/practice-time";
+
 
 // GET /api/v1/practice/offline/guidance -- CP-OFFLINE-SURVEY-001 s9 item 4.
 //
@@ -47,7 +47,7 @@ export async function GET() {
   // The practice's own clock, from the one helper that owns it. The review-date verdict is computed on
   // the device against THIS zone rather than the device's, so a practitioner who has travelled does not
   // see a protocol flip to overdue a day early.
-  const { timezone } = await workspaceClock(auth.caller.admin, auth.ctx.workspaceId);
+  const timezone = auth.ctx.workspaceTimezone;
   const result = await offlineGuidancePayload(auth.caller.admin, auth.ctx, { timezone });
 
   if (!result.ok)

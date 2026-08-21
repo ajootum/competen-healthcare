@@ -123,7 +123,7 @@ async function dailyCounts(admin: any, workspaceId: string, table: string, colum
  * was refused, exactly as CPR-330's dashboard does it.
  */
 export async function encounterTrend(admin: any, ctx: WorkspaceContext, period: Period) {
-  const { timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
   const spanMs = Date.parse(period.toIso) - Date.parse(period.fromIso);
   const prior: Period = {
     ...period,
@@ -356,7 +356,7 @@ export async function practiceIntelligence(admin: any, ctx: WorkspaceContext, op
  * professional-growth figure about somebody else is a performance review, which is a different product.
  */
 export async function myGrowth(admin: any, ctx: WorkspaceContext, period: Period) {
-  const { timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
   const { portfolioSummary } = await import("@/lib/practice/clinical-activity");
 
   const [portfolio, encounters, procedures] = await Promise.all([

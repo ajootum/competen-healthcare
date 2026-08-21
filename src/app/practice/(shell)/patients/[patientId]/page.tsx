@@ -6,7 +6,7 @@ import { hasCapability } from "@/lib/practice/access";
 import { getPatient, registerNeighbours } from "@/lib/practice/patients";
 import { patientFinancial } from "@/lib/practice/billing";
 import { formatMinor } from "@/lib/practice/billing-constants";
-import { workspaceClock } from "@/lib/practice/practice-time";
+import { practiceToday } from "@/lib/practice/practice-time";
 import { patientTimeline } from "@/lib/practice/encounters";
 import { listFollowUps } from "@/lib/practice/follow-ups";
 import { patientFollowUps } from "@/lib/practice/follow-up-plans";
@@ -130,7 +130,8 @@ export default async function PatientPage({ params, searchParams }: {
   // access log, in raw UTC slices. A booking that exists but cannot be seen where the decision is made
   // is the REACHABLE-but-not-DISCOVERABLE failure this product keeps re-finding. What is upcoming now
   // renders directly under the name, in the practice's own clock.
-  const { timezone, today } = await workspaceClock(admin, shell.ctx.workspaceId);
+  const timezone = shell.ctx.workspaceTimezone;
+  const today = practiceToday(timezone);
   // #15: the booking card offers WHERE. Active places only -- a closed location is not somewhere
   // a new appointment happens.
   const { data: locationRows } = await admin.from("practice_location")

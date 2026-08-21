@@ -150,7 +150,10 @@ async function grantedCapabilities(workspaceId: string, userId: string): Promise
 
 const ctxFor = (workspaceId: string, userId: string, capabilities: string[]): WorkspaceContext => ({
   userId, workspaceId, workspaceName: "Harness", workspaceType: "individual_practice",
-  workspaceStatus: "active", roleCodes: ["owner"], capabilities,
+  workspaceStatus: "active",
+  // ⚠ THE SAME SYMBOL THE WORKSPACE WAS PROVISIONED WITH, never a fresh literal -- a fixture
+  // whose ctx claims one zone while its row holds another tests a state that cannot exist.
+  workspaceTimezone: TZ, roleCodes: ["owner"], capabilities,
   entitled: true, entitlementStatus: "trial", onboardingComplete: true, onboardingStep: null,
 });
 

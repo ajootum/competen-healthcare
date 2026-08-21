@@ -5,7 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { followUpWorkspace } from "@/lib/practice/follow-ups";
 import { recallQueue } from "@/lib/practice/follow-up-plans";
-import { workspaceClock } from "@/lib/practice/practice-time";
+import { practiceToday } from "@/lib/practice/practice-time";
 import { periodFromParams, allDatesTarget } from "@/lib/practice/period-range";
 import FollowUpsWorkspace from "./FollowUpsWorkspace";
 import FollowUpsNavigator from "./FollowUpsNavigator";
@@ -40,7 +40,7 @@ export default async function FollowUpsPage({ searchParams }: {
   const one = (k: string) => { const v = raw[k]; return Array.isArray(v) ? v[0] : v; };
   const sp = { view: one("view"), q: one("q"), priority: one("priority"), source: one("source"), type: one("type") };
   const admin = createAdminClient();
-  const clock = await workspaceClock(admin, shell.ctx.workspaceId);
+  const clock = { timezone: shell.ctx.workspaceTimezone, today: practiceToday(shell.ctx.workspaceTimezone) };
 
   // ⚠ THE DEFAULT IS "All dates" AND IT HAS TO BE. See FollowUpsNavigator: a default period on a work
   // queue would hide the longest-overdue people first, which is the opposite of what this board is for.

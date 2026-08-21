@@ -7,7 +7,7 @@ import { hasCapability, type WorkspaceContext } from "@/lib/practice/access";
 import { STATE_COPY } from "@/lib/practice/intelligence-constants";
 import AssistantConsole from "../assistant/AssistantConsole";
 import { CARD, PanelHead, ProvenanceChip } from "./Ui";
-import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
+import { practiceDayOf } from "@/lib/practice/practice-time";
 
 // CPR-PI-001 s6's ninth area, and s3's consolidation decision.
 //
@@ -32,7 +32,7 @@ export default async function AssistantArea({ admin, ctx, sessionId, question }:
 }) {
   // The practice's day for the session dates below. This component takes admin and ctx as props, so
   // the clock is one read away -- there was no reason for it to be showing the server's.
-  const { timezone } = await workspaceClock(admin, ctx.workspaceId);
+  const timezone = ctx.workspaceTimezone;
   const canUse = hasCapability(ctx, "encounter.list");
   if (!canUse) {
     return (

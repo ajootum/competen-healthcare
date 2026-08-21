@@ -5,7 +5,7 @@ import {
   listProcedureTemplates, createProcedureTemplate, applyProcedureTemplate,
   portfolioSummary, setPortfolio, recordExternalProcedure, removeExternalProcedure,
 } from "@/lib/practice/clinical-activity";
-import { workspaceClock, instantInZone } from "@/lib/practice/practice-time";
+import { instantInZone } from "@/lib/practice/practice-time";
 
 // GET    /api/v1/practice/activities                    -- the clinical activity log
 // GET    /api/v1/practice/activities?view=portfolio     -- what the caller has done, counted
@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
         message: `${label} needs a date and a time on the 24-hour clock`,
       }) };
 
-    if (zone === null) zone = (await workspaceClock(auth.caller.admin, auth.ctx.workspaceId)).timezone;
+    if (zone === null) zone = auth.ctx.workspaceTimezone;
     const at = instantInZone(d, t, zone);
     if (!at)
       return { ok: false, res: fail({

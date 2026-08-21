@@ -6,7 +6,7 @@ import { getFormSubmission } from "@/lib/practice/forms";
 import { letterhead } from "@/lib/practice/document-generation";
 import { FORM_CAPABILITIES, FORM_ROUTE, FORM_ANSWER_SWATCH } from "@/lib/practice/form-constants";
 import { calculationNotice } from "@/lib/practice/form-field";
-import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
+import { practiceDayOf } from "@/lib/practice/practice-time";
 
 // /practice/knowledge-studio/forms/[id]/submissions/[submissionId]/print -- a completed form on paper.
 //
@@ -35,7 +35,7 @@ export default async function PrintFormSubmissionPage({ params }: {
   const admin = createAdminClient();
   // The practice's own day for every date rendered below. These were UTC slices of timestamptz
   // columns, which name yesterday for the three hours a practice ahead of UTC is already on tomorrow.
-  const { timezone } = await workspaceClock(admin, shell.ctx.workspaceId);
+  const timezone = shell.ctx.workspaceTimezone;
   const detail = await getFormSubmission(admin, shell.ctx.workspaceId, submissionId);
   if (detail.state !== "ok" || !detail.submission) redirect(`${FORM_ROUTE}/${formId}`);
 

@@ -5,7 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { activityRecord, portfolioSummary } from "@/lib/practice/clinical-activity";
 import { listLocations } from "@/lib/practice/configuration";
-import { workspaceClock } from "@/lib/practice/practice-time";
+import { practiceToday } from "@/lib/practice/practice-time";
 import {
   periodFromParams, periodLabel, periodSpanDays, allDatesTarget, periodToParams,
 } from "@/lib/practice/period-range";
@@ -48,7 +48,7 @@ export default async function ActivityPage({ searchParams }: {
   // ⚠ THE PRACTICE'S TODAY, NOT THIS MACHINE'S. Every rolling window on the control below is measured
   // from it, and a practice in Kampala is on a different calendar day from the renderer for three hours
   // of every morning.
-  const clock = await workspaceClock(admin, shell.ctx.workspaceId);
+  const clock = { timezone: shell.ctx.workspaceTimezone, today: practiceToday(shell.ctx.workspaceTimezone) };
 
   // ⚠ THE DEFAULT IS "All dates", WHICH IS EXACTLY WHAT THIS PAGE DID BEFORE THE CONTROL EXISTED. It has
   // never had a period; adding one with a default of "this month" would have hidden every older entry

@@ -1,4 +1,4 @@
-import { practiceDayOf, workspaceClock } from "@/lib/practice/practice-time";
+import { practiceDayOf } from "@/lib/practice/practice-time";
 import { generate } from "@/lib/ai/client";
 import { aiStatus } from "@/lib/ai/config";
 import { audit } from "@/lib/practice/audit";
@@ -271,7 +271,7 @@ async function buildContext(admin: any, ctx: WorkspaceContext, args: {
   // Kampala name yesterday for three hours every evening. An assistant that says "the consultation on
   // the 20th" about a consultation held on the 21st is worse than one that declines to answer -- it
   // is confidently wrong about a clinical record, in the one surface built to sound authoritative.
-  const { timezone: assistantTz } = await workspaceClock(admin, ctx.workspaceId);
+  const assistantTz = ctx.workspaceTimezone;
   const day = (v: unknown) => practiceDayOf(assistantTz, v as string) ?? "date not recorded";
   const grounding: GroundingSource[] = [];
 
