@@ -334,9 +334,14 @@ export default function PlannerWorkspace({
               <Figure label="Sessions" value={String(w.sessionCount)}
                 quietOnSmall={w.sessionCount === 0}
                 note={w.sessionsNotGenerated > 0 ? `${w.sessionsNotGenerated} with no generated times` : undefined} />
-              {/* ⚠ A DASH, NOT A NOUGHT, when nothing in the period could be counted. */}
+              {/* ⚠ A DASH, NOT A NOUGHT, when nothing in the period could be counted.
+                  AND THE UNIT, which this tile was the only place to omit: "25 / Free / in your own diary"
+                  is 25 of nothing named, and hours, days and slots all read plausibly. The Day Inspector
+                  labels the same figure "Slots" beside Booked and Free, and planner-constants.ts opens
+                  CAPACITY_BASIS_NOTE with "HOW A FREE COUNT MUST BE LABELLED WHEREVER IT IS DRAWN" -- this
+                  is one of the places it is drawn. */}
               <Figure label="Free" value={w.availableCount === null ? "-" : String(w.availableCount)}
-                note={w.availableCount === null ? "not calculable" : "in your own diary"} />
+                note={w.availableCount === null ? "not calculable" : "appointment slots in your own diary"} />
               <Figure label="Days used" value={String(w.daysWithActivities)}
                 note={`of ${range.days.length} days`} />
               <Figure label="Locations" value={String(w.locationCount)}

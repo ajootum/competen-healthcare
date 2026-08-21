@@ -1,3 +1,4 @@
+import type { Refusal } from "@/lib/practice/refusal-presentation";
 // CPR-V5-006 PATIENTS WORKSPACE -- the client-safe half.
 //
 // Nothing here imports a server module, a database client or `next/headers`, so a client component can
@@ -233,18 +234,37 @@ export const SORT_ORDER_CAP = 900;
  * support. They are exported so the screen can SHOW them rather than quietly omitting the section --
  * an omission reads as "there is nothing", which is the failure this whole file is written against.
  */
-export const REFUSES = [
+// ⚠ CPR-HFE-REF-001: the practitioner half and the internal half, split. See refusal-presentation.ts.
+export const REFUSES: readonly Refusal[] = [
   {
     key: "orders_placed",
-    label: "Pending investigations, as orders placed",
-    detail:
-      "The specification lists 'Orders & Procedures' and 'Results'; the comp shows 'Outstanding: MRI Brain, CBC'. There is no order register in this product -- nothing records that a test was requested, transmitted to a lab, and is awaited. What exists is practice_treatment rows of type 'investigation', which are the practitioner's RECORDED INTENTION inside a consultation, and practice_incoming_document, which is what ARRIVED. Both are shown, under their own names. An 'outstanding orders' list would be a count of intentions dressed as a count of requests.",
+    state: "NOT_AVAILABLE_YET",
+    title: "Investigations you have ordered",
+    reason:
+      "Competen Practice does not record investigation orders, so there is no list of what is outstanding. What comes back can still be filed as a document.",
+    internal: {
+      reasonCode: "NO_ORDER_ENTITY",
+      specReference: "CPR-PAT-002",
+      // Kept verbatim: this was the sentence a practitioner used to be shown.
+      technicalDetail:
+        "Pending investigations, as orders placed" + " -- " +
+        "The specification lists 'Orders & Procedures' and 'Results'; the comp shows 'Outstanding: MRI Brain, CBC'. There is no order register in this product -- nothing records that a test was requested, transmitted to a lab, and is awaited. What exists is practice_treatment rows of type 'investigation', which are the practitioner's RECORDED INTENTION inside a consultation, and practice_incoming_document, which is what ARRIVED. Both are shown, under their own names. An 'outstanding orders' list would be a count of intentions dressed as a count of requests.",
+    },
   },
   {
     key: "results_linked_to_requests",
-    label: "A result matched back to the investigation that asked for it",
-    detail:
-      "practice_incoming_document has no link to practice_treatment, so nothing can say this CBC answers that request. Pairing them on the label would be a guess presented as a chain of custody.",
+    state: "NOT_AVAILABLE_YET",
+    title: "Results matched to the request that asked for them",
+    reason:
+      "Because orders are not recorded, a result cannot be matched back to the request behind it. Results appear on their own.",
+    internal: {
+      reasonCode: "NO_ORDER_RESULT_LINK",
+      specReference: "CPR-PAT-002",
+      // Kept verbatim: this was the sentence a practitioner used to be shown.
+      technicalDetail:
+        "A result matched back to the investigation that asked for it" + " -- " +
+        "practice_incoming_document has no link to practice_treatment, so nothing can say this CBC answers that request. Pairing them on the label would be a guess presented as a chain of custody.",
+    },
   },
   {
     // ⚠ REWRITTEN BY CPR-MED-001, NOT DELETED, AND THE DISTINCTION IS THE WHOLE POINT.
@@ -260,33 +280,78 @@ export const REFUSES = [
     // headings for exactly this reason, and an uncarried treatment row appears on the medication
     // record's reconciliation list rather than being quietly counted as a medication.
     key: "current_medications",
-    label: "Current medications, from the treatment decisions in this workspace",
-    detail:
-      "CPR-V5-006's longitudinal record lists 'Current medications'. It cannot be built FROM practice_treatment, and the reason is stronger than 'this is an intention rather than a list'. practice_treatment.duration is FREE TEXT -- '5 days', 'until review', '1/12'. There is no end date and none is computable, so a course decided in March cannot be known to have ended. There is also no stop event, no source and no adherence. 'Current' is therefore not derivable from these rows at all, not merely unreliable. What is shown here instead is every medication DECIDED AT THIS PRACTICE, newest first, each with the encounter and date that decided it and the status somebody set. No 'active' subset is computed, because computing one would mean parsing those duration strings and presenting the guess as a fact. CPR-MED-001 lifts this refusal for a DIFFERENT store: practice_medication rows carry start and stop dates, a four-state status and a stop event, so a current list is derivable there. It is shown on the patient page under its own heading, and a treatment decision that nobody has carried across into it is on that record's reconciliation list rather than in its count.",
+    state: "NOT_AVAILABLE_YET",
+    title: "What the patient is taking today",
+    reason:
+      "What is recorded is what was decided at each consultation, which is not the same as what the patient is taking now. Showing it as current would overstate what this record knows.",
+    internal: {
+      reasonCode: "NO_CURRENT_MEDICATION_STATE",
+      specReference: "CPR-PAT-002",
+      // Kept verbatim: this was the sentence a practitioner used to be shown.
+      technicalDetail:
+        "Current medications, from the treatment decisions in this workspace" + " -- " +
+        "CPR-V5-006's longitudinal record lists 'Current medications'. It cannot be built FROM practice_treatment, and the reason is stronger than 'this is an intention rather than a list'. practice_treatment.duration is FREE TEXT -- '5 days', 'until review', '1/12'. There is no end date and none is computable, so a course decided in March cannot be known to have ended. There is also no stop event, no source and no adherence. 'Current' is therefore not derivable from these rows at all, not merely unreliable. What is shown here instead is every medication DECIDED AT THIS PRACTICE, newest first, each with the encounter and date that decided it and the status somebody set. No 'active' subset is computed, because computing one would mean parsing those duration strings and presenting the guess as a fact. CPR-MED-001 lifts this refusal for a DIFFERENT store: practice_medication rows carry start and stop dates, a four-state status and a stop event, so a current list is derivable there. It is shown on the patient page under its own heading, and a treatment decision that nobody has carried across into it is on that record's reconciliation list rather than in its count.",
+    },
   },
   {
     key: "asserted_family_links",
-    label: "Family relationships between two registered patients",
-    detail:
-      "practice_patient_relationship names a person (full name, phone) against one patient; it has no related_patient_id. So a mother's own record and her child's are not joined by anything. The family view therefore reports what IS recorded -- the parents and guardians named on each child -- plus siblings INFERRED from a shared live guardian (same normalised name and phone), labelled as an inference with its basis. It never asserts a link the record does not hold.",
+    state: "NOT_AVAILABLE_YET",
+    title: "Family links between two patients",
+    reason:
+      "Competen Practice does not record that one registered patient is related to another, so no family connections are shown.",
+    internal: {
+      reasonCode: "NO_RELATIONSHIP_ASSERTION",
+      specReference: "CPR-PAT-002",
+      // Kept verbatim: this was the sentence a practitioner used to be shown.
+      technicalDetail:
+        "Family relationships between two registered patients" + " -- " +
+        "practice_patient_relationship names a person (full name, phone) against one patient; it has no related_patient_id. So a mother's own record and her child's are not joined by anything. The family view therefore reports what IS recorded -- the parents and guardians named on each child -- plus siblings INFERRED from a shared live guardian (same normalised name and phone), labelled as an inference with its basis. It never asserts a link the record does not hold.",
+    },
   },
   {
     key: "care_setting",
-    label: "Care setting -- \"Outpatient\", \"Ward\"",
-    detail:
-      "The comp shows \"Outpatient / C-Care IHK\" and \"Ward / AKUH\". The PLACE is real and is shown: practice_encounter.location_id gives the location, and the activity the encounter was opened inside (migration 232) gives the facility. The CARE SETTING is not stored anywhere in Practice. practice_location.type is (hospital, clinic, outreach, teleconsultation, independent) -- the kind of place, not whether somebody was seen as an outpatient or on a ward -- and mapping one onto the other would be an invention. A care_setting column exists only in the hospital platform's taxonomy, which is a different tenant boundary and is not read from here. So the place is shown and the setting is not, and careSettingStored says so in the payload.",
+    state: "NOT_AVAILABLE_YET",
+    title: "Whether care was outpatient, ward or elsewhere",
+    reason:
+      "The setting a patient was seen in is not recorded against the visit, so it cannot be shown or filtered on.",
+    internal: {
+      reasonCode: "NO_CARE_SETTING_FIELD",
+      specReference: "CPR-PAT-002",
+      // Kept verbatim: this was the sentence a practitioner used to be shown.
+      technicalDetail:
+        "Care setting -- \"Outpatient\", \"Ward\"" + " -- " +
+        "The comp shows \"Outpatient / C-Care IHK\" and \"Ward / AKUH\". The PLACE is real and is shown: practice_encounter.location_id gives the location, and the activity the encounter was opened inside (migration 232) gives the facility. The CARE SETTING is not stored anywhere in Practice. practice_location.type is (hospital, clinic, outreach, teleconsultation, independent) -- the kind of place, not whether somebody was seen as an outpatient or on a ward -- and mapping one onto the other would be an invention. A care_setting column exists only in the hospital platform's taxonomy, which is a different tenant boundary and is not read from here. So the place is shown and the setting is not, and careSettingStored says so in the payload.",
+    },
   },
   {
     key: "place_beyond_this_practice",
-    label: "Where the patient is, when they are somewhere this practice does not run",
-    detail:
-      "The place in the banner comes from this practice's own encounters. If a patient is admitted to a hospital this practice has no part in, nothing here knows. It reports where THIS practice last had them, and says that is what it is.",
+    state: "NOT_AVAILABLE_YET",
+    title: "Where a patient is outside this practice",
+    reason:
+      "This record covers the places you practise. Where a patient is when they are somewhere else is not known to it.",
+    internal: {
+      reasonCode: "NO_EXTERNAL_PLACE",
+      specReference: "CPR-PAT-002",
+      // Kept verbatim: this was the sentence a practitioner used to be shown.
+      technicalDetail:
+        "Where the patient is, when they are somewhere this practice does not run" + " -- " +
+        "The place in the banner comes from this practice's own encounters. If a patient is admitted to a hospital this practice has no part in, nothing here knows. It reports where THIS practice last had them, and says that is what it is.",
+    },
   },
   {
     key: "photo_and_scanned_id",
-    label: "Patient photograph and scanned identity documents",
-    detail:
-      "There is no file storage in this product. CPR-REG-002's workspace already refused both for the same reason and it has not changed.",
+    state: "NOT_AVAILABLE_YET",
+    title: "Photographs and scanned identity documents",
+    reason:
+      "Competen Practice does not store images, so patients are identified by name and identifier rather than by photograph.",
+    internal: {
+      reasonCode: "NO_FILE_STORAGE",
+      specReference: "CPR-PAT-002",
+      // Kept verbatim: this was the sentence a practitioner used to be shown.
+      technicalDetail:
+        "Patient photograph and scanned identity documents" + " -- " +
+        "There is no file storage in this product. CPR-REG-002's workspace already refused both for the same reason and it has not changed.",
+    },
   },
 ] as const;
 

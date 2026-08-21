@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { PLACE_BOUNDARY, MEDICATION_NOT_CURRENT_REASON } from "@/lib/practice/patient-workspace-constants";
 import { Absence, CARD, day } from "./Honesty";
-import { UNSUPPLIED_COLUMN } from "./refusals";
+import { columnRefusal } from "./refusals";
 import type { CohortRowView, CohortSortView, CohortView, WorklistView } from "./types";
 import { COHORT_RING, JOURNEY_ICON, PATIENT_STATUS_SWATCH } from "@/lib/practice/palette";
 import { THEAD, TABLE_SCROLL } from "@/components/practice/PatientTable";
@@ -603,14 +603,14 @@ export default function CohortTable({
           </summary>
           <ul className="mt-1.5 flex flex-col gap-1.5 pl-3 text-[11px] leading-relaxed text-gray-500">
             <li>
-              <span className="font-semibold text-gray-600">Active problems.</span> {UNSUPPLIED_COLUMN.activeProblems}
+              <span className="font-semibold text-gray-600">Active problems.</span> {columnRefusal("activeProblems")!.reason}
             </li>
             <li>
-              <span className="font-semibold text-gray-600">Treatments decided.</span> {UNSUPPLIED_COLUMN.treatmentsDecided}{" "}
+              <span className="font-semibold text-gray-600">Treatments decided.</span> {columnRefusal("treatmentsDecided")!.reason}{" "}
               And it will never be headed &ldquo;current&rdquo;: {MEDICATION_NOT_CURRENT_REASON}
             </li>
             <li>
-              <span className="font-semibold text-gray-600">Journey snapshot.</span> {UNSUPPLIED_COLUMN.journeySnapshot}
+              <span className="font-semibold text-gray-600">Journey snapshot.</span> {columnRefusal("journeySnapshot")!.reason}
             </li>
             <li>
               <span className="font-semibold text-gray-600">No trajectory chip.</span> The design shows

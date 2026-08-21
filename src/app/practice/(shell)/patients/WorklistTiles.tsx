@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Count } from "./Honesty";
-import { UNSUPPLIED_REASON } from "./refusals";
+import { cardRefusal } from "./refusals";
 import { CARE_CARD_SWATCH, CARE_CARD_UNSUPPLIED, WORKLIST_SWATCH } from "@/lib/practice/palette";
 import type { Unavailable, WorklistsView, WorklistView } from "./types";
 
@@ -218,15 +218,18 @@ function CardShell({ card, variant, selected, onSelect }: {
         <p className="mt-1 font-mono text-[10px] leading-tight text-[var(--cmp-text-warning)]">{w.error}</p>
       )}
 
-      {/* THE CARD PRINTS ITS OWN GAP. An unexplained dash is indistinguishable from a bug, and somebody
-          extending the engine should not have to guess which query is missing. */}
-      {unsupplied && UNSUPPLIED_REASON[card.key] && (
+      {/* THE CARD PRINTS ITS OWN GAP. An unexplained dash is indistinguishable from a bug.
+          ⚠ CPR-HFE-REF-001: it prints the PRACTITIONER's reason. This used to render the engineering
+          note -- "worklists() reads practice_queue_entry.status and folds IN_CONSULTATION into the
+          single Waiting patients figure" -- to a doctor. That note still exists, under
+          internal.technicalDetail, for whoever extends the engine. */}
+      {unsupplied && cardRefusal(card.key) && (
         <details className="group mt-1">
           <summary className="cursor-pointer list-none text-[10.5px] font-semibold text-slate-500 hover:text-slate-700">
             <span className="mr-1 inline-block transition-transform group-open:rotate-90">&rsaquo;</span>
             Why this has no figure
           </summary>
-          <p className="mt-1 text-[10.5px] leading-relaxed text-slate-500">{UNSUPPLIED_REASON[card.key]}</p>
+          <p className="mt-1 text-[10.5px] leading-relaxed text-slate-500">{cardRefusal(card.key)!.reason}</p>
         </details>
       )}
 

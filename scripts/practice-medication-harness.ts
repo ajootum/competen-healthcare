@@ -358,12 +358,16 @@ async function main() {
     && /THE SAFETY CLAIM IS NOT/.test(calcSrc));
 
   const pwSrc = readFileSync(join(process.cwd(), "src", "lib", "practice", "patient-workspace-constants.ts"), "utf8");
+  // ⚠ .internal.technicalDetail, NOT .detail (CPR-HFE-REF-001). The prose these assertions match on
+  // is preserved exactly -- it just is not the sentence a practitioner reads any more. Asserting on
+  // the practitioner `reason` instead would be checking the wrong string: the engineering claim about
+  // practice_treatment.duration is what 5c and 5d exist to pin.
   const currentRefusal = REFUSES.find(r => r.key === "current_medications");
   ok("5c. ⚠ REFUSES.current_medications still EXISTS -- it stays true for practice_treatment rows",
-    !!currentRefusal && /practice_treatment\.duration is FREE TEXT/.test(currentRefusal.detail));
+    !!currentRefusal && /practice_treatment\.duration is FREE TEXT/.test((currentRefusal.internal.technicalDetail ?? "")));
   ok("5d. ⚠ and it was REWRITTEN: it now names the store where a current list IS derivable",
-    !!currentRefusal && /practice_medication/.test(currentRefusal.detail)
-    && /reconciliation list/i.test(currentRefusal.detail));
+    !!currentRefusal && /practice_medication/.test((currentRefusal.internal.technicalDetail ?? ""))
+    && /reconciliation list/i.test((currentRefusal.internal.technicalDetail ?? "")));
   ok("5e. MEDICATION_BOUNDARY and MEDICATION_NOT_CURRENT_REASON survive and both name their table",
     /NOT a current-medication list/.test(MEDICATION_BOUNDARY)
     && /medication record/i.test(MEDICATION_BOUNDARY)

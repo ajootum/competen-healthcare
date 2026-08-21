@@ -48,7 +48,12 @@ export type IdentifierSet = {
   all: IdentifierRow[];
 };
 
-export type Refusal = { key: string; label: string; detail: string };
+// ⚠ ONE Refusal TYPE FOR THE WHOLE PRODUCT (CPR-HFE-REF-001). This used to be its own
+// { key, label, detail } and that is how the engine's provenance ended up rendered to doctors:
+// two shapes, one of them with nowhere to put an internal half. It is now an alias, so a screen
+// physically cannot receive a refusal that has not been split.
+import type { Refusal } from "@/lib/practice/refusal-presentation";
+export type { Refusal } from "@/lib/practice/refusal-presentation";
 
 // ── Worklists ────────────────────────────────────────────────────────────────────────────────────────
 

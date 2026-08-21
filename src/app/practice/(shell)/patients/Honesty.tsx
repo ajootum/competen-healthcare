@@ -1,6 +1,7 @@
 "use client";
 
 import type { Unavailable } from "./types";
+import { practitionerView, type Refusal } from "@/lib/practice/refusal-presentation";
 
 // CPR-V5-006 -- the three states, in one place.
 //
@@ -101,26 +102,42 @@ export function Boundary({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** The refusals, collapsed. Visible labels, reasoning one click away -- never a silent omission. */
+/**
+ * The refusals, collapsed. Never a silent omission -- an omission reads as "there is nothing there".
+ *
+ * ⚠ CPR-HFE-REF-001: THIS COMPONENT SEES ONLY THE PRACTITIONER HALF, BY CONSTRUCTION. It maps every
+ * refusal through practitionerView(), which returns a NEW object carrying title, reason and any real
+ * next action -- and nothing else. It cannot render a reason code, a spec reference or a table name
+ * even by accident, because it never holds them. The old version took { key, label, detail } where
+ * `detail` was engineering prose shown to doctors.
+ */
 export function Refusals({ refuses, title, blurb }: {
-  refuses: readonly { key: string; label: string; detail: string }[];
+  refuses: readonly Refusal[];
   title: string;
   blurb: string;
 }) {
   if (refuses.length === 0) return null;
+  const shown = refuses.map(practitionerView);
   return (
     <section className={`${CARD} border-dashed bg-gray-50/60 p-4`}>
       <h2 className="text-[13px] font-bold text-gray-900">{title}</h2>
       <p className="mt-0.5 text-[11px] text-gray-500">{blurb}</p>
       <ul className="mt-2 flex flex-col gap-1">
-        {refuses.map(r => (
+        {shown.map(r => (
           <li key={r.key}>
             <details className="group">
               <summary className="cursor-pointer list-none text-[12px] font-semibold text-gray-700 hover:text-gray-900">
                 <span className="mr-1 inline-block text-gray-400 transition-transform group-open:rotate-90">&rsaquo;</span>
-                {r.label}
+                {r.title}
               </summary>
-              <p className="mt-0.5 pl-3 text-[11px] leading-relaxed text-gray-500">{r.detail}</p>
+              <p className="mt-0.5 pl-3 text-[11px] leading-relaxed text-gray-500">{r.reason}</p>
+              {/* s10: a CTA ONLY where the practitioner can genuinely change the state. */}
+              {r.nextAction && (
+                <a href={r.nextAction.href}
+                  className="mt-1 ml-3 inline-block text-[11px] font-semibold text-[var(--cmp-accent,#4338ca)] hover:underline">
+                  {r.nextAction.label} &rarr;
+                </a>
+              )}
             </details>
           </li>
         ))}
