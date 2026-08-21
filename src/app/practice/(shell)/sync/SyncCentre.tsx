@@ -169,8 +169,18 @@ export default function SyncCentre() {
             )}
             {summary && summary.unresolved === 0 && summary.needsAttention === 0 && !outboxDetail && (
               <p className="mt-2 text-[11.5px] leading-relaxed text-gray-500">
-                Recording while offline is not switched on yet, so nothing has been captured on this
-                device to send. This screen is where it will appear when it is.
+                {/* ⚠ THIS SENTENCE ONCE CLAIMED A SWITCH THAT DOES NOT EXIST. The condition above tests
+                    one thing -- the outbox is empty -- and the copy turned that into "recording while
+                    offline is not switched on yet", which is a claim about the PRODUCT. Recording is
+                    built and shipped; what it needs is CP-OFFLINE-SURVEY-001 s5's seventh precondition,
+                    a PIN on this device (offline-capture.ts lists all seven). Telling a practitioner a
+                    built feature does not exist is the stale-refusal class, and it understates the
+                    product in the one direction nobody checks. This screen cannot read the lock state,
+                    so it states the precondition as the general fact it is and claims nothing about
+                    this device. */}
+                Nothing has been captured on this device to send, so there is nothing waiting. Anything
+                recorded while offline appears here until the practice confirms it &mdash; recording
+                offline needs a PIN set on the device doing the recording.
               </p>
             )}
 
