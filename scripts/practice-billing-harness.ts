@@ -533,6 +533,41 @@ async function main() {
       && !consoleSrc.includes("arrive in Phase 2")
       && consoleSrc.includes("never silently reconciled away"));
 
+  // ── 12-8/12-9: UNITS. Added 2026-08-21 after a walkthrough found two money forms on one screen
+  // taking DIFFERENT units, with the only warning being the words "(minor units)" in a label. On UGX
+  // (exponent 0) major IS minor, so nothing ever misbehaved and no test could see it; on a 2-exponent
+  // currency the same two forms differ by a hundred. These two pin the fix in both directions.
+  // A raw read is a defect only where the value LEAVES for the server, so the rule tests the payload
+  // lines: a wire key and a raw form read on the same line. Reading the form string to validate it, or
+  // to grey out a button, converts nothing and is not a defect -- an earlier draft flagged both and was
+  // wrong. entForm.fixedMinor is deliberately outside this rule: it is a standing cross-currency rule
+  // with no currency at form time, so it is stated in words on the form instead of converted.
+  const WIRE_KEY = /(amountMinor|receivedMinor|entitlementMinor)\s*:/;
+  const RAW_MONEY_READ = new RegExp(
+    "Number\\((payForm|settleForm|settleManual|feeForm)[\\.\\[]");
+  const rawReads = consoleSrc.split(/\r?\n/)
+    .filter(l => WIRE_KEY.test(l) && RAW_MONEY_READ.test(l));
+  ok("12-8. no money value reaches the wire raw -- every amount converts through toMinor with a real currency",
+    rawReads.length === 0 && consoleSrc.includes("const toMinor =") && consoleSrc.includes("CURRENCY_EXPONENT"));
+  const CONTROL_LINE = "      amountMinor: Number(payForm.amountMajor), currency: inv.currency,";
+  ok("12-8-control. the rule can still see a raw read on a wire line",
+    WIRE_KEY.test(CONTROL_LINE) && RAW_MONEY_READ.test(CONTROL_LINE)
+      // and does NOT fire on the same read off the wire
+      && !(WIRE_KEY.test("    const major = Number(feeForm.amountMajor);")));
+
+  // Scanned with COMMENTS STRIPPED -- blocks first, then lines. The first draft of this rule failed
+  // against the source comment that explains the very fix it pins, which is the same way a rule in the
+  // refusal harness once matched its own documentation.
+  const consoleProse = consoleSrc
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split(/\r?\n/).map(l => l.replace(/\/\/.*$/, "")).join("\n");
+  const MINOR_AT_A_HUMAN = /minor units?\)|\(minor\)/i;
+  ok("12-9. and no money field speaks 'minor units' at a practitioner, in a label or a placeholder",
+    !MINOR_AT_A_HUMAN.test(consoleProse));
+  ok("12-9-control. the label rule can see the phrase it bans",
+    MINOR_AT_A_HUMAN.test('<span>Amount (minor units) *</span>')
+      && MINOR_AT_A_HUMAN.test('placeholder="share (minor units)"'));
+
   return report();
 }
 

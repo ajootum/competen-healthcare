@@ -36,6 +36,16 @@ const STATUS_CHIP: Record<string, string> = {
 
 type Money = { amountMinor: number; currency: string };
 
+// ── UNITS, IN ONE PLACE ────────────────────────────────────────────────────────────────────────────
+// Every money FIELD on this screen takes what the practitioner would say out loud -- fifty thousand
+// shillings is typed 50000. The wire and the store are minor units throughout; the conversion happens
+// here and nowhere else. UGX and RWF have exponent 0, so major IS minor and these calls are identity;
+// that is exactly why the screen shipped with two forms disagreeing about units and nobody could tell.
+const CURRENCY_EXPONENT: Record<string, number> = { UGX: 0, RWF: 0 };
+const expOf = (currency: string) => CURRENCY_EXPONENT[currency] ?? 2;
+const toMinor = (major: string, currency: string) => Math.round(Number(major) * 10 ** expOf(currency));
+const toMajor = (minor: number, currency: string) => minor / 10 ** expOf(currency);
+
 export default function PaymentsConsole(props: {
   tab: string;
   overview: any; invoices: any; outstanding: any; fees: any; locations: any[];
@@ -72,7 +82,7 @@ export default function PaymentsConsole(props: {
   // ── Record payment state ──
   const [payOpen, setPayOpen] = useState(false);
   const [payForm, setPayForm] = useState({
-    invoiceId: "", amountMinor: "", method: "cash", collector: "practitioner",
+    invoiceId: "", amountMajor: "", method: "cash", collector: "practitioner",
     payerKind: "patient", reference: "", notes: "",
   });
   const issuedInvoices = (props.invoices?.items ?? []).filter((i: any) => i.status === "ISSUED" && i.balanceMinor > 0);
@@ -80,7 +90,15 @@ export default function PaymentsConsole(props: {
   async function submitPayment() {
     const inv = issuedInvoices.find((i: any) => i.id === payForm.invoiceId);
     if (!inv) { setNotice({ kind: "err", text: "Choose the invoice this payment answers." }); return; }
-    const amount = Number(payForm.amountMinor);
+    // ⚠ TWO MONEY FORMS ON ONE SCREEN TOOK DIFFERENT UNITS, AND ONLY ONE SAID SO.
+    // submitFee takes MAJOR units and converts -- "MAJOR units for the human", as its own comment puts
+    // it. This form took the raw input as MINOR and multiplied by nothing. On UGX and RWF (exponent 0)
+    // the two coincide, which is why it has never bitten: major IS minor. On any 2-exponent currency in
+    // the price book they differ by a hundred, and the only warning was the words "(minor units)" in a
+    // label -- engineering vocabulary carrying a 100x consequence on a money field.
+    // Now the same conversion as the fee form, against the INVOICE's currency rather than a form field,
+    // because the invoice is what the payment answers to.
+    const amount = toMinor(payForm.amountMajor, inv.currency);
     const body = await post({
       action: "recordPayment", patientId: inv.patient_id ?? null,
       payerKind: payForm.payerKind, amountMinor: amount, currency: inv.currency,
@@ -94,12 +112,10 @@ export default function PaymentsConsole(props: {
   // ── Fee editor state ──
   const [feeForm, setFeeForm] = useState({ feeId: "", name: "", serviceType: "consultation", amountMajor: "", currency: "UGX", code: "" });
   async function submitFee() {
-    // The form takes MAJOR units for the human; the wire and the store are minor units. UGX has
-    // exponent 0 so major IS minor; for 2-exponent currencies the conversion is exact integer math.
-    const exp = { UGX: 0, RWF: 0 }[feeForm.currency as "UGX" | "RWF"] ?? 2;
+    // Units via toMinor, like every other money field here -- see CURRENCY_EXPONENT above.
     const major = Number(feeForm.amountMajor);
     if (!Number.isFinite(major) || major < 0) { setNotice({ kind: "err", text: "The fee must be a non-negative number." }); return; }
-    const amountMinor = Math.round(major * 10 ** exp);
+    const amountMinor = toMinor(feeForm.amountMajor, feeForm.currency);
     const body = await post({
       action: "saveFee", feeId: feeForm.feeId || null, name: feeForm.name,
       serviceType: feeForm.serviceType, amountMinor, currency: feeForm.currency, code: feeForm.code || null,
@@ -151,10 +167,10 @@ export default function PaymentsConsole(props: {
     const body = await post({
       action: "recordSettlement", locationId: f.locationId, currency: f.currency,
       periodFrom: settleForm.periodFrom, periodTo: settleForm.periodTo,
-      receivedMinor: Number(settleForm.receivedMinor), reference: settleForm.reference || null,
+      receivedMinor: toMinor(settleForm.receivedMinor, f.currency), reference: settleForm.reference || null,
       items: chosen.map((p: any) => ({
         paymentId: p.id,
-        entitlementMinor: p.entitlementMinor ?? (settleManual[p.id] ? Number(settleManual[p.id]) : null),
+        entitlementMinor: p.entitlementMinor ?? (settleManual[p.id] ? toMinor(settleManual[p.id], f.currency) : null),
       })),
     });
     if (body) { setNotice({ kind: "ok", text: `Recorded ${body.settlementNumber}. That money now counts as received.` }); reload(); }
@@ -263,7 +279,11 @@ export default function PaymentsConsole(props: {
               <span className="text-[11px] font-semibold text-gray-600">Against invoice *</span>
               <select value={payForm.invoiceId} onChange={e => {
                 const inv = issuedInvoices.find((i: any) => i.id === e.target.value);
-                setPayForm(f => ({ ...f, invoiceId: e.target.value, amountMinor: inv ? String(inv.balanceMinor) : "" }));
+                // The prefill is the outstanding balance, shown in the SAME units the field now takes.
+                setPayForm(f => ({
+                  ...f, invoiceId: e.target.value,
+                  amountMajor: inv ? String(toMajor(inv.balanceMinor, inv.currency)) : "",
+                }));
               }} className={input}>
                 <option value="">Choose an issued invoice</option>
                 {issuedInvoices.map((i: any) => (
@@ -274,9 +294,9 @@ export default function PaymentsConsole(props: {
               </select>
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[11px] font-semibold text-gray-600">Amount (minor units) *</span>
-              <input type="number" min={1} value={payForm.amountMinor}
-                onChange={e => setPayForm(f => ({ ...f, amountMinor: e.target.value }))} className={input} />
+              <span className="text-[11px] font-semibold text-gray-600">Amount *</span>
+              <input type="number" min={1} value={payForm.amountMajor}
+                onChange={e => setPayForm(f => ({ ...f, amountMajor: e.target.value }))} className={input} />
               <span className="text-[10px] text-gray-400">Part payment is fine; the balance stays on the invoice.</span>
             </label>
             <label className="flex flex-col gap-1">
@@ -303,7 +323,7 @@ export default function PaymentsConsole(props: {
                 onChange={e => setPayForm(f => ({ ...f, reference: e.target.value }))} className={input} />
             </label>
           </div>
-          <button type="button" className={`${BTN} mt-2`} disabled={busy || !payForm.invoiceId || !Number(payForm.amountMinor)}
+          <button type="button" className={`${BTN} mt-2`} disabled={busy || !payForm.invoiceId || !Number(payForm.amountMajor)}
             onClick={submitPayment}>
             Record payment
           </button>
@@ -549,7 +569,7 @@ export default function PaymentsConsole(props: {
                           <span className="text-gray-500">collected {formatMinor(p.amount_minor, f.currency)}</span>
                           <span className="ml-auto font-semibold text-gray-800">
                             {p.entitlementMinor !== null ? `share ${formatMinor(p.entitlementMinor, f.currency)}` : (
-                              <input type="number" min={0} max={p.amount_minor} placeholder="share (minor units)"
+                              <input type="number" min={0} max={p.amount_minor} placeholder="this payment's share"
                                 value={settleManual[p.id] ?? ""}
                                 onChange={e => setSettleManual(s => ({ ...s, [p.id]: e.target.value }))}
                                 className={`${input} w-40`} />
@@ -570,7 +590,7 @@ export default function PaymentsConsole(props: {
                           onChange={e => setSettleForm(s => ({ ...s, periodTo: e.target.value }))} className={input} />
                       </label>
                       <label className="flex flex-col gap-1">
-                        <span className="text-[11px] font-semibold text-gray-600">Amount received (minor) *</span>
+                        <span className="text-[11px] font-semibold text-gray-600">Amount received *</span>
                         <input type="number" min={1} required value={settleForm.receivedMinor}
                           onChange={e => setSettleForm(s => ({ ...s, receivedMinor: e.target.value }))} className={input} />
                         {/* The difference from your share is recorded and shown, never forced to zero. */}
@@ -656,9 +676,13 @@ export default function PaymentsConsole(props: {
                 )}
                 {entForm.kind === "fixed_per_payment" && (
                   <label className="flex flex-col gap-1">
-                    <span className="text-[11px] font-semibold text-gray-600">Fixed share (minor units) *</span>
+                    <span className="text-[11px] font-semibold text-gray-600">Fixed share per payment *</span>
                     <input type="number" min={0} required value={entForm.fixedMinor}
                       onChange={e => setEntForm(f => ({ ...f, fixedMinor: e.target.value }))} className={input} />
+                    <span className="text-[10px] text-gray-400">
+                      A standing rule, so it is not written in one currency: enter it in the smallest unit
+                      of whatever the payment is in. In shillings that is simply the number of shillings.
+                    </span>
                   </label>
                 )}
                 <button type="submit" className={BTN} disabled={busy || !entForm.locationId}>Save share</button>
