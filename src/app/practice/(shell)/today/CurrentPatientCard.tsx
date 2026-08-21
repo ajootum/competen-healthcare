@@ -98,9 +98,16 @@ export default function CurrentPatientCard({ person, canStartEncounter, canAttac
       <section className={`${card} border-gray-200`} aria-labelledby="current-patient-h">
         <h2 id="current-patient-h" className="text-[13px] font-bold text-gray-900">Current patient</h2>
         {/* An empty room is a REAL state, not an error -- and it is not padded out with zero-value
-            figures. The queue card below is where the next arrival appears. */}
+            figures. The queue card below is where the next arrival appears.
+
+            ⚠ AND THAT IS EXACTLY WHY THIS NO LONGER SAYS "nobody is waiting". This card is fed
+            `flow.current ?? flow.next`, both SESSION-scoped. The queue rendered directly beneath it is
+            DAY-scoped. Walking the product found this card saying "nobody is waiting" with four people
+            listed under it, each badged waiting -- they had arrived on an earlier day, so they were
+            outside the session window and invisible to this card while plainly visible below it.
+            A card that cannot see the queue must not make a claim about the queue. */}
         <p className="mt-1 text-[12.5px] text-gray-600">
-          Nobody is with you and nobody is waiting. New arrivals appear here as they are checked in.
+          Nobody is with you. New arrivals appear here as they are checked in.
         </p>
       </section>
     );
