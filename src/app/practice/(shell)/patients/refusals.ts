@@ -101,9 +101,13 @@ export const SCREEN_REFUSES: readonly Refusal[] = [
     state: "NOT_AVAILABLE_YET",
     title: "No patient photographs",
     reason:
-      "Competen Practice does not store images, so the register shows names and identifiers rather than photographs.",
+      "There is nowhere to put a photograph on a patient's record, so the register shows names and identifiers. Images can still be filed as documents.",
     internal: {
-      reasonCode: "NO_FILE_STORAGE",
+      reasonCode: "NO_PATIENT_PHOTO_FIELD",
+      // ⚠ "DOES NOT STORE IMAGES" WAS FALSE. The practice-attachments bucket exists (migration 336)
+      // and the document library has a camera capture that writes to it. What does not exist is a
+      // photograph on the PATIENT RECORD -- practice_patient has no photo column in any migration.
+      // The refusal stands; the reason it gave did not.
       specReference: "CPR-PAT-002 s4",
       // The label this refusal used to show a practitioner, kept as provenance.
       technicalDetail:

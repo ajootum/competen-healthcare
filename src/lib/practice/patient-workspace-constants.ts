@@ -343,9 +343,13 @@ export const REFUSES: readonly Refusal[] = [
     state: "NOT_AVAILABLE_YET",
     title: "Photographs and scanned identity documents",
     reason:
-      "Competen Practice does not store images, so patients are identified by name and identifier rather than by photograph.",
+      "There is nowhere to put a photograph or a scanned document on a patient's record, so patients are identified by name and identifier. Images can still be filed as documents.",
     internal: {
-      reasonCode: "NO_FILE_STORAGE",
+      reasonCode: "NO_PATIENT_PHOTO_FIELD",
+      // ⚠ "DOES NOT STORE IMAGES" WAS FALSE. The practice-attachments bucket exists (migration 336)
+      // and the document library has a camera capture that writes to it. What does not exist is a
+      // photograph on the PATIENT RECORD -- practice_patient has no photo column in any migration.
+      // The refusal stands; the reason it gave did not.
       specReference: "CPR-PAT-002",
       // Kept verbatim: this was the sentence a practitioner used to be shown.
       technicalDetail:
