@@ -261,7 +261,8 @@ export default function BulkWorkspace(props: {
       {/* ── 3. The grid ───────────────────────────────────────────────────────────────────────── */}
       {selected && (
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_260px]">
-          <section className="rounded-xl border border-gray-200 bg-white">
+          {/* min-w-0 -- see PathwaysWorkspace: the inner overflow-x-auto cannot engage without it. */}
+          <section className="min-w-0 rounded-xl border border-gray-200 bg-white">
             <div className="border-b border-gray-100 px-4 py-2.5">
               <h2 className="text-[13.5px] font-bold text-gray-900">{selected.dayLabel}</h2>
               <p className="text-[11.5px] text-gray-500">

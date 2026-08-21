@@ -501,6 +501,45 @@ if (existsSync(DOC)) {
   ok("7e every frozen surface still carries a mobile face", faceless.length === 0, faceless.join(", "));
 }
 
+// ---- 8. ⚠ THE min-width:auto TRAP ------------------------------------------------------------
+//
+// A grid item's min-width defaults to AUTO: it refuses to shrink below its content's intrinsic width.
+// So a wide table inside a grid column is not scrolled by the overflow-x-auto wrapped around it -- it
+// sets the COLUMN's floor instead, and the whole PAGE scrolls sideways. The scroller is still in the
+// markup, still correct-looking, and completely inert.
+//
+// Three times now: EncounterConsole, PathwaysWorkspace, BulkWorkspace. Each paired an overflow-x-auto
+// with a min-w-[Npx] table inside a [1fr_...] column whose child carried no min-w-0. Fixing the third
+// without pinning the shape only waits for the fourth.
+//
+// ⚠ Deliberately narrow: it fires only where a file BOTH declares a [1fr_...] grid AND contains a
+// horizontal scroller -- exactly the combination that traps. One without the other is not a candidate.
+{
+  const GRID_1FR = /grid-cols-\[[^\]]*1fr[^\]]*\]/;
+  const SCROLLER = /overflow-x-auto|TABLE_SCROLL/;
+  // The element opening immediately after the 1fr grid declaration is the column that must not
+  // establish a floor. 400 chars is enough to clear the grid div's own attributes and reach it.
+  const FIRST_CHILD = /grid-cols-\[[^\]]*1fr[^\]]*\][^]{0,400}?<(?:section|div)\s+className="([^"]*)"/;
+
+  const candidates = PRACTICE_FILES.filter(f => {
+    if (!f.endsWith(".tsx")) return false;
+    const src = readFileSync(f, "utf8");
+    return GRID_1FR.test(src) && SCROLLER.test(src);
+  });
+  const trapped = candidates.filter(f => {
+    const m = readFileSync(f, "utf8").match(FIRST_CHILD);
+    return m ? !m[1].includes("min-w-0") : false;
+  }).map(f => relative(ROOT, f));
+
+  ok("8a a 1fr column holding a horizontal scroller carries min-w-0, so the table scrolls and not the page",
+    trapped.length === 0, trapped.slice(0, 3).join(" | "));
+  ok("8a-control the scan finds candidate files at all, so it cannot pass by matching nothing",
+    candidates.length > 0);
+  ok("8a-control2 the child pattern reads the className it is meant to judge",
+    FIRST_CHILD.test('<div className="grid lg:grid-cols-[1fr_260px]">\n  <section className="min-w-0 rounded-xl">')
+      && !GRID_1FR.test('<div className="grid lg:grid-cols-2">'));
+}
+
 // ---------------------------------------------------------------------------------------------
 console.log(`\n${pass} passed, ${fails.length} failed`);
 if (fails.length) { for (const f of fails) console.log(`  - ${f}`); process.exit(1); }

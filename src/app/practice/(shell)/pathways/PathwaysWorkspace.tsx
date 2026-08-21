@@ -152,7 +152,10 @@ export default function PathwaysWorkspace({
       </details>
 
       <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
-        <section className="rounded-2xl border border-gray-200 bg-white">
+        {/* min-w-0: a grid item defaults to min-width:auto, so without this the 820px table inside
+            TABLE_SCROLL sets the column's floor, the overflow-x-auto never engages and the PAGE
+            scrolls sideways instead of the table. Same shape as the EncounterConsole fix. */}
+        <section className="min-w-0 rounded-2xl border border-gray-200 bg-white">
           <div className="flex flex-wrap items-center gap-1 border-b border-gray-100 px-3 pt-2">
             {([["patients", "My patients"], ["templates", "Pathway templates"]] as const).map(([k, label]) => (
               <button key={k} type="button" onClick={() => setTab(k)}
