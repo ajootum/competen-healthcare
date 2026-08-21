@@ -83,7 +83,7 @@ export default function SignInForm() {
         <Link href="/forgot-password" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Forgot your password?</Link>
       </p>
       <p className="mt-1.5 text-center text-[12px] text-gray-500">
-        New here? <Link href="/practice/sign-up" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">Create your Practice</Link>
+        New here? <Link href="/practice/sign-up" className="font-semibold text-[var(--cp-primary-deep)] hover:underline">See how to get a Practice</Link>
       </p>
     </form>
   );
