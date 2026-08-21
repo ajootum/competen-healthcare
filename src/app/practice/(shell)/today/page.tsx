@@ -133,7 +133,7 @@ export default async function CurrentSessionPage() {
   const actions = [
     hasCapability(shell.ctx, "patient.list") ? {
       href: "/practice/patients", label: "Add walk-in / find patient",
-      note: "Search the register first; attach, never duplicate (s9).",
+      note: "Search the register first; attach, never duplicate.",
     } : null,
     canControl ? {
       href: "/practice/calendar", label: "Open the appointment book",
@@ -141,7 +141,7 @@ export default async function CurrentSessionPage() {
     } : null,
     hasCapability(shell.ctx, "task.view") ? {
       href: "/practice/tasks", label: "Create or check a task",
-      note: "Tasks stay contextual here -- Current Session has no Tasks submenu (s12).",
+      note: "A task you raise here stays attached to this session.",
     } : null,
   ].filter((a): a is NonNullable<typeof a> => a !== null);
 
@@ -249,7 +249,7 @@ export default async function CurrentSessionPage() {
           <p className="mt-0.5 text-[13px] text-gray-500">
             {formatDate(plan.date)} · {dash.scope.kind === "session"
               ? "figures below count this session, not the whole day"
-              : "nothing is running — day figures live on the Command Centre, not here (s5.2)"}
+              : "nothing is running — day figures live on the Command Centre, not here"}
           </p>
         </div>
         <LiveRefresh asOf={dash.asOf} timezone={dash.timezone} />
