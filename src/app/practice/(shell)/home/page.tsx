@@ -178,7 +178,14 @@ export default async function PracticeCommandCentre() {
               <Link href={a.href}
                 className={`flex min-h-[var(--cp-touch)] items-center gap-2.5 rounded-lg border-l-[3px] bg-gray-50/70 px-3 py-2 ${sv.border}`}>
                 <span className="min-w-0 flex-1">
-                  <span className={`block text-[13px] font-semibold leading-snug ${sv.text}`}>{a.title}</span>
+                  {/* ⚠ THE NUMBER, WHICH THIS CARD BUILT AND THEN THREW AWAY. Every AttentionItem carries
+                      a `count` and the engine only emits the item at all when that count is above zero -- so
+                      the card asserted urgency ("Somebody outside this room is waiting on each of these")
+                      while withholding whether that was one person or thirty. Same page already renders
+                      counts elsewhere; nothing pinned their absence here. */}
+                  <span className={`block text-[13px] font-semibold leading-snug ${sv.text}`}>
+                    {a.title}{typeof a.count === "number" ? ` · ${a.count}` : ""}
+                  </span>
                   <span className="block text-[11.5px] leading-snug text-gray-500">{a.detail}</span>
                 </span>
                 <span aria-hidden className="shrink-0 text-[13px] text-gray-400">→</span>
@@ -577,7 +584,10 @@ export default async function PracticeCommandCentre() {
                   return (
                     <li key={a.kind}>
                       <Link href={a.href} className={`block rounded-lg border-l-[3px] py-0.5 pl-2.5 group ${sv.border}`}>
-                        <p className={`text-[12px] font-semibold ${sv.text} group-hover:underline`}>{a.title}</p>
+                        {/* The same number as the phone renders -- see the note in the mobile block. */}
+                        <p className={`text-[12px] font-semibold ${sv.text} group-hover:underline`}>
+                          {a.title}{typeof a.count === "number" ? ` · ${a.count}` : ""}
+                        </p>
                         <p className="text-[11px] leading-snug text-gray-500">{a.detail}</p>
                       </Link>
                     </li>
