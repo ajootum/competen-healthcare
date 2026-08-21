@@ -181,6 +181,39 @@ for (const rel of screens) {
     src.length > 0 && !/\.technicalDetail|\{\s*[\w.]*\.detail\s*\}/.test(src));
 }
 
+// ══ 8. THE OTHER TWO SCREENS s8 NAMES ═════════════════════════════════════════════════════════
+//
+// ⚠ THESE ARE SCANNED AS SOURCE, NOT AS A REGISTRY, BECAUSE THEY DO NOT HAVE ONE. Patients keeps its
+// refusals as data; Setup/Availability-Booking states them inline through <NotBuilt>, and Documents
+// states them as prose in the page. A registry-only harness would have reported "all clear" for both
+// while every leak sat untouched -- which is the shape of a guard that cannot fail.
+section("8. setup and documents carry no internal language either");
+const PROSE_SCREENS = [
+  "src/app/practice/(shell)/setup/availability-booking/page.tsx",
+  "src/app/practice/(shell)/setup/availability-booking/RuleWorkspace.tsx",
+  "src/app/practice/(shell)/documents/page.tsx",
+  "src/lib/practice/booking-rule-constants.ts",
+];
+/** A build-plan phase is as meaningless to a doctor as a spec id, and dates the product besides. */
+const BUILD_PHASE_RE = /\bPhase [0-9]\b/;
+for (const rel of PROSE_SCREENS) {
+  const p = join(process.cwd(), rel);
+  const name = rel.split("/").pop();
+  if (!existsSync(p)) { ok(`8a[${name}]. file exists`, false, rel); continue; }
+  const src = stripComments(readFileSync(p, "utf8"));
+  const strings = [...src.matchAll(/"([^"\\]{15,200})"/g)].map(m => m[1]);
+  const bad = strings.filter(t =>
+    INTERNAL_IDENTIFIER_RE.test(t) || /\bs[0-9]{1,2}\.[0-9]\b/.test(t) || BUILD_PHASE_RE.test(t));
+  ok(`8a[${name}]. no rendered string carries a spec id, section number or build phase`,
+    bad.length === 0, bad.slice(0, 2).map(b => b.slice(0, 80)).join(" | "));
+}
+ok("8b-control. the section-number and build-phase detectors match real ones",
+  /\bs[0-9]{1,2}\.[0-9]\b/.test("s10.1's eight testable scenarios") && BUILD_PHASE_RE.test("Phase 6 — not built"));
+// s8: a CTA is required where setup IS possible, and forbidden where it is not.
+ok("8c. NotBuilt no longer renders a build phase to a practitioner",
+  !/\{phase\}\s*—\s*not built/.test(
+    stripComments(readFileSync(join(process.cwd(), PROSE_SCREENS[0]), "utf8"))));
+
 // ⚠ THE STRIPPER NEEDS ITS OWN CONTROL. One that blanked the whole file would make every 7a green,
 // and a green 7a is exactly what a broken stripper looks like from the outside.
 ok("7-control. the stripper removes comments WITHOUT emptying the file",

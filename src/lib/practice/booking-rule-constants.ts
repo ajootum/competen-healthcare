@@ -409,7 +409,7 @@ export const BUILDER_SECTIONS = [
     key: "scope", title: "Scope", built: true, phase: null,
     alreadyBuilt: null,
     responsibility: "Location, recurring session, appointment type, booking channel, patient group",
-    note: "All five stored, and all five feed s11's ladder.",
+    note: "All five are stored, and all five decide whether this rule is the one that applies to a patient.",
   },
   {
     key: "window", title: "Booking window", built: true, phase: null,
@@ -433,7 +433,7 @@ export const BUILDER_SECTIONS = [
     key: "follow_ups", title: "Follow-ups", built: true, phase: null,
     alreadyBuilt: null,
     responsibility: "Due window, early/overdue booking, reserved capacity and recall behaviour",
-    note: "The early and late window is enforced against the follow-up's own due date. The recall queue is Phase 5 and lives in Follow-ups.",
+    note: "The early and late window is enforced against the follow-up's own due date. The recall queue lives in Follow-ups.",
   },
   {
     key: "walk_ins", title: "Walk-ins", built: true, phase: null,
@@ -478,7 +478,7 @@ export const BUILDER_SECTIONS = [
     note: "Every question the booking intake can ask is listed, and each is off, optional or required under this rule. A required answer that is missing refuses the booking on the server, not merely on the form. A question set to off is not asked, and an answer that arrives for it anyway is discarded rather than stored. Documents are the one item with nowhere to go -- there is no document service on the patient path, so none is offered.",
   },
   {
-    key: "notifications", title: "Notifications", built: false, phase: "Phase 6",
+    key: "notifications", title: "Notifications", built: false, phase: null,
     alreadyBuilt: null,
     responsibility: "Trigger selection; templates and delivery remain in Notifications configuration",
     note: "Nothing in this product sends a message to a patient. Offering triggers here would promise a notification nobody would receive.",
@@ -623,7 +623,7 @@ export const BOOKING_INTAKE_FIELDS: BookingIntakeField[] = [
   {
     field_key: "representative_name", label: "Parent, guardian or representative",
     field_type: "text", column: "representative_name",
-    help: "s7.6's paediatric path. Set this to required with the condition below and a child's booking asks for a guardian while an adult's does not.",
+    help: "Set this to required with the condition below and a child's booking asks for a guardian while an adult's does not.",
     alwaysRequired: false, group: "contact", rules: { minLength: 2, maxLength: 160 },
   },
   {
@@ -648,7 +648,7 @@ export const BOOKING_INTAKE_FIELDS: BookingIntakeField[] = [
   {
     field_key: "referral_source", label: "Who referred them",
     field_type: "text", column: "referral_source",
-    help: "s7.2's referral information. ⚠ It is NOT what makes a rule for referred patients match -- that is a property of the booking, not a sentence somebody typed.",
+    help: "This is not what makes a rule apply to referred patients -- that is a property of the booking, not a sentence somebody typed.",
     alwaysRequired: false, group: "context", rules: { maxLength: 200 },
   },
   {

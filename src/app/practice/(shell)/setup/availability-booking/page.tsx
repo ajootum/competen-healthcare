@@ -21,6 +21,7 @@ import RuleWorkspace from "./RuleWorkspace";
 import RecallWorkspace from "./RecallWorkspace";
 import PublishWorkspace from "./PublishWorkspace";
 import { onSetupReadinessEvaluated } from "@/lib/practice/activation-hooks";
+import { REFUSAL_STATE_COPY } from "@/lib/practice/refusal-presentation";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -75,14 +76,28 @@ export const dynamic = "force-dynamic";
 const card = "rounded-xl border border-gray-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]";
 
 /** A later phase's surface, drawn as what it is. */
-function NotBuilt({ title, phase, what }: { title: string; phase: string; what: string }) {
+/**
+ * ⚠ CPR-HFE-REF-001. `phase` USED TO RENDER AS "Phase 6 -- not built" AND A PRACTITIONER HAS NO
+ * IDEA WHAT PHASE 6 IS. It is a build-plan artefact: real to whoever sequenced the work, meaningless
+ * to the person reading it, and it dated the product in the worst way -- a doctor cannot tell whether
+ * Phase 6 is next month or next year, so it reads as an excuse rather than a fact.
+ *
+ * The state is what a practitioner needs, and "Not available yet" is the canonical way to say it.
+ * reasonCode/specReference/technicalDetail are accepted and NOT rendered: they exist so Product
+ * Director and Engineering keep the provenance, per s11.
+ */
+function NotBuilt({ title, what, nextAction }: {
+  title: string; phase?: string | null; what: string; alreadyBuilt?: string | null;
+  reasonCode?: string; specReference?: string; technicalDetail?: string;
+  nextAction?: { label: string; href: string } | null;
+}) {
   return (
     <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-3.5">
       <div className="flex flex-wrap items-center gap-2">
         <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-200 text-[12px] text-slate-500">◌</span>
         <p className="text-[12.5px] font-bold text-slate-600">{title}</p>
         <span className="rounded bg-white px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500 ring-1 ring-slate-200">
-          {phase} — not built
+          {REFUSAL_STATE_COPY.NOT_AVAILABLE_YET.title}
         </span>
       </div>
       <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">{what}</p>
@@ -322,7 +337,7 @@ export default async function AvailabilityBookingPage({ searchParams }: {
           <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--cp-primary)]/12 text-[15px] text-[var(--cp-primary-deep)]">③</span>
           <div className="min-w-0 flex-1">
             <p className="text-[12.5px] font-bold text-gray-900">
-              This workspace is at Phase 6 of six, and the one thing still missing is the screen a
+              Everything here is set up and working. The one thing still missing is the screen a
               patient would type into.
             </p>
             <p className="text-[11px] leading-relaxed text-gray-600">
@@ -544,8 +559,12 @@ export default async function AvailabilityBookingPage({ searchParams }: {
 
                 <NotBuilt
                   title="Offering the next available appointment, and a waiting list"
-                  phase="Phase 3 and Phase 5"
-                  what={"s5.3 lists six resolutions and three of them are real here — keep pending, cancel the appointment, and record that the patient was moved to another one. s7's rule engine now exists (Phase 3), so an alternative could be evaluated; what is still missing is somewhere to HOLD an offer and anything that would send it, which is why “offer next available” remains refused rather than stored. “Move to waiting list” needs a waiting list: practice_appointment has six statuses and none of them is wait-listed, and there is no priority to preserve. Both are refused by the engine with the reason rather than stored as a word that would make a patient look handled."} />
+                  phase={null}
+                  what={"Competen Practice cannot offer a patient the next available appointment, or hold them on a waiting list. There is nowhere to keep an offer and nothing that would send it, so when you change a time the choices are to keep the booking, cancel it, or record that the patient moved to another one."}
+                  // ⚠ CPR-HFE-REF-001: the practitioner reads `what`; this provenance is not rendered.
+                  reasonCode="NO_OFFER_STORE_NO_WAITLIST"
+                  specReference="CPR-AVB-001 s5.3"
+                  technicalDetail={"s5.3 lists six resolutions and three of them are real here — keep pending, cancel the appointment, and record that the patient was moved to another one. s7's rule engine now exists (Phase 3), so an alternative could be evaluated; what is still missing is somewhere to HOLD an offer and anything that would send it, which is why “offer next available” remains refused rather than stored. “Move to waiting list” needs a waiting list: practice_appointment has six statuses and none of them is wait-listed, and there is no priority to preserve. Both are refused by the engine with the reason rather than stored as a word that would make a patient look handled."} />
               </>
             )}
 
@@ -663,8 +682,12 @@ export default async function AvailabilityBookingPage({ searchParams }: {
 
                 <NotBuilt
                   title="Scenario preview"
-                  phase="Phase 6"
-                  what={"s10.1's eight testable scenarios. The panel beside this shows what the booking engine would offer from real slots and real rules over the next fortnight, which is the honest half of a preview. The other half — walking a NEW PATIENT, a follow-up, a staff booking and a walk-in through the page as they would experience it — needs the patient-facing intake, which is Phase 4's remainder and is not built. The publish checklist above says so as a blocker rather than leaving it to be discovered."} />
+                  phase={null}
+                  what={"You can see what the booking engine would offer from your real sessions and rules over the next fortnight. Walking a new patient or a follow-up through the booking page as they would see it needs the patient-facing intake, which is not built yet."}
+                  // ⚠ CPR-HFE-REF-001: the practitioner reads `what`; this provenance is not rendered.
+                  reasonCode="NO_PATIENT_INTAKE_PATH"
+                  specReference="CPR-AVB-001 s10.1"
+                  technicalDetail={"s10.1's eight testable scenarios. The panel beside this shows what the booking engine would offer from real slots and real rules over the next fortnight, which is the honest half of a preview. The other half — walking a NEW PATIENT, a follow-up, a staff booking and a walk-in through the page as they would experience it — needs the patient-facing intake, which is Phase 4's remainder and is not built. The publish checklist above says so as a blocker rather than leaving it to be discovered."} />
               </>
             )}
           </div>
