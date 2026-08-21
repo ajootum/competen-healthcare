@@ -221,9 +221,20 @@ ok("2a-control2 stripping removes the needle from a comment and leaves it in cod
  * fix depends on -- so ripping the composition out again cannot pass quietly.
  */
 const activitiesRoute = strip(readFileSync(join(APP, "api", "v1", "practice", "activities", "route.ts"), "utf8"));
+// ⚠ REPOINTED 2026-08-21. This pinned `workspaceClock`, the per-call helper that read the timezone
+// once per request. WorkspaceContext now CARRIES workspaceTimezone, so the helper is gone from this
+// route and the zone arrives already resolved -- the same guarantee, established earlier and in one
+// place. Pinning the helper's NAME made a deliberate improvement look like a regression, which is the
+// standing lesson about pinning a mechanism you are actively trying to change. What matters is that
+// the zone comes from the PRACTICE and the instant is composed on the SERVER, so that is what is
+// pinned: either source of the practice zone, and never a bare client-side Date.
+const PRACTICE_ZONE_SOURCE = /workspaceClock|ctx\.workspaceTimezone/;
 ok("2d the activities route composes a wall clock server-side, in the practice's timezone",
-  /instantInZone/.test(activitiesRoute) && /workspaceClock/.test(activitiesRoute)
+  /instantInZone/.test(activitiesRoute)
+  && PRACTICE_ZONE_SOURCE.test(activitiesRoute)
   && !/new Date\((?:body|x)\.\w+At\)/.test(activitiesRoute));
+ok("2d-control the pin rejects a route that composes the instant from the device instead",
+  !PRACTICE_ZONE_SOURCE.test("const at = new Date(d + 'T' + t);"));
 
 const offlineReader = strip(readFileSync(join(PRACTICE, "offline", "OfflineReader.tsx"), "utf8"));
 ok("2e the offline capture forms compose in the practice's timezone, not the device's",
