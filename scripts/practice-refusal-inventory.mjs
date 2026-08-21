@@ -45,8 +45,33 @@ const rows = [];
 for (const f of files) {
   const src = strip(readFileSync(f, "utf8"));
   // string literals long enough to be prose rather than a key or a class name
-  const lits = [...src.matchAll(/"([^"\\\n]{18,240})"/g)].map(m => m[1]);
-  for (const t of lits) {
+  // ⚠ CLASSIFY BY FIELD, NOT ONLY BY DIRECTORY. CPR-HFE-REF-001 split every refusal into a
+  // practitioner half and an `internal` half, and s11 REQUIRES the internal half to stay technical --
+  // it is how anybody answers "why is this refused" later. Those strings live in src/app/practice, so a
+  // directory-only rule reports finished work as outstanding for ever.
+  //
+  // ⚠ THE LOOKBACK MUST CLEAR CONCATENATION. A first draft looked back 80 characters and found the
+  // previous LITERAL rather than the field, because these values are written as
+  //     technicalDetail:
+  //       "one part" + " -- " +
+  //       "the next part",
+  // so every continuation line read as unclassified and four resolved entries kept reporting as open.
+  // Taking the NEAREST PRECEDING field name over a wider window classifies every part the same way.
+  const INTERNAL_FIELDS = new Set(["technicalDetail", "specReference"]);
+  const nearestField = (src, at) => {
+    const back = src.slice(Math.max(0, at - 600), at);
+    const names = [...back.matchAll(/\b([A-Za-z][A-Za-z0-9]*)\s*:/g)];
+    return names.length ? names[names.length - 1][1] : null;
+  };
+  // A JSX or code fragment that survived the literal scan is not prose. Both shapes below are
+  // artefacts of matching quotes inside markup, not sentences anybody reads.
+  const isFragment = (t) => t.includes("}}") || /^\s*[)\]},]/.test(t);
+
+  const matches = [...src.matchAll(/"([^"\\\n]{18,240})"/g)];
+  for (const m of matches) {
+    const t = m[1];
+    if (isFragment(t)) continue;
+    const internal = INTERNAL_FIELDS.has(nearestField(src, m.index));
     const flags = [];
     if (ID.test(t)) flags.push("spec-id");
     if (SECTION.test(t)) flags.push("section");
@@ -57,7 +82,7 @@ for (const f of files) {
     // Prose, not a key, a class list or a query string: real words, and not mostly punctuation.
     const words = t.trim().split(/\s+/);
     const isProse = words.length >= 5 && /[a-z]{3,}\s+[a-z]{3,}/i.test(t) && !/^[\w.-]+$/.test(t);
-    if (flags.length && isProse) rows.push({ file: f, flags: flags.join("+"), text: t });
+    if (flags.length && isProse) rows.push({ file: f, flags: flags.join("+"), text: t, internal });
   }
 }
 
@@ -70,12 +95,15 @@ let out = `CPR-HFE-REF-001 s9 -- practitioner-estate inventory\n`;
 out += `${rows.length} flagged strings across ${byFile.size} files (of ${files.length} scanned)\n\n`;
 for (const [f, rs] of sorted) {
   out += `\n=== ${f}  (${rs.length})\n`;
-  for (const r of rs) out += `  [${r.flags}] ${r.text.slice(0, 150)}\n`;
+  // A row still listed but marked INTERNAL is provenance s11 requires, not outstanding work. Without
+  // the marker a reader counts the lines under a heading and reaches the opposite conclusion.
+  for (const r of rs) out += `  ${r.internal ? "[INTERNAL s11 provenance -- keep] " : ""}[${r.flags}] ${r.text.slice(0, 150)}\n`;
 }
 writeFileSync(process.argv[2], out, "utf8");
 
-const app = rows.filter(r => r.file.startsWith("src/app/"));
-const lib = rows.filter(r => r.file.startsWith("src/lib/"));
+const provenance = rows.filter(r => r.internal);
+const app = rows.filter(r => r.file.startsWith("src/app/") && !r.internal);
+const lib = rows.filter(r => r.file.startsWith("src/lib/") && !r.internal);
 console.log(`${rows.length} flagged PROSE strings across ${byFile.size} files`);
 console.log(`  src/app/practice (definitely rendered): ${app.length}`);
 console.log(`  src/lib/practice  (rendered only if a screen reads it): ${lib.length}`);
