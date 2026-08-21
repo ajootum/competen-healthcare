@@ -60,12 +60,17 @@ no longer *accepts* `sources`, let alone renders it.
 
 ## Still open, with counts
 
-| Item | Size | Why it is not done |
+| Item | Size | State |
 |---|---|---|
-| Intelligence `formula` prose | ~57 sites in `intelligence.ts` | Sentences like *"practice_procedure rows in the period with status ABANDONED"* are jargon-flavoured but **true**, and each needs checking against its own query. An auto-generated basis that is plausible and wrong is worse than a true one that reads awkwardly. |
-| Lib-layer triage | 139 flagged strings in modules a practice screen imports | "Imported" is not "rendered". Most are metric formulas, refusal `technicalDetail` and engine internals — all of which s11 **requires** to keep technical language. Separating them is a read, not a regex. |
+| Intelligence `formula` prose | 41 lines, 38 of them prose | **Done.** 45 substitutions, every one a renaming — no clause added, removed or weakened. Three PostgREST column lists remain and are query arguments, not prose. |
+| Lib-layer triage | 129 flagged strings in modules a practice screen imports | **Open.** "Imported" is not "rendered". Most are metric formulas, refusal `technicalDetail` and engine internals — all of which s11 **requires** to keep technical language. Separating them is a read, not a regex. |
+| Absence claims outside the four registries | not counted | **Open.** Every `NotBuilt` and "not available" sentence in Setup, Documents and the engines. See the rot section below. |
+⚠ **The count of the intelligence work was wrong four times before it was right.** `grep -c "formula:"` said
+57 (occurrences of a key, including references); two cleverer regexes said 16 and 5, each blind to a
+different shape — positional arguments, template literals. A blunt line-based sweep was the only one that
+was right. **When counting a pattern in prose, scan lines and filter; do not parse structure.**
 
-⚠ **The 139 is a survey figure, not a defect count.** Quoting it as "139 leaks" would be exactly the kind
+⚠ **And the 129 is a survey figure, not a defect count.** Quoting it as "139 leaks" would be exactly the kind
 of unmeasured claim this arc keeps finding.
 
 ---
