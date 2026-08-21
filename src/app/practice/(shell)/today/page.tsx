@@ -107,7 +107,10 @@ export default async function CurrentSessionPage() {
       unit: (x?.unit ?? "count") as "count" | "minutes",
       reason: x?.reason ?? (m ? null : "Today's figures could not be read."),
       observations: x?.observations ?? null,
-      basis: x?.formula ?? null,
+      // ⚠ THE FIELD WAS CALLED `basis` AND WAS FED THE FORMULA, which is why this survived the
+      // Command Centre fix: the name already looked right. SessionTiles and SessionPerformance both
+      // use it as a tooltip, so hovering a Current Session tile showed the engineering sentence.
+      basis: x?.basis ?? null,
     };
   };
   const flowReason = flow.unavailable ? "The patient flow could not be read just now." : null;

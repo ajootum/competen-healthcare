@@ -250,6 +250,16 @@ section("9. metric provenance does not reach a practitioner surface");
   // the render itself -- a tooltip is practitioner-facing, whatever it is called
   const home = stripComments(readFileSync(
     join(process.cwd(), "src", "app", "practice", "(shell)", "home", "page.tsx"), "utf8"));
+  // ⚠ 9c ONLY EVER CHECKED ONE SCREEN, AND A SECOND ONE WAS DOING THE SAME THING WITH A FIELD
+  // ALREADY NAMED `basis`. today/page.tsx built its tiles with `basis: x?.formula` -- the name looked
+  // right, so the Command Centre fix read as complete while Current Session still put the
+  // engineering sentence in every tile tooltip. Found by walking the product, not by this harness.
+  const todaySrc = stripComments(readFileSync(
+    join(process.cwd(), "src", "app", "practice", "(shell)", "today", "page.tsx"), "utf8"));
+  ok("9c-b. ⚠ Current Session feeds its tiles the basis, never the formula",
+    /basis:\s*x\?\.basis/.test(todaySrc) && !/basis:\s*x\?\.formula/.test(todaySrc));
+  ok("9c-b-control. the detector would see the old mapping",
+    /basis:\s*x\?\.formula/.test("      basis: x?.formula ?? null,"));
   ok("9c. ⚠ the Command Centre renders `basis`, not formula/sources",
     /title=\{why \?\? t\.basis\}/.test(home) && !/t\.formula|t\.sources/.test(home));
 
