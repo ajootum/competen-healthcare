@@ -86,9 +86,19 @@ export const SCREEN_REFUSES: readonly Refusal[] = [
     state: "NOT_AVAILABLE_YET",
     title: "Search does not reach diagnoses or treatments",
     reason:
-      "Search covers names, phone numbers and identifiers. It does not yet look inside diagnoses, treatments or the hospital a patient was seen in.",
+      "The register searches names, phone numbers and identifiers. To search inside diagnoses, treatments or procedures, use Search.",
+    // ⚠ A REAL NEXT ACTION, BECAUSE THERE IS ONE. s10 forbids a CTA where the practitioner cannot
+    // change the state, and requires one where they can. They can: /practice/search covers diagnoses,
+    // problems, treatments, procedures, notes, documents and more.
+    nextAction: { label: "Open Search", href: "/practice/search" },
     internal: {
       reasonCode: "SEARCH_SCOPE_LIMITED",
+      // ⚠ THE OLD SENTENCE OVER-GENERALISED AND WAS THEREFORE FALSE. It said "Search ... does not yet
+      // look inside diagnoses, treatments or the hospital" -- but CPR-350 global search queries twelve
+      // sources including diagnoses, problems, treatments and procedures. Only the REGISTER search is
+      // name-only (patients.ts does a single ilike on name_normalised). A practitioner reading the old
+      // wording would conclude the product cannot search clinical content at all.
+      // Facility/hospital genuinely is not searched anywhere, so it is no longer claimed either way.
       specReference: "CPR-PAT-002 s5",
       // The label this refusal used to show a practitioner, kept as provenance.
       technicalDetail:
