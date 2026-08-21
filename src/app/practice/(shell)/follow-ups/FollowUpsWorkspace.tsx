@@ -631,7 +631,7 @@ export default function FollowUpsWorkspace({
         <div className="rounded-2xl border border-gray-200 bg-white p-4">
           <h2 className="text-[13px] font-bold text-gray-900">Where these came from</h2>
           <p className="mt-0.5 text-[11.5px] text-gray-500">
-            CPR-FUP-002 s3: encounters are the primary source. Every figure is the rows carrying that
+            Encounters are the primary source. Every figure is the rows carrying that
             source in what was read.
           </p>
           <ul className="mt-2 flex flex-col">

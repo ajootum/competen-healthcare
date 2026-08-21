@@ -528,7 +528,7 @@ export default async function PatientPage({ params, searchParams }: {
             </ul>
           )}
           <p className="mt-3 text-[10px] text-gray-400">
-            The 20 most recent encounters. Documents and attachments arrive with Phase 4.
+            The 20 most recent encounters. Documents and attachments are not shown here yet.
           </p>
         </section>
       )}

@@ -286,6 +286,43 @@ section("9. metric provenance does not reach a practitioner surface");
     SOURCE_RENDER.test('<p>From: {sources.join(" · ")}</p>'));
 }
 
+// ══ 10. JSX TEXT, WHICH EVERY EARLIER SECTION WAS BLIND TO ════════════════════════════════════
+//
+// ⚠ THIS WHOLE SECTION EXISTS BECAUSE THE s9 SWEEP DECLARED THE APP LAYER CLEAN AND IT WAS NOT.
+//
+// Sections 2 and 8 scan string LITERALS -- "..." and `...`. A practitioner-facing sentence in a React
+// component is usually neither: it is bare text between tags, and no quote character appears anywhere
+// near it. Nineteen leaks lived in that gap, including "The design puts a Scan ID button here, and
+// CPR-V5-006 marks barcode and QR scanning as future" on the walk-in registration drawer -- found by
+// opening the screen, not by any tool here.
+//
+// The lesson is not "add a regex". It is that a scanner encodes an assumption about where text lives,
+// and a clean report from it means only that the assumption held.
+section("10. no internal identifier in JSX text");
+{
+  const JSX_TEXT = />([^<>{}]{25,400})</g;
+  const BANNED = /\b(CPR|COMP|PLAT|IAM|WEB|GOV)-[A-Z0-9]{2,}(-[0-9]+)?\b|\bs[0-9]{1,2}\.[0-9]\b|\bPhase [0-9]\b|\bmigration [0-9]{2,3}\b/i;
+  const screens = execSync('git ls-files "src/app/practice/**/*.tsx"', { encoding: "utf8" })
+    .split("\n").filter(Boolean);
+  const leaks: string[] = [];
+  for (const f of screens) {
+    const src = stripComments(readFileSync(join(process.cwd(), f), "utf8"));
+    for (const m of src.matchAll(JSX_TEXT)) {
+      const t = m[1].replace(/\s+/g, " ").trim();
+      if (t.split(" ").length < 5 || !BANNED.test(t)) continue;
+      leaks.push(`${f.split("/").pop()}: ${t.slice(0, 70)}`);
+    }
+  }
+  ok("10a. ⚠ no sentence rendered as JSX text names a spec, section, phase or migration",
+    leaks.length === 0, leaks.slice(0, 3).join(" | "));
+  ok("10a-control. the detector sees a real one in JSX-text position",
+    (() => {
+      const sample = '<p className="x">The design puts a Scan ID button here, and CPR-V5-006 marks scanning as future.</p>';
+      const m = [...sample.matchAll(JSX_TEXT)].map(x => x[1]);
+      return m.length > 0 && m.some(t => BANNED.test(t));
+    })());
+}
+
 // ⚠ THE STRIPPER NEEDS ITS OWN CONTROL. One that blanked the whole file would make every 7a green,
 // and a green 7a is exactly what a broken stripper looks like from the outside.
 ok("7-control. the stripper removes comments WITHOUT emptying the file",

@@ -356,8 +356,7 @@ export default function DelegationConsole({
       <section className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/60 p-4">
         <h2 className="text-[13px] font-bold text-gray-500">AI team assistant</h2>
         <p className="mt-1 text-[11px] text-gray-500">
-          Delegation recommendations, workload balancing and bottleneck detection are specified in
-          CPR-210 AI Clinical Assistant, which is not built.
+          Delegation recommendations, workload balancing and bottleneck detection are specified for a future assistant, which is not built.
         </p>
       </section>
     </>

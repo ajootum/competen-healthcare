@@ -31,7 +31,7 @@ export default async function Page() {
           <span className="w-9 h-9 rounded-full bg-[var(--cp-primary)] flex items-center justify-center text-white font-bold">C</span>
           <div>
             <p className="text-[15px] font-bold text-gray-900">Set up {ctx.workspaceName}</p>
-            <p className="text-[12px] text-gray-500">Short enough to finish in one sitting (IAM-001 rule, and ours).</p>
+            <p className="text-[12px] text-gray-500">Short enough to finish in one sitting.</p>
           </div>
         </div>
         <OnboardingWizard workspaceId={ctx.workspaceId} />

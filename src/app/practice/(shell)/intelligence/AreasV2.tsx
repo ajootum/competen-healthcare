@@ -900,8 +900,7 @@ export function FollowUpV2Area({ suite, extras, zones }: { suite: Suite; extras:
             <li className="rounded-lg border border-dashed border-slate-200 px-2.5 py-1.5">
               <p className="text-[12px] text-gray-500">Planned procedures incomplete</p>
               <p className="text-[10px] leading-relaxed text-gray-500">
-                Not supported: procedures here have exactly two states, performed and abandoned
-                (migration 197) &mdash; a planned-procedure state does not exist, so this gap cannot
+                Not supported: procedures here have exactly two states, performed and abandoned &mdash; a planned-procedure state does not exist, so this gap cannot
                 be computed and no number pretends otherwise.
               </p>
             </li>

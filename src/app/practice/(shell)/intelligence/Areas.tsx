@@ -782,8 +782,8 @@ export function PerformanceArea({ suite, portfolio, exportHrefs }: {
         <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
           The portfolio is assembled from your own activity log and is a document you export rather than a
           dashboard you read, so it lives at its own route and is not duplicated here. Reflection and Case
-          Memory sit beside it &mdash; all three are re-homed under Practice Intelligence
-          (CPR-PI-001 s3) without becoming panels inside it.
+          Memory sit beside it &mdash; all three live under Practice Intelligence without becoming
+          panels inside it.
         </p>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {[["/practice/portfolio", "Portfolio"], ["/practice/reflection", "Reflection"], ["/practice/cases", "Case memory"], ["/practice/activity", "Clinical activity"]].map(([href, label]) => (

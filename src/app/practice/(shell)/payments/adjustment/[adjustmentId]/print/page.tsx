@@ -79,7 +79,7 @@ export default async function AdjustmentNotePage({ params }: {
       <header className="border-b-2 border-gray-900 pb-3">
         <h1 className="text-lg font-bold text-gray-900">{KIND_TITLE[a.kind] ?? "Adjustment Note"}</h1>
         <p className="mt-0.5 text-[11px] text-gray-500">
-          The formal record of a governed correction (CPR-PAY-002 s14). This note documents the
+          The formal record of a governed correction. This note documents the
           adjustment row itself &mdash; there is no separate note register to drift from it.
         </p>
       </header>
@@ -109,8 +109,7 @@ export default async function AdjustmentNotePage({ params }: {
         <p className="mt-4 rounded-lg border border-gray-200 px-3 py-2.5 text-[11.5px] leading-relaxed text-gray-700">
           This refund reverses money against the payment of {formatMinor(pay.amount_minor, pay.currency)}
           {" "}({pay.method}) received {practiceDayOf(timezone, pay.paid_at) ?? "date not recorded"}. <b>The original payment stands
-          on the record</b> &mdash; a refund is its own transaction and never erases what it reverses
-          (CPR-PAY-002 s14).
+          on the record</b> &mdash; a refund is its own transaction and never erases what it reverses.
         </p>
       )}
 

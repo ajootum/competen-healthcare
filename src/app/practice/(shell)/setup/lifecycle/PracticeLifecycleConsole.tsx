@@ -279,7 +279,7 @@ export default function PracticeLifecycleConsole({ lifecycle }: Props) {
       <section className="rounded-2xl border border-gray-200 bg-white p-5">
         <h2 className="text-[15px] font-bold text-gray-900">Before a practice closes</h2>
         <p className="mt-1 text-[12.5px] leading-relaxed text-gray-500">
-          CPR-LIFE-001 s4&rsquo;s six checks, reported against what this product can actually see. This is a
+          Six checks, reported against what this product can actually see. This is a
           report and not a control: nothing here closes a practice, because this build has no close verb.
         </p>
         <ul className="mt-4 flex flex-col gap-2">

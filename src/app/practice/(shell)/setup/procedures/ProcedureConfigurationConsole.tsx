@@ -62,7 +62,7 @@ export default function ProcedureConfigurationConsole({ types, canManage }: {
         <p className="mt-0.5 text-[11px] leading-relaxed text-gray-500">
           Their safety rules are read-only. What this practice controls is whether each is offered,
           what it is called here, and where it sorts &mdash; a departure is recorded only when you
-          change something (no row means enabled, migration 297&apos;s own rule).
+          change something (anything you have not changed stays enabled).
         </p>
         <ul className="mt-2 flex flex-col">
           {supplied.map(t => (

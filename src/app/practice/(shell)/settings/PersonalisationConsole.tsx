@@ -303,8 +303,8 @@ export default function PersonalisationConsole({ preferences, locked, practice }
           <div className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-2">
             <p className="text-[11px] font-semibold text-gray-500">Auto-save interval</p>
             <p className="mt-0.5 text-[10px] text-gray-500">
-              The comp sets this to two minutes. Consultation notes are saved when you save them &mdash;
-              there is no autosave to set an interval for. It is CPR-130&rsquo;s to build, and this
+              A two-minute setting was designed for this. Consultation notes are saved when you save them &mdash;
+              there is no autosave to set an interval for. It is not built, and this
               setting arrives with it.
             </p>
           </div>
@@ -348,7 +348,7 @@ export default function PersonalisationConsole({ preferences, locked, practice }
           <div className="mt-2 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-2">
             <p className="text-[11px] font-semibold text-gray-500">Your active devices</p>
             <p className="mt-0.5 text-[10px] text-gray-500">
-              A device list needs a session register, which is CPR-370&rsquo;s and is not built. Nothing
+              A device list needs a session register, which is not built. Nothing
               here can tell you what is signed in.
             </p>
           </div>
@@ -398,8 +398,7 @@ export default function PersonalisationConsole({ preferences, locked, practice }
       <section className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/60 p-4">
         <h2 className="text-[13px] font-bold text-gray-500">AI configuration assistant</h2>
         <p className="mt-1 text-[11px] text-gray-500">
-          Recommended layouts, suggested shortcuts and specialty template suggestions are specified in
-          CPR-210 AI Clinical Assistant, which is not built. Nothing on this page was chosen for you.
+          Recommended layouts, suggested shortcuts and specialty template suggestions are specified for a future assistant, which is not built. Nothing on this page was chosen for you.
         </p>
       </section>
     </>

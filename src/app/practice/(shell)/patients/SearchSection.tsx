@@ -190,8 +190,7 @@ export default function SearchSection({ canCreate }: { canCreate: boolean }) {
 
       {/* THE COMP'S "SCAN ID" BUTTON, in its designed position and honest about itself. */}
       <p className="mt-3 border-t border-gray-100 pt-2 text-[11px] text-gray-400">
-        The design puts a &ldquo;Scan ID&rdquo; button here, and CPR-V5-006 marks barcode and QR scanning
-        as future. Reading a national ID or a passport needs a camera and a document parser, neither of
+        There is no &ldquo;Scan ID&rdquo; button here yet. Reading a national ID or a passport needs a camera and a document parser, neither of
         which exists yet &mdash; and every number a scan would produce is already searchable by typing it.
       </p>
     </section>

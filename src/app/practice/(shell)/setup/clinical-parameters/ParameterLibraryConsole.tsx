@@ -259,7 +259,7 @@ export default function ParameterLibraryConsole({ library }: { library: Paramete
                 No packs yet, and that is the truth about this build rather than a failed load. The pack{" "}
                 <em>machinery</em> is here &mdash; a pack can be created, filled, cloned and installed, and
                 every parameter it activates records which pack and which version put it there. The curated
-                catalogue (CPR-CPL-001: roughly 450 candidate parameters across 34 specialty groupings) is a
+                catalogue (roughly 450 candidate parameters across 34 specialty groupings) is a
                 separate pass and has not been authored.
               </p>
             ) : (

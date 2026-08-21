@@ -398,7 +398,7 @@ export default async function ReportsPage({ searchParams }: {
           <section className="rounded-xl border border-dashed border-gray-200 bg-gray-50/60 p-4">
             <h2 className="text-[13px] font-bold text-gray-500">AI report assistant</h2>
             <p className="mt-1 text-[11px] text-gray-500">
-              Drafting, summarising and language help are specified in CPR-210 AI Clinical Assistant,
+              Drafting, summarising and language help are specified for a future assistant,
               which is not built. Nothing on this page is machine-written.
             </p>
           </section>

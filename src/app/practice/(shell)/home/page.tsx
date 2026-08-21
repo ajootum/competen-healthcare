@@ -505,8 +505,7 @@ export default async function PracticeCommandCentre() {
               Open Planner &rarr;
             </Link>
             <p className="mt-2 text-[10px] leading-relaxed text-gray-400">
-              The weekly locations panel lives there now &mdash; one canonical home per information
-              type (CPR-HFE-001 s10), and a pointer here instead of a copy.
+              The weekly locations panel lives there now &mdash; one canonical home per information type, and a pointer here instead of a copy.
             </p>
           </div>
         </section>
@@ -640,7 +639,7 @@ export default async function PracticeCommandCentre() {
               <p className="mt-2 text-[11px] text-gray-400">and {cc.timeline.length - 8} more today</p>
             )}
             <p className="mt-2 border-t border-gray-100 pt-2 text-[10px] text-gray-400">
-              Schedule changes and the wider week live in the Planner (s4.1 planner handoff).
+              Schedule changes and the wider week live in the Planner.
             </p>
           </div>
 

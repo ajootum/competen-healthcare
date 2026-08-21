@@ -94,7 +94,7 @@ export default function TreatmentConfigurationConsole(props: {
           ))}
         </div>
         <p className="mt-1 text-[10.5px] text-gray-500">
-          CPR-TREAT-001 s5 leaves this to each practice. Required means nothing records without a reason.
+          This is left to each practice. Required means nothing records without a reason.
         </p>
         {props.settingsUnreadable && (
           <p className="mt-1.5 text-[11px] text-[var(--cmp-text-critical)]">
@@ -146,8 +146,8 @@ export default function TreatmentConfigurationConsole(props: {
 
             {list.length === 0 ? (
               <p className="mt-2 text-[12px] text-gray-400">
-                Nothing here. If this deployment has not run migration 275 there is no store behind this
-                list yet &mdash; that is not the same as a practice having emptied it.
+                Nothing here. There may be nothing stored behind this list yet &mdash; that is not the
+                same as a practice having emptied it.
               </p>
             ) : (
               <ul className="mt-2 flex flex-col divide-y divide-gray-100">
