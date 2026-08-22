@@ -21,7 +21,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  createTemplate, resolveTemplate, CORE_FIELDS,
+  createTemplate, resolveTemplate, validateTemplate, CORE_FIELDS,
 } from "../src/lib/practice/registration-config";
 import { registrationForm } from "../src/lib/practice/registration";
 
@@ -32,6 +32,12 @@ const ok = (name: string, cond: boolean, detail = "") => {
 };
 
 const WS = "b7c5dbc1-22e1-4c53-900c-c2c0f0e7135b";
+
+// ⚠ SPELLED OUT ON PURPOSE, AND NOT IMPORTED. Importing the production set would make 7b and 7c pass
+// for any seed at all, including the broken one -- the test would be checking that a set equals itself.
+// These three keys are the answer a person checked against the floor, so a change to the production
+// rule has to come back here and be re-argued.
+const SEED_REQUIRED_FOR_TEST = new Set(["display_name", "birth_date", "phone"]);
 const ctx: any = {
   workspaceId: WS, userId: "u1", workspaceTimezone: "Africa/Kampala",
   capabilities: ["practice.settings.manage"],
@@ -53,6 +59,9 @@ function stub(script: {
     insert(rows: any) {
       op = "insert";
       calls.push(`insert:${table}:${Array.isArray(rows) ? rows.length : 1}`);
+      // KEPT, NOT COUNTED. The seed assertions below run the real validator over these exact rows,
+      // so a reconstruction of what the seed "should" be would defeat the whole point.
+      if (table === "practice_registration_field") api.inserted = Array.isArray(rows) ? rows : [rows];
       return api;
     },
     delete() { op = "delete"; calls.push(`delete:${table}`); return api; },
@@ -114,6 +123,42 @@ async function main() {
     ctx, { name: "Standard intake", correlationId: "c1" });
   ok("7. a failed cleanup is reported, not swallowed",
     worse.ok === false && String(worse.message).includes("delete exploded"), JSON.stringify(worse));
+
+  // -- 7b-7e. A NEW FORM IS PUBLISHABLE, WHICH IS WHAT BOTH THE COMMENT AND THE SCREEN PROMISE ------
+  //
+  // The seed used to mark display_name and nothing else, satisfying one protected group of three, so
+  // every new form opened on "2 things to fix before this can go live" -- while createTemplate's own
+  // comment and the editor screen both promised a form publishable the moment it exists.
+  //
+  // ⚠ THESE RUN THE REAL VALIDATOR OVER THE ROWS createTemplate REALLY INSERTED. An earlier draft of
+  // this file rebuilt the expected seed from a constant and checked THAT against the floor, which is a
+  // test of a constant against a rule -- it passes whatever production does, including the broken seed
+  // it was written to catch.
+  const seededRows = (good.inserted ?? []) as any[];
+  ok("7b. the seeded rows are the ones the engine actually wrote",
+    seededRows.length === CORE_FIELDS.length, `${seededRows.length} rows`);
+
+  const verdict = await validateTemplate(stub({ fields: seededRows }), ctx, "t1");
+  ok("7c. a form is publishable from the moment it is created",
+    (verdict as any).problems?.length === 0,
+    JSON.stringify((verdict as any).problems?.map((x: any) => x.problem)));
+
+  // The either/or half, which the floor alone cannot catch: satisfying every group by requiring BOTH
+  // members of a pair would also pass, and would force a patient to give a phone AND an email.
+  const requiredKeys = new Set(seededRows.filter(r => r.required).map(r => r.field_key));
+  const pairs = [...new Set(CORE_FIELDS.filter(f => f.protected).map(f => f.group))]
+    .map(g => CORE_FIELDS.filter(c => c.protected && c.group === g).map(c => c.key))
+    .filter(keys => keys.length > 1);
+  ok("7d. and no either/or pair has both members forced on the patient",
+    pairs.length > 0 && pairs.every(keys => keys.filter(k => requiredKeys.has(k)).length === 1),
+    JSON.stringify({ required: [...requiredKeys], pairs }));
+
+  // Independent of the rule: the answer a person checked, so a seed that changes has to be re-argued
+  // here rather than silently agreeing with itself.
+  ok("7e. the seed requires exactly the three keys that were checked by hand",
+    requiredKeys.size === SEED_REQUIRED_FOR_TEST.size
+    && [...SEED_REQUIRED_FOR_TEST].every(k => requiredKeys.has(k)),
+    JSON.stringify([...requiredKeys]));
 
   // -- 8-11. THE SOURCE FACTS -----------------------------------------------
   const root = join(__dirname, "..");

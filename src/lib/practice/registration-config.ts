@@ -72,6 +72,26 @@ const PROTECTED_GROUPS = [...new Set(CORE_FIELDS.filter(f => f.protected).map(f 
     keys: CORE_FIELDS.filter(f => f.protected && f.group === group).map(f => f.key),
   }));
 
+/**
+ * What a newly seeded form marks required.
+ *
+ * ⚠ DERIVED FROM THE FLOOR, NOT LISTED BESIDE IT. createTemplate used to mark exactly display_name
+ * required, which satisfied the `name` group and neither of the other two -- so every new form opened
+ * on "2 things to fix before this can go live", contradicting both the seeding comment in
+ * createTemplate and the sentence on the editor screen promising a form publishable from the moment it
+ * exists. Zero forms have ever been published in this estate, and this is the wall they met.
+ *
+ * One key per group rather than every protected key, because the groups are deliberately either/or: a
+ * date of birth OR an estimated age, a phone OR an email. Marking both members of a pair required
+ * would force a patient to give both and take away the choice the floor exists to leave open. The
+ * first key wins, which is the CORE_FIELDS order: a real date of birth over an estimate, a phone over
+ * an email.
+ *
+ * Computing it from PROTECTED_GROUPS means a group added to CORE_FIELDS tomorrow is seeded satisfied
+ * on the same day, instead of quietly reintroducing exactly this bug.
+ */
+const SEED_REQUIRED_KEYS = new Set(PROTECTED_GROUPS.map(g => g.keys[0]));
+
 // ── THE CONDITION EVALUATOR ──────────────────────────────────────────────────────────────────────────
 //
 // ⚠ IT LIVES IN registration-condition.ts NOW, AND IS RE-EXPORTED FROM HERE.
@@ -130,7 +150,7 @@ export async function createTemplate(admin: any, ctx: WorkspaceContext, args: {
       CORE_FIELDS.map((f, i) => ({
         workspace_id: ctx.workspaceId, template_id: data.id, field_key: f.key, is_core: true,
         label: f.label, field_type: f.type, visible: true, options: f.options,
-        required: f.key === "display_name", display_order: (i + 1) * 10,
+        required: SEED_REQUIRED_KEYS.has(f.key), display_order: (i + 1) * 10,
       })),
     );
     // ⚠ THIS ERROR WAS NOT LOOKED AT, AND THE COMMENT ABOVE IS WHY THAT MATTERED. The whole point of
