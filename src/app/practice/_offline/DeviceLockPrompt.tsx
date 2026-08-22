@@ -129,7 +129,24 @@ export default function DeviceLockPrompt({ variant, onUnlocked, children }: Prop
   }
 
   async function doUnlock() {
-    if (!record) return;
+    // ⚠ THIS USED TO BE `if (!record) return;` -- A SILENT NO-OP, and the control stayed enabled while
+    // the record loaded. Pressing Unlock before it arrived did nothing at all: no message, no failure
+    // recorded, nothing on screen. Somebody typing a correct PIN and pressing Enter three times has no
+    // way to tell that from a PIN that was refused, and the attempt counter stays where it was, so even
+    // the trail cannot tell you afterwards. Now it says so, and the buttons below are disabled until
+    // the record exists, so the sentence should be unreachable rather than merely informative.
+    if (!record) {
+      setProblem("This device is still being checked. Try again in a moment.");
+      return;
+    }
+    // ⚠ AN EMPTY BOX IS NOT A WRONG PIN, AND IT MUST NOT COST AN ATTEMPT. unlock() treats "" as a
+    // mismatch, which increments failures against a counter that CLEARS WHAT THE DEVICE IS HOLDING when
+    // it runs out. A stray Enter on an empty field should never move a destructive counter, so it is
+    // refused here, before the attempt is spent.
+    if (pin.length === 0) {
+      setProblem("Enter your PIN first. An empty box is not counted as a failed attempt.");
+      return;
+    }
     setBusy(true); setProblem(null);
     const result = await unlock(record, pin, new Date());
     setBusy(false);
@@ -223,9 +240,10 @@ export default function DeviceLockPrompt({ variant, onUnlocked, children }: Prop
                 onKeyDown={e => { if (e.key === "Enter") void doUnlock(); }}
                 className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)]" />
             </label>
-            <button type="button" disabled={busy || state === "cooling_down"} onClick={doUnlock}
+            {/* disabled until the record loads: see doUnlock for the no-op this prevents. */}
+            <button type="button" disabled={busy || !record || state === "cooling_down"} onClick={doUnlock}
               className="rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
-              {busy ? "Checking…" : "Unlock"}
+              {busy ? "Checking…" : !record ? "Checking this device…" : "Unlock"}
             </button>
           </div>
         )}
@@ -343,9 +361,9 @@ export default function DeviceLockPrompt({ variant, onUnlocked, children }: Prop
           <input type="password" value={pin} onChange={e => setPin(e.target.value)} autoComplete="current-password"
             onKeyDown={e => { if (e.key === "Enter") void doUnlock(); }} placeholder="PIN"
             className="w-36 rounded border border-gray-200 px-2 py-1 text-[12px] outline-none focus:border-[var(--cp-primary)]" />
-          <button type="button" disabled={busy || state === "cooling_down"} onClick={doUnlock}
+          <button type="button" disabled={busy || !record || state === "cooling_down"} onClick={doUnlock}
             className="rounded border border-gray-300 px-2 py-1 text-[11px] font-semibold text-gray-700 disabled:opacity-40">
-            {busy ? "Checking…" : "Unlock"}
+            {busy ? "Checking…" : !record ? "Checking…" : "Unlock"}
           </button>
         </span>
       )}
