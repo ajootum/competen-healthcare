@@ -157,9 +157,14 @@ async function main() {
   // s10 says must stay usable and non-public -- each reported "is set to internal, so it is not
   // offered to patients" as a fault the practice had to fix before it could publish. And `found`
   // counted the failures while every sibling row counts the passes, so the line read "11 of 1".
-  ok("16. the constraints check judges patient-bookable sessions only",
+  // ⚠ BOTH ARMS, BECAUSE FIXING ONE LEFT THE BUG ON SCREEN. The verdict is built from `uncovered`
+  // and `unresolved`, scoped in two different places. Scoping only the loop dropped the count from
+  // 11 to 0 and left three internal clinics still named in the sentence underneath it as reasons
+  // the practice could not publish -- a fix that improves the number and not the meaning.
+  ok("16. the constraints check judges patient-bookable sessions only -- both arms of it",
     access.includes("rw.sessions.filter(s => bookableSet.has(s.id))")
-    && !access.includes("for (const sess of rw.sessions) {"));
+    && !access.includes("for (const sess of rw.sessions) {")
+    && access.includes("rw.uncovered.value.filter(u => bookableIds.includes(u.id))"));
 
   ok("17. and `found` counts what passed, not what failed",
     access.includes("found: Math.max(0, bookableIds.length - broken)")

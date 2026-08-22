@@ -670,7 +670,13 @@ export async function publishReadiness(
   if (rw.uncovered.state !== "ok") {
     checks.push(checkRow("EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED", "not_checked", { because: rw.uncovered.reason }));
   } else {
-    const uncovered = rw.uncovered.value;
+    // ⚠ SCOPED HERE, NOT AT SOURCE. rw.uncovered means "sessions ANYBODY may book that no rule in
+    // force covers", which is right for the rules screen: a staff-bookable internal clinic with no
+    // rule is a real gap worth showing there. It is the wrong population for a PUBLIC publish
+    // blocker, which is why this check listed three internal clinics as reasons a practice could not
+    // go live. Same defect as the unresolved loop below, and it survived that fix because the two
+    // arms of one verdict were scoped in different places.
+    const uncovered = rw.uncovered.value.filter(u => bookableIds.includes(u.id));
     // ⚠⚠ COVERAGE IS NECESSARY AND NOT SUFFICIENT -- CPR-BOOK-READY-001 s3.
     //
     // This check used to pass the moment every session had a rule ROW pointing at it. That is how a
