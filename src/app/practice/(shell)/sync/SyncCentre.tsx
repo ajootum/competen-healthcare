@@ -178,9 +178,19 @@ export default function SyncCentre() {
                     product in the one direction nobody checks. This screen cannot read the lock state,
                     so it states the precondition as the general fact it is and claims nothing about
                     this device. */}
-                Nothing has been captured on this device to send, so there is nothing waiting. Anything
-                recorded while offline appears here until the practice confirms it &mdash; recording
-                offline needs a PIN set on the device doing the recording.
+                {/* ⚠ THIS USED TO OPEN "Nothing has been captured on this device to send", AND THAT IS A
+                    CLAIM ABOUT HISTORY THIS SCREEN CANNOT MAKE. It renders when the outbox is empty --
+                    which is equally true of a device that never captured anything and one that captured
+                    two items and had both confirmed. Walking step 17 produced exactly the second case:
+                    a reading and a field collection, both applied, both receipted, and this line
+                    insisting nothing had ever been captured.
+                    ⚠ I WROTE THE FALSE VERSION EARLIER THE SAME DAY, replacing a different false claim
+                    ("recording while offline is not switched on yet"). I corrected the WORDING and left
+                    it anchored to the same condition, which is how a sentence gets to be wrong twice in
+                    one day for opposite reasons. The sibling line above already states the true status
+                    from the ledger; this one now only says what the screen is FOR. */}
+                Anything recorded while offline appears here until the practice confirms it &mdash;
+                recording offline needs a PIN set on the device doing the recording.
               </p>
             )}
 
