@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   LOCKOUT_CLEARS, LOCKOUT_NEVER_CLEARS, LOCK_FORGOTTEN_NOTE, LOCK_HONEST_NOTE, LOCK_MIN_LENGTH,
   checkPin, enrolLock, lockMessage, lockStateOf, unlock, type LockRecord, type LockState,
@@ -54,13 +54,32 @@ export default function DeviceLockPrompt({ variant, onUnlocked, children }: Prop
   const [problem, setProblem] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // ⚠⚠ onUnlocked IS HELD IN A REF, AND THAT IS NOT A STYLE CHOICE -- IT IS AN INFINITE LOOP FIX.
+  //
+  // `reread` used to close over onUnlocked and list it as a dependency, and the effect below depends on
+  // `reread`. OfflineCacheWriter passes `onUnlocked={() => setAttempt(a => a + 1)}` -- a NEW ARROW ON
+  // EVERY RENDER. So: render -> new callback identity -> new reread -> effect re-runs -> it finds a held
+  // key -> calls onUnlocked -> setAttempt -> render. Measured on a real device at roughly 160 iterations
+  // per second, `attempt` climbing from 2 to 3,875 in 24 seconds.
+  //
+  // ⚠ AND IT WAS DORMANT UNTIL AN UNLOCK SUCCEEDED, because the onUnlocked call sits behind `if (held)`.
+  // A locked device is fine; the loop starts the instant the PIN is accepted. That is why it presented
+  // as "unlocking does nothing": the writer's own effect was torn down and restarted on every one of
+  // those renders (its probe recorded cancelled:true every time), so it reached the cache step never,
+  // while the key it needed was sitting right there -- sessionKeyNull:false in all 2,540 samples.
+  //
+  // The ref means a caller that does not memoise cannot restart this component's effects. Depending on
+  // a parent to wrap a handler in useCallback is a contract nobody can see and everybody breaks.
+  const onUnlockedRef = useRef(onUnlocked);
+  useEffect(() => { onUnlockedRef.current = onUnlocked; }, [onUnlocked]);
+
   const reread = useCallback(async () => {
     const loaded = await loadLock(new Date());
     setRecord(loaded.record); setDetail(loaded.detail);
     // ⚠ A key already held by this tab means unlocked, whatever the stored record says. The record does
     // not know about this tab; the session holder does.
     const held = sessionKey();
-    if (held) { setUnlocked(true); setState("unlocked"); onUnlocked?.(held); return; }
+    if (held) { setUnlocked(true); setState("unlocked"); onUnlockedRef.current?.(held); return; }
     setUnlocked(false); setState(loaded.state);
     // ⚠ A NOTICE DESCRIBES A COMPLETED ACTION, SO IT EXPIRES WHEN THE DEVICE RE-LOCKS. "A PIN is now set
     // on this device... will be fetched again while you are online" is true the moment it is written and
@@ -69,7 +88,9 @@ export default function DeviceLockPrompt({ variant, onUnlocked, children }: Prop
     // ⚠ Cleared HERE, in the callback that observes the transition -- not in an effect keyed on `state`,
     // which is a setState-in-effect cascade and is rejected by the lint rule for good reason.
     if (loaded.state !== "not_enrolled") setNotice(null);
-  }, [onUnlocked]);
+    // ⚠ NO DEPENDENCIES. Everything this reads is either module state or a ref; adding onUnlocked back
+    // reinstates the loop above.
+  }, []);
 
   useEffect(() => { queueMicrotask(() => { void reread(); }); }, [reread]);
 
