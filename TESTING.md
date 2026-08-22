@@ -44,10 +44,36 @@ config is the easy part once the list exists.
 
 ## Acceptance harnesses — local only
 
+> ### ⚠ DO NOT RUN THE WHOLE SUITE WHILE ANYONE IS USING THE PRODUCT
+>
+> Measured 2026-08-21. Sixty-eight harnesses into a full sweep, **Supabase Auth on the shared project
+> was returning HTTP 504 after 35–50 second timeouts** — to the dev server, to plain `fetch`, and to the
+> owner trying to sign in. It reads exactly like an outage. It is not: it is the sweep.
+>
+> ```
+> before stopping   504 in 50357ms / 504 in 35815ms / 504 in 43726ms
+> after stopping    503 in 3955ms / 503 in 5042ms / 200 in 3039ms / 200 in 366ms
+> ```
+>
+> The privileged-live harnesses provision workspaces and call GoTrue admin APIs. Run enough of them
+> back to back and the auth service sheds load — which it is entitled to do, and which every OTHER
+> harness in the run then fails against, for a reason that has nothing to do with the code.
+>
+> Two consequences, and the second is the one that costs time:
+>
+> 1. **Schedule a full sweep for when nobody is working.** It degrades a shared dependency.
+> 2. **A red harness late in a sweep is not evidence until it is re-run alone.** Under this load the
+>    failures are indistinguishable from real ones. Two partial runs on 2026-08-21 agreed on the same
+>    five reds inside the first 68, which is what made those five trustworthy — agreement across runs,
+>    not their presence in one.
+>
+> The `pure/local` harnesses cause none of this. When the question is "did I break something in the
+> last hour", run those and the ones for the area you touched, not the estate.
+
 **Full inventory, classification method, and every caveat: `docs/HARNESS-INVENTORY.md`.** Summary, not a
 substitute for reading it:
 
-- **212 scripts.** 32 need no database at all (`pure/local`). **That pass has now been done** (2026-08-18):
+- **221 scripts.** 32 need no database at all (`pure/local`). **That pass has now been done** (2026-08-18):
   every one of the 32 was run twice with a scrubbed environment, and **22 are in CI as a blocking job**.
 
   ⚠ **`pure/local` did not mean `CI-safe`, and the gap was not small.** Ten of the 32 do not belong in CI:
