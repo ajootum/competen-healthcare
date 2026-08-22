@@ -46,6 +46,13 @@ import { createClient } from "@supabase/supabase-js";
 import { resolvePracticeAccess, resolveWorkspaceContext } from "../src/lib/practice/access";
 import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
 import { judgeTarget } from "./production-guard";
+// The booking prerequisites, each through the engine the product itself calls — see provisionBooking.
+import { createLocation } from "../src/lib/practice/configuration";
+import { saveSession } from "../src/lib/practice/practice-sessions";
+import { claimHandle } from "../src/lib/practice/identity-service";
+import { saveBookingAccess, publishReadiness } from "../src/lib/practice/patient-access";
+import { saveBookingRule } from "../src/lib/practice/booking-rules";
+import { createTemplate, publishTemplate } from "../src/lib/practice/registration-config";
 
 loadEnvConfig(process.cwd());
 
@@ -59,6 +66,9 @@ const FIXTURE_EMAIL = "smoke.practitioner@staging.competen.invalid";
 const FIXTURE_NAME = "Automation Practitioner (synthetic)";
 const IDEMPOTENCY_KEY = "comp-eng-002g-smoke-fixture";
 const CORRELATION = "comp-eng-002g-provision";
+// CPR-BOOK-E2E-001 fixture names. Deterministic so a re-run reuses rather than multiplies.
+const FIXTURE_LOCATION = "Staging Clinic (synthetic)";
+const FIXTURE_HANDLE = "stagingclinic";
 
 const VERIFY_ONLY = process.argv.includes("--verify");
 
@@ -369,7 +379,151 @@ async function main() {
     if (Array.isArray(caps)) ok(`${caps.length} capability grant(s) — whatever the owner role confers, nothing added`);
   }
 
+  if (ctx.ok) await provisionBooking(ctx.ctx as any);
+
   report();
+}
+
+/**
+ * CPR-BOOK-E2E-001's publication prerequisites, provisioned in staging.
+ *
+ * ⚠ WHY THIS EXISTS AT ALL. The fixture above stopped at an ACTIVE workspace, which is everything the
+ * SHELL smoke journey needs and nothing the BOOKING one does. Staging carried zero locations, zero
+ * sessions, zero booking rules, zero booking-access profiles and zero registration templates, so
+ * Gates C, D, the concurrency race and the HFE pass had nothing to run against. That was mistaken
+ * for "no staging project exists" once already; it is a missing fixture, not a missing environment.
+ *
+ * ⚠ EVERY ROW HERE GOES THROUGH THE ENGINE THE PRODUCT USES, for the same reason the workspace does.
+ * Hand-inserted booking rows would look correct and prove nothing: the capability-backfill class in
+ * this codebase is exactly a fixture that looks right, a workspace nobody can use, and every harness
+ * still green. If an engine refuses, that refusal is the finding.
+ *
+ * ⚠ IDEMPOTENT, AND EACH STEP READS ITS OWN OUTCOME BACK. Re-running must not create a second
+ * location or a second rule, and "no error" is never taken for "a row exists" — the same trap the
+ * activation update above documents.
+ */
+async function provisionBooking(ctx: any): Promise<void> {
+  console.log("\nBOOKING (CPR-BOOK-E2E-001 publication prerequisites)");
+  const wsId: string = ctx.workspaceId;
+  const corr = "cpr-book-e2e-001-fixture";
+
+  // ── 1. A LOCATION ───────────────────────────────────────────────────────────────────────────────
+  const locs = await admin.from("practice_location").select("id, name, active").eq("workspace_id", wsId);
+  if (locs.error) { bad(`locations unreadable: ${locs.error.message}`); return; }
+  let locationId = (locs.data ?? []).find((l: any) => l.active)?.id ?? null;
+  if (!locationId) {
+    if (VERIFY_ONLY) { bad("no active location — run without --verify to provision one"); return; }
+    const made = await createLocation(admin, {
+      workspaceId: wsId, name: FIXTURE_LOCATION, type: "clinic", country: "UG",
+      actorId: ctx.userId, correlationId: corr,
+    });
+    if (!made.ok) { bad(`createLocation refused: ${made.message}`); return; }
+    locationId = made.data.id;
+    ok(`created location "${FIXTURE_LOCATION}"`);
+  } else ok(`reused location ${(locs.data ?? []).find((l: any) => l.id === locationId)?.name}`);
+
+  // ── 2. A SESSION PATIENTS MAY BOOK ──────────────────────────────────────────────────────────────
+  //
+  // booking_mode "public" rather than "link_only": Gate C's step 1 opens the PUBLIC address, and
+  // link_only is reachable but unlisted. A fixture that quietly tested the weaker of two modes would
+  // report a pass the acceptance pack did not ask for.
+  const sessions = await admin.from("practice_availability_template")
+    .select("id, booking_mode, weekday, capacity").eq("workspace_id", wsId).eq("status", "active");
+  if (sessions.error) { bad(`sessions unreadable: ${sessions.error.message}`); return; }
+  let sessionId = (sessions.data ?? []).find((s: any) => s.booking_mode === "public")?.id ?? null;
+  if (!sessionId) {
+    if (VERIFY_ONLY) { bad("no public session — run without --verify to provision one"); return; }
+    const made = await saveSession(admin, ctx, {
+      weekday: 3, startsMinute: 9 * 60, endsMinute: 13 * 60,
+      locationId, sessionName: "Staging public clinic",
+      bookingMode: "public", appointmentMinutes: 20, capacityManual: 8,
+      appointmentTypes: ["new_consultation"],
+      correlationId: corr,
+    } as any);
+    if (!(made as any).ok) { bad(`saveSession refused: ${(made as any).message}`); return; }
+    const back = await admin.from("practice_availability_template")
+      .select("id, booking_mode, capacity").eq("workspace_id", wsId).eq("booking_mode", "public").limit(1);
+    sessionId = (back.data ?? [])[0]?.id ?? null;
+    if (!sessionId) { bad("saveSession reported success but no public session came back"); return; }
+    ok(`created a public Wednesday 09:00-13:00 session, capacity ${(back.data ?? [])[0]?.capacity}`);
+  } else ok("reused the existing public session");
+
+  // ── 3. A HANDLE ─────────────────────────────────────────────────────────────────────────────────
+  const ident = await admin.from("practice_practitioner_identity")
+    .select("id, handle").eq("user_id", ctx.userId).maybeSingle();
+  if (!ident.data) { bad("no practitioner identity — runProvisioning's identity step did not land"); return; }
+  if (!(ident.data as any).handle) {
+    if (VERIFY_ONLY) { bad("no handle claimed — run without --verify to claim one"); return; }
+    const claimed = await claimHandle(admin, { userId: ctx.userId, handle: FIXTURE_HANDLE, correlationId: corr });
+    if (!claimed.ok) { bad(`claimHandle refused: ${claimed.message}`); return; }
+    ok(`claimed @${claimed.data.handle}`);
+  } else ok(`reused @${(ident.data as any).handle}`);
+
+  // ── 4. A BOOKING-ACCESS PROFILE ─────────────────────────────────────────────────────────────────
+  //
+  // Created AFTER the claim on purpose: that is the order in which the page seeds its handle from the
+  // identity, so the fixture exercises the seed path rather than assuming it.
+  const baBefore = await admin.from("practice_booking_access").select("id, handle, mode").eq("workspace_id", wsId).maybeSingle();
+  if (!baBefore.data) {
+    if (VERIFY_ONLY) { bad("no booking-access profile — run without --verify to create one"); return; }
+    const saved = await saveBookingAccess(admin, ctx, {
+      mode: "public", otpRequired: true,
+      actorId: ctx.userId, correlationId: corr,
+    } as any);
+    if (!(saved as any).ok) { bad(`saveBookingAccess refused: ${(saved as any).message}`); return; }
+    const after = await admin.from("practice_booking_access").select("handle, mode").eq("workspace_id", wsId).maybeSingle();
+    if (!(after.data as any)?.handle) bad("the booking page was created but seeded no handle from the identity");
+    else ok(`created the booking page carrying @${(after.data as any).handle}, mode ${(after.data as any).mode}`);
+  } else ok(`reused the booking page (handle ${(baBefore.data as any).handle ?? "null"})`);
+
+  // ── 5. A RULE COVERING IT ───────────────────────────────────────────────────────────────────────
+  const rules = await admin.from("practice_booking_rule")
+    .select("id, location_id, booking_horizon_days, visibility, status").eq("workspace_id", wsId);
+  if (rules.error) { bad(`rules unreadable: ${rules.error.message}`); return; }
+  const covering = (rules.data ?? []).find((r: any) =>
+    (r.location_id === null || r.location_id === locationId) && r.status === "active");
+  if (!covering) {
+    if (VERIFY_ONLY) { bad("no rule in force covers the public session — run without --verify"); return; }
+    const made = await saveBookingRule(admin, ctx, {
+      name: "Staging public self-booking", status: "active", locationId,
+      bookingHorizonDays: 120, leadTimeMinutes: 30, visibility: "public",
+      reason: "CPR-BOOK-E2E-001 staging fixture: gives the public session an explicit finite horizon, an explicit notice period and public visibility.",
+      actorId: ctx.userId, correlationId: corr,
+    });
+    if (!made.ok) { bad(`saveBookingRule refused: ${(made as any).message}`); return; }
+    ok(`created a rule: horizon 120, notice 30, visibility public`);
+  } else ok(`reused a rule in force (horizon ${covering.booking_horizon_days}, visibility ${covering.visibility})`);
+
+  // ── 6. A PUBLISHED REGISTRATION TEMPLATE ────────────────────────────────────────────────────────
+  const tpls = await admin.from("practice_registration_template")
+    .select("id, name, status").eq("workspace_id", wsId);
+  if (tpls.error) { bad(`registration templates unreadable: ${tpls.error.message}`); return; }
+  if (!(tpls.data ?? []).some((t: any) => t.status === "published")) {
+    if (VERIFY_ONLY) { bad("no published registration template — run without --verify"); return; }
+    let templateId = (tpls.data ?? []).find((t: any) => t.status === "draft")?.id ?? null;
+    if (!templateId) {
+      const made = await createTemplate(admin, ctx, { name: "Staging patient registration", correlationId: corr });
+      if (!made.ok) { bad(`createTemplate refused: ${made.message}`); return; }
+      templateId = made.data.id;
+    }
+    const pub = await publishTemplate(admin, ctx, { templateId: templateId!, makeDefault: true, correlationId: corr });
+    // The protected floor lives here: a template whose seed does not satisfy it cannot publish, and
+    // this is the fixture that would notice.
+    if (!pub.ok) { bad(`publishTemplate refused: ${pub.message}`); return; }
+    ok(`published a registration template as the default`);
+  } else ok("reused the published registration template");
+
+  // ── 7. WHAT THE PRODUCT ITSELF SAYS ─────────────────────────────────────────────────────────────
+  //
+  // ⚠ THE VERDICT IS ASKED OF THE REAL ENGINE, NOT RECOMPUTED HERE. A fixture that graded its own work
+  // with its own copy of the rules would agree with itself no matter what it had written.
+  const verdict = await publishReadiness(admin, ctx);
+  const blocking = (verdict.checks ?? []).filter((c: any) => c.severity === "blocker" && c.state === "fail");
+  if (blocking.length === 0) ok(`publishReadiness: 0 blocking`);
+  else bad(`publishReadiness: ${blocking.length} blocking — ${blocking.map((c: any) => c.code).join(", ")}`);
+  const notChecked = (verdict.checks ?? []).filter((c: any) => c.state === "not_checked").length;
+  const warnings = (verdict.checks ?? []).filter((c: any) => c.severity !== "blocker" && c.state === "fail").length;
+  console.log(`  note  ${notChecked} not checked, ${warnings} warning(s) — advisory, not blocking`);
 }
 
 function report() {
