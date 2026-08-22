@@ -690,7 +690,16 @@ export async function publishReadiness(
     const { resolveBookingRule } = await import("@/lib/practice/availability-config");
     const { publicBookingReadiness } = await import("@/lib/practice/patient-booking");
     const unresolved: { name: string; why: string }[] = [];
-    for (const sess of rw.sessions) {
+    // ⚠ PATIENT-BOOKABLE SESSIONS ONLY, AND THIS IS A CORRECTION. It walked every active session and
+    // judged each against PUBLIC readiness -- so a practice's internal clinics, which are not offered
+    // to patients and are not meant to be, each reported "is set to internal, so it is not offered to
+    // patients" as though that were a fault. Six of this estate's seven sessions are internal by
+    // choice, and the screen demanded they be fixed before the practice could publish.
+    //
+    // s10 is explicit that internal sessions stay usable and stay non-public. A check that treats
+    // "internal" as a defect is arguing with the specification, not enforcing it.
+    const bookableSet = new Set(bookableIds);
+    for (const sess of rw.sessions.filter(s => bookableSet.has(s.id))) {
       const rule = await resolveBookingRule(admin, ctx.workspaceId, sess.locationId ?? null, "");
       // s2's fourth invariant. The session carries capacity; the rule does not.
       //
@@ -712,9 +721,14 @@ export async function publishReadiness(
       visibility_not_public: "is set to internal, so it is not offered to patients",
       visibility_unknown: "has no visibility set, so which channels may book it is unresolved",
     };
-    const constraintsFail = uncovered.length > 0 || unresolved.length > 0;
+    // ⚠ found COUNTS WHAT PASSED, LIKE EVERY OTHER ROW ON THIS SCREEN. It counted the FAILURES here,
+    // against a denominator of the bookable sessions, and rendered "11 of 1" -- a number that cannot
+    // mean anything, sitting on the one check that decides whether a practice may go live. Every
+    // sibling row reads "3 of 4" as three good of four; this one read as eleven good of one.
+    const broken = uncovered.length + unresolved.length;
+    const constraintsFail = broken > 0;
     checks.push(checkRow("EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED", constraintsFail ? "fail" : "pass", {
-      found: uncovered.length + unresolved.length, of: bookableIds.length || null,
+      found: Math.max(0, bookableIds.length - broken), of: bookableIds.length || null,
       ids: uncovered.map(u => u.id),
       because: constraintsFail
         ? [

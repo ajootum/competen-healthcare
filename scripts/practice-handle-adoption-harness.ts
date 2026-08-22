@@ -150,6 +150,21 @@ async function main() {
     access.includes("claimedHandlesForWorkspace(admin, ctx.workspaceId)")
     && access.includes("is claimed, but this booking page does not carry it yet"));
 
+  // -- 16-17. THE READINESS SCREEN'S SCOPE AND ITS ARITHMETIC ---------------
+  //
+  // Both of these rendered on a real screen. The publish blocker walked EVERY active session and
+  // judged each against PUBLIC readiness, so six internal clinics -- internal on purpose, and which
+  // s10 says must stay usable and non-public -- each reported "is set to internal, so it is not
+  // offered to patients" as a fault the practice had to fix before it could publish. And `found`
+  // counted the failures while every sibling row counts the passes, so the line read "11 of 1".
+  ok("16. the constraints check judges patient-bookable sessions only",
+    access.includes("rw.sessions.filter(s => bookableSet.has(s.id))")
+    && !access.includes("for (const sess of rw.sessions) {"));
+
+  ok("17. and `found` counts what passed, not what failed",
+    access.includes("found: Math.max(0, bookableIds.length - broken)")
+    && !access.includes("found: uncovered.length + unresolved.length"));
+
   // -- CONTROL --------------------------------------------------------------
   // If this passes, the source assertions above are reading a file that says anything at all.
   ok("control. a claim the source does not make is not found",
