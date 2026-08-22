@@ -204,6 +204,55 @@ ok("7e. no engine selects a column a migration dropped",
   dropped.size > 0 && offences.length === 0,
   offences.length ? offences.join(" | ") : "no drop statements were found to check against");
 
+// ── 8. s8's FIRST LINE: "FIND EVERY WRITE/DEFAULT OF VISIBILITY" ───────────────────────────────
+//
+// ⚠⚠ THIS IS THE HALF THAT WAS SKIPPED, AND SKIPPING IT COST MORE THAN THE HALF THAT WAS DONE.
+// Assertions 4, 4b and 6b prove the READ side: visibility is resolved, it reaches the engine, and an
+// internal rule yields no public slots. All three passed while the column had NO WRITER AT ALL --
+// migration 230 gives it a NOT NULL default of 'internal', saveBookingRule carried the existing value
+// forward on every write, and no input, route or control ever supplied one. Every rule ever created
+// was internal and could never become anything else.
+//
+// So the enforcement was real and the gate had no key: a practice could not make a session publicly
+// bookable by any sequence of actions available to it. A read-side test suite cannot see that. These
+// four walk the write side of the same chain the spec asks to be documented end to end.
+const rules = read("src", "lib", "practice", "booking-rules.ts");
+const rulesRoute = read("src", "app", "api", "v1", "practice", "booking-rules", "route.ts");
+const ruleEditor = read("src", "app", "practice", "(shell)", "setup", "availability-booking", "RuleWorkspace.tsx");
+
+ok("8. the rule input accepts a visibility, so the value has somewhere to come from",
+  rules.includes("visibility?: string | null;"));
+
+ok("8b. and the save writes the supplied value rather than always carrying the old one forward",
+  rules.includes("args.visibility === undefined || args.visibility === null")
+    && !rules.includes("visibility: existing?.visibility ?? \"internal\",\n  };"));
+
+ok("8c. the value survives the route, so the screen is not talking to itself",
+  rulesRoute.includes("visibility: body.visibility === undefined ? undefined : str(body.visibility)"));
+
+// The card has to carry it back out too, or the editor opens every public rule showing 'internal'
+// and the first save a practitioner does silently returns it to internal.
+ok("8d. and the rule card reports it, so the control shows what is actually set",
+  rules.includes("visibility: (r.visibility as string | null) ?? \"internal\",")
+    && ruleEditor.includes("visibility: r.visibility ?? \"internal\""));
+
+ok("8e. a practitioner has a control for it",
+  ruleEditor.includes("set(\"visibility\", e.target.value)"));
+
+// s5 again, in the place a person actually reads. The box offered "no limit", which is the one
+// meaning a missing horizon does not have.
+//
+// ⚠ SCOPED TO THE HORIZON INPUT. A first version banned the string across the whole file and failed
+// on six capacity and follow-up fields, where an empty box means something else entirely. An
+// assertion that has to be argued down the first time it fires teaches the reader to argue with it.
+const horizonInput = ruleEditor.slice(
+  ruleEditor.indexOf("set(\"bookingHorizonDays\", e.target.value)") - 200,
+  ruleEditor.indexOf("set(\"bookingHorizonDays\", e.target.value)") + 120,
+);
+ok("8f. the horizon field no longer promises that empty means unlimited",
+  horizonInput.includes("bookingHorizonDays") && !horizonInput.includes("no limit"),
+  horizonInput.trim());
+
 // ── CONTROLS ───────────────────────────────────────────────────────────────────────────────────
 ok("control: the predicate can return ready, so these are not all passing on a constant false",
   publicBookingReadiness(PUBLIC_OK).ready === true);

@@ -487,6 +487,8 @@ export type BookingRuleCard = {
   overbookingAllowed: number;
   leadTimeMinutes: number;
   bookingHorizonDays: number | null;
+  /** Which audiences these times may be offered to. On the card because it decides who can see them. */
+  visibility: string;
   walkInDailyLimit: number | null;
   /** s11's arithmetic, on the card, so the ladder is legible before anything is refused. */
   specificity: number;
@@ -594,6 +596,7 @@ function toCard(
     overbookingAllowed: (r.overbooking_allowed as number) ?? 0,
     leadTimeMinutes: (r.lead_time_minutes as number) ?? 0,
     bookingHorizonDays: (r.booking_horizon_days as number | null) ?? null,
+    visibility: (r.visibility as string | null) ?? "internal",
     walkInDailyLimit: (r.walk_in_daily_limit as number | null) ?? null,
     specificity: specificityOf(s),
     rung: specificityRung(s),
@@ -694,6 +697,15 @@ export async function listBookingRules(admin: any, ctx: WorkspaceContext): Promi
 
 // ── AUTHORING (s7.2's builder, s14's permission, migration 244's versioning) ─────────────────────────
 
+/**
+ * The audiences a rule may be offered to, exactly as migration 230's check constraint lists them.
+ *
+ * Repeated here rather than imported from the schema because a constraint that only exists in the
+ * database produces an error nobody can act on; repeated in this order because the editor renders it
+ * and the least public option should not be the one a mis-scroll lands on.
+ */
+export const RULE_VISIBILITIES = ["internal", "link_only", "public"];
+
 export type RuleInput = {
   ruleId?: string | null;
   name?: string | null;
@@ -719,6 +731,17 @@ export type RuleInput = {
   followUpLateDays?: number | null;
   leadTimeMinutes?: number | null;
   bookingHorizonDays?: number | null;
+  /**
+   * Which audiences this rule's times may be offered to: 'public', 'link_only' or 'internal'.
+   *
+   * ⚠ NOTHING COULD SET THIS UNTIL NOW, WHICH MADE IT A GATE WITH NO KEY. The column has existed
+   * since migration 230 with a NOT NULL default of 'internal', the save carried the existing value
+   * forward on every write, and no input, route or screen ever supplied one. So every rule ever
+   * created was 'internal' and stayed 'internal' -- harmless while nothing read it, and a wall the
+   * moment CPR-BOOK-READY-001 made public slots conditional on it. s8's first instruction is "find
+   * every write/default of visibility"; the write side is this field, and it was missing.
+   */
+  visibility?: string | null;
   cancellationNoticeMinutes?: number | null;
   walkInDailyLimit?: number | null;
 
@@ -816,8 +839,19 @@ export async function saveBookingRule(admin: any, ctx: WorkspaceContext, args: R
       ? (existing?.cancellation_notice_minutes ?? 0) : int(args.cancellationNoticeMinutes),
     walk_in_daily_limit: args.walkInDailyLimit === undefined ? (existing?.walk_in_daily_limit ?? null) : int(args.walkInDailyLimit),
     emergency_reserve_minutes: existing?.emergency_reserve_minutes ?? 0,
-    visibility: existing?.visibility ?? "internal",
+    // ⚠ VALIDATED HERE AND NOT ONLY BY THE DATABASE. The column's check constraint would refuse a bad
+    // value with a Postgres error a practitioner cannot act on; this refuses it by name, and an
+    // `undefined` still means "leave it as it was" so a screen that does not draw the control cannot
+    // silently reset a practice to internal.
+    visibility: args.visibility === undefined || args.visibility === null
+      ? (existing?.visibility ?? "internal")
+      : String(args.visibility),
   };
+  if (!RULE_VISIBILITIES.includes(next.visibility))
+    return {
+      ok: false, status: 400, code: "VALIDATION_ERROR",
+      message: `visibility must be one of ${RULE_VISIBILITIES.join(", ")}`,
+    };
 
   // ══ MIGRATION 268's FOUR SECTIONS ══════════════════════════════════════════════════════════════
   //
@@ -2201,7 +2235,7 @@ export function availabilitySessionLabel(
     : "";
   return `Unnamed ${day}${at} session${where}`;
 }
-
+
 export async function bookingRulesWorkspace(admin: any, ctx: WorkspaceContext): Promise<BookingRulesWorkspace> {
   const { data: ws } = await admin.from("practice_workspace")
     .select("timezone").eq("id", ctx.workspaceId).maybeSingle();

@@ -57,7 +57,7 @@ const blankDraft = (): Draft => ({
   capacityTotal: "", capacityNew: "", capacityFollowUp: "", capacityUrgentReserve: "", overbookingAllowed: 0,
   patientEligibility: "any", minAgeYears: "", maxAgeYears: "",
   confirmationMode: "instant", followUpEarlyDays: "", followUpLateDays: "",
-  leadTimeMinutes: 0, bookingHorizonDays: "", cancellationNoticeMinutes: 0, walkInDailyLimit: "",
+  leadTimeMinutes: 0, bookingHorizonDays: "", visibility: "internal", cancellationNoticeMinutes: 0, walkInDailyLimit: "",
   // ── MIGRATION 268. The defaults ARE the behaviour this product had before the columns existed, so a
   //    new rule created on this form decides exactly what it would have decided yesterday.
   requiredFields: {} as Record<string, string>,
@@ -80,7 +80,7 @@ const draftFrom = (r: any): Draft => ({
   minAgeYears: r.minAgeYears ?? "", maxAgeYears: r.maxAgeYears ?? "",
   confirmationMode: r.confirmationMode ?? "instant",
   followUpEarlyDays: r.followUpEarlyDays ?? "", followUpLateDays: r.followUpLateDays ?? "",
-  leadTimeMinutes: r.leadTimeMinutes ?? 0, bookingHorizonDays: r.bookingHorizonDays ?? "",
+  leadTimeMinutes: r.leadTimeMinutes ?? 0, bookingHorizonDays: r.bookingHorizonDays ?? "", visibility: r.visibility ?? "internal",
   walkInDailyLimit: r.walkInDailyLimit ?? "",
   requiredFields: Object.fromEntries(Object.entries(
     (r.requiredInformation?.fields ?? {}) as Record<string, { level?: string }>,
@@ -537,9 +537,24 @@ export default function RuleWorkspace({
             <fieldset>
               <legend className="text-[11px] font-bold uppercase tracking-wide text-violet-700">Booking window</legend>
               <div className="mt-1.5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {/*
+                  ⚠ THE PLACEHOLDER SAID "no limit" AND THAT IS THE ONE THING IT DOES NOT MEAN.
+                  CPR-BOOK-READY-001 s5 is explicit: a missing horizon is MISSING, not unlimited and not
+                  inherited, and a session whose horizon does not resolve produces no public slots at
+                  all. So the empty box promised a practitioner the most permissive reading of a value
+                  whose real effect is the most restrictive one available.
+                */}
                 <label className={labelCls}>Opens this many days ahead
                   <input className={field} type="number" min={1} max={730} value={draft.bookingHorizonDays}
-                    onChange={e => set("bookingHorizonDays", e.target.value)} placeholder="no limit" />
+                    onChange={e => set("bookingHorizonDays", e.target.value)} placeholder="not set" />
+                </label>
+                <label className={labelCls}>Who may be offered these times
+                  <select className={field} value={draft.visibility}
+                    onChange={e => set("visibility", e.target.value)}>
+                    <option value="internal">Internal only — never offered to patients</option>
+                    <option value="link_only">Anyone with the link</option>
+                    <option value="public">Public — listed on the booking page</option>
+                  </select>
                 </label>
                 <label className={labelCls}>Closes this many minutes before
                   <input className={field} type="number" min={0} max={43200} value={draft.leadTimeMinutes}

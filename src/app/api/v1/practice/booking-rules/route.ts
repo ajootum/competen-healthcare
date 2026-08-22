@@ -127,6 +127,9 @@ export async function POST(req: NextRequest) {
         followUpLateDays: body.followUpLateDays === undefined ? undefined : num(body.followUpLateDays),
         leadTimeMinutes: num(body.leadTimeMinutes),
         bookingHorizonDays: body.bookingHorizonDays === undefined ? undefined : num(body.bookingHorizonDays),
+        // undefined, not str(), so a client that omits the field leaves the rule as it was. The engine
+        // validates the value itself -- see RULE_VISIBILITIES and why the write side went missing.
+        visibility: body.visibility === undefined ? undefined : str(body.visibility),
         cancellationNoticeMinutes: num(body.cancellationNoticeMinutes),
         walkInDailyLimit: body.walkInDailyLimit === undefined ? undefined : num(body.walkInDailyLimit),
         // ── MIGRATION 268's FOUR SECTIONS ─────────────────────────────────────────────────────────
