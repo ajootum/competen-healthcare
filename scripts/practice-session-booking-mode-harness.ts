@@ -328,6 +328,8 @@ async function main() {
       userId: sessionId, workspaceId: ws, workspaceName: "", workspaceType: "", workspaceStatus: "active",
       roleCodes: [], capabilities: [], entitled: true, entitlementStatus: null,
       onboardingComplete: true, onboardingStep: null,
+      // A fixture stands in for a resolved context; nothing here exercises invalidation.
+      contextVersion: "harness",
     };
     return bookUnderRules(admin, patientCtx, {
       channel: "patient_self", patientName: "Amina Nabirye", appointmentType: "new_consultation",

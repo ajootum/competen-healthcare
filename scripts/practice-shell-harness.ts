@@ -21,10 +21,14 @@
  * mandated order, that denials are safe, and what the workspace context actually carries.
  *
  * ⚠ AND WHERE THE BUILD DOES NOT MEET THE SPEC, THIS FILE SAYS SO RATHER THAN SKIPPING IT. s9's
- * context contract names thirteen fields; six are absent. Those are asserted as a DELIBERATE, RECORDED
- * absence -- the same shape the billing harness used for the Settlements tab -- so the gap is visible,
- * its consequence is written down, and the day somebody adds one the harness asks for this note to be
- * updated instead of quietly going green.
+ * context contract names thirteen fields and the build does not carry all of them. The shortfall is
+ * asserted as a DELIBERATE, RECORDED absence -- the same shape the billing harness used for the
+ * Settlements tab -- so the gap is visible, its consequence is written down, and the day somebody adds
+ * one the harness asks for the note to be updated instead of quietly going green.
+ *
+ * ⚠ THE COUNT LIVES IN SPEC_ABSENT, NOT IN THIS PARAGRAPH. Writing "six are absent" in prose was wrong
+ * within a day of shipping, when contextVersion was added -- the same mistake as pinning a count you
+ * are actively changing. The list below is the record; the prose does not repeat its length.
  *
  *   npx tsx scripts/practice-shell-harness.ts
  */
@@ -108,7 +112,7 @@ ok("15b and the context type is not reconstructible from browser storage: it is 
 const CONTEXT_PRESENT = [
   "userId", "workspaceId", "workspaceName", "workspaceType", "workspaceStatus",
   "workspaceTimezone", "roleCodes", "capabilities", "entitled", "entitlementStatus",
-  "onboardingComplete", "onboardingStep",
+  "onboardingComplete", "onboardingStep", "contextVersion",
 ];
 const typeBlock = accessSrc.slice(accessSrc.indexOf("export type WorkspaceContext"));
 const typeEnd = typeBlock.indexOf("\n};");
@@ -117,8 +121,8 @@ const absentFromType = CONTEXT_PRESENT.filter(f => !new RegExp(`\\b${f}\\s*[?]?:
 ok("9a the workspace context carries every field the build relies on", absentFromType.length === 0,
   absentFromType.join(", "));
 
-// ⚠⚠ THE RECORDED GAP. s9 names THIRTEEN context fields. Six are absent, and three of them are the
-// input to a guard s6 requires:
+// ⚠⚠ THE RECORDED GAP. s9 names THIRTEEN context fields. The ones below are not carried, and two of
+// them are still the input to a guard s6 requires:
 //
 //   membershipId    -- "Effective membership". The membership row id IS selected by the join in
 //                      resolvePracticeAccess; it simply is not carried onto the context.
@@ -128,21 +132,36 @@ ok("9a the workspace context carries every field the build relies on", absentFro
 //                      surface asks its own gate (offline-gate.ts) rather than reading the context.
 //   correlationId   -- "Current request/route trace". s6.2 requires a correlation id be RETURNED on a
 //                      denial for support; engines take one as an argument instead.
-//   contextVersion  -- "Detect stale or changed membership context". Without it s9.1's rule that
-//                      "background tabs receiving an invalidation event must re-authorise before
-//                      further writes" has nothing to compare, so a revoked membership in an open tab
-//                      is not detectable from the context alone.
+//   ~~contextVersion~~ CLOSED 2026-08-21 at the owner's instruction. A 16-character digest over the
+//                      AUTHORISATION-BEARING facts only -- deliberately not the practice name or
+//                      timezone, because a version that changed on cosmetic edits would be ignored
+//                      within a week. Its behaviour is proved live in practice-capability-harness
+//                      12b-1..5: stable across two reads of an unchanged workspace, different after a
+//                      revocation, restored when the grant is restored, and INDIFFERENT to a rename.
 //   locale          -- rendering context; workspaceTimezone is carried, locale is not.
 //
 // These are asserted ABSENT deliberately. If one is added this assertion goes red, which is the point:
 // the note above must be updated in the same change, so the gap list never quietly drifts.
-const SPEC_ABSENT = ["membershipId", "assuranceLevel", "featureFlags", "correlationId", "contextVersion", "locale"];
+const SPEC_ABSENT = ["membershipId", "assuranceLevel", "featureFlags", "correlationId", "locale"];
 const nowPresent = SPEC_ABSENT.filter(f => new RegExp(`\\b${f}\\s*[?]?:`).test(contextType));
-ok("9b the six s9 context fields this build does not carry are still absent, and still recorded above",
+ok("9b the five s9 context fields this build still does not carry are absent, and still recorded above",
   nowPresent.length === 0,
   nowPresent.length ? `now present (update the note): ${nowPresent.join(", ")}` : "");
 ok("9b-control the check can see a field that IS present, so it cannot pass by matching nothing",
   new RegExp("\\bcapabilities\\s*[?]?:").test(contextType));
+
+// ⚠ s9's contextVersion is only useful if it is OPAQUE. A version whose parts could be read back would
+// become a second, undocumented copy of the capability list, and the first thing anybody would do with
+// that copy is trust it without re-resolving. So: a digest, and a synthetic marker that cannot be
+// mistaken for one.
+ok("9c contextVersion is a hash of the authorisation facts, not a parseable record of them",
+  /createHash\("sha256"\)/.test(accessSrc) && /export function computeContextVersion/.test(accessSrc));
+ok("9d and the practice NAME and TIMEZONE are excluded, so a rename does not invalidate open tabs",
+  !/workspaceName|workspaceTimezone/.test(
+    accessSrc.slice(accessSrc.indexOf("export function computeContextVersion"),
+      accessSrc.indexOf("export function computeContextVersion") + 900)));
+ok("9e a context never resolved from a membership carries a WORD, so it cannot be compared to a digest",
+  /SYNTHETIC_CONTEXT_VERSION = "synthetic-no-membership"/.test(accessSrc));
 
 // ── 12. DEEP LINKS AND RETURN-TO ───────────────────────────────────────────────────────────────
 // s12: an unauthenticated protected deep link redirects to sign-in "and preserve[s] allow-listed

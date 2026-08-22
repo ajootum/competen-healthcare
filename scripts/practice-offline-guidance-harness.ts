@@ -64,6 +64,8 @@ const ctxFor = (workspaceId: string, caps: string[] = ALL): WorkspaceContext => 
   userId: USER, workspaceId, workspaceName: "H", workspaceType: "individual_practice",
   workspaceStatus: "active", roleCodes: ["owner"], capabilities: caps, entitled: true,
   entitlementStatus: "trial", onboardingComplete: true, onboardingStep: null,
+  // A fixture stands in for a resolved context; nothing here exercises invalidation.
+  contextVersion: "harness",
 });
 
 // ⚠ THE VALUES THAT MUST NOT SURVIVE THE PROJECTION, searched for BY VALUE in the serialised record. A

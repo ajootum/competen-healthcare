@@ -294,6 +294,8 @@ function ctxFor(workspaceId: string): WorkspaceContext {
     workspaceStatus: "active", roleCodes: ["owner"],
     capabilities: ["practice.home.view", "encounter.list", "practice.calendar.view", "followup.view"],
     entitled: true, entitlementStatus: "trial", onboardingComplete: true, onboardingStep: null,
+    // A fixture stands in for a resolved context; nothing here exercises invalidation.
+    contextVersion: "harness",
   };
 }
 

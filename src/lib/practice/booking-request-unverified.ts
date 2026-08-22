@@ -182,6 +182,11 @@ import {
   type VerificationState, type QueuedRequest,
 } from "@/lib/practice/booking-request-constants";
 import type { WorkspaceContext } from "@/lib/practice/access";
+// ⚠ A VALUE import from access.ts, unlike the type-only one above. access.ts reaches next/headers,
+// so this is safe only while every consumer of this module is server-side -- which they all are
+// today (API routes and server pages). A client component importing this module would pull
+// next/headers into its bundle; see offline-capture.ts's header for the time that shipped.
+import { SYNTHETIC_CONTEXT_VERSION } from "@/lib/practice/access";
 import { workspaceClock } from "@/lib/practice/practice-time";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -480,6 +485,8 @@ export async function submitUnverifiedRequest(
     // at all holds even less.
     capabilities: [],
     entitled: true, entitlementStatus: null, onboardingComplete: true, onboardingStep: null,
+    // Never resolved from a membership, so there is nothing to invalidate -- see the constant.
+    contextVersion: SYNTHETIC_CONTEXT_VERSION,
   };
 
   const answers: Record<string, unknown> = {
@@ -653,6 +660,8 @@ export async function intakeQuestionsFor(admin: any, args: {
     workspaceName: "", workspaceType: "", workspaceStatus: "active",
     roleCodes: [], capabilities: [],
     entitled: true, entitlementStatus: null, onboardingComplete: true, onboardingStep: null,
+    // Never resolved from a membership, so there is nothing to invalidate -- see the constant.
+    contextVersion: SYNTHETIC_CONTEXT_VERSION,
   };
 
   // ⚠ AN EMPTY INTAKE, DELIBERATELY. resolveIntake's conditions are evaluated over the answers, and

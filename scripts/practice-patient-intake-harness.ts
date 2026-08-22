@@ -507,6 +507,8 @@ async function main() {
     userId: "patient", workspaceId: ws, workspaceName: "", workspaceType: "", workspaceStatus: "active",
     roleCodes: [], capabilities: [], entitled: true, entitlementStatus: null,
     onboardingComplete: true, onboardingStep: null,
+    // A fixture stands in for a resolved context; nothing here exercises invalidation.
+    contextVersion: "harness",
   };
   // Re-close the channel so there IS a refusal for an override to try to lift.
   const reclose = await saveBookingRule(admin, ctx, {

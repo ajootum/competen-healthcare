@@ -155,6 +155,8 @@ const ctxFor = (workspaceId: string, userId: string, capabilities: string[]): Wo
   // whose ctx claims one zone while its row holds another tests a state that cannot exist.
   workspaceTimezone: TZ, roleCodes: ["owner"], capabilities,
   entitled: true, entitlementStatus: "trial", onboardingComplete: true, onboardingStep: null,
+  // A fixture stands in for a resolved context; nothing here exercises invalidation.
+  contextVersion: "harness",
 });
 
 // ── SOURCE SCANNING (rule 1's capability codes) ──────────────────────────────────────────────────────

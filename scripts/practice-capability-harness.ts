@@ -685,6 +685,61 @@ async function main() {
     ok("12-8. CONTROL: and the grant is restored, so the fixture is where it was",
       restored.includes("encounter.edit") && restored.length === before.length, restored.join(", "));
 
+    // ── 12b. contextVersion (CPR-SHELL-001 s9) ─────────────────────────────────────────────────
+    // s9.1: "membership or entitlement changes invalidate or version the active context", and a
+    // background tab "must re-authorise before further writes". That needs ONE comparable token, and
+    // these assertions are what make it worth comparing: stable when nothing changed, different when
+    // authorisation changed, and INDIFFERENT to cosmetic edits.
+    const v1 = await resolveWorkspaceContext(admin, OWNER, ws);
+    const v2 = await resolveWorkspaceContext(admin, OWNER, ws);
+    ok("12b-1. two resolves of an unchanged workspace agree on the version",
+      v1.ok && v2.ok && v1.ctx.contextVersion === v2.ctx.contextVersion,
+      v1.ok && v2.ok ? `${v1.ctx.contextVersion} vs ${v2.ctx.contextVersion}` : "resolve failed");
+    // ⚠ THIS IS THE ONE THAT WOULD HAVE CAUGHT AN UNSORTED DIGEST. PostgREST returns grant rows in no
+    // guaranteed order without an ORDER BY, so a digest over the rows as they arrive would differ
+    // between two identical reads -- and every open tab would re-authorise on every poll, which is how
+    // a versioning scheme gets switched off a week after it ships.
+
+    const { error: revoke2 } = await admin.from("practice_role_assignment")
+      .update({ effective_to: new Date().toISOString() })
+      .eq("membership_id", practitionerMembership).eq("capability_code", "encounter.edit")
+      .is("effective_to", null);
+    const vRevoked = await resolveWorkspaceContext(admin, OWNER, ws);
+    ok("12b-2. revoking a capability CHANGES the version -- the invalidation s9.1 asks for",
+      !revoke2 && vRevoked.ok && v1.ok && vRevoked.ctx.contextVersion !== v1.ctx.contextVersion,
+      vRevoked.ok && v1.ok ? `${v1.ctx.contextVersion} -> ${vRevoked.ctx.contextVersion}` : "resolve failed");
+
+    await admin.from("practice_role_assignment")
+      .update({ effective_to: null })
+      .eq("membership_id", practitionerMembership).eq("capability_code", "encounter.edit")
+      .not("effective_to", "is", null);
+    const vRestored = await resolveWorkspaceContext(admin, OWNER, ws);
+    // ⚠ IT IS A DIGEST OF STATE, NOT A COUNTER, so restoring the grants restores the version. That is
+    // correct for the question it answers -- "do my permissions still match what I was given?" -- and
+    // deliberately NOT an answer to "how many times has this changed?", which would need a counter and
+    // a migration. A client holding the original version after a revoke-then-restore is told
+    // "unchanged", and at that moment its capabilities genuinely are.
+    ok("12b-3. and restoring the grant restores the version: it describes STATE, not a count of edits",
+      vRestored.ok && v1.ok && vRestored.ctx.contextVersion === v1.ctx.contextVersion,
+      vRestored.ok && v1.ok ? `${vRestored.ctx.contextVersion} vs ${v1.ctx.contextVersion}` : "resolve failed");
+
+    // ⚠ AND THE NEGATIVE, WHICH IS HALF THE VALUE. A version that changed on cosmetic edits would be
+    // ignored within a week. Renaming a clinic must not force every open tab to re-authorise.
+    const { data: originalWs } = await admin.from("practice_workspace")
+      .select("name").eq("id", ws).maybeSingle();
+    await admin.from("practice_workspace").update({ name: "Renamed For Version Test" }).eq("id", ws);
+    const vRenamed = await resolveWorkspaceContext(admin, OWNER, ws);
+    await admin.from("practice_workspace").update({ name: originalWs?.name ?? "" }).eq("id", ws);
+    ok("12b-4. renaming the practice does NOT change the version -- authorisation facts only",
+      vRenamed.ok && v1.ok && vRenamed.ctx.contextVersion === v1.ctx.contextVersion
+        && vRenamed.ctx.workspaceName === "Renamed For Version Test",
+      vRenamed.ok && v1.ok ? `${v1.ctx.contextVersion} -> ${vRenamed.ctx.contextVersion}` : "resolve failed");
+    const { data: nameBack } = await admin.from("practice_workspace")
+      .select("name").eq("id", ws).maybeSingle();
+    ok("12b-5. CONTROL: and the fixture's name is back where it was",
+      nameBack?.name === originalWs?.name, `${nameBack?.name} vs ${originalWs?.name}`);
+
+
     // ── DIRECTION B: granting a permission must not activate a product ──
     const ownerBefore = await liveGrants(ownerMembership);
     ok("12-9. PRECONDITION: the OWNER membership does not hold encounter.edit",

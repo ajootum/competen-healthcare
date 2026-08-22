@@ -50,6 +50,8 @@ const ctxFor = (workspaceId: string, caps = ALL): WorkspaceContext => ({
   // whose ctx claims one zone while its row holds another tests a state that cannot exist.
   workspaceTimezone: "Africa/Kampala", roleCodes: ["owner"], capabilities: caps, entitled: true,
   entitlementStatus: "trial", onboardingComplete: true, onboardingStep: null,
+  // A fixture stands in for a resolved context; nothing here exercises invalidation.
+  contextVersion: "harness",
 });
 
 async function cleanup() {

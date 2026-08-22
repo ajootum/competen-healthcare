@@ -56,6 +56,8 @@ const ctxFor = (workspaceId: string, userId: string, capabilities: string[] = AL
   userId, workspaceId, workspaceName: "H", workspaceType: "individual_practice", workspaceStatus: "active",
   roleCodes: ["owner"], capabilities, entitled: true, entitlementStatus: "trial",
   onboardingComplete: true, onboardingStep: null,
+  // A fixture stands in for a resolved context; nothing here exercises invalidation.
+  contextVersion: "harness",
 });
 
 /** Idempotent teardown, run before AND after: a harness that cannot be run twice is run once. */

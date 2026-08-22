@@ -59,6 +59,8 @@ const ctxFor = (workspaceId: string, caps: string[] = ALL): WorkspaceContext => 
   userId: USER, workspaceId, workspaceName: "H", workspaceType: "individual_practice",
   workspaceStatus: "active", roleCodes: ["owner"], capabilities: caps, entitled: true,
   entitlementStatus: "trial", onboardingComplete: true, onboardingStep: null,
+  // A fixture stands in for a resolved context; nothing here exercises invalidation.
+  contextVersion: "harness",
 });
 
 // The fixture's disclosive values. Each is a field s3.8.1 DROPS, and each is searched for by value in the

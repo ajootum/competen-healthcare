@@ -44,6 +44,8 @@ const ctxFor = (workspaceId: string, userId: string): WorkspaceContext => ({
   userId, workspaceId, workspaceName: "S", workspaceType: "individual_practice", workspaceStatus: "active",
   roleCodes: ["owner"], capabilities: ["practice.home.view"], entitled: true, entitlementStatus: "trial",
   onboardingComplete: true, onboardingStep: null,
+  // A fixture stands in for a resolved context; nothing here exercises invalidation.
+  contextVersion: "harness",
 });
 
 async function cleanup(...users: string[]) {

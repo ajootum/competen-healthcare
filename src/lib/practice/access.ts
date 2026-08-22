@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { createHash } from "node:crypto";
 
 // Practice access resolution (CPR-IAM-001 s12 resolvePracticeAccess, CPR-SHELL-001 s9 context contract).
 //
@@ -59,7 +60,67 @@ export type WorkspaceContext = {
   entitlementStatus: string | null;
   onboardingComplete: boolean;
   onboardingStep: string | null;
+  /**
+   * CPR-SHELL-001 s9 -- "Detect stale or changed membership context".
+   *
+   * A short digest of the AUTHORISATION-BEARING facts in this context, and nothing else. s9.1 requires
+   * that "membership or entitlement changes invalidate or version the active context" and that
+   * "background tabs receiving an invalidation event must re-authorise before further writes". Without
+   * a single comparable token there is nothing for such a tab to compare: a revoked membership in an
+   * open tab was not detectable from the context alone.
+   *
+   * ⚠ AUTHORISATION FACTS ONLY. The practice's NAME and TIMEZONE are deliberately excluded. Renaming a
+   * clinic must not force every open tab to re-authorise -- a version that changed on cosmetic edits
+   * would be ignored within a week, which is worse than not having one.
+   *
+   * ⚠ INPUTS ARE SORTED. PostgREST returns grant rows in no guaranteed order without an ORDER BY, so an
+   * unsorted digest would change between two identical reads and every tab would re-authorise on every
+   * poll. Sorting is what makes this a fact about the GRANTS rather than about the query plan.
+   *
+   * ⚠ IT IS OPAQUE ON PURPOSE. Callers COMPARE it; they never parse it. A version whose parts could be
+   * read out would become a second, undocumented copy of the capability list -- and the first thing
+   * anybody would do with that copy is trust it without re-resolving.
+   */
+  contextVersion: string;
 };
+
+/**
+ * The digest itself, exported so a caller can recompute and compare without reaching into the resolver.
+ * Not reversible and not meant to be: 16 hex characters is ample to notice a change, and far too little
+ * to reconstruct what changed -- which is the point, because "what changed" is a question for a fresh
+ * resolve, not for a token held by a client.
+ */
+/**
+ * The version carried by a context that was NEVER RESOLVED FROM A MEMBERSHIP -- the synthetic ones
+ * built for an unverified booking request or a patient-facing evaluation, which hold no capability
+ * and answer to nobody's grants.
+ *
+ * ⚠ IT IS A WORD, NOT A DIGEST, AND THAT IS THE SAFEGUARD. Hashing the empty fact set would produce a
+ * perfectly stable-looking version, and the first person to compare it against a resolved one would
+ * be told "unchanged" about a context that never had anything to change. A value that cannot be
+ * mistaken for a digest cannot be compared to one by accident.
+ */
+export const SYNTHETIC_CONTEXT_VERSION = "synthetic-no-membership";
+export function computeContextVersion(facts: {
+  workspaceStatus: string;
+  membershipIds: string[];
+  roleCodes: string[];
+  capabilities: string[];
+  entitlementStatus: string | null;
+  onboardingComplete: boolean;
+  onboardingStep: string | null;
+}): string {
+  const canonical = JSON.stringify({
+    workspaceStatus: facts.workspaceStatus,
+    membershipIds: [...facts.membershipIds].sort(),
+    roleCodes: [...facts.roleCodes].sort(),
+    capabilities: [...facts.capabilities].sort(),
+    entitlementStatus: facts.entitlementStatus,
+    onboardingComplete: facts.onboardingComplete,
+    onboardingStep: facts.onboardingStep,
+  });
+  return createHash("sha256").update(canonical).digest("hex").slice(0, 16);
+}
 
 /** Every ACTIVE membership the user holds, grouped by workspace. */
 export async function resolvePracticeAccess(admin: any, userId: string): Promise<PracticeAccess> {
@@ -158,6 +219,14 @@ export async function resolveWorkspaceContext(admin: any, userId: string, worksp
     .select("state, current_step").eq("workspace_id", workspaceId).eq("user_id", userId)
     .order("started_at", { ascending: false }).limit(1).maybeSingle();
 
+  // ⚠ BUILT ONCE, THEN HASHED. The version is computed from THESE values, not from a second read --
+  // a re-query could return a different state and produce a version describing a context nobody holds.
+  const roleCodes = mine.map(m => m.roleCode);
+  const capabilities = [...new Set(((caps ?? []) as any[]).map(c => c.capability_code as string))];
+  const entitlementStatus = ((ents ?? []) as any[])[0]?.status ?? null;
+  const onboardingComplete = wsStatus === "ACTIVE" && (!ob || ob.state === "completed");
+  const onboardingStep = ob?.state === "in_progress" ? (ob.current_step as string) : null;
+
   return {
     ok: true,
     ctx: {
@@ -166,12 +235,16 @@ export async function resolveWorkspaceContext(admin: any, userId: string, worksp
       workspaceType: mine[0].workspaceType,
       workspaceStatus: wsStatus,
       workspaceTimezone: mine[0].workspaceTimezone,
-      roleCodes: mine.map(m => m.roleCode),
-      capabilities: [...new Set(((caps ?? []) as any[]).map(c => c.capability_code as string))],
+      roleCodes,
+      capabilities,
       entitled: true,
-      entitlementStatus: ((ents ?? []) as any[])[0]?.status ?? null,
-      onboardingComplete: wsStatus === "ACTIVE" && (!ob || ob.state === "completed"),
-      onboardingStep: ob?.state === "in_progress" ? (ob.current_step as string) : null,
+      entitlementStatus,
+      onboardingComplete,
+      onboardingStep,
+      contextVersion: computeContextVersion({
+        workspaceStatus: wsStatus, membershipIds, roleCodes, capabilities,
+        entitlementStatus, onboardingComplete, onboardingStep,
+      }),
     },
   };
 }
