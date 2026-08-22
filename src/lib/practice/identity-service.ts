@@ -505,6 +505,62 @@ export async function changeHandle(admin: any, args: {
  * the database cannot enforce (reserved, and retired by somebody else), and its failure is a refusal.
  * ────────────────────────────────────────────────────────────────────────────────────────────────────
  */
+/**
+ * The handle a booking page for this workspace should carry, for a page created AFTER its owner
+ * claimed one. claimHandle writes onto a page that already exists; this is the other order of the
+ * same two acts, and without it the result would depend on which the practitioner did first.
+ *
+ * ⚠ ZERO AND SEVERAL BOTH RESOLVE TO NULL, AND THE SECOND IS NOT AN OVERSIGHT. One page carries
+ * one handle (ux_practice_booking_access_handle), so when two practitioners both point their identity
+ * at this workspace there is no non-arbitrary way to choose between them -- and picking the older row
+ * would put one clinician's personal address on a practice both of them work in. Nothing is written,
+ * the readiness check keeps saying no handle is on the page, and a person decides.
+ */
+export async function claimedHandlesForWorkspace(admin: any, workspaceId: string): Promise<string[]> {
+  // Two is enough to tell none from one from several, which is all any caller needs to decide or to
+  // explain itself. Reading every identity in a large practice to answer a yes/no would be waste.
+  const { data } = await admin.from("practice_practitioner_identity")
+    .select("handle").eq("primary_workspace_id", workspaceId).not("handle", "is", null).limit(2);
+  return ((data ?? []) as { handle: string }[]).map(r => r.handle);
+}
+
+export async function handleForWorkspace(admin: any, workspaceId: string): Promise<string | null> {
+  const claimed = await claimedHandlesForWorkspace(admin, workspaceId);
+  return claimed.length === 1 ? claimed[0] : null;
+}
+
+export type HandleAdoption = "adopted" | "no_workspace" | "no_page" | "page_has_handle" | "refused";
+
+/**
+ * Put a freshly claimed handle onto the practice's booking page.
+ *
+ * Migration 254 made practice_booking_access.handle a foreign key onto the identity's handle, ON UPDATE
+ * CASCADE -- so CHANGING a handle later moves the booking page with it, in the database, with no code
+ * involved. What nothing ever performed was the FIRST write. The column stayed null for every practice
+ * that ever existed, which made HANDLE_CLAIMED unsatisfiable through the product: a blocker on the
+ * publish path that no amount of using the product could clear, telling a practitioner who had claimed
+ * @elisham1 that no handle had been claimed.
+ *
+ * `is("handle", null)` is the same guard the identity write above uses, for the same reason: it must
+ * never take a page that already carries somebody's address.
+ */
+export async function adoptHandleOntoBookingPage(
+  admin: any, workspaceId: string | null, handle: string,
+): Promise<HandleAdoption> {
+  if (!workspaceId) return "no_workspace";
+  const { data, error } = await admin.from("practice_booking_access")
+    .update({ handle, updated_at: nowIso() })
+    .eq("workspace_id", workspaceId).is("handle", null).select("id");
+  if (error) return "refused";
+  if (data && data.length > 0) return "adopted";
+  // Zero rows and no error: the guard held. Which of the two reasons it was decides whether anything
+  // still needs to happen -- no page means the seed on creation will pick the handle up, a page that
+  // already has one means a person has to choose. They are not the same outcome and are not logged as one.
+  const { data: page } = await admin.from("practice_booking_access")
+    .select("id").eq("workspace_id", workspaceId).maybeSingle();
+  return page ? "page_has_handle" : "no_page";
+}
+
 export async function claimHandle(admin: any, args: {
   userId: string; handle: string; correlationId: string;
 }): Promise<EngineResult<{ handle: string; bookingUrl: string }>> {
@@ -533,10 +589,17 @@ export async function claimHandle(admin: any, args: {
       message: "a handle was claimed for you a moment ago, so this one was not written",
     };
 
+  // ⚠ THIS MUST NOT BE ABLE TO REFUSE THE CLAIM. The identity write above has already committed, so
+  // the handle IS claimed whatever happens here; returning a failure would tell the practitioner
+  // otherwise and leave them unable to retry, because the second attempt hits HANDLE_ALREADY_CLAIMED.
+  // The outcome is carried into the audit payload instead -- a null that nobody could see is the exact
+  // defect this call exists to fix, and it would be a poor fix that failed the same way.
+  const adoption = await adoptHandleOntoBookingPage(admin, identity.primary_workspace_id, h);
+
   await audit(admin, {
     workspaceId: identity.primary_workspace_id, actorId: args.userId,
     eventType: "practice.handle_claimed",
-    payload: { identityId: identity.id, handle: h, bookingUrl: bookingUrl(h) },
+    payload: { identityId: identity.id, handle: h, bookingUrl: bookingUrl(h), bookingPage: adoption },
     correlationId: args.correlationId,
   });
   return { ok: true, data: { handle: h, bookingUrl: bookingUrl(h) } };

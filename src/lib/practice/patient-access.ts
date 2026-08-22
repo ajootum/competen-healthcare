@@ -13,6 +13,7 @@ import {
 } from "@/lib/practice/publish-constants";
 import type { WorkspaceContext } from "@/lib/practice/access";
 import { onBookingLinkCreated } from "./activation-hooks";
+import { claimedHandlesForWorkspace, handleForWorkspace } from "@/lib/practice/identity-service";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -821,9 +822,21 @@ export async function publishReadiness(
     for (const code of PUBLISH_CHECKS_DATABASE_OWNED)
       checks.push(checkRow(code, "not_checked", { because }));
   } else {
-    checks.push(checkRow("HANDLE_CLAIMED", profile.handle ? "pass" : "fail", {
-      because: profile.handle ? null : "no handle has been claimed, so there is no address a patient could be given.",
-    }));
+    // ⚠ THIS READ IS THE DIFFERENCE BETWEEN A TRUE SENTENCE AND A FALSE ONE, and it was reported as a
+    // defect by somebody looking at their own screen: Practice Setup showed "Your booking address .
+    // @elisham1" in its header while this check, two clicks away, said no handle had been claimed. Both
+    // read a column called `handle`; they were different columns. The identity's is the claim, the
+    // page's is the FK that carries it to patients, and only the second was ever null.
+    let handleBecause: string | null = null;
+    if (!profile.handle) {
+      const claimed = await claimedHandlesForWorkspace(admin, ctx.workspaceId);
+      handleBecause = claimed.length === 0
+        ? "no handle has been claimed, so there is no address a patient could be given."
+        : claimed.length === 1
+          ? `@${claimed[0]} is claimed, but this booking page does not carry it yet.`
+          : "more than one practitioner here has claimed a handle, and which one this page answers on is a choice nobody has made.";
+    }
+    checks.push(checkRow("HANDLE_CLAIMED", profile.handle ? "pass" : "fail", { because: handleBecause }));
     checks.push(checkRow("OTP_REQUIRED", profile.otpRequired ? "pass" : "fail", {
       because: profile.otpRequired ? null : "the one-time code is switched off on this profile.",
     }));
@@ -910,10 +923,18 @@ export type BookingAccessSave = {
  * it. That is the same cross-tenant hole checkPlacement's comment describes for
  * practice_appointment.location_id, and here the array is what a PATIENT-FACING page would render.
  *
- * ⚠ IT NEVER TOUCHES publish_state OR handle. Publishing is a separate, deliberate act (setPublishState)
- * and the handle is claimed in Practice Setup, atomically at the index. Letting a settings save move
- * either of them would make configuring a page an act of publishing one, which is the exact collapse
- * migration 254 kept `mode` and `publish_state` apart to avoid.
+ * ⚠ IT NEVER TOUCHES publish_state, AND IT NEVER MOVES A HANDLE. Publishing is a separate, deliberate
+ * act (setPublishState) and the handle is claimed in Practice Setup, atomically at the index. Letting a
+ * settings save move either of them would make configuring a page an act of publishing one, which is
+ * the exact collapse migration 254 kept `mode` and `publish_state` apart to avoid.
+ *
+ * THE ONE EXCEPTION, AND WHY IT IS NOT THAT: creating a page for the first time seeds `handle` from the
+ * practice's own already-claimed identity. That is not a settings save moving a handle -- there is no
+ * handle to move, publish_state is still `draft` and `mode` is untouched, so nothing about it publishes
+ * anything. It exists because claimHandle performs the same write from the other side, onto a page it
+ * finds; without this the two orders of the same two acts would disagree, and the practitioner who
+ * claimed their handle before building their page would be the one left with the null. The UPDATE
+ * branch above still never touches the column, so the rule holds everywhere it was written for.
  */
 export async function saveBookingAccess(admin: any, ctx: WorkspaceContext, args: BookingAccessSave & {
   actorId: string; correlationId: string;
@@ -1023,8 +1044,18 @@ export async function saveBookingAccess(admin: any, ctx: WorkspaceContext, args:
     ? { fallback_email: BOOKING_FALLBACK_EMAIL }
     : {};
 
+  // The page's handle, when the practitioner claimed one before the page existed. claimHandle writes
+  // onto a page it finds; this is the same write from the other side, so that the two orders of the
+  // same two acts land in the same place. Null when nobody has claimed one yet, and null when more
+  // than one identity points here -- see handleForWorkspace for why that is deliberate.
+  const adopted = await handleForWorkspace(admin, ctx.workspaceId);
+
   const { data, error } = await admin.from("practice_booking_access")
-    .insert({ workspace_id: ctx.workspaceId, created_by: args.actorId, ...seeded, ...patch })
+    .insert({
+      workspace_id: ctx.workspaceId, created_by: args.actorId,
+      ...(adopted ? { handle: adopted } : {}),
+      ...seeded, ...patch,
+    })
     .select("id").maybeSingle();
   if (error) {
     if (error.code === "23505")

@@ -13,7 +13,7 @@ review looking covered.
 |---|---|---|---|
 | Unit | Vitest | Does this function do what it claims, in isolation? | **CI, every push/PR, blocking** |
 | Smoke | Playwright | Does the app boot and serve its critical routes? | **Not yet wired.** Installed (`@playwright/test`), zero spec/config files exist. Deferred — see below. |
-| Acceptance | 221 scripts under `scripts/*-harness.ts` | Does a specific, spec-derived invariant hold against the real system — a constraint, a boundary, a governance rule proven by a write that fails? | **25 in CI, blocking** (`scripts/ci-harnesses.ts`). The other 188 are local-only, run by a person with real credentials. See `docs/HARNESS-INVENTORY.md`. |
+| Acceptance | 223 scripts under `scripts/*-harness.ts` | Does a specific, spec-derived invariant hold against the real system — a constraint, a boundary, a governance rule proven by a write that fails? | **25 in CI, blocking** (`scripts/ci-harnesses.ts`). The other 188 are local-only, run by a person with real credentials. See `docs/HARNESS-INVENTORY.md`. |
 
 ## Unit tests (Vitest) — CI, blocking
 
