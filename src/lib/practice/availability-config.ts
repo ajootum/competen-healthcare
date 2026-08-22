@@ -740,6 +740,16 @@ export type ResolvedRule = {
    */
   readFailed: boolean;
   readError: string | null;
+  /**
+   * CPR-BOOK-READY-001 s7/s8. The rule's channel visibility, CARRIED so a caller can enforce it.
+   *
+   * ⚠ IT WAS WRITTEN, STORED AND NEVER SELECTED. booking-rules.ts defaulted it to "internal" on every
+   * save, the rules console displayed it, and the resolver that feeds public availability did not read
+   * the column at all -- so no code anywhere could act on it. s7: "Until an authoritative consumer is
+   * demonstrated, visibility='internal' must be treated as metadata rather than proof of protection."
+   * There was no consumer. This is the field arriving where one can exist.
+   */
+  visibility: string | null;
 };
 
 const DEFAULT_RULE: ResolvedRule = {
@@ -748,12 +758,16 @@ const DEFAULT_RULE: ResolvedRule = {
   selfCancelAllowed: true, selfRescheduleAllowed: true,
   emergencyReserveMinutes: 0, source: "default",
   readFailed: false, readError: null,
+  // ⚠ NULL, NOT "public". A practice with no rule row has not declared a channel, and defaulting the
+  // ABSENCE of a rule to publicly visible is the same shape as null meaning unlimited: an unstated
+  // configuration silently becoming the most permissive one. Public callers fail closed on this.
+  visibility: null,
 };
 
 /** Migration 268's half of the resolved rule. Read only when the columns exist. */
 const RESOLVE_COLUMNS_BASE =
   "location_id, appointment_type, lead_time_minutes, booking_horizon_days, "
-  + "cancellation_notice_minutes, walk_in_daily_limit, emergency_reserve_minutes";
+  + "cancellation_notice_minutes, walk_in_daily_limit, emergency_reserve_minutes, visibility";
 const RESOLVE_COLUMNS_268 =
   "walk_in_cutoff_minutes, reschedule_notice_minutes, self_cancel_allowed, self_reschedule_allowed";
 
@@ -815,6 +829,9 @@ export async function resolveBookingRule(
     emergencyReserveMinutes: r.emergency_reserve_minutes ?? 0,
     source,
     readFailed: false, readError: null,
+    // ⚠ NOT COERCED TO A DEFAULT. An unset visibility is unknown, and s7 says unknown fails closed
+    // on the public channel. Reading it as "public" here would put the decision in the wrong place.
+    visibility: (r.visibility as string | null) ?? null,
   };
 }
 

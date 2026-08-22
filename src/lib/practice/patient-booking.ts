@@ -657,6 +657,41 @@ const APPOINTMENT_PAGE_CAP = 100;
  */
 export type BookingChannel = "patient_self" | "staff";
 
+/**
+ * CPR-BOOK-READY-001 s2/s5/s7 -- IS THIS RULE BOOKING-READY FOR THE PUBLIC CHANNEL?
+ *
+ * ⚠ EXPORTED SO THE HARNESS TESTS THIS FUNCTION AND NOT A COPY OF IT. s3: "Do not create a test-only
+ * resolver whose semantics can drift from production." The permanent tests import this.
+ *
+ * ⚠ NULL HORIZON IS MISSING CONFIGURATION, FROZEN BY OWNER DECISION 2026-08-22 (NULL_AS_MISSING).
+ * It does not mean inherit -- there is no practice-level or product-level horizon to inherit from,
+ * and this change deliberately does not invent one. It does not mean unlimited: the line this guards
+ * read bookingHorizonDays === null ? Infinity, so a practice that had never set a horizon offered
+ * public times forever while the readiness screen called it covered. Unlimited is a product decision
+ * needing an explicit representation, not something inferred from an empty column.
+ *
+ * ⚠ AND IT ONLY BINDS THE PUBLIC CHANNEL. s10: internal visibility is not authorization, and staff
+ * booking keeps its own authorization path -- every internal caller passes channel staff and is
+ * untouched here. Refusing a practitioner a time because a PUBLIC constraint is unset would break
+ * their own diary to protect a page nobody has published.
+ */
+export type PublicReadiness =
+  | { ready: true }
+  | { ready: false; reason: "horizon_missing" | "horizon_invalid" | "visibility_not_public" | "visibility_unknown" };
+
+export function publicBookingReadiness(rule: {
+  bookingHorizonDays: number | null;
+  visibility?: string | null;
+}): PublicReadiness {
+  const h = rule.bookingHorizonDays;
+  if (h === null || h === undefined) return { ready: false, reason: "horizon_missing" };
+  if (!Number.isFinite(h) || !Number.isInteger(h) || h <= 0) return { ready: false, reason: "horizon_invalid" };
+  const v = (rule.visibility ?? "").trim();
+  if (v === "") return { ready: false, reason: "visibility_unknown" };
+  if (v !== "public") return { ready: false, reason: "visibility_not_public" };
+  return { ready: true };
+}
+
 /** ⚠ THE DEFAULT IS THE PATIENT CHANNEL, so a caller that names none cannot be loosened by omission. */
 const DEFAULT_CHANNEL: BookingChannel = "patient_self";
 
@@ -979,7 +1014,20 @@ export async function bookableTimes(admin: any, args: {
         ok: false, status: 503, code: "READ_FAILED",
         message: `these times could not be computed because your booking rules could not be read: ${rule.readError ?? "no reason was given"}`,
       };
+    // ⚠⚠ THE PUBLIC CHANNEL FAILS CLOSED HERE, AND THIS IS THE AUTHORITATIVE BOUNDARY.
+    // s9: unresolved mandatory constraints produce no public slots, and visibility internal produces
+    // no public slots even when time and capacity rules are otherwise valid. Server-side, in the
+    // engine every public entry point already goes through -- not a UI filter, which s9 calls
+    // insufficient. The slot is dropped silently, like every other refusal in this loop: a public
+    // caller is told what IS offerable and never why something is not, because the shape of the
+    // refusal would itself disclose that an internal session exists at that time.
+    if (channel === "patient_self") {
+      const verdict = publicBookingReadiness(rule);
+      if (!verdict.ready) continue;
+    }
     const earliest = now + rule.leadTimeMinutes * 60000;
+    // Past the guard above a public horizon is a finite positive integer. Staff keep the open-ended
+    // window, which is what a practitioner booking their own diary has always had.
     const latest = rule.bookingHorizonDays === null ? Infinity : now + rule.bookingHorizonDays * 86400000;
 
     // ⚠ THE WINDOW IS SUBDIVIDED, because a generated slot is a whole SESSION -- migration 230's

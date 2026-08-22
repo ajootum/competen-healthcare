@@ -89,10 +89,10 @@ export const PUBLISH_CHECKS: PublishCheckDefinition[] = [
     wouldNeed: null,
   },
   {
-    code: "SESSION_RULE_COVER",
-    requirement: "Every published session has an applicable booking rule",
+    code: "EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED",
+    requirement: "Every published session resolves a valid horizon, notice period and public visibility",
     severity: "blocker", authority: "engine",
-    detail: "A session no rule in force covers has no notice period, no horizon and no capacity limit, so nothing constrains how far ahead or how full it gets.",
+    detail: "CPR-BOOK-READY-001 s3. Coverage alone was never enough: a rule ROW existing said nothing about the values in it, so a practice passed this while its only rule set no horizon, no capacity and a visibility of internal. The effective values are now resolved through the same path production booking uses and judged by the same predicate the availability engine enforces, so a green check here and an offered slot cannot disagree. A null booking_horizon_days is MISSING configuration, never unlimited and never inherited -- owner decision, 2026-08-22.",
     wouldNeed: null,
   },
   {

@@ -667,14 +667,54 @@ export async function publishReadiness(
   const { bookingRulesWorkspace } = await import("@/lib/practice/booking-rules");
   const rw = await bookingRulesWorkspace(admin, ctx);
   if (rw.uncovered.state !== "ok") {
-    checks.push(checkRow("SESSION_RULE_COVER", "not_checked", { because: rw.uncovered.reason }));
+    checks.push(checkRow("EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED", "not_checked", { because: rw.uncovered.reason }));
   } else {
     const uncovered = rw.uncovered.value;
-    checks.push(checkRow("SESSION_RULE_COVER", uncovered.length === 0 ? "pass" : "fail", {
-      found: uncovered.length, of: bookableIds.length || null,
+    // ⚠⚠ COVERAGE IS NECESSARY AND NOT SUFFICIENT -- CPR-BOOK-READY-001 s3.
+    //
+    // This check used to pass the moment every session had a rule ROW pointing at it. That is how a
+    // practice reached a green readiness screen while its only rule set no horizon, no capacity and a
+    // visibility of internal. s3: do not pass because a rule row merely exists; resolve values through
+    // the same authoritative configuration path production booking uses.
+    //
+    // Coverage still runs -- an uncovered session has nothing to resolve -- and then the EFFECTIVE
+    // values are resolved through resolveBookingRule, the function bookableTimes itself calls, and
+    // judged by publicBookingReadiness, the predicate the engine itself enforces. One semantics, two
+    // callers, so the screen and the slot machine cannot drift.
+    //
+    // ⚠ RESOLVED PER LOCATION WITH NO APPOINTMENT TYPE. A type-specific rule is not evaluated here:
+    // this check asks whether the SESSION has resolvable baseline constraints, and the engine still
+    // applies the per-type rule when a slot is actually offered. Saying so because a reader would
+    // otherwise assume this covers every rule that could apply.
+    const { resolveBookingRule } = await import("@/lib/practice/availability-config");
+    const { publicBookingReadiness } = await import("@/lib/practice/patient-booking");
+    const unresolved: { name: string; why: string }[] = [];
+    for (const sess of rw.sessions) {
+      const rule = await resolveBookingRule(admin, ctx.workspaceId, sess.locationId ?? null, "");
+      // A read failure is NOT a missing constraint. The coverage arm above already reports an
+      // unreadable rule table, and recycling it here would turn a database wobble into a
+      // configuration verdict against the practice.
+      if (rule.readFailed) continue;
+      const verdict = publicBookingReadiness(rule);
+      if (!verdict.ready) unresolved.push({ name: sess.name, why: verdict.reason });
+    }
+    const REASON_WORDS: Record<string, string> = {
+      horizon_missing: "has no booking horizon set, so how far ahead it may be booked is unresolved",
+      horizon_invalid: "has a booking horizon that is not a positive whole number of days",
+      visibility_not_public: "is set to internal, so it is not offered to patients",
+      visibility_unknown: "has no visibility set, so which channels may book it is unresolved",
+    };
+    const constraintsFail = uncovered.length > 0 || unresolved.length > 0;
+    checks.push(checkRow("EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED", constraintsFail ? "fail" : "pass", {
+      found: uncovered.length + unresolved.length, of: bookableIds.length || null,
       ids: uncovered.map(u => u.id),
-      because: uncovered.length > 0
-        ? `${uncovered.map(u => u.name).join(", ")} ${uncovered.length === 1 ? "is" : "are"} covered by no rule in force.`
+      because: constraintsFail
+        ? [
+            uncovered.length > 0
+              ? `${uncovered.map(u => u.name).join(", ")} ${uncovered.length === 1 ? "is" : "are"} covered by no rule in force.`
+              : null,
+            ...unresolved.map(u => `${u.name} ${REASON_WORDS[u.why] ?? u.why}.`),
+          ].filter(Boolean).join(" ")
         : null,
     }));
   }
