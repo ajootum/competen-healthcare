@@ -4,11 +4,18 @@
 | --- | --- |
 | Specification | CPR-BOOK-E2E-001, Self-Booking Readiness & End-to-End Acceptance |
 | Date | 2026-08-22 |
-| Commit | `5027f1a426441d9851d002fea79105631bc246d1` |
+| Commit | `ea9c9006` (report), rule coverage closed same day |
 | Environment used | **Production** (`Trial`, workspace `b7c5dbc1…`) — see the blocker below |
 | Environment required | **Staging** (§Primary environment) |
 | Personas run | **None.** No acceptance journey was executed. |
-| Status (§13) | **NOT READY** |
+| Status (§13) | **READINESS CONTROLS GREEN** + **PRODUCTION DEPENDENCY OPEN** |
+
+> **Status changed 2026-08-22, later the same day.** The rule-coverage failure below was closed, so
+> every checker prerequisite now passes and the publish readiness surface reports **0 blocking**.
+> That moves the status off NOT READY to READINESS CONTROLS GREEN — which §13 defines as
+> *"Not sufficient for release"*, and §2 as *necessary but insufficient*. **It is not
+> FUNCTIONALLY READY IN STAGING and must not be recorded as such**: no acceptance journey has been
+> run, because there is nowhere to run one.
 
 ---
 
@@ -73,12 +80,27 @@ is not an acceptance run.
 | Notice period | **PASS** on the rule | `lead_time_minutes = 30` |
 | Capacity | **PASS** | `capacity = null` = the derived ceiling per migration 241, not "unlimited" and not missing |
 | Visibility | **PASS** on the rule | `visibility = public` |
-| **Location / rule coverage** | **FAIL** | The only patient-bookable session — Wednesday 08:30 at **Nsambya Hospital** (`link_only`) — is covered by **no rule in force**. The single rule is scoped to **TMR International Hospital**. |
-| Notification channel | **OPEN** | `practice_message_channel`: 0 rows. Named here as a production/pilot dependency, per §10 — not silently treated as complete. |
+| **Location / rule coverage** | **PASS** (closed 2026-08-22) | Was FAIL: the only patient-bookable session — Wednesday 08:30 at **Nsambya Hospital** (`link_only`) — was covered by no rule in force, the single rule being scoped to **TMR International Hospital**. Closed by adding `Public self-booking - Nsambya Hospital` (horizon 120, notice 30, visibility public, active). |
+| Notification channel | **OPEN** | `practice_message_channel`: 0 rows. The surface says so in its own words: *"This deployment has no SMS gateway and no mail provider configured, so nothing can send a code."* Named as a production/pilot dependency per §10, not silently treated as complete. |
 
-**The prerequisites are not simultaneously valid.** Six hold on a rule that does not govern the one
-session a patient could book. Clearing the rule's location, or adding a rule covering Nsambya, is
-what closes this; it is configuration, not code.
+**The prerequisites are now simultaneously valid**, notification excepted and named.
+
+The Nsambya rule was scoped to that location rather than clearing the existing rule's location, so
+the TMR rule keeps the scope it was configured with and the change is reversible by archiving one
+row. It was written through `saveBookingRule`, not SQL, so it carries the same validation, version
+and audit trail the screen produces; `RULE_CONFLICTS_RESOLVED` reports **PASS / 0**, two rules on
+different locations having no overlapping scope to tie on.
+
+### Readiness surface after the change
+
+| | |
+| --- | --- |
+| Blocking checks failing | **0** |
+| Could not be checked | 2 — `LOCATION_DIRECTIONS`, `WAITING_LIST` (advisory, honest-absence by design) |
+| Warnings | 1 — `NOTIFICATION_CHANNEL`, `0 of 2` |
+| Every published session resolves horizon, notice and public visibility | **PASS — 1 of 1** |
+| Required registration fields are valid | **PASS — 10 of 10** |
+| Booking page status | Draft |
 
 ---
 
@@ -105,7 +127,7 @@ what closes this; it is configuration, not code.
 | --- | --- |
 | Corrected 19/0 verdict reproduced from a clean state | Reproduced; **not** from a clean staging state |
 | Assertion 16 proves both arms independently | **Yes** |
-| All publication prerequisites simultaneously valid | **No** — rule coverage fails |
+| All publication prerequisites simultaneously valid | **Yes**, notification excepted and named |
 | Adult / minor / returning journeys pass in staging | **No** — not runnable |
 | Negative cases pass | **No** — not runnable |
 | Public availability cannot bypass server-side constraints | Proven by control only |
@@ -119,17 +141,23 @@ what closes this; it is configuration, not code.
 
 ## Status and what would move it
 
-**NOT READY** (§13: *"Any mandatory public-booking invariant or acceptance journey fails."*) Two
-distinct things hold it there, and they are not the same size:
+**READINESS CONTROLS GREEN** + **PRODUCTION DEPENDENCY OPEN**.
 
-1. **No staging project.** This blocks nine of the ten matrix rows. It is an infrastructure decision
-   for the owner, not a code change: provision a second Supabase project, populate the three
-   `STAGING_*` CI secrets, and provision the synthetic practitioner there (never in production).
-2. **Rule coverage.** One configuration change in the product — clear the rule's location, or add a
-   rule for Nsambya.
+One thing now stands between this and FUNCTIONALLY READY IN STAGING, and it is not a code change:
 
-Notification remains **PRODUCTION DEPENDENCY OPEN** either way, and under §10 no green verdict may
-imply confirmations are operational while it stands.
+**No staging project.** It blocks nine of the ten matrix rows. Provision a second Supabase project,
+populate `STAGING_SUPABASE_URL` / `STAGING_ANON_KEY` / `STAGING_SERVICE_ROLE_KEY`, and provision the
+synthetic practitioner there — never in production. The CI job, the environment contract and the
+production refusal are already built and waiting for it.
+
+Notification remains **PRODUCTION DEPENDENCY OPEN**, and under §10 no green verdict may imply
+confirmations are operational while it stands. The readiness surface currently states the limitation
+itself rather than hiding it behind the verdict, which is the posture §10 asks for.
+
+⚠ **What "0 blocking" does and does not mean.** It means every prerequisite the checker can test is
+satisfied. It does not mean a patient can book. §2's table is explicit that the readiness verdict
+does not prove public availability, registration and booking integrate correctly — and that remains
+entirely unproven here, because it can only be proven by a journey nobody can yet run.
 
 ### Not done, deliberately
 
