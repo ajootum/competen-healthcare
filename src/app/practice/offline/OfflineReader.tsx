@@ -86,8 +86,13 @@ function composeCapture(date: string, time: string, timezone: string): { at: str
 //   3. It shows NO CLINICAL SERVICE LABEL IN THE LIST. The visit kind is on the record and appears only
 //      when one patient is opened deliberately -- s3.8.7: the clinic context supplies the *who* for free,
 //      so a service label beside a name on a waiting-room screen is more disclosive than the name.
-//   4. It ACCEPTS NOTHING. Every control that would change a record is rendered disabled with a reason.
-//      There is no form, no input, no draft, no queue and no "sync now".
+//   4. It DOES NOT EDIT THE RECORD. Every control that would CHANGE what the practice already holds is
+//      rendered disabled with a reason.
+//      ⚠ THIS POINT USED TO READ "It ACCEPTS NOTHING... no form, no input, no draft, no queue and no
+//      'sync now'", and that stopped being true when s5's capture entities shipped. The screen now
+//      carries four capture forms and writes to an outbox. A doctrine comment that outlives the design
+//      it describes is worse than none: this one was quoted verbatim into the page, where it told a
+//      practitioner there was no queue while a queue held their reading.
 //
 // ⚠ AND WHEN THE DAY HAS EXPIRED IT RENDERS NOTHING AT ALL except why. s3.4.3: an empty screen with a
 // reason is safe; a stale screen is not.
@@ -270,10 +275,21 @@ export default function OfflineReader({ cacheKey }: { cacheKey?: CryptoKey | nul
             )}
           </section>
 
+          {/* ⚠ THIS PARAGRAPH USED TO SAY THE OPPOSITE OF WHAT THE SCREEN DOES.
+              Verbatim, until CPR-GATE-001 step 16 read it back: "Nothing on this screen can be changed
+              while the device is offline. Nothing typed here could be delivered to the practice, so
+              nothing is accepted -- there is no draft, no queue and nothing waiting to be sent."
+              Every clause was true of the read-only reader it was written for, and every clause was
+              false by the time four capture forms sat above it. Captured a weight on this very screen
+              and watched competen-practice-outbox go to records:1 while the page insisted there was no
+              queue. Two sentences, one screen, opposite claims -- and the FALSE one was the reassuring
+              one, which is the direction that costs trust when somebody later finds the outbox.
+              The distinction the reader must still draw is real, so it is drawn properly below: the
+              RECORD cannot be edited here, and what you CAPTURE is held rather than delivered. */}
           <p className="mt-4 text-[11px] leading-relaxed text-gray-500">
-            Nothing on this screen can be changed while the device is offline. Nothing typed here could be
-            delivered to the practice, so nothing is accepted — there is no draft, no queue and nothing
-            waiting to be sent.
+            The record above cannot be changed here, and nothing on this screen is sent to the practice
+            while the device is offline. What you capture is held on this device and filed when there is
+            a connection &mdash; it stays here until the practice confirms it.
           </p>
           <p className="mt-2 text-[11px] leading-relaxed text-gray-500">{OFFLINE_ENCRYPTION_NOTE}</p>
         </>
