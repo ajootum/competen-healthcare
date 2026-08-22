@@ -49,8 +49,8 @@ import { judgeTarget } from "./production-guard";
 // The booking prerequisites, each through the engine the product itself calls — see provisionBooking.
 import { createLocation } from "../src/lib/practice/configuration";
 import { saveSession } from "../src/lib/practice/practice-sessions";
-import { claimHandle } from "../src/lib/practice/identity-service";
-import { saveBookingAccess, publishReadiness } from "../src/lib/practice/patient-access";
+import { claimHandle, publishIdentity } from "../src/lib/practice/identity-service";
+import { saveBookingAccess, publishReadiness, setPublishState } from "../src/lib/practice/patient-access";
 import { saveBookingRule } from "../src/lib/practice/booking-rules";
 import { createTemplate, publishTemplate } from "../src/lib/practice/registration-config";
 
@@ -513,7 +513,59 @@ async function provisionBooking(ctx: any): Promise<void> {
     ok(`published a registration template as the default`);
   } else ok("reused the published registration template");
 
-  // ── 7. WHAT THE PRODUCT ITSELF SAYS ─────────────────────────────────────────────────────────────
+  // ── 7. AN IDENTITY A PATIENT CAN ACTUALLY REACH ─────────────────────────────────────────────────
+  //
+  // ⚠ THIS STEP EXISTS BECAUSE THE PUBLIC PAGE 404ed WITH EVERY BLOCKER GREEN, and that is a product
+  // finding, not a fixture detail. resolveHandle refuses an identity whose discovery is `hidden` or
+  // whose status is outside RESOLVABLE_STATES (`active`, `licence_verified`). A newly provisioned
+  // identity is `hidden` and `created` — both refused — and publishReadiness checks NEITHER. So a
+  // practitioner can clear every blocking check, publish, hand out their address, and have it answer
+  // 404. Raised as separate work per §14 rather than fixed here by adding a check.
+  //
+  // publishIdentity is the real path: it requires a claimed handle and a confirmed email, walks
+  // created -> email_verified -> active through transitionIdentity, and sets discovery.
+  const identNow = await admin.from("practice_practitioner_identity")
+    .select("discovery, status").eq("user_id", ctx.userId).maybeSingle();
+  const resolvable = (d: any) => d && d.discovery !== "hidden" && ["active", "licence_verified"].includes(d.status);
+  if (!resolvable(identNow.data)) {
+    if (VERIFY_ONLY) {
+      bad(`identity is discovery=${(identNow.data as any)?.discovery}/status=${(identNow.data as any)?.status} — the public page would 404`);
+      return;
+    }
+    const pub = await publishIdentity(admin, { userId: ctx.userId, discovery: "public", correlationId: corr });
+    if (!pub.ok) { bad(`publishIdentity refused: ${pub.message}`); return; }
+    const back = await admin.from("practice_practitioner_identity")
+      .select("discovery, status").eq("user_id", ctx.userId).maybeSingle();
+    if (!resolvable(back.data)) bad(`publishIdentity reported success but the identity is still discovery=${(back.data as any)?.discovery}/status=${(back.data as any)?.status}`);
+    else ok(`identity published — discovery ${(back.data as any).discovery}, status ${(back.data as any).status}`);
+  } else ok(`identity already resolvable (discovery ${(identNow.data as any).discovery}, status ${(identNow.data as any).status})`);
+
+  // ── 8. THE PAGE ITSELF, PUBLISHED ───────────────────────────────────────────────────────────────
+  //
+  // Publishing is a separate deliberate act by design (migration 254 keeps `mode` and `publish_state`
+  // apart), so readiness reporting 0 blocking means "you may now publish", not "you have". The
+  // fixture has to take that act for the journey to have a page to open.
+  //
+  // ⚠ `published_with_warnings` IS LIVE, AND THE DISTINCTION IS THE PRODUCT BEING HONEST RATHER THAN
+  // A FAILURE. This fixture first asserted `=== "published"` and went red on a page that had in fact
+  // gone live: NOTIFICATION_CHANNEL is a warning here, acceptWarnings carried the publish, and the
+  // engine recorded WHICH of the two it was instead of flattening both to "published". That is
+  // exactly §10's posture — never let a green state imply confirmations are operational — so the
+  // fixture accepts both live states and reports which one it got.
+  const LIVE = ["published", "published_with_warnings"];
+  const pageNow = await admin.from("practice_booking_access")
+    .select("publish_state").eq("workspace_id", wsId).maybeSingle();
+  if (!LIVE.includes((pageNow.data as any)?.publish_state)) {
+    if (VERIFY_ONLY) { bad(`booking page is ${(pageNow.data as any)?.publish_state}, not live`); return; }
+    const pub = await setPublishState(admin, ctx, { to: "published", acceptWarnings: true, actorId: ctx.userId, correlationId: corr });
+    if (!(pub as any).ok) { bad(`setPublishState refused: ${(pub as any).message}`); return; }
+    const back = await admin.from("practice_booking_access").select("publish_state").eq("workspace_id", wsId).maybeSingle();
+    const state = (back.data as any)?.publish_state;
+    if (!LIVE.includes(state)) bad(`publish reported success but the page is ${state}`);
+    else ok(`booking page live (${state})`);
+  } else ok(`booking page already live (${(pageNow.data as any).publish_state})`);
+
+  // ── 9. WHAT THE PRODUCT ITSELF SAYS ─────────────────────────────────────────────────────────────
   //
   // ⚠ THE VERDICT IS ASKED OF THE REAL ENGINE, NOT RECOMPUTED HERE. A fixture that graded its own work
   // with its own copy of the rules would agree with itself no matter what it had written.
