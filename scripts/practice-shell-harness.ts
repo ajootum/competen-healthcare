@@ -126,10 +126,23 @@ ok("9a the workspace context carries every field the build relies on", absentFro
 //
 //   membershipId    -- "Effective membership". The membership row id IS selected by the join in
 //                      resolvePracticeAccess; it simply is not carried onto the context.
-//   assuranceLevel  -- "Authentication/MFA strength". s6's AssuranceGuard cannot be expressed in
-//                      context without it, so step-up state is not a fact the shell can hold.
-//   featureFlags    -- "Deployment and cohort features". s6's FeatureFlagGuard likewise; today each
-//                      surface asks its own gate (offline-gate.ts) rather than reading the context.
+//   assuranceLevel  -- "Authentication/MFA strength".
+//                      ⚠ CORRECTED 2026-08-21. An earlier version of this note said s6's AssuranceGuard
+//                      "cannot be expressed" without this field. That was WRONG, and wrong in the
+//                      direction that overstates a gap. The guard is implemented: shell.ts computes the
+//                      AAL and calls mfaGate, and both UNAVAILABLE and REFUSE return BEFORE any context
+//                      is built -- so a WorkspaceContext in hand already means assurance was satisfied.
+//                      What is absent is the LEVEL as a carried fact, which would matter only for s15's
+//                      "sensitive routes may require step-up". No such route exists today.
+//                      ⚠ Note also the AAL is read ONLY when the policy requires MFA, deliberately, so
+//                      "aal1"/"aal2" is not universally knowable even inside a request -- an honest
+//                      field would need a NOT-ASKED state, not a default.
+//   featureFlags    -- "Deployment and cohort features".
+//                      ⚠ Same correction. s6's FeatureFlagGuard is implemented -- gateFor() in
+//                      platform/feature-flags.ts, reached through offlineCacheGate and used across the
+//                      offline routes, the practice home and the executive intelligence page. It simply
+//                      does not route through the context. Carrying resolved flags here would add a
+//                      query to every request and duplicate a mechanism that works.
 //   correlationId   -- "Current request/route trace". s6.2 requires a correlation id be RETURNED on a
 //                      denial for support; engines take one as an argument instead.
 //   ~~contextVersion~~ CLOSED 2026-08-21 at the owner's instruction. A 16-character digest over the
