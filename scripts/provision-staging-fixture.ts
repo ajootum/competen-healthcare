@@ -49,6 +49,7 @@ import { judgeTarget } from "./production-guard";
 // The booking prerequisites, each through the engine the product itself calls — see provisionBooking.
 import { createLocation } from "../src/lib/practice/configuration";
 import { saveSession } from "../src/lib/practice/practice-sessions";
+import { generateSlots } from "../src/lib/practice/availability-config";
 import { claimHandle, publishIdentity } from "../src/lib/practice/identity-service";
 import { saveBookingAccess, publishReadiness, setPublishState } from "../src/lib/practice/patient-access";
 import { saveBookingRule } from "../src/lib/practice/booking-rules";
@@ -476,6 +477,36 @@ async function provisionBooking(ctx: any): Promise<void> {
     else ok(`created the booking page carrying @${(after.data as any).handle}, mode ${(after.data as any).mode}`);
   } else ok(`reused the booking page (handle ${(baBefore.data as any).handle ?? "null"})`);
 
+  // ── 4b. WHAT THE PAGE ACTUALLY OFFERS ───────────────────────────────────────────────────────────
+  //
+  // ⚠ AN EMPTY visible_* ARRAY MEANS "NONE CHOSEN", NOT "ALL". patient-booking.ts narrows locations
+  // behind `if (ids.length > 0)` and raises NOTHING_OFFERED when either list is empty, so a page that
+  // is published, resolvable and green on every blocking check still tells a patient "this practice
+  // has not yet chosen what it offers online". That is what this fixture produced on its first run.
+  //
+  // Recorded rather than worked around silently: publishReadiness has no blocking check for it, which
+  // is the THIRD condition found today that leaves a 0-blocking practice unbookable. Raised as
+  // separate work per §14.
+  const offer = await admin.from("practice_booking_access")
+    .select("visible_location_ids, visible_appointment_types").eq("workspace_id", wsId).maybeSingle();
+  const emptyOffer = ((offer.data as any)?.visible_location_ids ?? []).length === 0
+    || ((offer.data as any)?.visible_appointment_types ?? []).length === 0;
+  if (emptyOffer) {
+    if (VERIFY_ONLY) { bad("the page offers no location or no appointment type — a patient sees NOTHING_OFFERED"); return; }
+    const saved = await saveBookingAccess(admin, ctx, {
+      visibleLocationIds: [locationId],
+      visibleAppointmentTypes: ["new_consultation"],
+      actorId: ctx.userId, correlationId: corr,
+    } as any);
+    if (!(saved as any).ok) { bad(`saveBookingAccess refused the offer: ${(saved as any).message}`); return; }
+    const back = await admin.from("practice_booking_access")
+      .select("visible_location_ids, visible_appointment_types").eq("workspace_id", wsId).maybeSingle();
+    const nLoc = ((back.data as any)?.visible_location_ids ?? []).length;
+    const nType = ((back.data as any)?.visible_appointment_types ?? []).length;
+    if (nLoc === 0 || nType === 0) bad(`the offer was saved but reads back as ${nLoc} location(s), ${nType} type(s)`);
+    else ok(`page offers ${nLoc} location(s) and ${nType} appointment type(s)`);
+  } else ok("page already offers a location and an appointment type");
+
   // ── 5. A RULE COVERING IT ───────────────────────────────────────────────────────────────────────
   const rules = await admin.from("practice_booking_rule")
     .select("id, location_id, booking_horizon_days, visibility, status").eq("workspace_id", wsId);
@@ -564,6 +595,33 @@ async function provisionBooking(ctx: any): Promise<void> {
     if (!LIVE.includes(state)) bad(`publish reported success but the page is ${state}`);
     else ok(`booking page live (${state})`);
   } else ok(`booking page already live (${(pageNow.data as any).publish_state})`);
+
+  // ── 8b. SLOTS, WHICH A SESSION TEMPLATE IS NOT ──────────────────────────────────────────────────
+  //
+  // ⚠ A TEMPLATE IS A RULE FOR MAKING TIMES, NOT THE TIMES. practice_availability_slot was empty
+  // across the whole staging project, so the public availability endpoint answered `slots: []` for a
+  // page that was published, resolvable, offering a location and a type, and green on every blocking
+  // check. Nothing said so: the emptiness reads exactly like "fully booked".
+  //
+  // generateSlots is the engine the planner calls. The window is deliberately short — a fortnight is
+  // enough for the journey to find a Wednesday, and materialising 120 days of a synthetic clinic
+  // would make every later count in this project harder to read.
+  const slotCount = await admin.from("practice_availability_slot")
+    .select("*", { count: "exact", head: true }).eq("workspace_id", wsId);
+  if ((slotCount.count ?? 0) === 0) {
+    if (VERIFY_ONLY) { bad("no availability slots — public availability would answer with an empty list"); return; }
+    const from = new Date();
+    const to = new Date(from.getTime() + 28 * 24 * 60 * 60 * 1000);
+    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const gen = await generateSlots(admin, ctx, {
+      fromDate: iso(from), toDate: iso(to), actorId: ctx.userId, correlationId: corr,
+    });
+    if (!gen.ok) { bad(`generateSlots refused: ${(gen as any).message}`); return; }
+    const back = await admin.from("practice_availability_slot")
+      .select("*", { count: "exact", head: true }).eq("workspace_id", wsId);
+    if ((back.count ?? 0) === 0) bad("generateSlots reported success but produced no slots");
+    else ok(`generated ${back.count} slot(s) over 28 days`);
+  } else ok(`reused ${slotCount.count} existing slot(s)`);
 
   // ── 9. WHAT THE PRODUCT ITSELF SAYS ─────────────────────────────────────────────────────────────
   //

@@ -5,9 +5,9 @@
 | Specification | CPR-BOOK-E2E-001, Self-Booking Readiness & End-to-End Acceptance |
 | Date | 2026-08-22 |
 | Commit | `ea9c9006` (report), rule coverage closed same day |
-| Environment used | **Production** (`Trial`, workspace `b7c5dbc1…`) — see the blocker below |
+| Environment used | **Staging** ref `ezhvpgtcqcdsgylrxgdb` for Gates C and D; production `Trial` for the Gate B configuration snapshot |
 | Environment required | **Staging** (§Primary environment) |
-| Personas run | **None.** No acceptance journey was executed. |
+| Personas run | **None.** The journey reaches slot selection and stops at the confirmation code. |
 | Status (§13) | **READINESS CONTROLS GREEN** + **PRODUCTION DEPENDENCY OPEN** |
 
 > **Status changed 2026-08-22, later the same day.** The rule-coverage failure below was closed, so
@@ -15,11 +15,11 @@
 > That moves the status off NOT READY to READINESS CONTROLS GREEN — which §13 defines as
 > *"Not sufficient for release"*, and §2 as *necessary but insufficient*. **It is not
 > FUNCTIONALLY READY IN STAGING and must not be recorded as such**: no acceptance journey has been
-> run, because staging carries no booking fixture to run one against.
+> run to completion: it stops at the one-time code, which no configured provider can send.
 
 ---
 
-## The blocking finding: staging exists, but holds no booking fixture
+## The blocking finding: no messaging provider, so no booking can complete
 
 > **⚠ CORRECTION, 2026-08-22.** An earlier revision of this report stated that no staging project
 > existed. **That was wrong.** It was sourced from a code comment — `.github/workflows/ci.yml:17`,
@@ -121,19 +121,106 @@ different locations having no overlapping scope to tie on.
 
 ---
 
+## Gate C — the canonical public journey, run against staging
+
+Built server on `127.0.0.1:3100` against staging ref `ezhvpgtcqcdsgylrxgdb`, signed out, through the
+public address and the authoritative API. No developer shortcuts and no direct database writes in the
+journey itself.
+
+| Step | Result | Evidence |
+| --- | --- | --- |
+| 1. Open public booking address | **PASS** | `/practice/book/@stagingclinic` → 200, renders the practitioner and `CP-000002-1` |
+| 2. Select location | **PASS** | `Staging Clinic (synthetic)` offered |
+| 3. Select appointment context | **PASS** | `new_consultation` offered; `emergency` refused with `TYPE_NOT_OFFERED` |
+| 4. Select date | **PASS** | 14-day window, first slot Wed 2026-08-26 |
+| 5. Select slot | **PASS** | **24 server-authorised slots** — 09:00–13:00 Kampala at 20 minutes, two Wednesdays |
+| 6–13. Register → confirm → commit → downstream | **BLOCKED** | No messaging provider exists, and the code is not optional |
+
+### Why 6–13 stopped, and why that is the correct behaviour
+
+The public page refuses booking outright:
+
+> *"Online booking is not open here yet: this practice has no way to send you the confirmation code
+> that booking requires. Contact them directly."*
+
+`patient-booking.ts` raises `NO_WAY_TO_SEND_A_CODE` from real deliverability, not from a settings row,
+so enabling a channel would not have unblocked it — correctly. Delivery needs `TWILIO_ACCOUNT_SID` /
+`TWILIO_AUTH_TOKEN`, an Africa's Talking equivalent, or `RESEND_API_KEY`; none is configured in any
+environment. And the code cannot be waived: migration 254's `practice_booking_access_publishable`
+refuses to publish a page with `otp_required` false.
+
+**So a deployment with no messaging provider cannot take a public booking at all, by design.** The
+product says so plainly rather than sending a patient to wait for a message that is never coming,
+which is exactly §10's posture.
+
+---
+
+## Gate D — negative and boundary cases, against the real public endpoint
+
+Each case was applied to the live rule, queried through
+`/api/v1/practice/public/booking`, and reverted.
+
+| Case | Expected | Observed |
+| --- | --- | --- |
+| baseline | slots returned | **24** |
+| `visibility = "internal"` | no public slots | **0** |
+| `booking_horizon_days = null` | NULL_AS_MISSING, no public slots | **0** |
+| horizon shorter than the next session | no public slots | **0** |
+| appointment type not offered | refused | `TYPE_NOT_OFFERED` |
+| restored | slots return | **24** |
+
+The final row is the control. Without it, four zeroes prove only that the endpoint was broken.
+
+This is the first evidence in this arc that the frozen NULL_AS_MISSING decision and the visibility
+rule hold **through the authoritative public path** rather than through a unit assertion over the
+predicate.
+
+---
+
+## Findings raised as separate work (§14)
+
+Three conditions were found in which `publishReadiness` reports **0 blocking** while no patient can
+book. Each was measured, not inferred. None is fixed here, per §14's instruction not to redesign
+booking architecture while executing the pack.
+
+**1. A hidden identity 404s the published page, and no check mentions it.**
+`resolveHandle` refuses an identity whose `discovery` is `hidden` or whose `status` is outside
+`RESOLVABLE_STATES` (`active`, `licence_verified`). Every identity *starts* hidden and `created`.
+Measured both ways on the live page: `discovery=hidden` → **404**, `discovery=public` → **200**, and
+`publishReadiness` returned **0 blocking in both states**. A practitioner can clear every blocker,
+publish, hand out their address, and have it answer 404.
+
+**2. A published page offers nothing until locations and types are chosen.**
+`visible_location_ids` and `visible_appointment_types` default to empty, and empty means *none* —
+`patient-booking.ts` narrows behind `if (ids.length > 0)` and raises `NOTHING_OFFERED`. A page that
+was published, resolvable and 0-blocking told patients *"this practice has not yet chosen what it
+offers online."*
+
+**3. A session template is not slots.** `practice_availability_slot` was empty estate-wide in
+staging, so public availability answered `slots: []` for a fully configured, 0-blocking page.
+Emptiness there is indistinguishable from "fully booked". Slots are materialised by `generateSlots`;
+nothing prompts a practice to run it.
+
+**4. `NOTIFICATION_CHANNEL` is classified as a warning but behaves as a blocker.** It is publishable
+with `acceptWarnings`, yet it makes every public booking impossible, because the one-time code is
+mandatory and undeliverable. A check whose failure means zero bookings is not advisory. This is the
+single most consequential classification in the readiness list.
+
+---
+
 ## §15 Acceptance matrix
 
 | Area | Required evidence | Result |
 | --- | --- | --- |
 | Verdict semantics | Scoped uncovered + unresolved, both break-tested | **PASS** |
-| Public handle | Canonical handle resolves correct Practice | **PARTIAL** — handle valid; resolution not exercised end-to-end |
-| Registration | Published template works for adult/minor/returning | **NOT RUN** — no staging fixture |
-| Constraints | Explicit notice + finite horizon + capacity enforced | **PARTIAL** — enforced in code and unit-proven; not proven through a public request |
-| Visibility | Internal sessions absent from public server response | **PARTIAL** — proven by control, not by a public response |
-| Atomic booking | Valid state after success, safe state after failure | **NOT RUN** |
-| Concurrency | No overbooking under deliberate race | **NOT RUN** |
-| Downstream Practice | Appointment appears in Planner | **NOT RUN** |
-| HFE | Public mobile/desktop walkthrough | **NOT RUN** |
+| Public handle | Canonical handle resolves correct Practice | **PASS** — /practice/book/@stagingclinic resolves the correct Practice |
+| Registration | Published template works for adult/minor/returning | **NOT RUN** — blocked at the code step |
+| Constraints | Explicit notice + finite horizon + capacity enforced | **PASS** — proven through the public endpoint (Gate D) |
+| Visibility | Internal sessions absent from public server response | **PASS** — internal returns 0 slots, restore returns 24 |
+| Atomic booking | Valid state after success, safe state after failure | **NOT RUN** — no messaging provider |
+| Concurrency | No overbooking under deliberate race | **NOT RUN** — needs a committable booking |
+| Downstream Practice | Appointment appears in Planner | **NOT RUN** — needs a committable booking |
+| HFE | Public mobile/desktop walkthrough | **PARTIAL** — public page reviewed; the wizard is unreachable |
 | Notifications | Required for release, or explicitly OPEN | **OPEN** — named dependency |
 
 ---
