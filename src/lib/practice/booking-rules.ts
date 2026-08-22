@@ -25,6 +25,7 @@ import {
 // walk-in limit and the cutoff have ONE resolver, shared with the screen that reports them.
 import { walkInAllowance } from "@/lib/practice/practice-sessions";
 import { onAppointmentCreated } from "./activation-hooks";
+import { WEEKDAY_NAME } from "@/lib/practice/planner-constants";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -666,14 +667,16 @@ export async function listBookingRules(admin: any, ctx: WorkspaceContext): Promi
   const rows = (data ?? []) as any[];
   const [{ data: locs }, { data: sess }] = await Promise.all([
     admin.from("practice_location").select("id, name").eq("workspace_id", ctx.workspaceId),
-    admin.from("practice_availability_template").select("id, session_name, weekday, starts_minute")
+    admin.from("practice_availability_template")
+      .select("id, session_name, weekday, starts_minute, location_id")
       .eq("workspace_id", ctx.workspaceId),
   ]);
+  const locationNames = new Map(((locs ?? []) as any[]).map(l => [l.id as string, l.name as string]));
   const names = {
-    location: new Map(((locs ?? []) as any[]).map(l => [l.id as string, l.name as string])),
+    location: locationNames,
     session: new Map(((sess ?? []) as any[]).map(s => [
       s.id as string,
-      (s.session_name as string | null) ?? `Session on day ${s.weekday}`,
+      availabilitySessionLabel(s, locationNames),
     ])),
   };
 
@@ -2161,6 +2164,37 @@ export type BookingRulesWorkspace = {
   readFailures: string[];
 };
 
+/**
+ * What an UNNAMED availability template is called on screen.
+ *
+ * ⚠ IT USED TO BE `Session on day ${weekday}`, AND THAT IS NOT A NAME -- IT IS A COLLISION.
+ * Every template in this estate has a null session_name, and three of them fall on the same weekday, so
+ * the publish blocker read "Session on day 3, Session on day 3 are covered by no rule in force." Two
+ * different sessions, one label, and the person being asked to fix them cannot tell which is which from
+ * the sentence asking. A message that names the thing to fix has to name it distinguishably or it has
+ * not named it at all.
+ *
+ * Weekday NAME rather than number (nobody reads "day 3" as Wednesday), the start time because that is
+ * what separates two sessions on one day, and the location when the caller knows it -- because the real
+ * collisions here are across hospitals.
+ */
+export function availabilitySessionLabel(
+  s: { session_name?: string | null; weekday: number; starts_minute?: number | null; location_id?: string | null },
+  locationNames?: Map<string, string>,
+): string {
+  const given = (s.session_name ?? "").trim();
+  if (given) return given;
+  const day = WEEKDAY_NAME[s.weekday] ?? `day ${s.weekday}`;
+  const mins = typeof s.starts_minute === "number" ? s.starts_minute : null;
+  const at = mins === null
+    ? ""
+    : ` ${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+  const where = s.location_id && locationNames?.get(s.location_id)
+    ? ` at ${locationNames.get(s.location_id)}`
+    : "";
+  return `Unnamed ${day}${at} session${where}`;
+}
+
 export async function bookingRulesWorkspace(admin: any, ctx: WorkspaceContext): Promise<BookingRulesWorkspace> {
   const { data: ws } = await admin.from("practice_workspace")
     .select("timezone").eq("id", ctx.workspaceId).maybeSingle();
@@ -2179,7 +2213,7 @@ export async function bookingRulesWorkspace(admin: any, ctx: WorkspaceContext): 
 
   const sessions = ((sess.data ?? []) as any[]).map(s => ({
     id: s.id as string,
-    name: (s.session_name as string | null) ?? `Session on day ${s.weekday}`,
+    name: availabilitySessionLabel(s, new Map(((locs.data ?? []) as any[]).map(l => [l.id as string, l.name as string]))),
     weekday: s.weekday as number,
     startsMinute: s.starts_minute as number,
     endsMinute: s.ends_minute as number,
