@@ -362,6 +362,24 @@ async function main() {
     part(otherAfterClaim, "booking_address")?.done === false,
     JSON.stringify(part(otherAfterClaim, "booking_address")));
 
+  // ── 11. THE TEAM COUNT IS A REAL COUNT ─────────────────────────────────────────────────────────
+  //
+  // ⚠ IT READ "0 active" FOR EVERY PRACTICE THAT HAS EVER EXISTED. setup.ts asked
+  // practice_membership for status "ACTIVE"; the column holds "active", in 12 of 12 rows estate-wide
+  // and in every other reader in src/lib/practice. So the Team & Permissions module reported nobody,
+  // however many people were invited, and could never be done.
+  //
+  // The neighbouring practice_encounter query really does want "ACTIVE" — that table's statuses
+  // genuinely are uppercase. Two tables, two conventions, one word apart, which is why nothing
+  // caught it: the code looks right, the query is valid, the count is a number, and the number is a
+  // lie. A count asserted to be non-zero against a workspace known to have a member is the cheapest
+  // thing that would have.
+  const team = (afterClaim as any).modules?.find((m: any) => m.key === "team");
+  ok("11. the team card counts the practice's real members, not zero",
+    typeof team?.detail === "string" && !/^0 /.test(team.detail),
+    team ? JSON.stringify({ key: team.key, state: team.state, detail: team.detail })
+         : `no team module; keys are ${((afterClaim as any).modules ?? []).map((m: any) => m.key).join(", ")}`);
+
   await cleanup();
 
   console.log(`\n  ${pass} passed, ${fails.length} failed`);

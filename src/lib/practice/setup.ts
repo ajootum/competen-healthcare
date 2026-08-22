@@ -362,8 +362,17 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
       .eq("workspace_id", ctx.workspaceId).eq("status", "published"),
     admin.from("practice_message_channel").select("*", { count: "exact", head: true })
       .eq("workspace_id", ctx.workspaceId).eq("enabled", true),
+    // ⚠ LOWERCASE. practice_membership.status is 'active' -- 12 of 12 rows in the estate, and every
+    // other reader in src/lib/practice queries it lowercase. This one asked for "ACTIVE" and so
+    // counted nothing, ever: the Team & Permissions module reported "0 active" and could never be
+    // done however many people a practice invited.
+    //
+    // The neighbouring practice_encounter query in encounters.ts really does want "ACTIVE", because
+    // THAT table's statuses genuinely are uppercase (ACTIVE, SIGNED, DRAFT, COMPLETED). Two tables,
+    // two conventions, one word apart -- which is why this was invisible: the code looks right, the
+    // query is valid, the count is a number, and the number is a lie.
     admin.from("practice_membership").select("*", { count: "exact", head: true })
-      .eq("workspace_id", ctx.workspaceId).eq("status", "ACTIVE"),
+      .eq("workspace_id", ctx.workspaceId).eq("status", "active"),
     // CPR-SET-002 migration 230. Module 5 stopped being "not built" when checkPlacement started
     // refusing on these, so it needs a real configured-check like every other built module.
     admin.from("practice_booking_rule").select("*", { count: "exact", head: true })
