@@ -74,8 +74,12 @@ ok("2. an explicit finite horizon with public visibility IS ready",
 // still computed Infinity underneath it would pass a value-only test and ship the bug.
 const engine = read("src", "lib", "practice", "patient-booking.ts");
 const infinityLine = /bookingHorizonDays === null \? Infinity/.test(engine);
+// ⚠ THE CALL SHAPE IS NOT PINNED, DELIBERATELY. A first draft asserted the literal
+// "publicBookingReadiness(rule)" and went red the moment the call grew an argument for capacity --
+// pinning a mechanism actively under change, which is the failure this codebase keeps re-learning.
+// What matters is that the public branch consults the predicate BEFORE the Infinity branch runs.
 const guardedFirst = engine.indexOf('if (channel === "patient_self")') < engine.indexOf("? Infinity")
-  && engine.includes("publicBookingReadiness(rule)");
+  && engine.includes("publicBookingReadiness(");
 ok("3. null is never read as unlimited on the public channel: the Infinity branch is guarded",
   !infinityLine || guardedFirst,
   `infinityPresent=${infinityLine} guardedFirst=${guardedFirst}`);
@@ -109,6 +113,28 @@ ok("6. the public booking route computes availability through the engine, not it
     && !/from\(["']practice_availability_slot["']\)/.test(publicRoute));
 ok("6b. and the resolver actually SELECTS visibility, so enforcement has something to read",
   /visibility/.test(read("src", "lib", "practice", "availability-config.ts")));
+
+// ── 7. CAPACITY (s2's fourth invariant, s6) ────────────────────────────────────────────────────
+// ⚠ NULL CAPACITY IS NOT MISSING CAPACITY, and this is the one place the two null semantics in this
+// specification diverge. Migration 240: capacity_manual null means DERIVE from the window and the
+// appointment length. Refusing it the way a null horizon is refused would reject nearly every
+// session in existence, because almost none override the derivation.
+ok("7. a null capacity still resolves -- it defers to the derivation, it is not missing",
+  publicBookingReadiness({ ...PUBLIC_OK, capacityManual: null }).ready === true
+    && publicBookingReadiness({ ...PUBLIC_OK }).ready === true);
+ok("7b. an explicit capacity of zero is NOT publicly bookable -- a session admitting nobody",
+  publicBookingReadiness({ ...PUBLIC_OK, capacityManual: 0 }).ready === false
+    && publicBookingReadiness({ ...PUBLIC_OK, capacityManual: -3 }).ready === false);
+ok("7c. and a positive capacity passes",
+  publicBookingReadiness({ ...PUBLIC_OK, capacityManual: 12 }).ready === true);
+
+// ⚠ 7d IS THE ONE THAT MATTERS. The slot row has never carried capacity, so a guard reading it off
+// the slot would be undefined on every call and pass forever -- an inert check, which is the exact
+// defect this whole specification exists to remove. This asserts the engine reads capacity from the
+// TEMPLATE, which is where the column lives.
+ok("7d. the engine resolves capacity from the template, not from a field the slot does not have",
+  engine.includes("capacity_manual") && engine.includes("capacityByTemplate")
+    && !engine.includes("(slot as any).capacity"));
 
 // ── CONTROLS ───────────────────────────────────────────────────────────────────────────────────
 ok("control: the predicate can return ready, so these are not all passing on a constant false",

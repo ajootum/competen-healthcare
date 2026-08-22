@@ -691,11 +691,13 @@ export async function publishReadiness(
     const unresolved: { name: string; why: string }[] = [];
     for (const sess of rw.sessions) {
       const rule = await resolveBookingRule(admin, ctx.workspaceId, sess.locationId ?? null, "");
+      // s2's fourth invariant. The session carries capacity; the rule does not.
+      const capacityManual = (sess as any).capacityManual ?? (sess as any).capacity ?? null;
       // A read failure is NOT a missing constraint. The coverage arm above already reports an
       // unreadable rule table, and recycling it here would turn a database wobble into a
       // configuration verdict against the practice.
       if (rule.readFailed) continue;
-      const verdict = publicBookingReadiness(rule);
+      const verdict = publicBookingReadiness({ ...rule, capacityManual });
       if (!verdict.ready) unresolved.push({ name: sess.name, why: verdict.reason });
     }
     const REASON_WORDS: Record<string, string> = {
