@@ -141,8 +141,8 @@ export const PUBLISH_CHECKS: PublishCheckDefinition[] = [
     code: "WAITING_LIST",
     requirement: "Waiting-list behaviour is configured",
     severity: "advisory", authority: "absent",
-    detail: "⚠ NOT CHECKED. There is no waiting-list configuration anywhere in this schema. The only trace of the idea is `waiting_list` as one resolution a person may choose for a booking a schedule change got in the way of (migration 242), which is a decision about one patient rather than a behaviour a practice has configured.",
-    wouldNeed: "A waiting-list store, or columns on practice_booking_rule saying what happens when a session is full.",
+    detail: "⚠ STILL NOT CHECKED, BUT NO LONGER FOR THE REASON THIS FIELD USED TO GIVE. It said \"there is no waiting-list configuration anywhere in this schema\", and migration 268 added practice_booking_rule.waiting_list_enabled -- which is precisely what the wouldNeed below asked for. The flag is writable through the rules API and has a checkbox in the rule editor, so a practitioner can turn it on today and it persists. What does NOT exist is anywhere for the list to live: no store, no board, and nothing that offers a freed time to anybody. The product says so at the switch rather than here -- ticking it renders WAITING_LIST_NO_SCREEN_NOTE and WAITING_LIST_CONTACT_NOTE beside the control, on the reasoning that a waiting list is the one setting a practitioner can believe into existence, because \"we'll let you know\" is what it means to a patient. So the setting is recorded, disclosed and unimplemented, which is honest -- and this check stays advisory and unchecked because there is still no behaviour to verify. Corrected 2026-08-21 after the column was found live while this text still denied it: an absence that stops being true and is not re-read becomes a lie by attrition.",
+    wouldNeed: "A waiting-list store and something that acts on it: the rule flag now exists, so what is missing is where the list lives and what offers a freed time. Until then there is no behaviour for this check to test.",
   },
   {
     code: "HANDLE_CLAIMED",
