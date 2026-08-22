@@ -200,7 +200,7 @@ export default async function CurrentSessionPage() {
           <span key={f.key} className="flex items-baseline gap-1">
             <span className={`text-[15px] font-bold leading-none tabular-nums ${
               f.value === null ? "text-gray-300"
-                : f.key === "emergency" ? "text-[var(--cmp-text-danger)]" : "text-gray-900"}`}>
+                : f.key === "emergency" ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>
               {/* A NULL COUNT RENDERS AN EM DASH, never a nought -- the reason renders below, in
                   visible words, because hover does not exist on this face (s4). */}
               {f.value === null ? "—" : f.value}
@@ -209,7 +209,7 @@ export default async function CurrentSessionPage() {
               )}
             </span>
             <span className={`text-[10.5px] ${
-              f.key === "emergency" ? "font-semibold text-[var(--cmp-text-danger)]" : "text-gray-600"}`}>
+              f.key === "emergency" ? "font-semibold text-[var(--cmp-text-critical)]" : "text-gray-600"}`}>
               {f.label}
             </span>
           </span>
@@ -506,7 +506,7 @@ export default async function CurrentSessionPage() {
                 {attention.map(a => (
                   <li key={a.key}>
                     <Link href={a.href} className={`block rounded-lg px-2.5 py-1.5 text-[12px] leading-snug hover:opacity-90 max-md:flex max-md:min-h-[var(--cp-touch)] max-md:items-center ${
-                      a.tone === "danger" ? "bg-[var(--cmp-surface-danger)] text-[var(--cmp-text-danger)]"
+                      a.tone === "danger" ? "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]"
                         : a.tone === "warning" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"
                         : "bg-gray-50 text-gray-700"}`}>
                       {/* s19: status never by colour alone -- the sentence carries the whole claim. */}

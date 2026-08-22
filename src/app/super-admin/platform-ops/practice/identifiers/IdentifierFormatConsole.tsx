@@ -115,7 +115,7 @@ export default function IdentifierFormatConsole({ format, issued, acknowledgemen
         </label>
       )}
 
-      {error && <p className="mt-2 text-xs text-[var(--cmp-text-danger)]">{error}</p>}
+      {error && <p className="mt-2 text-xs text-[var(--cmp-text-critical)]">{error}</p>}
       {done && <p className="mt-2 text-xs text-[var(--cmp-text-success)]">{done}</p>}
 
       <button

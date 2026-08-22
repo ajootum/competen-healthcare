@@ -76,7 +76,7 @@ export default function AssistantConsole(props: {
             className="mt-0.5" />
           <span>I have read the three points above and I am turning this on for the practice.</span>
         </label>
-        {error && <p className="mt-2 text-[11px] text-[var(--cmp-text-danger)]">{error}</p>}
+        {error && <p className="mt-2 text-[11px] text-[var(--cmp-text-critical)]">{error}</p>}
         <button
           type="button"
           // UNCHECKED MEANS UNCLICKABLE. The server refuses an unacknowledged enable as well; this only
@@ -174,7 +174,7 @@ export default function AssistantConsole(props: {
           </label>
         )}
 
-        {error && <p className="text-[11px] text-[var(--cmp-text-danger)]">{error}</p>}
+        {error && <p className="text-[11px] text-[var(--cmp-text-critical)]">{error}</p>}
 
         <div>
           <button

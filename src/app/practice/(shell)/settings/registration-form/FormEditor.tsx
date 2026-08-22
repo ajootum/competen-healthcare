@@ -234,7 +234,7 @@ export default function FormEditor({ canManage, initialTemplates, coreFields, fi
                     {!f.is_core && !locked && (
                       <button type="button" disabled={busy}
                         onClick={async () => { await call("DELETE", undefined, `?id=${openId}&field=${f.field_key}`); }}
-                        className="ml-auto text-[10px] font-semibold text-gray-400 hover:text-[var(--cmp-text-danger)]">
+                        className="ml-auto text-[10px] font-semibold text-gray-400 hover:text-[var(--cmp-text-critical)]">
                         Remove
                       </button>
                     )}

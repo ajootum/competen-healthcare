@@ -171,6 +171,46 @@ function main() {
     /\.cp-surface\s+:focus-visible/.test(css));
   ok("4b. reduced motion is honoured", /prefers-reduced-motion/.test(css));
 
+  // ── 5. EVERY DESIGN TOKEN A PRACTICE SURFACE NAMES IS ACTUALLY DEFINED ────────────────────────
+  //
+  // ⚠ ADDED AFTER THE RAW-HEX RULE CAUGHT SOMETHING BY LUCK. Honesty.tsx carried
+  // `text-[var(--cmp-accent,#4338ca)]`. `--cmp-accent` is defined nowhere -- globals.css declares 55
+  // --cmp-* tokens and that is not one of them -- so the FALLBACK was the real colour, on every render.
+  // Assertion 3 flagged the hex, which was correct but incidental: the defect was an undefined token,
+  // and the hex was only how it happened to be visible.
+  //
+  // Written without a fallback, `var(--cmp-accent)` resolves to nothing, the property is dropped, the
+  // text inherits, and NO rule here would have said a word. Worse, this particular token had a
+  // theme-aware sibling: --cp-primary-deep is re-declared per practice accent, so the fallback also
+  // froze one link at indigo while the rest of the surface followed the practice's own colour.
+  //
+  // ⚠ SCOPE: only the --cp-* and --cmp-* families, which globals.css owns. Third-party or inline
+  // custom properties are not this rule's business, and a token defined by a library would be a false
+  // positive rather than a finding.
+  //
+  // ⚠ AND ONLY THE FILES ABOVE, WHICH IS WHY THIS NEEDS NO INTERPOLATION GUARD TODAY.
+  // src/components/ui builds token names at runtime -- `var(--cmp-text-${tone})` -- and a static scan
+  // would read the prefix as an undefined token. Those files are not in `files`. If this list is ever
+  // widened to src/components, add a guard for the ${ form FIRST, or this rule goes noisy on day one,
+  // which is how a rule stops being read.
+  const defined = new Set<string>();
+  for (const m of readFileSync(cssPath, "utf8").matchAll(/(--(?:cp|cmp)-[a-z0-9-]+)\s*:/g)) defined.add(m[1]);
+
+  const undefinedTokens: string[] = [];
+  for (const f of files) {
+    if (!existsSync(f)) continue;
+    const src = blankComments(readFileSync(f, "utf8"));
+    for (const [i, line] of src.split("\n").entries()) {
+      for (const m of line.matchAll(/var\(\s*(--(?:cp|cmp)-[a-z0-9-]+)/g)) {
+        if (!defined.has(m[1])) undefinedTokens.push(`${f.replace(/\\/g, "/").split("/src/")[1] ?? f}:${i + 1} ${m[1]}`);
+      }
+    }
+  }
+  ok("5. every --cp-*/--cmp-* token a Practice surface names is defined in globals.css",
+    undefinedTokens.length === 0, undefinedTokens.slice(0, 4).join(" | "));
+  ok("5-control the scan found tokens at all, so it cannot pass by matching nothing",
+    defined.size > 20, `${defined.size} defined`);
+
   console.log(`\n${fails.length ? "FAILED" : "PASSED"}  ${pass} assertion(s)${fails.length ? `, ${fails.length} failure(s):\n  - ${fails.join("\n  - ")}` : ""}\n`);
   process.exitCode = fails.length ? 1 : 0;
 }

@@ -207,7 +207,7 @@ export default function CurrentPatientCard({ person, canStartEncounter, canAttac
       </div>
 
       {error && (
-        <p role="alert" className="mt-2 rounded-lg bg-[var(--cmp-surface-danger)] px-3 py-2 text-[12px] text-[var(--cmp-text-danger)]">
+        <p role="alert" className="mt-2 rounded-lg bg-[var(--cmp-surface-critical)] px-3 py-2 text-[12px] text-[var(--cmp-text-critical)]">
           {error}
         </p>
       )}

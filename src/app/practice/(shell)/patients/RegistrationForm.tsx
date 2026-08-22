@@ -538,7 +538,7 @@ export default function RegistrationForm({ form, majorityAge, today, mode = "ful
                     Ring first
                   </label>
                   <button type="button" onClick={() => setRelations(rs => rs.filter((_, j) => j !== i))}
-                    className="ml-auto text-[12px] font-semibold text-gray-400 hover:text-[var(--cmp-text-danger)]">
+                    className="ml-auto text-[12px] font-semibold text-gray-400 hover:text-[var(--cmp-text-critical)]">
                     Remove
                   </button>
                 </div>

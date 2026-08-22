@@ -154,7 +154,7 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
             className="mt-3 flex min-h-[var(--cp-touch-primary)] w-full items-center justify-center rounded-xl bg-[var(--cp-primary)] px-4 text-[15px] font-semibold text-white hover:opacity-90 md:hidden">
             Open Session
           </Link>
-          {error && <p role="alert" className="mt-2 text-[12px] text-[var(--cmp-text-danger)]">{error}</p>}
+          {error && <p role="alert" className="mt-2 text-[12px] text-[var(--cmp-text-critical)]">{error}</p>}
         </div>
       </section>
     );
@@ -298,7 +298,7 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
           </div>
         </>
       )}
-      {error && <p role="alert" className="mt-2 text-[12px] text-[var(--cmp-text-danger)]">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-[12px] text-[var(--cmp-text-critical)]">{error}</p>}
     </section>
   );
 }

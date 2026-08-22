@@ -189,7 +189,7 @@ export default function SessionHeader(props: SessionHeaderProps) {
       {/* THE ERROR IS SHOWN, NOT SWALLOWED. A control that silently did nothing is indistinguishable
           from a broken one, and the practitioner is the person who can act on the refusal. */}
       {error && (
-        <p role="alert" className="mt-2 rounded-lg bg-[var(--cmp-surface-danger)] px-3 py-2 text-[12px] text-[var(--cmp-text-danger)]">
+        <p role="alert" className="mt-2 rounded-lg bg-[var(--cmp-surface-critical)] px-3 py-2 text-[12px] text-[var(--cmp-text-critical)]">
           {error}
         </p>
       )}

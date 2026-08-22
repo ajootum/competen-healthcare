@@ -133,7 +133,7 @@ const TABS: { key: QueueTabKey; label: string }[] = [
 const GROUP_DOT: Record<QueueGroupKey, string> = {
   booked: "bg-[var(--cp-primary)]",
   walk_ins: "bg-[var(--cmp-text-warning)]",
-  emergency: "bg-[var(--cmp-text-danger)]",
+  emergency: "bg-[var(--cmp-text-critical)]",
 };
 
 export default function WaitingQueueCard(props: WaitingQueueCardProps) {
@@ -317,7 +317,7 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
                               the desktop row's coloured dot alone would be status by colour (s19). */}
                           {p.group !== "booked" && (
                             <span className={`font-semibold ${
-                              p.group === "emergency" ? "text-[var(--cmp-text-danger)]" : "text-[var(--cmp-text-warning)]"}`}>
+                              p.group === "emergency" ? "text-[var(--cmp-text-critical)]" : "text-[var(--cmp-text-warning)]"}`}>
                               {p.group === "emergency" ? "Emergency" : "Walk-in"}{" · "}
                             </span>
                           )}
@@ -386,7 +386,7 @@ export default function WaitingQueueCard(props: WaitingQueueCardProps) {
       )}
 
       {error && (
-        <p role="alert" className="mt-2 rounded-lg bg-[var(--cmp-surface-danger)] px-3 py-2 text-[12px] text-[var(--cmp-text-danger)]">
+        <p role="alert" className="mt-2 rounded-lg bg-[var(--cmp-surface-critical)] px-3 py-2 text-[12px] text-[var(--cmp-text-critical)]">
           {error}
         </p>
       )}

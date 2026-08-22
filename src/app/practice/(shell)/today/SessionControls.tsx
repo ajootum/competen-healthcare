@@ -186,7 +186,7 @@ export default function SessionControls({ activityId, header, unresolved }: Prop
             display:none below md, and an error only a hidden element shows is a button that silently
             did nothing. */}
         {error && (
-          <p role="alert" className="mt-1 rounded-lg bg-[var(--cmp-surface-danger)] px-2.5 py-1.5 text-[11.5px] text-[var(--cmp-text-danger)]">
+          <p role="alert" className="mt-1 rounded-lg bg-[var(--cmp-surface-critical)] px-2.5 py-1.5 text-[11.5px] text-[var(--cmp-text-critical)]">
             {error}
           </p>
         )}

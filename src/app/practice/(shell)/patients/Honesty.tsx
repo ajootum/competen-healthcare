@@ -133,8 +133,16 @@ export function Refusals({ refuses, title, blurb }: {
               <p className="mt-0.5 pl-3 text-[11px] leading-relaxed text-gray-500">{r.reason}</p>
               {/* s10: a CTA ONLY where the practitioner can genuinely change the state. */}
               {r.nextAction && (
+                {/* ⚠ WAS text-[var(--cmp-accent,#4338ca)], AND THE FALLBACK WAS DOING ALL THE WORK.
+                    `--cmp-accent` is defined nowhere -- globals.css carries 55 --cmp-* tokens and that
+                    is not one of them -- so the hex rendered every time. It also rendered the SAME hex
+                    every time, while --cp-primary-deep is re-declared per practice accent
+                    ([data-practice-accent="blue"], "cyan", ...). So a practice that chose an accent got
+                    one link that stayed indigo and never said why. The design-system harness caught it
+                    as a raw hex, which it was, but the raw hex was the symptom: a token name nobody
+                    defined, papered over by a fallback that then became the real colour. */}
                 <a href={r.nextAction.href}
-                  className="mt-1 ml-3 inline-block text-[11px] font-semibold text-[var(--cmp-accent,#4338ca)] hover:underline">
+                  className="mt-1 ml-3 inline-block text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
                   {r.nextAction.label} &rarr;
                 </a>
               )}

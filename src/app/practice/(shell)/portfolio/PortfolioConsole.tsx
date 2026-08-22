@@ -111,7 +111,7 @@ export default function PortfolioConsole({ kinds, portableNotice, portableFields
         </label>
       </div>
 
-      {error && <p className="mt-2 text-[11px] text-[var(--cmp-text-danger)]">{error}</p>}
+      {error && <p className="mt-2 text-[11px] text-[var(--cmp-text-critical)]">{error}</p>}
 
       <div className="mt-2 flex items-center gap-2">
         <button
