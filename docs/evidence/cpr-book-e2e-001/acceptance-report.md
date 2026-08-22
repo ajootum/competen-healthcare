@@ -15,7 +15,7 @@
 > That moves the status off NOT READY to READINESS CONTROLS GREEN — which §13 defines as
 > *"Not sufficient for release"*, and §2 as *necessary but insufficient*. **It is not
 > FUNCTIONALLY READY IN STAGING and must not be recorded as such**: no acceptance journey has been
-> run, because there is nowhere to run one.
+> run, because staging carries no booking fixture to run one against.
 
 ---
 

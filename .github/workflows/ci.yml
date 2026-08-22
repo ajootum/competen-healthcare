@@ -14,9 +14,19 @@
 # src/**/*.test.ts (vitest.config.ts's own include pattern) -- confirmed locally, twice, to pass
 # deterministically with zero Supabase/service-role dependency before this job existed. It does NOT
 # run any of the 180 DATABASE-DEPENDENT scripts/*-harness.ts acceptance scripts: those authenticate
-# against the one live Supabase project this repo has (no staging project exists yet -- see
-# docs/HARNESS-INVENTORY.md), and handing that key to GitHub is explicitly out of scope until a
-# staging strategy is built (COMP-ENG-001 s7, s9 step 8).
+# against the PRODUCTION Supabase project (see docs/HARNESS-INVENTORY.md), and handing that key to
+# GitHub is out of scope.
+#
+# ⚠ THIS SAID "no staging project exists yet" UNTIL 2026-08-22, AND IT WAS WRONG BY THEN. A staging
+# project does exist -- it is the one smoke-authenticated below already names through STAGING_*, and
+# the reason that job could be written at all. The stale clause was read as a statement of fact
+# about the estate during CPR-BOOK-E2E-001 and produced an acceptance report claiming there was
+# nowhere to run the acceptance journey. Corrected rather than deleted, because the next reader of
+# this block deserves to know it was once wrong: a comment is evidence of what somebody believed
+# when they wrote it, and an absence nobody re-reads becomes a lie by attrition.
+#
+# What remains true is the narrower claim: the DB-dependent harnesses are pointed at production and
+# are not run here. Moving them to staging is still open work (COMP-ENG-001 s7, s9 step 8).
 #
 # ⚠ THE `harnesses` JOB RUNS 22 OF THE 32 CREDENTIAL-FREE ONES, NOT ALL 32. Each of the 32 was run
 # twice with a scrubbed environment on 2026-08-18: six are RED on real pre-existing defects and four
