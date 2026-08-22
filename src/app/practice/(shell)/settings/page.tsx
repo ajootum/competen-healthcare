@@ -10,6 +10,9 @@ import { practiceSetup } from "@/lib/practice/setup";
 import SettingsConsole from "./SettingsConsole";
 import PersonalisationConsole from "./PersonalisationConsole";
 import SettingsCards, { type SettingsCard } from "./SettingsCards";
+import BillingCard from "./BillingCard";
+import { subscriptionState, formatMoney } from "@/lib/practice/subscription-state";
+import { gatewayConfig, currencyExponent } from "@/lib/practice/billing-gateway";
 
 // /practice/settings — CPR-SET-004 Personal Settings & Practice Setup.
 //
@@ -60,7 +63,7 @@ export default async function SettingsPage({ searchParams }: {
   const { tab } = await searchParams;
   const activeTab = tab === "practice" ? "practice" : "personal";
 
-  const [resolved, checklist, setup, configuration, locations, history, facilities] = await Promise.all([
+  const [resolved, checklist, setup, configuration, locations, history, facilities, billing] = await Promise.all([
     resolvePreferences(admin, ctx.workspaceId, ctx.userId),
     configurationChecklist(admin, ctx.workspaceId, ctx.userId),
     practiceSetup(admin, ctx),
@@ -68,7 +71,13 @@ export default async function SettingsPage({ searchParams }: {
     canManagePractice ? listLocations(admin, ctx.workspaceId) : Promise.resolve([]),
     canManagePractice ? configurationHistory(admin, ctx.workspaceId) : Promise.resolve([]),
     canManagePractice ? listFacilities(admin, ctx) : Promise.resolve([]),
+    subscriptionState(admin, ctx.workspaceId, gatewayConfig() !== null),
   ]);
+
+  // Money is formatted HERE, on the server, against the same exponent table the gateway is charged in --
+  // so the price on the button cannot drift from the price Flutterwave receives.
+  const prices: Record<string, string | null> = {};
+  for (const o of billing.offers) prices[o.planCode] = formatMoney(o.amountMinor, o.currency, currencyExponent);
 
   const p = resolved.preferences;
   const visibleWidgets = p.dashboardWidgets.filter(w => w.visible).length;
@@ -336,6 +345,12 @@ export default async function SettingsPage({ searchParams }: {
                   ))}
               </ul>
             </section>
+
+            {/* CPR-HFE-001 freezes the sidebar at eleven items, so subscription lives HERE with the other
+                practice-wide settings rather than becoming a twelfth nav entry. Rendered for everyone on
+                this tab: a practitioner without the manage capability still needs to know whether the
+                workspace is paid, and the card says who handles it instead of vanishing. */}
+            <BillingCard state={billing} prices={prices} canManage={canManagePractice} />
 
             {canManagePractice && configuration ? (
               <SettingsConsole

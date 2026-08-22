@@ -180,3 +180,13 @@ export async function createHostedCheckout(cfg: GatewayConfig, args: {
   }
   return { ok: true, link: String(body.data.link) };
 }
+
+/**
+ * The exponent, exposed so the SCREEN formats money against the same table the CHARGE uses. Two money
+ * formatters disagreeing major-vs-minor is the bug this repository has already paid for once; sharing the
+ * table is what stops the button and the invoice drifting apart.
+ */
+export function currencyExponent(currency: string): number | null {
+  const exp = MINOR_EXPONENT[(currency ?? "").toUpperCase()];
+  return exp === undefined ? null : exp;
+}
