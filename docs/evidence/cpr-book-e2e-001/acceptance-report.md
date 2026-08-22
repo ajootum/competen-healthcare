@@ -19,29 +19,46 @@
 
 ---
 
-## The blocking finding: the required environment does not exist
+## The blocking finding: staging exists, but holds no booking fixture
+
+> **⚠ CORRECTION, 2026-08-22.** An earlier revision of this report stated that no staging project
+> existed. **That was wrong.** It was sourced from a code comment — `.github/workflows/ci.yml:17`,
+> "no staging project exists yet" — which is stale, and which I treated as a fact about
+> infrastructure without verifying it. The correction came from the repository owner.
+>
+> This is the failure mode this codebase has recorded before: an absence that stopped being true,
+> restated by a reader who did not re-check it. A comment is evidence of what someone believed when
+> they wrote it, never of what is true now, and infrastructure claims in particular have to be
+> measured against the infrastructure.
 
 §Primary environment: *"Staging. Do not use production as the routine acceptance environment."*
 
-**There is no staging project.** The repository states this itself, in
-`.github/workflows/ci.yml:17`:
+**Staging exists and is healthy.** A separate Supabase project, ref `ezhvpgtcqcdsgylrxgdb`,
+distinct from production's `rnnqhlrcgvsauigxwszl`. Credentials for it are present locally as
+`STAGING_SUPABASE_URL`, `STAGING_ANON_KEY`, `STAGING_SERVICE_ROLE_KEY` and `STAGING_DB_URL`. The
+schema is deployed, and the synthetic smoke practitioner exists and is confirmed.
 
-> against the one live Supabase project this repo has (no staging project exists yet — see
-> `docs/HARNESS-INVENTORY.md`)
+| Staging table | Rows |
+| --- | --- |
+| `practice_workspace` | 2 (`Automation Practitioner (synthetic)`, `Retry Proof (synthetic)`) |
+| `practice_membership` | 4 |
+| `practice_practitioner_identity` | 2 |
+| `practice_location` | **0** |
+| `practice_availability_template` | **0** |
+| `practice_booking_rule` | **0** |
+| `practice_booking_access` | **0** |
+| `practice_registration_template` | **0** |
 
-The staging *contract* is built and waiting — the `smoke-authenticated` CI job, the
-`STAGING_SUPABASE_URL` / `STAGING_ANON_KEY` / `STAGING_SERVICE_ROLE_KEY` variables, and a synthetic
-practitioner helper that refuses production at the network layer
-(`e2e/helpers/synthetic-practitioner.ts` via `scripts/production-guard.ts`). What is missing is the
-project those variables would point at.
+**The real blocker is narrower and far more tractable than "no staging".** `scripts/provision-staging-fixture.ts`
+provisions the practitioner and workspace through the real provisioning engine — deliberately, so the
+fixture gets the capabilities and entitlement the product actually creates — but it stops there. It
+provisions no location, session, booking rule, booking-access handle or registration template, so
+there is nothing in staging for a public booking journey to touch.
 
-This is not a gap that can be worked around by substituting production, and not only because the
-spec forbids it: **the suite that would run Gate C actively refuses to.** That refusal is correct and
-should not be softened.
-
-**Consequently Gates C, D, §8 (concurrency) and §9 (patient-facing HFE) were not executed, and no
-claim is made about them.** Marking them anything other than NOT RUN would be the precise failure
-§2 of this specification was written to prevent.
+**Gates C, D, §8 (concurrency) and §9 (patient-facing HFE) were therefore not executed, and no claim
+is made about them.** Marking them anything other than NOT RUN would be the precise failure §2 of
+this specification was written to prevent. What unblocks them is extending the staging fixture to
+cover the publication prerequisites — bounded work against an environment that already exists.
 
 ---
 
@@ -110,7 +127,7 @@ different locations having no overlapping scope to tie on.
 | --- | --- | --- |
 | Verdict semantics | Scoped uncovered + unresolved, both break-tested | **PASS** |
 | Public handle | Canonical handle resolves correct Practice | **PARTIAL** — handle valid; resolution not exercised end-to-end |
-| Registration | Published template works for adult/minor/returning | **NOT RUN** — no staging |
+| Registration | Published template works for adult/minor/returning | **NOT RUN** — no staging fixture |
 | Constraints | Explicit notice + finite horizon + capacity enforced | **PARTIAL** — enforced in code and unit-proven; not proven through a public request |
 | Visibility | Internal sessions absent from public server response | **PARTIAL** — proven by control, not by a public response |
 | Atomic booking | Valid state after success, safe state after failure | **NOT RUN** |
@@ -128,10 +145,10 @@ different locations having no overlapping scope to tie on.
 | Corrected 19/0 verdict reproduced from a clean state | Reproduced; **not** from a clean staging state |
 | Assertion 16 proves both arms independently | **Yes** |
 | All publication prerequisites simultaneously valid | **Yes**, notification excepted and named |
-| Adult / minor / returning journeys pass in staging | **No** — not runnable |
-| Negative cases pass | **No** — not runnable |
+| Adult / minor / returning journeys pass in staging | **No** — staging holds no booking fixture |
+| Negative cases pass | **No** — staging holds no booking fixture |
 | Public availability cannot bypass server-side constraints | Proven by control only |
-| Successful booking produces correct appointment + downstream visibility | **No** — not runnable |
+| Successful booking produces correct appointment + downstream visibility | **No** — staging holds no booking fixture |
 | Human HFE review at both widths | **No** |
 | Notification limitation explicitly classified | **Yes** — OPEN |
 | Acceptance report stored in the evidence location | **Yes** — this file |
@@ -143,12 +160,15 @@ different locations having no overlapping scope to tie on.
 
 **READINESS CONTROLS GREEN** + **PRODUCTION DEPENDENCY OPEN**.
 
-One thing now stands between this and FUNCTIONALLY READY IN STAGING, and it is not a code change:
+One thing now stands between this and FUNCTIONALLY READY IN STAGING:
 
-**No staging project.** It blocks nine of the ten matrix rows. Provision a second Supabase project,
-populate `STAGING_SUPABASE_URL` / `STAGING_ANON_KEY` / `STAGING_SERVICE_ROLE_KEY`, and provision the
-synthetic practitioner there — never in production. The CI job, the environment contract and the
-production refusal are already built and waiting for it.
+**Staging holds no booking fixture.** It blocks nine of the ten matrix rows. The environment, the
+schema, the credentials, the CI job, the production refusal and the synthetic practitioner all
+already exist; what is missing is the booking configuration inside it — a location, at least one
+patient-facing session, a rule covering it, a claimed handle on a booking-access profile, and a
+published registration template. Extending `scripts/provision-staging-fixture.ts` to provision those
+through the real engines, the way it already provisions the workspace, is what makes Gates C, D, §8
+and §9 runnable.
 
 Notification remains **PRODUCTION DEPENDENCY OPEN**, and under §10 no green verdict may imply
 confirmations are operational while it stands. The readiness surface currently states the limitation
@@ -159,9 +179,14 @@ satisfied. It does not mean a patient can book. §2's table is explicit that the
 does not prove public availability, registration and booking integrate correctly — and that remains
 entirely unproven here, because it can only be proven by a journey nobody can yet run.
 
-### Not done, deliberately
+### Not done
 
-§12 asks for public-route integration tests and a minimum stable staging smoke journey. Both would
-target an environment that does not exist, so writing them now would produce tests that cannot run
-and cannot fail — the shape this specification's own §2 warns against. They are named here as the
-first work to do once staging exists, rather than written blind.
+§12 asks for public-route integration tests and a minimum stable staging smoke journey. They come
+after the fixture, not before: written against an unprovisioned staging they would pass by touching
+nothing, which is the shape §2 warns against. The order is fixture → journey → regression control.
+
+### Correction to the CI comment
+
+`.github/workflows/ci.yml:17` still asserts that no staging project exists. It is wrong, it is the
+source of the error corrected at the top of this report, and it should be fixed in the same pass as
+the fixture work — a stale absence left in place is the thing that produced this.
