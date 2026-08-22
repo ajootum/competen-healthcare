@@ -2154,6 +2154,13 @@ export type BookingRulesWorkspace = {
   sessions: {
     id: string; name: string; weekday: number; startsMinute: number; endsMinute: number;
     bookingMode: string; locationId: string | null;
+    /**
+     * `capacity` on practice_availability_template, carried so the publish-readiness screen can
+     * judge s2's fourth invariant. It read `sess.capacity` off this object for a while and got
+     * undefined every time, because the field was never on it -- an invariant that cannot fail is
+     * not an invariant. Null means the derived ceiling stands (migration 241), NOT unconfigured.
+     */
+    capacity: number | null;
   }[];
   /** Sessions anybody may book that no in-force rule covers. */
   uncovered: Reading<{ id: string; name: string }[]>;
@@ -2205,7 +2212,7 @@ export async function bookingRulesWorkspace(admin: any, ctx: WorkspaceContext): 
     listBookingRules(admin, ctx),
     admin.from("practice_location").select("id, name, active").eq("workspace_id", ctx.workspaceId),
     admin.from("practice_availability_template")
-      .select("id, session_name, weekday, starts_minute, ends_minute, booking_mode, location_id, status")
+      .select("id, session_name, weekday, starts_minute, ends_minute, booking_mode, location_id, status, capacity")
       .eq("workspace_id", ctx.workspaceId).eq("status", "active").order("weekday").order("starts_minute"),
     admin.from("practice_appointment")
       .select("id, applied_rule_id, applied_rule_version").eq("workspace_id", ctx.workspaceId),
@@ -2219,6 +2226,7 @@ export async function bookingRulesWorkspace(admin: any, ctx: WorkspaceContext): 
     endsMinute: s.ends_minute as number,
     bookingMode: (s.booking_mode as string) ?? "none",
     locationId: (s.location_id as string | null) ?? null,
+    capacity: (s.capacity as number | null) ?? null,
   }));
 
   const conflicts: Reading<RuleConflict[]> = rules.state === "ok"

@@ -693,12 +693,17 @@ export async function publishReadiness(
     for (const sess of rw.sessions) {
       const rule = await resolveBookingRule(admin, ctx.workspaceId, sess.locationId ?? null, "");
       // s2's fourth invariant. The session carries capacity; the rule does not.
-      const capacityManual = (sess as any).capacityManual ?? (sess as any).capacity ?? null;
+      //
+      // ⚠ NO `as any` AND NO ?? CHAIN. Both were here, and both were how this stayed broken: the
+      // session object genuinely had no capacity field, the cast silenced the compiler, the chain
+      // silenced the undefined, and the invariant quietly passed every session ever put through it.
+      // Typed straight off the object, a field that goes missing is a build error instead.
+      const sessionCapacity = sess.capacity;
       // A read failure is NOT a missing constraint. The coverage arm above already reports an
       // unreadable rule table, and recycling it here would turn a database wobble into a
       // configuration verdict against the practice.
       if (rule.readFailed) continue;
-      const verdict = publicBookingReadiness({ ...rule, capacityManual });
+      const verdict = publicBookingReadiness({ ...rule, sessionCapacity });
       if (!verdict.ready) unresolved.push({ name: sess.name, why: verdict.reason });
     }
     const REASON_WORDS: Record<string, string> = {

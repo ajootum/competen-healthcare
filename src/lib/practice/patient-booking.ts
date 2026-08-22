@@ -687,23 +687,28 @@ export function publicBookingReadiness(rule: {
   bookingHorizonDays: number | null;
   visibility?: string | null;
   /**
-   * s2/s6's capacity limit, from the SESSION rather than the rule -- capacity_manual on
+   * s2/s6's capacity limit, from the SESSION rather than the rule -- `capacity` on
    * practice_availability_template.
    *
    * ⚠⚠ NULL HERE IS THE OPPOSITE OF NULL ON THE HORIZON, AND CONFLATING THEM WOULD BREAK REAL
-   * SESSIONS. Migration 240 gave this column a documented meaning: "null means derive it from the
-   * time and the appointment length, which the engine can already do from starts_minute,
-   * ends_minute and appointment_minutes". So a null capacity RESOLVES -- it is a deliberate
-   * deferral to a calculation, not absent configuration. Treating it as missing the way a null
-   * horizon is missing would refuse every session that had simply never overridden the default,
-   * which is almost all of them.
+   * SESSIONS. A null capacity RESOLVES -- it is a ceiling nobody has lowered, not absent
+   * configuration. Treating it as missing the way a null horizon is missing would refuse every
+   * session that had simply never constrained itself, which is almost all of them.
+   *
+   * ⚠ READ MIGRATION 241 BEFORE TOUCHING THIS, NOT 240. 240 added `capacity_manual` beside the
+   * `capacity` 231 had already added, and 241 dropped it again after finding the real defect: the
+   * two nulls meant OPPOSITE things -- 231's null meant unlimited, 240's meant derive-it. 241 kept
+   * `capacity`, moved the data across, and redefined its null to the derived ceiling. An earlier
+   * version of this file selected `capacity_manual` from the live table on 240's authority alone,
+   * which is a column that has not existed since 241: PostgREST answered 42703 and the read guard
+   * below turned every public availability request into a 503.
    *
    * What cannot resolve to "a valid positive limit" (s2) is an EXPLICIT zero or negative: a
    * practitioner who has capped the session at nobody. The schema permits 0 (check is 0..500), so
    * this is reachable, and a session that admits nobody must not be advertised to patients as one
    * they can book into.
    */
-  capacityManual?: number | null;
+  sessionCapacity?: number | null;
 }): PublicReadiness {
   const h = rule.bookingHorizonDays;
   if (h === null || h === undefined) return { ready: false, reason: "horizon_missing" };
@@ -712,7 +717,7 @@ export function publicBookingReadiness(rule: {
   if (v === "") return { ready: false, reason: "visibility_unknown" };
   if (v !== "public") return { ready: false, reason: "visibility_not_public" };
   // Null is a resolvable capacity (see the field's note). Zero and below are not.
-  const cap = rule.capacityManual;
+  const cap = rule.sessionCapacity;
   if (cap !== null && cap !== undefined && (!Number.isFinite(cap) || cap <= 0))
     return { ready: false, reason: "capacity_none" };
   return { ready: true };
@@ -984,18 +989,18 @@ export async function bookableTimes(admin: any, args: {
   // ⚠ A SLOT WITH NO TEMPLATE IS UNTOUCHED, exactly as it is by the type link above: a one-off extra
   // session or a stretch of extended hours has no session to carry a mode, and is governed by the
   // channel's own list of types, which was checked above.
-  // ⚠ capacity_manual RIDES ALONG ON A READ THAT WAS ALREADY HAPPENING. s6 wants capacity resolved
+  // ⚠ capacity RIDES ALONG ON A READ THAT WAS ALREADY HAPPENING. s6 wants capacity resolved
   // before public slots are emitted, and the slot row does not carry it -- practice_availability_slot
   // selects id, location_id, times, kind, status and its template id, nothing else. Without this the
   // capacity guard below would read undefined on every slot and pass every time: an inert check, which
   // is the exact defect this specification was written to remove from visibility.
   const { data: modeRows, error: modeErr } = await admin.from("practice_availability_template")
-    .select("id, booking_mode, capacity_manual").eq("workspace_id", p.workspaceId).eq("status", "active");
+    .select("id, booking_mode, capacity").eq("workspace_id", p.workspaceId).eq("status", "active");
   if (modeErr || modeRows == null)
     return { ok: false, status: 503, code: "READ_FAILED", message: `it could not be read which of this practice's sessions are open to booking: ${modeErr?.message ?? "neither rows nor an error"}` };
   const admitsMode = channel === "staff" ? isStaffBookableMode : isPatientFacingMode;
   const capacityByTemplate = new Map<string, number | null>(
-    ((modeRows ?? []) as any[]).map(r => [String(r.id), (r.capacity_manual as number | null) ?? null]),
+    ((modeRows ?? []) as any[]).map(r => [String(r.id), (r.capacity as number | null) ?? null]),
   );
   const openToChannel = new Set(((modeRows ?? []) as any[])
     .filter(t => admitsMode(t.booking_mode as string | null)).map(t => String(t.id)));
@@ -1061,7 +1066,7 @@ export async function bookableTimes(admin: any, args: {
         // s6: capacity must resolve BEFORE public slots are emitted, so it is judged here rather
         // than left to the slot loop quietly running dry further down. A slot with no template has
         // no manual cap to honour, which resolves by derivation like any other null.
-        capacityManual: templateId ? capacityByTemplate.get(templateId) ?? null : null,
+        sessionCapacity: templateId ? capacityByTemplate.get(templateId) ?? null : null,
       });
       if (!verdict.ready) continue;
     }

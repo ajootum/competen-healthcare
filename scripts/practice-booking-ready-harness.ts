@@ -23,7 +23,7 @@
  *
  *   npx tsx scripts/practice-booking-ready-harness.ts
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { publicBookingReadiness } from "../src/lib/practice/patient-booking";
 
@@ -116,25 +116,93 @@ ok("6b. and the resolver actually SELECTS visibility, so enforcement has somethi
 
 // ── 7. CAPACITY (s2's fourth invariant, s6) ────────────────────────────────────────────────────
 // ⚠ NULL CAPACITY IS NOT MISSING CAPACITY, and this is the one place the two null semantics in this
-// specification diverge. Migration 240: capacity_manual null means DERIVE from the window and the
-// appointment length. Refusing it the way a null horizon is refused would reject nearly every
-// session in existence, because almost none override the derivation.
+// specification diverge. Refusing a null the way a null horizon is refused would reject nearly every
+// session in existence, because almost none constrain themselves below the derived ceiling.
+//
+// READ 241, NOT 240. 240 added `capacity_manual` beside 231's `capacity`; 241 found that the two
+// nulls meant OPPOSITE things (231: unlimited, 240: derive-it), dropped capacity_manual, moved the
+// data across and redefined `capacity`'s null as the derived ceiling. Assertion 7e exists because
+// this harness previously REQUIRED the dropped name and so kept a 42703 in production green.
 ok("7. a null capacity still resolves -- it defers to the derivation, it is not missing",
-  publicBookingReadiness({ ...PUBLIC_OK, capacityManual: null }).ready === true
+  publicBookingReadiness({ ...PUBLIC_OK, sessionCapacity: null }).ready === true
     && publicBookingReadiness({ ...PUBLIC_OK }).ready === true);
 ok("7b. an explicit capacity of zero is NOT publicly bookable -- a session admitting nobody",
-  publicBookingReadiness({ ...PUBLIC_OK, capacityManual: 0 }).ready === false
-    && publicBookingReadiness({ ...PUBLIC_OK, capacityManual: -3 }).ready === false);
+  publicBookingReadiness({ ...PUBLIC_OK, sessionCapacity: 0 }).ready === false
+    && publicBookingReadiness({ ...PUBLIC_OK, sessionCapacity: -3 }).ready === false);
 ok("7c. and a positive capacity passes",
-  publicBookingReadiness({ ...PUBLIC_OK, capacityManual: 12 }).ready === true);
+  publicBookingReadiness({ ...PUBLIC_OK, sessionCapacity: 12 }).ready === true);
 
 // ⚠ 7d IS THE ONE THAT MATTERS. The slot row has never carried capacity, so a guard reading it off
 // the slot would be undefined on every call and pass forever -- an inert check, which is the exact
 // defect this whole specification exists to remove. This asserts the engine reads capacity from the
 // TEMPLATE, which is where the column lives.
 ok("7d. the engine resolves capacity from the template, not from a field the slot does not have",
-  engine.includes("capacity_manual") && engine.includes("capacityByTemplate")
+  engine.includes("capacity") && engine.includes("capacityByTemplate")
     && !engine.includes("(slot as any).capacity"));
+
+// ⚠⚠ 7e IS HERE BECAUSE 7d ONCE MADE THINGS WORSE. It pinned the literal `capacity_manual`, so when the
+// engine was pointed at a column migration 241 had DROPPED, the assertion did not merely miss it --
+// it required it. PostgREST answered 42703, the read guard turned every public availability request
+// into a 503, and this suite stayed green.
+//
+// A name pinned as a string is only ever checked against itself. This checks it against the
+// migrations: any column a migration drops must not appear in a select anywhere in the practice
+// library. It is deliberately broader than capacity, because the mistake was not about capacity.
+// ⚠ TABLE-AWARE, AND THE FIRST VERSION WAS NOT. Keyed on the column name alone it reported 35
+// offences, every one of them `appointment_type` -- which 241 dropped from the SESSION TEMPLATE while
+// practice_booking_rule and practice_appointment keep a column of that name perfectly legitimately. A
+// check that cries wolf 35 times is switched off by the second person who reads it, so the pairing
+// below is not fussiness: it is the difference between a control and a nuisance.
+const between = (src: string, from: number, token: string, within: number) => {
+  const at = src.indexOf(token, from);
+  return at >= 0 && at - from < within ? at : -1;
+};
+const quoted = (src: string, from: number) => {
+  const q = src.indexOf("\"", from);
+  const close = q < 0 ? -1 : src.indexOf("\"", q + 1);
+  return q >= 0 && close > q && close - q < 600 ? src.slice(q + 1, close) : null;
+};
+
+const MIG_DIR = join(__dirname, "..", "supabase", "migrations");
+const dropped = new Map<string, string>();  // "table.column" -> migration file
+for (const f of readdirSync(MIG_DIR)) {
+  if (!f.endsWith(".sql")) continue;
+  for (const raw of readFileSync(join(MIG_DIR, f), "utf8").split("\n")) {
+    const line = raw.toLowerCase();
+    if (line.trim().startsWith("--")) continue;
+    const at = line.indexOf("drop column");
+    if (at < 0 || !line.includes("alter table")) continue;
+    const table = line.slice(line.indexOf("alter table") + "alter table".length).trim().split(/[^a-z0-9_]/)[0];
+    const after = line.slice(at + "drop column".length).trim();
+    const rest = after.startsWith("if exists") ? after.slice("if exists".length).trim() : after;
+    const col = rest.split(/[^a-z0-9_]/)[0];
+    if (table && col) dropped.set(`${table}.${col}`, f);
+  }
+}
+
+const LIB_DIR = join(__dirname, "..", "src", "lib", "practice");
+const offences: string[] = [];
+for (const f of readdirSync(LIB_DIR)) {
+  if (!f.endsWith(".ts")) continue;
+  const src = readFileSync(join(LIB_DIR, f), "utf8");
+  let i = src.indexOf(".from(");
+  while (i >= 0) {
+    const table = quoted(src, i);
+    // The select that belongs to this from(): the builder is chained, so it is the next one within a
+    // short reach. Anything further away belongs to a different query and is left alone.
+    const sel = table ? between(src, i, ".select(", 260) : -1;
+    if (table && sel >= 0) {
+      const cols = quoted(src, sel);
+      for (const col of (cols ?? "").split(",").map(c => c.trim().toLowerCase()))
+        if (dropped.has(`${table}.${col}`))
+          offences.push(`${f}: ${table}.${col}, dropped by ${dropped.get(`${table}.${col}`)}`);
+    }
+    i = src.indexOf(".from(", i + 1);
+  }
+}
+ok("7e. no engine selects a column a migration dropped",
+  dropped.size > 0 && offences.length === 0,
+  offences.length ? offences.join(" | ") : "no drop statements were found to check against");
 
 // ── CONTROLS ───────────────────────────────────────────────────────────────────────────────────
 ok("control: the predicate can return ready, so these are not all passing on a constant false",
