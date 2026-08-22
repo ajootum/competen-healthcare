@@ -380,6 +380,39 @@ async function main() {
     team ? JSON.stringify({ key: team.key, state: team.state, detail: team.detail })
          : `no team module; keys are ${((afterClaim as any).modules ?? []).map((m: any) => m.key).join(", ")}`);
 
+  // ── 12. NO MEMBERSHIP READ MAY ASSUME ONE ROW PER PERSON ───────────────────────────────────────
+  //
+  // ⚠ EVERY FOUNDING PRACTITIONER HAS TWO MEMBERSHIPS, AND THAT IS THE DESIGN. IAM-001 s10 keeps the
+  // administration and clinical capability sets apart, so provisioning writes practice_owner AND
+  // practitioner for the same person. Confirmed in all three workspaces in the estate.
+  //
+  // Which makes a (workspace_id, user_id) query ending in .maybeSingle() a trap with a very wide
+  // blast radius: PostgREST answers PGRST116 and `data` is null, so the OWNER of the practice reads
+  // as not a member. Measured rather than assumed — the same query with and without .limit(1) was
+  // run against the live practice, and the unbounded form returned exactly that.
+  //
+  // Every current site is bounded, by .limit(1), by the membership id, or by role_code. This asserts
+  // the next one is too, because the failure is invisible: no exception, no red, just an owner
+  // quietly refused by their own practice.
+  const membershipReads = readdirSync("src/lib/practice")
+    .filter(f => f.endsWith(".ts"))
+    .flatMap(f => {
+      const src = readFileSync(`src/lib/practice/${f}`, "utf8");
+      const out: string[] = [];
+      let i = src.indexOf('from("practice_membership")');
+      while (i >= 0) {
+        const chunk = src.slice(i, i + 420);
+        const ends = chunk.includes(".maybeSingle()") || chunk.includes(".single()");
+        const bounded = chunk.includes(".limit(1)") || chunk.includes('eq("id"')
+          || chunk.includes('eq("role_code"') || chunk.includes(".insert(");
+        if (ends && !bounded) out.push(`${f}:${src.slice(0, i).split("\n").length}`);
+        i = src.indexOf('from("practice_membership")', i + 1);
+      }
+      return out;
+    });
+  ok("12. no membership read expects a single row without bounding it",
+    membershipReads.length === 0, membershipReads.join(", "));
+
   await cleanup();
 
   console.log(`\n  ${pass} passed, ${fails.length} failed`);
