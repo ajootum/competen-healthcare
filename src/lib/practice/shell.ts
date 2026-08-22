@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeAccess, resolveWorkspaceContext, readActiveWorkspaceId, type WorkspaceContext } from "@/lib/practice/access";
@@ -64,11 +65,33 @@ export type ShellState =
  * a refused person reloading the page twenty times produces one row, not twenty.
  * ────────────────────────────────────────────────────────────────────────────────────────────────────
  */
-export async function resolvePracticeShell(): Promise<ShellState> {
+/**
+ * ⚠ cache() BECAUSE THE LAYOUT AND THE PAGE BOTH CALL THIS, ON ONE REQUEST.
+ *
+ * The comment above is right about intent and was wrong about effect. Its dedupe is keyed on GoTrue's
+ * `last_sign_in_at`, which does not move until somebody authenticates again -- so twenty RELOADS really
+ * did produce one row each. What it never covered is twenty calls inside ONE render: both calls compute
+ * the identical key, neither checks whether a row already carries it, and both insert. The key
+ * deduplicates by CONSTRUCTION and nothing enforces it.
+ *
+ * Measured on the pilot workspace before this: practice.auth.sign_in 103 rows for 54 distinct keys,
+ * device_registered 22 for 11 -- an exact doubling -- and absolute_lifetime_observed 60 rows for ONE
+ * key, because that one fires on every render rather than every sign-in. Those counts are not private:
+ * Privacy -> Security prints them to the practice as "Sign-ins recorded" and "turned away".
+ *
+ * cache() memoises per REQUEST, so the layout's call and the page's call are now one call and one
+ * write. It also halves the shell's database work on every authenticated page, which was the same
+ * duplication seen from the other side.
+ *
+ * ⚠ IT FIXES THIS MULTIPLICATION, NOT THE CLASS. A surface that legitimately renders three times still
+ * writes three rows. The class closes only when the trail itself refuses a duplicate -- a unique index
+ * on the dedupe key -- which is a migration and therefore the owner's to apply.
+ */
+export const resolvePracticeShell = cache(async (): Promise<ShellState> => {
   const { state, user } = await resolveShellState();
   if (user) await recordShellAuthEvents(state, user);
   return state;
-}
+});
 
 type ShellUser = { id: string; lastSignInAt: string | null };
 type ShellResolution = { state: ShellState; user: ShellUser | null };

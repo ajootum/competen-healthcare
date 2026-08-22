@@ -171,6 +171,23 @@ const signInSrc = readFileSync(join(PRACTICE, "sign-in", "SignInForm.tsx"), "utf
 ok("12a return_to is validated to a relative /practice path rather than taken as given",
   /return_to/.test(signInSrc) && /startsWith\(\s*["']\/practice/.test(strip(signInSrc)));
 
+// ── 5b. THE SHELL RESOLVER RUNS ONCE PER REQUEST ───────────────────────────────────────────────
+// resolvePracticeShell has a SIDE EFFECT: it records auth events. The layout and the page both call
+// it, and in the App Router both render on one request -- so unmemoised it wrote every shell auth
+// event twice. Measured on the pilot workspace before the fix: practice.auth.sign_in held 103 rows
+// for 54 distinct dedupe keys, device_registered 22 for 11. Those counts are not internal: Privacy
+// -> Security prints them to the practice as "Sign-ins recorded" and "turned away".
+//
+// ⚠ THE DEDUPE KEY DOES NOT PROTECT THIS. It is keyed on last_sign_in_at, identical for both calls
+// in one render, and nothing checks whether a row already carries it -- it deduplicates by
+// CONSTRUCTION, not by enforcement. Only a unique index closes the class; cache() closes this
+// multiplication. Unwrapping it silently doubles the trail again, which is why it is pinned here.
+ok("5b-1 the shell resolver is memoised per request, so its auth writes happen once",
+  shellSrc.includes('import { cache } from "react"')
+    && shellSrc.includes("export const resolvePracticeShell = cache("));
+ok("5b-2 and it is not a bare async function, which is the shape that doubled the trail",
+  !shellSrc.includes("export async function resolvePracticeShell"));
+
 console.log(`\n${fails.length === 0 ? "PASSED" : "FAILED"}  ${pass} passed, ${fails.length} failed`);
 if (fails.length) { for (const f of fails) console.log(`  - ${f}`); process.exitCode = 1; }
 console.log(
