@@ -126,13 +126,31 @@ export async function createTemplate(admin: any, ctx: WorkspaceContext, args: {
   // publish attempt fails on the protected floor -- and being told what is missing is less useful than
   // starting with it already there.
   if (args.seedCoreFields !== false) {
-    await admin.from("practice_registration_field").insert(
+    const seed = await admin.from("practice_registration_field").insert(
       CORE_FIELDS.map((f, i) => ({
         workspace_id: ctx.workspaceId, template_id: data.id, field_key: f.key, is_core: true,
         label: f.label, field_type: f.type, visible: true, options: f.options,
         required: f.key === "display_name", display_order: (i + 1) * 10,
       })),
     );
+    // ⚠ THIS ERROR WAS NOT LOOKED AT, AND THE COMMENT ABOVE IS WHY THAT MATTERED. The whole point of
+    // seeding is that the form is publishable from the moment it is made; a seed that failed silently
+    // produced the exact opposite -- an empty template, reported as created, that then refuses to
+    // publish against a protected floor the practitioner never saw themselves fall below.
+    //
+    // The template is removed rather than kept, because a half-made form in the list is worse than no
+    // form: it looks like the step is done. If the cleanup also fails the message says so, since a
+    // stale empty template the caller does not know about is the one thing worse again.
+    if (seed.error) {
+      const undo = await admin.from("practice_registration_template")
+        .delete().eq("id", data.id).eq("workspace_id", ctx.workspaceId);
+      return {
+        ok: false, status: 400, code: "VALIDATION_ERROR",
+        message: undo.error
+          ? `the standard fields could not be added (${seed.error.message}) and the empty form could not be removed (${undo.error.message}); it is in your list and should be deleted`
+          : `the standard fields could not be added (${seed.error.message}), so the form was not kept`,
+      };
+    }
   }
 
   await audit(admin, {

@@ -110,8 +110,26 @@ export default function FormEditor({ canManage, initialTemplates, coreFields, fi
       {/* ── The templates ───────────────────────────────────────────────────────────────────────── */}
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <h2 className="text-[13px] font-bold text-gray-900">Registration forms</h2>
+        {/*
+          ⚠ THERE IS NO BUILT-IN FORM, AND THIS LINE USED TO SAY THERE WAS.
+
+          It read "A practice with no published form uses the built-in one. That is a working answer,
+          not a gap." Three places say otherwise: resolveTemplate() returns null when nothing is
+          published, registrationForm() then hands the patient `fields: []`, and register() skips
+          validateSubmission entirely because there is no template to validate against. CORE_FIELDS
+          exists, but it is read by THIS EDITOR only -- to list what you can add -- and never by the
+          patient-facing path.
+
+          So the sentence was not merely inaccurate, it was load-bearing in the wrong direction: it
+          told a practitioner that skipping this screen was fine, while the publish blocker two
+          screens away refused to let them go live for exactly that reason. Zero templates exist
+          across the whole estate, which is what a reassuring sentence in front of a required step
+          buys you.
+        */}
         <p className="mt-0.5 text-[11px] text-gray-500">
-          A practice with no published form uses the built-in one. That is a working answer, not a gap.
+          {templates.some(x => x.status === "published")
+            ? "The published form is the one a patient fills in when they book."
+            : "Nothing is published yet, so a patient booking has no form to complete."}
         </p>
 
         {templates.length > 0 && (
