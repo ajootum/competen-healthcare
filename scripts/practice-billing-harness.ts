@@ -568,6 +568,20 @@ async function main() {
     MINOR_AT_A_HUMAN.test('<span>Amount (minor units) *</span>')
       && MINOR_AT_A_HUMAN.test('placeholder="share (minor units)"'));
 
+  // ── 12-10: A STATEMENT MUST OUTLIVE THE DEBT ─────────────────────────────────────────────────
+  // The statement route was live from the start, and the ONLY link to it sat inside the Outstanding
+  // list -- whose rows are, by definition, invoices with a balance. So a patient's statement was
+  // reachable while they owed money and vanished the moment they paid, which is precisely when
+  // somebody asks for one. Reachable is not discoverable, and a route nothing links to is neither.
+  //
+  // The pin is that the link exists on a surface NOT gated on a balance. Counting links would pass on
+  // the old code too, so what is asserted is that one of them sits in the invoice row of Transactions.
+  const stmtLinks = consoleSrc.split("/practice/payments/statement/").length - 1;
+  const invoiceRowHasStatement = consoleSrc.includes("{i.patient_id && (")
+    && consoleSrc.includes("payments/statement/${i.patient_id}/print");
+  ok("12-10. the patient statement is reachable from an invoice, not only while money is owed",
+    stmtLinks >= 2 && invoiceRowHasStatement, `links=${stmtLinks} inRow=${invoiceRowHasStatement}`);
+
   return report();
 }
 

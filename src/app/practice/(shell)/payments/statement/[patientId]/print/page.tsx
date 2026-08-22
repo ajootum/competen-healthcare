@@ -8,6 +8,7 @@ import { patientStatement } from "@/lib/practice/billing";
 import { audit } from "@/lib/practice/audit";
 import { formatMinor } from "@/lib/practice/billing-constants";
 import { practiceToday } from "@/lib/practice/practice-time";
+import { formatDayTime } from "@/lib/datetime";
 
 // The patient statement print view -- CPR-PAY-002 s10. THE PRINT VIEW IS THE PDF (the invoice
 // page's policy). A statement is a PERIOD SUMMARY derived at generation time from the same rows
@@ -75,7 +76,14 @@ export default async function StatementPrintPage({ params, searchParams }: {
           <p><span className="font-semibold">Patient:</span>{" "}
             {s.patientName ?? (s.identified ? "(name unavailable)" : "withheld -- viewing names needs patient.view")}</p>
           <p><span className="font-semibold">Period:</span> {s.fromDay} to {s.toDay}</p>
-          <p><span className="font-semibold">Generated:</span> {s.generatedAtIso.slice(0, 16).replace("T", " ")} UTC</p>
+          {/* ⚠ ONE DOCUMENT CARRIED TWO CLOCKS. The period above is already the PRACTICE's day
+              (practiceToday, line 37); this stamp was a raw ISO slice with " UTC" appended. On a
+              Kampala counter that printed 07:17 while the wall clock said 10:17, on the same sheet of
+              paper as dates that were local. It was labelled honestly, which is why it survived -- but
+              a patient reading one document should not have to know which line is in which timezone.
+              ⚠ And note clock-format 5a did NOT catch this: that rule pins calls to formatDayTime, and
+              a raw .slice() never calls it. The rule guards the helper, not the act of printing a time. */}
+          <p><span className="font-semibold">Generated:</span> {formatDayTime(s.generatedAtIso, shell.ctx.workspaceTimezone) ?? s.generatedAtIso.slice(0, 16).replace("T", " ")}</p>
           <p className="col-span-2 text-gray-500">
             A period summary of billing records only -- it carries no clinical detail, and it is not
             a replacement for the invoices and receipts it references.

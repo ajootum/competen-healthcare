@@ -444,6 +444,17 @@ export default function PaymentsConsole(props: {
                           {i.status === "ISSUED" && (
                             <Link href={`/practice/payments/invoice/${i.id}/print`} className={QUIET}>Print</Link>
                           )}
+                          {/* ⚠ THE STATEMENT USED TO EXIST ONLY ON THE OUTSTANDING TAB, whose rows are
+                              BY DEFINITION invoices with a balance. So a patient's statement was
+                              reachable while they owed money and unreachable the moment they paid --
+                              which is when somebody actually asks for one, because that is when they
+                              want a record of what they settled. The route was live the whole time;
+                              nothing linked to it. Reachable is not discoverable. */}
+                          {i.patient_id && (
+                            <Link href={`/practice/payments/statement/${i.patient_id}/print`} className={QUIET}>
+                              Statement
+                            </Link>
+                          )}
                           {i.status === "DRAFT" && props.canIssue && (
                             <button type="button" className={QUIET} disabled={busy}
                               onClick={async () => {
