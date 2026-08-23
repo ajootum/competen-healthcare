@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/server";
 import { resolvePracticeShell } from "@/lib/practice/shell";
+import { formatDateTime } from "@/lib/datetime";
 
 // /practice/settings/billing/return — where Flutterwave sends the practitioner back to.
 //
@@ -92,7 +93,10 @@ export default async function BillingReturnPage({ searchParams }: {
 
         {state === "paid" && checkout?.settled_at && (
           <p className="mt-3 text-[11px] text-gray-500">
-            Paid {new Date(checkout.settled_at).toLocaleString()}
+            {/* In the PRACTICE's clock, not the server's. A payment settled at 23:50 Kampala must not read as
+                the next day because the runtime sits in a different zone -- the practice-clock class this
+                codebase closed across 57 sites, and which the clock-format harness caught here. */}
+            Paid {formatDateTime(checkout.settled_at, shell.ctx.workspaceTimezone)}
             {checkout.channel && checkout.channel !== "unknown"
               ? ` by ${checkout.channel.replace(/_/g, " ")}`
               : ""}.

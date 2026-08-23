@@ -26,6 +26,10 @@
     {
       "route": "src/app/api/cron/reports/route.ts",
       "reason": "A system route with no human caller, invoked by the scheduler. Not ungated: it requires `Authorization: Bearer ${CRON_SECRET}` and returns 401 without it -- and 503 rather than running when CRON_SECRET is unset, so a missing secret fails closed instead of leaving the job open."
+    },
+    {
+      "route": "src/app/api/v1/practice/billing/webhook/flutterwave/route.ts",
+      "reason": "A system route with no human caller, invoked by Flutterwave after a payment. It cannot enter the caller gateway because the gateway has no Competen session -- and it is the ONLY unauthenticated write path in the Practice API, which is exactly why it belongs here with a reason rather than merely counted. Not ungated: it checks the verif-hash header against FLW_SECRET_HASH in constant time BEFORE parsing the body, returns 401 without a match, and 503 rather than proceeding when the secret is unset, so a missing secret fails closed. And the body is never trusted as evidence of payment: the engine verifies server-to-server against Flutterwave and compares the result to the amount WE recorded before the practitioner left (subscription.ts applyWebhook). A forged request that passes the signature still grants nothing."
     }
   ],
   "inlineAuthBacklog": [
