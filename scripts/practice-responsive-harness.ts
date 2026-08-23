@@ -719,6 +719,38 @@ if (existsSync(DOC)) {
   ok("9y all-clear is one row, gated on there being genuinely nothing to say",
     home.includes("No urgent items need attention.")
     && home.includes("nothingToSay && home.allClear"));
+
+  // ── MCC-07 / s9: THE BOTTOM EDGE, AND WHAT MUST BE ABOVE THE FOLD ───────────────────────────
+  //
+  // s9's formula: content bottom padding = bottom-nav height + env(safe-area-inset-bottom) + 16px
+  // minimum. The shell already satisfies it; this pins the arithmetic, because it is the kind of
+  // expression a later tidy shortens to pb-24 and nobody notices until a phone with a home indicator
+  // hides the last row of a list behind the navigation.
+  const shell = readFileSync("src/app/practice/(shell)/layout.tsx", "utf8");
+  const padding = /pb-\[calc\(var\(--cp-bottomnav-h\)_\+_var\(--cp-safe-bottom\)_\+_[0-9.]+rem\)\]/.test(shell);
+  ok("9z MCC-07 page content clears the bottom nav AND the hardware inset",
+    padding, "the shell's <main> must pad nav height + safe-area inset + at least 16px");
+
+  // ⚠ 9z ASSERTS THE FORMULA REFERENCES TWO TOKENS; THIS ASSERTS THE TOKENS MEAN ANYTHING. A first
+  // version of this check ended `|| padding`, which made it true whenever 9z was true -- two
+  // assertions, one fact, and the second one free. The independent claim is that --cp-safe-bottom is
+  // really the hardware inset and --cp-bottomnav-h is really a length: a calc() over two tokens is
+  // exactly as correct as its inputs, and a token quietly redefined to 0 would leave 9z green while
+  // the last row of every list sat under the navigation.
+  const css = readFileSync("src/app/globals.css", "utf8");
+  ok("9z-b and the tokens it multiplies out to are real",
+    /--cp-safe-bottom:\s*env\(safe-area-inset-bottom/.test(css)
+    && /--cp-bottomnav-h:\s*[1-9][0-9]*px/.test(css),
+    "the padding calc is only as correct as --cp-safe-bottom and --cp-bottomnav-h");
+
+  // s3's FIRST-VIEWPORT RULE ends "Do not require the user to pass the activity catalogue before"
+  // reaching the attention list. On an idle day the catalogue lives inside the hero, and 9r already
+  // pins the hero below Needs Attention -- so the rule holds BECAUSE of the owner's state-dependent
+  // ruling, not in spite of it. Asserted here as its own claim so the connection is not lost: if 9r
+  // is ever relaxed, this says what else breaks.
+  ok("9z-c first viewport: the activity catalogue never precedes Needs Attention when idle",
+    idleSlot > 0 && heroAt > 0 && idleSlot < heroAt,
+    "the launcher sits inside the hero, so the hero must follow the attention list on an idle day");
 }
 
 // ---------------------------------------------------------------------------------------------
