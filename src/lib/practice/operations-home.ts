@@ -289,7 +289,15 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
       items.followup_overdue = {
         kind: "followup_overdue", severity: "critical", count: followUps.overdue.length,
         title: "Overdue follow-ups",
-        detail: "Past their due date with nothing booked. Somebody outside this room is waiting on each of these.",
+        // ⚠ CPR-CC-MOB-001 s7 NAMES THIS SENTENCE AND ASKS FOR IT TO GO. It read "Past their due date
+        // with nothing booked. Somebody outside this room is waiting on each of these." The second
+        // half is advocacy, not information: it tells a practitioner how to FEEL about the number
+        // rather than what to DO with it, and it says the same thing whether the count is one or
+        // thirty. s7 wants "precise operational wording" -- what the state is, and what closes it.
+        //
+        // The first half was already right and is kept. A card is allowed two short lines on a phone,
+        // and one of them should not be an appeal.
+        detail: "Due date passed, no appointment booked. Book one or close the follow-up.",
         href: "/practice/follow-ups",
         sample: followUps.overdue.slice(0, 5).map((f: any) => ({
           id: f.id, label: f.patient_name ?? "Unknown patient",

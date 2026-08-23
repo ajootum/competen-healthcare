@@ -921,6 +921,30 @@ if (existsSync(DOC)) {
   // A control that opens onto an empty list is a dead end wearing a button.
   ok("9z-v the control renders nothing when there is nowhere to choose",
     sessionLoc.includes("if (!canEdit || locations.length === 0) return null"));
+
+  // ── s7's ONE NAMED SENTENCE ─────────────────────────────────────────────────────────────────
+  //
+  // ⚠ THE SPEC NAMES THIS STRING VERBATIM AND IT SURVIVED THE FIRST PASS. s7: 'Do not use "Somebody
+  // outside this room is waiting on each of these." Replace with precise operational wording.' The
+  // count-led work changed the TITLES and left the supporting lines alone, so the sentence stayed on
+  // the live screen and the owner found it in a screenshot rather than a test finding it here.
+  //
+  // Pinned on the stripped source: the paragraph above quotes the banned string, and an unstripped
+  // scan would report the explanation as the violation.
+  // ⚠ AND I WALKED INTO IT ANYWAY. `ops` is the RAW file; the first version of this assertion scanned
+  // it and failed on the paragraph above, which quotes the banned sentence in order to explain it.
+  // Written one line after warning about exactly that. The stripped source is the only honest scan.
+  const opsCode = strip(ops);
+  ok("9z-w-strip the stripper is working, so 9z-w reads the cards and not this note",
+    ops.includes("Somebody outside this room is waiting")
+    && !opsCode.includes("Somebody outside this room is waiting"));
+
+  ok("9z-w the sentence s7 names by name is gone from the cards",
+    !opsCode.includes("Somebody outside this room is waiting"),
+    "s7 asks for what the state is and what closes it, not how to feel about the number");
+
+  ok("9z-w2 and what replaced it says what to do",
+    opsCode.includes("Book one or close the follow-up"));
 }
 
 // ---------------------------------------------------------------------------------------------
