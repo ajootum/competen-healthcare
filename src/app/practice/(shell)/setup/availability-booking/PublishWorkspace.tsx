@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { PATIENT_ACCESS_MODES } from "@/lib/practice/patient-access-constants";
+import { PATIENT_ACCESS_MODES, BOOKING_FALLBACK_EMAIL } from "@/lib/practice/patient-access-constants";
 import {
   PUBLISH_STATES, PUBLISH_STATE_SWATCH, PUBLISH_STATES_LIVE, PUBLISHABLE_CONSTRAINT,
 } from "@/lib/practice/publish-constants";
@@ -335,7 +335,7 @@ export default function PublishWorkspace({ readiness, locations, mayPublish }: {
                 <label className="flex flex-col text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                   Email
                   <input type="email" value={draft.fallbackEmail} disabled={!mayPublish}
-                    placeholder="competenhealth@gmail.com"
+                    placeholder={BOOKING_FALLBACK_EMAIL}
                     onChange={e => setDraft(d => ({ ...d, fallbackEmail: e.target.value }))}
                     className="mt-0.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] text-gray-800" />
                 </label>

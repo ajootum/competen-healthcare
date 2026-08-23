@@ -227,5 +227,11 @@ export const PATIENT_ACCESS_BUILD_BLOCKERS: string[] = [];
  * The owner chose it, 2026-08-12. ONE constant, so migration 291's backfill and the seed applied when
  * a booking page is created cannot drift apart -- a default applied once in a migration is a default
  * that stops applying the next day, which the harness proved within minutes of 291 landing.
+ *
+ * CHANGED 2026-08-23 for the pilot test, to competenhealthcare@gmail.com. Changing this line is NOT
+ * enough, and the paragraph above says why: the live booking page already carried the old value from
+ * 291's backfill, and the UI placeholder pinned it too. All three moved together. Once
+ * competenhealthcare.com is verified in Resend this should become hello@competenhealthcare.com, and
+ * the same three sites move again.
  */
-export const BOOKING_FALLBACK_EMAIL = "competenhealth@gmail.com";
+export const BOOKING_FALLBACK_EMAIL = "competenhealthcare@gmail.com";
