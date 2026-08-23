@@ -977,6 +977,9 @@ export type SessionSummary = {
   activityType: ActivityType;
   label: string;
   title: string;
+  /** Where it happened, and the id a correction control preselects with. */
+  locationId: string | null;
+  locationName: string | null;
   planDate: string;
   state: ActivityState;
   startedAtIso: string;
@@ -1026,9 +1029,13 @@ export async function sessionSummary(
 
   const at = opts.at ?? new Date();
 
+  // location_id AND the joined name. The id is what a correction control preselects with; the name is
+  // what the summary prints. Neither substitutes for the other -- adding only the field to the type
+  // while the select fetched only the join is precisely how locationId ended up null on every row of
+  // PlannedActivity before it was caught.
   const { data: row, error } = await admin.from("practice_activity")
     .select("id, activity_type, title, plan_date, planned_start_minute, planned_end_minute, " +
-      "started_at, ended_at")
+      "started_at, ended_at, location_id, practice_location:location_id(name)")
     .eq("id", activityId).eq("workspace_id", ctx.workspaceId).eq("practitioner_id", ctx.userId)
     .maybeSingle();
   if (error) return { ok: false, status: 500, code: "READ_FAILED", message: error.message };
@@ -1077,6 +1084,8 @@ export async function sessionSummary(
       activityType: row.activity_type,
       label: ACTIVITY_LABEL[row.activity_type as ActivityType] ?? row.activity_type,
       title: row.title,
+      locationId: (row.location_id ?? null) as string | null,
+      locationName: ((row.practice_location as any)?.name ?? null) as string | null,
       planDate: row.plan_date,
       state: activityState(row.started_at, row.ended_at),
       startedAtIso: row.started_at,

@@ -859,23 +859,25 @@ if (existsSync(DOC)) {
   ok("9z-m the running card shows the location it now insists on",
     startCode.includes("[a.label, a.locationName, a.facilityName, a.room]"));
 
-  ok("9z-n and offers a control to correct it",
-    startCode.includes("setPlaceFor(a.id)") && startCode.includes('action: "set_location"'));
+  // ⚠ THESE THREE MOVED WITH THE CODE THEY DESCRIBE. They were written against an inline dialog in
+  // StartYourDay; extracting it to SessionLocation, so Session Complete could use the same one, made
+  // them fail against work that was correct and better. Re-pointed rather than deleted -- the claims
+  // are unchanged, they just live one file away now, and dropping an assertion because a refactor
+  // moved its subject is how coverage quietly drains out of a codebase.
+  const shared = strip(readFileSync("src/app/practice/(shell)/SessionLocation.tsx", "utf8"));
 
-  // ⚠ set_location, NEVER plan. Correcting where a RUNNING session is happening must not create a
-  // second activity or end and restart the live one -- a clinic with patients in it does not survive
-  // being reopened to fix a typo.
-  // ⚠ ANCHORED ON CODE, NOT ON A COMMENT. The first version sliced to `// ── RUNNING`, which strip()
-  // had already removed -- indexOf returned -1, the slice collapsed, and the assertion failed against
-  // correct code. Anchoring a scan on something the scan itself deletes is a self-defeating test.
-  const dialog = startCode.slice(startCode.indexOf("const placeDialog"), startCode.indexOf("if (metrics) {"));
+  ok("9z-n the running card offers the correction control",
+    startCode.includes("<SessionLocation activityId={a.id}"));
+
+  // set_location, NEVER plan or end. Correcting where a RUNNING session is happening must not create a
+  // second activity or restart the live one -- a clinic with patients in it does not survive being
+  // reopened to fix a typo.
   ok("9z-o the correction amends in place rather than re-planning",
-    dialog.length > 0 && dialog.includes('action: "set_location"')
-    && !dialog.includes('action: "plan"') && !dialog.includes('action: "end"'),
-    dialog.trim().slice(0, 120));
+    shared.includes('action: "set_location"')
+    && !shared.includes('action: "plan"') && !shared.includes('action: "end"'));
 
-  ok("9z-p it cannot save an empty location",
-    dialog.includes("disabled={busy !== null || !placeValue}"));
+  ok("9z-p it cannot save an empty location, nor the one already set",
+    shared.includes("disabled={busy || !value || value === locationId}"));
 
   // The picker preselects the CURRENT place, which needs the id and not the name -- two sites can
   // share a name, and matching by label is how a correction quietly moves a session to the wrong one.
@@ -883,9 +885,42 @@ if (existsSync(DOC)) {
   // first attempt here matched nothing for that reason and reported a real column as missing. Matching
   // the fragment that actually carries the column is both simpler and harder to get wrong.
   ok("9z-q the picker preselects by id, and the id is really selected from the table",
-    startCode.includes("setPlaceValue(a.locationId") && actCode.includes("locationId: row.location_id")
+    startCode.includes("locationId={a.locationId}") && actCode.includes("locationId: row.location_id")
     && actCode.includes("started_at, ended_at, location_id,"),
     "a locationId field with no location_id column would be null on every row");
+
+  // ── ONE CONTROL, TWO SCREENS ────────────────────────────────────────────────────────────────
+  //
+  // ⚠ EXTRACTED, NOT COPIED, AND THIS IS THE ASSERTION THAT KEEPS IT THAT WAY. Session Complete is
+  // exactly where a second copy would have been cheapest: same dialog, different page, nobody looking.
+  // Two dialogs posting one action drift in the way this repo keeps recording -- one gains a refusal
+  // the other does not, one starts preselecting by name -- and the day the rule changes it changes
+  // once. The count is the claim: exactly one component defines this dialog.
+  const sessionLoc = strip(readFileSync("src/app/practice/(shell)/SessionLocation.tsx", "utf8"));
+  const complete = strip(readFileSync("src/app/practice/(shell)/today/complete/page.tsx", "utf8"));
+
+  ok("9z-r the correction dialog is one shared component",
+    sessionLoc.includes('action: "set_location"')
+    && !startCode.includes('action: "set_location"')
+    && !complete.includes('action: "set_location"'),
+    "only SessionLocation may post the action; the screens import it");
+
+  ok("9z-s and both screens use it",
+    startCode.includes("<SessionLocation") && complete.includes("<SessionLocation"));
+
+  // The case the whole engine exists for: an ended session, corrected from the screen a practitioner
+  // reaches the moment a clinic closes -- the last point at which anyone still remembers.
+  ok("9z-t Session Complete shows where it happened, and says so when nothing was recorded",
+    complete.includes("No location was recorded for this session")
+    && complete.includes("s.locationName"));
+
+  ok("9z-u and the summary engine actually carries the place it prints",
+    actCode.includes("locationName: ((row.practice_location as any)?.name ?? null)")
+    && actCode.includes("ended_at, location_id, practice_location:location_id(name)"));
+
+  // A control that opens onto an empty list is a dead end wearing a button.
+  ok("9z-v the control renders nothing when there is nowhere to choose",
+    sessionLoc.includes("if (!canEdit || locations.length === 0) return null"));
 }
 
 // ---------------------------------------------------------------------------------------------

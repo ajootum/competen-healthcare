@@ -5,6 +5,7 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { sessionSummary, sessionClinicalActivity } from "@/lib/practice/activity";
 import { formatMinuteOfDay } from "@/lib/datetime";
+import SessionLocation from "../../SessionLocation";
 
 // SESSION COMPLETE -- CPR-HFE-001 v1.1 s6: the transition from live operations to closure.
 //
@@ -36,10 +37,21 @@ export default async function SessionCompletePage({ searchParams }: {
   const sp = await searchParams;
   if (!sp.activity) redirect("/practice/today");
   const admin = createAdminClient();
-  const [sum, clinical] = await Promise.all([
+  // ⚠ THE LOCATIONS READ IS ITS OWN, AND SMALL, AND NOT operationsHome. The home page gets them free
+  // because that engine already runs there; this screen calls neither, and pulling in a whole
+  // operations read to populate one picker would be a far larger cost than the four columns it needs.
+  // Active only -- the picker offers where a practice works NOW, while setActivityLocation still
+  // accepts an inactive one so a session at a closed site stays recordable.
+  const [sum, clinical, locRows] = await Promise.all([
     sessionSummary(admin, shell.ctx, sp.activity),
     sessionClinicalActivity(admin, shell.ctx, sp.activity),
+    admin.from("practice_location").select("id, name")
+      .eq("workspace_id", shell.ctx.workspaceId).eq("active", true).order("name"),
   ]);
+  // A failed read yields an empty list, which renders no control at all rather than an empty picker --
+  // the same reading SessionLocation gives a practice that has configured no locations.
+  const locations = ((locRows as any)?.data ?? []) as { id: string; name: string }[];
+  const canPlan = hasCapability(shell.ctx, "appointment.manage");
   if (!sum.ok) {
     if (sum.status === 404) notFound();
     return (
@@ -79,6 +91,28 @@ export default async function SessionCompletePage({ searchParams }: {
             ? `${s.activeMinutes} min active, ${s.pausedMinutes} min paused across ${s.pauseCount} pause${s.pauseCount === 1 ? "" : "s"}.`
             : "The pause ledger could not be read, so active time cannot be separated from paused time."}
         </p>
+
+        {/* ── WHERE IT HAPPENED, AND THE LAST PLACE IT CAN BE PUT RIGHT ──────────────────────────
+            This summary printed when, how long and how many, and never where -- on the screen a
+            practitioner reaches at the moment a clinic ends, which is the last point anyone still
+            remembers. startActivity now requires a location, so new sessions arrive with one; the
+            sessions that need correcting are exactly the ones that predate that rule, and this is
+            where somebody notices.
+
+            The same control as the running card, imported rather than reimplemented (SessionLocation).
+            An ended session is amendable by design -- setActivityLocation refuses only a cancelled
+            one -- because correcting the past is the whole reason that engine exists. */}
+        {/* The absent case is a SENTENCE, not silence: a session with no place recorded should say so
+            where somebody can still act on it, rather than omitting the line and looking complete. */}
+        <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="text-[12px] text-gray-600">
+            {s.locationName
+              ? <>Held at <span className="font-semibold text-gray-800">{s.locationName}</span></>
+              : <span className="text-gray-500">No location was recorded for this session.</span>}
+          </span>
+          <SessionLocation activityId={s.activityId} locationId={s.locationId}
+            locationName={s.locationName} locations={locations} canEdit={canPlan} />
+        </div>
       </header>
 
       {/* ── s6 ACTIVITY SUMMARY -- the governed metrics, each with its reason when absent ───────── */}

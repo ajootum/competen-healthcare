@@ -13,6 +13,7 @@ import type { SessionWithFigures } from "@/lib/practice/session";
 import { formatMinuteOfDay } from "@/lib/datetime";
 import { TimeInput } from "@/components/ui/wall-clock";
 import { HHMM_RE } from "@/lib/practice/practice-time";
+import SessionLocation from "../SessionLocation";
 
 // CPR-V5-001 Zone 1: START YOUR DAY / CURRENT ACTIVITY.
 //
@@ -50,11 +51,6 @@ export default function StartYourDay({ plan, metrics, canPlan, locations = [] }:
   // MCC-02: the More activities sheet. Closed on every render of a fresh page, so a practitioner who
   // opened it yesterday does not find it open today.
   const [moreOpen, setMoreOpen] = useState(false);
-  // The location-correction dialog on the running card. A separate piece of state from `confirming`
-  // because it is a different act on a different subject: that one names an activity TYPE about to be
-  // created, this one names an activity ID that already exists.
-  const [placeFor, setPlaceFor] = useState<string | null>(null);
-  const [placeValue, setPlaceValue] = useState<string>("");
   // s8 confirmation sheet. `confirming` is the activity awaiting a deliberate Start; the three fields
   // beside it are the values the old one-tap path invented silently.
   const [confirming, setConfirming] = useState<ActivityType | null>(null);
@@ -123,49 +119,6 @@ export default function StartYourDay({ plan, metrics, canPlan, locations = [] }:
     }
   };
 
-  /**
-   * The location-correction dialog, shared by every card that can offer it.
-   *
-   * ⚠ IT POSTS set_location, NOT plan. Correcting where a running session is happening must not create
-   * a second activity, and it must not end and restart the one that is running -- a clinic with
-   * patients in it does not survive being re-opened to fix a typo. The engine amends in place and
-   * writes an audit entry saying it was a correction.
-   */
-  const placeDialog = placeFor && (
-    <>
-      <button type="button" aria-label="Cancel changing the location" onClick={() => setPlaceFor(null)}
-        className="fixed inset-0 z-40 cursor-default bg-black/40" />
-      <div role="dialog" aria-modal="true" aria-label="Where is this session happening"
-        onKeyDown={e => { if (e.key === "Escape") setPlaceFor(null); }}
-        className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border-t border-gray-200 bg-white p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] md:inset-0 md:m-auto md:h-fit md:max-w-sm md:rounded-2xl md:border md:p-5 md:pb-5 md:shadow-xl">
-        <h3 className="text-[15px] font-bold text-gray-900">Where is this session happening?</h3>
-        <p className="mt-0.5 text-[11.5px] text-gray-500">
-          This corrects the record for this session. Everything filed under it follows.
-        </p>
-        <select value={placeValue} onChange={e => setPlaceValue(e.target.value)}
-          className="mt-3 min-h-[var(--cp-touch)] w-full rounded-lg border border-gray-200 px-2.5 text-[13px] text-gray-800">
-          <option value="">Choose where…</option>
-          {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
-        <div className="mt-3 flex flex-col gap-1.5">
-          <button type="button" disabled={busy !== null || !placeValue}
-            onClick={async () => {
-              const id = placeFor;
-              setPlaceFor(null);
-              await post({ action: "set_location", id, locationId: placeValue }, `place-${id}`);
-            }}
-            className="flex min-h-[var(--cp-touch-primary)] w-full items-center justify-center rounded-xl bg-[var(--cp-primary)] px-4 text-[15px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
-            {busy === `place-${placeFor}` ? "Saving…" : "Save location"}
-          </button>
-          <button type="button" onClick={() => setPlaceFor(null)}
-            className="flex min-h-[var(--cp-touch)] w-full items-center justify-center rounded-lg text-[13px] font-semibold text-gray-600">
-            Cancel
-          </button>
-        </div>
-      </div>
-    </>
-  );
-
   // ── RUNNING ────────────────────────────────────────────────────────────────────────────────────
   if (metrics) {
     const a = metrics.activity;
@@ -199,12 +152,12 @@ export default function StartYourDay({ plan, metrics, canPlan, locations = [] }:
           <p className="mt-0.5 text-[12px] text-gray-600">
             {[a.label, a.locationName, a.facilityName, a.room].filter(Boolean).join(" · ")}
           </p>
-          {canPlan && locations.length > 0 && (
-            <button type="button" onClick={() => { setPlaceFor(a.id); setPlaceValue(a.locationId ?? ""); }}
-              className="mt-1 min-h-[var(--cp-touch)] text-[11.5px] font-semibold text-[var(--cp-primary-deep)] underline underline-offset-2">
-              {a.locationName ? "Change location" : "Record where this is happening"}
-            </button>
-          )}
+          {/* The shared control -- see SessionLocation. Extracted when Session Complete needed the
+              same dialog, rather than copied into a second screen. */}
+          <div className="mt-1">
+            <SessionLocation activityId={a.id} locationId={a.locationId} locationName={a.locationName}
+              locations={locations} canEdit={canPlan} />
+          </div>
           <p className="mt-1 text-[12.5px] font-semibold tabular-nums text-[var(--cp-primary-deep)]">
             {formatMinuteOfDay(a.plannedStartMinute)} – {formatMinuteOfDay(a.plannedEndMinute)}
           </p>
@@ -248,7 +201,6 @@ export default function StartYourDay({ plan, metrics, canPlan, locations = [] }:
             className="mt-3 flex min-h-[var(--cp-touch-primary)] w-full items-center justify-center rounded-xl bg-[var(--cp-primary)] px-4 text-[15px] font-semibold text-white hover:opacity-90 md:hidden">
             Resume Session
           </Link>
-          {placeDialog}
           {error && <p role="alert" className="mt-2 text-[12px] text-[var(--cmp-text-critical)]">{error}</p>}
         </div>
       </section>
