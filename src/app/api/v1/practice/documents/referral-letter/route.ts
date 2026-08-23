@@ -1,0 +1,40 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
+import { generateReferralLetter } from "@/lib/practice/document-automation";
+
+// CPR-DOC-AUTO-001 sections 7 and 8 -- the purpose-driven entry point for a referral letter.
+//
+// Distinct from POST /api/v1/practice/documents, which stays exactly as it was: section 19 requires
+// blank/manual authoring to remain available for exceptions, so this route ADDS a path rather than
+// replacing one.
+
+export const dynamic = "force-dynamic";
+
+export async function POST(req: NextRequest) {
+  const auth = await requirePracticeContext("document.author");
+  if (isDenied(auth)) return auth;
+
+  let body: Record<string, unknown>;
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
+
+  if (!body.patientId) return NextResponse.json({ error: "patientId is required" }, { status: 400 });
+  if (!body.encounterId) return NextResponse.json({ error: "encounterId is required" }, { status: 400 });
+
+  const keys = Array.isArray(body.factKeys) ? body.factKeys.map(String) : [];
+
+  const result = await generateReferralLetter(auth.caller.admin, auth.ctx, {
+    patientId: String(body.patientId),
+    encounterId: String(body.encounterId),
+    referralId: body.referralId ? String(body.referralId) : null,
+    destinationId: body.destinationId ? String(body.destinationId) : null,
+    recipient: (body.recipient ?? null) as never,
+    reason: String(body.reason ?? ""),
+    requestedAction: body.requestedAction ? String(body.requestedAction) : null,
+    factKeys: keys,
+    correlationId: auth.caller.traceId,
+  });
+  if (!result.ok)
+    return NextResponse.json({ error: { code: result.code, message: result.message } }, { status: result.status });
+
+  return NextResponse.json({ ...result.data, correlationId: auth.caller.traceId }, { status: 201 });
+}

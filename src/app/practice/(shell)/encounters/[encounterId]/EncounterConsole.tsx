@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { ENCOUNTER_TRANSITIONS, NOTE_TYPES, LOCKED_STATUSES, actionFor, labelFor } from "@/lib/practice/encounter-constants";
 import { DOC_TYPES } from "@/lib/practice/document-constants";
+import ReferralLetterComposer from "./ReferralLetterComposer";
 import {
   FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES, FOLLOW_UP_STATUS_LABELS, FOLLOW_UP_TAB_FILTERS,
   FOLLOW_UP_PRIORITY_CHIP, FOLLOW_UP_PRIORITY_GLYPH, followUpSummary,
@@ -436,6 +437,9 @@ export default function EncounterConsole(props: {
   const [dictated, setDictated] = useState<Record<string, boolean>>({});
   const [showHistory, setShowHistory] = useState<Record<string, boolean>>({});
   const [templateId, setTemplateId] = useState("");
+  // CPR-DOC-AUTO-001 s7. null when the composer is closed. `reason` seeds the form from a referral that
+  // is already recorded, so the practitioner does not retype what the record already says.
+  const [letterFor, setLetterFor] = useState<{ referralId: string | null; reason: string } | null>(null);
   const [doc, setDoc] = useState({ title: "", docType: "consultation_summary", addressedTo: "", composeFrom: true });
   const [fu, setFu] = useState({
     // CPR-FUP-002 HFE s3's frozen sequence. `reason` carries the SUBJECT ("Follow-up for") -- the
@@ -1470,7 +1474,18 @@ export default function EncounterConsole(props: {
 
                     {/* ── REFERRALS ─────────────────────────────────────────────────────────────── */}
                     <section id="referrals">
-                      <h3 className="text-[12.5px] font-bold text-gray-900">Referrals</h3>
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-[12.5px] font-bold text-gray-900">Referrals</h3>
+                        {/* CPR-DOC-AUTO-001 s7's purpose-driven entry point. The blank-body document
+                            form on the Documents tab is untouched and still the way to write anything
+                            this does not anticipate (s19). */}
+                        {editable && (
+                          <button type="button" onClick={() => setLetterFor({ referralId: null, reason: "" })}
+                            className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                            Write referral letter
+                          </button>
+                        )}
+                      </div>
                       <p className="text-[10px] text-gray-400">
                         Recorded, not sent. CompetenPractice transmits nothing &mdash; the letter that goes
                         anywhere is a document with its own release register.
@@ -1489,6 +1504,13 @@ export default function EncounterConsole(props: {
                                 </div>
                                 <p className="text-[11px] text-gray-600">{r.reason}</p>
                                 <p className="text-[10px] text-gray-400">recorded {formatDate(`${r.referredOn}T00:00:00Z`, "UTC")}</p>
+                                {/* Writes the letter FOR this referral rather than recording a second
+                                    one. Not gated on `editable`: the referral is already made, and a
+                                    letter about it is a document with its own lifecycle. */}
+                                <button type="button" onClick={() => setLetterFor({ referralId: r.id, reason: r.reason })}
+                                  className="mt-0.5 text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+                                  Write letter
+                                </button>
                                 {editable && (
                                   <div className="mt-1 flex flex-wrap gap-1">
                                     {REFERRAL_STATUSES.filter(([s]) => s !== r.status).map(([s, label]) => (
@@ -2746,6 +2768,19 @@ export default function EncounterConsole(props: {
           last in the DOM is being last on the screen. `md:hidden` and `dockVisible` keep it exactly as
           conditional as the thing it is reserving room for. */}
       {dockVisible && <div aria-hidden className="h-24 md:hidden" />}
+
+      {/* CPR-DOC-AUTO-001 s7. Last child, so the dialog overlays the whole console rather than being
+          clipped by the column it was opened from. */}
+      {letterFor && (
+        <ReferralLetterComposer
+          patientId={props.patientId} encounterId={props.encounterId}
+          referralId={letterFor.referralId} initialReason={letterFor.reason}
+          onClose={() => setLetterFor(null)}
+          // Straight to the draft, which is where s18's next actions live -- read it, edit it, sign it.
+          // A notice back on the console would announce a document the practitioner then has to find.
+          onGenerated={id => { window.location.href = `/practice/documents/${id}`; }}
+        />
+      )}
     </div>
   );
 }

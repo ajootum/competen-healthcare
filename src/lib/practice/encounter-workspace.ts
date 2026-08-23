@@ -538,6 +538,8 @@ export async function reviewInvestigation(admin: any, args: Actor & {
  */
 export async function recordReferral(admin: any, args: Actor & {
   workspaceId: string; encounterId: string; referredTo: string; reason: string; referredOn?: string;
+  /** CPR-DOC-AUTO-001 section 16. Optional -- a referral typed free-hand stays a first-class referral. */
+  destinationId?: string | null;
 }): Promise<EngineResult<{ id: string }>> {
   const guard = await editableEncounter(admin, args.workspaceId, args.encounterId);
   if (!guard.ok) return guard;
@@ -550,6 +552,7 @@ export async function recordReferral(admin: any, args: Actor & {
   const { data, error } = await admin.from("practice_referral").insert({
     workspace_id: args.workspaceId, encounter_id: args.encounterId, patient_id: guard.data.patient_id,
     referred_to: referredTo, reason, status: "made",
+    ...(args.destinationId ? { destination_id: args.destinationId } : {}),
     ...(args.referredOn ? { referred_on: args.referredOn } : {}),
     created_by: args.actorId, updated_by: args.actorId,
   }).select("id").single();
