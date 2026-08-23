@@ -441,7 +441,12 @@ export default async function PracticeCommandCentre() {
                 said "Good morning, Elisha" and then six counters -- pleasant, and it answered no question
                 a practitioner has at 08:00. What replaces it is the one control that changes what every
                 other card on this page MEANS, because each of them scopes to the running session. */}
-            <StartYourDay plan={plan} metrics={metrics} canPlan={canPlan} />
+            {/* s8's sheet needs somewhere to offer. operationsHome already read the active locations
+                for this payload, so they are passed down rather than fetched again -- CORE-08's
+                one-assembled-read-model rule, and the reason this page stopped calling operationsHome
+                itself in the first place. */}
+            <StartYourDay plan={plan} metrics={metrics} canPlan={canPlan}
+              locations={((home as any).locations ?? []).map((l: any) => ({ id: l.id, name: l.name }))} />
 
             {/* ── TODAY AT A GLANCE (s3) ──────────────────────────────────────────────────────── */}
             {/* flex-col so the tile grid can GROW: this card stands beside taller siblings and used

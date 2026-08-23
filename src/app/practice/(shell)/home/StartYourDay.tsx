@@ -11,6 +11,8 @@ import {
 } from "@/lib/practice/activity-constants";
 import type { SessionWithFigures } from "@/lib/practice/session";
 import { formatMinuteOfDay } from "@/lib/datetime";
+import { TimeInput } from "@/components/ui/wall-clock";
+import { HHMM_RE } from "@/lib/practice/practice-time";
 
 // CPR-V5-001 Zone 1: START YOUR DAY / CURRENT ACTIVITY.
 //
@@ -35,10 +37,12 @@ import { formatMinuteOfDay } from "@/lib/datetime";
 // the hierarchy changes by breakpoint, which is s19's single-component-model rule. At md and up every
 // mobile element is hidden and the desktop render is untouched.
 
-export default function StartYourDay({ plan, metrics, canPlan }: {
+export default function StartYourDay({ plan, metrics, canPlan, locations = [] }: {
   plan: TodaysPlan;
   metrics: SessionWithFigures | null;
   canPlan: boolean;
+  /** Active locations, already on the payload via operationsHome -- not a second read (CORE-08). */
+  locations?: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
@@ -46,6 +50,12 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
   // MCC-02: the More activities sheet. Closed on every render of a fresh page, so a practitioner who
   // opened it yesterday does not find it open today.
   const [moreOpen, setMoreOpen] = useState(false);
+  // s8 confirmation sheet. `confirming` is the activity awaiting a deliberate Start; the three fields
+  // beside it are the values the old one-tap path invented silently.
+  const [confirming, setConfirming] = useState<ActivityType | null>(null);
+  const [cLocation, setCLocation] = useState<string>("");
+  const [cEnd, setCEnd] = useState<string>("");
+  const [cLabel, setCLabel] = useState<string>("");
 
   const post = async (body: Record<string, unknown>, tag: string) => {
     setBusy(tag); setError(null);
@@ -72,16 +82,32 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
 
   // Plan it and start it in the same gesture. Two requests rather than one because the engine keeps
   // planning and starting separate -- and it should: they are different permissions and different refusals.
-  const startNow = async (type: ActivityType) => {
+  //
+  // ── CPR-CC-MOB-001 s8: WHAT THIS USED TO DECIDE ON THE PRACTITIONER'S BEHALF ───────────────────
+  //
+  // One tap fired both requests and invented three things nobody had been asked: the title (the type's
+  // generic name), the end of the session (now+30 or 17:00, whichever is later) and the location (none
+  // at all). s8: "it must not start clinical state from an accidental single tap."
+  //
+  // ⚠ THE FIX IS NOT A YES/NO PROMPT. A confirm dialog over three invented values would ask somebody to
+  // agree to facts they had still never seen -- and would have been the easier thing to build, which is
+  // why it is worth naming. The sheet shows the three, prefilled with exactly what this function used
+  // to assume, and lets them be changed. The defaults are unchanged, so nobody's habit breaks; what
+  // changes is that they are now visible and refusable.
+  const startNow = async (type: ActivityType, over?: { locationId: string | null; endMinute: number; title: string }) => {
     setBusy(type); setError(null);
     try {
       const r = await fetch("/api/v1/practice/current-activity", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          action: "plan", activityType: type, title: ACTIVITY_LABEL[type], planDate: plan.date,
+          action: "plan", activityType: type,
+          title: over?.title?.trim() || ACTIVITY_LABEL[type],
+          planDate: plan.date,
+          locationId: over?.locationId ?? null,
           // The session runs from NOW to the end of the working day rather than a guessed length. A
           // two-hour default would put "1h 36m remaining" on a clinic nobody said would take two hours.
-          plannedStartMinute: nowMinute(), plannedEndMinute: Math.max(nowMinute() + 30, 17 * 60),
+          plannedStartMinute: nowMinute(),
+          plannedEndMinute: over?.endMinute ?? Math.max(nowMinute() + 30, 17 * 60),
         }),
       });
       const j = await r.json().catch(() => ({}));
@@ -190,11 +216,88 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
   // The sheet reuses the dismissal idiom PlannerFilters already uses below md: a backdrop that closes
   // on tap, a bottom panel, Escape to dismiss. Reused rather than reinvented, so one product does not
   // grow two ways of getting out of a sheet.
+  // s8: a tap here OPENS THE SHEET. It does not start anything. The sheet is prefilled with what the
+  // one-tap path used to assume, so the fast case is one extra tap and the careless case is none.
+  const openConfirm = (t: ActivityType) => {
+    setConfirming(t);
+    setCLabel(ACTIVITY_LABEL[t]);
+    setCEnd(formatMinuteOfDay(Math.max(nowMinute() + 30, 17 * 60)));
+    // Preselected only when there is exactly one, which is not a shortcut: with one active location
+    // there is no choice to make, and an empty picker would ask a question with a single answer. With
+    // several, nothing is guessed -- picking the alphabetically-first would be worse than picking none.
+    setCLocation(locations.length === 1 ? locations[0].id : "");
+  };
+
   const activityButton = (t: ActivityType) => (
-    <button key={t} type="button" disabled={busy !== null} onClick={() => startNow(t)}
+    <button key={t} type="button" disabled={busy !== null} onClick={() => openConfirm(t)}
       className="min-h-[var(--cp-touch)] rounded-lg border border-gray-200 px-2 text-[12.5px] font-semibold text-gray-700 hover:border-[var(--cp-primary-border)] hover:bg-[var(--cp-primary-soft)] hover:text-[var(--cp-primary-deep)] disabled:opacity-50">
       {busy === t ? "Starting…" : ACTIVITY_LABEL[t]}
     </button>
+  );
+
+  // ── s8's CONFIRMATION SHEET ────────────────────────────────────────────────────────────────────
+  //
+  // Three fields, and each one is a value this screen used to invent. The heading names the activity
+  // so the sheet cannot be mistaken for a generic dialog, and the primary button names it again --
+  // "Start Outpatient Clinic", not "Confirm" -- because the whole point is that nobody arrives here by
+  // accident and leaves having opened a clinic they did not mean to.
+  const confirmSheet = confirming && (
+    <>
+      <button type="button" aria-label="Cancel starting this activity" onClick={() => setConfirming(null)}
+        className="fixed inset-0 z-40 cursor-default bg-black/40" />
+      <div role="dialog" aria-modal="true" aria-label={`Start ${ACTIVITY_LABEL[confirming]}`}
+        onKeyDown={e => { if (e.key === "Escape") setConfirming(null); }}
+        className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-white p-4 pb-[calc(env(safe-area-inset-bottom)+16px)]">
+        <h3 className="text-[15px] font-bold text-gray-900">Start {ACTIVITY_LABEL[confirming]}</h3>
+        <p className="mt-0.5 text-[11.5px] text-gray-500">
+          Starting from {formatMinuteOfDay(nowMinute())}. Check these before you begin.
+        </p>
+
+        <label className="mt-3 flex flex-col text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+          Where
+          {locations.length === 0 ? (
+            // Not a disabled dropdown with nothing in it: a control that cannot be used should say why.
+            <span className="mt-1 rounded-lg bg-gray-50 px-2.5 py-2 text-[12px] font-normal normal-case text-gray-500">
+              No active locations are set up, so this session will not record one.
+            </span>
+          ) : (
+            <select value={cLocation} onChange={e => setCLocation(e.target.value)}
+              className="mt-1 min-h-[var(--cp-touch)] w-full rounded-lg border border-gray-200 px-2.5 text-[13px] font-normal normal-case text-gray-800">
+              <option value="">Not recorded</option>
+              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          )}
+        </label>
+
+        <label className="mt-2.5 flex flex-col text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+          Until
+          <TimeInput value={cEnd} onChange={setCEnd} ariaLabel="Planned end time"
+            className="mt-1 min-h-[var(--cp-touch)] w-full rounded-lg border border-gray-200 px-2.5 text-[13px] font-normal normal-case text-gray-800" />
+        </label>
+
+        <label className="mt-2.5 flex flex-col text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+          Called
+          <input value={cLabel} onChange={e => setCLabel(e.target.value)} maxLength={80}
+            className="mt-1 min-h-[var(--cp-touch)] w-full rounded-lg border border-gray-200 px-2.5 text-[13px] font-normal normal-case text-gray-800" />
+        </label>
+
+        <div className="mt-3 flex flex-col gap-1.5">
+          <button type="button" disabled={busy !== null}
+            onClick={() => {
+              const t = confirming;
+              setConfirming(null); setMoreOpen(false);
+              void startNow(t, { locationId: cLocation || null, endMinute: minuteOfHHMM(cEnd), title: cLabel });
+            }}
+            className="flex min-h-[var(--cp-touch-primary)] w-full items-center justify-center rounded-xl bg-[var(--cp-primary)] px-4 text-[15px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
+            {busy === confirming ? "Starting…" : `Start ${ACTIVITY_LABEL[confirming]}`}
+          </button>
+          <button type="button" onClick={() => setConfirming(null)}
+            className="flex min-h-[var(--cp-touch)] w-full items-center justify-center rounded-lg text-[13px] font-semibold text-gray-600">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </>
   );
 
   const typeGrid = (
@@ -210,6 +313,7 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
         More activities ({SECONDARY_ACTIVITY_TYPES.length})
       </button>
 
+      {confirmSheet}
       {moreOpen && (
         <>
           <button type="button" aria-label="Close the activity list" onClick={() => setMoreOpen(false)}
@@ -374,4 +478,23 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
 function nowMinute(): number {
   const d = new Date();
   return d.getHours() * 60 + d.getMinutes();
+}
+
+/**
+ * The inverse of formatMinuteOfDay, for the s8 sheet's end-time box.
+ *
+ * ⚠ AN UNPARSEABLE VALUE RETURNS THE DEFAULT, NOT NaN. TimeInput constrains the shape, but it is an
+ * input and a determined thumb can leave it half-typed; sending NaN would reach the engine as a null
+ * planned end and open a session with no end at all. The fallback is the exact expression the one-tap
+ * path used, so a broken box behaves like the old button rather than like a new bug.
+ *
+ * Validated with HHMM_RE -- the same expression TimeInput compiles its own `pattern` from, imported
+ * rather than re-typed, so the control and its reader cannot disagree about what a time looks like.
+ */
+function minuteOfHHMM(value: string): number {
+  const fallback = Math.max(nowMinute() + 30, 17 * 60);
+  const t = value.trim();
+  if (!HHMM_RE.test(t)) return fallback;
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
 }

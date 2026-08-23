@@ -751,6 +751,50 @@ if (existsSync(DOC)) {
   ok("9z-c first viewport: the activity catalogue never precedes Needs Attention when idle",
     idleSlot > 0 && heroAt > 0 && idleSlot < heroAt,
     "the launcher sits inside the hero, so the hero must follow the attention list on an idle day");
+
+  // ── s8's CONFIRMATION SHEET: NO CLINICAL STATE FROM ONE TAP ─────────────────────────────────
+  //
+  // ⚠⚠ THE ASSERTION THAT MATTERS IS THE NEGATIVE ONE. Adding a sheet is easy to do and easy to
+  // bypass: leave one button still wired straight to startNow and the hazard is intact on that path
+  // while the screen looks corrected. 9z-e reads the stripped source and requires that the launcher's
+  // buttons open the sheet, and only the sheet's own primary starts anything.
+  ok("9z-d a launcher tap opens the confirmation sheet",
+    startCode.includes("onClick={() => openConfirm(t)}")
+    && startCode.includes('role="dialog"') && startCode.includes("aria-modal=\"true\""));
+
+  // ⚠ SCOPED TO THE MOBILE LAUNCHER, AND THE FIRST VERSION WAS NOT -- it forbade `startNow(t)` anywhere
+  // and caught the DESKTOP grid, which is deliberately unchanged. s8 sits in a mobile corrective, and
+  // the hazard it names is an accidental single TAP: a thumb on a phone, not a mouse click on a small
+  // labelled button inside a headed "Start now" section. Extending the sheet to desktop is a defensible
+  // idea and a separate decision, raised rather than taken here.
+  //
+  // The assertion reads the mobile button helper alone, so the mobile path cannot regress and the
+  // desktop exclusion stays a visible choice instead of an assertion nobody could satisfy.
+  const helper = startCode.slice(
+    startCode.indexOf("const activityButton"),
+    startCode.indexOf("const confirmSheet"),
+  );
+  ok("9z-e no MOBILE launcher button starts an activity directly",
+    helper.length > 0 && helper.includes("openConfirm(t)") && !helper.includes("startNow("),
+    helper.trim().slice(0, 160));
+
+  ok("9z-e2 and the desktop grid is knowingly excluded, not accidentally missed",
+    startCode.includes("onClick={() => startNow(t)}"),
+    "if desktop ever adopts the sheet, delete this assertion deliberately");
+
+  // Each field the one-tap path used to invent must be visible and editable, or the sheet is a
+  // yes/no prompt over the same three assumptions.
+  ok("9z-f the sheet shows the three values that used to be invented",
+    startCode.includes("setCLocation") && startCode.includes("setCEnd") && startCode.includes("setCLabel")
+    && startCode.includes("<TimeInput"));
+
+  // A half-typed time must not reach the engine as NaN and open a session with no end.
+  ok("9z-g an unparseable end time falls back rather than sending NaN",
+    startCode.includes("function minuteOfHHMM") && startCode.includes("if (!HHMM_RE.test(t)) return fallback"));
+
+  ok("9z-h the sheet is dismissible without starting anything",
+    startCode.includes('aria-label="Cancel starting this activity"')
+    && startCode.includes('if (e.key === "Escape") setConfirming(null)'));
 }
 
 // ---------------------------------------------------------------------------------------------
