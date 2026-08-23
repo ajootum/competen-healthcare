@@ -129,12 +129,9 @@ export default function WorkspaceSidebar({ profileName, roles, activeRole, works
         {activeRole !== null && (roles.length > 1 || workspaces.length > 0) && (
           <div className="mb-2" data-sb-label><RoleSwitcher roles={roles} activeRole={activeRole} workspaces={workspaces} /></div>
         )}
-        <form action="/api/auth/logout" method="POST">
-          <button type="submit" data-sb-item className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-400 hover:bg-slate-800/30 hover:text-white transition-colors">
-            <span className="w-5 text-center">↩</span>
-            <span data-sb-label>Sign out</span>
-          </button>
-        </form>
+        {/* HWW-UI-002: "Sign Out is no longer displayed in the sidebar." It lives in the header user
+            menu, which every workspace renders through the shared GlobalHeader -- one place to sign out,
+            in the same position on every screen, rather than a second one that drifts. */}
       </div>
     </>
   );

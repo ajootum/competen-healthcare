@@ -33,14 +33,67 @@ function workspaceLayouts(): { name: string; file: string; src: string }[] {
     .filter(x => x.src.includes("data-sidebar"));
 }
 
+// A sidebar rendered as a component lives in its own file. Resolved by NAME rather than by parsing the
+// import, because these shells import from several alias shapes and a resolver that misses simply reads
+// as "clean" -- the failure mode this whole check just suffered from.
+function findComponent(name: string): string | null {
+  const roots = [path.join(process.cwd(), "src", "app"), path.join(process.cwd(), "src", "components")];
+  const walk = (dir: string): string | null => {
+    for (const d of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, d.name);
+      if (d.isDirectory()) { const hit = walk(full); if (hit) return hit; }
+      else if (d.name === `${name}.tsx`) return full;
+    }
+    return null;
+  };
+  for (const r of roots) { if (fs.existsSync(r)) { const hit = walk(r); if (hit) return hit; } }
+  return null;
+}
+
+const asideOf = (src: string) => {
+  const i = src.indexOf("data-sidebar");
+  return i < 0 ? "" : src.slice(i, src.indexOf("</aside>", i));
+};
+
 async function main() {
   const layouts = workspaceLayouts();
   check(layouts.length >= 15, "found the workspace layouts", `${layouts.length}: ${layouts.map(l => l.name).join(", ")}`);
 
   // ── HWW-UI-002: "Sign Out is no longer displayed in the sidebar." ──
-  const withLogout = layouts.filter(l => l.src.includes("auth/logout"));
-  check(withLogout.length === 0, "no workspace layout renders sign out in its sidebar",
-    withLogout.length ? withLogout.map(l => l.name).join(", ") : `${layouts.length} layouts clean`);
+  //
+  // ⚠ THIS CHECK WAS WRONG IN BOTH DIRECTIONS, and it had been failing for long enough to be treated as
+  // background noise. It searched the WHOLE layout file for "auth/logout", which meant:
+  //
+  //   FALSE POSITIVE. super-admin/layout.tsx signs you out from its REFUSAL PANEL -- the full-screen
+  //   "you do not hold a position that opens this platform" state, which early-returns before any
+  //   sidebar exists. Offering a way out of the wrong account there is deliberate and correct, and the
+  //   check called it a sidebar violation for two hundred lines of distance.
+  //
+  //   FALSE NEGATIVE, and this is the one that mattered. A sidebar rendered as a COMPONENT is invisible
+  //   to a scan of the layout. Both HQ sidebars really did render Sign out, in the files the check never
+  //   opened -- so the rule was broken in exactly the place the failing check was pointing at, and the
+  //   check could not see it.
+  //
+  // It now looks where sidebars actually are: the <aside> block of each layout, AND every sidebar
+  // COMPONENT that layout renders.
+  const sidebarSources = (l: { src: string }): { where: string; text: string }[] => {
+    const out = [{ where: "<aside>", text: asideOf(l.src) }];
+    // A LITERAL REGEX, AND NO \b. Both were forced by getting this wrong twice: writing the pattern
+    // through a generator turned \b into the BACKSPACE ESCAPE, so the needle was
+    // `Sidebar<0x08>` and could never match anything -- a check that passed because it was looking for a
+    // character no source file contains. `[A-Za-z]*` is already greedy to the end of the identifier, so
+    // the boundary added nothing but a way to be wrong.
+    for (const m of l.src.matchAll(/<([A-Z][A-Za-z]*Sidebar)/g)) {
+      const name = m[1];
+      const file = findComponent(name);
+      if (file) out.push({ where: name, text: fs.readFileSync(file, "utf8") });
+    }
+    return out;
+  };
+  const logoutSites = layouts.flatMap(l =>
+    sidebarSources(l).filter(s => s.text.includes("auth/logout")).map(s => `${l.name}:${s.where}`));
+  check(logoutSites.length === 0, "no workspace sidebar renders sign out (it lives in the header menu)",
+    logoutSites.length ? logoutSites.join(", ") : `${layouts.length} layouts and their sidebar components clean`);
 
   // ── "Sidebar contains only workflow-related navigation." ──
   // Scoped to the <aside> itself: a mobile top bar may legitimately carry a workspace switcher, since it is
@@ -50,10 +103,6 @@ async function main() {
   // its own workflow rather than account management bolted onto a clinical sidebar. Exempting it by name
   // beats contorting the rule until it passes.
   const PERSONAL_WORKSPACE = "dashboard";
-  const asideOf = (src: string) => {
-    const i = src.indexOf("data-sidebar");
-    return i < 0 ? "" : src.slice(i, src.indexOf("</aside>", i));
-  };
   const ACCOUNT_MARKERS = ["RoleSwitcher", "WorkspaceSwitcher", "/dashboard/preferences", "/dashboard/profile", "auth/logout"];
   const withAccountNav = layouts
     .filter(l => l.name !== PERSONAL_WORKSPACE)

@@ -568,19 +568,9 @@ function PdSidebarBody({
           </span>
         </Link>
 
-        {/* A POST, because signing out is a state change -- and the same endpoint every other shell uses.
-            There is no /logout route to link to. */}
-        <form action="/api/auth/logout" method="POST">
-          <button
-            type="submit"
-            aria-label="Sign out"
-            title="Sign out"
-            className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[12px] text-[var(--pd-shell-ink-dim)] transition-colors hover:bg-[var(--pd-shell-hover)] hover:text-[var(--pd-shell-ink)] pointer-coarse:min-h-[var(--cp-touch)] motion-reduce:transition-none ${geometry.row}`}
-          >
-            <span aria-hidden className="w-5 shrink-0 text-center leading-none">↩</span>
-            <span aria-hidden className={`min-w-0 flex-1 truncate text-left ${geometry.label}`}>Sign out</span>
-          </button>
-        </form>
+        {/* HWW-UI-002: "Sign Out is no longer displayed in the sidebar." It lives in the header user
+            menu -- this shell renders GlobalHeader too, so removing it here removes a DUPLICATE rather
+            than the only way out. */}
       </div>
     </>
   );

@@ -174,13 +174,11 @@ export default function MobileSidebar({ fullName, role, isAdmin, unread = 0, ava
               <p className="text-teal-400/60 text-[10px] capitalize">{role.replace(/_/g, " ")}</p>
             </div>
           </div>
-          <form action="/api/auth/logout" method="POST">
-            <button type="submit"
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-teal-100/50 hover:bg-teal-800/30 hover:text-white transition-colors">
-              <span className="w-5 text-center">↩</span>
-              <span>Sign out</span>
-            </button>
-          </form>
+          {/* HWW-UI-002: "Sign Out is no longer displayed in the sidebar."
+              CHECKED BEFORE REMOVING, because this is the MOBILE sidebar and stranding somebody with no
+              way out would be far worse than the duplication: /dashboard renders GlobalHeader, and the
+              header's user button carries no md:hidden -- it is present at every width, and sign out is
+              inside the menu it opens. So this was a second door to the same place, not the only one. */}
         </div>
       </aside>
     </>
