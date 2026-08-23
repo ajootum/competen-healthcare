@@ -60,6 +60,20 @@ const PUBLIC_OK = { bookingHorizonDays: 30, visibility: "public" };
 
 // ── 1. NULL HORIZON -> NOT PUBLICLY BOOKING-READY ──────────────────────────────────────────────
 const nullHorizon = publicBookingReadiness({ bookingHorizonDays: null, visibility: "public" });
+// ⚠ THE STRIPPER IS ASSERTED BEFORE ANYTHING RELIES ON IT. Added 2026-08-23 after the identical
+// helper in practice-responsive-harness.ts was found INERT on CRLF files: `.` does not match `\r`, so
+// `.*` stops before the line ending and an unanchored `$` then matches only at the end of the whole
+// string, leaving every comment but the last in place. That version split on "\n"; this one splits on
+// /\r?\n/ and is correct -- which is exactly why it needs a test. A stripper that silently stops
+// working turns every source assertion beneath it into a search of the documentation.
+ok("0. the comment stripper removes comments, on this checkout's line endings",
+  (() => {
+    const raw = readFileSync(join(ROOT, "src", "lib", "practice", "patient-booking.ts"), "utf8");
+    const needle = "AN UNREADABLE STORE IS NOT";
+    return raw.includes(needle) && !stripComments(raw).includes(needle);
+  })(),
+  "if this fails, every source assertion below is reading prose");
+
 ok("1. a null booking horizon is NOT publicly booking-ready",
   nullHorizon.ready === false && !nullHorizon.ready && nullHorizon.reason === "horizon_missing",
   JSON.stringify(nullHorizon));

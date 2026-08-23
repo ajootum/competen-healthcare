@@ -228,6 +228,12 @@ export default function StartYourDay({ plan, metrics, canPlan, locations = [] }:
     setCLocation(locations.length === 1 ? locations[0].id : "");
   };
 
+  // The client half of the server invariant in activity.ts. A practice with locations must record one;
+  // with none there is nothing to choose. Computed once so the picker, the disabled state and the
+  // helper sentence cannot disagree about whether a choice is outstanding.
+  const locationRequired = locations.length > 0;
+  const locationMissing = locationRequired && !cLocation;
+
   const activityButton = (t: ActivityType) => (
     <button key={t} type="button" disabled={busy !== null} onClick={() => openConfirm(t)}
       className="min-h-[var(--cp-touch)] rounded-lg border border-gray-200 px-2 text-[12.5px] font-semibold text-gray-700 hover:border-[var(--cp-primary-border)] hover:bg-[var(--cp-primary-soft)] hover:text-[var(--cp-primary-deep)] disabled:opacity-50">
@@ -245,9 +251,16 @@ export default function StartYourDay({ plan, metrics, canPlan, locations = [] }:
     <>
       <button type="button" aria-label="Cancel starting this activity" onClick={() => setConfirming(null)}
         className="fixed inset-0 z-40 cursor-default bg-black/40" />
+      {/* ⚠ ONE DIALOG, TWO PRESENTATIONS -- NOT TWO DIALOGS. Ruled 2026-08-23: the governing reason for
+          confirming is that a started session must carry its location, and that is the same requirement
+          on both devices. Two components would be two places to forget it, which is the shape of every
+          mobile/desktop divergence this file already warns about.
+          Below md it is a bottom sheet, where a thumb reaches. At md and up it is a compact centred
+          dialog -- a sheet glued to the bottom edge of a 1440px screen is a phone idiom worn by a
+          desktop, and the eye has to travel the whole window to find it. */}
       <div role="dialog" aria-modal="true" aria-label={`Start ${ACTIVITY_LABEL[confirming]}`}
         onKeyDown={e => { if (e.key === "Escape") setConfirming(null); }}
-        className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-white p-4 pb-[calc(env(safe-area-inset-bottom)+16px)]">
+        className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-white p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] md:inset-0 md:m-auto md:h-fit md:max-w-sm md:rounded-2xl md:border md:p-5 md:pb-5 md:shadow-xl">
         <h3 className="text-[15px] font-bold text-gray-900">Start {ACTIVITY_LABEL[confirming]}</h3>
         <p className="mt-0.5 text-[11.5px] text-gray-500">
           Starting from {formatMinuteOfDay(nowMinute())}. Check these before you begin.
@@ -261,9 +274,12 @@ export default function StartYourDay({ plan, metrics, canPlan, locations = [] }:
               No active locations are set up, so this session will not record one.
             </span>
           ) : (
+            // ⚠ NO "Not recorded" OPTION WHEN LOCATIONS EXIST. It was there in the first draft and it
+            // was a hole: the server refuses that start, so the option existed only to produce a
+            // refusal one tap later. An offer a screen knows will be rejected is worse than no offer.
             <select value={cLocation} onChange={e => setCLocation(e.target.value)}
               className="mt-1 min-h-[var(--cp-touch)] w-full rounded-lg border border-gray-200 px-2.5 text-[13px] font-normal normal-case text-gray-800">
-              <option value="">Not recorded</option>
+              {locations.length > 1 && <option value="">Choose where…</option>}
               {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           )}
@@ -282,7 +298,7 @@ export default function StartYourDay({ plan, metrics, canPlan, locations = [] }:
         </label>
 
         <div className="mt-3 flex flex-col gap-1.5">
-          <button type="button" disabled={busy !== null}
+          <button type="button" disabled={busy !== null || locationMissing}
             onClick={() => {
               const t = confirming;
               setConfirming(null); setMoreOpen(false);
@@ -291,6 +307,11 @@ export default function StartYourDay({ plan, metrics, canPlan, locations = [] }:
             className="flex min-h-[var(--cp-touch-primary)] w-full items-center justify-center rounded-xl bg-[var(--cp-primary)] px-4 text-[15px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
             {busy === confirming ? "Starting…" : `Start ${ACTIVITY_LABEL[confirming]}`}
           </button>
+          {/* Says WHY the button is dim. A disabled control with no explanation is a dead end that the
+              practitioner has to solve by guessing which field it means. */}
+          {locationMissing && (
+            <p className="text-[11.5px] text-gray-500">Choose where this session is happening to start it.</p>
+          )}
           <button type="button" onClick={() => setConfirming(null)}
             className="flex min-h-[var(--cp-touch)] w-full items-center justify-center rounded-lg text-[13px] font-semibold text-gray-600">
             Cancel
@@ -313,7 +334,6 @@ export default function StartYourDay({ plan, metrics, canPlan, locations = [] }:
         More activities ({SECONDARY_ACTIVITY_TYPES.length})
       </button>
 
-      {confirmSheet}
       {moreOpen && (
         <>
           <button type="button" aria-label="Close the activity list" onClick={() => setMoreOpen(false)}
@@ -395,7 +415,7 @@ export default function StartYourDay({ plan, metrics, canPlan, locations = [] }:
                   that had no problem. The mobile grid above is where the four-plus-More rule applies. */}
               <div className="mt-2 grid grid-cols-2 gap-1.5">
                 {ACTIVITY_TYPES.map(t => (
-                  <button key={t} type="button" disabled={busy !== null} onClick={() => startNow(t)}
+                  <button key={t} type="button" disabled={busy !== null} onClick={() => openConfirm(t)}
                     className="rounded-lg border border-gray-200 px-2 py-2 text-[11.5px] font-semibold text-gray-700 hover:border-[var(--cp-primary-border)] hover:bg-[var(--cp-primary-soft)] hover:text-[var(--cp-primary-deep)] disabled:opacity-50">
                     {busy === t ? "Starting…" : ACTIVITY_LABEL[t]}
                   </button>
@@ -468,6 +488,11 @@ export default function StartYourDay({ plan, metrics, canPlan, locations = [] }:
         </>
       )}
       {error && <p role="alert" className="mt-2 text-[12px] text-[var(--cmp-text-critical)]">{error}</p>}
+      {/* Rendered ONCE for the whole card, not inside either grid. It is position:fixed, so where
+          it sits in the tree does not affect where it appears -- but which BRANCH it sits in decides
+          whether it exists at all, and inside typeGrid it existed only on the phone. The desktop
+          button would have opened nothing. */}
+      {confirmSheet}
     </section>
   );
 }

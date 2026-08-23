@@ -621,10 +621,9 @@ if (existsSync(DOC)) {
   // justifying the rename says "Resume Session" twice -- so it would have passed with the button still
   // reading Open Session. An assertion that its own documentation satisfies is worse than none: it
   // reports green for the state it exists to forbid.
-  const startCode = start
-    .replace(/\{\/\*[\s\S]*?\*\/\}/g, " ")
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .split("\n").map(l => l.replace(/\/\/.*$/, "")).join("\n");
+  // strip(), not a local copy -- see the note at 9z-i. The local version was inert on CRLF files, and
+  // StartYourDay.tsx being LF is the only reason these three assertions were ever reading code.
+  const startCode = strip(start);
 
   ok("9l-strip the comment stripper works, so 9l-9n are reading code",
     start.includes("which is the right door and the wrong verb")
@@ -762,25 +761,39 @@ if (existsSync(DOC)) {
     startCode.includes("onClick={() => openConfirm(t)}")
     && startCode.includes('role="dialog"') && startCode.includes("aria-modal=\"true\""));
 
-  // ⚠ SCOPED TO THE MOBILE LAUNCHER, AND THE FIRST VERSION WAS NOT -- it forbade `startNow(t)` anywhere
-  // and caught the DESKTOP grid, which is deliberately unchanged. s8 sits in a mobile corrective, and
-  // the hazard it names is an accidental single TAP: a thumb on a phone, not a mouse click on a small
-  // labelled button inside a headed "Start now" section. Extending the sheet to desktop is a defensible
-  // idea and a separate decision, raised rather than taken here.
+  // ⚠ BOTH LAUNCHERS, RULED 2026-08-23. An earlier version scoped this to the mobile helper and pinned
+  // the desktop exclusion as deliberate -- on the reasoning that s8's hazard was an accidental TAP. The
+  // owner ruled the governing reason differently: it is that every started session must carry its
+  // location, which is the same requirement on both devices. That assertion was deleted knowingly, as
+  // its own note said it should be.
   //
-  // The assertion reads the mobile button helper alone, so the mobile path cannot regress and the
-  // desktop exclusion stays a visible choice instead of an assertion nobody could satisfy.
-  const helper = startCode.slice(
-    startCode.indexOf("const activityButton"),
-    startCode.indexOf("const confirmSheet"),
-  );
-  ok("9z-e no MOBILE launcher button starts an activity directly",
-    helper.length > 0 && helper.includes("openConfirm(t)") && !helper.includes("startNow("),
-    helper.trim().slice(0, 160));
+  // So there is now ONE contract and two presentations, and the test is that NO launcher starts an
+  // activity directly. `startNow` may appear only twice: its definition, and the dialog's own Start.
+  // ⚠ startNow IS CALLED EXACTLY ONCE, from the dialog's Start. Its DEFINITION reads `const startNow =`
+  // and does not match this pattern -- a first version expected two, went red on correct code, and was
+  // the pinned-tally mistake this file's own header warns about. One call site IS the claim: every
+  // other route to a running session has to pass through openConfirm first.
+  const startCalls = (startCode.match(/startNow\(/g) ?? []).length;
+  const confirmOpens = (startCode.match(/openConfirm\(t\)/g) ?? []).length;
+  ok("9z-e neither launcher starts an activity directly",
+    !startCode.includes("onClick={() => startNow(t)}")
+    && confirmOpens === 2
+    && startCalls === 1
+    && startCode.includes("const startNow = async"),
+    `startNow calls x${startCalls}, openConfirm x${confirmOpens}`);
 
-  ok("9z-e2 and the desktop grid is knowingly excluded, not accidentally missed",
-    startCode.includes("onClick={() => startNow(t)}"),
-    "if desktop ever adopts the sheet, delete this assertion deliberately");
+  ok("9z-e2 one dialog serves both, rendered outside either grid",
+    startCode.includes("{confirmSheet}")
+    && (startCode.match(/\{confirmSheet\}/g) ?? []).length === 1
+    && startCode.includes("md:inset-0 md:m-auto"),
+    "inside typeGrid it would exist only on the phone, and the desktop button would open nothing");
+
+  // The ruling's substance: a practice WITH locations must record one, and the screen must not offer a
+  // choice the server will refuse.
+  ok("9z-e3 the dialog requires a location when the practice has any",
+    startCode.includes("const locationRequired = locations.length > 0")
+    && startCode.includes("disabled={busy !== null || locationMissing}")
+    && !startCode.includes('<option value="">Not recorded</option>'));
 
   // Each field the one-tap path used to invent must be visible and editable, or the sheet is a
   // yes/no prompt over the same three assumptions.
@@ -795,6 +808,47 @@ if (existsSync(DOC)) {
   ok("9z-h the sheet is dismissible without starting anything",
     startCode.includes('aria-label="Cancel starting this activity"')
     && startCode.includes('if (e.key === "Escape") setConfirming(null)'));
+
+  // ── THE SERVER SIDE OF THE SAME CONTRACT ────────────────────────────────────────────────────
+  //
+  // ⚠⚠ THE SCREENS ARE NOT THE INVARIANT. Both launchers now ask for a location, and a rule enforced
+  // only in screens lasts until the third caller -- the planner's quick add, an integration, a harness,
+  // or a curl at the route, all of which reach startActivity without passing either dialog. The ruling
+  // asked for a shared server-side invariant precisely so neither launcher CAN bypass it, and these
+  // assertions exist because a client-only version of this work would look identical from the UI.
+  // ⚠⚠ USE THIS FILE'S OWN strip(), NOT A LOCAL ONE -- AND 9z-i IS WHY.
+  //
+  // The first version here stripped with `.split("\n").map(l => l.replace(/\/\/.*$/, ""))`, which is
+  // correct on an LF file and INERT on a CRLF one: `.` does not match `\r`, so `.*` stops short of the
+  // line ending and an unanchored `$` (no `m` flag) then matches only at the end of the WHOLE string.
+  // Every line but the last keeps its comment.
+  //
+  // activity.ts is CRLF in this checkout; StartYourDay.tsx and LiveRefresh.tsx are LF. So the same
+  // three lines of stripper worked in two places and silently did nothing in the third -- and the
+  // assertions beneath it were reading prose while reporting green. strip() at the top of this file
+  // handles both, has done since it was written, and existed the whole time.
+  //
+  // 9z-i is not decoration. It is the assertion that caught this, and it stays because a stripper that
+  // stops working is invisible in exactly the way this one was.
+  const activitySrc = readFileSync("src/lib/practice/activity.ts", "utf8");
+  const actCode = strip(activitySrc);
+
+  ok("9z-i the strip works, so the server assertions read code",
+    activitySrc.includes("THE INVARIANT LIVES HERE") && !actCode.includes("THE INVARIANT LIVES HERE"));
+
+  ok("9z-j startActivity refuses a location-less start when the practice has locations",
+    actCode.includes('code: "LOCATION_REQUIRED"')
+    && /if \(!row\.location_id\)/.test(actCode)
+    && actCode.includes('.eq("workspace_id", ctx.workspaceId).eq("active", true)'));
+
+  // Zero locations must NOT be refused, or a practice cannot open a clinic before finishing setup.
+  ok("9z-k a practice with no locations is not blocked by it",
+    /\(locs \?\? \[\]\)\.length > 0/.test(actCode));
+
+  // ⚠ AND A FAILED READ MUST NOT BECOME AN OUTAGE. A data-quality rule that stops a clinic opening
+  // because a table was briefly unreadable has traded a small wrong for a large one.
+  ok("9z-l an unreadable location table allows the start rather than blocking the day",
+    /!locError && \(locs \?\? \[\]\)\.length > 0/.test(actCode));
 }
 
 // ---------------------------------------------------------------------------------------------

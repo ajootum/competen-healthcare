@@ -427,6 +427,39 @@ export async function startActivity(
   // fact about the practitioner's day.
   if (row.cancelled_at) return { ok: false, status: 422, code: "CANCELLED", message: "that activity was cancelled" };
 
+  // ── CPR-CC-MOB-001 s8, RULED 2026-08-23: A STARTED SESSION CARRIES ITS LOCATION ────────────────
+  //
+  // ⚠ THE INVARIANT LIVES HERE, NOT IN THE TWO LAUNCHERS, AND THAT IS THE WHOLE POINT OF THE RULING.
+  // The mobile sheet and the desktop dialog both ask for a location, and a rule enforced only in the
+  // screens is a rule that lasts until the third caller -- the planner's quick add, an integration, a
+  // harness, or a `curl` at the route, all of which reach planActivity and startActivity directly.
+  // Every session begins here, whatever asked for it, so this is the one place the requirement cannot
+  // be routed around.
+  //
+  // WHY START AND NOT PLAN. Planning a block before deciding where it will happen is legitimate --
+  // the Planner does exactly that, and half the activities in this estate were created that way. What
+  // must not happen is a session RUNNING with no location: every encounter, queue entry and document
+  // it produces inherits that emptiness, and no later screen can reconstruct where the clinic was.
+  //
+  // ZERO LOCATIONS IS NOT A FAILURE. A practice that has configured none has nothing to choose, and
+  // refusing would make the product unusable before setup is finished. The requirement is only that a
+  // practice WITH locations records one.
+  if (!row.location_id) {
+    const { data: locs, error: locError } = await admin.from("practice_location")
+      .select("id").eq("workspace_id", ctx.workspaceId).eq("active", true).limit(1);
+    // ⚠ A FAILED READ ALLOWS THE START. Deliberately, and it is the one place this invariant yields:
+    // the cost of a false refusal here is a practitioner who cannot open their clinic because a table
+    // was briefly unreadable, and the cost of a false allow is one session with a blank location that
+    // can be corrected afterwards. A data-quality rule must not become an availability risk.
+    if (!locError && (locs ?? []).length > 0) {
+      return {
+        ok: false, status: 422, code: "LOCATION_REQUIRED",
+        message: "choose where this session is happening before starting it — every encounter it "
+          + "creates inherits the location, and a blank one cannot be worked out later",
+      };
+    }
+  }
+
   // Same check, and here the cost of skipping it is a wrong REFUSAL rather than a wrong reading: silently
   // falling back to UTC makes a Kampala practice unable to start a clinic between 21:00 and midnight
   // local, and able to start yesterday's before 03:00.
