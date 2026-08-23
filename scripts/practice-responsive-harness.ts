@@ -613,6 +613,50 @@ if (existsSync(DOC)) {
   // the mobile rule to a screen that never had the problem.
   ok("9k the desktop launcher still offers every activity without a sheet",
     start.includes("{ACTIVITY_TYPES.map(t => ("));
+
+  // ── MCC-04 / s9: THE SESSION ACTION IS THE PRIMARY ONE, AND SAYS WHAT IT STARTS ─────────────
+  //
+  // ⚠ ON THE STRIPPED SOURCE, BECAUSE THE COMMENTS EXPLAINING THESE LABELS CONTAIN THE LABELS. A first
+  // version asserted `start.includes("Resume Session")` against the raw file, where the paragraph
+  // justifying the rename says "Resume Session" twice -- so it would have passed with the button still
+  // reading Open Session. An assertion that its own documentation satisfies is worse than none: it
+  // reports green for the state it exists to forbid.
+  const startCode = start
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, " ")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .split("\n").map(l => l.replace(/\/\/.*$/, "")).join("\n");
+
+  ok("9l-strip the comment stripper works, so 9l-9n are reading code",
+    start.includes("which is the right door and the wrong verb")
+    && !startCode.includes("which is the right door and the wrong verb"));
+
+  ok("9l the running state's primary CTA is Resume Session",
+    startCode.includes("Resume Session"));
+
+  ok("9m and it is not the old ambiguous verb",
+    !startCode.includes("Open Session"));
+
+  ok("9n the planned CTA names what it starts",
+    startCode.includes('"Start Planned Session"')
+    && !startCode.includes('busy === next.id ? "Starting…" : "Start"'));
+
+  // ⚠ AC-06: an active session SUPPRESSES the launcher. Already true by construction -- the running
+  // branch returns before the launcher is built -- and pinned because "already true by construction"
+  // is exactly the kind of guarantee an innocent refactor removes.
+  const runningBranch = start.slice(start.indexOf("if (metrics) {"), start.indexOf("// ── NOTHING RUNNING"));
+  ok("9o an active session suppresses the activity launcher entirely",
+    runningBranch.length > 0
+    && !runningBranch.includes("PRIMARY_ACTIVITY_TYPES")
+    && !runningBranch.includes("More activities"));
+
+  // MCC-04's stated correction is "above secondary handoffs". Planner and Reports are s9's secondary
+  // handoffs, and they are assembled after the hero in the mobile story -- asserted on the page rather
+  // than assumed from reading it once.
+  const heroAt = home.indexOf("<StartYourDay");
+  const linksAt = home.indexOf("const mobileLinks");
+  ok("9p the session card precedes the Planner/Reports handoffs in the mobile story",
+    heroAt > 0 && linksAt > 0 && home.indexOf("{mobileLinks}") > heroAt,
+    `hero@${heroAt} mobileLinks-render@${home.indexOf("{mobileLinks}")}`);
 }
 
 // ---------------------------------------------------------------------------------------------

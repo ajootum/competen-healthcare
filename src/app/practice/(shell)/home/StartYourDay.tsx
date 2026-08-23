@@ -155,9 +155,14 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
               where the queue, the controls and End all live. End is deliberately not a one-tap control
               on a phone dashboard (s4 caps a viewport at one dominant action, and a mis-tap here would
               close a live clinic); it waits one screen away, behind a confirm, in Current Session. */}
+          {/* CPR-CC-MOB-001 s9: the primary CTA is "Resume Session" when one is active. It read "Open
+              Session", which is the right door and the wrong verb: opening is what you do to a thing
+              you have not started, and this session is running with patients in it. Resume says there
+              is something already underway to go back to, which is the fact that makes this the
+              dominant action on the screen. */}
           <Link href="/practice/today"
             className="mt-3 flex min-h-[var(--cp-touch-primary)] w-full items-center justify-center rounded-xl bg-[var(--cp-primary)] px-4 text-[15px] font-semibold text-white hover:opacity-90 md:hidden">
-            Open Session
+            Resume Session
           </Link>
           {error && <p role="alert" className="mt-2 text-[12px] text-[var(--cmp-text-critical)]">{error}</p>}
         </div>
@@ -315,11 +320,15 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
                   {/* s6 row 3 promises a Start OR Open action. A caller without the plan-write
                       capability cannot start, so their action is the Open -- the same unconditional
                       planner door the desktop handoff card already offers everyone. */}
+                  {/* CPR-CC-MOB-001 s9: "Start Planned Session", not "Start". The bare verb sat under a
+                      title, a time and a location and could plausibly have started any of them, or
+                      something new -- on the one control that begins clinical state. Naming what it
+                      starts is what makes it safe to tap without re-reading the card above it. */}
                   {canPlan ? (
                     <button type="button" disabled={busy !== null}
                       onClick={() => post({ action: "start", id: next.id }, next.id)}
                       className="mt-2.5 flex min-h-[var(--cp-touch-primary)] w-full items-center justify-center rounded-xl bg-[var(--cp-primary)] px-4 text-[15px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
-                      {busy === next.id ? "Starting…" : "Start"}
+                      {busy === next.id ? "Starting…" : "Start Planned Session"}
                     </button>
                   ) : (
                     <Link href="/practice/calendar"
