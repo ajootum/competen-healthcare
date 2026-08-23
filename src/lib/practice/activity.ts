@@ -58,6 +58,12 @@ export type PlannedActivity = {
   room: string | null;
   facilityName: string | null;
   locationName: string | null;
+  /**
+   * Exposed so a screen can PRESELECT the current place when correcting it (setActivityLocation).
+   * The name alone cannot do that: two sites can share a name, and matching a picker by label is how a
+   * correction quietly moves a session to the wrong one.
+   */
+  locationId: string | null;
   planDate: string;
   plannedStartMinute: number;
   plannedEndMinute: number;
@@ -117,6 +123,7 @@ function shape(row: any, nowMs: number): PlannedActivity {
     room: row.room ?? null,
     facilityName: row.practice_facility?.name ?? null,
     locationName: row.practice_location?.name ?? null,
+    locationId: row.location_id ?? null,
     planDate: row.plan_date,
     plannedStartMinute: row.planned_start_minute,
     plannedEndMinute: row.planned_end_minute,
@@ -167,8 +174,12 @@ export async function todaysPlan(
   if (!ctx.capabilities.includes(CAN_VIEW)) return { ...empty, unavailable: true };
 
   const { data, error } = await admin.from("practice_activity")
+    // ⚠ location_id AS WELL AS THE JOIN, and the two are not the same thing. The join yields the NAME
+    // for display; the column yields the ID a picker preselects with. Adding the field to the type
+    // without adding the column here would have made locationId null on every row -- a field that
+    // exists, type-checks, and is always empty, which is the shape of defect this repo keeps finding.
     .select("id, activity_type, title, room, plan_date, planned_start_minute, planned_end_minute, " +
-      "started_at, ended_at, practice_facility:facility_id(name), practice_location:location_id(name)")
+      "started_at, ended_at, location_id, practice_facility:facility_id(name), practice_location:location_id(name)")
     .eq("workspace_id", ctx.workspaceId)
     .eq("practitioner_id", ctx.userId)
     .eq("plan_date", date)

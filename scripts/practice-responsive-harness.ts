@@ -849,6 +849,43 @@ if (existsSync(DOC)) {
   // because a table was briefly unreadable has traded a small wrong for a large one.
   ok("9z-l an unreadable location table allows the start rather than blocking the day",
     /!locError && \(locs \?\? \[\]\)\.length > 0/.test(actCode));
+
+  // ── THE CORRECTION CONTROL ON THE SESSION CARD ──────────────────────────────────────────────
+  //
+  // ⚠ A MANDATORY FIELD THE CARD DID NOT DISPLAY. The running card read label · facility · room and
+  // skipped location -- the one field startActivity was just made to require. The product insisted on
+  // a value at the door and never showed it back, so nobody could notice it was wrong. Showing it is
+  // half the fix; the other half is being able to correct it without ending the clinic.
+  ok("9z-m the running card shows the location it now insists on",
+    startCode.includes("[a.label, a.locationName, a.facilityName, a.room]"));
+
+  ok("9z-n and offers a control to correct it",
+    startCode.includes("setPlaceFor(a.id)") && startCode.includes('action: "set_location"'));
+
+  // ⚠ set_location, NEVER plan. Correcting where a RUNNING session is happening must not create a
+  // second activity or end and restart the live one -- a clinic with patients in it does not survive
+  // being reopened to fix a typo.
+  // ⚠ ANCHORED ON CODE, NOT ON A COMMENT. The first version sliced to `// ── RUNNING`, which strip()
+  // had already removed -- indexOf returned -1, the slice collapsed, and the assertion failed against
+  // correct code. Anchoring a scan on something the scan itself deletes is a self-defeating test.
+  const dialog = startCode.slice(startCode.indexOf("const placeDialog"), startCode.indexOf("if (metrics) {"));
+  ok("9z-o the correction amends in place rather than re-planning",
+    dialog.length > 0 && dialog.includes('action: "set_location"')
+    && !dialog.includes('action: "plan"') && !dialog.includes('action: "end"'),
+    dialog.trim().slice(0, 120));
+
+  ok("9z-p it cannot save an empty location",
+    dialog.includes("disabled={busy !== null || !placeValue}"));
+
+  // The picker preselects the CURRENT place, which needs the id and not the name -- two sites can
+  // share a name, and matching by label is how a correction quietly moves a session to the wrong one.
+  // The select is a concatenation across two string literals, so a single [^"]* cannot span it -- the
+  // first attempt here matched nothing for that reason and reported a real column as missing. Matching
+  // the fragment that actually carries the column is both simpler and harder to get wrong.
+  ok("9z-q the picker preselects by id, and the id is really selected from the table",
+    startCode.includes("setPlaceValue(a.locationId") && actCode.includes("locationId: row.location_id")
+    && actCode.includes("started_at, ended_at, location_id,"),
+    "a locationId field with no location_id column would be null on every row");
 }
 
 // ---------------------------------------------------------------------------------------------
