@@ -143,3 +143,83 @@ The engineering statement §13 asks for is accurate as written and unchanged by 
 > *The current schema prevents execution of the intended Practice deletion lifecycle. This is a
 > privacy/deletion-capability defect and must be corrected before Competen claims the Practice deletion
 > obligation is operationally supported.*
+
+---
+
+# Addendum — §3 FK topology under `practice_workspace`
+
+**Measured:** 2026-08-23, staging catalog, read-only (`scripts/cpr-del-001-topology.mjs`)
+
+## The shape of a practice deletion
+
+A delete of one `practice_workspace` row would **cascade into 183 tables**. 133 further edges are
+`SET NULL` — those rows survive with a nulled reference, which is a deliberate design and not a blocker.
+
+**Eight distinct blockers abort it.** Not thirty-seven, and the difference is the point.
+
+## Why the raw count is wrong, and what corrects it
+
+A first pass counted every `RESTRICT` and `NO ACTION` edge and reported **37**. That overstates it about
+fourfold, because the two actions do not behave alike:
+
+- **`NO ACTION`** is checked at the **end of the statement**. If the referencing row is *also* removed by
+  the same cascade, nothing is left pointing anywhere and the constraint passes. Most of these edges are
+  between two tables the cascade deletes together — `practice_parameter_measurement` →
+  `practice_parameter_definition`, `practice_form_answer` → `practice_form_field`, and so on. **Benign.**
+- **`RESTRICT`** does not wait. It refuses the parent delete while any referencing row exists at that
+  instant, *even one the cascade is about to remove*.
+
+So a `NO ACTION` edge blocks only when its child is **unreachable** from the cascade — which cannot be
+known until the whole graph is walked. That reachability pass is what takes 37 to 8.
+
+## The eight
+
+| # | Table | Blocker | Reading |
+|---|---|---|---|
+| 1 | `practice_lifecycle_transition` | `NO ACTION` on `workspace_id` | table unreachable by cascade — **the brake from §247** |
+| 2 | `practice_lifecycle_transition` | `NO ACTION` on `actor_membership_id` | same table, second edge |
+| 3 | `practice_patient_identifier` | `RESTRICT` → `practice_facility` | reference-data protection |
+| 4 | `practice_encounter_identifier` | `RESTRICT` → `practice_facility` | reference-data protection |
+| 5 | `practice_patient_pathway_stage` | `RESTRICT` → `practice_pathway_stage` | reference-data protection |
+| 6 | `practice_patient_pathway` | `RESTRICT` → `practice_pathway_template` | reference-data protection |
+| 7 | `practice_invoice_item` | `RESTRICT` → `practice_charge` | financial evidence |
+| 8 | `practice_invoice_item` | `practice_invoice_item_frozen_guard` | refuses once the invoice leaves DRAFT |
+
+## What this changes about the recommendation
+
+**Five of the eight are `RESTRICT` edges onto reference data the cascade is itself deleting** — facility,
+pathway stage, pathway template, charge. That is not an accident and not a defect. `RESTRICT` is how this
+schema protects a config row from vanishing while something still points at it.
+
+A pure database cascade **cannot** satisfy them, in any ordering, because `RESTRICT` refuses before the
+cascade gets to the child. They can only be satisfied by deleting in a **deliberate order**: identifiers
+before facilities, patient pathways before templates, invoice items before charges.
+
+Which is exactly what migration 247 anticipated when it kept its brake:
+
+> *"…while still permitting a full cascade if one is ever built to run in the right order."*
+
+**So the schema already assumes an ordered deletion service rather than a single `DELETE`.** That tilts
+the §4 Class D question on `practice_lifecycle_transition` toward reading (1) — the brake stays, and a
+governed service removes children in order — because reading (2) (make the FK `CASCADE`) would still
+leave five `RESTRICT` edges that no cascade can pass.
+
+This is a finding, not an authorisation. It narrows the decision; it does not make it.
+
+## Consequence for migration 351
+
+**A trigger-only migration cannot deliver practice deletion.** Relaxing
+`practice_invoice_item_frozen_guard` and `practice_lifecycle_transition_immutable` would leave five
+`RESTRICT` edges intact and the delete would still abort — with the added risk of *looking* fixed.
+
+What the evidence now supports:
+
+1. §6's **authorized deletion path is the deliverable**, not the migration. It must delete in dependency
+   order, and the topology above is its order of operations.
+2. Migration 351 shrinks to whatever that service genuinely cannot do for itself — on current evidence,
+   the two immutability triggers, and only where §4 authorises them.
+3. The §10 ratchet should assert **this walk**, not a trigger inventory: *no `RESTRICT` or unreachable
+   `NO ACTION` edge under `practice_workspace` without a documented exception.*
+
+Still unmeasured, and still required by §3: **direct and cascade DELETE are not demonstrated.** Everything
+above is static analysis of the catalog. The §9 staging fixture is what would prove it.
