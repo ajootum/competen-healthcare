@@ -538,6 +538,111 @@ export async function startActivity(
   return { ok: true, value: { id, endedPrevious: running.id, eventWarnings } };
 }
 
+/**
+ * Correct where a session happened.
+ *
+ * ── WHY THIS EXISTS ────────────────────────────────────────────────────────────────────────────────
+ *
+ * planActivity records a location at creation and, until now, nothing could amend one. moveActivity
+ * takes a date and two minutes; every other mutation here changes state, not place. So a practice that
+ * picked the wrong location, or captured none before the requirement existed, had no way to put it
+ * right through the product -- and on 2026-08-23 three ended sessions in the live estate had to be
+ * corrected by a script written for the purpose. That is the gap this closes.
+ *
+ * It matters more since startActivity began REQUIRING a location: a rule that makes a field mandatory
+ * and offers no way to amend it turns one wrong pick at a confirmation dialog into a permanent record.
+ * A mandatory field without an edit path is a trap, not a control.
+ *
+ * ── WHAT IT REFUSES, AND WHAT IT DELIBERATELY DOES NOT ─────────────────────────────────────────────
+ *
+ *   cancelled   REFUSED. A cancelled activity is not a session that happened anywhere, so recording
+ *               where it happened is recording a fact about nothing.
+ *   ended       ALLOWED, and it is the case that prompted this. Correcting the past is the whole point.
+ *   running     ALLOWED. Realising mid-clinic that the wrong site was picked is exactly when somebody
+ *               notices, and making them wait until it ends would guarantee they forget.
+ *   planned     ALLOWED, obviously.
+ *
+ * ⚠ IT WILL NOT CLEAR A LOCATION. `locationId` is required and may not be null. startActivity refuses
+ * to run a session with no location once a practice has any, so an engine that could blank one would
+ * be a way back into the state that invariant exists to prevent -- reachable, ironically, only after
+ * the session had already satisfied it. Setting a DIFFERENT location is the correction; there is no
+ * use for un-recording a place.
+ *
+ * ⚠ AN INACTIVE LOCATION IS ACCEPTED. Deactivation is about what a picker should OFFER, not about
+ * where a clinic was held: a session genuinely run at a site since closed must still be recordable, or
+ * the honest answer becomes unrepresentable and a blank is left instead. The refusal is only for a
+ * location belonging to a different practice.
+ */
+export async function setActivityLocation(
+  admin: any, ctx: WorkspaceContext, id: string,
+  input: { locationId: string; reason?: string | null },
+  opts: { source?: EventSource; correlationId?: string } = {},
+): Promise<Result<{ id: string; locationId: string; previousLocationId: string | null }>> {
+  if (!ctx.capabilities.includes(CAN_PLAN))
+    return { ok: false, status: 403, code: "FORBIDDEN", message: `${CAN_PLAN} is required` };
+
+  const locationId = String(input.locationId ?? "").trim();
+  if (!locationId)
+    return {
+      ok: false, status: 400, code: "VALIDATION_ERROR",
+      message: "choose a location — this corrects where a session happened and cannot un-record one",
+    };
+
+  const { row, error } = await loadOwn(admin, ctx, id);
+  if (error) return { ok: false, status: 500, code: "READ_FAILED", message: error.message };
+  if (!row) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  if (row.cancelled_at)
+    return {
+      ok: false, status: 422, code: "CANCELLED",
+      message: "that activity was cancelled, so it did not happen anywhere",
+    };
+
+  // ⚠ SCOPED TO THIS WORKSPACE, AND THE COLUMN CANNOT DO IT FOR US. practice_activity.location_id is a
+  // uuid; nothing in the schema stops another practice's location id being written into it, and the
+  // same hole is documented on practice_booking_access.visible_location_ids. An id that resolves to no
+  // row HERE is refused as unknown rather than written and discovered later by a report that renders
+  // somebody else's clinic name.
+  const { data: loc, error: locError } = await admin.from("practice_location")
+    .select("id, name, active").eq("id", locationId).eq("workspace_id", ctx.workspaceId).maybeSingle();
+  if (locError) return { ok: false, status: 500, code: "READ_FAILED", message: locError.message };
+  if (!loc)
+    return { ok: false, status: 404, code: "UNKNOWN_LOCATION", message: "that location is not one of this practice's" };
+
+  const previousLocationId: string | null = (row.location_id as string | null) ?? null;
+  if (previousLocationId === locationId)
+    // Not an error: asking for the value it already has is a no-op, and reporting failure would make a
+    // double-tap look like a problem. It writes no audit entry either -- a trail of changes that did
+    // not change anything is a trail nobody reads.
+    return { ok: true, value: { id, locationId, previousLocationId } };
+
+  const { data: updated, error: updateError } = await admin.from("practice_activity")
+    .update({ location_id: locationId, updated_at: new Date().toISOString() })
+    .eq("id", id).eq("workspace_id", ctx.workspaceId).select("id");
+  if (updateError) return { ok: false, status: 400, code: "WRITE_FAILED", message: updateError.message };
+  // ⚠ NO ERROR IS NOT A ROW CHANGED. This repo has shipped silent write failures by believing it twice.
+  if (!updated || updated.length === 0)
+    return { ok: false, status: 409, code: "NOT_WRITTEN", message: "that activity changed underneath you; reload and try again" };
+
+  // ⚠ THE PREVIOUS VALUE IS IN THE PAYLOAD, AND `wasBlank` IS THE FIELD THAT MATTERS. Filling a blank
+  // afterwards and overwriting a recorded place are different acts with different weight: one is
+  // completing a record, the other is contradicting it. A reader six months later cannot tell them
+  // apart from the new value alone.
+  await audit(admin, {
+    workspaceId: ctx.workspaceId, actorId: ctx.userId,
+    eventType: "practice.activity_location_set",
+    payload: {
+      activityId: id, locationId, locationName: loc.name as string,
+      previousLocationId, wasBlank: previousLocationId === null,
+      correctedAfterEnd: !!row.ended_at,
+      locationInactive: loc.active === false,
+      reason: input.reason?.trim() || null,
+    },
+    correlationId: opts.correlationId, source: opts.source ?? "web",
+  });
+
+  return { ok: true, value: { id, locationId, previousLocationId } };
+}
+
 /** End the activity. The plan is not rewritten to match: overrunning is recorded, not corrected. */
 export async function endActivity(
   admin: any, ctx: WorkspaceContext, id: string,

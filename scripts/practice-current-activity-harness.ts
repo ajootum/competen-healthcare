@@ -17,7 +17,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { loadEnvConfig } from "@next/env";
 import {
-  todaysPlan, planActivity, startActivity, endActivity, activityState, ACTIVITY_TYPES,
+  todaysPlan, planActivity, startActivity, endActivity, setActivityLocation, activityState, ACTIVITY_TYPES,
   ACTIVITY_CAPABILITIES,
 } from "../src/lib/practice/activity";
 import { todaysWork, TODAYS_WORK_CAPABILITIES } from "../src/lib/practice/todays-work";
@@ -862,6 +862,105 @@ async function main() {
   ok("12g-control. and the cancelled row is still IN THE TABLE -- voided, never deleted (CORE-001 s13)",
     !(timelineRows ?? []).some((r: { id: string }) => r.id === cancelledId)
     && (await admin.from("practice_activity").select("id").eq("id", cancelledId).maybeSingle()).data !== null);
+
+  // ── 13. setActivityLocation: CORRECTING WHERE A SESSION HAPPENED ───────────────────────────────
+  //
+  // Built 2026-08-23 because nothing could amend a location and three ended sessions in the live estate
+  // had to be corrected by a one-off script. It matters more since startActivity began REQUIRING a
+  // location: a mandatory field with no edit path turns one wrong pick into a permanent record.
+  //
+  // ⚠ EVERY REFUSAL BELOW IS PAIRED WITH A CONTROL, per this file's own rule at the top: a refusal
+  // assertion with no control passes just as well against a function that refuses everything.
+  // ⚠ THE FIXTURE IS ASSERTED BEFORE IT IS USED. A failed insert here would leave every assertion below
+  // comparing undefined against undefined, and several of them would pass -- a refusal test cannot tell
+  // "refused correctly" from "was never given anything to refuse".
+  const mkLoc = async (workspaceId: string, name: string, active: boolean): Promise<string> => {
+    const r = await admin.from("practice_location")
+      .insert({ workspace_id: workspaceId, name, type: "clinic", active }).select("id").single();
+    if (r.error || !r.data?.id) throw new Error(`fixture location "${name}" was not created: ${r.error?.message ?? "no row"}`);
+    return r.data.id as string;
+  };
+  const locA = await mkLoc(ctxA.workspaceId, "Harness Site One", true);
+  const locB = await mkLoc(ctxA.workspaceId, "Harness Site Two", false);
+  const foreign = await mkLoc(ctxB.workspaceId, "Another Practice's Site", true);
+
+  const toCorrect = await plan(ctxA, "Session needing a place", 14 * 60, 15 * 60);
+  ok("13a. an activity can be planned with no location, which is the state this engine exists for",
+    toCorrect.ok === true);
+  const correctId = (toCorrect as any).value.id as string;
+
+  const set1 = await setActivityLocation(admin, ctxA, correctId, { locationId: locA });
+  ok("13b. a location can be set on a planned activity",
+    set1.ok === true && (set1 as any).value?.previousLocationId === null,
+    JSON.stringify(set1));
+
+  const reread = await admin.from("practice_activity").select("location_id").eq("id", correctId).maybeSingle();
+  ok("13b-control. and the row really carries it -- not merely an ok result",
+    reread.data?.location_id === locA);
+
+  // ⚠ THE CROSS-TENANT ONE. practice_activity.location_id is a bare uuid with nothing in the schema
+  // stopping another practice's id being written into it.
+  const cross = await setActivityLocation(admin, ctxA, correctId, { locationId: foreign });
+  ok("13c. a location belonging to ANOTHER practice is refused",
+    cross.ok === false && (cross as any).code === "UNKNOWN_LOCATION", JSON.stringify(cross));
+
+  const still = await admin.from("practice_activity").select("location_id").eq("id", correctId).maybeSingle();
+  ok("13c-control. and the refusal wrote nothing -- the original location stands",
+    still.data?.location_id === locA);
+
+  // Deactivation governs what a picker OFFERS, not where a clinic was held.
+  const inactive = await setActivityLocation(admin, ctxA, correctId, { locationId: locB });
+  ok("13d. an INACTIVE location is accepted, so a session at a closed site stays recordable",
+    inactive.ok === true, JSON.stringify(inactive));
+
+  ok("13e. clearing a location is refused -- there is no use for un-recording a place",
+    (await setActivityLocation(admin, ctxA, correctId, { locationId: "" })).ok === false);
+
+  // Idempotence, and it must not write a trail entry for a change that changed nothing.
+  const before13f = await admin.from("practice_audit_event")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", ctxA.workspaceId).eq("event_type", "practice.activity_location_set");
+  const same = await setActivityLocation(admin, ctxA, correctId, { locationId: locB });
+  const after13f = await admin.from("practice_audit_event")
+    .select("id", { count: "exact", head: true })
+    .eq("workspace_id", ctxA.workspaceId).eq("event_type", "practice.activity_location_set");
+  ok("13f. setting the value it already has succeeds and writes no audit entry",
+    same.ok === true && (before13f.count ?? 0) === (after13f.count ?? 0),
+    `${before13f.count} -> ${after13f.count}`);
+
+  // The case that prompted the engine: correcting a session that is already over.
+  //
+  // ⚠ IT MUST BE GIVEN A LOCATION BEFORE IT CAN START, and the first version of this block was not --
+  // it planned a location-less activity and called startActivity, which REFUSED with LOCATION_REQUIRED
+  // because the fixture above had just given this practice its first locations. The activity therefore
+  // never ran, never ended, and 13i went red looking for a correction-after-end that had not happened.
+  // That is the 2026-08-23 invariant working exactly as written, caught by a test that had not been
+  // told about it -- so the sequence below is the real one: locate, start, end, then CORRECT.
+  const past = await plan(ctxA, "Session already over", 6 * 60, 7 * 60);
+  const pastId = (past as any).value.id as string;
+  const located = await setActivityLocation(admin, ctxA, pastId, { locationId: locA });
+  ok("13g-pre. it takes a location first, because a session with none cannot start at all",
+    located.ok === true, JSON.stringify(located));
+  const startedPast = await startActivity(admin, ctxA, pastId);
+  ok("13g-pre2. and with one it starts",
+    startedPast.ok === true, JSON.stringify(startedPast));
+  await endActivity(admin, ctxA, pastId);
+  const corrected = await setActivityLocation(admin, ctxA, pastId, { locationId: locB });
+  ok("13g. an ENDED session can be corrected -- the case this engine was built for",
+    corrected.ok === true, JSON.stringify(corrected));
+
+  // ⚠ wasBlank IS THE FIELD THAT MATTERS. Filling a blank and overwriting a recorded place are
+  // different acts, and the new value alone cannot tell them apart six months later.
+  const trail = await admin.from("practice_audit_event")
+    .select("payload").eq("workspace_id", ctxA.workspaceId)
+    .eq("event_type", "practice.activity_location_set");
+  const payloads = ((trail.data ?? []) as any[]).map(r => r.payload);
+  ok("13h. the trail distinguishes filling a blank from overwriting a place",
+    payloads.some(p => p?.wasBlank === true) && payloads.some(p => p?.wasBlank === false),
+    JSON.stringify(payloads.map(p => ({ blank: p?.wasBlank, after: p?.correctedAfterEnd }))));
+
+  ok("13i. and it records that the correction came after the session ended",
+    payloads.some(p => p?.correctedAfterEnd === true));
 
   await cleanup(userA, userB);
   report();

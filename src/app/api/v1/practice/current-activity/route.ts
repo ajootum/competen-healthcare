@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import {
-  todaysPlan, planActivity, startActivity, endActivity, pauseActivity, resumeActivity, sessionSummary,
+  todaysPlan, planActivity, startActivity, endActivity, pauseActivity, setActivityLocation, resumeActivity, sessionSummary,
 } from "@/lib/practice/activity";
 
 // GET  /api/v1/practice/current-activity  -- today's plan and what is running in it.
 // GET  /api/v1/practice/current-activity?summary=<activityId>  -- CPR-V5-004's "Generate Summary".
 // POST /api/v1/practice/current-activity
-//      -- { action: "plan" | "start" | "pause" | "resume" | "end", ... }
+//      -- { action: "plan" | "start" | "pause" | "resume" | "end" | "set_location", ... }
 //
 // PAUSE AND RESUME LIVE HERE, NOT ON A ROUTE OF THEIR OWN. CPR-V5-004's lifecycle is one thing with six
 // rungs, and the screen that draws Start also draws Pause -- splitting them across endpoints would give
@@ -67,6 +67,14 @@ export async function POST(req: NextRequest) {
           { reason: typeof body.reason === "string" ? body.reason : undefined, correlationId: auth.caller.traceId })
           : body.action === "resume" ? await resumeActivity(admin, auth.ctx, String(body.id ?? ""), { correlationId: auth.caller.traceId })
             : body.action === "end" ? await endActivity(admin, auth.ctx, String(body.id ?? ""), { correlationId: auth.caller.traceId })
+              // Correcting where a session happened. A separate action rather than a field on `plan`,
+              // because it applies to an activity that ALREADY EXISTS and often to one that is already
+              // over -- and because a correction deserves its own audit event and its own refusals.
+              : body.action === "set_location"
+                ? await setActivityLocation(admin, auth.ctx, String(body.id ?? ""), {
+                  locationId: String(body.locationId ?? ""),
+                  reason: typeof body.reason === "string" ? body.reason : null,
+                }, { correlationId: auth.caller.traceId })
               : { ok: false as const, status: 400, code: "UNKNOWN_ACTION", message: `no such action: ${body.action}` };
 
   if (!result.ok)
