@@ -55,7 +55,20 @@ function useDismiss(open: boolean, close: () => void, triggerRef: React.RefObjec
 }
 
 const CONTROL = "inline-flex items-center gap-1.5 h-9 px-2.5 rounded-lg text-[13px] text-gray-600 hover:bg-gray-100 transition-colors";
-const PANEL = "absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-50";
+// ⚠ max-h AND overflow-y-auto ARE LOAD-BEARING, NOT POLISH.
+//
+// This panel had neither, and its height is DATA-DRIVEN: the workspace menu renders one row per
+// workspace the person holds. Somebody with a handful sees a tidy menu; somebody with sixteen -- an
+// estate admin who is also an educator, a nurse, an assessor and holds an HQ appointment -- gets a
+// panel taller than the viewport.
+//
+// AND THE HEADER IS `sticky top-0`, so the overflow could not be scrolled to. The panel is anchored to
+// a header that stays at the top of the screen, so scrolling the page moves the panel with it and the
+// entries below the fold stay below the fold FOREVER. They were not hard to reach; they were
+// unreachable, by any input, with no visual cue that anything had been cut off.
+//
+// overscroll-contain stops a scroll that reaches the end of the menu from scrolling the page behind it.
+const PANEL = "absolute right-0 top-full mt-1 w-64 max-h-[70vh] overflow-y-auto overscroll-contain bg-white border border-gray-200 rounded-xl shadow-lg py-1 z-50";
 
 function Badge({ n }: { n: number }) {
   if (!n) return null;
