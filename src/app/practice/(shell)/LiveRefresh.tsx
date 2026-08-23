@@ -53,6 +53,15 @@ import { offlineFreshness } from "@/lib/practice/offline-projection";
 
 /** s12's fallback window. The slow end of 30-60s: this is a whole-page re-render, not a delta. */
 const POLL_MS = 45_000;
+/**
+ * How long a page may go without a successful re-read before it stops calling itself current.
+ *
+ * TWO POLL INTERVALS, NOT ONE. A single missed poll is a slow request or a tab the browser throttled
+ * while it was in the background; escalating on that would put a red badge on every phone that had been
+ * in a pocket. Two consecutive misses is a pattern, and 112 seconds is still well inside the window in
+ * which a practitioner would want to know that what they are reading has stopped moving.
+ */
+const STALE_AFTER_MS = POLL_MS * 2.5;
 /** Events arrive in bursts -- a completion emits several -- so refreshes are coalesced. */
 const COALESCE_MS = 400;
 /** How often the offline badge re-reads its own age, so the label escalates while the tab is left open. */
@@ -160,34 +169,77 @@ export default function LiveRefresh({ asOf, timezone }: { asOf?: string; timezon
   // when the tab lost its connection, which is precisely the "8 minutes and 8 hours look identical"
   // failure this state exists to prevent.
   void tick;
-  const stale = mode === "offline" && asOf ? offlineFreshness(asOf, timezone ?? "UTC", new Date()) : null;
 
-  const label = mode === "live" ? "Live"
+  // ── A REFRESH THAT NEVER LANDS (CPR-CC-MOB-001 s6, "never label it Live") ──────────────────────
+  //
+  // ⚠ EVERY STATE ABOVE IS ABOUT THE TRANSPORT, AND NONE OF THEM IS ABOUT THE DATA. `live` means the
+  // EventSource is open; `polling` means it is not; `offline` means navigator says there is no network.
+  // A server returning 500 to every re-read satisfies none of those: the socket is fine, navigator is
+  // happy, and the badge says Live over a page that has not been re-read since it was opened.
+  //
+  // router.refresh() is fire-and-forget -- it returns nothing, resolves nothing, and throws nothing a
+  // caller can see -- so a failed refresh cannot be observed at the call site. What CAN be observed is
+  // its effect: `asOf` is the server's render instant (dashboard.ts, `asOf: at.toISOString()`), so a
+  // re-read that lands necessarily brings a new one. The poll runs ALONGSIDE the stream in every mode,
+  // every POLL_MS -- so in every mode, a stalled `asOf` means the re-reads are not arriving.
+  //
+  // Two intervals, not one, before it says so: a single missed poll is a slow request or a throttled
+  // tab, and calling that stale would cry wolf at every red light.
+  const asOfSeenAt = useRef<number>(Date.now());
+  const lastAsOf = useRef<string | undefined>(asOf);
+  if (asOf !== lastAsOf.current) { lastAsOf.current = asOf; asOfSeenAt.current = Date.now(); }
+  const notReRead = Date.now() - asOfSeenAt.current > STALE_AFTER_MS;
+
+  // Offline already had this reading and keeps it. The addition is that a page nobody could re-read is
+  // now described the same way whether the cause was the network or the server -- because to the person
+  // reading it, those are the same fact: what is on screen is older than it looks.
+  const stale = (mode === "offline" || notReRead) && asOf
+    ? offlineFreshness(asOf, timezone ?? "UTC", new Date())
+    : null;
+
+  // ⚠ notReRead OUTRANKS live AND polling, and that ordering is the whole fix. Both of those words are
+  // claims about currency -- "Live" says this is now, "Updating every 45s" says it will be shortly --
+  // and neither is true of a page whose re-reads are failing. Offline still wins over both, because it
+  // is the more specific diagnosis of the same fact.
+  const label = mode === "offline" ? (stale ? `Offline — showing ${stale.atLabel}` : "Offline")
+    : notReRead ? (stale ? `Not updating — showing ${stale.atLabel}` : "Not updating")
+    : mode === "live" ? "Live"
     : mode === "polling" ? "Updating every 45s"
-    : mode === "offline" ? (stale ? `Offline — showing ${stale.atLabel}` : "Offline")
     : "Connecting";
 
   // Offline is NOT amber. Amber is `polling`, which means degraded but current; these must never look
   // alike, and the offline tone deepens with age.
-  const tone = mode === "live" ? "bg-emerald-100 text-emerald-700"
+  // Not-updating takes the offline palette rather than amber: amber is `polling`, which means degraded
+  // but CURRENT, and this is the one thing amber must never be confused with. It deepens with age
+  // through the same bands, because eight minutes and eight hours are not the same warning.
+  const agedTone = stale?.band === "stale" ? "bg-red-200 text-red-900"
+    : stale?.band === "ageing" ? "bg-orange-100 text-orange-800" : "bg-red-100 text-red-700";
+
+  const tone = mode === "offline" ? agedTone
+    : notReRead ? agedTone
+    : mode === "live" ? "bg-emerald-100 text-emerald-700"
     : mode === "polling" ? "bg-amber-100 text-amber-700"
-    : mode === "offline"
-      ? (stale?.band === "stale" ? "bg-red-200 text-red-900"
-        : stale?.band === "ageing" ? "bg-orange-100 text-orange-800" : "bg-red-100 text-red-700")
     : "bg-slate-100 text-slate-500";
 
-  const dot = mode === "live" ? "bg-emerald-500"
-    : mode === "polling" ? "bg-amber-500"
-    : mode === "offline" ? "bg-red-500" : "bg-slate-400";
+  const dot = mode === "offline" || notReRead ? "bg-red-500"
+    : mode === "live" ? "bg-emerald-500"
+    : mode === "polling" ? "bg-amber-500" : "bg-slate-400";
 
-  const title = mode === "live"
-    ? "Connected to the practice event stream. Cards update as things happen."
-    : mode === "polling"
-      ? "The event stream is not connected, so this page re-reads every 45 seconds instead."
-      : mode === "offline"
-        ? (stale
-          ? `${stale.sentence} Nothing on this page has been re-read since then.`
-          : "This device has no connection, so nothing on this page has been re-read since it was opened.")
+  const title = mode === "offline"
+    ? (stale
+      ? `${stale.sentence} Nothing on this page has been re-read since then.`
+      : "This device has no connection, so nothing on this page has been re-read since it was opened.")
+    : notReRead
+      // Deliberately does not guess WHY. From in here a server error, a signed-out session and a proxy
+      // eating the request are indistinguishable, and naming the wrong cause is worse than naming none:
+      // it sends somebody to check their wifi when their session has expired.
+      ? (stale
+        ? `${stale.sentence} This page has asked for newer figures and not received any, so what you see is older than it looks.`
+        : "This page has asked for newer figures and not received any, so what you see is older than it looks.")
+    : mode === "live"
+      ? "Connected to the practice event stream. Cards update as things happen."
+      : mode === "polling"
+        ? "The event stream is not connected, so this page re-reads every 45 seconds instead."
         : "Connecting to the practice event stream.";
 
   return (

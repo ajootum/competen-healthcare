@@ -262,6 +262,49 @@ async function main() {
   ok("3d. and the screen reaches it only through the record, never through the row",
     !/\brow\.visitKind\b/.test(readerSrc) && /\bdetail\.visitKind\b/.test(readerSrc));
 
+  // ── 3e-3j. A REFRESH THAT NEVER LANDS MUST NOT STILL SAY "Live" ──────────────────────────────
+  //
+  // CPR-CC-MOB-001 s6: "never label it Live" when a freshness check has failed. LiveRefresh's four
+  // states are all about the TRANSPORT -- stream open, stream shut, navigator offline -- and a server
+  // returning 500 to every re-read satisfies none of them: the socket is fine, navigator is happy, and
+  // the badge says Live over a page that has not been re-read since it was opened.
+  //
+  // ⚠ WHY THE DETECTOR IS `asOf` AND NOT A TRY/CATCH. router.refresh() is fire-and-forget: it returns
+  // nothing, resolves nothing, and throws nothing the caller can see, so a failed refresh is invisible
+  // at the call site. Its EFFECT is observable -- asOf is the server's render instant, so a re-read
+  // that lands brings a new one. Asserted here rather than in the responsive harness because this is a
+  // claim about data freshness, which is this file's subject, not about layout.
+  const live = readFileSync("src/app/practice/(shell)/LiveRefresh.tsx", "utf8");
+  const liveCode = live.replace(/\/\*[\s\S]*?\*\//g, " ")
+    .split("\n").map(l => l.replace(/\/\/.*$/, "")).join("\n");
+
+  ok("3e. the stripper works, so 3f-3j read code and not the paragraphs explaining it",
+    live.includes("fire-and-forget") && !liveCode.includes("fire-and-forget"));
+
+  ok("3f. a stalled asOf is detected at all",
+    liveCode.includes("asOfSeenAt") && liveCode.includes("Date.now() - asOfSeenAt.current > STALE_AFTER_MS"));
+
+  // Two intervals, not one: a single missed poll is a slow request or a throttled tab.
+  ok("3g. and it waits more than one poll interval before saying so",
+    /STALE_AFTER_MS = POLL_MS \* (1\.[5-9]|[2-9])/.test(liveCode));
+
+  // ⚠ THE ORDERING IS THE FIX. "Live" and "Updating every 45s" are both claims about currency; neither
+  // may win over a page whose re-reads are failing.
+  const labelExpr = liveCode.slice(liveCode.indexOf("const label ="), liveCode.indexOf("const agedTone"));
+  ok("3h. not-updating outranks both Live and the polling label",
+    labelExpr.indexOf("notReRead") < labelExpr.indexOf('"Live"')
+    && labelExpr.indexOf("notReRead") < labelExpr.indexOf("Updating every 45s"),
+    labelExpr.trim().slice(0, 140));
+
+  ok("3i. it does not wear the polling colour, which means degraded but CURRENT",
+    liveCode.includes("notReRead ? agedTone") && !/notReRead[^\n]*amber/.test(liveCode));
+
+  // It must not guess WHY: a server error, an expired session and a proxy eating the request are
+  // indistinguishable from the browser, and naming the wrong cause sends somebody to check their wifi.
+  ok("3j. and it explains the effect without inventing a cause",
+    liveCode.includes("older than it looks")
+    && !/notReRead[\s\S]{0,400}(wifi|network is down|server error)/i.test(liveCode));
+
   // ── 4. s3.8.2: EXPIRY AT THE END OF THE CLINIC DAY, IN THE PRACTICE'S TIMEZONE ───────────────────
   //
   // Kampala is UTC+3 all year, so the end of the practice's day is 21:00Z on the same date. Written out
