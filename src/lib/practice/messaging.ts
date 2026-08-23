@@ -28,7 +28,14 @@ import { emailFrom, smsFrom } from "@/lib/notifications/dispatch";
 
 const nowIso = () => new Date().toISOString();
 
-export type MessageKind = "sms" | "email";
+export type MessageKind = "sms" | "email" | "whatsapp";
+
+/**
+ * WHATSAPP IS A KIND, NOT A TRANSPORT FOR SMS. It carries its own consent, its own sender identity, its
+ * own provider and its own refusals. A practice that switched SMS on has not agreed to message patients
+ * on WhatsApp, and a patient who consented to a text has not consented to a business account writing to
+ * them. Folding it into "sms" would make both of those consents unrepresentable.
+ */
 
 /**
  * Which provider, if any.
@@ -39,6 +46,7 @@ export type MessageKind = "sms" | "email";
 export function messagingStatus(): {
   sms: { configured: boolean; provider: string | null; receiptsAvailable: boolean };
   email: { configured: boolean; provider: string | null; receiptsAvailable: boolean };
+  whatsapp: { configured: boolean; provider: string | null; receiptsAvailable: boolean };
 } {
   const twilio = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
   const africas = !!(process.env.AFRICASTALKING_API_KEY && process.env.AFRICASTALKING_USERNAME);
@@ -50,6 +58,7 @@ export function messagingStatus(): {
   // TWILIO_FROM or TWILIO_FROM_NUMBER) so that one value configures both. See their definitions in
   // src/lib/notifications/dispatch.ts for why there were ever two.
   const resend = !!(process.env.RESEND_API_KEY && emailFrom());
+  const whatsapp = !!(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
 
   return {
     sms: {
@@ -60,6 +69,15 @@ export function messagingStatus(): {
       receiptsAvailable: false,
     },
     email: { configured: resend, provider: resend ? "resend" : null, receiptsAvailable: false },
+    // Meta WhatsApp Cloud API. A token without a phone number id cannot send, so both are required --
+    // the same rule the other two channels learned the hard way.
+    whatsapp: {
+      configured: whatsapp,
+      provider: whatsapp ? "whatsapp_cloud" : null,
+      // WhatsApp DOES emit delivery and read receipts, but only to a webhook this deployment does not
+      // host. Reporting true here would make delivery_confirmed_at read as a failure forever.
+      receiptsAvailable: false,
+    },
   };
 }
 
@@ -67,39 +85,56 @@ export function messagingStatus(): {
 
 type TemplateArgs = Record<string, string | number>;
 
+/**
+ * THE WORDS BELOW ARE NOT THE WORDS WHATSAPP SENDS, and that is a fact about WhatsApp rather than a
+ * shortcut taken here. Meta only permits a business to OPEN a conversation with a template it approved
+ * in advance, so what reaches the handset is Meta's stored copy. `body` remains our rendering of the
+ * same template -- the best evidence available, and not a transcript. `whatsapp.template` records which
+ * approved template was invoked so a disputed message can be traced to the version Meta held.
+ *
+ * THE ORDER OF `params` IS THE CONTRACT. Meta addresses variables positionally as {{1}}, {{2}}, so a
+ * reordering here silently swaps a date for a practitioner name on a real patient's phone. The tests
+ * pin the order against the body text for exactly that reason.
+ */
 const TEMPLATES: Record<string, {
   kinds: MessageKind[];
   subject?: (a: TemplateArgs) => string;
   body: (a: TemplateArgs) => string;
+  whatsapp?: { template: string; params: (a: TemplateArgs) => string[] };
 }> = {
   otp_booking: {
-    kinds: ["sms", "email"],
+    kinds: ["sms", "email", "whatsapp"],
     subject: () => "Your booking code",
     // NO PRACTICE NAME, NO PRACTITIONER NAME, NO REASON FOR THE APPOINTMENT. Somebody reading this over
     // a shoulder learns a six-digit number and nothing about the person it was sent to.
     body: a => `${a.code} is your booking code. It expires in ${a.minutes} minutes. Do not share it.`,
+    whatsapp: { template: "otp_booking", params: a => [String(a.code), String(a.minutes)] },
   },
   otp_sign_in: {
-    kinds: ["sms", "email"],
+    kinds: ["sms", "email", "whatsapp"],
     subject: () => "Your sign-in code",
     body: a => `${a.code} is your sign-in code. It expires in ${a.minutes} minutes. Do not share it.`,
+    whatsapp: { template: "otp_sign_in", params: a => [String(a.code), String(a.minutes)] },
   },
   appointment_confirmation: {
-    kinds: ["sms", "email"],
+    kinds: ["sms", "email", "whatsapp"],
     subject: () => "Your appointment",
     // THE DATE AND TIME, AND WHO WITH. Not why -- "your oncology follow-up" on a lock screen is a
     // disclosure the patient did not choose.
     body: a => `Your appointment with ${a.practitioner} is confirmed for ${a.when}.`,
+    whatsapp: { template: "appointment_confirmation", params: a => [String(a.practitioner), String(a.when)] },
   },
   appointment_reminder: {
-    kinds: ["sms", "email"],
+    kinds: ["sms", "email", "whatsapp"],
     subject: () => "Appointment reminder",
     body: a => `Reminder: your appointment with ${a.practitioner} is on ${a.when}.`,
+    whatsapp: { template: "appointment_reminder", params: a => [String(a.practitioner), String(a.when)] },
   },
   appointment_cancelled: {
-    kinds: ["sms", "email"],
+    kinds: ["sms", "email", "whatsapp"],
     subject: () => "Appointment cancelled",
     body: a => `Your appointment with ${a.practitioner} on ${a.when} has been cancelled.`,
+    whatsapp: { template: "appointment_cancelled", params: a => [String(a.practitioner), String(a.when)] },
   },
   invitation_code: {
     kinds: ["email"],
@@ -118,7 +153,7 @@ export async function channelSettings(admin: any, workspaceId: string) {
   const rows = (data ?? []) as any[];
   const status = messagingStatus();
 
-  return (["sms", "email"] as MessageKind[]).map(kind => {
+  return (["sms", "email", "whatsapp"] as MessageKind[]).map(kind => {
     const row = rows.find(r => r.kind === kind);
     return {
       kind,
@@ -143,8 +178,8 @@ export async function setChannel(admin: any, ctx: WorkspaceContext, args: {
 }): Promise<EngineResult<{ enabled: boolean }>> {
   if (!ctx.capabilities.includes("practice.settings.manage"))
     return { ok: false, status: 403, code: "FORBIDDEN", message: "practice.settings.manage is required" };
-  if (args.kind !== "sms" && args.kind !== "email")
-    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "kind must be sms or email" };
+  if (args.kind !== "sms" && args.kind !== "email" && args.kind !== "whatsapp")
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "kind must be sms, email or whatsapp" };
 
   // A CHANNEL WITHOUT A SENDER IDENTITY PHISHES ITS OWN PATIENTS. "Your code is 481920" from an unknown
   // number is indistinguishable from a scam, and teaching patients to trust those is worse than not
@@ -239,6 +274,11 @@ async function refusalFor(admin: any, workspaceId: string, args: {
  */
 export type Transport = (
   kind: MessageKind, destination: string, body: string, subject?: string,
+  // THE WHATSAPP MAPPING IS PART OF THE CONTRACT, not an implementation detail of handOver. An injected
+  // transport that cannot see which template and parameters were chosen cannot assert on them -- and the
+  // positional parameter order is the thing most worth asserting, because swapping two of them puts a
+  // date where a practitioner name belongs on a real patient's phone.
+  wa?: { template: string; params: string[] },
 ) => Promise<{ ok: boolean; providerMessageId?: string; response: string }>;
 
 export async function sendMessage(admin: any, args: {
@@ -276,7 +316,11 @@ export async function sendMessage(admin: any, args: {
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
 
   const status = messagingStatus()[args.kind];
-  const outcome = await (args.transport ?? handOver)(args.kind, args.destination, body, template.subject?.(args.params));
+  // The approved template this send invokes. Null for sms and email, where `body` IS the message.
+  const wa = args.kind === "whatsapp" && template.whatsapp
+    ? { template: template.whatsapp.template, params: template.whatsapp.params(args.params) }
+    : undefined;
+  const outcome = await (args.transport ?? handOver)(args.kind, args.destination, body, template.subject?.(args.params), wa);
 
   await admin.from("practice_message").update({
     status: outcome.ok ? "handed_over" : "failed",
@@ -285,6 +329,9 @@ export async function sendMessage(admin: any, args: {
     provider_message_id: outcome.ok ? outcome.providerMessageId ?? null : null,
     // VERBATIM, both ways. A summarised provider error is one nobody can debug at 7am.
     provider_response: outcome.response,
+    // WHICH APPROVED TEMPLATE WAS INVOKED. Without it practice_message.body would assert wording it
+    // cannot prove was sent, because the text that reached the handset is Meta's copy, not ours.
+    provider_template_name: wa?.template ?? null,
   }).eq("id", row.id);
 
   return { ok: true, data: { messageId: row.id as string, status: outcome.ok ? "handed_over" : "failed" } };
@@ -524,7 +571,12 @@ export async function appointmentNotice(admin: any, args: {
  * A TIMEOUT, BECAUSE SOMEBODY IS WAITING. An OTP is sent while a person watches a spinner; a gateway
  * that hangs must fail in seconds and say so, not hold the request open.
  */
-async function handOver(kind: MessageKind, destination: string, body: string, subject?: string): Promise<{
+async function handOver(
+  kind: MessageKind, destination: string, body: string, subject?: string,
+  // WhatsApp is handed a TEMPLATE NAME and ORDERED PARAMETERS, never `body` -- Meta rejects free
+  // text outside a 24-hour window a patient opened. The other two channels ignore this.
+  wa?: { template: string; params: string[] },
+): Promise<{
   ok: boolean; providerMessageId?: string; response: string;
 }> {
   const status = messagingStatus()[kind];
@@ -560,6 +612,30 @@ async function handOver(kind: MessageKind, destination: string, body: string, su
       });
       const text = await res.text();
       return { ok: res.ok, providerMessageId: safeJson(text)?.SMSMessageData?.Recipients?.[0]?.messageId, response: text.slice(0, 2000) };
+    }
+    if (kind === "whatsapp") {
+      // A whatsapp send with no approved template is refused HERE rather than sent as free text. Meta
+      // would reject it anyway, but the refusal has to be ours: a message that silently becomes a
+      // different shape than the record claims is worse than one that does not go.
+      if (!wa) return { ok: false, response: "no approved WhatsApp template for this purpose" };
+      const res = await fetch(`https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
+        method: "POST", signal: controller.signal,
+        headers: { authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: destination,
+          type: "template",
+          template: {
+            name: wa.template,
+            language: { code: process.env.WHATSAPP_TEMPLATE_LOCALE ?? "en" },
+            components: wa.params.length
+              ? [{ type: "body", parameters: wa.params.map(text => ({ type: "text", text })) }]
+              : [],
+          },
+        }),
+      });
+      const text = await res.text();
+      return { ok: res.ok, providerMessageId: safeJson(text)?.messages?.[0]?.id, response: text.slice(0, 2000) };
     }
     if (kind === "email" && status.provider === "resend") {
       const res = await fetch("https://api.resend.com/emails", {
