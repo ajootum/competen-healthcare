@@ -13,6 +13,7 @@ import OfflineCacheWriter from "../OfflineCacheWriter";
 import { offlineCacheGate } from "@/lib/practice/offline-gate";
 import { BILLING_CAPTURE_CAPABILITIES } from "@/lib/practice/billing-constants";
 import { primaryNav } from "@/lib/practice/navigation";
+import { countLed } from "@/lib/practice/operations-home";
 import { PANEL, GLANCE_SWATCH, QUICK_SWATCH, QUICK_ICON, SEVERITY } from "@/lib/practice/palette";
 import type { Metadata } from "next";
 
@@ -186,9 +187,14 @@ export default async function PracticeCommandCentre() {
                       a `count` and the engine only emits the item at all when that count is above zero -- so
                       the card asserted urgency ("Somebody outside this room is waiting on each of these")
                       while withholding whether that was one person or thirty. Same page already renders
-                      counts elsewhere; nothing pinned their absence here. */}
+                      counts elsewhere; nothing pinned their absence here.
+
+                      CPR-CC-MOB-001 s7 then moved the number to the FRONT. "Overdue follow-ups · 4" is a
+                      category that happens to have a size; "4 overdue follow-ups" is an amount of work,
+                      and it is what a screen reader announces first. countLed() owns the wording, keyed
+                      on the kind, with singular and plural written out -- s11 forbids "1 follow-ups". */}
                   <span className={`block text-[13px] font-semibold leading-snug ${sv.text}`}>
-                    {a.title}{typeof a.count === "number" ? ` · ${a.count}` : ""}
+                    {countLed(a.kind, a.count, a.title)}
                   </span>
                   <span className="block text-[11.5px] leading-snug text-gray-500">{a.detail}</span>
                 </span>
@@ -256,18 +262,27 @@ export default async function PracticeCommandCentre() {
 
   // s6 row 5 -- the optional secondary links, gated by the same capability-filtered nav the sidebar
   // and bottom bar use, so nobody is handed a door their capabilities cannot open.
+  //
+  // ⚠ CPR-CC-MOB-001 MCC-03: PLANNER AND REPORTS WERE TWO EQUAL HALVES OF ONE ROW, and that equality was
+  // the defect. They are not comparable acts: Planner is where the next piece of operational work is
+  // arranged, Reports is formal output a practitioner produces occasionally and rarely from a phone.
+  // Side by side at identical weight, the row said they were the same size of decision.
+  //
+  // Planner keeps the full-width button. Reports becomes a restrained text link beneath it -- s9's
+  // wording, "Reports is secondary and moves to More or Practice Intelligence" -- and it is NOT removed,
+  // because it is still reachable from More and deleting a door somebody uses is not decluttering.
   const mobileLinks = canPlanner || canReports ? (
-    <div className="flex gap-2 md:hidden">
+    <div className="flex flex-col gap-2 md:hidden">
       {canPlanner && (
         <Link href="/practice/calendar"
-          className="flex min-h-[var(--cp-touch)] flex-1 items-center justify-center rounded-xl border border-gray-200 bg-white text-[13px] font-semibold text-[var(--cp-primary-deep)]">
-          Planner →
+          className="flex min-h-[var(--cp-touch)] w-full items-center justify-center rounded-xl border border-gray-200 bg-white text-[13px] font-semibold text-[var(--cp-primary-deep)]">
+          Open Planner →
         </Link>
       )}
       {canReports && (
         <Link href="/practice/reports"
-          className="flex min-h-[var(--cp-touch)] flex-1 items-center justify-center rounded-xl border border-gray-200 bg-white text-[13px] font-semibold text-[var(--cp-primary-deep)]">
-          Reports →
+          className="flex min-h-[var(--cp-touch)] items-center justify-center text-[12px] font-medium text-gray-500 underline underline-offset-2">
+          Reports
         </Link>
       )}
     </div>
@@ -594,9 +609,15 @@ export default async function PracticeCommandCentre() {
                   return (
                     <li key={a.kind}>
                       <Link href={a.href} className={`block rounded-lg border-l-[3px] py-0.5 pl-2.5 group ${sv.border}`}>
-                        {/* The same number as the phone renders -- see the note in the mobile block. */}
+                        {/* ⚠ THE SAME WORDING AS THE PHONE, NOT MERELY THE SAME NUMBER. This card kept
+                            "Overdue follow-ups · 4" for a few minutes after the mobile one moved to
+                            "4 overdue follow-ups", which is the second-call-site miss this repo keeps
+                            making -- and the harness assertion caught it rather than a person. Two label
+                            forms for one item across a breakpoint is drift by construction: AC-14 wants
+                            desktop and mobile showing the same operational state, and a practitioner who
+                            reads both should not have to reconcile two phrasings of one fact. */}
                         <p className={`text-[12px] font-semibold ${sv.text} group-hover:underline`}>
-                          {a.title}{typeof a.count === "number" ? ` · ${a.count}` : ""}
+                          {countLed(a.kind, a.count, a.title)}
                         </p>
                         <p className="text-[11px] leading-snug text-gray-500">{a.detail}</p>
                       </Link>

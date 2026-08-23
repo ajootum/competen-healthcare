@@ -52,6 +52,56 @@ export type AttentionItem = {
 };
 
 /**
+ * CPR-CC-MOB-001 s7: the count-led label, as a noun the count can lead.
+ *
+ * The spec's own avoid/use table: "Overdue follow-ups" -> "4 overdue follow-ups". A heading followed by
+ * a number reads as a category that happens to have a size; a count followed by a noun reads as an
+ * amount of work. The mobile card renders it as the first semantic content, which s6 requires and which
+ * a screen reader then announces first.
+ *
+ * ⚠ TYPED Record<AttentionKind, ...>, SO A NEW KIND CANNOT SHIP WITHOUT ONE. There are fourteen kinds
+ * and five of them are what the phone shows today; the other nine appear for practices configured
+ * differently, and a missing entry would fall back to a bare title exactly where nobody is looking.
+ * The compiler is the reviewer here.
+ *
+ * ⚠ SINGULAR AND PLURAL ARE BOTH WRITTEN OUT. s11: "Never render '1 follow-ups'". English pluralisation
+ * is not a suffix rule -- "1 patient waiting" against "3 patients waiting" moves the s, and
+ * "1 conversation with something new" against "3 conversations with something new" moves it elsewhere in
+ * the phrase. Storing both forms is the only version that survives translation.
+ */
+export const COUNT_LED: Record<AttentionKind, { one: string; many: string }> = {
+  followup_overdue: { one: "overdue follow-up", many: "overdue follow-ups" },
+  followup_due_soon: { one: "follow-up due within 14 days", many: "follow-ups due within 14 days" },
+  encounter_unsigned: { one: "encounter awaiting signature", many: "encounters awaiting signature" },
+  encounter_live: { one: "consultation in progress", many: "consultations in progress" },
+  queue_waiting: { one: "patient waiting", many: "patients waiting" },
+  clinic_remaining: { one: "appointment still to come today", many: "appointments still to come today" },
+  document_unissued: { one: "document not yet issued", many: "documents not yet issued" },
+  consent_not_recorded: { one: "procedure with no consent recorded", many: "procedures with no consent recorded" },
+  task_orphaned: { one: "task nobody can see", many: "tasks nobody can see" },
+  task_overdue: { one: "overdue task", many: "overdue tasks" },
+  task_due: { one: "task coming up", many: "tasks coming up" },
+  incoming_unreviewed: { one: "received document awaiting review", many: "received documents awaiting review" },
+  message_unread: { one: "conversation with something new", many: "conversations with something new" },
+  notification_unread: { one: "new notification", many: "new notifications" },
+};
+
+/**
+ * "4 overdue follow-ups", or the plain title when there is no number to lead with.
+ *
+ * ⚠ A NULL OR ABSENT COUNT FALLS BACK TO THE TITLE RATHER THAN PRINTING A NUMBER. Nothing in this module
+ * emits an item without a count today, but the fallback is the difference between a future unreadable
+ * source rendering "Overdue follow-ups" and it rendering "0 overdue follow-ups" -- and s6 is explicit
+ * that an unavailable category must never be drawn as nought.
+ */
+export function countLed(kind: AttentionKind, count: number | null | undefined, title: string): string {
+  if (typeof count !== "number" || !Number.isFinite(count)) return title;
+  const noun = COUNT_LED[kind];
+  if (!noun) return title;
+  return `${count} ${count === 1 ? noun.one : noun.many}`;
+}
+
+/**
  * The order. First entry is the loudest.
  *
  * The reasoning, once, so nobody re-sorts it on aesthetics: a person waiting on a review the practice

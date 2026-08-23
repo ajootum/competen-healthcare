@@ -540,6 +540,49 @@ if (existsSync(DOC)) {
       && !GRID_1FR.test('<div className="grid lg:grid-cols-2">'));
 }
 
+// ── CPR-CC-MOB-001: THE CORRECTIVE, PINNED ────────────────────────────────────────────────────
+//
+// ⚠ TWO OF THE SEVEN DEFECTS WERE ALREADY FIXED WHEN THE SPECIFICATION ARRIVED, and knowing which
+// mattered more than the code did. MCC-01 (count-less cards) was closed on 2026-08-21 and MCC-06
+// (zero cards visible) has been closed at source for longer -- operationsHome only emits an item when
+// its count exceeds zero. The screenshots the spec was written from predate the first of those, so
+// re-implementing both would have been work that changed nothing while appearing to fix a real
+// report. These assertions hold the closed ones closed and the new ones honest.
+{
+  const ops = readFileSync("src/lib/practice/operations-home.ts", "utf8");
+  const home = readFileSync("src/app/practice/(shell)/home/page.tsx", "utf8");
+
+  // MCC-05 / s7: the count leads. "4 overdue follow-ups", never "Overdue follow-ups · 4".
+  ok("9a MCC-05 the mobile attention card renders a count-led label",
+    home.includes("countLed(a.kind, a.count, a.title)")
+    && !home.includes("` · ${a.count}`"));
+
+  // s11: locale-aware pluralisation. Both forms written out, never a suffix rule.
+  const kinds = [...ops.matchAll(/kind: "([a-z_]+)", severity/g)].map(m => m[1]);
+  const labelled = [...ops.matchAll(/^  ([a-z_]+): \{ one: "/gm)].map(m => m[1]);
+  const missing = [...new Set(kinds)].filter(k => !labelled.includes(k));
+  ok("9b every attention kind emitted has a count-led label",
+    kinds.length > 0 && missing.length === 0, `unlabelled: ${missing.join(", ")}`);
+
+  ok("9c singular and plural are both written out, so '1 follow-ups' is unrepresentable",
+    !/one: "([^"]+)s", many: "\1s"/.test(ops) && ops.includes('one: "patient waiting", many: "patients waiting"'));
+
+  // MCC-03 / s9: Planner is the secondary handoff; Reports is not its equal.
+  ok("9d MCC-03 Planner and Reports are no longer equal-weight halves of one row",
+    home.includes("Open Planner →") && !home.includes("flex gap-2 md:hidden"));
+
+  // ⚠ NOT DELETED. s16: "Do not delete any activity type; use progressive disclosure" is about the
+  // launcher, and the same restraint applies here -- Reports stays reachable, demoted rather than
+  // removed, because deleting a door somebody uses is not decluttering.
+  ok("9e and Reports is demoted rather than removed",
+    home.includes('href="/practice/reports"'));
+
+  // MCC-06, already true at source. Pinned because the spec asks for it and because a future edit that
+  // emitted zero-count items would put five "0 ..." rows on a phone.
+  ok("9f MCC-06 attention items are only emitted above zero",
+    /if \(followUps\.overdue\.length > 0\)/.test(ops) && /if \(unsigned\.length > 0\)/.test(ops));
+}
+
 // ---------------------------------------------------------------------------------------------
 console.log(`\n${pass} passed, ${fails.length} failed`);
 if (fails.length) { for (const f of fails) console.log(`  - ${f}`); process.exit(1); }
