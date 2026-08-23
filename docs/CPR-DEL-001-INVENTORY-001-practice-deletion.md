@@ -223,3 +223,71 @@ What the evidence now supports:
 
 Still unmeasured, and still required by §3: **direct and cascade DELETE are not demonstrated.** Everything
 above is static analysis of the catalog. The §9 staging fixture is what would prove it.
+
+---
+
+# Addendum 2 — §9 staging fixture: the blocker is a DEADLOCK, not an ordering problem
+
+**Ran:** 2026-08-23, staging project `ezhvpgtcqcdsgylrxgdb`, confirmed by project ref
+(`scripts/cpr-del-001-fixture.mjs`). This is the first **demonstrated** result in this document;
+everything before it was static analysis.
+
+## What was observed
+
+A synthetic practice with one lifecycle transition and one facility. Deleting the workspace:
+
+```
+1. blocked by FK practice_lifecycle_transition_workspace_id_fkey
+   and its own delete is refused:
+   "practice_lifecycle_transition is append only. DELETE refused on transition …"
+```
+
+**Both directions are closed.** The workspace cannot be deleted while transitions exist, and the
+transitions cannot be deleted at all. No ordering resolves it, because there is no order in which the
+child may go first.
+
+## This resolves the §4 Class D question on `practice_lifecycle_transition`
+
+The static analysis offered two readings of migration 247's brake. The fixture eliminates one:
+
+> **Reading (1) — "the brake stays, and a governed service deletes transitions in order" — is not
+> implementable.** The service would have to issue a direct `DELETE`, and the trigger refuses direct
+> `DELETE` unconditionally. Ordering cannot help; the door is locked from both sides.
+
+So any workable correction **must change the trigger**, whichever way the FK is decided. That was not
+knowable from reading the schema, and it narrows §4 from an open question to a bounded one:
+
+| Option | Requires | Note |
+|---|---|---|
+| FK → `CASCADE` + canonical trigger allowance | migration | matches the `practice_access_log` comparator already in this plane |
+| FK stays `NO ACTION` + trigger recognises a governed service | migration | §2 discourages inventing a Practice-only mechanism |
+
+Both need a migration. The choice is which, not whether.
+
+## A finding about the fixture itself
+
+**Its first run stranded its own workspace in staging** — the FK refused the parent, the trigger refused
+the child, and ordinary cleanup had no move. That is the defect reproducing *on the test*, and it is
+worth recording because a fixture that litters when it finds the bug is one people stop running.
+
+The cleanup now disables the immutability trigger as a last resort, removes only its own rows, re-enables
+it, and **verifies the trigger is back on** rather than assuming. Legitimate only because the guard at the
+top has already proved this is staging by project ref — the same three lines against production would be
+tampering with an audit trail.
+
+Verified after the run: **0 fixture workspaces left, 11 of 11 immutability triggers enabled.**
+
+## Safety guard worth reusing
+
+The project check compares the **connection string's username**, not its host. A Supabase pooler
+connection is `aws-1-eu-west-1.pooler.supabase.com` for *every* project — comparing hosts would have
+compared two identical pooler addresses and passed against production. The project ref lives in the
+username (`postgres.<ref>`).
+
+## Still not demonstrated
+
+- The five `RESTRICT` edges (facility, pathway stage, pathway template, charge) — the run stopped at the
+  first blocker, so they remain predicted rather than observed. They need a fixture that seeds patients,
+  identifiers, pathways and charges, which is the fuller §9 fixture.
+- §9's other PASS conditions: cross-practice isolation, unauthorized delete refused, Class B retention,
+  non-DB cleanup, shared identity safety.
