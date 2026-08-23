@@ -37,21 +37,55 @@ const USER_LINKS: { label: string; href: string; icon: string }[] = [
   { label: "Help & Support", href: "/dashboard/help", icon: "?" },
 ];
 
-// Closes a popover on Escape or an outside click, and hands focus back to the trigger.
-function useDismiss(open: boolean, close: () => void, triggerRef: React.RefObject<HTMLElement | null>) {
-  const ref = useRef<HTMLDivElement>(null);
+/**
+ * Is this click outside EVERY element that counts as part of this popover?
+ *
+ * Extracted from useDismiss and exported so the decision can be tested without a DOM -- the whole bug
+ * below lived in this predicate, and a hook that only exists inside React is a hook nothing asserts on.
+ * `contains` is the only thing it needs from an element, so a test supplies two objects with a contains
+ * method and no jsdom is required.
+ */
+export function isOutsideAll(
+  target: Node,
+  insiders: readonly { current: { contains(n: Node): boolean } | null }[],
+): boolean {
+  return !insiders.some(r => r.current?.contains(target));
+}
+
+/**
+ * Closes a popover on Escape or an outside click, and hands focus back to the trigger.
+ *
+ * ⚠ IT TAKES EVERY INSIDE ELEMENT, NOT ONE PANEL AND ONE TRIGGER, AND THAT IS THE WHOLE FIX.
+ *
+ * The workspace menu has TWO panels (a desktop one and an `md:hidden` mobile one) and TWO triggers, all
+ * driven by one `menu === "workspace"` state. It used to get TWO SEPARATE useDismiss hooks, and each
+ * treated the OTHER panel as outside. So on desktop, clicking a workspace link satisfied the desktop
+ * hook and simultaneously fired close() from the mobile hook -- whose panel is still in the DOM, merely
+ * hidden by CSS, and therefore does not contain the click.
+ *
+ * mousedown precedes click. close() unmounted the panel, and the click then landed on an anchor that no
+ * longer existed, so nothing navigated: the menu just shut. Reported as "unable to switch workspaces",
+ * and it affected every entry, not only the ones below the fold.
+ *
+ * The previous shape was introduced to fix exactly this failure at the TRIGGER level -- its comment even
+ * names it, "the classic button does nothing bug" -- and reintroduced it one level down at the PANEL.
+ * One hook per menu STATE, holding every element that belongs to it, is the shape that cannot do that.
+ */
+function useDismiss(
+  open: boolean,
+  close: () => void,
+  insiders: readonly React.RefObject<HTMLElement | null>[],
+  triggerRef: React.RefObject<HTMLElement | null>,
+) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { close(); triggerRef.current?.focus(); } };
-    const onClick = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (!ref.current?.contains(t) && !triggerRef.current?.contains(t)) close();
-    };
+    const onClick = (e: MouseEvent) => { if (isOutsideAll(e.target as Node, insiders)) close(); };
     document.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onClick);
     return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onClick); };
-  }, [open, close, triggerRef]);
-  return ref;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, close, triggerRef, ...insiders]);
 }
 
 const CONTROL = "inline-flex items-center gap-1.5 h-9 px-2.5 rounded-lg text-[13px] text-gray-600 hover:bg-gray-100 transition-colors";
@@ -111,10 +145,16 @@ export default function GlobalHeader({
    * gesture that opened it — the classic "the button does nothing" bug.
    */
   const wsMobileBtn = useRef<HTMLButtonElement>(null);
-  const userPanel = useDismiss(menu === "user", close, userBtn);
-  const wsPanel = useDismiss(menu === "workspace", close, wsBtn);
-  const wsMobilePanel = useDismiss(menu === "workspace", close, wsMobileBtn);
-  const unitPanel = useDismiss(menu === "unit", close, unitBtn);
+  const userPanel = useRef<HTMLDivElement>(null);
+  const wsPanel = useRef<HTMLDivElement>(null);
+  const wsMobilePanel = useRef<HTMLDivElement>(null);
+  const unitPanel = useRef<HTMLDivElement>(null);
+
+  // ONE HOOK PER MENU STATE. The workspace menu lists BOTH panels and BOTH triggers, because all four
+  // belong to `menu === "workspace"` and any of them containing the click means the click was inside.
+  useDismiss(menu === "user", close, [userPanel, userBtn], userBtn);
+  useDismiss(menu === "workspace", close, [wsPanel, wsMobilePanel, wsBtn, wsMobileBtn], wsBtn);
+  useDismiss(menu === "unit", close, [unitPanel, unitBtn], unitBtn);
 
   const activeUnit = units.find(u => u.id === activeUnitId) ?? null;
   const initials = (user.name || "?").split(/\s+/).map(p => p[0]).slice(0, 2).join("").toUpperCase();
