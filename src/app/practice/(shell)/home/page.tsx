@@ -348,7 +348,31 @@ export default async function PracticeCommandCentre() {
         {/* ── s6 row 2, idle ordering: when nothing is running, row 1 is absent and Needs Attention
                LEADS the story -- above the hero, whose StartYourDay is then row 3's What's Next. DOM
                order tracks visual order in both states (s17 focus order), which is why this module
-               has two conditional slots rather than a CSS order. ──────────────────────────────────── */}
+               has two conditional slots rather than a CSS order. ────────────────────────────────────
+
+               ⚠⚠ THE ORDER IS STATE-DEPENDENT ON PURPOSE, AND A LATER SPEC ASKED FOR IT NOT TO BE.
+               CPR-CC-MOB-001 s3 lists one fixed hierarchy with the session card third and Needs
+               Attention fourth -- i.e. the session card above the attention list in every state. Taken
+               literally that reverses the idle ordering above, which CPR-MOB-001 s6 decided
+               deliberately and CLAUDE.md lists as frozen.
+
+               RULED BY THE OWNER, 2026-08-23, in favour of keeping both:
+
+                 idle    identity -> heading/freshness -> NEEDS ATTENTION -> session start card -> handoffs
+                 active  identity -> heading/freshness -> SESSION STATE CARD -> needs attention -> handoffs
+
+               The reasoning is the one s6 already carried and s3 did not contradict so much as overlook:
+               a practitioner opening Today with nothing running is asking what is owed, and one with a
+               clinic in progress is asking about the clinic. Neither question is the same screen's
+               answer. So s3 is IMPLEMENTED AS INTERPRETED rather than applied as a flat list, and the
+               frozen doctrine is not edited to match a newer document.
+
+               MCC-04's own correction -- the session action above the SECONDARY handoffs, Planner and
+               Reports -- holds in both states and is unaffected by this.
+
+               scripts/practice-responsive-harness.ts 9q-9t assert BOTH orders and that the two slots
+               stay mutually exclusive, so a future tidy cannot collapse them into one fixed sequence
+               without going red. That is the specific regression this ruling exists to prevent. */}
         {!metrics && mobileAttention}
 
         {/* ── Hero briefing ─────────────────────────────────────────────────────────────────────── */}

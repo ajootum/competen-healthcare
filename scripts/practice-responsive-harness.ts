@@ -657,6 +657,41 @@ if (existsSync(DOC)) {
   ok("9p the session card precedes the Planner/Reports handoffs in the mobile story",
     heroAt > 0 && linksAt > 0 && home.indexOf("{mobileLinks}") > heroAt,
     `hero@${heroAt} mobileLinks-render@${home.indexOf("{mobileLinks}")}`);
+
+  // ── THE STATE-DEPENDENT ORDER, RULED BY THE OWNER 2026-08-23 ────────────────────────────────
+  //
+  // CPR-CC-MOB-001 s3 lists ONE hierarchy with the session card above Needs Attention in every state.
+  // CPR-MOB-001 s6 puts Needs Attention first when nothing is running, deliberately, and CLAUDE.md
+  // lists it as frozen. The ruling keeps both, by state:
+  //
+  //   idle    ... -> NEEDS ATTENTION -> session start card -> handoffs
+  //   active  ... -> SESSION STATE CARD -> needs attention -> handoffs
+  //
+  // ⚠ THE REGRESSION THESE EXIST TO CATCH IS A TIDY, NOT A DISAGREEMENT. Two conditional slots
+  // rendering the same module look like duplication to anyone reading quickly, and collapsing them to
+  // one unconditional {mobileAttention} would compile, render, and silently pick one order for both
+  // states -- which is precisely what the ruling declined to do. So the guards are asserted, not just
+  // the positions.
+  const idleSlot = home.indexOf("{!metrics && mobileAttention}");
+  const activeSlot = home.indexOf("{metrics && mobileAttention}");
+
+  ok("9q both attention slots exist, so the order can differ by state at all",
+    idleSlot > 0 && activeSlot > 0 && idleSlot !== activeSlot,
+    `idle@${idleSlot} active@${activeSlot}`);
+
+  ok("9r IDLE: Needs Attention leads, above the session card (CPR-MOB-001 s6, preserved)",
+    idleSlot > 0 && heroAt > 0 && idleSlot < heroAt,
+    `idle@${idleSlot} hero@${heroAt}`);
+
+  ok("9s ACTIVE: the session card leads, above Needs Attention (CPR-CC-MOB-001 s3)",
+    activeSlot > 0 && heroAt > 0 && activeSlot > heroAt,
+    `hero@${heroAt} active@${activeSlot}`);
+
+  // The anti-collapse check. An unconditional render would satisfy neither guard, and a single slot
+  // would fail 9q -- but a reader could also "simplify" by dropping only one guard, which this catches.
+  const unguarded = /\{\s*mobileAttention\s*\}/.test(home);
+  ok("9t neither slot is unguarded, so one fixed order cannot creep back in",
+    !unguarded, unguarded ? "found an unconditional {mobileAttention}" : "");
 }
 
 // ---------------------------------------------------------------------------------------------
