@@ -29,6 +29,30 @@ export const ACTIVITY_TYPES = [
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 
+/**
+ * CPR-CC-MOB-001 s8: the four the phone offers before you ask for more.
+ *
+ * ⚠ THIRTEEN EQUALLY WEIGHTED BUTTONS IS NOT A CHOICE, IT IS A SEARCH. MCC-02: the launcher rendered
+ * every activity type at identical size in a two-column block that filled a phone screen, so finding
+ * "Outpatient Clinic" cost the same as finding "Travel" and the common case paid for the rare one.
+ *
+ * These four are the spec's, in the spec's order. Not deleted, not hidden: s16 is explicit that no
+ * activity type may be removed, so the remaining nine sit behind one More activities control -- which
+ * is progressive disclosure rather than a shorter list.
+ *
+ * ⚠ NOT SORTED BY USAGE, and s8 says why: "Do not reorder unpredictably on every visit." A launcher
+ * whose buttons move as the week goes on cannot be used without reading it, and the whole value of a
+ * fixed position is that a thumb learns it. Usage-based favourites are named in s8 as a Practice Setup
+ * choice -- a configured preference, applied deliberately, not a running tally rearranging the screen.
+ */
+export const PRIMARY_ACTIVITY_TYPES: readonly ActivityType[] = [
+  "outpatient_clinic", "ward_round", "emergency_consult", "theatre",
+];
+
+/** Everything else, in ACTIVITY_TYPES order, derived so a new type cannot go missing from both lists. */
+export const SECONDARY_ACTIVITY_TYPES: readonly ActivityType[] =
+  ACTIVITY_TYPES.filter(t => !PRIMARY_ACTIVITY_TYPES.includes(t));
+
 // ── CPR-CUR-001 s3/s15: WHICH ACTIVITIES INVOLVE PATIENTS ──────────────────────────────────────────
 //
 // "Patient-flow components are enabled only for activity types that involve patients. Non-clinical

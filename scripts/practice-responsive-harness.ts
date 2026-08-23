@@ -581,6 +581,38 @@ if (existsSync(DOC)) {
   // emitted zero-count items would put five "0 ..." rows on a phone.
   ok("9f MCC-06 attention items are only emitted above zero",
     /if \(followUps\.overdue\.length > 0\)/.test(ops) && /if \(unsigned\.length > 0\)/.test(ops));
+
+  // ── MCC-02 / s8: FOUR PRIMARIES AND A SHEET, WITH NOTHING LOST ──────────────────────────────
+  const act = readFileSync("src/lib/practice/activity-constants.ts", "utf8");
+  const start = readFileSync("src/app/practice/(shell)/home/StartYourDay.tsx", "utf8");
+
+  ok("9g MCC-02 the phone offers four primary activities, not thirteen",
+    start.includes("{PRIMARY_ACTIVITY_TYPES.map(activityButton)}")
+    && start.includes("More activities ({SECONDARY_ACTIVITY_TYPES.length})"));
+
+  // ⚠⚠ THE ONE THAT MATTERS MOST, because "show fewer buttons" is one careless edit away from
+  // "offer fewer activities". s16: "Do not delete any activity type; use progressive disclosure."
+  // Derived from the same array, so the two lists cannot drift apart -- and asserted anyway, because
+  // the derivation is one line somebody could replace with a literal.
+  const declared = (act.match(/^\s{2}"[a-z_]+",/gm) ?? []).length;
+  ok("9h primary and secondary together are still EVERY activity type",
+    act.includes("ACTIVITY_TYPES.filter(t => !PRIMARY_ACTIVITY_TYPES.includes(t))")
+    && act.includes('"outpatient_clinic", "ward_round", "emergency_consult", "theatre"'),
+    `${declared} literals seen in the constants file`);
+
+  // s9's safe area, on the surface that sits against the bottom edge.
+  ok("9i the sheet clears the bottom navigation and the home indicator",
+    start.includes("env(safe-area-inset-bottom)"));
+
+  ok("9j the sheet is dismissible by backdrop and by Escape, like the planner's",
+    start.includes('aria-label="Close the activity list"')
+    && start.includes('if (e.key === "Escape") setMoreOpen(false)'));
+
+  // The desktop grid is a different surface and keeps all thirteen -- s10 permits the wider
+  // arrangement, and MCC-02 is a mobile defect. Pinned so a later tidy does not "consistently" apply
+  // the mobile rule to a screen that never had the problem.
+  ok("9k the desktop launcher still offers every activity without a sheet",
+    start.includes("{ACTIVITY_TYPES.map(t => ("));
 }
 
 // ---------------------------------------------------------------------------------------------

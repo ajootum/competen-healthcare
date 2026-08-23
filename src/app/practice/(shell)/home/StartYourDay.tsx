@@ -6,7 +6,9 @@ import Link from "next/link";
 import type { TodaysPlan } from "@/lib/practice/activity";
 // From the CONSTANTS module, never from the engine: activity.ts reaches metrics.ts -> access.ts ->
 // next/headers, and importing it here put server-only code in the browser bundle and failed the build.
-import { ACTIVITY_LABEL, ACTIVITY_TYPES, type ActivityType } from "@/lib/practice/activity-constants";
+import {
+  ACTIVITY_LABEL, ACTIVITY_TYPES, PRIMARY_ACTIVITY_TYPES, SECONDARY_ACTIVITY_TYPES, type ActivityType,
+} from "@/lib/practice/activity-constants";
 import type { SessionWithFigures } from "@/lib/practice/session";
 import { formatMinuteOfDay } from "@/lib/datetime";
 
@@ -41,6 +43,9 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // MCC-02: the More activities sheet. Closed on every render of a fresh page, so a practitioner who
+  // opened it yesterday does not find it open today.
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const post = async (body: Record<string, unknown>, tag: string) => {
     setBusy(tag); setError(null);
@@ -169,15 +174,61 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
   const morePlanned = next ? planned.filter(a => a.id !== next.id).length : 0;
   // The one-tap unplanned grid at thumb size (s4's 44px floor). Built once because it renders in two
   // mobile places: as the whole module when nothing is planned, behind a disclosure when something is.
+  //
+  // ── CPR-CC-MOB-001 MCC-02 / s8: FOUR, THEN THE REST ON REQUEST ─────────────────────────────────
+  //
+  // ⚠ THIRTEEN BUTTONS AT ONE WEIGHT MADE THE COMMON CASE PAY FOR THE RARE ONE. The block filled a
+  // phone screen, and "Outpatient Clinic" cost the same to find as "Travel". The four primaries are
+  // s8's, in s8's order, and NOTHING IS DELETED -- s16 forbids removing an activity type, so the other
+  // nine are one control away rather than gone.
+  //
+  // The sheet reuses the dismissal idiom PlannerFilters already uses below md: a backdrop that closes
+  // on tap, a bottom panel, Escape to dismiss. Reused rather than reinvented, so one product does not
+  // grow two ways of getting out of a sheet.
+  const activityButton = (t: ActivityType) => (
+    <button key={t} type="button" disabled={busy !== null} onClick={() => startNow(t)}
+      className="min-h-[var(--cp-touch)] rounded-lg border border-gray-200 px-2 text-[12.5px] font-semibold text-gray-700 hover:border-[var(--cp-primary-border)] hover:bg-[var(--cp-primary-soft)] hover:text-[var(--cp-primary-deep)] disabled:opacity-50">
+      {busy === t ? "Starting…" : ACTIVITY_LABEL[t]}
+    </button>
+  );
+
   const typeGrid = (
-    <div className="mt-2 grid grid-cols-2 gap-1.5">
-      {ACTIVITY_TYPES.map(t => (
-        <button key={t} type="button" disabled={busy !== null} onClick={() => startNow(t)}
-          className="min-h-[var(--cp-touch)] rounded-lg border border-gray-200 px-2 text-[12.5px] font-semibold text-gray-700 hover:border-[var(--cp-primary-border)] hover:bg-[var(--cp-primary-soft)] hover:text-[var(--cp-primary-deep)] disabled:opacity-50">
-          {busy === t ? "Starting…" : ACTIVITY_LABEL[t]}
-        </button>
-      ))}
-    </div>
+    <>
+      <div className="mt-2 grid grid-cols-2 gap-1.5">
+        {PRIMARY_ACTIVITY_TYPES.map(activityButton)}
+      </div>
+      {/* The count is on the control because "More" alone does not say whether it hides two things or
+          twenty, and a practitioner deciding whether to open it deserves to know. */}
+      <button type="button" onClick={() => setMoreOpen(true)} disabled={busy !== null}
+        aria-expanded={moreOpen} aria-haspopup="dialog"
+        className="mt-1.5 flex min-h-[var(--cp-touch)] w-full items-center justify-center rounded-lg border border-dashed border-gray-300 text-[12.5px] font-semibold text-gray-600 disabled:opacity-50">
+        More activities ({SECONDARY_ACTIVITY_TYPES.length})
+      </button>
+
+      {moreOpen && (
+        <>
+          <button type="button" aria-label="Close the activity list" onClick={() => setMoreOpen(false)}
+            className="fixed inset-0 z-40 cursor-default bg-black/40" />
+          <div role="dialog" aria-modal="true" aria-label="More activities"
+            onKeyDown={e => { if (e.key === "Escape") setMoreOpen(false); }}
+            /* s9's safe area: the sheet sits on the bottom edge, where the browser chrome and the
+               home indicator both live. Padding the inset means the last row is tappable rather than
+               half under the navigation. */
+            className="fixed inset-x-0 bottom-0 z-50 max-h-[80vh] overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-white p-4 pb-[calc(env(safe-area-inset-bottom)+16px)]">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[15px] font-bold text-gray-900">More activities</h3>
+              <button type="button" onClick={() => setMoreOpen(false)}
+                className="min-h-[var(--cp-touch)] px-2 text-[13px] font-semibold text-[var(--cp-primary-deep)]">
+                Close
+              </button>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              {SECONDARY_ACTIVITY_TYPES.map(activityButton)}
+            </div>
+          </div>
+        </>
+      )}
+    </>
   );
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-4" aria-labelledby="zone1">
@@ -228,6 +279,11 @@ export default function StartYourDay({ plan, metrics, canPlan }: {
               <p className="text-[10.5px] font-bold uppercase tracking-wide text-gray-500">
                 {planned.length > 0 ? "Or start something unplanned" : "Start now"}
               </p>
+              {/* ⚠ ALL THIRTEEN, ON PURPOSE, AND THIS BLOCK IS max-md:hidden. MCC-02 is a MOBILE defect:
+                  thirteen equal buttons fill a phone and cost the common case as much as the rare one. On a
+                  desktop the same thirteen are two short columns beside everything else, s10 permits the
+                  wider arrangement, and hiding nine of them behind a sheet would add a click to a screen
+                  that had no problem. The mobile grid above is where the four-plus-More rule applies. */}
               <div className="mt-2 grid grid-cols-2 gap-1.5">
                 {ACTIVITY_TYPES.map(t => (
                   <button key={t} type="button" disabled={busy !== null} onClick={() => startNow(t)}
