@@ -1,9 +1,9 @@
 import { audit } from "./audit";
 import {
   type GatewayConfig, createHostedCheckout, verifyTransaction, newTxRef, minorToMajor,
-} from "./billing-gateway";
+} from "./subscription-gateway";
 
-// The SUBSCRIPTION engine -- Competen billing the PRACTITIONER. billing-gateway.ts talks to Flutterwave;
+// The SUBSCRIPTION engine -- Competen billing the PRACTITIONER. subscription-gateway.ts talks to Flutterwave;
 // this file decides what a verified payment MEANS, and it is the only place that grants paid access.
 //
 // ⚠ NOT billing.ts. That name was already taken by the PATIENT-billing engine (fees, charges, invoices,

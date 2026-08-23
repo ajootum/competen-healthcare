@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
-import { gatewayConfig } from "@/lib/practice/billing-gateway";
+import { gatewayConfig } from "@/lib/practice/subscription-gateway";
 import { startCheckout } from "@/lib/practice/subscription";
 
 // POST /api/v1/practice/billing/checkout  { planCode }

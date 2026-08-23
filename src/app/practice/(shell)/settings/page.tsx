@@ -12,7 +12,7 @@ import PersonalisationConsole from "./PersonalisationConsole";
 import SettingsCards, { type SettingsCard } from "./SettingsCards";
 import BillingCard from "./BillingCard";
 import { subscriptionState, formatMoney } from "@/lib/practice/subscription-state";
-import { gatewayConfig, currencyExponent } from "@/lib/practice/billing-gateway";
+import { gatewayConfig, currencyExponent } from "@/lib/practice/subscription-gateway";
 
 // /practice/settings — CPR-SET-004 Personal Settings & Practice Setup.
 //

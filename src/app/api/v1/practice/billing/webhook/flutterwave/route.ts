@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
-import { gatewayConfig, verifHashMatches } from "@/lib/practice/billing-gateway";
+import { gatewayConfig, verifHashMatches } from "@/lib/practice/subscription-gateway";
 import { applyWebhook } from "@/lib/practice/subscription";
 
 // POST /api/v1/practice/billing/webhook/flutterwave

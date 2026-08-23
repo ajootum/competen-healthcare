@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { subscriptionState, formatMoney } from "@/lib/practice/subscription-state";
-import { currencyExponent } from "@/lib/practice/billing-gateway";
+import { currencyExponent } from "@/lib/practice/subscription-gateway";
 
 // The billing card draws whatever this returns, so the only property worth asserting hard is that an
 // UNREAD status never renders as a reassuring one. Telling somebody they are on a free trial because the

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { minorToMajor, majorToMinor, verifHashMatches, normaliseChannel, paymentOptionsFor } from "@/lib/practice/billing-gateway";
+import { minorToMajor, majorToMinor, verifHashMatches, normaliseChannel, paymentOptionsFor } from "@/lib/practice/subscription-gateway";
 import { applyWebhook } from "@/lib/practice/subscription";
 
 // The payment path. Three properties are worth more than the rest of this file put together:
