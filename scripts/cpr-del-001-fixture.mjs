@@ -72,18 +72,52 @@ try {
   // schema has 197 practice_* tables and a fixture that must satisfy every NOT NULL to exist would
   // never run. What it fails to build, it reports -- an unbuilt blocker is an untested one.
   const seeded = [], unbuilt = [];
-  const seed = async (label, sql, args) => {
-    const r = await tryQ(sql, args);
-    r.ok ? (seeded.push(label), say(`  seeded  ${label}`)) : (unbuilt.push({ label, why: why(r.err) }));
+
+  // The graph the topology walk predicted would block, seeded in dependency order. Each RESTRICT edge
+  // needs BOTH ends to exist before it can refuse anything, so a fixture that seeds only the parents
+  // proves nothing -- which is what the first version did, and why it stopped at the first blocker.
+  const id = {};
+  const seedRow = async (label, sql, args, capture) => {
+    try { const r = await c.query(sql, args); if (capture) id[capture] = r.rows[0]?.id; seeded.push(label); say(`  seeded  ${label}`); }
+    catch (e) { unbuilt.push({ label, why: why(e) }); say(`  UNBUILT ${label} -- ${why(e)}`); }
   };
 
-  await seed("practice_lifecycle_transition",
-    `insert into practice_lifecycle_transition (workspace_id, from_status, to_status, reason) values ($1,'ACTIVE','ARCHIVED',$2)`,
-    [wsId, `fixture ${MARK}`]);
+  await seedRow("practice_facility", `insert into practice_facility (workspace_id, name) values ($1,$2) returning id`, [wsId, `ZZ Facility ${MARK}`], "facility");
+  await seedRow("practice_patient", `insert into practice_patient (workspace_id, display_name) values ($1,$2) returning id`, [wsId, `ZZ Patient ${MARK}`], "patient");
+  await seedRow("practice_encounter", `insert into practice_encounter (workspace_id, patient_id) values ($1,$2) returning id`, [wsId, id.patient], "encounter");
 
-  await seed("practice_facility",
-    `insert into practice_facility (workspace_id, name) values ($1, $2)`, [wsId, `ZZ Facility ${MARK}`]);
+  // RESTRICT edges 1 and 2: an identifier pins the facility it was issued at.
+  await seedRow("practice_patient_identifier", `insert into practice_patient_identifier (workspace_id, patient_id, identifier_type, value, facility_id) values ($1,$2,$3,$4,$5) returning id`, [wsId, id.patient, "hospital_mrn", `ZZ-${MARK}`, id.facility]);
+  await seedRow("practice_encounter_identifier", `insert into practice_encounter_identifier (workspace_id, encounter_id, value, facility_id) values ($1,$2,$3,$4) returning id`, [wsId, id.encounter, `ZZE-${MARK}`, id.facility]);
 
+  // RESTRICT edges 3 and 4: a patient pathway pins the template and stage it was started from.
+  await seedRow("practice_pathway_template", `insert into practice_pathway_template (workspace_id, name) values ($1,$2) returning id`, [wsId, `ZZ Pathway ${MARK}`], "template");
+  await seedRow("practice_pathway_stage", `insert into practice_pathway_stage (workspace_id, template_id, position, name, offset_days) values ($1,$2,1,$3,0) returning id`, [wsId, id.template, `ZZ Stage ${MARK}`], "stage");
+  await seedRow("practice_patient_pathway", `insert into practice_patient_pathway (workspace_id, patient_id, template_id) values ($1,$2,$3) returning id`, [wsId, id.patient, id.template], "ppathway");
+  await seedRow("practice_patient_pathway_stage", `insert into practice_patient_pathway_stage (workspace_id, patient_pathway_id, stage_id) values ($1,$2,$3) returning id`, [wsId, id.ppathway, id.stage]);
+
+  // RESTRICT edge 5 plus the conditional trigger: an invoice line pins the charge it billed.
+  await seedRow("practice_charge", `insert into practice_charge (workspace_id, description, unit_amount_minor, amount_minor, currency, charged_on) values ($1,$2,5000,5000,$3,current_date) returning id`, [wsId, `ZZ Charge ${MARK}`, "UGX"], "charge");
+  await seedRow("practice_invoice", `insert into practice_invoice (workspace_id, currency, patient_id) values ($1,$2,$3) returning id`, [wsId, "UGX", id.patient], "invoice");
+  await seedRow("practice_invoice_item", `insert into practice_invoice_item (workspace_id, invoice_id, charge_id, description_snapshot, unit_amount_minor, line_amount_minor, currency) values ($1,$2,$3,$4,5000,5000,$5) returning id`, [wsId, id.invoice, id.charge, `ZZ Line ${MARK}`, "UGX"]);
+
+  // ⚠ THE DEADLOCK IS OPT-IN, AND FINDING OUT WHY COST A RUN. practice_lifecycle_transition is refused
+  // by a FK on the workspace itself, so it aborts the delete BEFORE the cascade ever reaches the
+  // RESTRICT edges further down. Seeding it by default made every other blocker invisible: the fixture
+  // reported one blocker and looked complete. --deadlock demonstrates it deliberately, on its own.
+  if (process.argv.includes("--deadlock")) {
+    await seedRow("practice_lifecycle_transition", `insert into practice_lifecycle_transition (workspace_id, from_status, to_status, reason) values ($1,$2,$3,$4) returning id`, [wsId, "ACTIVE", "ARCHIVED", `fixture ${MARK}`]);
+  } else {
+    say(`  skipped practice_lifecycle_transition -- it aborts first and would mask the RESTRICT chain (--deadlock to include it)`);
+  }
+
+  // --issued exercises the OTHER arm of practice_invoice_item_frozen_guard: it permits DELETE while the
+  // invoice is DRAFT and refuses once it is issued, so the same fixture gives opposite results and only
+  // running both proves the condition is real rather than the guard being inert.
+  if (process.argv.includes("--issued") && id.invoice) {
+    const r = await tryQ(`update practice_invoice set status = $2 where id = $1`, [id.invoice, "ISSUED"]);
+    say(r.ok ? `  issued  practice_invoice -- the frozen guard should now refuse its lines` : `  could not issue the invoice: ${why(r.err)}`);
+  }
   // ---- OBSERVE: the parent delete ----------------------------------------------------------------
   say(`\n  ATTEMPTING the parent delete, and clearing each blocker in turn:\n`);
   const order = [];

@@ -291,3 +291,86 @@ username (`postgres.<ref>`).
   identifiers, pathways and charges, which is the fuller §9 fixture.
 - §9's other PASS conditions: cross-practice isolation, unauthorized delete refused, Class B retention,
   non-DB cleanup, shared identity safety.
+
+---
+
+# Addendum 3 — the fuller fixture disproves the topology prediction
+
+**Ran:** 2026-08-23, staging `ezhvpgtcqcdsgylrxgdb`, full graph
+(`scripts/cpr-del-001-fixture.mjs`, three variants, three repeats of the default).
+
+## What was seeded
+
+Facility · patient · encounter · patient identifier · encounter identifier · pathway template ·
+pathway stage · patient pathway · patient pathway stage · charge · invoice · invoice item —
+i.e. **both ends of every predicted `RESTRICT` edge**, plus the conditional trigger's table.
+
+## The result
+
+| Variant | Outcome |
+|---|---|
+| Full graph | **DELETE SUCCEEDED** (3 of 3 repeats) |
+| Full graph + `--issued` invoice | **DELETE SUCCEEDED** |
+| Full graph + `--deadlock` | blocked by `practice_lifecycle_transition` |
+
+**Eight predicted blockers. One real one.**
+
+## Why the five `RESTRICT` edges did not block
+
+`RESTRICT` refuses the deletion of a *referenced* row while a referencing row exists. Under a cascade
+both ends are children of the same workspace, and Postgres removes the referencing rows first — so by the
+time it reaches the facility, pathway template or charge, nothing points at them and `RESTRICT` has
+nothing to refuse.
+
+**My Addendum 2 conclusion was wrong.** It said *"a pure database cascade cannot satisfy them, in any
+ordering"* and inferred that the schema requires an ordered deletion service. It does not. The cascade
+orders itself correctly, and it was demonstrated three times.
+
+## Why the issued-invoice guard did not block either
+
+`practice_invoice_item_frozen_guard` reads:
+
+```
+if coalesce((select status from practice_invoice where id = …), 'DRAFT') <> 'DRAFT' then
+  raise exception 'the line items of an issued invoice are frozen';
+```
+
+Under a cascade the parent invoice is already deleted when the line's own trigger fires, so the subquery
+returns `NULL`, the `coalesce` yields `'DRAFT'`, and the guard permits the delete. **It is cascade-safe by
+accident** — the default was written for a missing invoice, not for a deletion, and happens to be right.
+
+That is worth stating plainly: it works, but nothing records *why*, and a later author tightening that
+`coalesce` would reintroduce the blocker without touching anything that looks related.
+
+## What this does to §4
+
+**`practice_invoice_item` — Class D withdrawn.** It is not a blocker. There is no financial-retention
+decision to make *for the purposes of this spec*, because practice deletion never asks it to refuse. (The
+separate question of whether issued invoices *should* survive a practice deletion remains a governance
+matter — but it is not what is stopping deletion today.)
+
+**`practice_lifecycle_transition` — the only remaining Class D**, and the only blocker.
+
+## What this does to migration 351
+
+It shrinks to **one table**. The needed change is the canonical cascade-safe pattern on
+`practice_lifecycle_transition` — the comparator being `practice_access_log_immutable`, already in this
+plane — plus whatever the FK decision requires.
+
+Nine tables I would have touched on the topology evidence turn out to need nothing.
+
+## Two lessons recorded rather than smoothed over
+
+1. **Static FK analysis predicted eight blockers; the database has one.** The topology walk was still
+   worth doing — it produced the candidate set — but it could not model cascade *ordering*, and ordering
+   was the whole answer. §3's insistence on demonstrated behaviour is not ceremony.
+2. **The fixture masked its own findings on the first run.** `practice_lifecycle_transition` aborts before
+   the cascade reaches anything else, so seeding it by default made the other blockers unobservable and
+   the fixture reported "one blocker" while proving nothing about the rest. It is now opt-in via
+   `--deadlock`, and the default run exercises the chain the deadlock would hide.
+
+## Still not demonstrated
+
+§9's remaining PASS conditions: cross-practice isolation, unauthorized delete refused, Class B retention
+behaviour, non-database cleanup (§8), shared identity safety. None of these are schema questions — they
+need the §6 deletion service, which does not exist yet.
