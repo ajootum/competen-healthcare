@@ -64,6 +64,19 @@ const INCLUDED = [
   // rules are also pinned in src/lib/practice/identity-service.test.ts for the Vitest job.
   "practice-handle-adoption-harness.ts",
   "practice-nav-discoverability-harness.ts",
+  // ⚠ THE FIVE BELOW WERE ADMITTED ON THE SAME EVIDENCE, GATHERED THE SAME WAY, 2026-08-23. Each ran
+  // twice with .env.local REMOVED (not env vars scrubbed -- these harnesses read the file, so scrubbing
+  // the environment proves nothing) and exited 0 with an identical assertion count to a credentialed
+  // run. That second comparison is the one that matters: a harness that passes without credentials by
+  // SKIPPING its assertions would show a lower count, and this file's own header records four that
+  // would have gone green that way. None of the five imports a Supabase client or reads a git diff.
+  // Three contain the word "skip" -- in comments explaining that they do NOT skip, the
+  // needle-matching-its-own-documentation false positive this repository has recorded eight times.
+  "practice-booking-ready-harness.ts",      // 21/21 -- CPR-BOOK-READY-001: effective booking constraints and visibility enforcement
+  "practice-event-coverage-harness.ts",     // 11/11 -- which of migration 233's event types are emitted
+  "practice-refusal-harness.ts",            // 48/48 -- CPR-HFE-REF-001 s12: the practitioner/internal audience boundary
+  "practice-registration-form-harness.ts",  // 16/16 -- registration form: creating one works or leaves nothing behind
+  "practice-shell-harness.ts",              // 16/16 -- SHELL-001 context fields and guard order
   // ⚠ THE ONE TIMING-SENSITIVE ENTRY. 3i asserts a refusal costs <150ms and 7a asserts a PBKDF2
   // derivation costs >50ms. Both passed three consecutive local runs with room to spare, and 7a failing
   // on faster hardware would be a REAL signal (the iteration count no longer protects a short secret),
@@ -77,6 +90,13 @@ const INCLUDED = [
   // EXCLUDED's place: pui-a11y found two genuinely unprotected modal surfaces (plus a third whose
   // hand-rolled trap was inert), while pui-components was itself stale, pinned to where the focus code
   // used to live before it moved into use-modal-focus.ts.
+  // PROMOTED FROM EXCLUDED 2026-08-23. Its exclusion reason -- "the super-admin layout renders sign out
+  // in its sidebar" -- stopped being true when that was fixed (commit 77155a82), and the file's own rule
+  // is to remove an entry the moment its reason does. The fix also found the check had been wrong in
+  // BOTH directions: it flagged a sign-out on the refusal panel (no sidebar exists there) and missed
+  // three real ones inside sidebar COMPONENTS it never opened. It now looks where sidebars actually
+  // live. Screened like the rest: 32/32 twice with .env.local removed, identical count with it.
+  "pui-header-harness.ts",
   "pui-a11y-harness.ts",
   "pui-charts-harness.ts",
   "pui-components-harness.ts",
@@ -97,13 +117,6 @@ type Exclusion = { file: string; reason: string };
  * Fixing the defect and moving the entry into INCLUDED is the intended end state for all six.
  */
 const EXCLUDED: Exclusion[] = [
-  {
-    file: "pui-header-harness.ts",
-    reason:
-      "RED ON A REAL DEFECT. The super-admin workspace layout renders sign out in its sidebar, which the "
-      + "header doctrine forbids. Small fix, but it is a doctrine question rather than a mechanical one "
-      + "— confirm the rule still holds for super-admin before moving the control.",
-  },
   {
     file: "umw-nav-harness.ts",
     reason:
