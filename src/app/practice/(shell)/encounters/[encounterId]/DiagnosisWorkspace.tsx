@@ -291,7 +291,9 @@ export default function DiagnosisWorkspace(props: {
 
                 The row cards, the radio and the tickbox all take s4's 44px floor; the radio and checkbox
                 grow to 20px because a 13px OS default is not a touch target however large its label. */}
-            <div className="overflow-x-auto max-md:overflow-visible">
+            {/* The anchor the Add diagnosis quick action scrolls to. Every other capture surface already
+                had one; this was the only tab a jump could reach and then not point at anything. */}
+            <div id="diagnosis-capture" className="overflow-x-auto max-md:overflow-visible">
               <table className="w-full border-collapse max-md:block">
                 <thead className={`${WS_HEAD} max-md:hidden`}>
                   <tr>

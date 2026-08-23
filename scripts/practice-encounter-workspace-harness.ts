@@ -614,6 +614,43 @@ async function main() {
     && !/=>\s*window\.print\(/.test(readFileSync(join(encDir, "[encounterId]", "EncounterConsole.tsx"), "utf8")),
     "a window.print() handler here would produce an unversioned sheet that looks like a clinical document");
 
+  // ── 12b. A QUICK ACTION HAS TO DO SOMETHING VISIBLE ──────────────────────────────────────────
+  //
+  // ⚠ REPORTED BY THE OWNER AS "clicking Create referral does not do anything", AND IT DID NOT.
+  // Each action set the tab and stopped. From another tab that moves you; from the tab you are
+  // already on it is a no-op that React renders as nothing. `create_referral` targets `overview` --
+  // the tab this console OPENS on -- so the panel's most obvious action did nothing at all unless you
+  // had navigated away first. Eight assertions about capabilities and destinations were green
+  // throughout, because every one of them asked where the button POINTED and none asked whether
+  // pressing it changed anything.
+  const qaConsoleSrc = readFileSync(join(encDir, "[encounterId]", "EncounterConsole.tsx"), "utf8");
+
+  ok("12b-1. a quick action scrolls to its form, not merely to its tab",
+    /scrollIntoView/.test(qaConsoleSrc) && /getElementById\(a\.anchor/.test(qaConsoleSrc),
+    "setTab alone is invisible when the target tab is the one already open");
+
+  // ⚠ THE ANCHOR MUST EXIST, and this is the half that fails silently. A typo'd or renamed id makes
+  // getElementById return null, the scroll is skipped, and the button goes back to doing nothing --
+  // with no error anywhere. Resolved against the real tree rather than trusted.
+  const tsx: string[] = [];
+  const walkTsx = (d: string) => {
+    for (const e of readdirSync(d)) {
+      const p = join(d, e);
+      if (statSync(p).isDirectory()) walkTsx(p);
+      else if (e.endsWith(".tsx")) tsx.push(readFileSync(p, "utf8"));
+    }
+  };
+  walkTsx(join(process.cwd(), "src/app/practice"));
+  const anchored = QUICK_ACTIONS.filter(a => a.tab);
+  const dangling = anchored.filter(a => !a.anchor || !tsx.some(s => s.includes(`id="${a.anchor}"`)));
+  ok("12b-2. every tab-switching action names an anchor that really exists in the markup",
+    anchored.length > 0 && dangling.length === 0,
+    dangling.map(a => `${a.key} -> ${a.anchor ?? "(none)"}`).join(", "));
+
+  // The one that started it, asserted by name so it cannot silently lose its anchor again.
+  ok("12b-3. create_referral points at the referral form on the tab it opens on",
+    QUICK_ACTIONS.some(a => a.key === "create_referral" && a.tab === "overview" && a.anchor === "referrals"));
+
   // ── 13. CPR-ENC-003: THE CLINICAL DECISION WORKSPACE ──────────────────────
   //
   // The reorganisation of 2026-08-08. Three things have to be true and none of them can be reached by

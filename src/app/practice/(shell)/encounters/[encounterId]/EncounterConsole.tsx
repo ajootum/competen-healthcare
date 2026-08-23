@@ -920,8 +920,39 @@ export default function EncounterConsole(props: {
     );
   };
 
+  /**
+   * ⚠ SETTING THE TAB WAS NOT ENOUGH, AND FOR ONE ACTION IT WAS NOTHING AT ALL.
+   *
+   * This read `if (a.tab) { setTab(a.tab); }`. From another tab that moves you; from the tab you are
+   * already on it is a no-op, React re-renders nothing, and the click has no effect a person can see.
+   * "Create referral" targets `overview` -- the tab this console opens on -- so the panel's most
+   * obvious action did nothing for anybody who had not navigated away first. Reported as "clicking
+   * Create referral does not do anything", which is exactly what it did.
+   *
+   * The scroll is therefore not a nicety, it is the part that makes the button observable. It also
+   * makes the panel's own claim true: the comment beside it says the jump saves you a scroll, and
+   * until now it moved the tab and left you to find the form down a long page yourself.
+   *
+   * FOCUS, NOT JUST SCROLL, WHERE THE TARGET TAKES IT. A keyboard user given a scrolled viewport and
+   * no caret has been shown the form, not handed it. scrollIntoView is the fallback for anchors that
+   * are containers rather than controls.
+   */
   const quickAction = (a: typeof QUICK_ACTIONS[number]) => {
-    if (a.tab) { setTab(a.tab); setNotice(null); }
+    if (!a.tab) return;
+    setTab(a.tab);
+    setNotice(null);
+    if (!a.anchor) return;
+    // After the tab's own render, or the node does not exist yet to be scrolled to. Two frames because
+    // one is not enough when the tab actually changes and a whole panel mounts.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const el = document.getElementById(a.anchor!);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      const focusable = el.matches("input, select, textarea, button")
+        ? el
+        : el.querySelector<HTMLElement>("input, select, textarea, button");
+      focusable?.focus({ preventScroll: true });
+    }));
   };
   const held: Record<string, boolean> = {
     "procedure.record": props.canProcedure, "diagnosis.record": props.canDiagnose,

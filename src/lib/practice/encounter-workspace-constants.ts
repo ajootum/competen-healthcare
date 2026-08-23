@@ -82,14 +82,26 @@ export const ENCOUNTER_TAB_CODES = ENCOUNTER_TABS.map(([k]) => k);
  * clicks", and an action that opened a different page would cost the practitioner the consultation they
  * are in the middle of. `add_task` is the exception and says so: tasks are a different module.
  */
-export const QUICK_ACTIONS: { key: string; label: string; tab: string | null; href?: string; capability: string }[] = [
-  { key: "add_procedure", label: "Add procedure", tab: "procedures", capability: "procedure.record" },
-  { key: "add_diagnosis", label: "Add diagnosis", tab: "diagnoses", capability: "diagnosis.record" },
-  { key: "update_treatment", label: "Update treatment", tab: "treatment", capability: "treatment.record" },
-  { key: "request_investigation", label: "Request investigation", tab: "investigations", capability: "encounter.edit" },
-  { key: "create_referral", label: "Create referral", tab: "overview", capability: "encounter.edit" },
-  { key: "generate_letter", label: "Generate letter", tab: "attachments", capability: "document.author" },
-  { key: "schedule_follow_up", label: "Schedule follow-up", tab: "follow-up", capability: "followup.manage" },
+/**
+ * ⚠ `anchor` EXISTS BECAUSE SWITCHING TABS IS NOT ALWAYS A VISIBLE EVENT, AND ONE ACTION PROVED IT.
+ *
+ * Every action here set the tab and nothing else. That works from another tab and does nothing at all
+ * when you are already on the target -- and "Create referral" targets `overview`, which is the tab this
+ * console OPENS on. So the most-used action on the panel was, for most people, a button that did
+ * nothing: the owner clicked it, watched the screen not change, and asked whether it was broken.
+ *
+ * The comment above this list claimed the jump is "what makes it one click rather than a scroll". It
+ * was one click INSTEAD OF a scroll -- it moved the tab and left you to find the form yourself, down a
+ * long page. The anchor makes the sentence true.
+ */
+export const QUICK_ACTIONS: { key: string; label: string; tab: string | null; href?: string; anchor?: string; capability: string }[] = [
+  { key: "add_procedure", label: "Add procedure", tab: "procedures", anchor: "procedure-search", capability: "procedure.record" },
+  { key: "add_diagnosis", label: "Add diagnosis", tab: "diagnoses", anchor: "diagnosis-capture", capability: "diagnosis.record" },
+  { key: "update_treatment", label: "Update treatment", tab: "treatment", anchor: "treatment-composer", capability: "treatment.record" },
+  { key: "request_investigation", label: "Request investigation", tab: "investigations", anchor: "inv-search", capability: "encounter.edit" },
+  { key: "create_referral", label: "Create referral", tab: "overview", anchor: "referrals", capability: "encounter.edit" },
+  { key: "generate_letter", label: "Generate letter", tab: "attachments", anchor: "doc-title", capability: "document.author" },
+  { key: "schedule_follow_up", label: "Schedule follow-up", tab: "follow-up", anchor: "fu-type", capability: "followup.manage" },
   { key: "add_task", label: "Add task", tab: null, href: "/practice/tasks", capability: "task.manage" },
   // ⚠ THIS ONE JUMPS TO ATTACHMENTS AND DOES NOT PRINT, WHICH IS THE WHOLE POINT OF IT.
   //
@@ -103,7 +115,7 @@ export const QUICK_ACTIONS: { key: string; label: string; tab: string | null; hr
   // label stays the comp's word because that IS what the practitioner is setting out to do; the caption
   // beneath the row says what the click does. Naming it "Create summary document" would have been the
   // other honest choice and a worse one -- it hides the button from somebody scanning for "print".
-  { key: "print_summary", label: "Print summary", tab: "attachments", capability: "document.author" },
+  { key: "print_summary", label: "Print summary", tab: "attachments", anchor: "doc-type", capability: "document.author" },
 ];
 
 /** The comp's small glyphs for the eight. */
