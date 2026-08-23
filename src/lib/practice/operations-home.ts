@@ -39,14 +39,58 @@ export type AttentionKind =
   | "notification_unread" | "task_overdue" | "task_due" | "task_orphaned"
   | "incoming_unreviewed" | "message_unread";
 
+/**
+ * CPR-CC-MOB-001 s4/s6. What is known about a category, which is not always its size.
+ *
+ * ⚠ THE ONLY TWO THIS SERVER EMITS ARE `ready` AND `unavailable`, and the type carries five on purpose.
+ * `loading` and `stale` are states a CLIENT knows and a server cannot: the offline cache can hand a
+ * screen a payload read minutes ago, and that screen must be able to say so rather than relabel it
+ * Live. `error` is reserved for a transport failure between the two -- this module never sees one,
+ * because a failure here is a failed QUERY and that is `unavailable`.
+ *
+ * Naming the three it does not produce is not padding: without them the client would have to invent a
+ * parallel vocabulary for the same idea, and two vocabularies for one concept is how "stale" ends up
+ * rendered as "Live" somewhere downstream.
+ */
+export type AttentionStatus = "ready" | "loading" | "unavailable" | "stale" | "error";
+
 export type AttentionItem = {
   kind: AttentionKind;
   severity: "critical" | "warning" | "normal";
-  count: number;
+  /**
+   * ⚠ NULL WHENEVER status IS NOT `ready`, AND THAT IS THE WHOLE POINT OF THE FIELD BEING NULLABLE.
+   * s6: "unavailable/error -- do not show zero". A failed read used to produce an empty array, an
+   * empty array produced no item, and no item is indistinguishable from nothing being owed. This
+   * column can now hold "I do not know" and the renderer has to handle it.
+   */
+  count: number | null;
+  status: AttentionStatus;
   title: string;
   /** What the count MEANS, in the words the practitioner would use. Never a target or a benchmark. */
   detail: string;
   href: string;
+  /**
+   * s4's ranking and escalation inputs. Null where the category has no meaningful age -- a document
+   * not yet issued has one, an unread notification does not.
+   *
+   * Minutes for work measured within a day (waiting, live encounters), days for work measured across
+   * them (overdue, unsigned). Both null is legitimate; both set is not, and no caller should have to
+   * guess which unit a bare number was in.
+   */
+  oldestAgeMinutes: number | null;
+  oldestAgeDays: number | null;
+  /** s4/s5: the end of the "due soon" window, so the card can say 14 days without hardcoding 14. */
+  windowEnd: string | null;
+  /**
+   * s4: the instant this aggregate was read, and the practice timezone it was read in.
+   *
+   * ⚠ PER ITEM EVEN THOUGH ONE READ PRODUCES THEM ALL TODAY. They are the same instant right now, and
+   * saying so per item is what lets one category later be served from cache while its neighbours are
+   * fresh -- without a shape change, and without a screen having to assume that one timestamp on the
+   * container covers rows it may not.
+   */
+  asOf: string;
+  timezone: string;
   /** A few real rows, so the tile is a worklist rather than a figure. */
   sample: { id: string; label: string; note?: string; href?: string }[];
 };
@@ -100,6 +144,31 @@ export function countLed(kind: AttentionKind, count: number | null | undefined, 
   if (!noun) return title;
   return `${count} ${count === 1 ? noun.one : noun.many}`;
 }
+
+/**
+ * What an unavailable card is called, per category.
+ *
+ * ⚠ THE CATEGORY IS NAMED EVEN WHEN ITS SIZE IS NOT KNOWN. "Follow-ups could not be read" is
+ * actionable -- a practitioner knows which part of their day is dark and can go and look. A generic
+ * "Attention summary unavailable" for one failed read out of ten would hide nine working categories
+ * behind one broken one, which is the opposite of what s6 asks for.
+ */
+const UNAVAILABLE_TITLE: Partial<Record<AttentionKind, string>> = {
+  followup_overdue: "Overdue follow-ups could not be read",
+  followup_due_soon: "Follow-ups due soon could not be read",
+  encounter_unsigned: "Encounters awaiting signature could not be read",
+  encounter_live: "Consultations in progress could not be read",
+  queue_waiting: "The waiting room could not be read",
+  clinic_remaining: "Today's remaining appointments could not be read",
+  document_unissued: "Documents not yet issued could not be read",
+  consent_not_recorded: "Procedure consent could not be read",
+  task_overdue: "Your overdue tasks could not be read",
+  task_due: "Your tasks coming up could not be read",
+  task_orphaned: "Unassigned tasks could not be read",
+  incoming_unreviewed: "Received documents could not be read",
+  message_unread: "Conversations could not be read",
+  notification_unread: "Notifications could not be read",
+};
 
 /**
  * The order. First entry is the loudest.
@@ -200,7 +269,20 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
     : { data: [] };
   const nameOf = (id: string) => (((patients ?? []) as any[]).find(p => p.id === id)?.display_name) ?? "Unknown patient";
 
-  const items: Partial<Record<AttentionKind, AttentionItem>> = {};
+  /**
+   * What a builder below writes: the part that is specific to its category.
+   *
+   * ⚠ THE FOURTEEN BUILDERS ARE NOT EDITED TO CARRY s4's COMMON FIELDS, AND THAT IS DELIBERATE. asOf,
+   * timezone and status are the same for every item produced by one read, so asking fourteen places to
+   * set them is asking for the fifteenth to forget. They are stamped once, below, where the list is
+   * assembled -- which also means a builder cannot accidentally claim `ready` for a category whose read
+   * failed, because builders do not get to say.
+   */
+  type AttentionDraft =
+    Omit<AttentionItem, "status" | "asOf" | "timezone" | "oldestAgeMinutes" | "oldestAgeDays" | "windowEnd">
+    & Partial<Pick<AttentionItem, "oldestAgeMinutes" | "oldestAgeDays" | "windowEnd">>;
+
+  const items: Partial<Record<AttentionKind, AttentionDraft>> = {};
 
   if (followUps) {
     if (followUps.overdue.length > 0) {
@@ -408,7 +490,41 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
     };
   }
 
-  const attention = ORDER.map(k => items[k]).filter(Boolean) as AttentionItem[];
+  // ── CPR-CC-MOB-001 s4: STAMP THE COMMON FIELDS, AND SAY WHICH CATEGORIES COULD NOT BE READ ───────
+  //
+  // ⚠ WITHOUT THE SECOND HALF, `status` WOULD BE A FIELD THAT ONLY EVER SAYS "ready". Every read above
+  // destructures its rows; a query that failed yields none; no rows means no builder ran; no builder
+  // means no item -- and an absent category is indistinguishable from a category with nothing in it.
+  // That is precisely what s6 forbids ("unavailable/error -- do not show zero"), and adding a status
+  // enum without also emitting the non-ready case would have looked like compliance while changing
+  // nothing a practitioner sees.
+  //
+  // The container already knew: `unreadable` below names the failed reads. What it could not do is say
+  // WHICH CARD is affected, so a screen could only print a global footnote. This maps a failed read to
+  // the categories it feeds, so the card itself can say it does not know.
+  const asOf = new Date(now).toISOString();
+  const FED_BY: Record<string, AttentionKind[]> = {
+    "follow-ups": ["followup_overdue", "followup_due_soon"],
+    "encounters": ["encounter_unsigned", "encounter_live"],
+    "the waiting room": ["queue_waiting"],
+    "the diary": ["clinic_remaining"],
+    "documents": ["document_unissued"],
+    "procedure consent": ["consent_not_recorded"],
+    "tasks": ["task_overdue", "task_due", "task_orphaned"],
+    "the incoming register": ["incoming_unreviewed"],
+    "messages": ["message_unread"],
+    "notifications": ["notification_unread"],
+  };
+
+  const stamp = (d: AttentionDraft, status: AttentionStatus): AttentionItem => ({
+    ...d,
+    status,
+    count: status === "ready" ? d.count : null,
+    oldestAgeMinutes: d.oldestAgeMinutes ?? null,
+    oldestAgeDays: d.oldestAgeDays ?? null,
+    windowEnd: d.windowEnd ?? null,
+    asOf, timezone,
+  });
 
   // NAMED, NOT SILENT. A block the caller cannot see is reported as a blind spot rather than simply
   // missing, so an empty-looking home page can say WHY it is empty.
@@ -563,6 +679,28 @@ export async function operationsHome(admin: any, ctx: WorkspaceContext) {
     ["the incoming register", incoming], ["messages", unreadThreads],
   ];
   const unreadable = READS.filter(([, r]) => (r as { error?: unknown } | null)?.error).map(([n]) => n);
+
+  // ── THE LIST, ASSEMBLED ONLY ONCE `unreadable` IS KNOWN ──────────────────────────────────────────
+  //
+  // Ready items keep ORDER, which is argued in that constant's own comment. An unreadable category is
+  // appended in the same order but carries no count, so the renderer cannot draw it as nought.
+  //
+  // ⚠ A CATEGORY THE CALLER MAY NOT SEE IS STILL ABSENT, NOT UNAVAILABLE. "You may not look" is
+  // blindSpots and has always been a different sentence from "I could not look". Emitting an
+  // unavailable card for a permission the practitioner does not hold would tell them something is
+  // broken when nothing is -- and would leak the existence of work they are not entitled to know about.
+  const unreadableKinds = new Set(
+    unreadable.flatMap(name => FED_BY[name] ?? []).filter(k => !items[k]),
+  );
+  const attention: AttentionItem[] = [
+    ...ORDER.map(k => items[k]).filter(Boolean).map(d => stamp(d as AttentionDraft, "ready")),
+    ...ORDER.filter(k => unreadableKinds.has(k)).map(k => stamp({
+      kind: k, severity: "warning", count: null,
+      title: UNAVAILABLE_TITLE[k] ?? "This could not be read",
+      detail: "This could not be read just now, so it is not known whether anything is waiting.",
+      href: "/practice/home", sample: [],
+    }, "unavailable")),
+  ];
 
   return {
     today, timezone,

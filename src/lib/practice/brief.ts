@@ -101,21 +101,34 @@ export function practiceBrief(
   input: { attention: AttentionItem[]; blindSpots: string[]; allClear?: boolean; unreadable?: string[] },
   at: Date = new Date(),
 ): PracticeBrief {
-  const items: BriefItem[] = input.attention.map(a => {
-    const table = SOURCE_TABLE[a.kind] ?? "unknown";
-    const sourceRefs = a.sample.map(s => ({ table, id: s.id }));
-    return {
-      key: a.kind,
-      severity: a.severity,
-      // The tile's own title and detail, joined. NOT a new sentence: rewording it here would give the
-      // brief and the tile two ways of saying one thing, and only one of them would get updated.
-      sentence: a.detail ? `${a.title}. ${a.detail}` : a.title,
-      href: a.href,
-      count: a.count,
-      sourceRefs,
-      refsArePartial: a.count > sourceRefs.length,
-    };
-  });
+  // ⚠ AN UNAVAILABLE CATEGORY IS NOT A BRIEF ITEM, AND IS NOT DROPPED EITHER. CPR-CC-MOB-001 s4 gave
+  // an attention item a `status`, so a category whose read failed now arrives here with count null
+  // instead of being absent. It must not become a brief sentence: the brief is a statement of what is
+  // OWED, every item carries a count and source references, and "we could not look" has neither. It is
+  // carried on `unreadable` instead -- the field this function already takes for exactly that idea, and
+  // which the caller already populates by name.
+  //
+  // Filtering on status rather than on `count !== null` because the two say different things: one is
+  // "this category could not be read", the other is a shape check that would also swallow a genuine
+  // future bug where a ready item lost its number.
+  const items: BriefItem[] = input.attention
+    .filter(a => a.status === "ready" && typeof a.count === "number")
+    .map(a => {
+      const table = SOURCE_TABLE[a.kind] ?? "unknown";
+      const sourceRefs = a.sample.map(s => ({ table, id: s.id }));
+      const count = a.count as number;
+      return {
+        key: a.kind,
+        severity: a.severity,
+        // The tile's own title and detail, joined. NOT a new sentence: rewording it here would give the
+        // brief and the tile two ways of saying one thing, and only one of them would get updated.
+        sentence: a.detail ? `${a.title}. ${a.detail}` : a.title,
+        href: a.href,
+        count,
+        sourceRefs,
+        refsArePartial: count > sourceRefs.length,
+      };
+    });
 
   // De-duplicated across items: one overdue follow-up can be the reason for two sentences, and listing
   // its row twice would make the trace look longer than the evidence.

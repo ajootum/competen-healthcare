@@ -3901,8 +3901,17 @@ export async function intelligenceSuite(
     atTime,
   );
 
+  // ⚠ READY ITEMS ONLY, AND THE UNKNOWN IS NOT LOST BY SAYING SO. CPR-CC-MOB-001 s4 lets an attention
+  // item arrive with status "unavailable" and no count, for a category whose read failed. A priority
+  // strip ranks by size, so a sizeless item cannot take a place in it -- but `unreadable` travels in
+  // the same argument, by name, which is where "this could not be read" already belonged.
   const priority = priorityStrip(
-    { attention: home.attention, blindSpots: home.blindSpots, unreadable: home.unreadable },
+    {
+      attention: home.attention.filter(a => a.status === "ready" && typeof a.count === "number")
+        .map(a => ({ ...a, count: a.count as number })),
+      blindSpots: home.blindSpots,
+      unreadable: home.unreadable,
+    },
     patients, pathways, atTime,
   );
 

@@ -194,11 +194,20 @@ async function main() {
   // ── 2. EVERY FIGURE IS THE LENGTH OF A LIST YOU CAN OPEN ─────────────────
   ok("the home now has work on it (the assertions below are not vacuous)",
     home.attention.length >= 4, `${home.attention.length} items`);
-  ok("EVERY attention item carries a count, a link and real sample rows",
-    home.attention.every(i => i.count > 0 && !!i.href && i.href.startsWith("/practice/") && i.sample.length > 0),
-    JSON.stringify(home.attention.map(i => ({ k: i.kind, c: i.count, h: i.href, s: i.sample.length }))));
+  // ⚠ SCOPED TO READY ITEMS, AND THE SCOPE IS ITSELF ASSERTED BELOW. CPR-CC-MOB-001 s4 lets an item
+  // arrive with status "unavailable" and count null, for a category whose read failed -- such an item
+  // has no count and no samples BY DESIGN, so applying the old predicate to it would fail for the one
+  // reason that is correct behaviour. Narrowing a test to dodge a case is how a test stops meaning
+  // anything, so the narrowing is paid for: 2c asserts the excluded items really are the sizeless ones.
+  const ready = home.attention.filter(i => i.status === "ready");
+  ok("EVERY ready attention item carries a count, a link and real sample rows",
+    ready.length > 0 && ready.every(i => (i.count ?? 0) > 0 && !!i.href && i.href.startsWith("/practice/") && i.sample.length > 0),
+    JSON.stringify(ready.map(i => ({ k: i.kind, c: i.count, h: i.href, s: i.sample.length }))));
   ok("no item shows more samples than its count claims",
-    home.attention.every(i => i.sample.length <= i.count));
+    ready.every(i => i.sample.length <= (i.count ?? 0)));
+  ok("2c an item is sizeless only when it says it is unavailable, and never the reverse",
+    home.attention.every(i => (i.count === null) === (i.status !== "ready")),
+    JSON.stringify(home.attention.map(i => ({ k: i.kind, status: i.status, c: i.count }))));
   ok("every sample row has a label (no blank lines dressed as work)",
     home.attention.every(i => i.sample.every(s => !!s.label && s.label.length > 0)));
 
