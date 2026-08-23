@@ -89,8 +89,14 @@ function main() {
       [...src.matchAll(/\b(CPR-[A-Z0-9-]+|COMP-[A-Z0-9-]+|PLAT-[A-Z0-9-]+)\b/g)].map(m => m[1]),
     )].slice(0, 3);
 
-    const usesSupabase = /@supabase\/supabase-js/.test(src);
-    const usesServiceRole = /SUPABASE_SERVICE_ROLE_KEY/.test(src);
+    // ⚠ A DATABASE IS NOT ONLY REACHED THROUGH SUPABASE-JS. cascade-immutability-ratchet-harness.ts
+    // reads pg_catalog and deletes fixture rows over a direct `pg` connection, and this classifier
+    // tiered it "pure/local" -- the tier whose definition is "no network, no database" -- because it
+    // only looked for the one client library. A harness that mutates a database being labelled safe
+    // for the no-credential CI subset is the exact misclassification the tier exists to prevent.
+    // Either client is a database; either credential is privilege.
+    const usesSupabase = /@supabase\/supabase-js/.test(src) || /from ["']pg["']/.test(src);
+    const usesServiceRole = /SUPABASE_SERVICE_ROLE_KEY|STAGING_DB_URL|DATABASE_URL/.test(src);
 
     // ⚠ A MUTATION VERB WITHOUT A SUPABASE IMPORT IS A FALSE POSITIVE, NOT A FINDING — confirmed on
     // pui-header-harness.ts, whose one `.delete(` match is a string-literal assertion that OTHER source

@@ -58,6 +58,11 @@ const INCLUDED = [
   "pd-screen-doctrine-harness.ts",
   "plane-boundary-harness.ts",
   "practice-diagnosis-capture-harness.ts",
+  // The handle-adoption rules (one claim resolves, two refuse, none resolves null) against a stub
+  // PostgREST builder, plus source assertions that claimHandle calls the adoption at all. Confirmed:
+  // exit 0 and 19/19 twice with .env.local REMOVED, so it genuinely reads no database. Its three branch
+  // rules are also pinned in src/lib/practice/identity-service.test.ts for the Vitest job.
+  "practice-handle-adoption-harness.ts",
   "practice-nav-discoverability-harness.ts",
   // ⚠ THE ONE TIMING-SENSITIVE ENTRY. 3i asserts a refusal costs <150ms and 7a asserts a PBKDF2
   // derivation costs >50ms. Both passed three consecutive local runs with room to spare, and 7a failing
