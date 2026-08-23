@@ -1,8 +1,11 @@
 import { audit } from "@/lib/practice/audit";
 import { createDocument } from "@/lib/practice/documentation";
-import { buildMergeContext, practitionerNameFor } from "@/lib/practice/document-generation";
-import { composeReferralLetter, recipientLine, type Recipient, type RecipientKind } from "@/lib/practice/document-compose";
-import { resolveSelection, selectableFacts, type SelectableFact } from "@/lib/practice/document-facts";
+import { buildMergeContext, practitionerNameFor, type MergeContext } from "@/lib/practice/document-generation";
+import {
+  composeReferralLetter, composeVisitSummary, composePatientInstructions, recipientLine,
+  type ComposedDocument, type Recipient, type RecipientKind,
+} from "@/lib/practice/document-compose";
+import { defaultSelection, resolveSelection, selectableFacts, type SelectableFact } from "@/lib/practice/document-facts";
 import { recordReferral } from "@/lib/practice/encounter-workspace";
 import type { EngineResult } from "@/lib/practice/encounters";
 import type { WorkspaceContext } from "@/lib/practice/access";
@@ -154,23 +157,9 @@ export async function generateReferralLetter(admin: any, ctx: WorkspaceContext, 
   const reason = (args.reason ?? "").trim();
   if (!reason) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a referral needs a reason" };
 
-  const offered = await selectableFacts(admin, ctx, { patientId: args.patientId, encounterId: args.encounterId });
-  if (!offered) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
-  if (!offered.encounterId)
-    return { ok: false, status: 422, code: "ENCOUNTER_PATIENT_MISMATCH", message: "that consultation is not this patient's" };
-
-  // ⚠ AN UNRECOGNISED KEY REFUSES THE WHOLE LETTER, and dropping it silently would be the worse bug.
-  //
-  // A key that is not in the offered set means one of two things: it names a record belonging to
-  // somebody else (section 17's patient isolation, which is refused here by simply never having looked
-  // it up), or the record moved under the form -- a diagnosis deleted while the letter was being
-  // composed. In the second case a practitioner is looking at a checked box for a fact that will not be
-  // in the letter. Generating anyway hands them a document that is missing something they believe is in
-  // it, and they will sign it. Refusing costs a reload.
-  const { selected, unknown } = resolveSelection(offered.groups, args.factKeys ?? []);
-  if (unknown.length)
-    return { ok: false, status: 409, code: "FACT_SELECTION_STALE",
-             message: `${unknown.length} selected item(s) are no longer in this patient's record. Reload and check the selection.` };
+  const prepared = await prepare(admin, ctx, args);
+  if (!prepared.ok) return prepared;
+  const { selected, merge } = prepared.data;
 
   const recipientResult = await resolveRecipient(admin, ctx, args, ctx.userId);
   if (!recipientResult.ok) return recipientResult;
@@ -197,12 +186,6 @@ export async function generateReferralLetter(admin: any, ctx: WorkspaceContext, 
     referralId = made.data.id;
   }
 
-  const merge = await buildMergeContext(admin, ctx, {
-    patientId: args.patientId, encounterId: args.encounterId,
-    practitionerName: await practitionerNameFor(admin, ctx.userId),
-  });
-  if (!merge) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
-
   const composed = composeReferralLetter({
     today: merge["today"],
     recipient,
@@ -214,19 +197,46 @@ export async function generateReferralLetter(admin: any, ctx: WorkspaceContext, 
     practiceName: merge["practice.name"],
   });
 
+  const stored = await store(admin, ctx, {
+    patientId: args.patientId, encounterId: args.encounterId, docType: "referral_letter",
+    composed, selected, addressedTo, purpose: "referral_letter",
+    correlationId: args.correlationId, extraAudit: { referralId, destinationId },
+  });
+  if (!stored.ok) return stored;
+
+  await admin.from("practice_clinical_document").update({ referral_id: referralId }).eq("id", stored.data.documentId);
+
+  return { ok: true, data: { documentId: stored.data.documentId, referralId, disclosed: stored.data.disclosed } };
+}
+
+/**
+ * THE SHARED TAIL OF EVERY GENERATED DOCUMENT -- store it, record what it disclosed, say so.
+ *
+ * Section 6 requires letterhead, lifecycle and storage to be shared rather than duplicated per
+ * generator, and section 19 forbids a second document repository. This function is where that is
+ * actually true: the referral letter, the visit summary and the patient instructions all end here, so
+ * none of them can acquire its own storage, its own provenance rule or its own audit shape by drifting.
+ *
+ * Adding a document type in a later phase means writing a composer and calling this. If a new type
+ * needs something this cannot do, that is a design conversation, not a second copy of these forty lines.
+ */
+async function store(admin: any, ctx: WorkspaceContext, args: {
+  patientId: string; encounterId: string | null; docType: string;
+  composed: ComposedDocument; selected: SelectableFact[];
+  addressedTo?: string; purpose: string; correlationId: string;
+  extraAudit?: Record<string, unknown>;
+}): Promise<EngineResult<{ documentId: string; disclosed: number }>> {
   const created = await createDocument(admin, {
     workspaceId: ctx.workspaceId, patientId: args.patientId, encounterId: args.encounterId,
-    docType: "referral_letter", title: composed.title, addressedTo, body: composed.body,
-    actorId: ctx.userId, correlationId: args.correlationId,
+    docType: args.docType, title: args.composed.title, addressedTo: args.addressedTo,
+    body: args.composed.body, actorId: ctx.userId, correlationId: args.correlationId,
   });
   if (!created.ok) return created;
 
-  await admin.from("practice_clinical_document").update({ referral_id: referralId }).eq("id", created.data.id);
-
   // PROVENANCE COMES FROM WHAT THE COMPOSER USED, not from what was selected. If a fact were ever
   // selected but had no section to appear in, this table would not claim it was disclosed.
-  const byKey = new Map(selected.map(f => [f.key, f] as const));
-  const disclosed = composed.usedFactKeys
+  const byKey = new Map(args.selected.map(f => [f.key, f] as const));
+  const disclosed = args.composed.usedFactKeys
     .map((key, index) => ({ fact: byKey.get(key)!, index }))
     .filter(e => e.fact)
     .map(({ fact, index }: { fact: SelectableFact; index: number }) => ({
@@ -240,18 +250,135 @@ export async function generateReferralLetter(admin: any, ctx: WorkspaceContext, 
     // A document whose disclosure record failed to write is a document nobody can audit. Say so rather
     // than returning a clean success -- the draft exists and is editable, so this is recoverable.
     if (error) return { ok: false, status: 500, code: "PROVENANCE_NOT_RECORDED",
-                        message: "the letter was created but what it disclosed could not be recorded. Do not issue it -- report this." };
+                        message: "the document was created but what it disclosed could not be recorded. Do not issue it -- report this." };
   }
 
   await audit(admin, {
     workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.document_generated",
     payload: {
-      documentId: created.data.id, purpose: "referral_letter", referralId, destinationId,
-      disclosed: disclosed.length,
-      historicalDisclosed: selected.filter(f => f.scope === "historical").length,
+      documentId: created.data.id, purpose: args.purpose, disclosed: disclosed.length,
+      historicalDisclosed: args.selected.filter(f => f.scope === "historical").length,
+      ...(args.extraAudit ?? {}),
     },
     correlationId: args.correlationId,
   });
 
-  return { ok: true, data: { documentId: created.data.id, referralId, disclosed: disclosed.length } };
+  return { ok: true, data: { documentId: created.data.id, disclosed: disclosed.length } };
+}
+
+/**
+ * THE SHARED HEAD OF EVERY GENERATED DOCUMENT -- offer the record, resolve the selection, read the
+ * patient's details.
+ *
+ * The counterpart to store(). Between the two, a document type is reduced to the only thing that
+ * genuinely differs: which composer runs and what it is asked for.
+ */
+/**
+ * ⚠ AN OMITTED SELECTION MEANS SECTION 9'S DEFAULT. AN EMPTY ARRAY MEANS NOTHING.
+ *
+ * The two are different requests and the distinction is what lets the visit summary be genuinely
+ * one-click (section 3's mode A): the caller says nothing about facts and gets this consultation's,
+ * without a round trip to ask what the default is and post it straight back.
+ *
+ * `[]` still means include nothing, so a practitioner who unticks every box gets what they asked for
+ * rather than silently having the default reinstated.
+ */
+async function prepare(admin: any, ctx: WorkspaceContext, args: {
+  patientId: string; encounterId: string; factKeys?: string[];
+}): Promise<EngineResult<{ selected: SelectableFact[]; merge: MergeContext }>> {
+  const offered = await selectableFacts(admin, ctx, { patientId: args.patientId, encounterId: args.encounterId });
+  if (!offered) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+  if (!offered.encounterId)
+    return { ok: false, status: 422, code: "ENCOUNTER_PATIENT_MISMATCH", message: "that consultation is not this patient's" };
+
+  // ⚠ AN UNRECOGNISED KEY REFUSES THE WHOLE DOCUMENT, and dropping it silently would be the worse bug.
+  //
+  // A key that is not in the offered set means one of two things: it names a record belonging to
+  // somebody else (section 17's patient isolation, which is refused here by simply never having looked
+  // it up), or the record moved under the form -- a diagnosis deleted while the document was being
+  // composed. In the second case a practitioner is looking at a checked box for a fact that will not be
+  // in the document. Generating anyway hands them something missing what they believe is in it, and
+  // they will sign it. Refusing costs a reload.
+  const keys = args.factKeys === undefined ? defaultSelection(offered.groups) : args.factKeys;
+  const { selected, unknown } = resolveSelection(offered.groups, keys);
+  if (unknown.length)
+    return { ok: false, status: 409, code: "FACT_SELECTION_STALE",
+             message: `${unknown.length} selected item(s) are no longer in this patient's record. Reload and check the selection.` };
+
+  const merge = await buildMergeContext(admin, ctx, {
+    patientId: args.patientId, encounterId: args.encounterId,
+    practitionerName: await practitionerNameFor(admin, ctx.userId),
+  });
+  if (!merge) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
+
+  return { ok: true, data: { selected, merge } };
+}
+
+const patientOf = (merge: MergeContext) => ({
+  name: merge["patient.name"], identifier: merge["patient.identifier"],
+  sex: merge["patient.sex"], age: merge["patient.age"],
+});
+
+/**
+ * A visit summary for the patient.
+ *
+ * Section 3's mode is "One-click / review" and section 17's PASS condition is "Current encounter
+ * generates without manual re-entry" -- so this takes no typed input at all. The caller passes the
+ * selection the form was offered, which by section 9's default is this consultation's facts.
+ *
+ * REFUSES WHEN THERE IS NOTHING TO SUMMARISE. A document consisting of a date and a patient name is
+ * not a summary of anything, and issuing one would let a practitioner hand a patient a page implying
+ * their visit is accounted for. The refusal names the fix.
+ */
+export async function generateVisitSummary(admin: any, ctx: WorkspaceContext, args: {
+  patientId: string; encounterId: string; factKeys?: string[]; correlationId: string;
+}): Promise<EngineResult<{ documentId: string; disclosed: number }>> {
+  const prepared = await prepare(admin, ctx, args);
+  if (!prepared.ok) return prepared;
+  const { selected, merge } = prepared.data;
+
+  if (!selected.length)
+    return { ok: false, status: 422, code: "NOTHING_TO_SUMMARISE",
+             message: "nothing has been recorded at this consultation yet, so there is nothing to summarise" };
+
+  const composed = composeVisitSummary({
+    today: merge["today"], visitDate: merge["encounter.date"], patient: patientOf(merge),
+    facts: selected, practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
+  });
+
+  return store(admin, ctx, {
+    patientId: args.patientId, encounterId: args.encounterId, docType: "consultation_summary",
+    composed, selected, purpose: "visit_summary", correlationId: args.correlationId,
+  });
+}
+
+/**
+ * Patient instructions.
+ *
+ * Section 3's mode is "Decision + generation" and section 13's required input is "confirm
+ * instructions, treatment directions and follow-up" -- the typed instruction and the ticked facts
+ * respectively. Either alone is a usable document, which is why the refusal below needs BOTH absent.
+ */
+export async function generatePatientInstructions(admin: any, ctx: WorkspaceContext, args: {
+  patientId: string; encounterId: string; instructions?: string | null;
+  factKeys: string[]; correlationId: string;
+}): Promise<EngineResult<{ documentId: string; disclosed: number }>> {
+  const prepared = await prepare(admin, ctx, args);
+  if (!prepared.ok) return prepared;
+  const { selected, merge } = prepared.data;
+
+  const instructions = (args.instructions ?? "").trim();
+  if (!instructions && !selected.length)
+    return { ok: false, status: 422, code: "NOTHING_TO_INSTRUCT",
+             message: "write what the patient should do, or include something from the record" };
+
+  const composed = composePatientInstructions({
+    today: merge["today"], patient: patientOf(merge), instructions: instructions || null,
+    facts: selected, practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
+  });
+
+  return store(admin, ctx, {
+    patientId: args.patientId, encounterId: args.encounterId, docType: "patient_instructions",
+    composed, selected, purpose: "patient_instructions", correlationId: args.correlationId,
+  });
 }

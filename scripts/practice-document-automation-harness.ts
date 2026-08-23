@@ -6,10 +6,10 @@
  * asked four ways: does anything appear in this document that was not a selected fact or something the
  * practitioner typed?
  *
- * That question is answerable HERE, without a practice, because composeReferralLetter is a pure
- * function. It receives facts and returns text. So the test can hand it three facts and read the output
- * for a fourth. Against a real database the same test would be a guess: you would be reading a letter
- * about a real patient and trying to decide whether a phrase came from a row you did not select.
+ * That question is answerable HERE, without a practice, because every composer is a pure function. It
+ * receives facts and returns text. So the test can hand it three facts and read the output for a
+ * fourth. Against a real database the same test would be a guess: you would be reading a letter about
+ * a real patient and trying to decide whether a phrase came from a row you did not select.
  *
  * ⚠ THE STRUCTURAL TESTS IN SECTION 6 ARE THE ONES THAT KEEP THIS TRUE. Purity is not a property the
  * behavioural tests can see -- a composer that quietly grew a database read would still pass every test
@@ -17,13 +17,19 @@
  * document-compose.ts imports nothing capable of reading a record, and holds no clock. If somebody has
  * to change those assertions to land a feature, that is the conversation this file exists to force.
  *
- * WHAT IS DELIBERATELY NOT HERE. Visit summary and medication list are section 17 rows for Phase 2 and
- * Phase 3. Asserting them now would mean writing a test against a composer that does not exist, and a
- * skipped test that reads as coverage is worse than an absent one.
+ * WHAT IS DELIBERATELY NOT HERE. The medication list is a section 17 row for Phase 3. Asserting it now
+ * would mean writing a test against a composer that does not exist, and a skipped test that reads as
+ * coverage is worse than an absent one. Sections 9 and 10 cover the two Phase 2 documents; section 11
+ * covers the claim that all three share one pipeline, which is the claim most likely to quietly stop
+ * being true as document types are added.
  */
 import fs from "node:fs";
 import path from "node:path";
-import { composeReferralLetter, recipientLine, type Recipient } from "../src/lib/practice/document-compose";
+import {
+  composeReferralLetter, composeVisitSummary, composePatientInstructions, recipientLine, type Recipient,
+} from "../src/lib/practice/document-compose";
+import { DOC_TYPES } from "../src/lib/practice/document-constants";
+import { DOC_TYPE_OPTIONS } from "../src/lib/practice/documents-workspace-constants";
 import { resolveSelection, defaultSelection, selectableFacts, type FactGroup, type SelectableFact } from "../src/lib/practice/document-facts";
 
 let pass = 0;
@@ -306,6 +312,106 @@ async function main() {
       .body.includes("Dear Colleague,"));
   ok("8c. the title names the patient",
     composed.title === "Referral letter - Aisha Nakato");
+
+  // ── 9. VISIT SUMMARY (Phase 2, s5 priority 2) ────────────────────────────────────────────────────
+  //
+  // s17: "Current encounter generates without manual re-entry." The composer takes no typed input at
+  // all, which is what makes that testable rather than aspirational.
+  const summary = composeVisitSummary({
+    today: "2026-08-23", visitDate: "2026-08-22", patient: PATIENT,
+    facts: [CURRENT_DX, CURRENT_RX], practitionerName: "Dr Grace Aine", practiceName: "Competen Clinic",
+  });
+
+  ok("9a. the visit summary carries the consultation's facts",
+    summary.body.includes("ZZ-CURRENT-DX") && summary.body.includes("ZZ-CURRENT-RX"));
+  ok("9b. it names the patient and the day of the visit",
+    summary.body.includes("Visit summary for Aisha Nakato - 26-000141") && summary.body.includes("Date of visit: 2026-08-22"));
+
+  // A PATIENT DOCUMENT IS NOT A LETTER TO A COLLEAGUE. No recipient, no salutation, and the headings
+  // come from the patient set -- if the clinician headings leaked in, the patient would be reading
+  // "Treatment given" and "Follow-up arranged" about themselves.
+  ok("9c. it addresses nobody and salutes nobody",
+    !summary.body.includes("Dear") && !summary.body.includes("Yours sincerely"));
+  ok("9d. it uses the patient headings, not the clinician ones",
+    summary.body.includes("What we found") && !summary.body.includes("Diagnoses"));
+  ok("9e. and the facts under them are unchanged -- only the heading differs",
+    summary.body.includes("- ZZ-CURRENT-DX (confirmed)"));
+
+  const summaryEntitled = [
+    "2026-08-23", "Visit summary for Aisha Nakato - 26-000141", "Date of visit: 2026-08-22",
+    "What we found", "ZZ-CURRENT-DX", "confirmed", "Treatment", "ZZ-CURRENT-RX", "oral - 5 days",
+    "Seen by Dr Grace Aine", "Competen Clinic",
+  ];
+  let sResidue = summary.body;
+  for (const piece of [...summaryEntitled].sort((a, b) => b.length - a.length)) sResidue = sResidue.split(piece).join("");
+  ok("9f. GROUNDING -- nothing in the visit summary is unaccounted for",
+    sResidue.replace(/[\s\-(),:]/g, "") === "", `residue: ${JSON.stringify(sResidue.slice(0, 120))}`);
+  ok("9g. the title names the document and the patient", summary.title === "Visit summary - Aisha Nakato");
+
+  // ── 10. PATIENT INSTRUCTIONS (Phase 2, s5 priority 3) ────────────────────────────────────────────
+  const instructions = composePatientInstructions({
+    today: "2026-08-23", patient: PATIENT, instructions: "ZZ-TYPED-INSTRUCTION",
+    facts: [CURRENT_RX], practitionerName: "Dr Grace Aine", practiceName: "Competen Clinic",
+  });
+
+  ok("10a. what the practitioner typed appears", instructions.body.includes("ZZ-TYPED-INSTRUCTION"));
+  ok("10b. and it LEADS, before the recorded facts",
+    instructions.body.indexOf("ZZ-TYPED-INSTRUCTION") < instructions.body.indexOf("ZZ-CURRENT-RX"));
+  ok("10c. the selected treatment appears under a patient heading",
+    instructions.body.includes("Treatment") && instructions.body.includes("ZZ-CURRENT-RX"));
+
+  const instructionsEntitled = [
+    "2026-08-23", "Instructions for Aisha Nakato - 26-000141", "What to do", "ZZ-TYPED-INSTRUCTION",
+    "Treatment", "ZZ-CURRENT-RX", "oral - 5 days", "Prepared by Dr Grace Aine", "Competen Clinic",
+  ];
+  let iResidue = instructions.body;
+  for (const piece of [...instructionsEntitled].sort((a, b) => b.length - a.length)) iResidue = iResidue.split(piece).join("");
+  ok("10d. GROUNDING -- nothing in the instructions is unaccounted for",
+    iResidue.replace(/[\s\-(),:]/g, "") === "", `residue: ${JSON.stringify(iResidue.slice(0, 120))}`);
+
+  // A sheet with no typed instruction is still legitimate -- the ticked facts carry it.
+  const ticksOnly = composePatientInstructions({
+    today: "2026-08-23", patient: PATIENT, instructions: null,
+    facts: [CURRENT_RX], practitionerName: null, practiceName: null,
+  });
+  ok("10e. with nothing typed, no empty 'What to do' heading is printed",
+    !ticksOnly.body.includes("What to do") && ticksOnly.body.includes("ZZ-CURRENT-RX"));
+
+  // ── 11. ONE PIPELINE, AND THE VOCABULARY THAT MIRRORS IT ─────────────────────────────────────────
+  //
+  // s6/s19/s20. Three document types now exist. The claim that they share one engine is only worth
+  // anything if it is checked -- a fourth generator that quietly calls createDocument itself would
+  // still work, and would still be the "collection of one-off letter forms" s20 forbids.
+  const engineSrc = strip(read("src/lib/practice/document-automation.ts"));
+  const generators = [...engineSrc.matchAll(/export async function (generate\w+)/g)].map(m => m[1]);
+  ok("11a. all three generators exist", generators.length === 3, generators.join(", "));
+  ok("11b. exactly one call site stores a document",
+    (engineSrc.match(/createDocument\(/g) ?? []).length === 1);
+  ok("11c. every generator ends at the shared store()",
+    (engineSrc.match(/return store\(|await store\(|stored = await store\(/g) ?? []).length === generators.length);
+  ok("11d. and every generator starts at the shared prepare()",
+    (engineSrc.match(/await prepare\(/g) ?? []).length === generators.length);
+
+  // ⚠ THE VOCABULARY FAN-OUT. Migration 354 widened the doc_type CHECK, and the label for a type lives
+  // in THREE separate lists. A type the engine writes but a list does not name renders blank in the
+  // documents workspace and cannot be filtered for -- the same shape as a catalogue insert shipped
+  // without its backfill.
+  const written = [...engineSrc.matchAll(/docType: "(\w+)"/g)].map(m => m[1]);
+  ok("11e. the engine writes the three expected document types",
+    written.length === 3 && new Set(written).size === 3, written.join(", "));
+
+  const intelligenceBlock = strip(read("src/lib/practice/intelligence.ts"))
+    .split("const DOCUMENT_TYPES")[1]?.split("];")[0] ?? "";
+  const missing = written.filter(t =>
+    !DOC_TYPES.some(([v]) => v === t)
+    || !DOC_TYPE_OPTIONS.some(([v]) => v === t)
+    || !intelligenceBlock.includes(`"${t}"`));
+  ok("11f. every type the engine writes has a label in all three lists",
+    missing.length === 0, `unlabelled: ${missing.join(", ")}`);
+
+  const mig354 = read("supabase/migrations/354-patient-instructions-document-type.sql");
+  ok("11g. and the one type 354 added is in the CHECK it rewrites",
+    /check \(doc_type in \([^)]*'patient_instructions'/s.test(mig354));
 
   // ── CONTROL ──────────────────────────────────────────────────────────────────────────────────────
   //

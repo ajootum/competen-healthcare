@@ -104,7 +104,13 @@ const SECTION_ORDER: FactCategory[] = [
   "encounter", "diagnosis", "procedure", "investigation", "treatment", "medication", "follow_up",
 ];
 
-const SECTION_HEADING: Record<FactCategory, string> = {
+/**
+ * Headings for a letter to a clinician.
+ *
+ * Clinical register, because the reader is a colleague: "Diagnoses" means what it says and does not
+ * need softening.
+ */
+const CLINICIAN_HEADING: Record<FactCategory, string> = {
   encounter: "Clinical context",
   diagnosis: "Diagnoses",
   procedure: "Procedures",
@@ -112,6 +118,25 @@ const SECTION_HEADING: Record<FactCategory, string> = {
   treatment: "Treatment given",
   medication: "Current medication",
   follow_up: "Follow-up arranged",
+};
+
+/**
+ * Headings for a document the PATIENT reads.
+ *
+ * ⚠ ONLY THE HEADINGS CHANGE. The facts underneath print exactly as recorded, here as everywhere --
+ * a diagnosis recorded as provisional still says provisional under "What we found". Rewriting a
+ * clinical label into gentler words would be the composer making a clinical judgement about what the
+ * patient should be told, which section 10 forbids and which is the practitioner's call, not this
+ * function's. The heading is the frame around the facts, not a translation of them.
+ */
+const PATIENT_HEADING: Record<FactCategory, string> = {
+  encounter: "Your visit",
+  diagnosis: "What we found",
+  procedure: "What was done",
+  investigation: "Tests",
+  treatment: "Treatment",
+  medication: "Your medication",
+  follow_up: "Next steps",
 };
 
 /**
@@ -132,13 +157,15 @@ function factLine(f: SelectableFact): string {
  * A section with no selected facts is not printed. An empty heading tells a reader something was
  * considered and found absent, which is a clinical claim this function is not entitled to make.
  */
-function factSections(facts: SelectableFact[]): { blocks: string[]; used: string[] } {
+function factSections(facts: SelectableFact[], headings: Record<FactCategory, string>): {
+  blocks: string[]; used: string[];
+} {
   const blocks: string[] = [];
   const used: string[] = [];
   for (const category of SECTION_ORDER) {
     const inSection = facts.filter(f => f.category === category);
     if (!inSection.length) continue;
-    blocks.push([SECTION_HEADING[category], ...inSection.map(factLine)].join("\n"));
+    blocks.push([headings[category], ...inSection.map(factLine)].join("\n"));
     used.push(...inSection.map(f => f.key));
   }
   return { blocks, used };
@@ -152,7 +179,7 @@ function factSections(facts: SelectableFact[]): { blocks: string[]; used: string
  * selected facts, and nothing else.
  */
 export function composeReferralLetter(input: ReferralLetterInput): ComposedDocument {
-  const { blocks, used } = factSections(input.facts);
+  const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING);
   const parts: string[] = [];
 
   const today = clean(input.today);
@@ -179,6 +206,113 @@ export function composeReferralLetter(input: ReferralLetterInput): ComposedDocum
   const who = clean(input.patient.name);
   return {
     title: who ? `Referral letter - ${who}` : "Referral letter",
+    body: parts.join("\n\n"),
+    usedFactKeys: used,
+  };
+}
+
+// ── PATIENT-FACING DOCUMENTS (Phase 2) ──────────────────────────────────────────────────────────────
+//
+// Sections 3 and 5 make the visit summary and patient instructions the second and third documents to
+// automate, and section 7 groups them as "Patient documents" -- a different audience from the referral
+// letter, not a different pipeline.
+//
+// WHAT CHANGES FOR A PATIENT AUDIENCE, and it is less than it looks: there is no recipient to address,
+// no salutation to a colleague, and the section headings come from PATIENT_HEADING. What does NOT
+// change is the fact lines themselves. See the comment on PATIENT_HEADING for why.
+
+export type PatientDocumentInput = {
+  today: string | null;
+  patient: { name: string | null; identifier: string | null; sex: string | null; age: string | null };
+  facts: SelectableFact[];
+  practitionerName: string | null;
+  practiceName: string | null;
+};
+
+export type VisitSummaryInput = PatientDocumentInput & {
+  /** The day the consultation happened, already resolved in the practice's timezone. */
+  visitDate: string | null;
+};
+
+export type PatientInstructionsInput = PatientDocumentInput & {
+  /** Practitioner-typed. Section 13: the practitioner confirms the instructions. */
+  instructions: string | null;
+};
+
+/** "Aisha Nakato - 26-000141" -- the patient's own document names them, without the demographics. */
+function patientHeading(p: PatientDocumentInput["patient"]): string | null {
+  const name = clean(p.name);
+  if (!name) return null;
+  return [name, clean(p.identifier)].filter(Boolean).join(" - ");
+}
+
+function signOff(who: string, input: PatientDocumentInput): string[] {
+  const name = clean(input.practitionerName);
+  const practice = clean(input.practiceName);
+  if (!name && !practice) return [];
+  return [[`${who} ${name ?? practice}`, name && practice ? practice : null].filter(Boolean).join("\n")];
+}
+
+/**
+ * A visit summary, for the patient.
+ *
+ * Section 3's automation mode is "One-click / review": CP already holds the facts, so nothing is asked
+ * for. Section 17's PASS condition is "Current encounter generates without manual re-entry", which is
+ * why this takes no typed input at all -- every line comes from the record.
+ */
+export function composeVisitSummary(input: VisitSummaryInput): ComposedDocument {
+  const { blocks, used } = factSections(input.facts, PATIENT_HEADING);
+  const parts: string[] = [];
+
+  const today = clean(input.today);
+  if (today) parts.push(today);
+
+  const who = patientHeading(input.patient);
+  const header = [who ? `Visit summary for ${who}` : "Visit summary"];
+  const visit = clean(input.visitDate);
+  if (visit) header.push(`Date of visit: ${visit}`);
+  parts.push(header.join("\n"));
+
+  parts.push(...blocks);
+  parts.push(...signOff("Seen by", input));
+
+  const name = clean(input.patient.name);
+  return {
+    title: name ? `Visit summary - ${name}` : "Visit summary",
+    body: parts.join("\n\n"),
+    usedFactKeys: used,
+  };
+}
+
+/**
+ * Patient instructions, for the patient.
+ *
+ * Section 3's mode is "Decision + generation" from treatment, plan and follow-up. The decision is what
+ * the practitioner types plus what they tick, and this composes the two.
+ *
+ * THE TYPED INSTRUCTIONS LEAD. What the practitioner wants the patient to DO is the point of the
+ * document, so it is the first thing under the heading rather than a note appended after a list of
+ * recorded facts.
+ */
+export function composePatientInstructions(input: PatientInstructionsInput): ComposedDocument {
+  const { blocks, used } = factSections(input.facts, PATIENT_HEADING);
+  const parts: string[] = [];
+
+  const today = clean(input.today);
+  if (today) parts.push(today);
+
+  const who = patientHeading(input.patient);
+  parts.push(who ? `Instructions for ${who}` : "Instructions");
+
+  const instructions = clean(input.instructions);
+  if (instructions) parts.push(["What to do", instructions].join("\n"));
+
+  parts.push(...blocks);
+  parts.push(...signOff("Prepared by", input));
+
+  const name = clean(input.patient.name);
+  return {
+    title: name ? `Patient instructions - ${name}` : "Patient instructions",
     body: parts.join("\n\n"),
     usedFactKeys: used,
   };

@@ -530,6 +530,9 @@ export const DOC_TYPE_OPTIONS: [string, string][] = [
   ["sick_note", "Sick note"],
   ["procedure_note", "Procedure note"],
   ["discharge_summary", "Discharge summary"],
+  // CPR-DOC-AUTO-001 s5. Migration 354 added this to the doc_type CHECK -- keep the two in step, or a
+  // generated instruction sheet filters as nothing and lists with a blank type.
+  ["patient_instructions", "Patient instructions"],
   ["general", "Other document"],
   ["lab_result", "Lab result"],
   ["imaging_report", "Imaging report"],

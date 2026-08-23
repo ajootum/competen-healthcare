@@ -37,6 +37,8 @@ export const DOC_TYPES = [
   ["sick_note", "Sick note"],
   ["procedure_note", "Procedure note"],
   ["discharge_summary", "Discharge summary"],
+  // CPR-DOC-AUTO-001 s5, migration 354.
+  ["patient_instructions", "Patient instructions"],
   ["general", "Other document"],
 ] as const;
 

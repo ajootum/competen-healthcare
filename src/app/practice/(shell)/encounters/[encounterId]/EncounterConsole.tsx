@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { ENCOUNTER_TRANSITIONS, NOTE_TYPES, LOCKED_STATUSES, actionFor, labelFor } from "@/lib/practice/encounter-constants";
 import { DOC_TYPES } from "@/lib/practice/document-constants";
-import ReferralLetterComposer from "./ReferralLetterComposer";
+import DocumentComposer, { type ComposerPurpose } from "./DocumentComposer";
 import {
   FOLLOW_UP_KINDS, FOLLOW_UP_PRIORITIES, FOLLOW_UP_STATUS_LABELS, FOLLOW_UP_TAB_FILTERS,
   FOLLOW_UP_PRIORITY_CHIP, FOLLOW_UP_PRIORITY_GLYPH, followUpSummary,
@@ -439,7 +439,8 @@ export default function EncounterConsole(props: {
   const [templateId, setTemplateId] = useState("");
   // CPR-DOC-AUTO-001 s7. null when the composer is closed. `reason` seeds the form from a referral that
   // is already recorded, so the practitioner does not retype what the record already says.
-  const [letterFor, setLetterFor] = useState<{ referralId: string | null; reason: string } | null>(null);
+  const [letterFor, setLetterFor] = useState<{ purpose: ComposerPurpose; referralId: string | null; reason: string } | null>(null);
+  const [makingSummary, setMakingSummary] = useState(false);
   const [doc, setDoc] = useState({ title: "", docType: "consultation_summary", addressedTo: "", composeFrom: true });
   const [fu, setFu] = useState({
     // CPR-FUP-002 HFE s3's frozen sequence. `reason` carries the SUBJECT ("Follow-up for") -- the
@@ -661,6 +662,33 @@ export default function EncounterConsole(props: {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ templateId, mode: "fill_empty" }),
     }), "Template applied.", true);
+  };
+
+  /**
+   * CPR-DOC-AUTO-001 s3, mode A -- the visit summary is one click.
+   *
+   * NO factKeys IN THE BODY, AND THAT IS THE WHOLE POINT. An omitted selection means the s9 default
+   * (this consultation's facts), decided server-side, so the button does not first have to ask what
+   * the default is and post it straight back. An empty array would mean "include nothing" and produce
+   * a summary of nothing.
+   */
+  const createVisitSummary = async () => {
+    setMakingSummary(true); setNotice(null);
+    try {
+      const res = await fetch("/api/v1/practice/documents/visit-summary", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patientId: props.patientId, encounterId: props.encounterId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNotice({ kind: "err", text: data?.error?.message ?? "That did not work." });
+        setMakingSummary(false); return;
+      }
+      window.location.href = `/practice/documents/${data.documentId}`;
+    } catch {
+      setNotice({ kind: "err", text: "That did not work." });
+      setMakingSummary(false);
+    }
   };
 
   const createDocument = () => call(() => fetch("/api/v1/practice/documents", {
@@ -1480,7 +1508,7 @@ export default function EncounterConsole(props: {
                             form on the Documents tab is untouched and still the way to write anything
                             this does not anticipate (s19). */}
                         {editable && (
-                          <button type="button" onClick={() => setLetterFor({ referralId: null, reason: "" })}
+                          <button type="button" onClick={() => setLetterFor({ purpose: "referral_letter", referralId: null, reason: "" })}
                             className="text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
                             Write referral letter
                           </button>
@@ -1507,7 +1535,7 @@ export default function EncounterConsole(props: {
                                 {/* Writes the letter FOR this referral rather than recording a second
                                     one. Not gated on `editable`: the referral is already made, and a
                                     letter about it is a document with its own lifecycle. */}
-                                <button type="button" onClick={() => setLetterFor({ referralId: r.id, reason: r.reason })}
+                                <button type="button" onClick={() => setLetterFor({ purpose: "referral_letter", referralId: r.id, reason: r.reason })}
                                   className="mt-0.5 text-[11px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
                                   Write letter
                                 </button>
@@ -2312,8 +2340,48 @@ export default function EncounterConsole(props: {
                     }))}
                   />
 
+                  {/* ── CPR-DOC-AUTO-001 s7: PURPOSE-DRIVEN ENTRY POINTS, ABOVE THE BLANK FORM ──────
+                      s7's complaint is that writing a document here means "Title + type dropdown +
+                      blank body" -- naming a document the product could name, and authoring prose the
+                      product could compose. These three ask for the decision and compose the rest.
+
+                      The blank form is still directly below, because s19 requires manual authoring to
+                      stay available. What changed is which one a practitioner meets first. */}
                   {props.canDocument && (
-                    <form className="mt-3 grid grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); createDocument(); }}>
+                    <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50/60 p-2.5">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Create from the record</p>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-gray-500">
+                        Composed from what is recorded at this consultation. Each creates a draft you review
+                        before anything is signed.
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {/* s3 mode A, "one-click / review": CP already holds the facts, so this asks
+                            nothing and lands on the draft. */}
+                        <button type="button" disabled={busy || makingSummary} onClick={createVisitSummary}
+                          className={`min-h-[var(--cp-touch)] ${QUIET_BTN}`}>
+                          {makingSummary ? "Creating…" : "Visit summary"}
+                        </button>
+                        <button type="button" disabled={busy}
+                          onClick={() => setLetterFor({ purpose: "patient_instructions", referralId: null, reason: "" })}
+                          className={`min-h-[var(--cp-touch)] ${QUIET_BTN}`}>
+                          Patient instructions
+                        </button>
+                        <button type="button" disabled={busy}
+                          onClick={() => setLetterFor({ purpose: "referral_letter", referralId: null, reason: "" })}
+                          className={`min-h-[var(--cp-touch)] ${QUIET_BTN}`}>
+                          Referral letter
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {props.canDocument && (
+                    <p className="mt-3 text-[11px] font-bold uppercase tracking-wide text-gray-400">
+                      Or write one from scratch
+                    </p>
+                  )}
+                  {props.canDocument && (
+                    <form className="mt-1 grid grid-cols-2 gap-2" onSubmit={e => { e.preventDefault(); createDocument(); }}>
                       {/* ⚠ CPR-MOB-001 s16: "ALL FORM CONTROLS REQUIRE VISIBLE LABELS; PLACEHOLDERS ARE
                           NOT SUBSTITUTES." Two of these three controls were labelled by placeholder
                           alone, which is a label that disappears the moment somebody types into it —
@@ -2772,7 +2840,8 @@ export default function EncounterConsole(props: {
       {/* CPR-DOC-AUTO-001 s7. Last child, so the dialog overlays the whole console rather than being
           clipped by the column it was opened from. */}
       {letterFor && (
-        <ReferralLetterComposer
+        <DocumentComposer
+          purpose={letterFor.purpose}
           patientId={props.patientId} encounterId={props.encounterId}
           referralId={letterFor.referralId} initialReason={letterFor.reason}
           onClose={() => setLetterFor(null)}
