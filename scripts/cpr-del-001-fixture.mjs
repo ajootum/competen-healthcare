@@ -106,7 +106,7 @@ try {
   // RESTRICT edges further down. Seeding it by default made every other blocker invisible: the fixture
   // reported one blocker and looked complete. --deadlock demonstrates it deliberately, on its own.
   if (process.argv.includes("--deadlock")) {
-    await seedRow("practice_lifecycle_transition", `insert into practice_lifecycle_transition (workspace_id, from_status, to_status, reason) values ($1,$2,$3,$4) returning id`, [wsId, "ACTIVE", "ARCHIVED", `fixture ${MARK}`]);
+    await seedRow("practice_lifecycle_transition", `insert into practice_lifecycle_transition (workspace_id, from_status, to_status, reason) values ($1,$2,$3,$4) returning id`, [wsId, "ACTIVE", "ARCHIVED", `fixture ${MARK}`], "transition");
   } else {
     say(`  skipped practice_lifecycle_transition -- it aborts first and would mask the RESTRICT chain (--deadlock to include it)`);
   }
@@ -119,6 +119,23 @@ try {
     say(r.ok ? `  issued  practice_invoice -- the frozen guard should now refuse its lines` : `  could not issue the invoice: ${why(r.err)}`);
   }
   // ---- OBSERVE: the parent delete ----------------------------------------------------------------
+  // ---- s9 / s14 ACCEPTANCE: immutability must SURVIVE the correction ------------------------------
+  //
+  // A migration that made deletion work by making the trail mutable would pass "parent lifecycle
+  // executable" and defeat the whole point of CPR-DEL-001. These run BEFORE the delete, while the rows
+  // still exist, and they are what makes this an acceptance test rather than a demonstration.
+  if (id.transition) {
+    const d = await tryQ("delete from practice_lifecycle_transition where id = $1", [id.transition]);
+    say("  s9 direct DELETE  " + (d.ok ? "*** PERMITTED -- IMMUTABILITY IS BROKEN ***" : "still refused  (" + why(d.err) + ")"));
+    const u = await tryQ("update practice_lifecycle_transition set reason = $2 where id = $1", [id.transition, "tamper"]);
+    say("  s9 direct UPDATE  " + (u.ok ? "*** PERMITTED -- APPEND-ONLY IS BROKEN ***" : "still refused  (" + why(u.err) + ")"));
+  }
+
+  // s9 cross-practice isolation: deleting this workspace must not reach another practice.
+  const otherId = randomUUID();
+  await tryQ("insert into practice_workspace (id, name, status, owner_person_id, country, timezone) values ($1,$2,'ACTIVE',$3,'UG','Africa/Kampala')", [otherId, "ZZ other " + MARK, randomUUID()]);
+  await tryQ("insert into practice_lifecycle_transition (workspace_id, from_status, to_status, reason) values ($1,'ACTIVE','ARCHIVED',$2)", [otherId, "neighbour " + MARK]);
+
   say(`\n  ATTEMPTING the parent delete, and clearing each blocker in turn:\n`);
   const order = [];
   for (let attempt = 1; attempt <= 12; attempt++) {
@@ -133,6 +150,12 @@ try {
     const cleared = await tryQ(`delete from ${tbl} where workspace_id = $1`, [wsId]);
     if (!cleared.ok) { say(`      and its own delete is refused: ${why(cleared.err)}`); break; }
     say(`      cleared ${tbl}, retrying`);
+  }
+
+  {
+    const n = await q("select count(*)::int as n from practice_lifecycle_transition where reason = $1", ["neighbour " + MARK]);
+    say("  s9 isolation      neighbour practice " + (n.rows[0].n === 1 ? "untouched" : "*** AFFECTED -- " + n.rows[0].n + " row(s) ***"));
+    await tryQ("delete from practice_workspace where name = $1", ["ZZ other " + MARK]);
   }
 
   say(`\n  ORDER OF OPERATIONS observed (${order.length} step(s) before the parent could go):`);

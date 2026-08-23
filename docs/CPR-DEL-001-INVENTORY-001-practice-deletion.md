@@ -374,3 +374,65 @@ Nine tables I would have touched on the topology evidence turn out to need nothi
 §9's remaining PASS conditions: cross-practice isolation, unauthorized delete refused, Class B retention
 behaviour, non-database cleanup (§8), shared identity safety. None of these are schema questions — they
 need the §6 deletion service, which does not exist yet.
+
+---
+
+# Addendum 4 — migration 351, validated on staging
+
+**Written:** `supabase/migrations/351-practice-lifecycle-cascade-safe.sql` — house rules **ALL CLEAR**
+(67 lines, 8 statements). **Applied to staging only.** Production is the owner's, per CLAUDE.md.
+
+## Scope: one table
+
+`practice_lifecycle_transition`, because it is the only **demonstrated** blocker. Addendum 3 showed the
+other eight predictions were wrong. Nine tables a topology-driven migration would have touched are not
+touched.
+
+## It needs both halves, and that is not obvious
+
+| Half | Why alone it does nothing |
+|---|---|
+| **Trigger** — canonical `pg_trigger_depth() > 1` allowance, copied from `gov_decision_event_immutable` per §2 | With the FK still `NO ACTION`, the parent delete is refused before any cascade begins, so the allowance never fires |
+| **FK** — `NO ACTION` → `CASCADE` | With the trigger still refusing every DELETE, the cascade reaches the trail and aborts |
+
+A trigger-only migration would have **looked** correct and changed nothing. That is the trap this
+addendum exists to close.
+
+`actor_membership_id` deliberately stays `NO ACTION` — `practice_membership` is itself a cascade child, so
+both rows go in one statement and an end-of-statement check passes. Changing it would be the unrelated FK
+drift §5 forbids.
+
+## §14 acceptance, observed on migrated staging
+
+| Criterion | Result |
+|---|---|
+| Parent lifecycle executable | **DELETE SUCCEEDED** with the full graph *and* the transition seeded |
+| Immutability preserved | direct `DELETE` **still refused** |
+| Append-only preserved | direct `UPDATE` **still refused** |
+| Isolation | neighbour practice **untouched** |
+
+## The control
+
+Passing tests after a change do not show the change caused it. So on staging the FK was reverted to
+`NO ACTION` alone — the delete **blocked again** — and 351 re-applied — it **worked again**, with
+immutability still intact.
+
+That also isolates the two halves: reverting the FK alone is enough to break it, and the pre-migration
+runs showed the trigger alone blocks a direct delete. Neither half is redundant.
+
+## Regression
+
+`tsc` clean, eslint clean, Vitest **138/138**, `practice-security-harness` **149/0** (run against
+production, still unmigrated — a baseline, not a validation of 351).
+
+## Before this reaches production
+
+1. **§4 Class D on `practice_lifecycle_transition` is still formally open.** The evidence now strongly
+   favours the cascade: the fixture proved the alternative — a governed service deleting transitions in
+   order — cannot be built, because the trigger refuses a direct `DELETE` by design. But the decision is
+   the owner's to record, not mine to infer.
+2. **The §10 ratchet does not exist.** Nothing yet fails when a new immutable table appears behind a
+   cascade FK. Without it this correction is a point fix, not a class fix.
+3. **§6 authorized deletion path, §8 non-database sweep, §7 deletion evidence** are all unbuilt. 351
+   makes deletion *possible*; it does not make it *governed*. §14's "operationally supported" is not met
+   by this migration alone, and should not be claimed on it.
