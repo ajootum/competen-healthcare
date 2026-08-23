@@ -692,6 +692,33 @@ if (existsSync(DOC)) {
   const unguarded = /\{\s*mobileAttention\s*\}/.test(home);
   ok("9t neither slot is unguarded, so one fixed order cannot creep back in",
     !unguarded, unguarded ? "found an unconditional {mobileAttention}" : "");
+
+  // ── s6's RENDERED STATES ────────────────────────────────────────────────────────────────────
+  //
+  // The s4 contract made "I could not read this" expressible; these assert the screens actually draw
+  // it as something other than work. An unavailable item rendered through the ready branch would carry
+  // a severity border, an arrow and a link to nowhere -- indistinguishable from an obligation, which is
+  // "represent partial data as complete" exactly.
+  ok("9u both attention lists separate unavailable items from real work",
+    home.includes('readyItems = (home.attention as any[]).filter(a => a.status !== "unavailable")')
+    && home.includes('darkItems = (home.attention as any[]).filter(a => a.status === "unavailable")'));
+
+  ok("9v neither list still maps the raw attention array into a link",
+    !home.includes("{home.attention.map((a: any) => {"),
+    "a raw map would render unavailable items as tappable work");
+
+  // Rendered on BOTH surfaces, or the two disagree about what is known -- AC-14.
+  const darkRenders = (home.match(/darkItems\.map\(/g) ?? []).length;
+  ok("9w the unavailable rows are drawn on the phone AND the desktop",
+    darkRenders === 2, `${darkRenders} render site(s)`);
+
+  ok("9x an unavailable row is not a link and carries no arrow",
+    home.includes("border-dashed border-gray-300") && !/darkItems\.map[\s\S]{0,400}<Link/.test(home));
+
+  // s6: one calm row, and only when nothing is hidden and nothing failed.
+  ok("9y all-clear is one row, gated on there being genuinely nothing to say",
+    home.includes("No urgent items need attention.")
+    && home.includes("nothingToSay && home.allClear"));
 }
 
 // ---------------------------------------------------------------------------------------------

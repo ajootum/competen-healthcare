@@ -172,11 +172,48 @@ export default async function PracticeCommandCentre() {
   // s6 row 2 -- only actionable cross-day obligations, which is exactly what home.attention is: the
   // desktop Needs Attention card, and the Tasks and Messages exception cards, all render from this one
   // list, so the phone loses nothing by rendering it once. Rows are thumb-sized links (s4).
-  const mobileAttention = home.attention.length > 0 || home.blindSpots.length > 0 ? (
+  //
+  // ── CPR-CC-MOB-001 s6: WHAT THIS SECTION SHOWS WHEN IT DOES NOT HAVE FIVE COUNTS ───────────────
+  //
+  // The s4 contract gave an item a `status`, so a category whose read failed now ARRIVES here instead
+  // of being absent. Rendered through the same branch it would look exactly like work: a coloured
+  // border, an arrow, a tappable row -- and its href is a self-link, because there is nothing to open.
+  // "Do not represent partial data as complete" is the rule, and a card that cannot be told apart from
+  // a real one is the clearest way to break it.
+  //
+  // ⚠ TWO OF s6's FIVE STATES ARE NOT BUILT, AND THAT IS A MEASUREMENT, NOT AN OMISSION:
+  //
+  //   loading  There is no loading state on this surface to render. The page is a server component with
+  //            force-dynamic and there is no loading.tsx anywhere under src/app/practice, so the HTML
+  //            reaches the browser with the data already in it. A skeleton here would be code that can
+  //            never run, which is the same defect as a status enum whose second value never occurs.
+  //   stale    This page never renders FROM the offline cache. OfflineCacheWriter says so in its own
+  //            header -- it runs after the shell has rendered from the server, and "the online path is
+  //            untouched". Nothing hands this section a cached payload to label.
+  //
+  // Both are named in the acceptance report rather than stubbed. The one real staleness vector is
+  // LiveRefresh failing quietly between polls, which leaves a correct-looking page that is minutes old
+  // -- a genuine gap, and one this contract cannot see, because the server was never asked again.
+  const readyItems = (home.attention as any[]).filter(a => a.status !== "unavailable");
+  const darkItems = (home.attention as any[]).filter(a => a.status === "unavailable");
+  const nothingToSay = readyItems.length === 0 && darkItems.length === 0 && home.blindSpots.length === 0;
+
+  const mobileAttention = home.attention.length > 0 || home.blindSpots.length > 0 || home.allClear ? (
     <section className={`${card} md:hidden`} aria-labelledby="m-attention">
       <h2 id="m-attention" className={panelTitle}>Needs attention</h2>
+
+      {/* s6: "If every category is ready and zero, show one calm all-clear row." One row, not five
+          zeroes -- and only when nothing is hidden and nothing failed, which is what allClear already
+          means on this payload. A cheerful line printed over an unread category would be the lie the
+          rest of this file exists to avoid. */}
+      {nothingToSay && home.allClear && (
+        <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2.5 text-[12.5px] text-gray-600">
+          No urgent items need attention.
+        </p>
+      )}
+
       <ul className="mt-3 space-y-2">
-        {home.attention.map((a: any) => {
+        {readyItems.map((a: any) => {
           const sv = SEVERITY[a.severity] ?? SEVERITY.normal;
           return (
             <li key={a.kind}>
@@ -204,6 +241,23 @@ export default async function PracticeCommandCentre() {
           );
         })}
       </ul>
+
+      {/* s6, unavailable: no count, no arrow, not a link. A row that cannot be opened should not look
+          like one, and there is nowhere to go -- the category was not read, so its workspace has
+          nothing new to show. Rendered AFTER the real work so a dark category never pushes an actual
+          obligation down the screen. */}
+      {darkItems.length > 0 && (
+        <ul className="mt-2 space-y-2">
+          {darkItems.map((a: any) => (
+            <li key={a.kind}
+              className="rounded-lg border border-dashed border-gray-300 bg-white px-3 py-2">
+              <span className="block text-[12.5px] font-semibold leading-snug text-gray-600">{a.title}</span>
+              <span className="block text-[11.5px] leading-snug text-gray-500">{a.detail}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
       {home.blindSpots.length > 0 && (
         <p className="mt-3 border-t border-gray-100 pt-2 text-[11px] leading-relaxed text-gray-500">
           Not shown to you: {home.blindSpots.join(", ")}. This list cannot tell you whether anything
@@ -628,7 +682,11 @@ export default async function PracticeCommandCentre() {
               </div>
             ) : (
               <ul className="space-y-2">
-                {home.attention.map((a: any) => {
+                {/* ⚠ THE SAME SPLIT AS THE PHONE, FOR THE SAME REASON. An unavailable category has no
+                    count and nowhere to go; drawn as a link with a severity border it is indistinguishable
+                    from real work on the widest screen too. AC-14 asks desktop and mobile to show the
+                    same operational state, and "the same state" includes not knowing. */}
+                {readyItems.map((a: any) => {
                   const sv = SEVERITY[a.severity] ?? SEVERITY.normal;
                   return (
                     <li key={a.kind}>
@@ -648,6 +706,16 @@ export default async function PracticeCommandCentre() {
                     </li>
                   );
                 })}
+              </ul>
+            )}
+            {darkItems.length > 0 && (
+              <ul className="mt-2 space-y-2">
+                {darkItems.map((a: any) => (
+                  <li key={a.kind} className="rounded-lg border border-dashed border-gray-300 px-2.5 py-1.5">
+                    <p className="text-[12px] font-semibold text-gray-600">{a.title}</p>
+                    <p className="text-[11px] leading-snug text-gray-500">{a.detail}</p>
+                  </li>
+                ))}
               </ul>
             )}
             {home.blindSpots.length > 0 && (
