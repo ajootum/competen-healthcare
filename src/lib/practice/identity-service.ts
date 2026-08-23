@@ -516,17 +516,41 @@ export async function changeHandle(admin: any, args: {
  * would put one clinician's personal address on a practice both of them work in. Nothing is written,
  * the readiness check keeps saying no handle is on the page, and a person decides.
  */
-export async function claimedHandlesForWorkspace(admin: any, workspaceId: string): Promise<string[]> {
+/**
+ * ⚠ AN UNREADABLE ANSWER IS NOT AN EMPTY ONE, and in THIS function that distinction is the entire bug
+ * this arc exists to close. It used to destructure only `data` and then fall back to an empty array, so
+ * a failed read produced NO CLAIMED HANDLES -- and the publish readiness check turns that into the
+ * sentence "no handle has been claimed, so there is no address a patient could be given."
+ *
+ * That is, word for word, the false sentence somebody reported from their own screen while Practice Setup
+ * displayed @elisham1 in the header two clicks away. Migration 348 fixed the cause; discarding this error
+ * reproduced the SYMPTOM on any transient failure, in the one function whose whole job is to answer
+ * "has a handle been claimed?". The caller comment even says this read "is the difference between a true
+ * sentence and a false one" -- and then threw away the error that decides which.
+ */
+export type ClaimedHandles =
+  | { ok: true; handles: string[] }
+  | { ok: false; detail: string };
+
+export async function claimedHandlesForWorkspace(admin: any, workspaceId: string): Promise<ClaimedHandles> {
   // Two is enough to tell none from one from several, which is all any caller needs to decide or to
   // explain itself. Reading every identity in a large practice to answer a yes/no would be waste.
-  const { data } = await admin.from("practice_practitioner_identity")
+  const { data, error } = await admin.from("practice_practitioner_identity")
     .select("handle").eq("primary_workspace_id", workspaceId).not("handle", "is", null).limit(2);
-  return ((data ?? []) as { handle: string }[]).map(r => r.handle);
+  if (error) return { ok: false, detail: error.message };
+  return { ok: true, handles: ((data ?? []) as { handle: string }[]).map(r => r.handle) };
 }
 
+/**
+ * Null for zero, for several, AND for a read that failed -- three different reasons, one safe answer,
+ * because every one of them means we cannot name the single handle this page should carry. Writing a
+ * handle we could not confirm is the only outcome here that could put one clinician address on another
+ * clinician page, so this fails closed. Callers that need to EXPLAIN the null ask
+ * claimedHandlesForWorkspace directly and get the reason.
+ */
 export async function handleForWorkspace(admin: any, workspaceId: string): Promise<string | null> {
   const claimed = await claimedHandlesForWorkspace(admin, workspaceId);
-  return claimed.length === 1 ? claimed[0] : null;
+  return claimed.ok && claimed.handles.length === 1 ? claimed.handles[0] : null;
 }
 
 export type HandleAdoption = "adopted" | "no_workspace" | "no_page" | "page_has_handle" | "refused";

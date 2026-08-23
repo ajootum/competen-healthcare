@@ -78,7 +78,7 @@ async function main() {
     (await handleForWorkspace(stub({ identities: [{ handle: "elisham1" }, { handle: "amina2" }] }), WS)) === null);
 
   ok("3b. and the ambiguous case is still REPORTABLE, not merely absent",
-    (await claimedHandlesForWorkspace(stub({ identities: [{ handle: "elisham1" }, { handle: "amina2" }] }), WS)).length === 2);
+    ((r) => r.ok && r.handles.length === 2)(await claimedHandlesForWorkspace(stub({ identities: [{ handle: "elisham1" }, { handle: "amina2" }] }), WS)));
 
   // -- 4-8. THE WRITE, AND ITS FOUR HONEST OUTCOMES -------------------------
   ok("4. an identity with no primary workspace has no page to write to",

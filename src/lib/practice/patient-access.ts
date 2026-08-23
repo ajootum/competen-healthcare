@@ -855,11 +855,16 @@ export async function publishReadiness(
     let handleBecause: string | null = null;
     if (!profile.handle) {
       const claimed = await claimedHandlesForWorkspace(admin, ctx.workspaceId);
-      handleBecause = claimed.length === 0
-        ? "no handle has been claimed, so there is no address a patient could be given."
-        : claimed.length === 1
-          ? `@${claimed[0]} is claimed, but this booking page does not carry it yet.`
-          : "more than one practitioner here has claimed a handle, and which one this page answers on is a choice nobody has made.";
+      // A read that FAILED must not become the sentence for a read that found nothing. That confusion is
+      // the defect this check was written to fix, and saying "no handle has been claimed" about an
+      // unreadable table would have quietly reintroduced it.
+      handleBecause = !claimed.ok
+        ? "we could not check whether a handle has been claimed. This is not a statement that none is -- reload before acting on it."
+        : claimed.handles.length === 0
+          ? "no handle has been claimed, so there is no address a patient could be given."
+          : claimed.handles.length === 1
+            ? `@${claimed.handles[0]} is claimed, but this booking page does not carry it yet.`
+            : "more than one practitioner here has claimed a handle, and which one this page answers on is a choice nobody has made.";
     }
     checks.push(checkRow("HANDLE_CLAIMED", profile.handle ? "pass" : "fail", { because: handleBecause }));
     checks.push(checkRow("OTP_REQUIRED", profile.otpRequired ? "pass" : "fail", {
