@@ -191,7 +191,7 @@ it is provisioned, or auth flows on that gateway will fail after DNS starts work
 | 1. Inventory | **Done** — this document | — |
 | 2. Canonical registry in one shared source | **Done** — `src/lib/identity/domains.ts` | — |
 | 3. Freeze `recruitment.`, identify `recruit.*` | **Done** — frozen in the registry, zero references found | — |
-| 4. Configure DNS / TLS / deployment routing | **Not started** | **Owner** — registrar + Vercel |
+| 4. Configure DNS / TLS / deployment routing | **Vercel side DONE** (2026-08-24) — all six subdomains added to project `competen-healthcare`, ownership verified, awaiting DNS. **DNS records outstanding** | **Owner** — WebHostBox DNS |
 | 5. Wire gateway-aware product context and branding | Not started. `gatewayForHost()` exists and returns null for six of seven names until step 4 | Dev, after step 4 |
 | 6. Verify entitlement routing independent of hostname | **Largely already true** — `src/lib/identity/product-resolution.ts` (COMP-ID-ROUTE-001) resolves from server-side membership tables only | Dev — verification, not build |
 | 7. Wrong-door behaviour | **Already built** — `product-resolution.ts`: one destination redirects, several render a chooser, none renders a controlled no-product state | Dev — verification |
@@ -217,3 +217,64 @@ DNS, which no test can assert:
 ```bash
 for h in www practice enterprise individual recruitment staff platform; do printf "%-40s" "$h.competenhealthcare.com"; curl -s -o /dev/null -m 12 -w "%{http_code}\n" "https://$h.competenhealthcare.com/" || echo "NO RESOLVE"; done
 ```
+
+---
+
+## 8. Activation record — §9 DNS/TLS (added 2026-08-24)
+
+### 8.1 What the DNS actually is
+
+`vercel domains inspect` and a live NS lookup, both 2026-08-24:
+
+- **Registrar/DNS: third party.** Nameservers are `ns1.bh-65.webhostbox.net` and `ns2.bh-65.webhostbox.net`
+  — WebHostBox, a cPanel-style zone editor. Vercel's own nameservers (`ns1/ns2.vercel-dns.com`) are
+  listed as "intended" and are **not** in use. That is a supported configuration; records are created
+  at WebHostBox and Vercel serves the traffic.
+- **There is no proxy layer.** WebHostBox DNS is plain authoritative DNS. The "proxied / DNS-only"
+  distinction is a Cloudflare concept and does not exist here, so there is nothing to disable. If the
+  zone is ever moved to Cloudflare, the records must be **DNS-only (grey cloud)** at least until
+  Vercel has issued certificates, or the ACME challenge cannot complete.
+
+### 8.2 Existing records, which are NOT being changed
+
+| Host | Type | Value |
+|---|---|---|
+| `competenhealthcare.com` (apex) | A | `64.29.17.1`, `216.198.79.1` |
+| `www` | CNAME | `competen-v5-semacast.vercel.app` |
+
+Both work and both predate the current Vercel recommendation. **They are deliberately left alone** —
+§13 step 2 is a registry, not a migration, and the apex is the patient booking address (§4).
+
+### 8.3 Vercel side — done
+
+All six subdomains added to project `competen-healthcare`; `attached: true`, `verified: true` (ownership).
+Each reports `invalid-configuration` only because no DNS record exists yet. The project now holds eight
+domains. Required record for all six, from `vercel domains verify`:
+
+**CNAME → `fe965000d36362fc.vercel-dns-017.com`**
+
+⚠ That target is **per-domain, not generic**. It is not `cname.vercel-dns.com`; it was read from Vercel
+for each of the six individually and is identical across them because it is scoped to
+`competenhealthcare.com`. Do not substitute a value remembered from another project.
+
+### 8.4 Verifying
+
+```
+node scripts/domain-activation-check.mjs
+```
+
+Reports four distinct states per host — `NO DNS`, `DNS, NO TLS`, `WRONG TARGET`, `LIVE` — because they
+have different fixes and look identical in a browser. `www` and the apex are included as **controls**:
+they already work, so if they do not report `LIVE` the check itself is broken.
+
+Baseline before any records existed: **0/6 gateways live, both controls live.**
+
+### 8.5 ⚠ What DNS will NOT give you
+
+A hostname answering 200 means the address works. It does **not** mean the product gateway behind it is
+wired. §13 step 5 (gateway-aware product context and branding) is not built: of the six, only `staff`
+has host-aware routing today (`staffEntryRewrite`, COMP-HQ-ACCESS-001 §5). The other five will serve the
+application's ordinary root — the marketing home — until step 5 is built.
+
+That is the honest sequence and it is not a defect: hostname is navigation, and §5 of the spec requires
+authorization to stay entitlement-driven regardless of host.
