@@ -4,7 +4,7 @@ import { buildMergeContext, practitionerNameFor, type MergeContext } from "@/lib
 import {
   composeReferralLetter, composeVisitSummary, composePatientInstructions, composeClinicalSummary,
   composeInvestigationRequest, composeFollowUpInstructions, composeMedicationList, recipientLine,
-  type ComposedDocument, type Recipient, type RecipientKind,
+  type ComposedDocument, type DocumentStructure, type Recipient, type RecipientKind,
   sectionsFor,
 } from "@/lib/practice/document-compose";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/lib/practice/document-facts";
 import { assistantSettings } from "@/lib/practice/ai-assistant";
 import { phraseFactSections, type PhrasingResult } from "@/lib/practice/document-phrasing";
+import { resolveStyle, type StyleOverride } from "@/lib/practice/document-style";
 import { publishedStyleFor } from "@/lib/practice/document-style-store";
 import { recordReferral } from "@/lib/practice/encounter-workspace";
 import type { EngineResult } from "@/lib/practice/encounters";
@@ -167,9 +168,9 @@ export async function generateReferralLetter(admin: any, ctx: WorkspaceContext, 
   const reason = (args.reason ?? "").trim();
   if (!reason) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a referral needs a reason" };
 
-  const prepared = await prepare(admin, ctx, args);
+  const prepared = await prepare(admin, ctx, { ...args, docType: "referral_letter" });
   if (!prepared.ok) return prepared;
-  const { selected, merge } = prepared.data;
+  const { selected, merge, structure, styleId } = prepared.data;
 
   const recipientResult = await resolveRecipient(admin, ctx, args, ctx.userId);
   if (!recipientResult.ok) return recipientResult;
@@ -202,7 +203,7 @@ export async function generateReferralLetter(admin: any, ctx: WorkspaceContext, 
   });
 
   const composed = composeReferralLetter({
-    narrative: phrased.narrative,
+    narrative: phrased.narrative, structure,
     today: merge["today"],
     recipient,
     patient: { name: merge["patient.name"], identifier: merge["patient.identifier"], sex: merge["patient.sex"], age: merge["patient.age"] },
@@ -215,7 +216,7 @@ export async function generateReferralLetter(admin: any, ctx: WorkspaceContext, 
 
   const stored = await store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "referral_letter",
-    composed, selected, addressedTo, purpose: "referral_letter", phrasing: phrased.phrasing,
+    composed, selected, addressedTo, purpose: "referral_letter", styleId, phrasing: phrased.phrasing,
     correlationId: args.correlationId, extraAudit: { referralId, destinationId },
   });
   if (!stored.ok) return stored;
@@ -244,6 +245,9 @@ async function store(admin: any, ctx: WorkspaceContext, args: {
   composed: ComposedDocument; selected: SelectableFact[];
   addressedTo?: string; purpose: string; correlationId: string;
   phrasing?: PhrasingChoice;
+  /** Resolved in prepare(), passed through rather than re-read. */
+  styleId?: string | null;
+  documentOverride?: StyleOverride | null;
   extraAudit?: Record<string, unknown>;
 }): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
   const created = await createDocument(admin, {
@@ -255,12 +259,13 @@ async function store(admin: any, ctx: WorkspaceContext, args: {
 
   // Only written when it is not the default, so a deterministic document needs no second round trip
   // and the column can never disagree with migration 356's default for the rows that predate it.
-  // CPR-DOC-CONFIG-001 s8/s11/s15. The structure behind the body, and the style version this document
-  // was rendered with. The pin is what stops a later publish repainting a letter somebody has signed.
-  const style = await publishedStyleFor(admin, ctx.workspaceId);
+  // CPR-DOC-CONFIG-001 s8/s11/s15. The structure behind the body, the style version this document was
+  // rendered with, and any per-document change. The pin is what stops a later publish repainting a
+  // letter somebody has already signed.
   await admin.from("practice_clinical_document").update({
     content_model: args.composed.blocks,
-    ...(style ? { style_id: style.id } : {}),
+    ...(args.styleId ? { style_id: args.styleId } : {}),
+    ...(args.documentOverride ? { style_overrides: args.documentOverride } : {}),
     ...(args.phrasing === "assisted" ? { phrasing: "assisted" } : {}),
   }).eq("id", created.data.id);
 
@@ -361,6 +366,10 @@ async function narrativeFor(admin: any, ctx: WorkspaceContext, opts: {
  */
 async function prepare(admin: any, ctx: WorkspaceContext, args: {
   patientId: string;
+  /** The type being composed, so the family and type overrides can be resolved. */
+  docType?: string | null;
+  /** Section 12's per-document change, bounded and validated by the caller. */
+  documentOverride?: StyleOverride | null;
   /**
    * Optional from Phase 3 on. The clinical summary is longitudinal (section 3: "Select + summarise"
    * over the record, not over a consultation) and may be written with no consultation open at all.
@@ -370,7 +379,10 @@ async function prepare(admin: any, ctx: WorkspaceContext, args: {
   from?: string | null; to?: string | null;
   /** See CURRENT_STATE_CATEGORIES. A purpose names only its own subject. */
   alsoCurrent?: FactCategory[];
-}): Promise<EngineResult<{ selected: SelectableFact[]; merge: MergeContext }>> {
+}): Promise<EngineResult<{
+  selected: SelectableFact[]; merge: MergeContext;
+  structure: DocumentStructure; styleId: string | null; locked: boolean;
+}>> {
   const offered = await selectableFacts(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, from: args.from, to: args.to,
   });
@@ -407,7 +419,21 @@ async function prepare(admin: any, ctx: WorkspaceContext, args: {
   });
   if (!merge) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
-  return { ok: true, data: { selected, merge } };
+  // CPR-DOC-CONFIG-001 s2. Resolved HERE rather than at render, because section order and section
+  // visibility decide which sections the BODY contains -- and the body is what gets signed. Colour
+  // and typography are resolved at render, where changing them repaints nothing that is signed.
+  const practice = await publishedStyleFor(admin, ctx.workspaceId);
+  const style = resolveStyle({
+    practicePublished: practice?.tokens, docType: args.docType,
+    documentOverride: args.documentOverride,
+  });
+
+  return { ok: true, data: {
+    selected, merge,
+    structure: style.tokens.structure,
+    styleId: practice?.id ?? null,
+    locked: style.locked,
+  } };
 }
 
 const patientOf = (merge: MergeContext) => ({
@@ -429,9 +455,9 @@ const patientOf = (merge: MergeContext) => ({
 export async function generateVisitSummary(admin: any, ctx: WorkspaceContext, args: {
   patientId: string; encounterId: string; factKeys?: string[]; phrasing?: PhrasingChoice; correlationId: string;
 }): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
-  const prepared = await prepare(admin, ctx, args);
+  const prepared = await prepare(admin, ctx, { ...args, docType: "consultation_summary" });
   if (!prepared.ok) return prepared;
-  const { selected, merge } = prepared.data;
+  const { selected, merge, structure, styleId } = prepared.data;
 
   if (!selected.length)
     return { ok: false, status: 422, code: "NOTHING_TO_SUMMARISE",
@@ -442,14 +468,14 @@ export async function generateVisitSummary(admin: any, ctx: WorkspaceContext, ar
   });
 
   const composed = composeVisitSummary({
-    narrative: phrased.narrative,
+    narrative: phrased.narrative, structure,
     today: merge["today"], visitDate: merge["encounter.date"], patient: patientOf(merge),
     facts: selected, practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
   });
 
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "consultation_summary",
-    composed, selected, purpose: "visit_summary", phrasing: phrased.phrasing,
+    composed, selected, purpose: "visit_summary", styleId, phrasing: phrased.phrasing,
     correlationId: args.correlationId,
   });
 }
@@ -465,9 +491,9 @@ export async function generatePatientInstructions(admin: any, ctx: WorkspaceCont
   patientId: string; encounterId: string; instructions?: string | null;
   factKeys: string[]; phrasing?: PhrasingChoice; correlationId: string;
 }): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
-  const prepared = await prepare(admin, ctx, args);
+  const prepared = await prepare(admin, ctx, { ...args, docType: "patient_instructions" });
   if (!prepared.ok) return prepared;
-  const { selected, merge } = prepared.data;
+  const { selected, merge, structure, styleId } = prepared.data;
 
   const instructions = (args.instructions ?? "").trim();
   if (!instructions && !selected.length)
@@ -480,14 +506,14 @@ export async function generatePatientInstructions(admin: any, ctx: WorkspaceCont
   });
 
   const composed = composePatientInstructions({
-    narrative: phrased.narrative,
+    narrative: phrased.narrative, structure,
     today: merge["today"], patient: patientOf(merge), instructions: instructions || null,
     facts: selected, practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
   });
 
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "patient_instructions",
-    composed, selected, purpose: "patient_instructions", phrasing: phrased.phrasing,
+    composed, selected, purpose: "patient_instructions", styleId, phrasing: phrased.phrasing,
     correlationId: args.correlationId,
   });
 }
@@ -510,9 +536,9 @@ export async function generateClinicalSummary(admin: any, ctx: WorkspaceContext,
   if (!purpose)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "what is this summary for?" };
 
-  const prepared = await prepare(admin, ctx, args);
+  const prepared = await prepare(admin, ctx, { ...args, docType: "clinical_summary" });
   if (!prepared.ok) return prepared;
-  const { selected, merge } = prepared.data;
+  const { selected, merge, structure, styleId } = prepared.data;
 
   if (!selected.length)
     return { ok: false, status: 422, code: "NOTHING_SELECTED",
@@ -528,7 +554,7 @@ export async function generateClinicalSummary(admin: any, ctx: WorkspaceContext,
   });
 
   const composed = composeClinicalSummary({
-    narrative: phrased.narrative,
+    narrative: phrased.narrative, structure,
     today: merge["today"], patient: patientOf(merge), recipient, purpose,
     periodFrom: args.from ?? null, periodTo: args.to ?? null,
     facts: selected, practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
@@ -537,7 +563,7 @@ export async function generateClinicalSummary(admin: any, ctx: WorkspaceContext,
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId ?? null, docType: "clinical_summary",
     composed, selected, addressedTo: recipientLine(recipient),
-    purpose: "clinical_summary", phrasing: phrased.phrasing, correlationId: args.correlationId,
+    purpose: "clinical_summary", styleId, phrasing: phrased.phrasing, correlationId: args.correlationId,
   });
 }
 
@@ -558,9 +584,9 @@ export async function generateInvestigationRequest(admin: any, ctx: WorkspaceCon
   if (!indication)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a request needs a clinical indication" };
 
-  const prepared = await prepare(admin, ctx, args);
+  const prepared = await prepare(admin, ctx, { ...args, docType: "investigation_request" });
   if (!prepared.ok) return prepared;
-  const { selected, merge } = prepared.data;
+  const { selected, merge, structure, styleId } = prepared.data;
 
   // A request naming no investigation is a letter asking for nothing.
   if (!selected.some(f => f.category === "investigation"))
@@ -581,7 +607,7 @@ export async function generateInvestigationRequest(admin: any, ctx: WorkspaceCon
   });
 
   const composed = composeInvestigationRequest({
-    narrative: phrased.narrative,
+    narrative: phrased.narrative, structure,
     today: merge["today"], patient: patientOf(merge), recipient, clinicalIndication: indication,
     facts: selected, practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
   });
@@ -589,7 +615,7 @@ export async function generateInvestigationRequest(admin: any, ctx: WorkspaceCon
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "investigation_request",
     composed, selected, ...(recipient ? { addressedTo: recipientLine(recipient) } : {}),
-    purpose: "investigation_request", phrasing: phrased.phrasing, correlationId: args.correlationId,
+    purpose: "investigation_request", styleId, phrasing: phrased.phrasing, correlationId: args.correlationId,
   });
 }
 
@@ -604,9 +630,9 @@ export async function generateFollowUpInstructions(admin: any, ctx: WorkspaceCon
   patientId: string; encounterId: string; instructions?: string | null;
   factKeys?: string[]; phrasing?: PhrasingChoice; correlationId: string;
 }): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
-  const prepared = await prepare(admin, ctx, { ...args, alsoCurrent: ["follow_up"] });
+  const prepared = await prepare(admin, ctx, { ...args, alsoCurrent: ["follow_up"], docType: "follow_up_instructions" });
   if (!prepared.ok) return prepared;
-  const { selected, merge } = prepared.data;
+  const { selected, merge, structure, styleId } = prepared.data;
 
   if (!selected.some(f => f.category === "follow_up"))
     return { ok: false, status: 422, code: "NO_FOLLOW_UP_OUTSTANDING",
@@ -618,7 +644,7 @@ export async function generateFollowUpInstructions(admin: any, ctx: WorkspaceCon
   });
 
   const composed = composeFollowUpInstructions({
-    narrative: phrased.narrative,
+    narrative: phrased.narrative, structure,
     today: merge["today"], patient: patientOf(merge),
     instructions: (args.instructions ?? "").trim() || null,
     facts: selected, practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
@@ -626,7 +652,7 @@ export async function generateFollowUpInstructions(admin: any, ctx: WorkspaceCon
 
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "follow_up_instructions",
-    composed, selected, purpose: "follow_up_instructions", phrasing: phrased.phrasing,
+    composed, selected, purpose: "follow_up_instructions", styleId, phrasing: phrased.phrasing,
     correlationId: args.correlationId,
   });
 }
@@ -644,9 +670,9 @@ export async function generateFollowUpInstructions(admin: any, ctx: WorkspaceCon
 export async function generateMedicationList(admin: any, ctx: WorkspaceContext, args: {
   patientId: string; encounterId?: string | null; factKeys?: string[]; phrasing?: PhrasingChoice; correlationId: string;
 }): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
-  const prepared = await prepare(admin, ctx, { ...args, alsoCurrent: ["medication"] });
+  const prepared = await prepare(admin, ctx, { ...args, alsoCurrent: ["medication"], docType: "medication_list" });
   if (!prepared.ok) return prepared;
-  const { merge } = prepared.data;
+  const { merge, structure, styleId } = prepared.data;
 
   const selected = prepared.data.selected.filter(f => f.category === "medication");
   if (!selected.length)
@@ -658,14 +684,14 @@ export async function generateMedicationList(admin: any, ctx: WorkspaceContext, 
   });
 
   const composed = composeMedicationList({
-    narrative: phrased.narrative,
+    narrative: phrased.narrative, structure,
     today: merge["today"], patient: patientOf(merge), facts: selected,
     practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
   });
 
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId ?? null, docType: "medication_list",
-    composed, selected, purpose: "medication_list", phrasing: phrased.phrasing,
+    composed, selected, purpose: "medication_list", styleId, phrasing: phrased.phrasing,
     correlationId: args.correlationId,
   });
 }

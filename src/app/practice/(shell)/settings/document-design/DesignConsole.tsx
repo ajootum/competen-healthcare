@@ -7,8 +7,10 @@ import { PREVIEW_DOCUMENTS, CERTIFICATE_PREVIEW_ABSENT, previewDocument, type Pr
 import {
   BODY_FONTS, BODY_SIZE_RANGE, BORDER_STYLES, DENSITIES, FOOTER_STYLES, HEADING_CASES,
   HEADING_SIZE_RANGE, PATIENT_BLOCKS, PRESETS, SECTION_ROLES, SECTION_TREATMENTS,
-  contrastRatio, presetTokens, validateTokens, type PresetName, type SectionRole, type StyleTokens,
+  contrastRatio, presetTokens, validateTokens, HIDEABLE_CATEGORIES, LOCKED_LAYOUT_NOTICE,
+  isLayoutLocked, type PresetName, type SectionRole, type StyleTokens,
 } from "@/lib/practice/document-style";
+import type { FactCategory } from "@/lib/practice/document-facts";
 import type { StyleSummary } from "@/lib/practice/document-design";
 
 // CPR-DOC-CONFIG-001 sections 3, 4, 16 and 17 -- THE ONE-GO DOCUMENT DESIGNER.
@@ -55,6 +57,13 @@ const DENSITY_LABEL: Record<string, string> = {
   compact: "Compact", standard: "Standard", relaxed: "Relaxed",
 };
 
+// s16: plain language. A practitioner reorders "Diagnoses", not a FactCategory.
+const SECTION_LABEL: Record<string, string> = {
+  encounter: "Consultation context", diagnosis: "Diagnoses", procedure: "Procedures",
+  investigation: "Investigations", treatment: "Treatment", medication: "Medication",
+  follow_up: "Follow-up",
+};
+
 const FONT_LABEL: Record<string, string> = {
   inter: "Inter (sans serif)", source_serif: "Source Serif (serif)", system: "System default",
 };
@@ -95,6 +104,26 @@ export default function DesignConsole(props: {
       ...t,
       colour: { ...t.colour, roles: { ...t.colour.roles, [role]: { ...t.colour.roles[role], [part]: v } } },
     }));
+  // s7. Reordering is a permutation, never an insert or a delete -- the validator refuses an order
+  // that drops or repeats a section, so a control that could produce one would only ever be refused.
+  const moveSection = (from: number, delta: number) => set(t => {
+    const order = [...t.structure.sectionOrder];
+    const to = from + delta;
+    if (to < 0 || to >= order.length) return t;
+    [order[from], order[to]] = [order[to], order[from]];
+    return { ...t, structure: { ...t.structure, sectionOrder: order } };
+  });
+
+  const toggleHidden = (cat: FactCategory) => set(t => ({
+    ...t,
+    structure: {
+      ...t.structure,
+      hidden: t.structure.hidden.includes(cat)
+        ? t.structure.hidden.filter(c => c !== cat)
+        : [...t.structure.hidden, cat],
+    },
+  }));
+
   const setType = (k: keyof StyleTokens["typography"], v: unknown) =>
     set(t => ({ ...t, typography: { ...t.typography, [k]: v } as StyleTokens["typography"] }));
   const setLayout = (k: keyof StyleTokens["layout"], v: unknown) =>
@@ -223,6 +252,56 @@ export default function DesignConsole(props: {
           </select>
         </section>
 
+        {/* ── s7: SECTION ORDER AND VISIBILITY ────────────────────────────────────────────── */}
+        <section className="rounded-xl border border-gray-100 bg-white p-3">
+          <p className={label}>Order of sections</p>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-gray-500">
+            The order every generated document follows. A section with nothing recorded in it is left
+            out automatically.
+          </p>
+          <ul className="mt-2 flex flex-col gap-1">
+            {tokens.structure.sectionOrder.map((cat, i) => {
+              const hidden = tokens.structure.hidden.includes(cat);
+              const canHide = HIDEABLE_CATEGORIES.includes(cat);
+              return (
+                <li key={cat} className="flex items-center gap-1.5 rounded-lg border border-gray-100 px-2 py-1">
+                  <span className={`flex-1 text-[12px] ${hidden ? "text-gray-400 line-through" : "text-gray-800"}`}>
+                    {SECTION_LABEL[cat]}
+                  </span>
+                  <button type="button" aria-label={`Move ${SECTION_LABEL[cat]} up`}
+                    disabled={!props.canManage || i === 0} onClick={() => moveSection(i, -1)}
+                    className="min-h-[var(--cp-touch)] px-1.5 text-[13px] text-gray-500 disabled:opacity-25">
+                    &uarr;
+                  </button>
+                  <button type="button" aria-label={`Move ${SECTION_LABEL[cat]} down`}
+                    disabled={!props.canManage || i === tokens.structure.sectionOrder.length - 1}
+                    onClick={() => moveSection(i, 1)}
+                    className="min-h-[var(--cp-touch)] px-1.5 text-[13px] text-gray-500 disabled:opacity-25">
+                    &darr;
+                  </button>
+                  {canHide ? (
+                    <button type="button" disabled={!props.canManage} onClick={() => toggleHidden(cat)}
+                      className="min-h-[var(--cp-touch)] px-1 text-[11px] font-semibold text-[var(--cp-primary-deep)]">
+                      {hidden ? "Show" : "Hide"}
+                    </button>
+                  ) : (
+                    /* s7: clinical disclosure is chosen when the document is written, never hidden by a
+                       theme. Saying so where somebody looks for the control beats leaving them to
+                       wonder why only one section has it. */
+                    <span className="px-1 text-[10.5px] text-gray-400" title="Choose what to include when you write the document">
+                      always shown
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-gray-500">
+            {LOCKED_LAYOUT_NOTICE} for certificates and other statutory forms &mdash; they keep the
+            layout their template prescribes, and take only your colours and type.
+          </p>
+        </section>
+
         {/* Section 16: "Keep advanced controls collapsed by default." */}
         <section className="rounded-xl border border-gray-100 bg-white p-3">
           <button type="button" onClick={() => setShowAdvanced(v => !v)}
@@ -335,6 +414,11 @@ export default function DesignConsole(props: {
         <p className="text-[11px] text-gray-500">
           A worked example, not a real patient. {CERTIFICATE_PREVIEW_ABSENT}
         </p>
+        {isLayoutLocked(previewKey) && (
+          <p role="status" className="rounded-lg bg-gray-100 px-2.5 py-1.5 text-[11.5px] font-semibold text-gray-700">
+            {LOCKED_LAYOUT_NOTICE} &mdash; this type keeps its prescribed layout.
+          </p>
+        )}
 
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="mb-1 text-[15px] font-bold" style={{ color: tokens.colour.text }}>{doc.title}</h2>

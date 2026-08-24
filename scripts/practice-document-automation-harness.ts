@@ -44,7 +44,8 @@ import { AI_NOTICE } from "../src/lib/practice/ai-assistant";
 import { renderPlainText, type DocumentBlock } from "../src/lib/practice/document-compose";
 import { PREVIEW_DOCUMENTS, previewDocument } from "../src/lib/practice/document-preview";
 import {
-  PLATFORM_BASELINE, PRESETS, ROLE_FOR_CATEGORY, SECTION_ROLES, presetTokens, resolveStyle,
+  LOCKED_LAYOUT_NOTICE, PLATFORM_BASELINE, PRESETS, ROLE_FOR_CATEGORY, SECTION_ROLES, presetTokens,
+  resolveStyle,
   validateTokens,
 } from "../src/lib/practice/document-style";
 import {
@@ -454,7 +455,16 @@ async function main() {
   // in THREE separate lists. A type the engine writes but a list does not name renders blank in the
   // documents workspace and cannot be filtered for -- the same shape as a catalogue insert shipped
   // without its backfill.
-  const written = [...engineSrc.matchAll(/docType: "(\w+)"/g)].map(m => m[1]);
+  // ⚠ THE WRITE SITE, NOT EVERY MENTION. Since CPR-DOC-CONFIG-001 each generator names its type twice:
+  // once passing it to prepare(), which is a READ used to resolve family and type overrides, and once
+  // passing it to store(), which is the write. Counting both reported fourteen types for seven
+  // generators.
+  //
+  // The discriminator is the trailing comma: prepare's docType CLOSES its object literal
+  // (`docType: "x" })`), store's is followed by more properties. A first attempt excluded matches
+  // preceded by "...args, " instead, which missed the two generators that pass alsoCurrent as well --
+  // a needle chosen from three examples that did not hold for the other four.
+  const written = [...engineSrc.matchAll(/docType: "(\w+)",/g)].map(m => m[1]);
   ok("11e. each generator writes exactly one document type, and no two share one",
     written.length === generators.length && new Set(written).size === written.length,
     `${written.length} types for ${generators.length} generators: ${written.join(", ")}`);
@@ -999,6 +1009,111 @@ async function main() {
   // s11: the replaced version is archived, never deleted -- documents pinned to it still render from it.
   ok("22l. the style it replaces is archived, not deleted",
     /status: "archived"/.test(designSrc) && !/\.delete\(\)/.test(designSrc));
+
+  // ── 23. THE FIVE LEVELS, AND THE ONE THAT CANNOT BE OVERRIDDEN (Phase 3) ─────────────────────────
+  //
+  // s2's precedence, s7's structural limits and s10's locked templates. s18 makes the first two
+  // acceptance rows in their own right: "Single document > type > family > Practice > platform
+  // precedence resolves deterministically" and "Statutory/controlled form ignores prohibited styling
+  // while clearly showing why".
+
+  const withOverrides = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  withOverrides.colour.primary = "#111111";
+  withOverrides.overrides = {
+    family: { correspondence: { colour: { primary: "#222222" }, typography: { bodySize: 12 } } },
+    type: { referral_letter: { colour: { primary: "#333333" } } },
+  };
+
+  // ⚠ EACH LEVEL BEATS THE ONE BELOW IT, AND ONLY THE PROPERTY IT NAMES. The family sets a body size
+  // the type does not mention, so the type override must not discard it -- that is the difference
+  // between merging the levels and simply picking one.
+  const atType = resolveStyle({ practicePublished: withOverrides, docType: "referral_letter" });
+  ok("23a. the type override beats the family, which beats the practice",
+    atType.tokens.colour.primary === "#333333", atType.tokens.colour.primary);
+  ok("23b. and a property only the family set survives the type override",
+    atType.tokens.typography.bodySize === 12);
+
+  const atFamily = resolveStyle({ practicePublished: withOverrides, docType: "clinical_summary" });
+  ok("23c. a type with no override of its own still takes its family's",
+    atFamily.tokens.colour.primary === "#222222" && atFamily.tokens.typography.bodySize === 12);
+
+  const noFamily = resolveStyle({ practicePublished: withOverrides, docType: "medication_list" });
+  ok("23d. and a type in another family takes the practice default",
+    noFamily.tokens.colour.primary === "#111111");
+
+  // s12: the per-document change is the highest level, and beats everything.
+  const perDoc = resolveStyle({
+    practicePublished: withOverrides, docType: "referral_letter",
+    documentOverride: { colour: { primary: "#444444" } },
+  });
+  ok("23e. and this document beats them all",
+    perDoc.tokens.colour.primary === "#444444");
+  ok("23f. the levels that contributed are reported, so precedence is legible rather than folklore",
+    perDoc.applied.join(" > ") === "platform > practice style > family: correspondence > type: referral_letter > this document",
+    perDoc.applied.join(" > "));
+
+  // s11 again, now that overrides exist: a pinned style brings its OWN overrides, not today's.
+  const pinnedWith = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  pinnedWith.overrides = { type: { referral_letter: { colour: { primary: "#AA0000" } } } };
+  ok("23g. a pinned style resolves with the overrides it was published with",
+    resolveStyle({ pinned: pinnedWith, practicePublished: withOverrides, docType: "referral_letter" })
+      .tokens.colour.primary === "#AA0000");
+
+  // ── s10: locked layouts ──────────────────────────────────────────────────────────────────────────
+  const reorderedStyle = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  reorderedStyle.structure.sectionOrder = ["follow_up", "medication", "treatment", "investigation", "procedure", "diagnosis", "encounter"];
+  reorderedStyle.colour.primary = "#0000AA";
+
+  const cert = resolveStyle({ practicePublished: reorderedStyle, docType: "sick_note" });
+  ok("23h. a certificate ignores a practice section order",
+    cert.tokens.structure.sectionOrder[0] === PLATFORM_BASELINE.structure.sectionOrder[0]);
+  ok("23i. and says why, rather than ignoring it silently",
+    cert.locked && cert.lockedReason === LOCKED_LAYOUT_NOTICE);
+
+  // ⚠ s10 LOCKS THE LAYOUT, NOT THE BRANDING: "Practitioner branding may apply only to permitted
+  // header/footer areas." A certificate that also lost the practice's colours would look like a
+  // different organisation's document.
+  ok("23j. but it keeps the practice's own colours",
+    cert.tokens.colour.primary === "#0000AA");
+  ok("23k. CONTROL -- an ordinary document is not locked and does take the order",
+    (() => { const r = resolveStyle({ practicePublished: reorderedStyle, docType: "referral_letter" });
+             return !r.locked && r.tokens.structure.sectionOrder[0] === "follow_up"; })());
+
+  // ── s7: what a style may and may not restructure ─────────────────────────────────────────────────
+  const hideClinical = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  hideClinical.structure.hidden = ["diagnosis"];
+  ok("23l. a style cannot hide a section carrying recorded clinical facts",
+    validateTokens(hideClinical).some(p => p.path === "structure.hidden"));
+  const hideAllowed = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  hideAllowed.structure.hidden = ["encounter"];
+  ok("23m. CONTROL -- the one section s7 allows hiding is accepted",
+    validateTokens(hideAllowed).length === 0);
+
+  const dropped = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  dropped.structure.sectionOrder = dropped.structure.sectionOrder.slice(1);
+  ok("23n. an order missing a section is refused, so nothing selected can vanish",
+    validateTokens(dropped).some(p => p.path === "structure.sectionOrder"));
+  const twice = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  twice.structure.sectionOrder = [...PLATFORM_BASELINE.structure.sectionOrder, "diagnosis"];
+  ok("23o. and one listing a section twice is refused, so nothing prints twice",
+    validateTokens(twice).some(p => p.path === "structure.sectionOrder"));
+
+  // ── and it actually changes the document ─────────────────────────────────────────────────────────
+  const flipped = composeReferralLetter({
+    ...baseInput([CURRENT_DX, CURRENT_RX]),
+    structure: { sectionOrder: ["treatment", "diagnosis", "encounter", "procedure", "investigation", "medication", "follow_up"], hidden: [] },
+  });
+  ok("23p. section order reaches the composed document",
+    flipped.body.indexOf("ZZ-CURRENT-RX") < flipped.body.indexOf("ZZ-CURRENT-DX"));
+  ok("23q. CONTROL -- the default order puts them the other way round",
+    composed.body.indexOf("ZZ-CURRENT-DX") < composed.body.indexOf("ZZ-CURRENT-RX"));
+
+  const hiddenDoc = composeReferralLetter({
+    ...baseInput([CURRENT_DX, CURRENT_RX]),
+    structure: { sectionOrder: PLATFORM_BASELINE.structure.sectionOrder, hidden: ["treatment"] },
+  });
+  ok("23r. a hidden section leaves the document, and its facts leave the provenance with it",
+    !hiddenDoc.body.includes("ZZ-CURRENT-RX") && !hiddenDoc.usedFactKeys.includes(CURRENT_RX.key));
 
   // ── CONTROL ──────────────────────────────────────────────────────────────────────────────────────
   //

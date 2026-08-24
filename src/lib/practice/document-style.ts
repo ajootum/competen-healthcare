@@ -18,7 +18,7 @@
 // that is not a six-digit hex or a member of a named list never reaches the page.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-import type { FactCategory } from "@/lib/practice/document-facts";
+import { FACT_CATEGORIES, type FactCategory } from "@/lib/practice/document-facts";
 
 /** Section 8's eight semantic roles. */
 export const SECTION_ROLES = [
@@ -71,6 +71,23 @@ export type PresetName = typeof PRESETS[number];
  * The floor is not a style preference. A referral letter set at 9px is a document a consultant cannot
  * read, and the practitioner choosing it will not be the person struggling with it.
  */
+/**
+ * ⚠ THE ONLY SECTION A STYLE MAY HIDE, AND THE LIST IS SHORT ON PURPOSE.
+ *
+ * Section 7: "Only optional sections may be hidden by default", and, one row below, "Clinical
+ * content -- No as a theme setting. Clinical disclosure is selected during document generation, not
+ * globally hidden by styling."
+ *
+ * Read together those two rules leave very little: a diagnosis, a treatment, a medication, an
+ * investigation and a follow-up are all clinical content, and a THEME that hid any of them would be
+ * deciding disclosure for every future document -- exactly what the second rule forbids. What is
+ * left is the consultation context block, which is narrative rather than a clinical finding.
+ *
+ * Widening this is a product decision, not a tweak. The validator refuses anything else, so a wider
+ * list cannot arrive by accident through a form.
+ */
+export const HIDEABLE_CATEGORIES: FactCategory[] = ["encounter"];
+
 export const BODY_SIZE_RANGE = { min: 11, max: 16 } as const;
 export const HEADING_SIZE_RANGE = { min: 12, max: 24 } as const;
 
@@ -92,6 +109,23 @@ export type StyleTokens = {
     headingSize: number;
     headingCase: typeof HEADING_CASES[number];
     lineSpacing: typeof DENSITIES[number];
+  };
+  /**
+   * Section 7's structural configuration.
+   *
+   * ⚠ BY CATEGORY, NOT BY ROLE, and the difference is load-bearing. A role is what a section LOOKS
+   * like -- procedure and treatment share the treatment role because section 8 groups them for
+   * colour. A category is what a section IS, and those two are separate sections with separate
+   * headings. Ordering by role would merge them into one.
+   */
+  structure: {
+    sectionOrder: FactCategory[];
+    hidden: FactCategory[];
+  };
+  /** Section 2's family and type levels. Partial styles, applied over this one. See resolveStyle. */
+  overrides?: {
+    family?: Partial<Record<string, StyleOverride>>;
+    type?: Partial<Record<string, StyleOverride>>;
   };
   layout: {
     sectionTreatment: SectionTreatment;
@@ -156,6 +190,13 @@ export const PLATFORM_BASELINE: StyleTokens = {
     headingSize: 14,
     headingCase: "uppercase",
     lineSpacing: "standard",
+  },
+  // The order the composers have always emitted, now stated as configuration rather than buried in
+  // an array literal. Nothing hidden by default: a section with no selected facts is already
+  // omitted, which is section 7's "default should be omit-empty".
+  structure: {
+    sectionOrder: ["encounter", "diagnosis", "procedure", "investigation", "treatment", "medication", "follow_up"],
+    hidden: [],
   },
   layout: {
     sectionTreatment: "band",
@@ -264,6 +305,24 @@ export function validateTokens(input: unknown): StyleProblem[] {
   oneOf(ty.headingCase, HEADING_CASES, "typography.headingCase");
   oneOf(ty.lineSpacing, DENSITIES, "typography.lineSpacing");
 
+  // Section 7. The order must be a permutation of the categories -- a missing one would drop a
+  // section the practitioner selected facts for, and a duplicate would print it twice.
+  const st = t.structure ?? ({} as StyleTokens["structure"]);
+  const order = Array.isArray(st.sectionOrder) ? st.sectionOrder : [];
+  const expected = [...FACT_CATEGORIES].sort().join(",");
+  if ([...order].sort().join(",") !== expected) {
+    problems.push({ path: "structure.sectionOrder", message: "every section must appear exactly once" });
+  }
+  const hidden = Array.isArray(st.hidden) ? st.hidden : [];
+  for (const h of hidden) {
+    if (!HIDEABLE_CATEGORIES.includes(h)) {
+      problems.push({
+        path: "structure.hidden",
+        message: `this section carries recorded clinical facts, so a style cannot hide it -- choose what to include when you write the document`,
+      });
+    }
+  }
+
   const l = t.layout ?? ({} as StyleTokens["layout"]);
   oneOf(l.sectionTreatment, SECTION_TREATMENTS, "layout.sectionTreatment");
   oneOf(l.sectionSpacing, DENSITIES, "layout.sectionSpacing");
@@ -277,30 +336,146 @@ export function validateTokens(input: unknown): StyleProblem[] {
   return problems;
 }
 
+// ── section 2's five levels, and section 10's locked layouts ─────────────────────────────────────────
+
 /**
- * The style a document should be rendered with.
+ * Section 2's document families. A family override is how "certificates use a restrained monochrome
+ * layout; clinical summaries use section bands" is expressed without naming eight document types.
+ */
+export const DOCUMENT_FAMILIES = ["correspondence", "patient", "orders", "certificates"] as const;
+export type DocumentFamily = typeof DOCUMENT_FAMILIES[number];
+
+export const FAMILY_FOR_TYPE: Record<string, DocumentFamily> = {
+  referral_letter: "correspondence",
+  clinical_summary: "correspondence",
+  discharge_summary: "correspondence",
+  consultation_summary: "patient",
+  patient_instructions: "patient",
+  follow_up_instructions: "patient",
+  medication_list: "patient",
+  investigation_request: "orders",
+  procedure_note: "orders",
+  sick_note: "certificates",
+};
+
+/**
+ * ⚠ SECTION 10: LAYOUT THE PRACTITIONER MAY NOT REARRANGE.
  *
- * ⚠ A PINNED STYLE WINS, ALWAYS, AND THAT IS SECTION 11'S HISTORICAL IMMUTABILITY. A document carries
- * the tokens it was rendered with; publishing a new practice style must not repaint a letter somebody
- * already signed and sent. Only a document with no pin follows the practice's current style.
+ * "Statutory/jurisdiction-prescribed fields and placement remain locked", "Do not allow section
+ * reordering when the controlled form forbids it", and "Display 'Layout controlled by template' rather
+ * than silently ignoring practitioner settings."
  *
- * Anything unreadable falls through to the baseline rather than failing: a document that cannot be
- * displayed because its theme did not load is worse than one displayed in the default theme, and the
- * caller is told which it got.
+ * Certificates are locked, and the reason is the same one that stops this product GENERATING them:
+ * CPR-DOC-AUTO-001 section 14 requires an approved controlled template before a statutory document is
+ * automated, and none exists. A sick note can still be written by hand through the blank-body form, so
+ * one can exist -- and its layout must not follow a practice theme somebody chose for their referral
+ * letters.
+ *
+ * PRESENTATION STILL APPLIES. Section 10 permits branding "only to permitted header/footer areas", so
+ * a locked document keeps the practice's colours and type and loses only the STRUCTURE -- the order and
+ * visibility of its sections. Locking the palette too would mean a practice's certificates looked like
+ * a different organisation's.
+ */
+export const LOCKED_FAMILIES = new Set<DocumentFamily>(["certificates"]);
+
+export function isLayoutLocked(docType: string | null | undefined): boolean {
+  const family = docType ? FAMILY_FOR_TYPE[docType] : undefined;
+  return !!family && LOCKED_FAMILIES.has(family);
+}
+
+export const LOCKED_LAYOUT_NOTICE = "Layout controlled by template";
+
+/** A partial style. Every level above the practice default is expressed as one of these. */
+export type StyleOverride = {
+  colour?: Partial<Omit<StyleTokens["colour"], "roles">> & { roles?: Partial<Record<SectionRole, Partial<RoleTone>>> };
+  typography?: Partial<StyleTokens["typography"]>;
+  layout?: Partial<StyleTokens["layout"]>;
+  structure?: Partial<StyleTokens["structure"]>;
+};
+
+const mergeOverride = (base: StyleTokens, over: StyleOverride | null | undefined): StyleTokens => {
+  if (!over) return base;
+  const roles = { ...base.colour.roles };
+  for (const [role, tone] of Object.entries(over.colour?.roles ?? {})) {
+    roles[role as SectionRole] = { ...roles[role as SectionRole], ...(tone as Partial<RoleTone>) };
+  }
+  return {
+    colour: { ...base.colour, ...(over.colour ?? {}), roles },
+    typography: { ...base.typography, ...(over.typography ?? {}) },
+    layout: { ...base.layout, ...(over.layout ?? {}) },
+    structure: { ...base.structure, ...(over.structure ?? {}) },
+    overrides: base.overrides,
+  };
+};
+
+export type ResolvedStyle = {
+  tokens: StyleTokens;
+  /** Which level supplied the base, before family/type/document overrides were applied. */
+  source: "pinned" | "practice" | "baseline";
+  /** Every level that actually contributed, lowest first. Section 18 asks precedence to be legible. */
+  applied: string[];
+  locked: boolean;
+  lockedReason: string | null;
+};
+
+/**
+ * Section 2's resolution, in one place.
+ *
+ *   platform baseline -> practice default -> document family -> document type -> this document
+ *
+ * ⚠ THE LIST IS APPLIED LOWEST FIRST, so the LAST one to touch a property wins -- which is section 2's
+ * order read from the other end ("single-document override -> type -> family -> Practice -> platform").
+ * Writing the merge in the same direction as the specification lists it would invert the whole thing,
+ * and every level would be overridden by the one it is supposed to override.
+ *
+ * ⚠ A PINNED STYLE STILL WINS OVER THE PRACTICE'S CURRENT ONE (section 11). The pin replaces the BASE,
+ * and the family and type overrides then come from that same pinned profile -- not from today's. A
+ * signed letter re-rendered next year resolves exactly as it did the day it was signed.
  */
 export function resolveStyle(args: {
   pinned?: unknown | null;
   practicePublished?: unknown | null;
-}): { tokens: StyleTokens; source: "pinned" | "practice" | "baseline" } {
-  for (const [candidate, source] of [
+  docType?: string | null;
+  documentOverride?: StyleOverride | null;
+}): ResolvedStyle {
+  const applied: string[] = ["platform"];
+  let base = PLATFORM_BASELINE;
+  let source: ResolvedStyle["source"] = "baseline";
+
+  for (const [candidate, name] of [
     [args.pinned, "pinned"],
     [args.practicePublished, "practice"],
   ] as const) {
     if (candidate && validateTokens(candidate).length === 0) {
-      return { tokens: candidate as StyleTokens, source };
+      base = candidate as StyleTokens;
+      source = name;
+      applied.push(name === "pinned" ? "pinned style" : "practice style");
+      break;
     }
   }
-  return { tokens: PLATFORM_BASELINE, source: "baseline" };
+
+  const family = args.docType ? FAMILY_FOR_TYPE[args.docType] : undefined;
+  if (family && base.overrides?.family?.[family]) {
+    base = mergeOverride(base, base.overrides.family[family]);
+    applied.push(`family: ${family}`);
+  }
+  if (args.docType && base.overrides?.type?.[args.docType]) {
+    base = mergeOverride(base, base.overrides.type[args.docType]);
+    applied.push(`type: ${args.docType}`);
+  }
+  if (args.documentOverride) {
+    base = mergeOverride(base, args.documentOverride);
+    applied.push("this document");
+  }
+
+  // Section 10, applied LAST so nothing below can put a locked layout back.
+  const locked = isLayoutLocked(args.docType);
+  if (locked) {
+    base = { ...base, structure: PLATFORM_BASELINE.structure };
+    applied.push("template lock");
+  }
+
+  return { tokens: base, source, applied, locked, lockedReason: locked ? LOCKED_LAYOUT_NOTICE : null };
 }
 
 // ── section 5's theme presets ────────────────────────────────────────────────────────────────────────
@@ -361,5 +536,6 @@ export function presetTokens(name: PresetName): StyleTokens {
     colour: { ...PLATFORM_BASELINE.colour, ...(diff.colour ?? {}), roles: PLATFORM_BASELINE.colour.roles },
     typography: { ...PLATFORM_BASELINE.typography, ...(diff.typography ?? {}) },
     layout: { ...PLATFORM_BASELINE.layout, ...(diff.layout ?? {}) },
+    structure: PLATFORM_BASELINE.structure,
   } as StyleTokens;
 }

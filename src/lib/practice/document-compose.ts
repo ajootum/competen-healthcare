@@ -1,5 +1,5 @@
 import type { FactCategory, SelectableFact } from "@/lib/practice/document-facts";
-import { ROLE_FOR_CATEGORY, type SectionRole } from "@/lib/practice/document-style";
+import { PLATFORM_BASELINE, ROLE_FOR_CATEGORY, type SectionRole } from "@/lib/practice/document-style";
 
 // CPR-DOC-AUTO-001 sections 4, 10 and 17 -- COMPOSITION, AND WHY IT IS A PURE FUNCTION.
 //
@@ -108,6 +108,8 @@ export type ReferralLetterInput = {
   today: string | null;
   /** Verified AI prose standing in for the fact lists. See factSections. */
   narrative?: string | null;
+  /** Section order and visibility. See DocumentStructure. */
+  structure?: DocumentStructure;
   recipient: Recipient;
   patient: { name: string | null; identifier: string | null; sex: string | null; age: string | null };
   /** Practitioner-typed. Section 17 counts this as grounding: it is explicit practitioner input. */
@@ -159,9 +161,18 @@ function patientLine(p: ReferralLetterInput["patient"]): string | null {
   return [name, clean(p.identifier), demographics || null].filter(Boolean).join(" - ");
 }
 
-const SECTION_ORDER: FactCategory[] = [
-  "encounter", "diagnosis", "procedure", "investigation", "treatment", "medication", "follow_up",
-];
+/**
+ * ⚠ STRUCTURE IS APPLIED AT COMPOSE TIME, NOT AT RENDER TIME, and the split is the whole reason the
+ * two are separate token groups.
+ *
+ * Section order and section visibility decide WHICH SECTIONS EXIST and in what sequence -- they change
+ * the body, which is the text that gets signed. Colour and typography decide how that text is painted.
+ * So a practice publishing a new section order does not silently rearrange a letter somebody signed
+ * last month: that document was composed under the old order and its blocks still carry it.
+ */
+export type DocumentStructure = { sectionOrder: FactCategory[]; hidden: FactCategory[] };
+
+const DEFAULT_STRUCTURE: DocumentStructure = PLATFORM_BASELINE.structure;
 
 /**
  * Headings for a letter to a clinician.
@@ -216,10 +227,11 @@ function factLine(f: SelectableFact): string {
  * deterministic fallback does not have, and a fallback that changes the document's shape is not a
  * fallback.
  */
-export function sectionsFor(audience: "clinician" | "patient", facts: SelectableFact[]):
+export function sectionsFor(audience: "clinician" | "patient", facts: SelectableFact[],
+                            structure: DocumentStructure = DEFAULT_STRUCTURE):
   { heading: string; facts: SelectableFact[] }[] {
   const headings = audience === "patient" ? PATIENT_HEADING : CLINICIAN_HEADING;
-  return SECTION_ORDER
+  return visibleOrder(structure)
     .map(category => ({ heading: headings[category], facts: facts.filter(f => f.category === category) }))
     .filter(s => s.facts.length > 0);
 }
@@ -241,12 +253,17 @@ export function sectionsFor(audience: "clinician" | "patient", facts: Selectable
  * The used-key list is still computed from the FACTS, never from the prose. verifyGrounded has
  * already established that every fact appears in it.
  */
-function factSections(facts: SelectableFact[], headings: Record<FactCategory, string>, narrative?: string | null): {
+/** The categories this document prints, in order, with hidden ones removed. */
+const visibleOrder = (structure: DocumentStructure): FactCategory[] =>
+  structure.sectionOrder.filter(c => !structure.hidden.includes(c));
+
+function factSections(facts: SelectableFact[], headings: Record<FactCategory, string>,
+                      narrative?: string | null, structure: DocumentStructure = DEFAULT_STRUCTURE): {
   blocks: DocumentBlock[]; used: string[];
 } {
   const blocks: DocumentBlock[] = [];
   const used: string[] = [];
-  for (const category of SECTION_ORDER) {
+  for (const category of visibleOrder(structure)) {
     const inSection = facts.filter(f => f.category === category);
     if (!inSection.length) continue;
     blocks.push({
@@ -267,7 +284,7 @@ function factSections(facts: SelectableFact[], headings: Record<FactCategory, st
  * selected facts, and nothing else.
  */
 export function composeReferralLetter(input: ReferralLetterInput): ComposedDocument {
-  const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING, input.narrative);
+  const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING, input.narrative, input.structure);
   const parts: DocumentBlock[] = [];
 
   const today = clean(input.today);
@@ -315,6 +332,8 @@ export type PatientDocumentInput = {
   today: string | null;
   /** Verified AI prose standing in for the fact lists. See factSections. */
   narrative?: string | null;
+  /** Section order and visibility. See DocumentStructure. */
+  structure?: DocumentStructure;
   patient: { name: string | null; identifier: string | null; sex: string | null; age: string | null };
   facts: SelectableFact[];
   practitionerName: string | null;
@@ -353,7 +372,7 @@ function signOff(who: string, input: PatientDocumentInput): DocumentBlock[] {
  * why this takes no typed input at all -- every line comes from the record.
  */
 export function composeVisitSummary(input: VisitSummaryInput): ComposedDocument {
-  const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative);
+  const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative, input.structure);
   const parts: DocumentBlock[] = [];
 
   const today = clean(input.today);
@@ -388,7 +407,7 @@ export function composeVisitSummary(input: VisitSummaryInput): ComposedDocument 
  * recorded facts.
  */
 export function composePatientInstructions(input: PatientInstructionsInput): ComposedDocument {
-  const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative);
+  const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative, input.structure);
   const parts: DocumentBlock[] = [];
 
   const today = clean(input.today);
@@ -455,7 +474,7 @@ export type MedicationListInput = PatientDocumentInput;
  * says "full record" is not, and a colleague would rely on it.
  */
 export function composeClinicalSummary(input: ClinicalSummaryInput): ComposedDocument {
-  const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING, input.narrative);
+  const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING, input.narrative, input.structure);
   const parts: DocumentBlock[] = [];
 
   const today = clean(input.today);
@@ -501,7 +520,7 @@ export function composeClinicalSummary(input: ClinicalSummaryInput): ComposedDoc
  * a document look automated.
  */
 export function composeInvestigationRequest(input: InvestigationRequestInput): ComposedDocument {
-  const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING, input.narrative);
+  const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING, input.narrative, input.structure);
   const parts: DocumentBlock[] = [];
 
   const today = clean(input.today);
@@ -540,7 +559,7 @@ export function composeInvestigationRequest(input: InvestigationRequestInput): C
  * carries what the record cannot: where to come, who to ask for, what to bring.
  */
 export function composeFollowUpInstructions(input: FollowUpInstructionsInput): ComposedDocument {
-  const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative);
+  const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative, input.structure);
   const parts: DocumentBlock[] = [];
 
   const today = clean(input.today);
@@ -578,7 +597,7 @@ export function composeFollowUpInstructions(input: FollowUpInstructionsInput): C
  * about the patient.
  */
 export function composeMedicationList(input: MedicationListInput): ComposedDocument {
-  const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative);
+  const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative, input.structure);
   const parts: DocumentBlock[] = [];
 
   const today = clean(input.today);

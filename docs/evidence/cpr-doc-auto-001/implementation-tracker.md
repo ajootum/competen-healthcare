@@ -19,7 +19,8 @@ Last updated 2026-08-24, after the AI phrasing layer.
 | 7 | Medication list | A, one-click | **Built** (Phase 3) | `generateMedicationList` | `medication_list` |
 | 8 | Sick leave / fitness certificate | D, decision + controlled template | **Not built — blocked, see below** | none | `sick_note` exists, nothing writes it |
 
-Migrations: 352 + 353 (Phase 1), 354 (Phase 2), 355 (Phase 3), 356 (AI phrasing). All applied and probed live.
+Migrations: 352 + 353 (Phase 1), 354 (Phase 2), 355 (Phase 3), 356 (AI phrasing), 357 (style profiles).
+All applied and probed live. **358 is sent and not yet applied** -- see the designer section below.
 
 ## Priority 8 is blocked, not skipped
 
@@ -106,3 +107,26 @@ Two rows are **not** closed by the harness and should not be read as if they wer
 asserted at the schema level but the signed-document UI path has not been exercised end to end, and
 "Timeline" is asserted by construction (the FK is written) rather than by reading the rendered patient
 timeline. Both need the signed-in pass that remains the owner's.
+
+## CPR-DOC-CONFIG-001 — the document designer
+
+A separate specification, built on this engine. Tracked here because it consumes the same composers,
+the same renderer and the same acceptance harness.
+
+| Phase | What | State |
+|---|---|---|
+| 1 | Semantic roles, content model, versioned style profiles, shared renderer | **Built** (mig 357) |
+| 2 | The one-go designer: presets, live preview, publish confirmation | **Built** |
+| 3 | Five-level override resolution, locked templates, section order | **Built**; mig 358 NOT YET APPLIED |
+
+⚠ **Migration 358 is not applied yet.** Nothing depends on it today: the engine writes
+`style_overrides` only when a per-document override is supplied, and no screen supplies one. Apply it
+before building that screen, or the first write will fail.
+
+**Not built, and deliberately:** the per-document override (§12) is plumbed through the engine and has
+a column, but no UI offers it yet — a practitioner cannot currently customise a single draft. The
+resolution layer accepts one, so adding the control is a screen, not an architecture change.
+
+**Locked layouts** (§10) cover the certificates family. Nothing generates a certificate — §14 of this
+specification blocks that — but a sick note can be written by hand through the blank form, and its
+layout must not follow a theme chosen for referral letters.
