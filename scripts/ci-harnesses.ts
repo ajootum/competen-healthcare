@@ -115,6 +115,12 @@ const INCLUDED = [
   "pui-colour-harness.ts",
   "pui-tokens-harness.ts",
   "sidebar-active-harness.ts",
+  // COMP-ACCESS-URL-001 s13 step 2 -- 45/45. The canonical hostname registry, plus the regression
+  // searches s8 and s12 ask for (no deprecated recruitment host, no independent Enterprise-module
+  // login domain, no executable hostname literal outside the registry). Pure: reads src/**, scripts/**
+  // and supabase/** from disk and counts in-process. It asserts NOTHING about DNS -- s9 is an owner
+  // action and six of the seven hostnames do not resolve.
+  "domain-registry-harness.ts",
   "staff-host-harness.ts",
 ];
 

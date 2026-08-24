@@ -19,8 +19,28 @@
 // with its own decision; this one adds an entrance and takes nothing away.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** The staff door's path. The subdomain is an alias for it, never a second implementation. */
-export const STAFF_DOOR_PATH = "/staff";
+import { GATEWAYS, normaliseHost } from "./domains";
+
+/**
+ * ⚠ THE HOSTNAMES AND `normaliseHost` NOW COME FROM THE REGISTRY (COMP-ACCESS-URL-001 s13 step 2,
+ * src/lib/identity/domains.ts). The values are unchanged -- `staff.competenhealthcare.com` and
+ * `staff.localhost`, in that order -- but they are no longer typed out twice. Before the registry
+ * existed this file was one of three places holding an executable Competen hostname, and the spec's
+ * whole step 2 is that there should be one.
+ */
+export { normaliseHost };
+
+/**
+ * The staff door's path. The subdomain is an alias for it, never a second implementation.
+ *
+ * ⚠ DERIVED FROM THE REGISTRY SO THE `/hq` QUESTION CANNOT BE ANSWERED BY ACCIDENT. COMP-ACCESS-URL-001
+ * s2 names `/hq` as the staff route equivalent and this application serves `/staff`; the registry
+ * records the disagreement rather than resolving it. Deriving the door from the same field means an
+ * edit made to satisfy the newer spec moves the privileged entrance too, instead of leaving a registry
+ * that claims one thing and a door that is another -- and domain-registry-harness.ts asserts both that
+ * this equals "/staff" and that the route directory exists, so the change goes red rather than quiet.
+ */
+export const STAFF_DOOR_PATH = GATEWAYS.staff.route;
 
 /**
  * Hosts that mean "landlord entry". Exact matches only -- a suffix test (`endsWith("staff...")`)
@@ -31,19 +51,9 @@ export const STAFF_DOOR_PATH = "/staff";
  * production, where the host header is whatever the platform terminated TLS for.
  */
 export const STAFF_HOSTS: readonly string[] = [
-  "staff.competenhealthcare.com",
-  "staff.localhost",
+  GATEWAYS.staff.host,
+  ...GATEWAYS.staff.devHosts,
 ];
-
-/** The host header, normalised: lower-cased and stripped of its port. Null when absent or unusable. */
-export function normaliseHost(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const host = raw.trim().toLowerCase().split(",")[0].trim();
-  if (!host) return null;
-  // IPv6 literals arrive bracketed ("[::1]:3000"); everything else splits on the last colon.
-  const withoutPort = host.startsWith("[") ? host.slice(0, host.indexOf("]") + 1) : host.split(":")[0];
-  return withoutPort || null;
-}
 
 export function isStaffHost(rawHost: string | null | undefined): boolean {
   const host = normaliseHost(rawHost);
