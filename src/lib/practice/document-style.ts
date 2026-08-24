@@ -239,6 +239,64 @@ export const MIN_CONTRAST = 4.5;
 
 export type StyleProblem = { path: string; message: string };
 
+
+/**
+ * Section 7's structural rules, in one place because two callers enforce them: a practice style, and
+ * a single document's override. Two copies would drift, and the copy that drifted would be the one
+ * a document author reaches.
+ */
+export function validateStructure(input: unknown): StyleProblem[] {
+  const problems: StyleProblem[] = [];
+  const st = (input ?? {}) as StyleTokens["structure"];
+
+  // The order must be a permutation of the categories -- a missing one would drop a section the
+  // practitioner selected facts for, and a duplicate would print it twice.
+  const order = Array.isArray(st.sectionOrder) ? st.sectionOrder : [];
+  if ([...order].sort().join(",") !== [...FACT_CATEGORIES].sort().join(",")) {
+    problems.push({ path: "structure.sectionOrder", message: "every section must appear exactly once" });
+  }
+
+  const hidden = Array.isArray(st.hidden) ? st.hidden : [];
+  for (const h of hidden) {
+    if (!HIDEABLE_CATEGORIES.includes(h)) {
+      problems.push({
+        path: "structure.hidden",
+        message: "this section carries recorded clinical facts, so it cannot be hidden here -- choose what to include when you write the document",
+      });
+    }
+  }
+  return problems;
+}
+
+/**
+ * ⚠ WHAT ONE DOCUMENT MAY CHANGE, WHICH IS FAR LESS THAN A PRACTICE STYLE.
+ *
+ * Section 12: "Allow optional section visibility/order changes where clinically safe", and, two lines
+ * later, "Do not expose raw theme internals in the routine document composer."
+ *
+ * So this accepts STRUCTURE AND NOTHING ELSE. A colour or a typeface arriving on a per-document
+ * request is not a value to clamp, it is a request that should not have been made -- either a screen
+ * offering controls it should not, or a caller reaching past one. Both are worth refusing loudly
+ * rather than quietly dropping, because a silent drop looks to the practitioner like it worked.
+ *
+ * The permission difference is the reason. Publishing a practice style takes practice.settings.manage;
+ * writing a document takes document.author. If a document author could send colour here, the second
+ * capability would silently confer the first for the duration of one letter.
+ */
+export function validateDocumentOverride(input: unknown): StyleProblem[] {
+  if (input === null || input === undefined) return [];
+  if (typeof input !== "object") return [{ path: "override", message: "that is not a document setting" }];
+
+  const keys = Object.keys(input as Record<string, unknown>);
+  const forbidden = keys.filter(k => k !== "structure");
+  if (forbidden.length) {
+    return [{
+      path: "override",
+      message: `only the order and visibility of sections can be changed for one document (not ${forbidden.join(", ")})`,
+    }];
+  }
+  return validateStructure((input as { structure?: unknown }).structure);
+}
 /**
  * Validate a token set. Returns every problem, not the first.
  *
@@ -305,23 +363,7 @@ export function validateTokens(input: unknown): StyleProblem[] {
   oneOf(ty.headingCase, HEADING_CASES, "typography.headingCase");
   oneOf(ty.lineSpacing, DENSITIES, "typography.lineSpacing");
 
-  // Section 7. The order must be a permutation of the categories -- a missing one would drop a
-  // section the practitioner selected facts for, and a duplicate would print it twice.
-  const st = t.structure ?? ({} as StyleTokens["structure"]);
-  const order = Array.isArray(st.sectionOrder) ? st.sectionOrder : [];
-  const expected = [...FACT_CATEGORIES].sort().join(",");
-  if ([...order].sort().join(",") !== expected) {
-    problems.push({ path: "structure.sectionOrder", message: "every section must appear exactly once" });
-  }
-  const hidden = Array.isArray(st.hidden) ? st.hidden : [];
-  for (const h of hidden) {
-    if (!HIDEABLE_CATEGORIES.includes(h)) {
-      problems.push({
-        path: "structure.hidden",
-        message: `this section carries recorded clinical facts, so a style cannot hide it -- choose what to include when you write the document`,
-      });
-    }
-  }
+  problems.push(...validateStructure(t.structure));
 
   const l = t.layout ?? ({} as StyleTokens["layout"]);
   oneOf(l.sectionTreatment, SECTION_TREATMENTS, "layout.sectionTreatment");

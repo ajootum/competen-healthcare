@@ -12,7 +12,7 @@ import {
 } from "@/lib/practice/document-facts";
 import { assistantSettings } from "@/lib/practice/ai-assistant";
 import { phraseFactSections, type PhrasingResult } from "@/lib/practice/document-phrasing";
-import { resolveStyle, type StyleOverride } from "@/lib/practice/document-style";
+import { resolveStyle, validateDocumentOverride, type StyleOverride } from "@/lib/practice/document-style";
 import { publishedStyleFor } from "@/lib/practice/document-style-store";
 import { recordReferral } from "@/lib/practice/encounter-workspace";
 import type { EngineResult } from "@/lib/practice/encounters";
@@ -72,6 +72,8 @@ export type ReferralLetterArgs = {
   factKeys: string[];
   /** CPR-DOC-AUTO-001 s10. Opt-in per request; the default and every failure is deterministic. */
   phrasing?: PhrasingChoice;
+  /** CPR-DOC-CONFIG-001 s12. Section order and visibility only -- see validateDocumentOverride. */
+  documentOverride?: StyleOverride | null;
   correlationId: string;
 };
 
@@ -216,7 +218,7 @@ export async function generateReferralLetter(admin: any, ctx: WorkspaceContext, 
 
   const stored = await store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "referral_letter",
-    composed, selected, addressedTo, purpose: "referral_letter", styleId, phrasing: phrased.phrasing,
+    composed, selected, addressedTo, purpose: "referral_letter", styleId, documentOverride: args.documentOverride, phrasing: phrased.phrasing,
     correlationId: args.correlationId, extraAudit: { referralId, destinationId },
   });
   if (!stored.ok) return stored;
@@ -419,6 +421,17 @@ async function prepare(admin: any, ctx: WorkspaceContext, args: {
   });
   if (!merge) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
 
+  // ⚠ s12 IS BOUNDED, AND THE BOUND IS CHECKED BEFORE THE DOCUMENT IS COMPOSED. A per-document change
+  // may reorder or hide sections and nothing else -- see validateDocumentOverride for why a colour
+  // arriving here is refused rather than ignored. Refusing before composition means a rejected request
+  // leaves no half-made document behind.
+  const overrideProblems = validateDocumentOverride(args.documentOverride);
+  if (overrideProblems.length)
+    return {
+      ok: false, status: 422, code: "DOCUMENT_OVERRIDE_NOT_ALLOWED",
+      message: overrideProblems.map(p => p.message).join("; "),
+    };
+
   // CPR-DOC-CONFIG-001 s2. Resolved HERE rather than at render, because section order and section
   // visibility decide which sections the BODY contains -- and the body is what gets signed. Colour
   // and typography are resolved at render, where changing them repaints nothing that is signed.
@@ -453,7 +466,10 @@ const patientOf = (merge: MergeContext) => ({
  * their visit is accounted for. The refusal names the fix.
  */
 export async function generateVisitSummary(admin: any, ctx: WorkspaceContext, args: {
-  patientId: string; encounterId: string; factKeys?: string[]; phrasing?: PhrasingChoice; correlationId: string;
+  patientId: string; encounterId: string; factKeys?: string[]; phrasing?: PhrasingChoice;
+  /** CPR-DOC-CONFIG-001 s12. Section order and visibility only -- see validateDocumentOverride. */
+  documentOverride?: StyleOverride | null;
+  correlationId: string;
 }): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
   const prepared = await prepare(admin, ctx, { ...args, docType: "consultation_summary" });
   if (!prepared.ok) return prepared;
@@ -475,7 +491,7 @@ export async function generateVisitSummary(admin: any, ctx: WorkspaceContext, ar
 
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "consultation_summary",
-    composed, selected, purpose: "visit_summary", styleId, phrasing: phrased.phrasing,
+    composed, selected, purpose: "visit_summary", styleId, documentOverride: args.documentOverride, phrasing: phrased.phrasing,
     correlationId: args.correlationId,
   });
 }
@@ -489,7 +505,10 @@ export async function generateVisitSummary(admin: any, ctx: WorkspaceContext, ar
  */
 export async function generatePatientInstructions(admin: any, ctx: WorkspaceContext, args: {
   patientId: string; encounterId: string; instructions?: string | null;
-  factKeys: string[]; phrasing?: PhrasingChoice; correlationId: string;
+  factKeys: string[]; phrasing?: PhrasingChoice;
+  /** CPR-DOC-CONFIG-001 s12. Section order and visibility only -- see validateDocumentOverride. */
+  documentOverride?: StyleOverride | null;
+  correlationId: string;
 }): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
   const prepared = await prepare(admin, ctx, { ...args, docType: "patient_instructions" });
   if (!prepared.ok) return prepared;
@@ -513,7 +532,7 @@ export async function generatePatientInstructions(admin: any, ctx: WorkspaceCont
 
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "patient_instructions",
-    composed, selected, purpose: "patient_instructions", styleId, phrasing: phrased.phrasing,
+    composed, selected, purpose: "patient_instructions", styleId, documentOverride: args.documentOverride, phrasing: phrased.phrasing,
     correlationId: args.correlationId,
   });
 }
@@ -530,7 +549,10 @@ export async function generateClinicalSummary(admin: any, ctx: WorkspaceContext,
   patientId: string; encounterId?: string | null;
   destinationId?: string | null; recipient?: AdHocRecipient | null;
   purpose: string; from?: string | null; to?: string | null;
-  factKeys: string[]; phrasing?: PhrasingChoice; correlationId: string;
+  factKeys: string[]; phrasing?: PhrasingChoice;
+  /** CPR-DOC-CONFIG-001 s12. Section order and visibility only -- see validateDocumentOverride. */
+  documentOverride?: StyleOverride | null;
+  correlationId: string;
 }): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
   const purpose = (args.purpose ?? "").trim();
   if (!purpose)
@@ -563,7 +585,7 @@ export async function generateClinicalSummary(admin: any, ctx: WorkspaceContext,
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId ?? null, docType: "clinical_summary",
     composed, selected, addressedTo: recipientLine(recipient),
-    purpose: "clinical_summary", styleId, phrasing: phrased.phrasing, correlationId: args.correlationId,
+    purpose: "clinical_summary", styleId, documentOverride: args.documentOverride, phrasing: phrased.phrasing, correlationId: args.correlationId,
   });
 }
 
@@ -578,7 +600,10 @@ export async function generateClinicalSummary(admin: any, ctx: WorkspaceContext,
 export async function generateInvestigationRequest(admin: any, ctx: WorkspaceContext, args: {
   patientId: string; encounterId: string;
   destinationId?: string | null; recipient?: AdHocRecipient | null;
-  clinicalIndication: string; factKeys: string[]; phrasing?: PhrasingChoice; correlationId: string;
+  clinicalIndication: string; factKeys: string[]; phrasing?: PhrasingChoice;
+  /** CPR-DOC-CONFIG-001 s12. Section order and visibility only -- see validateDocumentOverride. */
+  documentOverride?: StyleOverride | null;
+  correlationId: string;
 }): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
   const indication = (args.clinicalIndication ?? "").trim();
   if (!indication)
@@ -615,7 +640,7 @@ export async function generateInvestigationRequest(admin: any, ctx: WorkspaceCon
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "investigation_request",
     composed, selected, ...(recipient ? { addressedTo: recipientLine(recipient) } : {}),
-    purpose: "investigation_request", styleId, phrasing: phrased.phrasing, correlationId: args.correlationId,
+    purpose: "investigation_request", styleId, documentOverride: args.documentOverride, phrasing: phrased.phrasing, correlationId: args.correlationId,
   });
 }
 
@@ -628,7 +653,10 @@ export async function generateInvestigationRequest(admin: any, ctx: WorkspaceCon
  */
 export async function generateFollowUpInstructions(admin: any, ctx: WorkspaceContext, args: {
   patientId: string; encounterId: string; instructions?: string | null;
-  factKeys?: string[]; phrasing?: PhrasingChoice; correlationId: string;
+  factKeys?: string[]; phrasing?: PhrasingChoice;
+  /** CPR-DOC-CONFIG-001 s12. Section order and visibility only -- see validateDocumentOverride. */
+  documentOverride?: StyleOverride | null;
+  correlationId: string;
 }): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
   const prepared = await prepare(admin, ctx, { ...args, alsoCurrent: ["follow_up"], docType: "follow_up_instructions" });
   if (!prepared.ok) return prepared;
@@ -652,7 +680,7 @@ export async function generateFollowUpInstructions(admin: any, ctx: WorkspaceCon
 
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "follow_up_instructions",
-    composed, selected, purpose: "follow_up_instructions", styleId, phrasing: phrased.phrasing,
+    composed, selected, purpose: "follow_up_instructions", styleId, documentOverride: args.documentOverride, phrasing: phrased.phrasing,
     correlationId: args.correlationId,
   });
 }
@@ -668,7 +696,10 @@ export async function generateFollowUpInstructions(admin: any, ctx: WorkspaceCon
  * one-click list cannot quietly acquire a diagnosis from a wider default.
  */
 export async function generateMedicationList(admin: any, ctx: WorkspaceContext, args: {
-  patientId: string; encounterId?: string | null; factKeys?: string[]; phrasing?: PhrasingChoice; correlationId: string;
+  patientId: string; encounterId?: string | null; factKeys?: string[]; phrasing?: PhrasingChoice;
+  /** CPR-DOC-CONFIG-001 s12. Section order and visibility only -- see validateDocumentOverride. */
+  documentOverride?: StyleOverride | null;
+  correlationId: string;
 }): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
   const prepared = await prepare(admin, ctx, { ...args, alsoCurrent: ["medication"], docType: "medication_list" });
   if (!prepared.ok) return prepared;
@@ -691,7 +722,7 @@ export async function generateMedicationList(admin: any, ctx: WorkspaceContext, 
 
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId ?? null, docType: "medication_list",
-    composed, selected, purpose: "medication_list", styleId, phrasing: phrased.phrasing,
+    composed, selected, purpose: "medication_list", styleId, documentOverride: args.documentOverride, phrasing: phrased.phrasing,
     correlationId: args.correlationId,
   });
 }

@@ -57,6 +57,19 @@ const field = "min-h-[var(--cp-touch)] w-full rounded-lg border border-gray-200 
 export type ComposerPurpose =
   | "referral_letter" | "patient_instructions" | "clinical_summary" | "investigation_request";
 
+type DocumentStructure = { sectionOrder: string[]; hidden: string[] };
+
+// s16: plain language. A practitioner reorders "Diagnoses", never a FactCategory.
+const SECTION_LABEL: Record<string, string> = {
+  encounter: "Consultation context", diagnosis: "Diagnoses", procedure: "Procedures",
+  investigation: "Investigations", treatment: "Treatment", medication: "Medication",
+  follow_up: "Follow-up",
+};
+
+// Only this one may be hidden. s7 puts clinical content outside styling entirely, so the rest are
+// governed by what the practitioner ticks in Include from the record, not by presentation.
+const HIDEABLE = ["encounter"];
+
 type PurposeConfig = {
   endpoint: string; heading: string; blurb: string; submit: string; working: string;
   /** "required" puts the recipient block up and refuses without one; "optional" offers it. */
@@ -142,6 +155,13 @@ export default function DocumentComposer(props: {
   const [assist, setAssist] = useState(false);
   // Set when assisted phrasing was asked for and the result came back as the plain list anyway.
   const [fellBack, setFellBack] = useState<string | null>(null);
+
+  // s12. null means "use the Practice style", which is the default and stays the default: a
+  // customisation is something a practitioner asks for on one document, never something they arrive
+  // already inside. practiceStructure is what they would be customising FROM.
+  const [practiceStructure, setPracticeStructure] = useState<DocumentStructure | null>(null);
+  const [layoutLocked, setLayoutLocked] = useState(false);
+  const [custom, setCustom] = useState<DocumentStructure | null>(null);
   const cfg = PURPOSES[props.purpose];
 
   const [busy, setBusy] = useState(false);
@@ -153,7 +173,7 @@ export default function DocumentComposer(props: {
     (async () => {
       try {
         const [factsRes, destRes] = await Promise.all([
-          fetch(`/api/v1/practice/documents/facts?patientId=${props.patientId}&encounterId=${props.encounterId}`
+          fetch(`/api/v1/practice/documents/facts?patientId=${props.patientId}&encounterId=${props.encounterId}&docType=${props.purpose}`
             + (period.from ? `&from=${period.from}` : "") + (period.to ? `&to=${period.to}` : "")),
           fetch("/api/v1/practice/referral-destinations"),
         ]);
@@ -163,6 +183,8 @@ export default function DocumentComposer(props: {
         setGroups(facts.groups ?? []);
         setSelected(new Set<string>(facts.defaultSelected ?? []));
         setAssistAvailable(facts.assistedPhrasingAvailable === true);
+        setPracticeStructure(facts.structure ?? null);
+        setLayoutLocked(facts.layoutLocked === true);
         if (destRes.ok) setDestinations((await destRes.json()).destinations ?? []);
       } catch {
         if (live) setLoadFailed("This patient's record could not be read, so nothing can be included yet.");
@@ -172,7 +194,25 @@ export default function DocumentComposer(props: {
     // ⚠ THE RANGE IS PART OF WHAT IS OFFERED, so changing it re-reads. Leaving it out of the
     // dependencies would show the practitioner a list from the old window and generate from the new
     // one -- a selection that no longer matches what was on screen.
-  }, [props.patientId, props.encounterId, period.from, period.to]);
+    // props.purpose is a dependency because the request now carries it: the resolved section order
+    // differs per document type, so a purpose change must refetch rather than keep the previous one.
+  }, [props.patientId, props.encounterId, props.purpose, period.from, period.to]);
+
+  // Reordering is a swap, so the result is always a permutation -- the engine refuses anything else,
+  // and a control that could produce one would only ever be refused.
+  const moveCustom = (from: number, delta: number) => setCustom(c => {
+    if (!c) return c;
+    const order = [...c.sectionOrder];
+    const to = from + delta;
+    if (to < 0 || to >= order.length) return c;
+    [order[from], order[to]] = [order[to], order[from]];
+    return { ...c, sectionOrder: order };
+  });
+
+  const toggleCustomHidden = (cat: string) => setCustom(c => c && ({
+    ...c,
+    hidden: c.hidden.includes(cat) ? c.hidden.filter(x => x !== cat) : [...c.hidden, cat],
+  }));
 
   const toggle = (key: string) => setSelected(prev => {
     const next = new Set(prev);
@@ -189,6 +229,9 @@ export default function DocumentComposer(props: {
           patientId: props.patientId, encounterId: props.encounterId,
           factKeys: [...selected],
           phrasing: assist ? "assisted" : "deterministic",
+          // Absent unless the practitioner asked. s12: a one-document change must never touch the
+          // Practice-wide configuration, and the safest expression of that is sending nothing.
+          ...(custom ? { documentOverride: { structure: custom } } : {}),
           ...(cfg.recipient ? {
             referralId: props.referralId ?? null,
             destinationId: destinationId || null,
@@ -446,6 +489,62 @@ export default function DocumentComposer(props: {
           </div>
         )}
 
+        {/* ── s12: USE PRACTICE STYLE, OR CUSTOMISE THIS ONE ───────────────────────────────── */}
+        {!loadFailed && practiceStructure && (
+          <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50/60 p-2.5">
+            {layoutLocked ? (
+              /* s10. A prescribed layout is not a control to disable -- it is a fact to state. */
+              <p className="text-[11.5px] text-gray-600">
+                This document keeps the layout its template prescribes.
+              </p>
+            ) : custom === null ? (
+              <div className="flex items-center gap-2">
+                <span className="flex-1 text-[12px] text-gray-700">Using your practice document style.</span>
+                <button type="button" onClick={() => setCustom({ ...practiceStructure })}
+                  className="min-h-[var(--cp-touch)] text-[12px] font-semibold text-[var(--cp-primary-deep)]">
+                  Customise this one
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 text-[12px] font-semibold text-gray-800">Just this document</span>
+                  <button type="button" onClick={() => setCustom(null)}
+                    className="min-h-[var(--cp-touch)] text-[12px] font-semibold text-[var(--cp-primary-deep)]">
+                    Use practice style
+                  </button>
+                </div>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-gray-500">
+                  Changes the order for this document only. Your practice style is untouched.
+                </p>
+                <ul className="mt-1.5 flex flex-col gap-1">
+                  {custom.sectionOrder.map((cat, i) => {
+                    const isHidden = custom.hidden.includes(cat);
+                    return (
+                      <li key={cat} className="flex items-center gap-1 rounded border border-gray-100 bg-white px-2 py-0.5">
+                        <span className={`flex-1 text-[11.5px] ${isHidden ? "text-gray-400 line-through" : "text-gray-700"}`}>
+                          {SECTION_LABEL[cat] ?? cat}
+                        </span>
+                        <button type="button" aria-label={`Move ${SECTION_LABEL[cat] ?? cat} up`} disabled={i === 0}
+                          onClick={() => moveCustom(i, -1)}
+                          className="min-h-[var(--cp-touch)] px-1 text-[12px] text-gray-500 disabled:opacity-25">&uarr;</button>
+                        <button type="button" aria-label={`Move ${SECTION_LABEL[cat] ?? cat} down`}
+                          disabled={i === custom.sectionOrder.length - 1} onClick={() => moveCustom(i, 1)}
+                          className="min-h-[var(--cp-touch)] px-1 text-[12px] text-gray-500 disabled:opacity-25">&darr;</button>
+                        {HIDEABLE.includes(cat) && (
+                          <button type="button" onClick={() => toggleCustomHidden(cat)}
+                            className="min-h-[var(--cp-touch)] px-1 text-[10.5px] font-semibold text-[var(--cp-primary-deep)]">
+                            {isHidden ? "Show" : "Hide"}
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
         {/* CPR-DOC-AUTO-001 s10. Offered only where the practice has turned the assistant on and
             accepted the current disclosure. Opt-in per document, never remembered as a default --
             a practitioner should decide this for the letter in front of them.

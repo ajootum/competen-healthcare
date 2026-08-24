@@ -24,6 +24,9 @@ export async function POST(req: NextRequest) {
     // CPR-DOC-AUTO-001 s10. Anything other than an explicit "assisted" is deterministic -- the
     // safe reading of an absent, malformed or unexpected value.
     phrasing: body.phrasing === "assisted" ? "assisted" : "deterministic",
+    // CPR-DOC-CONFIG-001 s12. Bounded to section order and visibility, and validated in the engine
+    // rather than here -- a second caller must not be able to skip the bound by not being this file.
+    documentOverride: (body.documentOverride ?? null) as never,
     correlationId: auth.caller.traceId,
   });
   if (!result.ok)

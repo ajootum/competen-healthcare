@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { selectableFacts, defaultSelection } from "@/lib/practice/document-facts";
 import { assistantSettings } from "@/lib/practice/ai-assistant";
+import { resolveStyle } from "@/lib/practice/document-style";
+import { publishedStyleFor } from "@/lib/practice/document-style-store";
 
 // CPR-DOC-AUTO-001 section 9 -- what this patient's record can offer a document, and what is
 // pre-selected. Read-only: offering a fact discloses nothing, so this is document.view rather than
@@ -33,11 +35,21 @@ export async function GET(req: NextRequest) {
   // looks, and never travel with a document form.
   const assistant = await assistantSettings(auth.caller.admin, auth.ctx.workspaceId);
 
+  // CPR-DOC-CONFIG-001 s12. The section order this document type would use, so the composer can offer
+  // "customise this one" seeded with what it is customising FROM rather than with a guess -- and the
+  // locked flag, so a type whose layout is prescribed does not offer a control that cannot apply.
+  const docType = req.nextUrl.searchParams.get("docType");
+  const practiceStyle = await publishedStyleFor(auth.caller.admin, auth.ctx.workspaceId);
+  const style = resolveStyle({ practicePublished: practiceStyle?.tokens, docType });
+
   return NextResponse.json({
     groups: offered.groups,
     encounterId: offered.encounterId,
     defaultSelected: defaultSelection(offered.groups),
     assistedPhrasingAvailable: assistant.enabled && assistant.noticeCurrent && assistant.configured,
+    structure: style.tokens.structure,
+    layoutLocked: style.locked,
+    layoutLockedReason: style.lockedReason,
     correlationId: auth.caller.traceId,
   });
 }

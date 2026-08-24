@@ -45,8 +45,7 @@ import { renderPlainText, type DocumentBlock } from "../src/lib/practice/documen
 import { PREVIEW_DOCUMENTS, previewDocument } from "../src/lib/practice/document-preview";
 import {
   LOCKED_LAYOUT_NOTICE, PLATFORM_BASELINE, PRESETS, ROLE_FOR_CATEGORY, SECTION_ROLES, presetTokens,
-  resolveStyle,
-  validateTokens,
+  resolveStyle, validateDocumentOverride, validateTokens,
 } from "../src/lib/practice/document-style";
 import {
   resolveSelection, defaultSelection, selectableFacts, CURRENT_STATE_CATEGORIES, FACT_CATEGORIES,
@@ -1114,6 +1113,84 @@ async function main() {
   });
   ok("23r. a hidden section leaves the document, and its facts leave the provenance with it",
     !hiddenDoc.body.includes("ZZ-CURRENT-RX") && !hiddenDoc.usedFactKeys.includes(CURRENT_RX.key));
+
+  // ── 24. CUSTOMISING ONE DOCUMENT (s12) ───────────────────────────────────────────────────────────
+  //
+  // s12 lets a practitioner change presentation on the document in front of them, and bounds it twice
+  // over: "Allow optional section visibility/order changes where clinically safe", and "Do not expose
+  // raw theme internals in the routine document composer."
+  //
+  // ⚠ THE BOUND IS A PERMISSION BOUNDARY, NOT TIDINESS. Publishing a practice style takes
+  // practice.settings.manage. Writing a document takes document.author. If a document author could
+  // send a colour on a per-document request, the second capability would confer the first for the
+  // length of one letter.
+
+  ok("24a. a section order and visibility change is accepted",
+    validateDocumentOverride({ structure: { sectionOrder: [...PLATFORM_BASELINE.structure.sectionOrder], hidden: ["encounter"] } }).length === 0);
+  ok("24b. and no override at all is accepted, which is the normal case",
+    validateDocumentOverride(null).length === 0 && validateDocumentOverride(undefined).length === 0);
+
+  for (const [what, payload] of [
+    ["a colour", { colour: { primary: "#FF0000" } }],
+    ["a typeface", { typography: { bodyFont: "source_serif" } }],
+    ["a section treatment", { layout: { sectionTreatment: "plain" } }],
+  ] as [string, Record<string, unknown>][]) {
+    const problems = validateDocumentOverride(payload);
+    ok(`24c. one document cannot change ${what} -- that is a practice-wide setting`,
+      problems.length > 0 && problems[0].path === "override");
+  }
+
+  // ⚠ REFUSED, NOT SILENTLY DROPPED. A dropped key looks to the practitioner like it worked.
+  ok("24d. and a mixed payload is refused outright rather than partly applied",
+    validateDocumentOverride({
+      structure: { sectionOrder: [...PLATFORM_BASELINE.structure.sectionOrder], hidden: [] },
+      colour: { primary: "#FF0000" },
+    }).some(p => p.path === "override"));
+
+  // The structural rules are the SAME ones a practice style obeys -- one definition, two callers.
+  ok("24e. a per-document order must still be a permutation",
+    validateDocumentOverride({ structure: { sectionOrder: ["diagnosis"], hidden: [] } })
+      .some(p => p.path === "structure.sectionOrder"));
+  ok("24f. and it still cannot hide a section carrying clinical facts",
+    validateDocumentOverride({
+      structure: { sectionOrder: [...PLATFORM_BASELINE.structure.sectionOrder], hidden: ["diagnosis"] },
+    }).some(p => p.path === "structure.hidden"));
+
+  // s2: this document is the highest level, so it beats the type override above it.
+  const docBeatsType = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  docBeatsType.overrides = {
+    type: { referral_letter: { structure: { sectionOrder: ["diagnosis", "encounter", "procedure", "investigation", "treatment", "medication", "follow_up"], hidden: [] } } },
+  };
+  const perDocOrder = resolveStyle({
+    practicePublished: docBeatsType, docType: "referral_letter",
+    documentOverride: { structure: { sectionOrder: ["treatment", "encounter", "diagnosis", "procedure", "investigation", "medication", "follow_up"], hidden: [] } },
+  });
+  ok("24g. a per-document order beats the type override",
+    perDocOrder.tokens.structure.sectionOrder[0] === "treatment");
+
+  // s12: "must not silently overwrite the Practice-wide configuration."
+  const engineSrcForOverride = strip(read("src/lib/practice/document-automation.ts"));
+  ok("24h. the override is written to the DOCUMENT, never to the practice style",
+    /style_overrides: args\.documentOverride/.test(engineSrcForOverride)
+    && !/practice_document_style[\s\S]{0,200}update/.test(engineSrcForOverride));
+  // ⚠ THE NEEDLE MUST EXIST BEFORE ITS POSITION MEANS ANYTHING -- and this is the SECOND time that trap
+  // was walked into in this file. 18g had it first: deleting the call outright makes indexOf return -1,
+  // and -1 is less than every real index, so "validated first" passes with no validation present. The
+  // fix is the same fix, and the lesson is that an ordering assertion is always also an existence one.
+  const validateAt = engineSrcForOverride.indexOf("validateDocumentOverride(args.documentOverride)");
+  ok("24i. and it is validated before anything is composed or stored",
+    validateAt >= 0
+    && validateAt < engineSrcForOverride.indexOf("const practice = await publishedStyleFor"),
+    `validate at ${validateAt}`);
+
+  // s12: "Do not expose raw theme internals in the routine document composer."
+  const composerSrc = strip(read("src/app/practice/(shell)/encounters/[encounterId]/DocumentComposer.tsx"));
+  ok("24j. the document composer offers no colour or typeface control",
+    !/type="color"/.test(composerSrc) && !/bodyFont|headingSize|sectionTreatment/.test(composerSrc));
+  ok("24k. it offers both of s12's choices by name",
+    /Use practice style/.test(composerSrc) && /Customise this one/.test(composerSrc));
+  ok("24l. and a locked layout is stated rather than offered as a disabled control",
+    /layoutLocked/.test(composerSrc) && /keeps the layout its template prescribes/.test(composerSrc));
 
   // ── CONTROL ──────────────────────────────────────────────────────────────────────────────────────
   //
