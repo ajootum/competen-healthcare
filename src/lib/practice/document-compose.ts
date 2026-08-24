@@ -1,4 +1,5 @@
 import type { FactCategory, SelectableFact } from "@/lib/practice/document-facts";
+import { ROLE_FOR_CATEGORY, type SectionRole } from "@/lib/practice/document-style";
 
 // CPR-DOC-AUTO-001 sections 4, 10 and 17 -- COMPOSITION, AND WHY IT IS A PURE FUNCTION.
 //
@@ -36,6 +37,60 @@ export type Recipient = {
   address?: string | null;
 };
 
+/**
+ * CPR-DOC-CONFIG-001 sections 8 and 15 -- THE CONTENT MODEL.
+ *
+ * Section 15: "Renderer receives: document content model + resolved style profile + letterhead +
+ * template constraints." Until now the renderer received a STRING, so it could not put a diagnosis
+ * section in the diagnosis colour without parsing prose back into meaning.
+ *
+ * ⚠ THE BLOCKS ARE THE SOURCE AND THE BODY IS DERIVED FROM THEM. Not stored side by side -- derived,
+ * by renderPlainText, which is the only thing that produces a body. Two independently-built
+ * representations of one document would drift the first time somebody edited a composer and updated
+ * only one of them, and the drift would be invisible until a signed letter rendered differently from
+ * the text that was signed. A test asserts body === renderPlainText(blocks) for every composer.
+ *
+ * Migration 195's plain-text decision is untouched: body is still the text, still what gets signed,
+ * still diffable. This is the same content with its structure kept rather than thrown away.
+ */
+export type DocumentBlock =
+  | { kind: "date"; text: string }
+  | { kind: "address"; lines: string[] }
+  | { kind: "salutation"; text: string }
+  /** Lines rendered together as one paragraph -- e.g. a title above its date line. */
+  | { kind: "subject"; lines: string[] }
+  | { kind: "meta"; text: string }
+  /** A heading over practitioner-typed text. Carries a role so it takes the same palette. */
+  | { kind: "prose"; role: SectionRole; heading: string; lines: string[] }
+  /** A heading over recorded facts. */
+  | { kind: "section"; role: SectionRole; heading: string; lines: string[] }
+  /** Verified AI prose standing in for the fact sections. Unstructured by nature. */
+  | { kind: "narrative"; lines: string[] }
+  | { kind: "signoff"; lines: string[] };
+
+/** The one function that turns blocks into a body. See the warning above. */
+export function renderPlainText(blocks: DocumentBlock[]): string {
+  return blocks.map(b => {
+    switch (b.kind) {
+      case "date": case "salutation": case "meta": return b.text;
+      case "subject": case "address": case "signoff": case "narrative": return b.lines.join("\n");
+      case "prose": case "section": return [b.heading, ...b.lines].join("\n");
+    }
+  }).join("\n\n");
+}
+
+/** Short constructors, so a composer reads as a list of blocks rather than of object literals. */
+const B = {
+  date: (text: string): DocumentBlock => ({ kind: "date", text }),
+  address: (lines: string[]): DocumentBlock => ({ kind: "address", lines }),
+  salutation: (text: string): DocumentBlock => ({ kind: "salutation", text }),
+  subject: (...lines: string[]): DocumentBlock => ({ kind: "subject", lines }),
+  meta: (text: string): DocumentBlock => ({ kind: "meta", text }),
+  prose: (role: SectionRole, heading: string, text: string): DocumentBlock =>
+    ({ kind: "prose", role, heading, lines: text.split("\n") }),
+  signoff: (...lines: string[]): DocumentBlock => ({ kind: "signoff", lines }),
+};
+
 export type ComposedDocument = {
   title: string;
   body: string;
@@ -45,6 +100,8 @@ export type ComposedDocument = {
    * does not appear in it.
    */
   usedFactKeys: string[];
+  /** The same content as `body`, with its structure kept. See DocumentBlock. */
+  blocks: DocumentBlock[];
 };
 
 export type ReferralLetterInput = {
@@ -185,18 +242,21 @@ export function sectionsFor(audience: "clinician" | "patient", facts: Selectable
  * already established that every fact appears in it.
  */
 function factSections(facts: SelectableFact[], headings: Record<FactCategory, string>, narrative?: string | null): {
-  blocks: string[]; used: string[];
+  blocks: DocumentBlock[]; used: string[];
 } {
-  const blocks: string[] = [];
+  const blocks: DocumentBlock[] = [];
   const used: string[] = [];
   for (const category of SECTION_ORDER) {
     const inSection = facts.filter(f => f.category === category);
     if (!inSection.length) continue;
-    blocks.push([headings[category], ...inSection.map(factLine)].join("\n"));
+    blocks.push({
+      kind: "section", role: ROLE_FOR_CATEGORY[category],
+      heading: headings[category], lines: inSection.map(factLine),
+    });
     used.push(...inSection.map(f => f.key));
   }
   const prose = (narrative ?? "").trim();
-  return { blocks: prose ? [prose] : blocks, used };
+  return { blocks: prose ? [{ kind: "narrative" as const, lines: prose.split("\n") }] : blocks, used };
 }
 
 /**
@@ -208,33 +268,35 @@ function factSections(facts: SelectableFact[], headings: Record<FactCategory, st
  */
 export function composeReferralLetter(input: ReferralLetterInput): ComposedDocument {
   const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING, input.narrative);
-  const parts: string[] = [];
+  const parts: DocumentBlock[] = [];
 
   const today = clean(input.today);
-  if (today) parts.push(today);
+  if (today) parts.push(B.date(today));
 
-  parts.push(addressBlock(input.recipient).join("\n"));
-  parts.push(salutation(input.recipient));
+  parts.push(B.address(addressBlock(input.recipient)));
+  parts.push(B.salutation(salutation(input.recipient)));
 
   const re = patientLine(input.patient);
-  if (re) parts.push(`Re: ${re}`);
+  if (re) parts.push(B.subject(`Re: ${re}`));
 
   const reason = clean(input.reason);
-  if (reason) parts.push(["Reason for referral", reason].join("\n"));
+  if (reason) parts.push(B.prose("purpose", "Reason for referral", reason));
 
   parts.push(...blocks);
 
   const action = clean(input.requestedAction);
-  if (action) parts.push(["Requested action", action].join("\n"));
+  if (action) parts.push(B.prose("plan", "Requested action", action));
 
-  parts.push("Yours sincerely,");
-  const signature = [clean(input.practitionerName), clean(input.practiceName)].filter(Boolean);
-  if (signature.length) parts.push(signature.join("\n"));
+  parts.push(B.signoff("Yours sincerely,"));
+  const signature = [clean(input.practitionerName), clean(input.practiceName)]
+    .filter((v): v is string => Boolean(v));
+  if (signature.length) parts.push(B.signoff(...signature));
 
   const who = clean(input.patient.name);
   return {
     title: who ? `Referral letter - ${who}` : "Referral letter",
-    body: parts.join("\n\n"),
+    body: renderPlainText(parts),
+    blocks: parts,
     usedFactKeys: used,
   };
 }
@@ -276,11 +338,11 @@ function patientHeading(p: PatientDocumentInput["patient"]): string | null {
   return [name, clean(p.identifier)].filter(Boolean).join(" - ");
 }
 
-function signOff(who: string, input: PatientDocumentInput): string[] {
+function signOff(who: string, input: PatientDocumentInput): DocumentBlock[] {
   const name = clean(input.practitionerName);
   const practice = clean(input.practiceName);
   if (!name && !practice) return [];
-  return [[`${who} ${name ?? practice}`, name && practice ? practice : null].filter(Boolean).join("\n")];
+  return [B.signoff(...[`${who} ${name ?? practice}`, name && practice ? practice : null].filter(Boolean) as string[])];
 }
 
 /**
@@ -292,16 +354,16 @@ function signOff(who: string, input: PatientDocumentInput): string[] {
  */
 export function composeVisitSummary(input: VisitSummaryInput): ComposedDocument {
   const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative);
-  const parts: string[] = [];
+  const parts: DocumentBlock[] = [];
 
   const today = clean(input.today);
-  if (today) parts.push(today);
+  if (today) parts.push(B.date(today));
 
   const who = patientHeading(input.patient);
   const header = [who ? `Visit summary for ${who}` : "Visit summary"];
   const visit = clean(input.visitDate);
   if (visit) header.push(`Date of visit: ${visit}`);
-  parts.push(header.join("\n"));
+  parts.push(B.subject(...header));
 
   parts.push(...blocks);
   parts.push(...signOff("Seen by", input));
@@ -309,7 +371,8 @@ export function composeVisitSummary(input: VisitSummaryInput): ComposedDocument 
   const name = clean(input.patient.name);
   return {
     title: name ? `Visit summary - ${name}` : "Visit summary",
-    body: parts.join("\n\n"),
+    body: renderPlainText(parts),
+    blocks: parts,
     usedFactKeys: used,
   };
 }
@@ -326,16 +389,16 @@ export function composeVisitSummary(input: VisitSummaryInput): ComposedDocument 
  */
 export function composePatientInstructions(input: PatientInstructionsInput): ComposedDocument {
   const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative);
-  const parts: string[] = [];
+  const parts: DocumentBlock[] = [];
 
   const today = clean(input.today);
-  if (today) parts.push(today);
+  if (today) parts.push(B.date(today));
 
   const who = patientHeading(input.patient);
-  parts.push(who ? `Instructions for ${who}` : "Instructions");
+  parts.push(B.subject(who ? `Instructions for ${who}` : "Instructions"));
 
   const instructions = clean(input.instructions);
-  if (instructions) parts.push(["What to do", instructions].join("\n"));
+  if (instructions) parts.push(B.prose("plan", "What to do", instructions));
 
   parts.push(...blocks);
   parts.push(...signOff("Prepared by", input));
@@ -343,7 +406,8 @@ export function composePatientInstructions(input: PatientInstructionsInput): Com
   const name = clean(input.patient.name);
   return {
     title: name ? `Patient instructions - ${name}` : "Patient instructions",
-    body: parts.join("\n\n"),
+    body: renderPlainText(parts),
+    blocks: parts,
     usedFactKeys: used,
   };
 }
@@ -392,36 +456,38 @@ export type MedicationListInput = PatientDocumentInput;
  */
 export function composeClinicalSummary(input: ClinicalSummaryInput): ComposedDocument {
   const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING, input.narrative);
-  const parts: string[] = [];
+  const parts: DocumentBlock[] = [];
 
   const today = clean(input.today);
-  if (today) parts.push(today);
+  if (today) parts.push(B.date(today));
 
-  parts.push(addressBlock(input.recipient).join("\n"));
-  parts.push(salutation(input.recipient));
+  parts.push(B.address(addressBlock(input.recipient)));
+  parts.push(B.salutation(salutation(input.recipient)));
 
   const re = patientLine(input.patient);
-  if (re) parts.push(`Re: ${re}`);
+  if (re) parts.push(B.subject(`Re: ${re}`));
 
   const purpose = clean(input.purpose);
-  if (purpose) parts.push(["Purpose of this summary", purpose].join("\n"));
+  if (purpose) parts.push(B.prose("purpose", "Purpose of this summary", purpose));
 
   const from = clean(input.periodFrom);
   const to = clean(input.periodTo);
   if (from || to) {
     const period = from && to ? `${from} to ${to}` : from ? `from ${from}` : `up to ${to}`;
-    parts.push(`Period covered: ${period}`);
+    parts.push(B.meta(`Period covered: ${period}`));
   }
 
   parts.push(...blocks);
-  parts.push("Yours sincerely,");
-  const signature = [clean(input.practitionerName), clean(input.practiceName)].filter(Boolean);
-  if (signature.length) parts.push(signature.join("\n"));
+  parts.push(B.signoff("Yours sincerely,"));
+  const signature = [clean(input.practitionerName), clean(input.practiceName)]
+    .filter((v): v is string => Boolean(v));
+  if (signature.length) parts.push(B.signoff(...signature));
 
   const name = clean(input.patient.name);
   return {
     title: name ? `Clinical summary - ${name}` : "Clinical summary",
-    body: parts.join("\n\n"),
+    body: renderPlainText(parts),
+    blocks: parts,
     usedFactKeys: used,
   };
 }
@@ -436,31 +502,33 @@ export function composeClinicalSummary(input: ClinicalSummaryInput): ComposedDoc
  */
 export function composeInvestigationRequest(input: InvestigationRequestInput): ComposedDocument {
   const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING, input.narrative);
-  const parts: string[] = [];
+  const parts: DocumentBlock[] = [];
 
   const today = clean(input.today);
-  if (today) parts.push(today);
+  if (today) parts.push(B.date(today));
 
   if (input.recipient) {
-    parts.push(addressBlock(input.recipient).join("\n"));
-    parts.push(salutation(input.recipient));
+    parts.push(B.address(addressBlock(input.recipient)));
+    parts.push(B.salutation(salutation(input.recipient)));
   }
 
   const re = patientLine(input.patient);
-  if (re) parts.push(`Re: ${re}`);
+  if (re) parts.push(B.subject(`Re: ${re}`));
 
   parts.push(...blocks);
 
   const indication = clean(input.clinicalIndication);
-  if (indication) parts.push(["Clinical indication", indication].join("\n"));
+  if (indication) parts.push(B.prose("purpose", "Clinical indication", indication));
 
-  const signature = [clean(input.practitionerName), clean(input.practiceName)].filter(Boolean);
-  if (signature.length) parts.push([`Requested by ${signature[0]}`, ...signature.slice(1)].join("\n"));
+  const signature = [clean(input.practitionerName), clean(input.practiceName)]
+    .filter((v): v is string => Boolean(v));
+  if (signature.length) parts.push(B.signoff(`Requested by ${signature[0]}`, ...signature.slice(1)));
 
   const name = clean(input.patient.name);
   return {
     title: name ? `Investigation request - ${name}` : "Investigation request",
-    body: parts.join("\n\n"),
+    body: renderPlainText(parts),
+    blocks: parts,
     usedFactKeys: used,
   };
 }
@@ -473,25 +541,26 @@ export function composeInvestigationRequest(input: InvestigationRequestInput): C
  */
 export function composeFollowUpInstructions(input: FollowUpInstructionsInput): ComposedDocument {
   const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative);
-  const parts: string[] = [];
+  const parts: DocumentBlock[] = [];
 
   const today = clean(input.today);
-  if (today) parts.push(today);
+  if (today) parts.push(B.date(today));
 
   const who = patientHeading(input.patient);
-  parts.push(who ? `Follow-up for ${who}` : "Follow-up");
+  parts.push(B.subject(who ? `Follow-up for ${who}` : "Follow-up"));
 
   parts.push(...blocks);
 
   const instructions = clean(input.instructions);
-  if (instructions) parts.push(["Please note", instructions].join("\n"));
+  if (instructions) parts.push(B.prose("plan", "Please note", instructions));
 
   parts.push(...signOff("Prepared by", input));
 
   const name = clean(input.patient.name);
   return {
     title: name ? `Follow-up instructions - ${name}` : "Follow-up instructions",
-    body: parts.join("\n\n"),
+    body: renderPlainText(parts),
+    blocks: parts,
     usedFactKeys: used,
   };
 }
@@ -510,14 +579,14 @@ export function composeFollowUpInstructions(input: FollowUpInstructionsInput): C
  */
 export function composeMedicationList(input: MedicationListInput): ComposedDocument {
   const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative);
-  const parts: string[] = [];
+  const parts: DocumentBlock[] = [];
 
   const today = clean(input.today);
-  if (today) parts.push(today);
+  if (today) parts.push(B.date(today));
 
   const who = patientHeading(input.patient);
-  parts.push(who ? `Medication list for ${who}` : "Medication list");
-  if (today) parts.push(`Correct as at ${today}`);
+  parts.push(B.subject(who ? `Medication list for ${who}` : "Medication list"));
+  if (today) parts.push(B.meta(`Correct as at ${today}`));
 
   parts.push(...blocks);
   parts.push(...signOff("Prepared by", input));
@@ -525,7 +594,8 @@ export function composeMedicationList(input: MedicationListInput): ComposedDocum
   const name = clean(input.patient.name);
   return {
     title: name ? `Medication list - ${name}` : "Medication list",
-    body: parts.join("\n\n"),
+    body: renderPlainText(parts),
+    blocks: parts,
     usedFactKeys: used,
   };
 }

@@ -12,6 +12,7 @@ import {
 } from "@/lib/practice/document-facts";
 import { assistantSettings } from "@/lib/practice/ai-assistant";
 import { phraseFactSections, type PhrasingResult } from "@/lib/practice/document-phrasing";
+import { publishedStyleFor } from "@/lib/practice/document-style-store";
 import { recordReferral } from "@/lib/practice/encounter-workspace";
 import type { EngineResult } from "@/lib/practice/encounters";
 import type { WorkspaceContext } from "@/lib/practice/access";
@@ -254,9 +255,14 @@ async function store(admin: any, ctx: WorkspaceContext, args: {
 
   // Only written when it is not the default, so a deterministic document needs no second round trip
   // and the column can never disagree with migration 356's default for the rows that predate it.
-  if (args.phrasing === "assisted") {
-    await admin.from("practice_clinical_document").update({ phrasing: "assisted" }).eq("id", created.data.id);
-  }
+  // CPR-DOC-CONFIG-001 s8/s11/s15. The structure behind the body, and the style version this document
+  // was rendered with. The pin is what stops a later publish repainting a letter somebody has signed.
+  const style = await publishedStyleFor(admin, ctx.workspaceId);
+  await admin.from("practice_clinical_document").update({
+    content_model: args.composed.blocks,
+    ...(style ? { style_id: style.id } : {}),
+    ...(args.phrasing === "assisted" ? { phrasing: "assisted" } : {}),
+  }).eq("id", created.data.id);
 
   // PROVENANCE COMES FROM WHAT THE COMPOSER USED, not from what was selected. If a fact were ever
   // selected but had no section to appear in, this table would not claim it was disclosed.

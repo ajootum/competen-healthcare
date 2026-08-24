@@ -104,6 +104,20 @@ function main() {
   // the check that exists to stop exactly that. The exemption is this file's palette and nothing else.
   const ACCENT_PALETTE = join(process.cwd(), "src", "lib", "practice", "preference-constants.ts");
 
+  // ⚠ A SECOND EXEMPT FILE, ON THE SAME REASONING AND WITH THE SAME BOUND.
+  //
+  // document-style.ts declares PLATFORM_BASELINE: the default document design tokens a practice gets
+  // before it has configured anything (CPR-DOC-CONFIG-001 s2). These are DATA, not theme a component
+  // leaked. They are stored as jsonb, published per practice, pinned onto individual documents and
+  // rendered into a PDF -- and a --cmp-* custom property can do none of those things. It cannot be
+  // written to a database column, and it does not resolve in a print renderer, which is the one place
+  // these values have to survive.
+  //
+  // Exempt by PATH, not by adding the hexes to ALLOWED, for the reason given just above: #4F46E5 is
+  // the brand indigo, and allowing it by value would let any Practice component hardcode the primary
+  // colour and still pass the check that exists to stop precisely that.
+  const DOCUMENT_TOKENS = join(process.cwd(), "src", "lib", "practice", "document-style.ts");
+
   /**
    * ⚠ COMMENTS ARE BLANKED BEFORE THE SCAN, AND THE LINE NUMBERS SURVIVE IT (2026-08-17).
    *
@@ -122,7 +136,7 @@ function main() {
   const offenders: string[] = [];
   for (const f of files) {
     if (!existsSync(f)) continue;
-    if (f === ACCENT_PALETTE) continue;
+    if (f === ACCENT_PALETTE || f === DOCUMENT_TOKENS) continue;
     for (const [i, line] of blankComments(readFileSync(f, "utf8")).split("\n").entries()) {
       // ⚠ NOT PRECEDED BY & -- A NUMERIC CHARACTER REFERENCE IS NOT A COLOUR (2026-08-17).
       // This scan reported eleven "raw hex colours" that were emoji: &#128197; is a calendar, &#128205;
@@ -165,6 +179,23 @@ function main() {
   ok("3-exempt. the exempt palette holds exactly its 7 accents, all inside the ACCENTS block",
     paletteHexes.length === 7 && accentBlock.length === 7,
     `${paletteHexes.length} in the file, ${accentBlock.length} inside ACCENTS`);
+
+  // The same bound on the second exemption. PLATFORM_BASELINE needs five surface colours, and a band
+  // plus an accent for each of the eight semantic roles -- twenty-one, and not one more. A hex added
+  // anywhere else in that file, or a ninth role invented without review, fails here.
+  //
+  // Comments are blanked first, exactly as the main scan does. The baseline carries a comment quoting
+  // the two specification values it corrects for contrast, and counting those would be the needle
+  // matching its own documentation -- the failure this file already records at blankComments.
+  const tokenLines = blankComments(readFileSync(DOCUMENT_TOKENS, "utf8")).split("\n");
+  const tokenHexes = tokenLines.flatMap(l => l.match(/#[0-9A-Fa-f]{6}\b/g) ?? []);
+  const baselineBlock = tokenLines
+    .slice(tokenLines.findIndex(l => /export const PLATFORM_BASELINE/.test(l)),
+           tokenLines.findIndex(l => /^const HEX = /.test(l)))
+    .flatMap(l => l.match(/#[0-9A-Fa-f]{6}\b/g) ?? []);
+  ok("3-exempt-2. the document baseline holds exactly its 21 token colours, all inside PLATFORM_BASELINE",
+    tokenHexes.length === 21 && baselineBlock.length === 21,
+    `${tokenHexes.length} in the file, ${baselineBlock.length} inside PLATFORM_BASELINE`);
 
   // ── 4. The focus rule CPR-040 s9 requires is present and scoped ──────────────────────────────
   ok("4. a visible focus state is defined for the Practice surface",

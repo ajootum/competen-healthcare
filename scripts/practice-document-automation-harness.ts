@@ -41,8 +41,12 @@ import { DOC_TYPES } from "../src/lib/practice/document-constants";
 import { DOC_TYPE_OPTIONS } from "../src/lib/practice/documents-workspace-constants";
 import { verifyGrounded, phrasingPayload } from "../src/lib/practice/document-phrasing";
 import { AI_NOTICE } from "../src/lib/practice/ai-assistant";
+import { renderPlainText, type DocumentBlock } from "../src/lib/practice/document-compose";
 import {
-  resolveSelection, defaultSelection, selectableFacts, CURRENT_STATE_CATEGORIES,
+  PLATFORM_BASELINE, ROLE_FOR_CATEGORY, SECTION_ROLES, resolveStyle, validateTokens,
+} from "../src/lib/practice/document-style";
+import {
+  resolveSelection, defaultSelection, selectableFacts, CURRENT_STATE_CATEGORIES, FACT_CATEGORIES,
   type FactGroup, type SelectableFact,
 } from "../src/lib/practice/document-facts";
 
@@ -282,9 +286,27 @@ async function main() {
   const composeSrc = read("src/lib/practice/document-compose.ts");
   const composeCode = strip(composeSrc);
   const imports = [...composeCode.matchAll(/^import\s+([\s\S]*?)from\s+"([^"]+)"/gm)].map(m => m[2]);
-  ok("6a. the composer imports nothing but its own fact types",
-    imports.length === 1 && imports[0] === "@/lib/practice/document-facts",
+  // ⚠ AN ALLOWLIST, AND EVERY MEMBER IS CHECKED TOO. The first version pinned "exactly one import",
+  // which went red the moment the composer legitimately needed the semantic roles from
+  // document-style. Pinning a count says nothing about purity: one import of a database client would
+  // have passed it. What matters is that nothing the composer imports can reach a record, so each
+  // allowed module is opened and checked for a client of its own.
+  const COMPOSER_MAY_IMPORT = ["@/lib/practice/document-facts", "@/lib/practice/document-style"];
+  ok("6a. the composer imports only modules that cannot reach a record",
+    imports.every(i => COMPOSER_MAY_IMPORT.includes(i)),
     `imports: ${imports.join(", ")}`);
+  // ⚠ ONLY A VALUE IMPORT CAN CARRY BEHAVIOUR. document-facts DOES reach the database -- selectableFacts
+  // takes an admin client -- but the composer imports only TYPES from it, which are erased at compile
+  // time and cannot execute. Checking the whole module would have failed on a module the composer
+  // provably cannot call into. So: type imports are free, and every VALUE import is opened and checked.
+  const valueImports = [...composeCode.matchAll(/^import\s+(?!type\s)([\s\S]*?)from\s+"([^"]+)"/gm)]
+    .map(m => m[2]);
+  ok("6a-i. every module the composer imports for its VALUES is itself unable to reach a record",
+    valueImports.every(m => {
+      const src = strip(read(m.replace("@/", "src/") + ".ts"));
+      return !/@supabase\/supabase-js/.test(src) && !/\bfrom\s*\(/.test(src) && !/\badmin\b/.test(src);
+    }),
+    `value imports: ${valueImports.join(", ") || "(none)"}`);
   ok("6b. the composer cannot read a record",
     !/\bfrom\s*\(/.test(composeCode) && !/\bfetch\s*\(/.test(composeCode) && !/\badmin\b/.test(composeCode));
   ok("6c. the composer holds no clock -- the practice day is passed in",
@@ -755,8 +777,11 @@ async function main() {
     `${assistedReturns.length} return site(s), verify at ${verifyAt}`);
 
   // The engine writes the column only for assisted, and s14's certificate ban still holds.
+  // The phrasing write folded into the same update as the content model and the style pin when
+  // CPR-DOC-CONFIG-001 arrived -- one round trip instead of three. What matters is unchanged: the
+  // column is written only for assisted, never for deterministic.
   ok("18h. the engine records assisted phrasing on the document itself",
-    /update\(\{ phrasing: "assisted" \}\)/.test(engineSrc));
+    /phrasing: "assisted" \} : \{\}\)/.test(engineSrc));
   ok("18i. every generator routes phrasing through the one helper",
     (engineSrc.match(/await narrativeFor\(/g) ?? []).length === generators.length);
   ok("18j. stale consent is not consent -- the current notice is required",
@@ -791,6 +816,121 @@ async function main() {
   // The notice must not promise more than the verifier delivers -- see ASSERTION_MARKERS.
   ok("19e. it does not claim the grounding check is perfect",
     notice.includes("not perfect") || notice.includes("read the draft"));
+
+  // ── 20. THE CONTENT MODEL AND THE STYLE CONTRACT (CPR-DOC-CONFIG-001) ────────────────────────────
+  //
+  // s15 wants the renderer to receive a content model rather than a string, and s8 wants sections to
+  // carry semantic roles so no form hard-codes a colour. s11 wants a published style never to repaint
+  // a document that has already been issued.
+
+  // ⚠ THE INVARIANT THE WHOLE MODEL RESTS ON. body is DERIVED from blocks by renderPlainText -- if the
+  // two could be built independently they would drift, and the drift would first be visible as a
+  // signed letter rendering differently from the text that was signed. Checked for every composer,
+  // because one composer quietly assembling its own string is exactly how this would rot.
+  const composedAll = [
+    ["referral letter", composed],
+    ["visit summary", summary],
+    ["patient instructions", instructions],
+    ["clinical summary", clinical],
+    ["investigation request", withLab],
+    ["follow-up instructions", followUp],
+    ["medication list", meds],
+  ] as [string, { body: string; blocks: DocumentBlock[] }][];
+
+  const drifted = composedAll.filter(([, d]) => d.body !== renderPlainText(d.blocks)).map(([n]) => n);
+  ok("20a. every document's body is exactly what its blocks render to",
+    drifted.length === 0, `drifted: ${drifted.join(", ")}`);
+
+  // CONTROL: if blocks were empty, 20a would pass by comparing "" to "".
+  ok("20b. CONTROL -- the blocks are not empty, so 20a compared something",
+    composedAll.every(([, d]) => d.blocks.length >= 3),
+    composedAll.map(([n, d]) => `${n}:${d.blocks.length}`).join(" "));
+
+  // s8: sections carry a semantic role, and the role comes from the category.
+  const sectionsOf = (d: { blocks: DocumentBlock[] }) =>
+    d.blocks.filter((b): b is Extract<DocumentBlock, { kind: "section" }> => b.kind === "section");
+  const referralSections = sectionsOf(composed);
+  ok("20c. recorded-fact sections carry a semantic role",
+    referralSections.length > 0 && referralSections.every(b => SECTION_ROLES.includes(b.role)));
+  ok("20d. and the role is the one s8 assigns to that kind of fact",
+    referralSections.every(b => Object.values(ROLE_FOR_CATEGORY).includes(b.role)));
+
+  // ⚠ A PROCEDURE IS A TREATMENT, per s8's own grouping. Worth pinning: it is the one mapping that is
+  // not the identity, so it is the one a later edit is most likely to "tidy" into its own role.
+  ok("20e. a procedure takes the treatment role, as s8 groups them",
+    ROLE_FOR_CATEGORY.procedure === "treatment");
+  ok("20f. every fact category maps to a role, so no section can be roleless",
+    FACT_CATEGORIES.every(c => SECTION_ROLES.includes(ROLE_FOR_CATEGORY[c])));
+
+  // Typed practitioner text is a section too, and takes a role rather than a hard-coded colour.
+  const prose = composed.blocks.filter((b): b is Extract<DocumentBlock, { kind: "prose" }> => b.kind === "prose");
+  ok("20g. what the practitioner typed is carried as prose with its own role",
+    prose.length === 2 && prose[0].role === "purpose" && prose[1].role === "plan",
+    prose.map(p => `${p.heading}:${p.role}`).join(" "));
+
+  // The AI narrative replaces the fact sections, so it cannot be given a role -- and must not claim one.
+  const phrasedBlocks = phrasedLetter.blocks.filter(b => b.kind === "narrative");
+  ok("20h. verified AI prose is carried as narrative, not as a roled section",
+    phrasedBlocks.length === 1
+    && !phrasedLetter.blocks.some(b => b.kind === "section"));
+
+  // ── 21. STYLE TOKENS AND THEIR GUARDRAILS (s6, s11, s16) ─────────────────────────────────────────
+  ok("21a. the platform baseline is itself a valid style",
+    validateTokens(PLATFORM_BASELINE).length === 0,
+    JSON.stringify(validateTokens(PLATFORM_BASELINE)));
+  ok("21b. it defines a tone for every semantic role",
+    SECTION_ROLES.every(r => !!PLATFORM_BASELINE.colour.roles[r]));
+
+  // s16 / s18: "Unsafe contrast/font-size choices are blocked or corrected."
+  const faint = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  faint.colour.roles.diagnosis.accent = "#DDE9FF"; // pale on pale
+  ok("21c. a heading colour too faint on its own band is refused",
+    validateTokens(faint).some(p => p.path === "colour.roles.diagnosis"));
+
+  const tiny = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  tiny.typography.bodySize = 8;
+  ok("21d. a body size below the readable floor is refused",
+    validateTokens(tiny).some(p => p.path === "typography.bodySize"));
+
+  const greyOnWhite = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  greyOnWhite.colour.text = "#BBBBBB";
+  ok("21e. body text too faint on the page is refused",
+    validateTokens(greyOnWhite).some(p => p.path === "colour.text"));
+
+  // s14: no arbitrary CSS. Anything outside the bounded vocabulary is a problem, not a default.
+  const injected = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  injected.colour.primary = "red; background: url(http://evil)";
+  ok("21f. a colour that is not a plain hex value is refused",
+    validateTokens(injected).some(p => p.path === "colour.primary"));
+
+  const madeUp = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  madeUp.layout.sectionTreatment = "parallax";
+  ok("21g. a section treatment outside the approved list is refused",
+    validateTokens(madeUp).some(p => p.path === "layout.sectionTreatment"));
+
+  const noFont = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  noFont.typography.bodyFont = "https://fonts.example/Evil.woff2";
+  ok("21h. a font outside the approved list is refused -- s14 forbids remote fonts",
+    validateTokens(noFont).some(p => p.path === "typography.bodyFont"));
+
+  // s11: a document keeps the style it was rendered with.
+  const practiceStyle = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  practiceStyle.colour.primary = "#7C3AED";
+  const pinnedStyle = JSON.parse(JSON.stringify(PLATFORM_BASELINE));
+  pinnedStyle.colour.primary = "#059669";
+
+  ok("21i. HISTORICAL IMMUTABILITY -- a pinned style wins over the practice's current one",
+    resolveStyle({ pinned: pinnedStyle, practicePublished: practiceStyle }).tokens.colour.primary === "#059669");
+  ok("21j. an unpinned document follows the practice style",
+    resolveStyle({ practicePublished: practiceStyle }).source === "practice");
+  ok("21k. and a practice with no style gets the platform baseline",
+    resolveStyle({}).source === "baseline");
+
+  // A style that no longer validates must not take a document down with it.
+  ok("21l. an unreadable pinned style falls back rather than failing",
+    resolveStyle({ pinned: { colour: "nonsense" }, practicePublished: practiceStyle }).source === "practice");
+  ok("21m. and the caller is told which style it actually got",
+    resolveStyle({ pinned: pinnedStyle }).source === "pinned");
 
   // ── CONTROL ──────────────────────────────────────────────────────────────────────────────────────
   //

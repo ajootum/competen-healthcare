@@ -654,7 +654,7 @@ export async function recordRelease(admin: any, args: {
 /** One document with its patient, its releases, and both ends of its version chain. */
 export async function getDocument(admin: any, workspaceId: string, documentId: string) {
   const { data: doc } = await admin.from("practice_clinical_document")
-    .select("id, patient_id, encounter_id, template_id, doc_type, title, body, addressed_to, status, version, supersedes_document_id, amendment_reason, signed_at, signed_by, record_version, created_at, updated_at")
+    .select("id, patient_id, encounter_id, template_id, doc_type, title, body, addressed_to, status, version, supersedes_document_id, content_model, style_id, amendment_reason, signed_at, signed_by, record_version, created_at, updated_at")
     .eq("id", documentId).eq("workspace_id", workspaceId).maybeSingle();
   if (!doc) return null;
 

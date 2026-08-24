@@ -5,6 +5,9 @@ import { resolvePracticeShell } from "@/lib/practice/shell";
 import { hasCapability } from "@/lib/practice/access";
 import { getDocument } from "@/lib/practice/documentation";
 import { letterhead } from "@/lib/practice/document-generation";
+import { resolveStyle } from "@/lib/practice/document-style";
+import { publishedStyleFor } from "@/lib/practice/document-style-store";
+import { DocumentBody } from "../DocumentBody";
 import { DOC_ATTESTATION } from "@/lib/practice/documents-workspace-constants";
 import { logAccess } from "@/lib/practice/privacy";
 import { formatDateTime } from "@/lib/datetime";
@@ -44,6 +47,15 @@ export default async function PrintDocumentPage({ params }: { params: Promise<{ 
     ? await admin.from("practice_note_template").select("include_letterhead").eq("id", doc.template_id).maybeSingle()
     : { data: null };
   const head = template?.include_letterhead === false ? null : await letterhead(admin, shell.ctx.workspaceId);
+
+  // CPR-DOC-CONFIG-001 s11. THE PINNED STYLE FIRST. A document rendered under one practice style must
+  // keep it when the practice publishes another -- a letter that has been signed and sent cannot be
+  // repainted. Only a document with no pin follows the practice style of today.
+  const { data: pinnedRow } = doc.style_id
+    ? await admin.from("practice_document_style").select("tokens").eq("id", doc.style_id).maybeSingle()
+    : { data: null };
+  const practiceStyle = pinnedRow ? null : await publishedStyleFor(admin, shell.ctx.workspaceId);
+  const style = resolveStyle({ pinned: pinnedRow?.tokens, practicePublished: practiceStyle?.tokens });
 
   await logAccess(admin, {
     workspaceId: shell.ctx.workspaceId, actorId: shell.ctx.userId,
@@ -102,9 +114,11 @@ export default async function PrintDocumentPage({ params }: { params: Promise<{ 
           {" · "}{new Date(doc.created_at).toLocaleDateString()}
         </p>
 
-        {/* The body verbatim. Any [[marker]] the generator left is still visible here, which is the
-            entire point of rendering unresolved fields rather than blanking them. */}
-        <div className="whitespace-pre-wrap">{doc.body ?? ""}</div>
+        {/* CPR-DOC-CONFIG-001 s15. Structure plus the resolved style where the document has one, and
+            the verbatim body where it does not -- which is every document written before this existed.
+            Either way any [[marker]] the generator left is still visible, which is the entire point of
+            rendering unresolved fields rather than blanking them. */}
+        <DocumentBody blocks={(doc.content_model as never) ?? null} body={doc.body ?? ""} tokens={style.tokens} />
 
         <footer className="mt-10 border-t border-black/20 pt-3 text-[11px]">
           {signed ? (
