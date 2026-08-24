@@ -45,6 +45,9 @@ const INCLUDED = [
   "dev-origin-harness.ts",
   "access-doors-harness.ts",
   "access-scanner-harness.ts",
+  // CPR-AI-PROV -- 21/21. Explicit per-deployment provider selection, and the rule that a safety
+  // refusal is never retried against another vendor. Pure: it patches process.env and restores it.
+  "ai-provider-harness.ts",
   "attendance-harness.ts",
   // Reads only src/** and security/*.json, counts in-process. Its drift control is the reason it is
   // here rather than run occasionally: an unclassified guard helper makes gated routes look open.

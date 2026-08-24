@@ -210,7 +210,14 @@ export default async function AssistantPage({ searchParams }: {
                 </li>
               ))}
             </ul>
-            <p className="mt-1.5 text-[10px] text-gray-400">
+            <p className="mt-1.5 text-[10px] leading-relaxed text-gray-400">
+              {/* CPR-AI-PROV. The provider is chosen for this whole deployment, not per practice --
+                  saying so stops a practice owner looking for a control that does not exist, and makes
+                  a change of vendor something they can see here rather than infer. */}
+              The provider is set for this Competen deployment, not per practice. If it changes, this
+              panel is where it changes.
+            </p>
+            <p className="mt-1 text-[10px] text-gray-400">
               The design names a &ldquo;Competen Clinical LLM v2.1&rdquo;. There is no such model, and no
               bespoke clinical model anywhere in this product &mdash; so the real one is named instead.
             </p>
