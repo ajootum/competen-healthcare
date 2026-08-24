@@ -80,6 +80,32 @@ const TITLES: Record<FactCategory, string> = {
  */
 export const CATEGORY_LIMIT = 25;
 
+/**
+ * ⚠ A DOSE WITHOUT ITS UNIT IS THE ONE FIELD WORTH SPECIAL-CASING, and this was found by reading a
+ * composed letter rather than by any test.
+ *
+ * practice_medication carries the dose twice: dose_text, which practitioners type, and dose_unit,
+ * which the form captures separately. Measured on the live estate, dose_text is inconsistent -- one
+ * row reads "1000 mg" and the next reads "3" with dose_unit "mg" beside it. The registry read only
+ * dose_text, so the second printed into a referral letter as "Bisoprolol (3 - Oral)".
+ *
+ * Three of what, to a consultant reading it. The unit is IN THE RECORD, so adding it invents nothing --
+ * this is the opposite of the grounding problem, a fact the product held and was throwing away.
+ *
+ * Appended only when dose_text does not already carry it, or the common case becomes "1000 mg mg".
+ */
+export const doseWithUnit = (
+  text: string | null | undefined, unit: string | null | undefined,
+): string | null => {
+  const t = (text ?? "").trim();
+  const u = (unit ?? "").trim();
+  if (!t) return u || null;
+  if (!u) return t;
+  // Substring rather than a built regex: the unit comes from the database, and interpolating it into
+  // a pattern is how an injected value becomes an expression. Lowercased both sides so "MG" matches.
+  return t.toLowerCase().includes(u.toLowerCase()) ? t : `${t} ${u}`;
+};
+
 const joinDetail = (parts: (string | null | undefined)[]): string | null => {
   const kept = parts.map(p => (p == null ? "" : String(p).trim())).filter(Boolean);
   return kept.length ? kept.join(" - ") : null;
@@ -216,7 +242,7 @@ export async function selectableFacts(admin: any, ctx: WorkspaceContext, args: {
     // current treatment list", and a discontinued drug in a letter reads as a prescription. Widening
     // this to stopped medication is a product decision, not a tweak -- it changes what a document
     // discloses by default about a patient's past.
-    read(admin, "practice_medication", "id, generic_name, brand_name, dose_text, route, frequency, status, encounter_id, created_at", ctx.workspaceId, args.patientId, "created_at", { ...window, statusIn: ["active", "paused"] }),
+    read(admin, "practice_medication", "id, generic_name, brand_name, dose_text, dose_unit, route, frequency, status, encounter_id, created_at", ctx.workspaceId, args.patientId, "created_at", { ...window, statusIn: ["active", "paused"] }),
     // ⚠ ONLY OUTSTANDING FOLLOW-UPS, AND PHASE 1 SHIPPED WITHOUT THIS FILTER. The section heading a
     // follow-up prints under is "Follow-up arranged" / "Next steps", and practice_follow_up carries
     // COMPLETED, MISSED and CANCELLED alongside OPEN and SCHEDULED. A cancelled follow-up rendered
@@ -291,7 +317,7 @@ export async function selectableFacts(admin: any, ctx: WorkspaceContext, args: {
       r => ({
         id: r.id, label: [r.generic_name, r.brand_name ? `(${r.brand_name})` : null].filter(Boolean).join(" "),
         encounterId: r.encounter_id, recordedOn: day(r.created_at),
-        detail: joinDetail([r.dose_text, r.route, r.frequency, r.status === "paused" ? "paused" : null]),
+        detail: joinDetail([doseWithUnit(r.dose_text, r.dose_unit), r.route, r.frequency, r.status === "paused" ? "paused" : null]),
       })),
     build("follow_up", "practice_follow_up", fu, r => ({
       id: r.id, label: r.reason, encounterId: r.origin_encounter_id, recordedOn: day(r.created_at),

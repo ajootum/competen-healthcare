@@ -49,6 +49,7 @@ import {
 } from "../src/lib/practice/document-style";
 import {
   resolveSelection, defaultSelection, selectableFacts, CURRENT_STATE_CATEGORIES, FACT_CATEGORIES,
+  doseWithUnit,
   type FactGroup, type SelectableFact,
 } from "../src/lib/practice/document-facts";
 
@@ -1191,6 +1192,20 @@ async function main() {
     /Use practice style/.test(composerSrc) && /Customise this one/.test(composerSrc));
   ok("24l. and a locked layout is stated rather than offered as a disabled control",
     /layoutLocked/.test(composerSrc) && /keeps the layout its template prescribes/.test(composerSrc));
+
+  // ── 25. A DOSE CARRIES ITS UNIT ──────────────────────────────────────────────────────────────────
+  //
+  // Found by reading a composed letter against the live record, not by any test above. dose_text is
+  // inconsistent in the estate -- one row reads "1000 mg", the next reads "3" with dose_unit "mg"
+  // beside it -- and the registry read only dose_text. A referral letter said "Bisoprolol (3 - Oral)".
+  //
+  // Three of what. The unit was in the record the whole time.
+  ok("25a. a dose missing its unit gains the one the record holds",
+    doseWithUnit("3", "mg") === "3 mg");
+  ok("25b. and one that already carries it is left alone, not doubled",
+    doseWithUnit("1000 mg", "mg") === "1000 mg" && doseWithUnit("500MG", "mg") === "500MG");
+  ok("25c. no unit recorded means nothing is invented",
+    doseWithUnit("3", null) === "3" && doseWithUnit(null, null) === null);
 
   // ── CONTROL ──────────────────────────────────────────────────────────────────────────────────────
   //
