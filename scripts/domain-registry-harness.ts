@@ -121,6 +121,29 @@ ok("2d. ⚠ /hq does not exist, so adopting s2's name would mean BUILDING a seco
 ok("2e. STAFF_DOOR_PATH is derived from the registry, so the two cannot drift apart",
   STAFF_DOOR_PATH === GATEWAYS.staff.route && STAFF_DOOR_PATH === "/staff", STAFF_DOOR_PATH);
 
+// ⚠ THE RULING THE REGISTRY CITES MUST EXIST AND BE FINDABLE. domains.ts and staff-host.ts both point
+// at ADR-014 as the reason the staff route is /staff rather than s2's /hq. A citation to a file nobody
+// can find is worse than no citation: it reads as authority while carrying none, and the whole point of
+// writing the ruling down was that it had been in force for a week with no record anybody could grep.
+const ADR = "docs/adr/ADR-014-hq-mounts-on-super-admin.md";
+ok("2f. ⚠ the ADR the registry cites exists",
+  existsSync(join(ROOT, ADR)), ADR);
+ok("2g. ⚠ ...and is listed in the ADR index, so it is reachable without knowing the filename",
+  readFileSync(join(ROOT, "docs/adr/README.md"), "utf8").includes("ADR-014-hq-mounts-on-super-admin.md"));
+// ⚠ THIS ASSERTS THE CLAIM, NOT THE SENTENCE. An earlier version of this pin matched one exact phrasing
+// ("supersedes COMP-ACCESS-URL-001 s2's /hq") and went red against an ADR that says the same thing in
+// the passive voice. Pinning prose word order tests the wording, not the ruling, and it fails on a
+// rewrite that changed nothing -- the brittle shape this codebase keeps relearning.
+// ⚠ READ DEFENSIVELY. 2f already reports a missing ADR; if this read threw as well, the harness would
+// CRASH on that case instead of reporting it, and the run would end here with the later sections
+// unevaluated. A control that takes the process down tells you less than one that goes red.
+const adrText = existsSync(join(ROOT, ADR)) ? readFileSync(join(ROOT, ADR), "utf8") : "";
+ok("2h. ⚠ ...and it rules on /hq rather than merely mentioning it",
+  adrText.includes("COMP-ACCESS-URL-001") && /supersede/i.test(adrText) && adrText.includes("/hq"),
+  `names-spec=${adrText.includes("COMP-ACCESS-URL-001")} supersede=${/supersede/i.test(adrText)}`);
+ok("2i. the registry names the ADR, so a reader of the code reaches the reason",
+  readFileSync(join(ROOT, "src/lib/identity/domains.ts"), "utf8").includes("ADR-014"));
+
 // ── 3. staff-host.ts consumes the registry rather than its own copy ──────────────────────────────
 ok("3a. STAFF_HOSTS derives from the registry (step 2: one shared configuration source)",
   STAFF_HOSTS.length === 2 && STAFF_HOSTS[0] === GATEWAYS.staff.host && STAFF_HOSTS[1] === "staff.localhost",

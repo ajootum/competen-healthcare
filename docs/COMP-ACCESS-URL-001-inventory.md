@@ -119,16 +119,13 @@ The registry records `/staff` with the disagreement written next to it. Harness 
 the registry names is actually served, 2c asserts the staff route is `/staff`, and 2d asserts `/hq` does
 not exist. Break-tested: changing the registry to `/hq` turns 2b, 2c and 2e red.
 
-> **This may already have been decided, and if so the decision is not written down anywhere in this
-> repository.** During the COMP-HQ-ACCESS-001 arc on 2026-08-17 the owner chose to mount the HQ
-> behaviours on the existing `/super-admin` estate rather than build a parallel `/hq/*` family —
-> "`/hq` paths are later aliases if ever wanted" — on the grounds that duplicating a 33-section estate
-> contradicts one-canonical-home, and that the spec's definition of done is behavioural and names no
-> path. A grep of `docs/`, `docs/adr/` and `src/` finds no record of that ruling; it survives only in
-> an assistant memory file, which is a point-in-time note and not authoritative. **If the ruling is
-> real, COMP-ACCESS-URL-001 §2's `/hq` row is already superseded and this conflict is closed** — but
-> it should be written into `docs/adr/` before anyone relies on it, because a decision that lives
-> outside the repository is one session away from being re-litigated.
+> **RULED — this conflict is closed.** The owner decided on 2026-08-17 to mount the HQ behaviours on
+> the existing `/super-admin` estate rather than build a parallel `/hq/*` family, with `/hq` paths as
+> later aliases if ever wanted. The decision had been in force since then and shaped the rest of the HQ
+> arc, but the rationale had never been written down — enforced in four places in the code, recorded in
+> none. It is now **[ADR-014](./adr/ADR-014-hq-mounts-on-super-admin.md)**, which supersedes
+> COMP-ACCESS-URL-001 §2's `/hq` row by name. `/staff` is the Staff/HQ gateway's main-domain route
+> equivalent, and a future `/hq` would be a rewrite onto the existing estate, never a second route tree.
 
 ### 4.2 §1 lists `practice.competenhealthcare.com`; the booking address is the apex
 

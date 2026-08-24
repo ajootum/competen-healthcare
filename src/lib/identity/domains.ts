@@ -68,14 +68,15 @@ export type Gateway = {
 /**
  * s1's table, verbatim in structure, plus the route each product answers on the main domain (s2).
  *
- * ⚠ ONE ROUTE HERE DISAGREES WITH THE SPEC ON PURPOSE. s2 names `/hq` as the staff route equivalent.
- * This application has no `/hq` route and never has; the HQ estate answers on `/staff`, which
- * COMP-HQ-ACCESS-001 s5 froze as `STAFF_DOOR_PATH` and which staff-host.ts already treats as the one
- * door the subdomain aliases. Inventing `/hq` to match the newer document would create a second
- * entrance to a privileged plane, which is exactly the kind of change that is a decision rather than a
- * tidy-up. The conflict is recorded in the inventory doc for the person who owns both specs. Until it
- * is ruled on, the built route is the one written down, because a registry that names a route nobody
- * serves is worse than one that admits the disagreement.
+ * ⚠ ONE ROUTE HERE DISAGREES WITH THE SPEC ON PURPOSE, AND THE DISAGREEMENT IS RULED. s2 names `/hq`
+ * as the staff route equivalent. This application has no `/hq` route and never has; the HQ estate
+ * answers on `/staff`, which COMP-HQ-ACCESS-001 s5 froze as `STAFF_DOOR_PATH` and which staff-host.ts
+ * already treats as the one door the subdomain aliases.
+ *
+ * docs/adr/ADR-014-hq-mounts-on-super-admin.md is the ruling: HQ mounts on the existing `/super-admin`
+ * estate, and `/hq/*` is an alias at most, never a second route tree. It supersedes s2's `/hq` row by
+ * name. Inventing `/hq` here would create a second entrance to a privileged plane -- a security
+ * decision with its own blast radius, not a tidy-up -- and would duplicate a 33-section estate.
  */
 export const GATEWAYS: Readonly<Record<GatewayKey, Gateway>> = {
   public: {
@@ -114,7 +115,8 @@ export const GATEWAYS: Readonly<Record<GatewayKey, Gateway>> = {
     devHosts: ["recruitment.localhost"],
   },
   staff: {
-    // s2 says `/hq`. See the warning above: `/staff` is what exists and what COMP-HQ-ACCESS-001 froze.
+    // s2 says `/hq`. See the warning above: `/staff` is what exists, what COMP-HQ-ACCESS-001 froze,
+    // and what ADR-014 ruled. A `/hq` alias, if ever wanted, is a rewrite onto the same estate.
     host: `staff.${COMPETEN_DOMAIN}`,
     route: "/staff",
     label: "Competen Staff",

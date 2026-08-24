@@ -34,11 +34,12 @@ export { normaliseHost };
  * The staff door's path. The subdomain is an alias for it, never a second implementation.
  *
  * ⚠ DERIVED FROM THE REGISTRY SO THE `/hq` QUESTION CANNOT BE ANSWERED BY ACCIDENT. COMP-ACCESS-URL-001
- * s2 names `/hq` as the staff route equivalent and this application serves `/staff`; the registry
- * records the disagreement rather than resolving it. Deriving the door from the same field means an
- * edit made to satisfy the newer spec moves the privileged entrance too, instead of leaving a registry
- * that claims one thing and a door that is another -- and domain-registry-harness.ts asserts both that
- * this equals "/staff" and that the route directory exists, so the change goes red rather than quiet.
+ * s2 names `/hq` as the staff route equivalent and this application serves `/staff`. ADR-014 ruled it:
+ * HQ mounts on the existing `/super-admin` estate and `/hq/*` is an alias at most, never a second route
+ * tree. Deriving the door from the same field means an edit made to satisfy a spec that names `/hq`
+ * moves the privileged entrance too, instead of leaving a registry that claims one thing and a door
+ * that is another -- and domain-registry-harness.ts asserts both that this equals "/staff" and that the
+ * route directory exists, so the change goes red rather than quiet.
  */
 export const STAFF_DOOR_PATH = GATEWAYS.staff.route;
 
