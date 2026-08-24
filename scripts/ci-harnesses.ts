@@ -114,6 +114,9 @@ const INCLUDED = [
   "role-authorization-ratchet-harness.ts",
   "pui-colour-harness.ts",
   "pui-tokens-harness.ts",
+  // Build isolation: a verification build must never write into the dev server's .next.
+  // 13/13, pure static reads of next.config.ts, tsconfig.json, package.json and .vercelignore.
+  "build-isolation-harness.ts",
   "sidebar-active-harness.ts",
   // COMP-ACCESS-URL-001 s13 step 2 -- 45/45. The canonical hostname registry, plus the regression
   // searches s8 and s12 ask for (no deprecated recruitment host, no independent Enterprise-module
