@@ -49,9 +49,11 @@ import {
 } from "../src/lib/practice/document-style";
 import {
   resolveSelection, defaultSelection, selectableFacts, CURRENT_STATE_CATEGORIES, FACT_CATEGORIES,
-  doseWithUnit,
   type FactGroup, type SelectableFact,
 } from "../src/lib/practice/document-facts";
+// The dose rule lives in medication-constants, where CPR-TREAT-001 put it. document-facts briefly
+// carried a second copy; section 25 tests the one that survived.
+import { doseWithUnit } from "../src/lib/practice/medication-constants";
 
 let pass = 0;
 const fails: string[] = [];
@@ -1204,8 +1206,18 @@ async function main() {
     doseWithUnit("3", "mg") === "3 mg");
   ok("25b. and one that already carries it is left alone, not doubled",
     doseWithUnit("1000 mg", "mg") === "1000 mg" && doseWithUnit("500MG", "mg") === "500MG");
+  // The shared helper returns "" rather than null for an absent dose -- joinDetail drops empty
+  // strings, so both read the same downstream. Asserted as the surviving contract rather than the
+  // one the deleted copy had.
   ok("25c. no unit recorded means nothing is invented",
-    doseWithUnit("3", null) === "3" && doseWithUnit(null, null) === null);
+    doseWithUnit("3", null) === "3" && doseWithUnit(null, null) === "");
+  // ⚠ THE CASES THE DELETED COPY GOT WRONG. Its plain substring test would have left "2 tablets"
+  // alone but also mishandled a dose that spells its unit; the surviving one knows "500mg" and
+  // "5 mg/kg" already carry theirs.
+  ok("25d. a dose written without a space still counts as carrying its unit",
+    doseWithUnit("500mg", "mg") === "500mg");
+  ok("25e. and a rate keeps its unit rather than gaining a second one",
+    doseWithUnit("5 mg/kg", "mg") === "5 mg/kg");
 
   // ── CONTROL ──────────────────────────────────────────────────────────────────────────────────────
   //

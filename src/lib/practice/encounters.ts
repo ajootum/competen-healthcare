@@ -456,7 +456,7 @@ export async function recordDiagnosis(admin: any, args: {
 
 export async function recordTreatment(admin: any, args: {
   workspaceId: string; encounterId: string; treatmentType: string; label: string;
-  dose?: string; route?: string; frequency?: string; duration?: string; notes?: string;
+  dose?: string; doseUnit?: string | null; route?: string; frequency?: string; duration?: string; notes?: string;
   diagnosisId?: string | null; actorId: string; correlationId: string;
 }): Promise<EngineResult<{ id: string }>> {
   const guard = await editableEncounter(admin, args.workspaceId, args.encounterId);
@@ -465,7 +465,8 @@ export async function recordTreatment(admin: any, args: {
   const { data: t, error } = await admin.from("practice_treatment").insert({
     workspace_id: args.workspaceId, encounter_id: args.encounterId, patient_id: guard.data.patient_id,
     diagnosis_id: args.diagnosisId ?? null, treatment_type: args.treatmentType, label: args.label.trim(),
-    dose: args.dose ?? null, route: args.route ?? null, frequency: args.frequency ?? null,
+    dose: args.dose ?? null, dose_unit: args.doseUnit ?? null,
+    route: args.route ?? null, frequency: args.frequency ?? null,
     duration: args.duration ?? null, notes: args.notes ?? null, created_by: args.actorId,
   }).select("id").single();
   if (error) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: error.message };
