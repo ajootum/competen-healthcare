@@ -132,6 +132,10 @@ export default function DocumentComposer(props: {
   const [summaryPurpose, setSummaryPurpose] = useState("");
   const [clinicalIndication, setClinicalIndication] = useState("");
   const [period, setPeriod] = useState({ from: "", to: "" });
+  const [assistAvailable, setAssistAvailable] = useState(false);
+  const [assist, setAssist] = useState(false);
+  // Set when assisted phrasing was asked for and the result came back as the plain list anyway.
+  const [fellBack, setFellBack] = useState<string | null>(null);
   const cfg = PURPOSES[props.purpose];
 
   const [busy, setBusy] = useState(false);
@@ -152,6 +156,7 @@ export default function DocumentComposer(props: {
         const facts = await factsRes.json();
         setGroups(facts.groups ?? []);
         setSelected(new Set<string>(facts.defaultSelected ?? []));
+        setAssistAvailable(facts.assistedPhrasingAvailable === true);
         if (destRes.ok) setDestinations((await destRes.json()).destinations ?? []);
       } catch {
         if (live) setLoadFailed("This patient's record could not be read, so nothing can be included yet.");
@@ -177,6 +182,7 @@ export default function DocumentComposer(props: {
         body: JSON.stringify({
           patientId: props.patientId, encounterId: props.encounterId,
           factKeys: [...selected],
+          phrasing: assist ? "assisted" : "deterministic",
           ...(cfg.recipient ? {
             referralId: props.referralId ?? null,
             destinationId: destinationId || null,
@@ -195,7 +201,16 @@ export default function DocumentComposer(props: {
         }),
       });
       const json = await res.json();
-      if (!res.ok) { setError(json?.error?.message ?? "The letter could not be created."); return; }
+      if (!res.ok) { setError(json?.error?.message ?? "The document could not be created."); return; }
+
+      // ⚠ THE DRAFT EXISTS EITHER WAY. If prose was asked for and the answer came back as the plain
+      // list, that is the grounding check having refused something it could not verify -- which is
+      // the designed behaviour, not a failure. Say so and let them open the draft, rather than
+      // navigating away and leaving them to wonder why it looks the same as always.
+      if (assist && json.phrasing !== "assisted") {
+        setFellBack(json.documentId);
+        return;
+      }
       props.onGenerated(json.documentId);
     } catch {
       setError("The letter could not be created.");
@@ -411,6 +426,40 @@ export default function DocumentComposer(props: {
         </div>
 
         {error && <p role="alert" className="mt-2 text-[12px] text-[var(--cmp-text-critical)]">{error}</p>}
+
+        {fellBack && (
+          <div role="status" className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+            <p className="text-[12px] font-semibold text-gray-800">The draft was written as a list.</p>
+            <p className="mt-0.5 text-[11.5px] leading-relaxed text-gray-600">
+              The prose version could not be checked against the record, so it was discarded. The draft
+              contains exactly what you selected, in the usual form.
+            </p>
+            <button type="button" onClick={() => props.onGenerated(fellBack)}
+              className="mt-1.5 min-h-[var(--cp-touch)] text-[12px] font-semibold text-[var(--cp-primary-deep)] hover:underline">
+              Open the draft
+            </button>
+          </div>
+        )}
+
+        {/* CPR-DOC-AUTO-001 s10. Offered only where the practice has turned the assistant on and
+            accepted the current disclosure. Opt-in per document, never remembered as a default --
+            a practitioner should decide this for the letter in front of them.
+
+            s18: no model name, no provider, no prompt. What it does, and what it will not do. */}
+        {assistAvailable && !loadFailed && (
+          <label className="mt-3 flex min-h-[var(--cp-touch)] items-start gap-2 rounded-lg border border-gray-100 bg-gray-50/60 p-2.5">
+            <input type="checkbox" checked={assist} onChange={e => { setAssist(e.target.checked); setFellBack(null); }}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--cp-primary-deep)]" />
+            <span className="text-[12px] leading-snug text-gray-700">
+              Write the clinical sections as prose
+              <span className="block text-[11px] text-gray-500">
+                Rewrites only the lists of recorded facts. It cannot add a finding, a dose or a date that
+                is not in the record, and it does not touch what you have typed. If anything cannot be
+                checked against the record, you get the plain list instead.
+              </span>
+            </span>
+          </label>
+        )}
 
         <div className="mt-3 flex flex-col gap-1.5 border-t border-gray-100 pt-3">
           <p className="text-[11px] text-gray-500">

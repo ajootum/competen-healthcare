@@ -5,10 +5,13 @@ import {
   composeReferralLetter, composeVisitSummary, composePatientInstructions, composeClinicalSummary,
   composeInvestigationRequest, composeFollowUpInstructions, composeMedicationList, recipientLine,
   type ComposedDocument, type Recipient, type RecipientKind,
+  sectionsFor,
 } from "@/lib/practice/document-compose";
 import {
   defaultSelection, resolveSelection, selectableFacts, type FactCategory, type SelectableFact,
 } from "@/lib/practice/document-facts";
+import { assistantSettings } from "@/lib/practice/ai-assistant";
+import { phraseFactSections, type PhrasingResult } from "@/lib/practice/document-phrasing";
 import { recordReferral } from "@/lib/practice/encounter-workspace";
 import type { EngineResult } from "@/lib/practice/encounters";
 import type { WorkspaceContext } from "@/lib/practice/access";
@@ -65,6 +68,8 @@ export type ReferralLetterArgs = {
   reason: string;
   requestedAction?: string | null;
   factKeys: string[];
+  /** CPR-DOC-AUTO-001 s10. Opt-in per request; the default and every failure is deterministic. */
+  phrasing?: PhrasingChoice;
   correlationId: string;
 };
 
@@ -157,7 +162,7 @@ async function resolveRecipient(admin: any, ctx: WorkspaceContext, args: {
  * record to a document bug.
  */
 export async function generateReferralLetter(admin: any, ctx: WorkspaceContext, args: ReferralLetterArgs):
-  Promise<EngineResult<{ documentId: string; referralId: string; disclosed: number }>> {
+  Promise<EngineResult<{ documentId: string; referralId: string; disclosed: number; phrasing: PhrasingChoice }>> {
   const reason = (args.reason ?? "").trim();
   if (!reason) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a referral needs a reason" };
 
@@ -190,7 +195,13 @@ export async function generateReferralLetter(admin: any, ctx: WorkspaceContext, 
     referralId = made.data.id;
   }
 
+  const phrased = await narrativeFor(admin, ctx, {
+    requested: args.phrasing === "assisted", audience: "clinician",
+    facts: selected, typed: [reason, args.requestedAction],
+  });
+
   const composed = composeReferralLetter({
+    narrative: phrased.narrative,
     today: merge["today"],
     recipient,
     patient: { name: merge["patient.name"], identifier: merge["patient.identifier"], sex: merge["patient.sex"], age: merge["patient.age"] },
@@ -203,14 +214,17 @@ export async function generateReferralLetter(admin: any, ctx: WorkspaceContext, 
 
   const stored = await store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "referral_letter",
-    composed, selected, addressedTo, purpose: "referral_letter",
+    composed, selected, addressedTo, purpose: "referral_letter", phrasing: phrased.phrasing,
     correlationId: args.correlationId, extraAudit: { referralId, destinationId },
   });
   if (!stored.ok) return stored;
 
   await admin.from("practice_clinical_document").update({ referral_id: referralId }).eq("id", stored.data.documentId);
 
-  return { ok: true, data: { documentId: stored.data.documentId, referralId, disclosed: stored.data.disclosed } };
+  return { ok: true, data: {
+    documentId: stored.data.documentId, referralId,
+    disclosed: stored.data.disclosed, phrasing: stored.data.phrasing,
+  } };
 }
 
 /**
@@ -228,14 +242,21 @@ async function store(admin: any, ctx: WorkspaceContext, args: {
   patientId: string; encounterId: string | null; docType: string;
   composed: ComposedDocument; selected: SelectableFact[];
   addressedTo?: string; purpose: string; correlationId: string;
+  phrasing?: PhrasingChoice;
   extraAudit?: Record<string, unknown>;
-}): Promise<EngineResult<{ documentId: string; disclosed: number }>> {
+}): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
   const created = await createDocument(admin, {
     workspaceId: ctx.workspaceId, patientId: args.patientId, encounterId: args.encounterId,
     docType: args.docType, title: args.composed.title, addressedTo: args.addressedTo,
     body: args.composed.body, actorId: ctx.userId, correlationId: args.correlationId,
   });
   if (!created.ok) return created;
+
+  // Only written when it is not the default, so a deterministic document needs no second round trip
+  // and the column can never disagree with migration 356's default for the rows that predate it.
+  if (args.phrasing === "assisted") {
+    await admin.from("practice_clinical_document").update({ phrasing: "assisted" }).eq("id", created.data.id);
+  }
 
   // PROVENANCE COMES FROM WHAT THE COMPOSER USED, not from what was selected. If a fact were ever
   // selected but had no section to appear in, this table would not claim it was disclosed.
@@ -261,13 +282,58 @@ async function store(admin: any, ctx: WorkspaceContext, args: {
     workspaceId: ctx.workspaceId, actorId: ctx.userId, eventType: "practice.document_generated",
     payload: {
       documentId: created.data.id, purpose: args.purpose, disclosed: disclosed.length,
+      phrasing: args.phrasing ?? "deterministic",
       historicalDisclosed: args.selected.filter(f => f.scope === "historical").length,
       ...(args.extraAudit ?? {}),
     },
     correlationId: args.correlationId,
   });
 
-  return { ok: true, data: { documentId: created.data.id, disclosed: disclosed.length } };
+  return { ok: true, data: {
+    documentId: created.data.id, disclosed: disclosed.length,
+    // WHAT ACTUALLY HAPPENED, not what was asked for. A practitioner who requested prose and received
+    // the list is told, rather than left to wonder why the draft looks the same as always.
+    phrasing: args.phrasing ?? "deterministic",
+  } };
+}
+
+
+export type PhrasingChoice = "deterministic" | "assisted";
+
+/**
+ * Ask for AI phrasing, if this practice has agreed to it and the practitioner asked.
+ *
+ * THE DEFAULT IS DETERMINISTIC AND SO IS EVERY FAILURE. Not requested, not enabled, no provider, the
+ * model errored, or the output did not verify -- all five return the same thing: no narrative, so the
+ * composer prints the labelled lists it always did. There is no path here that produces unverified
+ * prose, and none that turns a phrasing problem into a failed document.
+ *
+ * The typed strings are passed to the verifier because section 17 counts explicit practitioner input
+ * as grounding, alongside selected source data.
+ */
+async function narrativeFor(admin: any, ctx: WorkspaceContext, opts: {
+  requested: boolean;
+  audience: "clinician" | "patient";
+  facts: SelectableFact[];
+  typed: (string | null | undefined)[];
+}): Promise<{ narrative: string | null; phrasing: PhrasingChoice; detail: PhrasingResult | null }> {
+  if (!opts.requested) return { narrative: null, phrasing: "deterministic", detail: null };
+
+  const settings = await assistantSettings(admin, ctx.workspaceId);
+  const result = await phraseFactSections({
+    sections: sectionsFor(opts.audience, opts.facts),
+    typed: opts.typed.filter(Boolean).map(String),
+    // STALE CONSENT IS NOT CONSENT. assistantSettings distinguishes a practice that agreed to the
+    // CURRENT disclosure from one that agreed to an older one, and only the first counts.
+    enabled: settings.enabled && settings.noticeCurrent,
+    canGenerate: settings.configured,
+    workspaceId: ctx.workspaceId,
+    userId: ctx.userId,
+  });
+
+  return result.phrasing === "assisted"
+    ? { narrative: result.narrative, phrasing: "assisted", detail: result }
+    : { narrative: null, phrasing: "deterministic", detail: result };
 }
 
 /**
@@ -355,8 +421,8 @@ const patientOf = (merge: MergeContext) => ({
  * their visit is accounted for. The refusal names the fix.
  */
 export async function generateVisitSummary(admin: any, ctx: WorkspaceContext, args: {
-  patientId: string; encounterId: string; factKeys?: string[]; correlationId: string;
-}): Promise<EngineResult<{ documentId: string; disclosed: number }>> {
+  patientId: string; encounterId: string; factKeys?: string[]; phrasing?: PhrasingChoice; correlationId: string;
+}): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
   const prepared = await prepare(admin, ctx, args);
   if (!prepared.ok) return prepared;
   const { selected, merge } = prepared.data;
@@ -365,14 +431,20 @@ export async function generateVisitSummary(admin: any, ctx: WorkspaceContext, ar
     return { ok: false, status: 422, code: "NOTHING_TO_SUMMARISE",
              message: "nothing has been recorded at this consultation yet, so there is nothing to summarise" };
 
+  const phrased = await narrativeFor(admin, ctx, {
+    requested: args.phrasing === "assisted", audience: "patient", facts: selected, typed: [],
+  });
+
   const composed = composeVisitSummary({
+    narrative: phrased.narrative,
     today: merge["today"], visitDate: merge["encounter.date"], patient: patientOf(merge),
     facts: selected, practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
   });
 
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "consultation_summary",
-    composed, selected, purpose: "visit_summary", correlationId: args.correlationId,
+    composed, selected, purpose: "visit_summary", phrasing: phrased.phrasing,
+    correlationId: args.correlationId,
   });
 }
 
@@ -385,8 +457,8 @@ export async function generateVisitSummary(admin: any, ctx: WorkspaceContext, ar
  */
 export async function generatePatientInstructions(admin: any, ctx: WorkspaceContext, args: {
   patientId: string; encounterId: string; instructions?: string | null;
-  factKeys: string[]; correlationId: string;
-}): Promise<EngineResult<{ documentId: string; disclosed: number }>> {
+  factKeys: string[]; phrasing?: PhrasingChoice; correlationId: string;
+}): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
   const prepared = await prepare(admin, ctx, args);
   if (!prepared.ok) return prepared;
   const { selected, merge } = prepared.data;
@@ -396,14 +468,21 @@ export async function generatePatientInstructions(admin: any, ctx: WorkspaceCont
     return { ok: false, status: 422, code: "NOTHING_TO_INSTRUCT",
              message: "write what the patient should do, or include something from the record" };
 
+  const phrased = await narrativeFor(admin, ctx, {
+    requested: args.phrasing === "assisted", audience: "patient",
+    facts: selected, typed: [instructions],
+  });
+
   const composed = composePatientInstructions({
+    narrative: phrased.narrative,
     today: merge["today"], patient: patientOf(merge), instructions: instructions || null,
     facts: selected, practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
   });
 
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "patient_instructions",
-    composed, selected, purpose: "patient_instructions", correlationId: args.correlationId,
+    composed, selected, purpose: "patient_instructions", phrasing: phrased.phrasing,
+    correlationId: args.correlationId,
   });
 }
 
@@ -419,8 +498,8 @@ export async function generateClinicalSummary(admin: any, ctx: WorkspaceContext,
   patientId: string; encounterId?: string | null;
   destinationId?: string | null; recipient?: AdHocRecipient | null;
   purpose: string; from?: string | null; to?: string | null;
-  factKeys: string[]; correlationId: string;
-}): Promise<EngineResult<{ documentId: string; disclosed: number }>> {
+  factKeys: string[]; phrasing?: PhrasingChoice; correlationId: string;
+}): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
   const purpose = (args.purpose ?? "").trim();
   if (!purpose)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "what is this summary for?" };
@@ -437,7 +516,13 @@ export async function generateClinicalSummary(admin: any, ctx: WorkspaceContext,
   if (!recipientResult.ok) return recipientResult;
   const { recipient } = recipientResult.data;
 
+  const phrased = await narrativeFor(admin, ctx, {
+    requested: args.phrasing === "assisted", audience: "clinician",
+    facts: selected, typed: [purpose],
+  });
+
   const composed = composeClinicalSummary({
+    narrative: phrased.narrative,
     today: merge["today"], patient: patientOf(merge), recipient, purpose,
     periodFrom: args.from ?? null, periodTo: args.to ?? null,
     facts: selected, practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
@@ -446,7 +531,7 @@ export async function generateClinicalSummary(admin: any, ctx: WorkspaceContext,
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId ?? null, docType: "clinical_summary",
     composed, selected, addressedTo: recipientLine(recipient),
-    purpose: "clinical_summary", correlationId: args.correlationId,
+    purpose: "clinical_summary", phrasing: phrased.phrasing, correlationId: args.correlationId,
   });
 }
 
@@ -461,8 +546,8 @@ export async function generateClinicalSummary(admin: any, ctx: WorkspaceContext,
 export async function generateInvestigationRequest(admin: any, ctx: WorkspaceContext, args: {
   patientId: string; encounterId: string;
   destinationId?: string | null; recipient?: AdHocRecipient | null;
-  clinicalIndication: string; factKeys: string[]; correlationId: string;
-}): Promise<EngineResult<{ documentId: string; disclosed: number }>> {
+  clinicalIndication: string; factKeys: string[]; phrasing?: PhrasingChoice; correlationId: string;
+}): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
   const indication = (args.clinicalIndication ?? "").trim();
   if (!indication)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a request needs a clinical indication" };
@@ -484,7 +569,13 @@ export async function generateInvestigationRequest(admin: any, ctx: WorkspaceCon
     recipient = resolved.data.recipient;
   }
 
+  const phrased = await narrativeFor(admin, ctx, {
+    requested: args.phrasing === "assisted", audience: "clinician",
+    facts: selected, typed: [indication],
+  });
+
   const composed = composeInvestigationRequest({
+    narrative: phrased.narrative,
     today: merge["today"], patient: patientOf(merge), recipient, clinicalIndication: indication,
     facts: selected, practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
   });
@@ -492,7 +583,7 @@ export async function generateInvestigationRequest(admin: any, ctx: WorkspaceCon
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "investigation_request",
     composed, selected, ...(recipient ? { addressedTo: recipientLine(recipient) } : {}),
-    purpose: "investigation_request", correlationId: args.correlationId,
+    purpose: "investigation_request", phrasing: phrased.phrasing, correlationId: args.correlationId,
   });
 }
 
@@ -505,8 +596,8 @@ export async function generateInvestigationRequest(admin: any, ctx: WorkspaceCon
  */
 export async function generateFollowUpInstructions(admin: any, ctx: WorkspaceContext, args: {
   patientId: string; encounterId: string; instructions?: string | null;
-  factKeys?: string[]; correlationId: string;
-}): Promise<EngineResult<{ documentId: string; disclosed: number }>> {
+  factKeys?: string[]; phrasing?: PhrasingChoice; correlationId: string;
+}): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
   const prepared = await prepare(admin, ctx, { ...args, alsoCurrent: ["follow_up"] });
   if (!prepared.ok) return prepared;
   const { selected, merge } = prepared.data;
@@ -515,7 +606,13 @@ export async function generateFollowUpInstructions(admin: any, ctx: WorkspaceCon
     return { ok: false, status: 422, code: "NO_FOLLOW_UP_OUTSTANDING",
              message: "nothing is outstanding for this patient, so there is nothing to come back for" };
 
+  const phrased = await narrativeFor(admin, ctx, {
+    requested: args.phrasing === "assisted", audience: "patient",
+    facts: selected, typed: [args.instructions],
+  });
+
   const composed = composeFollowUpInstructions({
+    narrative: phrased.narrative,
     today: merge["today"], patient: patientOf(merge),
     instructions: (args.instructions ?? "").trim() || null,
     facts: selected, practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
@@ -523,7 +620,8 @@ export async function generateFollowUpInstructions(admin: any, ctx: WorkspaceCon
 
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "follow_up_instructions",
-    composed, selected, purpose: "follow_up_instructions", correlationId: args.correlationId,
+    composed, selected, purpose: "follow_up_instructions", phrasing: phrased.phrasing,
+    correlationId: args.correlationId,
   });
 }
 
@@ -538,8 +636,8 @@ export async function generateFollowUpInstructions(admin: any, ctx: WorkspaceCon
  * one-click list cannot quietly acquire a diagnosis from a wider default.
  */
 export async function generateMedicationList(admin: any, ctx: WorkspaceContext, args: {
-  patientId: string; encounterId?: string | null; factKeys?: string[]; correlationId: string;
-}): Promise<EngineResult<{ documentId: string; disclosed: number }>> {
+  patientId: string; encounterId?: string | null; factKeys?: string[]; phrasing?: PhrasingChoice; correlationId: string;
+}): Promise<EngineResult<{ documentId: string; disclosed: number; phrasing: PhrasingChoice }>> {
   const prepared = await prepare(admin, ctx, { ...args, alsoCurrent: ["medication"] });
   if (!prepared.ok) return prepared;
   const { merge } = prepared.data;
@@ -549,13 +647,19 @@ export async function generateMedicationList(admin: any, ctx: WorkspaceContext, 
     return { ok: false, status: 422, code: "NO_CURRENT_MEDICATION",
              message: "no current medication is recorded for this patient" };
 
+  const phrased = await narrativeFor(admin, ctx, {
+    requested: args.phrasing === "assisted", audience: "patient", facts: selected, typed: [],
+  });
+
   const composed = composeMedicationList({
+    narrative: phrased.narrative,
     today: merge["today"], patient: patientOf(merge), facts: selected,
     practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
   });
 
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId ?? null, docType: "medication_list",
-    composed, selected, purpose: "medication_list", correlationId: args.correlationId,
+    composed, selected, purpose: "medication_list", phrasing: phrased.phrasing,
+    correlationId: args.correlationId,
   });
 }

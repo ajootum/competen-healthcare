@@ -37,6 +37,7 @@ import {
 } from "../src/lib/practice/document-compose";
 import { DOC_TYPES } from "../src/lib/practice/document-constants";
 import { DOC_TYPE_OPTIONS } from "../src/lib/practice/documents-workspace-constants";
+import { verifyGrounded, phrasingPayload } from "../src/lib/practice/document-phrasing";
 import {
   resolveSelection, defaultSelection, selectableFacts, CURRENT_STATE_CATEGORIES,
   type FactGroup, type SelectableFact,
@@ -600,6 +601,163 @@ async function main() {
   const mig355 = flatten(read("supabase/migrations/355-phase-three-document-types.sql"));
   ok("15c. and 355 records why priority 8 is missing rather than leaving a gap",
     /section 14/i.test(mig355) && /controlled template/i.test(mig355));
+
+  // ── 16. AI PHRASING (s10) ────────────────────────────────────────────────────────────────────────
+  //
+  // s10 lets a model "improve organization, grammar and professional phrasing" and forbids it inventing
+  // seven named things. A prompt saying so is a hope. verifyGrounded is the control, and it is pure, so
+  // every case below runs without a model, a network or a database.
+  //
+  // WHAT A VIOLATION MEANS HERE: the prose is DISCARDED and the deterministic lists are used instead.
+  // Nothing in this module can produce an unverified document, so these tests are about whether the
+  // net catches things, not about whether something bad reaches a patient.
+
+  const PHRASE_FACTS = [
+    fact({ key: "practice_medication:p1", label: "Metformin", category: "medication",
+           sourceTable: "practice_medication", detail: "500mg - oral - twice daily - 5 days" }),
+    fact({ key: "practice_diagnosis:p2", label: "Type 2 diabetes mellitus", detail: "confirmed" }),
+  ];
+  const GOOD = "Current medication\nMetformin 500mg is taken orally twice daily for 5 days.\n\n"
+    + "Diagnoses\nThere is a confirmed diagnosis of type 2 diabetes mellitus.";
+
+  ok("16a. CONTROL -- faithful prose verifies, so the net is not simply rejecting everything",
+    verifyGrounded(GOOD, PHRASE_FACTS).length === 0,
+    JSON.stringify(verifyGrounded(GOOD, PHRASE_FACTS)));
+
+  // A DOSE THAT WAS NEVER RECORDED. The most dangerous invention and the most detectable.
+  const badDose = verifyGrounded(GOOD.replace("500mg", "850mg"), PHRASE_FACTS);
+  ok("16b. an invented dose is caught",
+    badDose.some(v => v.kind === "ungrounded_number" && v.token === "850"));
+
+  // SPELLED OUT. Without the number-word map this walks straight through.
+  const badWord = verifyGrounded(GOOD + " Treatment continued for seven days.", PHRASE_FACTS);
+  ok("16c. an invented duration spelled as a word is caught",
+    badWord.some(v => v.kind === "ungrounded_number" && v.token === "seven"));
+  ok("16d. CONTROL -- a spelled number that IS in the payload passes",
+    verifyGrounded(GOOD + " Taken for five days.", PHRASE_FACTS)
+      .every(v => v.kind !== "ungrounded_number"));
+
+  // A MONTH SWAP passes every number check, because the digits still match.
+  const dated = [fact({ key: "practice_follow_up:p3", label: "Review appointment", category: "follow_up",
+                        sourceTable: "practice_follow_up", detail: "due 2026-09-10" })];
+  ok("16e. CONTROL -- a date rewritten in words, with the right month, verifies",
+    verifyGrounded("Next steps\nA review appointment is due on 10 September 2026.", dated).length === 0);
+  ok("16f. the same sentence with the month swapped is caught",
+    verifyGrounded("Next steps\nA review appointment is due on 10 October 2026.", dated)
+      .some(v => v.kind === "ungrounded_month" && v.token === "october"));
+
+  // ASSERTED FINDINGS -- s10's severity, examination, result, response and recurrence.
+  for (const [phrase, token] of [
+    ["The patient is stable.", "stable"],
+    ["Examination was unremarkable.", "unremarkable"],
+    ["She tolerated it well.", "tolerated"],
+    ["Symptoms improved.", "improved"],
+    ["This is a recurrent problem.", "recurrent"],
+    ["Blood pressure was normal.", "normal"],
+  ] as [string, string][]) {
+    ok(`16g. an asserted finding is caught -- "${token}"`,
+      verifyGrounded(GOOD + " " + phrase, PHRASE_FACTS)
+        .some(v => v.kind === "asserted_finding" && v.token === token));
+  }
+
+  // ⚠ AND THE SAME WORD IS FINE WHEN THE RECORD CONTAINS IT. A diagnosis genuinely recorded as
+  // "resolved pneumothorax" must not be rejected -- that would be the verifier inventing a problem.
+  const resolvedFact = [fact({ key: "practice_diagnosis:p4", label: "Resolved pneumothorax", detail: "confirmed" })];
+  ok("16h. CONTROL -- a marker word present in the record is not a violation",
+    verifyGrounded("Diagnoses\nThere is a confirmed resolved pneumothorax.", resolvedFact).length === 0);
+
+  // PRACTITIONER-TYPED TEXT COUNTS AS GROUNDING (s17).
+  ok("16i. a number the practitioner typed is grounded",
+    verifyGrounded("Diagnoses\nType 2 diabetes mellitus, reviewed over 3 visits.",
+      [PHRASE_FACTS[1]], ["reviewed over 3 visits"]).length === 0);
+
+  // A DROPPED FACT is not a safety problem in the same direction, but practice_document_fact would
+  // then record a disclosure the document does not contain.
+  ok("16j. a fact the prose omitted is caught",
+    verifyGrounded("Diagnoses\nThere is a confirmed diagnosis of type 2 diabetes mellitus.", PHRASE_FACTS)
+      .some(v => v.kind === "fact_missing" && v.label === "Metformin"));
+  ok("16k. empty prose is caught rather than treated as a clean pass",
+    verifyGrounded("   ", PHRASE_FACTS).some(v => v.kind === "empty"));
+
+  // ── 17. THE BOUNDARY s10 DRAWS AROUND THE PRACTITIONER'S OWN WORDS ───────────────────────────────
+  //
+  // s10: "Clearly separate practitioner-entered referral reason/question from generated narrative."
+  // The guarantee is structural -- narrative replaces the FACT BLOCKS and nothing else -- so this
+  // checks that the scaffold and the typed text survive a rephrasing untouched.
+  const phrasedLetter = composeReferralLetter({
+    ...baseInput([CURRENT_DX, CURRENT_RX]),
+    narrative: "Diagnoses\nZZ-AI-PROSE mentioning ZZ-CURRENT-DX and ZZ-CURRENT-RX.",
+  });
+  ok("17a. the verified prose is what appears", phrasedLetter.body.includes("ZZ-AI-PROSE"));
+  ok("17b. ⚠ the practitioner's typed reason and requested action survive verbatim",
+    phrasedLetter.body.includes("ZZ-TYPED-REASON") && phrasedLetter.body.includes("ZZ-TYPED-ACTION"));
+  ok("17c. and the scaffold is untouched -- recipient, salutation, subject line, sign-off",
+    phrasedLetter.body.includes("Dr Okello") && phrasedLetter.body.includes("Dear Dr Okello,")
+    && phrasedLetter.body.includes("Re: Aisha Nakato") && phrasedLetter.body.includes("Yours sincerely,"));
+  ok("17d. the labelled list it replaced is gone",
+    !phrasedLetter.body.includes("- ZZ-CURRENT-DX (confirmed)"));
+  ok("17e. and provenance still comes from the FACTS, not from the prose",
+    phrasedLetter.usedFactKeys.length === 2 && phrasedLetter.usedFactKeys.includes(CURRENT_RX.key));
+
+  // Same boundary on a patient document.
+  const phrasedInstructions = composePatientInstructions({
+    ...patientBase, instructions: "ZZ-TYPED-INSTRUCTION", facts: [CURRENT_RX],
+    narrative: "Treatment\nZZ-AI-PROSE about ZZ-CURRENT-RX.",
+  });
+  ok("17f. a patient document keeps its typed instruction alongside the prose",
+    phrasedInstructions.body.includes("ZZ-TYPED-INSTRUCTION") && phrasedInstructions.body.includes("ZZ-AI-PROSE"));
+
+  // ── 18. THE SHAPE THAT KEEPS SECTION 16 TRUE ─────────────────────────────────────────────────────
+  const phrasingSrc = strip(read("src/lib/practice/document-phrasing.ts"));
+  const phrasingImports = [...phrasingSrc.matchAll(/^import\s+([\s\S]*?)from\s+"([^"]+)"/gm)].map(m => m[2]);
+  ok("18a. the phrasing module reaches the model and the fact types, and nothing else",
+    phrasingImports.length === 2
+    && phrasingImports.includes("@/lib/ai/client")
+    && phrasingImports.includes("@/lib/practice/document-facts"),
+    phrasingImports.join(", "));
+  ok("18b. it cannot read a record -- no client, no query",
+    !/\bfrom\s*\(/.test(phrasingSrc) && !/\badmin\b/.test(phrasingSrc) && !/supabase/i.test(phrasingSrc));
+
+  // s2's bounded payload: the model is sent sections of facts, so it CANNOT be sent an identity.
+  ok("18c. the payload the model receives is built from sections of facts alone",
+    /export function phrasingPayload\(sections: \{ heading: string; facts: SelectableFact\[\] \}\[\]\)/.test(phrasingSrc));
+  const payloadSample = phrasingPayload([{ heading: "Diagnoses", facts: PHRASE_FACTS }]);
+  ok("18d. and it carries no patient identity",
+    !payloadSample.includes("Aisha") && !payloadSample.includes("26-000141"));
+
+  // s18: "Never expose prompts, model parameters ... to practitioners."
+  const uiFiles = ["src/app/practice/(shell)/encounters/[encounterId]/DocumentComposer.tsx",
+                   "src/app/practice/(shell)/encounters/[encounterId]/EncounterConsole.tsx"];
+  ok("18e. no practitioner-facing screen imports the prompt module",
+    uiFiles.every(p => !strip(read(p)).includes("document-phrasing")));
+
+  // Every refusal path must land on deterministic. A path that returned prose without verifying, or
+  // threw, would be the one that matters.
+  const refusals = (phrasingSrc.match(/phrasing: "deterministic", reason:/g) ?? []).length;
+  ok("18f. every refusal path returns deterministic rather than throwing or returning prose",
+    refusals >= 5, `${refusals} refusal paths`);
+  // ⚠ MATCH THE RETURN, NOT THE TYPE. The first version counted `phrasing: "assisted"` anywhere, which
+  // includes the PhrasingResult union's own declaration -- so it failed on correct code and said
+  // nothing about where prose is actually returned.
+  //
+  // ⚠ AND THE VERIFY CALL MUST BE PRESENT, NOT MERELY EARLIER. Deleting verification outright made
+  // indexOf return -1, and -1 is less than any index, so the ordering check passed with no verifier at
+  // all. An ordering assertion over a possibly-absent needle is an assertion about nothing.
+  const assistedReturns = phrasingSrc.match(/return \{ phrasing: "assisted"/g) ?? [];
+  const verifyAt = phrasingSrc.indexOf("verifyGrounded(result.text");
+  ok("18g. assisted prose is returned from exactly one place, and only after verification",
+    assistedReturns.length === 1
+    && verifyAt >= 0
+    && verifyAt < phrasingSrc.indexOf('return { phrasing: "assisted"'),
+    `${assistedReturns.length} return site(s), verify at ${verifyAt}`);
+
+  // The engine writes the column only for assisted, and s14's certificate ban still holds.
+  ok("18h. the engine records assisted phrasing on the document itself",
+    /update\(\{ phrasing: "assisted" \}\)/.test(engineSrc));
+  ok("18i. every generator routes phrasing through the one helper",
+    (engineSrc.match(/await narrativeFor\(/g) ?? []).length === generators.length);
+  ok("18j. stale consent is not consent -- the current notice is required",
+    /settings\.enabled && settings\.noticeCurrent/.test(engineSrc));
 
   // ── CONTROL ──────────────────────────────────────────────────────────────────────────────────────
   //

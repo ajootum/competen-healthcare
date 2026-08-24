@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePracticeContext, isDenied } from "@/lib/practice/api-context";
 import { selectableFacts, defaultSelection } from "@/lib/practice/document-facts";
+import { assistantSettings } from "@/lib/practice/ai-assistant";
 
 // CPR-DOC-AUTO-001 section 9 -- what this patient's record can offer a document, and what is
 // pre-selected. Read-only: offering a fact discloses nothing, so this is document.view rather than
@@ -23,10 +24,20 @@ export async function GET(req: NextRequest) {
   const offered = await selectableFacts(auth.caller.admin, auth.ctx, { patientId, encounterId, from, to });
   if (!offered) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 });
 
+  // CPR-DOC-AUTO-001 s10. Whether assisted phrasing may even be OFFERED here -- the practice has
+  // turned the assistant on, has accepted the CURRENT disclosure, and a provider that can actually
+  // generate is configured. All three, or the option is not shown.
+  //
+  // s18 forbids exposing prompts, model parameters and internal identifiers to practitioners, so this
+  // reports one boolean. The provider and model name stay on the settings screen where an administrator
+  // looks, and never travel with a document form.
+  const assistant = await assistantSettings(auth.caller.admin, auth.ctx.workspaceId);
+
   return NextResponse.json({
     groups: offered.groups,
     encounterId: offered.encounterId,
     defaultSelected: defaultSelection(offered.groups),
+    assistedPhrasingAvailable: assistant.enabled && assistant.noticeCurrent && assistant.configured,
     correlationId: auth.caller.traceId,
   });
 }

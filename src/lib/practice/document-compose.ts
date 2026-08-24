@@ -49,6 +49,8 @@ export type ComposedDocument = {
 
 export type ReferralLetterInput = {
   today: string | null;
+  /** Verified AI prose standing in for the fact lists. See factSections. */
+  narrative?: string | null;
   recipient: Recipient;
   patient: { name: string | null; identifier: string | null; sex: string | null; age: string | null };
   /** Practitioner-typed. Section 17 counts this as grounding: it is explicit practitioner input. */
@@ -152,12 +154,37 @@ function factLine(f: SelectableFact): string {
 }
 
 /**
- * Group facts into the letter's sections, in a fixed order.
+ * The section grouping, exported so the AI phrasing layer sends the model the SAME structure this
+ * composer would otherwise have printed. Two groupings would let the model return headings the
+ * deterministic fallback does not have, and a fallback that changes the document's shape is not a
+ * fallback.
+ */
+export function sectionsFor(audience: "clinician" | "patient", facts: SelectableFact[]):
+  { heading: string; facts: SelectableFact[] }[] {
+  const headings = audience === "patient" ? PATIENT_HEADING : CLINICIAN_HEADING;
+  return SECTION_ORDER
+    .map(category => ({ heading: headings[category], facts: facts.filter(f => f.category === category) }))
+    .filter(s => s.facts.length > 0);
+}
+
+/**
+ * Group facts into the document's sections, in a fixed order.
  *
  * A section with no selected facts is not printed. An empty heading tells a reader something was
  * considered and found absent, which is a clinical claim this function is not entitled to make.
+ *
+ * NARRATIVE REPLACES THE FACT BLOCKS AND NOTHING ELSE.
+ *
+ * When the phrasing layer has produced VERIFIED prose it stands in for the labelled lists, and only
+ * for those. The date, the address, the salutation, the practitioner's typed text and the sign-off
+ * are composed here as they always were. Section 10 requires the practitioner's own words to stay
+ * "clearly separate" from generated narrative, and the way to guarantee that is for the generated
+ * part never to reach them.
+ *
+ * The used-key list is still computed from the FACTS, never from the prose. verifyGrounded has
+ * already established that every fact appears in it.
  */
-function factSections(facts: SelectableFact[], headings: Record<FactCategory, string>): {
+function factSections(facts: SelectableFact[], headings: Record<FactCategory, string>, narrative?: string | null): {
   blocks: string[]; used: string[];
 } {
   const blocks: string[] = [];
@@ -168,7 +195,8 @@ function factSections(facts: SelectableFact[], headings: Record<FactCategory, st
     blocks.push([headings[category], ...inSection.map(factLine)].join("\n"));
     used.push(...inSection.map(f => f.key));
   }
-  return { blocks, used };
+  const prose = (narrative ?? "").trim();
+  return { blocks: prose ? [prose] : blocks, used };
 }
 
 /**
@@ -179,7 +207,7 @@ function factSections(facts: SelectableFact[], headings: Record<FactCategory, st
  * selected facts, and nothing else.
  */
 export function composeReferralLetter(input: ReferralLetterInput): ComposedDocument {
-  const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING);
+  const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING, input.narrative);
   const parts: string[] = [];
 
   const today = clean(input.today);
@@ -223,6 +251,8 @@ export function composeReferralLetter(input: ReferralLetterInput): ComposedDocum
 
 export type PatientDocumentInput = {
   today: string | null;
+  /** Verified AI prose standing in for the fact lists. See factSections. */
+  narrative?: string | null;
   patient: { name: string | null; identifier: string | null; sex: string | null; age: string | null };
   facts: SelectableFact[];
   practitionerName: string | null;
@@ -261,7 +291,7 @@ function signOff(who: string, input: PatientDocumentInput): string[] {
  * why this takes no typed input at all -- every line comes from the record.
  */
 export function composeVisitSummary(input: VisitSummaryInput): ComposedDocument {
-  const { blocks, used } = factSections(input.facts, PATIENT_HEADING);
+  const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative);
   const parts: string[] = [];
 
   const today = clean(input.today);
@@ -295,7 +325,7 @@ export function composeVisitSummary(input: VisitSummaryInput): ComposedDocument 
  * recorded facts.
  */
 export function composePatientInstructions(input: PatientInstructionsInput): ComposedDocument {
-  const { blocks, used } = factSections(input.facts, PATIENT_HEADING);
+  const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative);
   const parts: string[] = [];
 
   const today = clean(input.today);
@@ -361,7 +391,7 @@ export type MedicationListInput = PatientDocumentInput;
  * says "full record" is not, and a colleague would rely on it.
  */
 export function composeClinicalSummary(input: ClinicalSummaryInput): ComposedDocument {
-  const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING);
+  const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING, input.narrative);
   const parts: string[] = [];
 
   const today = clean(input.today);
@@ -405,7 +435,7 @@ export function composeClinicalSummary(input: ClinicalSummaryInput): ComposedDoc
  * a document look automated.
  */
 export function composeInvestigationRequest(input: InvestigationRequestInput): ComposedDocument {
-  const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING);
+  const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING, input.narrative);
   const parts: string[] = [];
 
   const today = clean(input.today);
@@ -442,7 +472,7 @@ export function composeInvestigationRequest(input: InvestigationRequestInput): C
  * carries what the record cannot: where to come, who to ask for, what to bring.
  */
 export function composeFollowUpInstructions(input: FollowUpInstructionsInput): ComposedDocument {
-  const { blocks, used } = factSections(input.facts, PATIENT_HEADING);
+  const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative);
   const parts: string[] = [];
 
   const today = clean(input.today);
@@ -479,7 +509,7 @@ export function composeFollowUpInstructions(input: FollowUpInstructionsInput): C
  * about the patient.
  */
 export function composeMedicationList(input: MedicationListInput): ComposedDocument {
-  const { blocks, used } = factSections(input.facts, PATIENT_HEADING);
+  const { blocks, used } = factSections(input.facts, PATIENT_HEADING, input.narrative);
   const parts: string[] = [];
 
   const today = clean(input.today);

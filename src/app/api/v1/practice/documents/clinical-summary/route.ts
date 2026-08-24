@@ -26,6 +26,9 @@ export async function POST(req: NextRequest) {
     from: body.from ? String(body.from) : null,
     to: body.to ? String(body.to) : null,
     factKeys: Array.isArray(body.factKeys) ? body.factKeys.map(String) : [],
+    // CPR-DOC-AUTO-001 s10. Anything other than an explicit "assisted" is deterministic -- the
+    // safe reading of an absent, malformed or unexpected value.
+    phrasing: body.phrasing === "assisted" ? "assisted" : "deterministic",
     correlationId: auth.caller.traceId,
   });
   if (!result.ok)
