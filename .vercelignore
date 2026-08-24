@@ -31,11 +31,27 @@
 # NOT ANCHORED, deliberately: node_modules (nested ones are real), .git (worktrees carry their own),
 # and the .env patterns -- a secret must never be uploaded from any depth.
 
+# ⚠ THIS LIST WAS WRITTEN BY MEASURING, AFTER A VERSION WRITTEN FROM MEMORY FAILED TWICE.
+#
+# `du -sh ./* ./.[!.]*` at the repository root is the only way to write this file honestly. The first
+# version listed what a Next.js project is "supposed" to generate -- .next, node_modules, coverage --
+# and missed `.next-verify`, a 2.3GB local verification build that no mental model of "build output"
+# happens to name. The archive stayed at 1.6GB and the upload died with "fetch failed", which reads as
+# a network problem and is not one. `.next` does NOT match `.next-verify`: gitignore patterns match a
+# whole path segment, so a near-miss name is a complete miss.
+#
+# Measured 2026-08-24: 9.7GB working directory, of which .next 6.3G, .next-verify 2.3G, node_modules
+# 562M, .claude 427M, .git 51M and .vs 42M are all excluded below -- leaving roughly 65MB of actual
+# source. If a deploy ever uploads more than about a hundred megabytes again, re-run the du and look
+# for the new directory rather than assuming the list is still complete.
+
 # Build output. Regenerated on every deploy.
 /.next
+/.next-verify
 /out
 /build
 /dist
+/tsconfig.tsbuildinfo
 
 # Dependencies. Vercel installs its own from the lockfile.
 node_modules
@@ -44,6 +60,10 @@ node_modules
 .git
 /.vscode
 /.idea
+/.vs
+
+# Local scratch.
+/scratchpad
 
 # A stale git worktree lives here -- a full duplicate of the tree, and nothing the build wants.
 /.claude
