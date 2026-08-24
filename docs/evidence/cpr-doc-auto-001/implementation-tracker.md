@@ -62,6 +62,7 @@ on it, in front of whoever owns that decision.
 - **Results summary** — named in §3's examples for mode A. CP records investigations and their
   summaries, but "results" as a distinct authoritative artifact is not modelled, and inventing one
   would be the second clinical source of truth §19 forbids.
+
 ## AI phrasing (§10) — built 2026-08-24
 
 Opt-in per document, offered in the composer dialog only. The one-click documents stay deterministic:
@@ -88,8 +89,8 @@ phrasing on the document itself, and deliberately carries no model, prompt or pr
 
 | Test | Where |
 |---|---|
-| Grounded generation | harness 1d, 9f, 10d, 12l |
-| No invention | 1e, 1f, 12d |
+| Grounded generation | harness 1d, 9f, 10d, 12l; assisted prose 16a-16k, 18a-18j |
+| No invention | 1e, 1f, 12d; assisted prose 16b-16h |
 | Disclosure control | 2a-2c, 13a-13e |
 | Referral | 1a-1c, 8a-8c |
 | Visit summary | 9a-9g |
