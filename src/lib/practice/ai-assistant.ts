@@ -147,12 +147,21 @@ export const REFUSED = [
 
 // The version of the disclosure a practitioner agrees to when switching this on. Bumping it is how a
 // changed disclosure gets re-consented rather than silently inherited.
-export const AI_NOTICE_VERSION = "practice-ai-1";
+//
+// practice-ai-2 (CPR-DOC-AUTO-001): the flag now gates a SECOND thing with a different data flow.
+// v1 described one behaviour -- the assistant, which sends the open record -- and document phrasing
+// sends far less than that. A practice reading v1 would reasonably have concluded that asking for a
+// letter in prose ships the whole record, which is not true, and a disclosure that overstates is still
+// a disclosure that misdescribes. Editing the words without bumping the version would have recorded
+// everyone who accepted v1 as having accepted wording they never saw.
+export const AI_NOTICE_VERSION = "practice-ai-2";
 
 export const AI_NOTICE = [
-  "Using the assistant sends the content of the record you have open -- including patient details and clinical notes -- to a third-party model provider outside this system.",
-  "It is not used to train anything. It answers your question and the exchange is kept here so the practice can see what was asked and what came back.",
-  "The assistant can be wrong, including confidently wrong. Nothing it produces is saved to a patient record unless you copy it in yourself and sign it.",
+  "Asking the assistant a question sends the content of the record you have open -- including patient details and clinical notes -- to a third-party model provider outside this system.",
+  "Writing a document as prose sends much less: only the facts you ticked for that document. Not the rest of the record, not what you typed yourself, and not the patient's name, identifier or date of birth.",
+  "What comes back from a document is checked against those facts and thrown away if it does not match. That check is not perfect, so read the draft before you sign it.",
+  "Neither is used to train anything, and the exchange is kept here so the practice can see what was asked and what came back.",
+  "It can be wrong, including confidently wrong. Nothing the assistant tells you reaches a patient record unless you copy it in yourself, and a generated document stays an unsigned draft until you sign it.",
 ];
 
 // ── THE CONSENT GATE ─────────────────────────────────────────────────────────────────────────────────

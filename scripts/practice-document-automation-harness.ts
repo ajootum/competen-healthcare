@@ -28,6 +28,8 @@
  * pin that. Adding one later should mean deleting a test with section 14 written on it, in front of
  * whoever owns that decision -- not quietly finding nothing in the way.
  */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -38,6 +40,7 @@ import {
 import { DOC_TYPES } from "../src/lib/practice/document-constants";
 import { DOC_TYPE_OPTIONS } from "../src/lib/practice/documents-workspace-constants";
 import { verifyGrounded, phrasingPayload } from "../src/lib/practice/document-phrasing";
+import { AI_NOTICE } from "../src/lib/practice/ai-assistant";
 import {
   resolveSelection, defaultSelection, selectableFacts, CURRENT_STATE_CATEGORIES,
   type FactGroup, type SelectableFact,
@@ -758,6 +761,36 @@ async function main() {
     (engineSrc.match(/await narrativeFor\(/g) ?? []).length === generators.length);
   ok("18j. stale consent is not consent -- the current notice is required",
     /settings\.enabled && settings\.noticeCurrent/.test(engineSrc));
+
+  // ── 19. THE DISCLOSURE MATCHES THE BEHAVIOUR ─────────────────────────────────────────────────────
+  //
+  // One flag gates two different data flows: the assistant, which sends the open record, and document
+  // phrasing, which sends the selected facts and nothing else. The notice a practice accepts is the
+  // only place they learn which. Version 1 described the assistant alone, so a practice reading it
+  // would reasonably have concluded that asking for a letter in prose ships the whole record.
+  //
+  // These assertions exist because the failure mode is silent: the notice is prose in a constant, the
+  // behaviour is in another module, and nothing makes them disagree loudly.
+  const notice = AI_NOTICE.join(" ").toLowerCase();
+  ok("19a. the disclosure covers the document flow, not only the assistant",
+    notice.includes("document"));
+  ok("19b. it says what that flow does NOT send",
+    notice.includes("not the patient's name") || notice.includes("not the rest of the record"));
+
+  // ⚠ THE CLAIM MOST EASILY MADE FALSE BY A LATER EDIT. The notice promises that what a practitioner
+  // types is not sent to the provider. That holds only because generate() is handed the payload
+  // builder's output -- passing the typed text for "context" would quietly make the disclosure a lie.
+  // ⚠ ANCHORED TO THE END OF THE ARGUMENT, because a prefix match is not "and nothing else". Appending
+  // the typed text to the payload left this passing -- the needle was still there, with a leak after it.
+  ok("19c. the model call sends the bounded payload and nothing else",
+    /user: phrasingPayload\(args\.sections\),\s*\n/.test(phrasingSrc));
+  ok("19d. and the practitioner's typed text is used only for verification",
+    /verifyGrounded\(result\.text, facts, args\.typed\)/.test(phrasingSrc)
+    && (phrasingSrc.match(/args\.typed/g) ?? []).length === 1);
+
+  // The notice must not promise more than the verifier delivers -- see ASSERTION_MARKERS.
+  ok("19e. it does not claim the grounding check is perfect",
+    notice.includes("not perfect") || notice.includes("read the draft"));
 
   // ── CONTROL ──────────────────────────────────────────────────────────────────────────────────────
   //
