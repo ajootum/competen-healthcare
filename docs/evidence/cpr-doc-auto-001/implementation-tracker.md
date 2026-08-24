@@ -4,7 +4,7 @@
 contracts/templates, **with phased implementation explicitly tracked**". This file is that tracking.
 It is the answer to "which of the eight is built, and what is the honest state of the rest".
 
-Last updated 2026-08-24, after Phase 3.
+Last updated 2026-08-24, after the AI phrasing layer.
 
 ## The priority set (§5)
 
@@ -19,7 +19,7 @@ Last updated 2026-08-24, after Phase 3.
 | 7 | Medication list | A, one-click | **Built** (Phase 3) | `generateMedicationList` | `medication_list` |
 | 8 | Sick leave / fitness certificate | D, decision + controlled template | **Not built — blocked, see below** | none | `sick_note` exists, nothing writes it |
 
-Migrations: 352 + 353 (Phase 1), 354 (Phase 2), 355 (Phase 3).
+Migrations: 352 + 353 (Phase 1), 354 (Phase 2), 355 (Phase 3), 356 (AI phrasing). All applied and probed live.
 
 ## Priority 8 is blocked, not skipped
 
@@ -62,10 +62,27 @@ on it, in front of whoever owns that decision.
 - **Results summary** — named in §3's examples for mode A. CP records investigations and their
   summaries, but "results" as a distinct authoritative artifact is not modelled, and inventing one
   would be the second clinical source of truth §19 forbids.
-- **AI phrasing (§10)** — deferred by owner decision, Phase 1 ("deterministic first"). The engine's
-  payload contract does not change when it arrives: composition already receives exactly the selected
-  facts and practitioner input, so an AI layer replaces the composer's prose without widening what it
-  is allowed to see. The grounding tests continue to apply unchanged and are the acceptance gate.
+## AI phrasing (§10) — built 2026-08-24
+
+Opt-in per document, offered in the composer dialog only. The one-click documents stay deterministic:
+a medication list is a list, and prose would be worse.
+
+`verifyGrounded` decides whether the model's output is used at all. It is a pure function, so every
+case is testable without a model, a network or a database. It checks numbers (including spelled-out
+ones), month names, a closed vocabulary of asserted findings, and that no selected fact vanished from
+the prose. Anything unverifiable is discarded, the deterministic composition is used, and the
+practitioner is told that is what happened.
+
+**Two of §10's seven categories are NOT covered by the marker list.** *Chronology* and *recipient
+instruction* are not word-detectable — "then", "after" and "please arrange" appear in correct letters,
+and banning them would reject good output constantly while a determined invention would phrase around
+them anyway. Those rest on the number check, on the practitioner reading the draft, and on the artifact
+being an unsigned DRAFT until they approve it. **Do not describe the verifier as covering all of §10.**
+
+The model never receives the record (only the selected facts), never receives or rewrites
+practitioner-typed text (§10's "clearly separate" clause, enforced structurally — narrative replaces
+the fact blocks and nothing else), and never receives patient identity. Migration 356 records the
+phrasing on the document itself, and deliberately carries no model, prompt or provider (§18).
 
 ## §17 acceptance rows
 
