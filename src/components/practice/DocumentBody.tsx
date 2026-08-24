@@ -4,7 +4,8 @@ import type { StyleTokens } from "@/lib/practice/document-style";
 // CPR-DOC-CONFIG-001 sections 8, 15 and 16 -- THE SHARED RENDERER.
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
-// ONE RENDERER, DRIVEN BY TOKENS. Section 15: "The same resolved style must drive editor preview,
+// ONE RENDERER, DRIVEN BY TOKENS, AND IT LIVES HERE RATHER THAN BESIDE ONE ROUTE BECAUSE THREE
+// SURFACES SHARE IT: the designer preview, the print view and the PDF that print view produces. Section 15: "The same resolved style must drive editor preview,
 // print preview and final PDF as closely as technically possible." This component is that single
 // place. It takes a content model and a resolved style and returns the document. It does not know
 // which document type it is rendering, and no document type knows what colour it is.

@@ -7,7 +7,7 @@ import { getDocument } from "@/lib/practice/documentation";
 import { letterhead } from "@/lib/practice/document-generation";
 import { resolveStyle } from "@/lib/practice/document-style";
 import { publishedStyleFor } from "@/lib/practice/document-style-store";
-import { DocumentBody } from "../DocumentBody";
+import { DocumentBody } from "@/components/practice/DocumentBody";
 import { DOC_ATTESTATION } from "@/lib/practice/documents-workspace-constants";
 import { logAccess } from "@/lib/practice/privacy";
 import { formatDateTime } from "@/lib/datetime";

@@ -302,3 +302,64 @@ export function resolveStyle(args: {
   }
   return { tokens: PLATFORM_BASELINE, source: "baseline" };
 }
+
+// ── section 5's theme presets ────────────────────────────────────────────────────────────────────────
+//
+// "Provide high-quality presets so practitioners can configure quickly without becoming graphic
+// designers", and "A preset is a starting configuration, not a locked template."
+//
+// Each is expressed as a DIFFERENCE from the baseline rather than a full token set. A preset written
+// out in full would silently stop inheriting a later correction to the baseline -- the two contrast
+// fixes above would have had to be made five more times, and missing one would ship a preset that
+// fails the accessibility rule the product enforces everywhere else.
+
+type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };
+
+const PRESET_DIFFS: Record<PresetName, DeepPartial<StyleTokens>> = {
+  // The CP default. No difference at all, by definition.
+  professional: {},
+
+  // Section 5: "Conservative clinical correspondence; minimal colour and traditional section
+  // treatment." Serif body, no bands, title case headings -- a letter that could have come off a
+  // typewriter and a good printer.
+  classic: {
+    typography: { bodyFont: "source_serif", headingCase: "title", lineSpacing: "relaxed" },
+    layout: { sectionTreatment: "plain", borders: "subtle", showSectionIcons: false },
+  },
+
+  // "Crisp spacing, stronger typography, restrained contemporary accents."
+  modern: {
+    typography: { headingSize: 15, lineSpacing: "compact" },
+    layout: { sectionTreatment: "left_accent", sectionSpacing: "compact", borders: "accent" },
+  },
+
+  // "Mostly monochrome; headings/dividers rather than coloured bands."
+  minimal: {
+    typography: { headingCase: "uppercase" },
+    layout: { sectionTreatment: "plain", borders: "none", showSectionIcons: false },
+  },
+
+  // "Uses the Practice's approved primary/accent colours within safe contrast rules." The practice
+  // colour is applied in the designer, where the practice's own value is known -- this preset only
+  // sets the shape that suits a branded document.
+  practice_brand: {
+    layout: { sectionTreatment: "left_accent", showSectionIcons: true },
+  },
+};
+
+/**
+ * A preset's full token set.
+ *
+ * ⚠ MINIMAL IS MONOCHROME IN TREATMENT, NOT IN MEANING. It removes the bands, and the section headings
+ * keep their role accents -- section 16 forbids meaning that rests on colour alone, and the inverse
+ * trap is a "monochrome" preset that strips the headings' colour AND their prominence until a reader
+ * cannot tell a diagnosis from a follow-up. The headings stay; the decoration goes.
+ */
+export function presetTokens(name: PresetName): StyleTokens {
+  const diff = PRESET_DIFFS[name];
+  return {
+    colour: { ...PLATFORM_BASELINE.colour, ...(diff.colour ?? {}), roles: PLATFORM_BASELINE.colour.roles },
+    typography: { ...PLATFORM_BASELINE.typography, ...(diff.typography ?? {}) },
+    layout: { ...PLATFORM_BASELINE.layout, ...(diff.layout ?? {}) },
+  } as StyleTokens;
+}

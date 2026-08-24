@@ -180,6 +180,18 @@ const CATALOGUE: Entry[] = [
     specUnbuilt: true, domain: "foundation",
   },
   {
+    // CPR-DOC-CONFIG-001 s3 recommends this route by name: Practice Setup -> Documents and
+    // Letterhead -> Document Design. It sits directly after Letterhead because they are the same
+    // job seen twice -- the letterhead is the stationery, this is everything printed on it.
+    //
+    // ⚠ REGISTERED HERE RATHER THAN ONLY EXISTING AT ITS URL. A screen reachable only by typing its
+    // path is a screen nobody uses, which this product has recorded as a defect class of its own.
+    n: 23, key: "document_design", title: "Document Design",
+    description: "Set how generated letters, summaries and instructions look, once, for all of them.",
+    icon: "◈", hue: "var(--cp-primary)", href: "/practice/settings/document-design",
+    capability: "practice.settings.manage", domain: "foundation",
+  },
+  {
     n: 10, key: "identifiers", title: "Hospital Identifiers",
     description: "Configure hospital numbers and identifier rules for each location.",
     icon: "▥", hue: "var(--cp-primary)", href: "/practice/settings?tab=practice#institutions",
@@ -342,7 +354,7 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
 
   const [
     wsQ, configQ, locationsQ, facilitiesQ,
-    slotsQ, templatesQ, channelsQ, membersQ,
+    slotsQ, templatesQ, channelsQ, membersQ, documentStyleQ,
     bookingRulesQ, weekSessionsQ, sessionRowsQ, sessionTypesQ,
     activityQ, parametersQ, identityQ, procActivationQ, procOwnQ,
   ] = await Promise.all([
@@ -373,6 +385,12 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
     // query is valid, the count is a number, and the number is a lie.
     admin.from("practice_membership").select("*", { count: "exact", head: true })
       .eq("workspace_id", ctx.workspaceId).eq("status", "active"),
+    // CPR-DOC-CONFIG-001. Whether this practice has published a document style of its own.
+    // ⚠ POSITION IS THE CONTRACT HERE. This array is destructured positionally, so a query inserted
+    // anywhere other than its own slot silently hands its result to the next name along -- I put this
+    // one before membership first, which would have had the team count reading document styles.
+    admin.from("practice_document_style").select("*", { count: "exact", head: true })
+      .eq("workspace_id", ctx.workspaceId).eq("status", "published"),
     // CPR-SET-002 migration 230. Module 5 stopped being "not built" when checkPlacement started
     // refusing on these, so it needs a real configured-check like every other built module.
     admin.from("practice_booking_rule").select("*", { count: "exact", head: true })
@@ -418,6 +436,9 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
   const slots = countOf(slotsQ);
   const templates = countOf(templatesQ);
   const channels = countOf(channelsQ);
+  // CPR-DOC-CONFIG-001. Has this practice published a document style of its own? Counted rather
+  // than fetched: the step only needs to know whether one exists.
+  const documentStyle = countOf(documentStyleQ);
   const members = countOf(membersQ);
   const bookingRules = countOf(bookingRulesQ);
   const activeParameters = countOf(parametersQ);
@@ -488,6 +509,14 @@ export async function practiceSetup(admin: any, ctx: WorkspaceContext) {
     letterhead: configQ.error
       ? unread("your branding")
       : { done: !!config?.letterhead_name, detail: config?.letterhead_name ?? "documents carry no header" },
+    // Not done is not broken here: a practice with no published style generates documents in the
+    // platform baseline, which is a real design rather than an empty one. The detail says so, so
+    // nobody reads the unticked box as documents coming out blank.
+    document_design: documentStyle === null
+      ? unread("your document style")
+      : documentStyle > 0
+        ? { done: true, detail: "your own style, applied to new documents" }
+        : { done: false, detail: "using the Competen default" },
     identifiers: facilities === null
       ? unread("your institutions")
       : { done: facilities > 0, detail: `${facilities} institutions` },

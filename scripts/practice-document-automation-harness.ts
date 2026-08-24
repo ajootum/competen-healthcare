@@ -42,8 +42,10 @@ import { DOC_TYPE_OPTIONS } from "../src/lib/practice/documents-workspace-consta
 import { verifyGrounded, phrasingPayload } from "../src/lib/practice/document-phrasing";
 import { AI_NOTICE } from "../src/lib/practice/ai-assistant";
 import { renderPlainText, type DocumentBlock } from "../src/lib/practice/document-compose";
+import { PREVIEW_DOCUMENTS, previewDocument } from "../src/lib/practice/document-preview";
 import {
-  PLATFORM_BASELINE, ROLE_FOR_CATEGORY, SECTION_ROLES, resolveStyle, validateTokens,
+  PLATFORM_BASELINE, PRESETS, ROLE_FOR_CATEGORY, SECTION_ROLES, presetTokens, resolveStyle,
+  validateTokens,
 } from "../src/lib/practice/document-style";
 import {
   resolveSelection, defaultSelection, selectableFacts, CURRENT_STATE_CATEGORIES, FACT_CATEGORIES,
@@ -931,6 +933,72 @@ async function main() {
     resolveStyle({ pinned: { colour: "nonsense" }, practicePublished: practiceStyle }).source === "practice");
   ok("21m. and the caller is told which style it actually got",
     resolveStyle({ pinned: pinnedStyle }).source === "pinned");
+
+  // ── 22. THE DESIGNER (CPR-DOC-CONFIG-001 Phase 2) ────────────────────────────────────────────────
+  //
+  // s5's presets, s4's preview and s13's permission. The designer screen itself is the owner's to look
+  // at; what is checkable here is that every theme it offers can actually be published, that the
+  // preview cannot reach a patient, and that no write happens without the capability.
+
+  // ⚠ A THEME A PRACTITIONER CANNOT PUBLISH IS WORSE THAN NO THEME. Every preset must satisfy the same
+  // validator that gates publishing -- otherwise somebody picks "Classic", tunes it for ten minutes and
+  // is refused at the last step for something they did not choose.
+  const badPresets = PRESETS.filter(p => validateTokens(presetTokens(p)).length > 0);
+  ok("22a. every theme s5 offers is publishable as it ships",
+    badPresets.length === 0,
+    badPresets.map(p => `${p}: ${validateTokens(presetTokens(p)).map(x => x.message).join("; ")}`).join(" | "));
+
+  // ⚠ AND THEY INHERIT THE ROLE PALETTE RATHER THAN COPYING IT. Written out in full, each preset would
+  // have needed the two contrast corrections applied five more times, and missing one would ship a
+  // theme that fails the rule the product enforces everywhere else.
+  ok("22b. every theme inherits the baseline section palette, so a colour fix reaches all of them",
+    PRESETS.every(p => SECTION_ROLES.every(r =>
+      presetTokens(p).colour.roles[r].accent === PLATFORM_BASELINE.colour.roles[r].accent)));
+
+  // s16: meaning must not rest on colour alone -- and the inverse trap is a "monochrome" theme that
+  // strips the headings until a diagnosis and a follow-up look identical.
+  ok("22c. the monochrome theme drops the bands but keeps each section's heading colour",
+    presetTokens("minimal").layout.sectionTreatment === "plain"
+    && presetTokens("minimal").colour.roles.diagnosis.accent !== presetTokens("minimal").colour.roles.follow_up.accent);
+
+  // s4: the preview switches across the generated document types.
+  const previewed = PREVIEW_DOCUMENTS.map(d => [d.key, previewDocument(d.key)] as const);
+  ok("22d. every document type previews, with real structure behind it",
+    previewed.length >= 6 && previewed.every(([, doc]) => doc.blocks.length >= 3 && doc.body.length > 100),
+    previewed.map(([k, d]) => `${k}:${d.blocks.length}`).join(" "));
+  ok("22e. and the preview is the SAME text the composer would generate",
+    previewed.every(([, doc]) => doc.body === renderPlainText(doc.blocks)));
+
+  // ⚠ s4: "never another patient's live record merely for theme configuration". Structural, because a
+  // behavioural test cannot prove the absence of a read that is not there.
+  const previewSrc = strip(read("src/lib/practice/document-preview.ts"));
+  ok("22f. the preview module cannot reach a record",
+    !/@supabase\/supabase-js/.test(previewSrc) && !/\badmin\b/.test(previewSrc)
+    && !/\bpatientId\b/.test(previewSrc) && !/\bfrom\s*\(/.test(previewSrc));
+  ok("22g. and it runs the real composers rather than drawing its own approximation",
+    /composeReferralLetter\(/.test(previewSrc) && /composeMedicationList\(/.test(previewSrc));
+
+  // s4 also asks for a certificate preview. There is no certificate composer, and s14 is why.
+  ok("22h. the missing certificate preview is explained rather than faked",
+    /CERTIFICATE_PREVIEW_ABSENT/.test(previewSrc)
+    && !/composeSickLeave|composeFitness|composeCertificate/.test(previewSrc));
+
+  // s13: permission. Checked in the ENGINE, so a second caller cannot skip it by not being the route.
+  const designSrc = strip(read("src/lib/practice/document-design.ts"));
+  const writers = [...designSrc.matchAll(/export async function (saveDraft|publishStyle|restoreDefault)/g)];
+  ok("22i. every write path checks the capability itself",
+    writers.length === 3
+    && (designSrc.match(/hasCapability\(ctx, DESIGN_CAPABILITY\)/g) ?? []).length === 3);
+  ok("22j. and it uses an existing capability rather than a role name",
+    /DESIGN_CAPABILITY = "practice\.settings\.manage"/.test(designSrc)
+    && !/role ===|isOwner|\bowner\b\s*\?/.test(designSrc));
+
+  // s11: a published style is re-validated at the moment of publishing, not only when saved.
+  ok("22k. publishing re-validates rather than trusting what was saved",
+    designSrc.indexOf("validateTokens(draft.tokens)") > designSrc.indexOf("export async function publishStyle"));
+  // s11: the replaced version is archived, never deleted -- documents pinned to it still render from it.
+  ok("22l. the style it replaces is archived, not deleted",
+    /status: "archived"/.test(designSrc) && !/\.delete\(\)/.test(designSrc));
 
   // ── CONTROL ──────────────────────────────────────────────────────────────────────────────────────
   //
