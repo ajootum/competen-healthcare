@@ -20,7 +20,7 @@ Last updated 2026-08-24, after the AI phrasing layer.
 | 8 | Sick leave / fitness certificate | D, decision + controlled template | **Not built — blocked, see below** | none | `sick_note` exists, nothing writes it |
 
 Migrations: 352 + 353 (Phase 1), 354 (Phase 2), 355 (Phase 3), 356 (AI phrasing), 357 (style profiles).
-All applied and probed live. **358 is sent and not yet applied** -- see the designer section below.
+Plus 358 (per-document overrides). All applied and probed live.
 
 ## Priority 8 is blocked, not skipped
 
@@ -117,11 +117,7 @@ the same renderer and the same acceptance harness.
 |---|---|---|
 | 1 | Semantic roles, content model, versioned style profiles, shared renderer | **Built** (mig 357) |
 | 2 | The one-go designer: presets, live preview, publish confirmation | **Built** |
-| 3 | Five-level override resolution, locked templates, section order | **Built**; mig 358 NOT YET APPLIED |
-
-⚠ **Migration 358 is not applied yet.** Nothing depends on it today: the engine writes
-`style_overrides` only when a per-document override is supplied, and no screen supplies one. Apply it
-before building that screen, or the first write will fail.
+| 3 | Five-level override resolution, locked templates, section order | **Built** (mig 358) |
 
 **Not built, and deliberately:** the per-document override (§12) is plumbed through the engine and has
 a column, but no UI offers it yet — a practitioner cannot currently customise a single draft. The
