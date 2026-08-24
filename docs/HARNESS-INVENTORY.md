@@ -14,7 +14,7 @@ column below is a grep-derived signal a reader can re-run and re-check themselve
 This is a **static** classification. It tells you what a harness's own source *says about itself* —
 does it import a Supabase client, does it call a mutation method, does it reference the service-role
 key. It does not run anything, and it cannot tell you whether a harness's cleanup actually succeeds, or
-whether two harnesses run concurrently would collide. Two real corrections were made to this
+whether two harnesses run concurrently would collide. Three real corrections were made to this
 classifier's own signals while building this document, on the discipline of the rest of this codebase —
 verify a claim before it goes in a doc, don't let a plausible-looking regex stand unchecked:
 
@@ -27,6 +27,18 @@ verify a claim before it goes in a doc, don't let a plausible-looking regex stan
    `_cleanup.ts` helper and no function literally named `cleanup()`. The classifier's "shared cleanup
    helper" column reflects **one specific convention**, not the general property. Read it as "candidates
    to verify individually," never as "these leak data."
+3. **`pure/local` is a DIRECT-import test, and two harnesses reach a Supabase client transitively**
+   (checked 2026-08-24 by walking every import chain to depth 12):
+   - `access-scanner-harness.ts` → `src/lib/hq/api-gate.ts` → `src/lib/hq/context.ts` → `src/lib/supabase/server.ts`
+   - `practice-document-automation-harness.ts` → `src/lib/practice/document-phrasing.ts` → `src/lib/ai/client.ts` → `src/lib/ai/gateway.ts` → `src/lib/supabase/server.ts`
+
+   **Both are genuinely pure at runtime** — nothing in either chain constructs a client at module load,
+   and both exit 0 on scrubbed runs with no project URL, no service-role key and no `ANTHROPIC_API_KEY`.
+   So the tier is correct and the classifier does not need changing. What this records is that the
+   signal is **structural, not behavioural**: an edit inside one of those chains that moved a
+   `createClient` to module scope would make these two hit the network while still classifying as
+   `pure/local`, because the classifier only ever reads the harness's own source. The two are named in
+   `scripts/ci-harnesses.ts` for the same reason.
 
 ## Environment reality, stated plainly
 
@@ -52,12 +64,12 @@ spec's five-tier vocabulary collapses, today, to three reachable tiers:
 
 | | Count |
 |---|---|
-| Total harness scripts | 218 |
-| **pure/local** (no Supabase client) | 38 |
-| **privileged-live** (real Supabase, one project, no staging tier exists yet) | 180 |
-| — of which mutate the database | 160 |
-| — of which are read-only | 20 |
-| Use the shared cleanup helper (`_cleanup.ts` / `cleanupOnKill` / `FIXTURE_OWNER_PREFIX`) | 132 |
+| Total harness scripts | 227 |
+| **pure/local** (no Supabase client) | 45 |
+| **privileged-live** (real Supabase, one project, no staging tier exists yet) | 182 |
+| — of which mutate the database | 161 |
+| — of which are read-only | 21 |
+| Use the shared cleanup helper (`_cleanup.ts` / `cleanupOnKill` / `FIXTURE_OWNER_PREFIX`) | 133 |
 | Mutate without the shared helper — **verify individually, do not assume unsafe** | 29 |
 | Gate on a specific migration being applied (`NOT READY` / `NOT APPLIED` probe) | 17 |
 
@@ -114,7 +126,7 @@ before trusting a tier label here:
   populated. Neither exists on a clean checkout. Running a harness successfully on a developer's machine
   is not evidence it will do anything meaningful elsewhere.
 
-The **180 privileged-live** harnesses stay local-only, per COMP-ENG-001 §7 and this repo's existing CI
+The **182 privileged-live** harnesses stay local-only, per COMP-ENG-001 §7 and this repo's existing CI
 workflow: *"the database harnesses authenticate with the service-role key, and that key does not belong
 in GitHub."*
 
@@ -133,6 +145,7 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `attendance-harness.ts` | Attendance harness. No database, no migration. | pure/local | — | read-only | n/a | no |
 | `auth-boundary-harness.ts` | Every API route enters an approved authorization boundary, or is allowlisted with a reason. | pure/local | — | read-only | n/a | no |
 | `blanket-policy-harness.ts` | Blanket-policy harness: the latent tenant leak. | privileged-live | — | read-only | n/a | no |
+| `cascade-immutability-ratchet-harness.ts` | CPR-DEL-001 §10 — the permanent cascade-vs-immutability ratchet. | privileged-live | CPR-DEL-001 | read-only | n/a | no |
 | `cgr-gate-harness.ts` | One-off harness for the CGR-028 activation gate. Calls the SHIPPED engines (@/lib/cgr/service-profiles + | privileged-live | — | update/delete | no — verify | no |
 | `cgr-suggest-harness.ts` | One-off harness for the CGR-027 AI link suggester. Calls the SHIPPED engine (@/lib/cgr/suggest-links) — the | privileged-live | — | read-only | n/a | no |
 | `clock-format-harness.ts` | Clock formatting harness. No database, no migration. | pure/local | CPR-300 | read-only | n/a | no |
@@ -195,17 +208,19 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `practice-appointment-notice-harness.ts` | Appointment notice harness -- the three templates migration 224 wrote and nothing ever called. | privileged-live | — | insert/update/delete | yes | no |
 | `practice-ask-harness.ts` | CPR-PI-001 v2 s13 harness -- Ask Practice, the grounded flow. | privileged-live | CPR-PI-001 | insert | yes | no |
 | `practice-assistant-harness.ts` | AI Clinical Assistant harness -- CPR-210. Migration 215. | privileged-live | CPR-210 | insert/update/delete | yes | no |
+| `practice-attention-contract-harness.ts` | CPR-CC-MOB-001 s4/s6 -- THE ATTENTION SUMMARY CONTRACT, AND THE STATE IT WAS BUILT TO EXPRESS. | pure/local | CPR-CC-MOB-001 | read-only | n/a | no |
 | `practice-audit-harness.ts` | CPR-CORE-001 CORE-14: audit logging and permissions checks. | privileged-live | CPR-CORE-001, CPR-PID-001 | insert/update/delete | yes | no |
 | `practice-auth-guard-harness.ts` | Auth-guard harness: the three doors to super_admin on public.profiles, watched from the DEPLOYED | privileged-live | — | read-only | n/a | no |
 | `practice-availability-config-harness.ts` | CPR-SET-002 v4 Locations, Clinics & Availability Configuration harness. Migration 230. | privileged-live | CPR-SET-002, CPR-SETUP-003 | insert/update/delete | yes | no |
 | `practice-billing-harness.ts` | Practice billing harness -- CPR-PAY-001/002 Phase 1 over migration 303. | privileged-live | CPR-PAY-001, CPR-PI-001 | insert | yes | no |
 | `practice-booking-link-harness.ts` | CPB-002 -- PRACTITIONER PUBLIC IDENTITY, BOOKING LINK AND SHARING. | privileged-live | — | insert/update/delete | yes | no |
+| `practice-booking-ready-harness.ts` | CPR-BOOK-READY-001 -- EFFECTIVE BOOKING CONSTRAINTS AND VISIBILITY ENFORCEMENT. | pure/local | CPR-BOOK-READY-001 | read-only | n/a | no |
 | `practice-booking-rules-harness.ts` | CPR-V5-007 PHASE 3 -- the booking rules engine. Migration 244. | privileged-live | CPR-V5-007 | insert/update/delete | yes | no |
 | `practice-booking-sections-harness.ts` | CPR-V5-007 s7.2 -- THE FOUR BUILDER SECTIONS THAT WERE CAPTIONED "NOT BUILT". Migrations 268 and 269. | privileged-live | CPR-V5-007 | insert/update/delete | yes | yes |
 | `practice-brief-harness.ts` | CPR-CORE-001 CORE-12: the derived brief with source references. | privileged-live | CPR-CORE-001 | insert/update/delete | yes | no |
 | `practice-bundle-harness.ts` | practice-bundle-harness — proves a server-only module has not leaked into a client bundle. | pure/local | — | read-only | n/a | no |
 | `practice-calendar-harness.ts` | Practice Operations Calendar harness -- CPR-CAL-001 v4. Migration 227. | privileged-live | CPR-CAL-001, CPR-300, CPR-PID-001 | insert/update/delete | yes | no |
-| `practice-capability-harness.ts` | CAPABILITY ACTIVATION FRAMEWORK -- CPR-CAP-001 s3-s6 and s8, migration 278. | privileged-live | CPR-CAP-001, CPR-CAP-001-, CPR-V2-005 | insert/update/delete | yes | no |
+| `practice-capability-harness.ts` | CAPABILITY ACTIVATION FRAMEWORK -- CPR-CAP-001 s3-s6 and s8, migration 278. | privileged-live | CPR-CAP-001, CPR-CAP-001-, CPR-SHELL-001 | insert/update/delete | yes | no |
 | `practice-case-memory-harness.ts` | Case Memory harness -- CPR-220. Migration 214. | privileged-live | CPR-220 | insert/update | yes | no |
 | `practice-checklist-harness.ts` | Practice Checklists harness -- CPR-KS-001 Phase 2 (Engine 5), plus section 8's library. | privileged-live | CPR-KS-001 | insert/update | yes | no |
 | `practice-clinic-day-harness.ts` | CPR-CORE-001 CORE-15: the end-to-end clinic-day acceptance test. | privileged-live | CPR-CORE-001 | insert/update/delete | yes | no |
@@ -219,6 +234,7 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `practice-dashboard-harness.ts` | CPR-CORE-001 CORE-08 dashboard assembler harness. | privileged-live | CPR-CORE-001 | insert/update/delete | yes | no |
 | `practice-delegation-harness.ts` | Practice delegation harness -- CPR-310's area model, approvals and derived queues. Migration 208. | privileged-live | CPR-310 | insert | yes | no |
 | `practice-diagnosis-capture-harness.ts` | Diagnosis working-set harness (CP-ENC-DIAG-001). Pure rules only -- no database. | pure/local | — | read-only | n/a | no |
+| `practice-document-automation-harness.ts` | CPR-DOC-AUTO-001 s17 -- THE ACCEPTANCE TESTS, AND WHY MOST OF THEM NEED NO DATABASE. | pure/local | CPR-DOC-AUTO-001 | read-only | n/a | no |
 | `practice-documentation-harness.ts` | Practice clinical-documentation harness -- CPR-130, exercised against the live database through the | privileged-live | CPR-130 | insert/update | yes | no |
 | `practice-documentation-tools-harness.ts` | Practice documentation-tools harness -- CPR-130's autosave, smart text, calculators and attachments. | privileged-live | CPR-130, CPR-ATT-HFE-009 | insert | yes | no |
 | `practice-documents-phase2-harness.ts` | CPR-DOC-002 Documents Workspace harness -- PHASE 2 (s20): the structured editor, PDF render, the | privileged-live | CPR-DOC-002 | insert/update | yes | no |
@@ -235,6 +251,7 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `practice-followups-harness.ts` | Practice follow-up harness -- CPR-140 / PEN-004, exercised against the live database through the same | privileged-live | CPR-140, CPR-FUP-HFE-008 | insert/update | yes | no |
 | `practice-forms-harness.ts` | Practice Forms harness -- CPR-KS-001 Phase 3 (section 4, the Intelligent Forms Engine). | privileged-live | CPR-KS-001 | insert/update | yes | no |
 | `practice-generation-harness.ts` | Practice document-generation harness -- CPR-330, exercised against the live database through the same | privileged-live | CPR-330, CPR-130, CPR-PID-001 | insert/update | yes | no |
+| `practice-handle-adoption-harness.ts` | HANDLE ADOPTION -- practice_booking_access.handle is populated when a handle is claimed. | pure/local | — | read-only | n/a | no |
 | `practice-handle-reachability-harness.ts` | THE BOOKING ADDRESS: REACHABLE FROM THE SIDEBAR, AND OFFERED DURING ONBOARDING. | privileged-live | CPR-V5-002, CPR-HFE-001 | insert/update/delete | yes | no |
 | `practice-hfe-harness.ts` | CPR-HFE-001 v1.1 harness -- the harmonised shell (s14 orders 5-11), and its REFREEZE. | privileged-live | CPR-HFE-001, CPR-V5-004, CPR-CUR-001 | insert | yes | no |
 | `practice-hospital-booking-harness.ts` | Multi-hospital booking harness -- migration 228. | privileged-live | — | insert/update/delete | yes | no |
@@ -254,12 +271,12 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `practice-medication-weight-decision-harness.ts` | THE RULING OF 2026-08-08, END TO END: | privileged-live | CPR-V2-005 | insert/update | yes | no |
 | `practice-messaging-harness.ts` | Delivery channel harness -- PIS-000 s11/s14, IAM-000 s3/s7, CPR-PRM-001 s10. Migration 224. | privileged-live | CPR-PRM-001 | insert/update/delete | yes | no |
 | `practice-nav-discoverability-harness.ts` | PRACTICE SIDEBAR — DISCOVERABILITY, not reachability. | pure/local | CPR-HFE-001, CPR-ADOPT-001 | read-only | n/a | no |
-| `practice-offline-cache-harness.ts` | CP-OFFLINE-SURVEY-001 phase one — the read-only offline cache. | privileged-live | — | insert/update/delete | yes | no |
+| `practice-offline-cache-harness.ts` | CP-OFFLINE-SURVEY-001 phase one — the read-only offline cache. | privileged-live | CPR-CC-MOB-001 | insert/update/delete | yes | no |
 | `practice-offline-clinical-harness.ts` | CP-OFFLINE-SURVEY-001 s9 — THE CLINICAL CARRY. | privileged-live | — | insert/update/delete | yes | no |
 | `practice-offline-filing-harness.ts` | CP-OFFLINE-SURVEY-001 s5 -- the FILING side of offline capture, which nothing tested. | privileged-live | CPR-GATE-001, CPR-V2-005 | insert/delete | yes | no |
 | `practice-offline-guidance-harness.ts` | CP-OFFLINE-SURVEY-001 s9 item 4 — THE CACHED GUIDANCE LIBRARY. | privileged-live | — | insert/delete | yes | no |
 | `practice-offline-lock-harness.ts` | PHASE TWO, PRECONDITION 0 — LOCAL RE-AUTHENTICATION (COMP-SEC-001 s4/s10). | pure/local | COMP-SEC-001 | read-only | n/a | no |
-| `practice-operations-harness.ts` | Practice operations-home harness -- CPR-300, plus the practice clock it shares with CPR-140. | privileged-live | CPR-300, CPR-140, CPR-AUDIT-001 | insert/update | yes | no |
+| `practice-operations-harness.ts` | Practice operations-home harness -- CPR-300, plus the practice clock it shares with CPR-140. | privileged-live | CPR-300, CPR-140, CPR-CC-MOB-001 | insert/update | yes | no |
 | `practice-outbox-durability-harness.ts` | CP-OFFLINE-SURVEY-001 s5 PRECONDITION 1 — "Durable local persistence that survives tab close, crash | pure/local | — | read-only | n/a | no |
 | `practice-outbox-harness.ts` | PHASE TWO, THE TRANSACTION OUTBOX — COMP-SYNC-001 s5/s9 and CP-OFFLINE-SURVEY-001 s5. | pure/local | COMP-SYNC-001 | read-only | n/a | no |
 | `practice-parameters-harness.ts` | CPR-LCP-001 -- configurable longitudinal clinical parameters and patient monitoring, on migration 246. | privileged-live | CPR-LCP-001, CPR-PIE-001, CPR-V5-002 | insert | yes | no |
@@ -287,13 +304,14 @@ Spec refs are every `CPR-*` / `COMP-*` / `PLAT-*` identifier found in the file, 
 | `practice-refusal-harness.ts` | ──────────────────────────────────────────────────────────────────────────────────────────────── | pure/local | CPR-HFE-REF-001, CPR-PAT-002, CPR-V5-006 | read-only | n/a | no |
 | `practice-registration-conditional-harness.ts` | Conditional registration fields, ON SCREEN -- CPR-PRM-001 s9. | privileged-live | CPR-PRM-001 | insert/delete | yes | no |
 | `practice-registration-config-harness.ts` | Registration configuration harness -- CPR-PRM-001 s2, s9. Migration 223. | privileged-live | CPR-PRM-001 | insert/update/delete | yes | no |
+| `practice-registration-form-harness.ts` | REGISTRATION FORM -- there is no built-in form, and creating one either works or leaves nothing behind. | pure/local | — | read-only | n/a | no |
 | `practice-registration-harness.ts` | Registration act harness -- CPR-PRM-001 s4, s5, s6, s9. Migration 225. | privileged-live | CPR-PRM-001, CPR-REG-002, CPR-V5-006 | insert/delete | yes | no |
 | `practice-registration-scheduling-harness.ts` | THE REGISTRATION SCHEDULING CARD, THE STAFF CHANNEL, AND THE ATOMIC REGISTER-AND-BOOK. | privileged-live | CPR-PID-001 | insert/update/delete | yes | no |
 | `practice-relationships-harness.ts` | Patient relationships harness -- CPR-PRM-001 s6, s10, s4. Migration 221. | privileged-live | CPR-PRM-001, CPR-V2-005 | insert/update/delete | yes | no |
 | `practice-reports-harness.ts` | Practice ACTIVITY harness -- an early slice of CPR-270 Analytics & Reporting, exercised against the | privileged-live | CPR-270, CPR-AUDIT-001, CPR-330 | insert/update | yes | no |
 | `practice-reports-v2-harness.ts` | CPR-PI-001 v2 s12 harness -- the report engine and its catalogue. | privileged-live | CPR-PI-001 | insert/update | yes | no |
 | `practice-reschedule-harness.ts` | Reschedule / drag-and-drop harness -- rescheduleAppointment + checkPlacement. | privileged-live | — | insert/update/delete | yes | no |
-| `practice-responsive-harness.ts` | CPR-MOB-001 PHASES 9 AND 10 -- THE RESPONSIVE SYSTEM'S REGRESSION SUITE AND ITS FREEZE. | pure/local | CPR-MOB-001, CPR-MOB-001-RESPONSIVE-FREEZE | read-only | n/a | no |
+| `practice-responsive-harness.ts` | CPR-MOB-001 PHASES 9 AND 10 -- THE RESPONSIVE SYSTEM'S REGRESSION SUITE AND ITS FREEZE. | pure/local | CPR-MOB-001, CPR-MOB-001-RESPONSIVE-FREEZE, CPR-CC-MOB-001 | read-only | n/a | no |
 | `practice-saved-search-harness.ts` | Practice saved-search harness -- CPR-350's saved searches, history, filters and count strip. | privileged-live | CPR-350 | insert | yes | no |
 | `practice-schedule-exception-harness.ts` | CPR-V5-007 PHASE 2 -- Changes & Exceptions, and the affected-booking workflow. Migration 242. | privileged-live | CPR-V5-007 | insert/update/delete | yes | no |
 | `practice-scheduling-harness.ts` | Practice scheduling harness -- PEN-001's rules exercised against the live database, through the same | privileged-live | — | insert/update | yes | no |

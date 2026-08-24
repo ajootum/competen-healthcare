@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useModalFocus } from "@/components/ui/use-modal-focus";
 import Link from "next/link";
 import type { TodaysPlan } from "@/lib/practice/activity";
 // From the CONSTANTS module, never from the engine: activity.ts reaches metrics.ts -> access.ts ->
@@ -54,6 +55,13 @@ export default function StartYourDay({ plan, metrics, canPlan, locations = [] }:
   // s8 confirmation sheet. `confirming` is the activity awaiting a deliberate Start; the three fields
   // beside it are the values the old one-tap path invented silently.
   const [confirming, setConfirming] = useState<ActivityType | null>(null);
+
+  // CPR-PUI a11y. TWO dialogs on this screen, and each needs its own panel ref -- one shared ref would
+  // trap focus in whichever rendered last. Focus in on open, Tab held inside, focus restored on close.
+  const confirmPanel = useRef<HTMLDivElement>(null);
+  const morePanel = useRef<HTMLDivElement>(null);
+  useModalFocus(confirming !== null, confirmPanel, () => setConfirming(null));
+  useModalFocus(moreOpen, morePanel, () => setMoreOpen(false));
   const [cLocation, setCLocation] = useState<string>("");
   const [cEnd, setCEnd] = useState<string>("");
   const [cLabel, setCLabel] = useState<string>("");
@@ -269,8 +277,7 @@ export default function StartYourDay({ plan, metrics, canPlan, locations = [] }:
           Below md it is a bottom sheet, where a thumb reaches. At md and up it is a compact centred
           dialog -- a sheet glued to the bottom edge of a 1440px screen is a phone idiom worn by a
           desktop, and the eye has to travel the whole window to find it. */}
-      <div role="dialog" aria-modal="true" aria-label={`Start ${ACTIVITY_LABEL[confirming]}`}
-        onKeyDown={e => { if (e.key === "Escape") setConfirming(null); }}
+      <div ref={confirmPanel} role="dialog" aria-modal="true" aria-label={`Start ${ACTIVITY_LABEL[confirming]}`}
         className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-white p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] md:inset-0 md:m-auto md:h-fit md:max-w-sm md:rounded-2xl md:border md:p-5 md:pb-5 md:shadow-xl">
         <h3 className="text-[15px] font-bold text-gray-900">Start {ACTIVITY_LABEL[confirming]}</h3>
         <p className="mt-0.5 text-[11.5px] text-gray-500">
@@ -349,8 +356,7 @@ export default function StartYourDay({ plan, metrics, canPlan, locations = [] }:
         <>
           <button type="button" aria-label="Close the activity list" onClick={() => setMoreOpen(false)}
             className="fixed inset-0 z-40 cursor-default bg-black/40" />
-          <div role="dialog" aria-modal="true" aria-label="More activities"
-            onKeyDown={e => { if (e.key === "Escape") setMoreOpen(false); }}
+          <div ref={morePanel} role="dialog" aria-modal="true" aria-label="More activities"
             /* s9's safe area: the sheet sits on the bottom edge, where the browser chrome and the
                home indicator both live. Padding the inset means the last row is tappable rather than
                half under the navigation. */

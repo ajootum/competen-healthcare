@@ -72,6 +72,13 @@ const INCLUDED = [
   // would have gone green that way. None of the five imports a Supabase client or reads a git diff.
   // Three contain the word "skip" -- in comments explaining that they do NOT skip, the
   // needle-matching-its-own-documentation false positive this repository has recorded eight times.
+  "practice-attention-contract-harness.ts", // 11/11 -- CPR-CC-MOB-001 s4/s6: a failed read must not render as zero
+  // ⚠ IT IMPORTS document-phrasing, WHICH TRANSITIVELY REACHES src/lib/supabase/server.ts
+  // (document-phrasing -> ai/client -> ai/gateway -> supabase/server). That chain is INERT: nothing
+  // constructs a client at module load, and the harness exits 0 on scrubbed runs with no URL, no
+  // service-role key and no ANTHROPIC_API_KEY. Recorded because the classifier only reads DIRECT
+  // imports, so this file would not be flagged if a future edit inside that chain started connecting.
+  "practice-document-automation-harness.ts", // 120/120 -- CPR-DOC-AUTO-001 s17: grounding, disclosure, provenance
   "practice-booking-ready-harness.ts",      // 21/21 -- CPR-BOOK-READY-001: effective booking constraints and visibility enforcement
   "practice-event-coverage-harness.ts",     // 11/11 -- which of migration 233's event types are emitted
   "practice-refusal-harness.ts",            // 48/48 -- CPR-HFE-REF-001 s12: the practitioner/internal audience boundary

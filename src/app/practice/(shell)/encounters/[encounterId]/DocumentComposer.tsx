@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useModalFocus } from "@/components/ui/use-modal-focus";
 
 // CPR-DOC-AUTO-001 sections 7 and 18 -- THE PURPOSE-DRIVEN ENTRY POINTS.
 //
@@ -117,6 +118,11 @@ export default function DocumentComposer(props: {
   onClose: () => void;
   onGenerated: (documentId: string) => void;
 }) {
+  // CPR-PUI a11y: focus in on open, Tab trapped inside, focus restored to the trigger on close.
+  // Always open while mounted -- the parent unmounts it to close -- so the flag is a constant true.
+  const panel = useRef<HTMLDivElement>(null);
+  useModalFocus(true, panel, props.onClose);
+
   const [groups, setGroups] = useState<Group[] | null>(null);
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -273,8 +279,7 @@ export default function DocumentComposer(props: {
         className="fixed inset-0 z-40 cursor-default bg-black/40" />
       {/* One dialog, two presentations -- the bottom sheet where a thumb reaches, a compact modal on a
           wide screen. The shape SessionLocation and the start confirmation already use. */}
-      <div role="dialog" aria-modal="true" aria-label={cfg.heading}
-        onKeyDown={e => { if (e.key === "Escape") props.onClose(); }}
+      <div ref={panel} role="dialog" aria-modal="true" aria-label={cfg.heading}
         className="fixed inset-x-0 bottom-0 z-50 flex max-h-[88vh] flex-col rounded-t-2xl border-t border-gray-200 bg-white p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] md:inset-0 md:m-auto md:h-fit md:max-h-[86vh] md:max-w-lg md:rounded-2xl md:border md:p-5 md:pb-5 md:shadow-xl">
         <h3 className="text-[15px] font-bold text-gray-900">{cfg.heading}</h3>
         <p className="mt-0.5 text-[11.5px] leading-relaxed text-gray-500">{cfg.blurb}</p>

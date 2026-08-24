@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { useRouter } from "next/navigation";
 
 /**
@@ -29,6 +30,10 @@ export default function SessionLocation({ activityId, locationId, locationName, 
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  // CPR-PUI a11y: focus in on open, Tab trapped inside, focus restored to the trigger on close.
+  // Escape is the hook's too, so the panel no longer needs its own handler.
+  const panel = useRef<HTMLDivElement>(null);
+  useModalFocus(open, panel, () => setOpen(false));
   const [value, setValue] = useState(locationId ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,8 +72,7 @@ export default function SessionLocation({ activityId, locationId, locationName, 
           {/* One dialog, two presentations -- bottom sheet where a thumb reaches, compact modal on a
               wide screen. The same shape the start confirmation uses, so the product has one way of
               asking rather than two. */}
-          <div role="dialog" aria-modal="true" aria-label="Where did this session happen"
-            onKeyDown={e => { if (e.key === "Escape") setOpen(false); }}
+          <div ref={panel} role="dialog" aria-modal="true" aria-label="Where did this session happen"
             className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border-t border-gray-200 bg-white p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] md:inset-0 md:m-auto md:h-fit md:max-w-sm md:rounded-2xl md:border md:p-5 md:pb-5 md:shadow-xl">
             <h3 className="text-[15px] font-bold text-gray-900">Where did this session happen?</h3>
             <p className="mt-0.5 text-[11.5px] leading-relaxed text-gray-500">

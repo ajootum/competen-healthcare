@@ -604,9 +604,21 @@ if (existsSync(DOC)) {
   ok("9i the sheet clears the bottom navigation and the home indicator",
     start.includes("env(safe-area-inset-bottom)"));
 
+  // ⚠ THE PROPERTY IS "DISMISSIBLE BY ESCAPE", NOT "CONTAINS THIS LINE". Both this and 9z-h used to
+  // require a literal inline `if (e.key === "Escape") setX(...)`, and went red when the dialogs adopted
+  // useModalFocus -- on a change that made Escape STRICTLY better. The old handler hung off the panel's
+  // onKeyDown, so it only fired once focus was already inside, and nothing put it there; the hook
+  // listens on document and also traps Tab and restores focus. A test that pins the mechanism fails the
+  // improvement it should be protecting, so these accept either way of providing it.
+  // [^;]* rather than [^)]* -- the call contains the arrow function's own "()", so a negated-paren
+  // class stops before ever reaching the setter and the check silently never matches.
+  const dismissesOnEscape = (src: string, setter: string) =>
+    src.includes(`if (e.key === "Escape") ${setter}`)
+    || new RegExp(`useModalFocus\\([^;]*=>\\s*${setter.replace(/[()]/g, "\\$&")}`).test(src);
+
   ok("9j the sheet is dismissible by backdrop and by Escape, like the planner's",
     start.includes('aria-label="Close the activity list"')
-    && start.includes('if (e.key === "Escape") setMoreOpen(false)'));
+    && dismissesOnEscape(start, "setMoreOpen(false)"));
 
   // The desktop grid is a different surface and keeps all thirteen -- s10 permits the wider
   // arrangement, and MCC-02 is a mobile defect. Pinned so a later tidy does not "consistently" apply
@@ -807,7 +819,7 @@ if (existsSync(DOC)) {
 
   ok("9z-h the sheet is dismissible without starting anything",
     startCode.includes('aria-label="Cancel starting this activity"')
-    && startCode.includes('if (e.key === "Escape") setConfirming(null)'));
+    && dismissesOnEscape(startCode, "setConfirming(null)"));
 
   // ── THE SERVER SIDE OF THE SAME CONTRACT ────────────────────────────────────────────────────
   //
