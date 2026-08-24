@@ -53,25 +53,57 @@ const KINDS: [string, string][] = [
 
 const field = "min-h-[var(--cp-touch)] w-full rounded-lg border border-gray-200 px-2.5 text-[13px] text-gray-800";
 
-export type ComposerPurpose = "referral_letter" | "patient_instructions";
+export type ComposerPurpose =
+  | "referral_letter" | "patient_instructions" | "clinical_summary" | "investigation_request";
 
-const PURPOSES: Record<ComposerPurpose, {
+type PurposeConfig = {
   endpoint: string; heading: string; blurb: string; submit: string; working: string;
-  recipient: boolean; reason: boolean; requestedAction: boolean; instructions: boolean;
-}> = {
+  /** "required" puts the recipient block up and refuses without one; "optional" offers it. */
+  recipient: "required" | "optional" | false;
+  reason: boolean; requestedAction: boolean; instructions: boolean;
+  summaryPurpose: boolean; dateRange: boolean; clinicalIndication: boolean;
+  /** A category at least one of which must be ticked before this document means anything. */
+  needsCategory?: string;
+};
+
+const NO_FIELDS = {
+  recipient: false as const, reason: false, requestedAction: false, instructions: false,
+  summaryPurpose: false, dateRange: false, clinicalIndication: false,
+};
+
+const PURPOSES: Record<ComposerPurpose, PurposeConfig> = {
   referral_letter: {
+    ...NO_FIELDS,
     endpoint: "/api/v1/practice/documents/referral-letter",
     heading: "Write a referral letter",
     blurb: "This creates a draft. Nothing is sent, and nothing is signed until you say so.",
     submit: "Create draft letter", working: "Creating the draft…",
-    recipient: true, reason: true, requestedAction: true, instructions: false,
+    recipient: "required", reason: true, requestedAction: true,
   },
   patient_instructions: {
+    ...NO_FIELDS,
     endpoint: "/api/v1/practice/documents/patient-instructions",
     heading: "Write patient instructions",
     blurb: "For the patient to take away. This creates a draft -- nothing is issued until you say so.",
     submit: "Create draft instructions", working: "Creating the draft…",
-    recipient: false, reason: false, requestedAction: false, instructions: true,
+    instructions: true,
+  },
+  clinical_summary: {
+    ...NO_FIELDS,
+    endpoint: "/api/v1/practice/documents/clinical-summary",
+    heading: "Write a clinical summary",
+    blurb: "A summary of this patient's record, for a colleague. Choose the period and what it covers.",
+    submit: "Create draft summary", working: "Creating the draft…",
+    recipient: "required", summaryPurpose: true, dateRange: true,
+  },
+  investigation_request: {
+    ...NO_FIELDS,
+    endpoint: "/api/v1/practice/documents/investigation-request",
+    heading: "Request an investigation",
+    blurb: "For investigations already recorded at this consultation. This asks for them -- it does not order them.",
+    submit: "Create draft request", working: "Creating the draft…",
+    // Optional: a request handed to the patient to take wherever they choose has no destination.
+    recipient: "optional", clinicalIndication: true, needsCategory: "investigation",
   },
 };
 
@@ -97,6 +129,9 @@ export default function DocumentComposer(props: {
   const [reason, setReason] = useState(props.initialReason ?? "");
   const [requestedAction, setRequestedAction] = useState("");
   const [instructions, setInstructions] = useState("");
+  const [summaryPurpose, setSummaryPurpose] = useState("");
+  const [clinicalIndication, setClinicalIndication] = useState("");
+  const [period, setPeriod] = useState({ from: "", to: "" });
   const cfg = PURPOSES[props.purpose];
 
   const [busy, setBusy] = useState(false);
@@ -108,7 +143,8 @@ export default function DocumentComposer(props: {
     (async () => {
       try {
         const [factsRes, destRes] = await Promise.all([
-          fetch(`/api/v1/practice/documents/facts?patientId=${props.patientId}&encounterId=${props.encounterId}`),
+          fetch(`/api/v1/practice/documents/facts?patientId=${props.patientId}&encounterId=${props.encounterId}`
+            + (period.from ? `&from=${period.from}` : "") + (period.to ? `&to=${period.to}` : "")),
           fetch("/api/v1/practice/referral-destinations"),
         ]);
         if (!live) return;
@@ -122,7 +158,10 @@ export default function DocumentComposer(props: {
       }
     })();
     return () => { live = false; };
-  }, [props.patientId, props.encounterId]);
+    // ⚠ THE RANGE IS PART OF WHAT IS OFFERED, so changing it re-reads. Leaving it out of the
+    // dependencies would show the practitioner a list from the old window and generate from the new
+    // one -- a selection that no longer matches what was on screen.
+  }, [props.patientId, props.encounterId, period.from, period.to]);
 
   const toggle = (key: string) => setSelected(prev => {
     const next = new Set(prev);
@@ -150,6 +189,9 @@ export default function DocumentComposer(props: {
           ...(cfg.reason ? { reason } : {}),
           ...(cfg.requestedAction ? { requestedAction: requestedAction || null } : {}),
           ...(cfg.instructions ? { instructions: instructions || null } : {}),
+          ...(cfg.summaryPurpose ? { purpose: summaryPurpose } : {}),
+          ...(cfg.clinicalIndication ? { clinicalIndication } : {}),
+          ...(cfg.dateRange ? { from: period.from || null, to: period.to || null } : {}),
         }),
       });
       const json = await res.json();
@@ -164,9 +206,15 @@ export default function DocumentComposer(props: {
   // A referral has a recipient and a reason. Instructions need something to say -- typed, ticked, or
   // both -- which is the same rule the engine enforces, stated here so the button explains itself.
   const hasRecipient = destinationId !== "" || newRecipient.displayName.trim() !== "";
-  const ready = !busy && (cfg.recipient ? hasRecipient : true)
+  const selectedCategories = new Set(
+    (groups ?? []).flatMap(g => g.facts.filter(f => selected.has(f.key)).map(f => f.category)));
+  const ready = !busy && (cfg.recipient === "required" ? hasRecipient : true)
     && (cfg.reason ? reason.trim() !== "" : true)
-    && (cfg.instructions ? (instructions.trim() !== "" || selected.size > 0) : true);
+    && (cfg.summaryPurpose ? summaryPurpose.trim() !== "" : true)
+    && (cfg.clinicalIndication ? clinicalIndication.trim() !== "" : true)
+    && (cfg.needsCategory ? selectedCategories.has(cfg.needsCategory) : true)
+    && (cfg.instructions ? (instructions.trim() !== "" || selected.size > 0) : true)
+    && (cfg.summaryPurpose ? selected.size > 0 : true);
 
   const current = (groups ?? []).map(g => ({ ...g, facts: g.facts.filter(f => f.scope === "current_encounter") }));
   const earlier = (groups ?? []).map(g => ({ ...g, facts: g.facts.filter(f => f.scope === "historical") }));
@@ -222,9 +270,9 @@ export default function DocumentComposer(props: {
           ) : (
             <div className="flex flex-col gap-3">
               {/* ── WHO ─────────────────────────────────────────────────────────────────────── */}
-              {cfg.recipient && (
+              {cfg.recipient !== false && (
               <div>
-                <label htmlFor="ref-dest" className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Refer to</label>
+                <label htmlFor="ref-dest" className="text-[11px] font-bold uppercase tracking-wide text-gray-400">{cfg.recipient === "optional" ? "Send to (optional)" : "Refer to"}</label>
                 {destinations.length > 0 && (
                   <select id="ref-dest" value={destinationId} onChange={e => setDestinationId(e.target.value)} className={`mt-1 ${field}`}>
                     <option value="">Someone new&hellip;</option>
@@ -284,6 +332,43 @@ export default function DocumentComposer(props: {
                 </div>
               )}
 
+              {/* ── WHAT THE SUMMARY IS FOR, AND THE WINDOW IT COVERS (s13) ─────────────────── */}
+              {cfg.summaryPurpose && (
+                <div>
+                  <label htmlFor="doc-purpose" className="text-[11px] font-bold uppercase tracking-wide text-gray-400">
+                    What is this summary for?
+                  </label>
+                  <textarea id="doc-purpose" value={summaryPurpose} onChange={e => setSummaryPurpose(e.target.value)} rows={2}
+                    placeholder="Continuing care under a new treating clinician"
+                    className="mt-1 w-full rounded-lg border border-gray-200 p-2.5 text-[13px] text-gray-800" />
+                </div>
+              )}
+              {cfg.dateRange && (
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Period covered</p>
+                  <p className="mt-0.5 text-[11px] text-gray-500">
+                    Leave both empty to choose from everything recorded. The summary states the period only
+                    when you set one.
+                  </p>
+                  <div className="mt-1 flex gap-1.5">
+                    <input type="date" aria-label="Period from" value={period.from}
+                      onChange={e => setPeriod(p => ({ ...p, from: e.target.value }))} className={field} />
+                    <input type="date" aria-label="Period to" value={period.to}
+                      onChange={e => setPeriod(p => ({ ...p, to: e.target.value }))} className={field} />
+                  </div>
+                </div>
+              )}
+              {cfg.clinicalIndication && (
+                <div>
+                  <label htmlFor="doc-indication" className="text-[11px] font-bold uppercase tracking-wide text-gray-400">
+                    Clinical indication
+                  </label>
+                  <textarea id="doc-indication" value={clinicalIndication} onChange={e => setClinicalIndication(e.target.value)} rows={2}
+                    placeholder="Why this investigation is being requested"
+                    className="mt-1 w-full rounded-lg border border-gray-200 p-2.5 text-[13px] text-gray-800" />
+                </div>
+              )}
+
               {/* ── WHAT GOES IN ────────────────────────────────────────────────────────────── */}
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Include from the record</p>
@@ -333,6 +418,11 @@ export default function DocumentComposer(props: {
               ? "No recorded facts will be included — it will carry only what you have typed."
               : `${selectedCount} recorded ${selectedCount === 1 ? "item" : "items"} will be included.`}
           </p>
+          {cfg.needsCategory && !selectedCategories.has(cfg.needsCategory) && (
+            <p className="text-[11px] text-gray-500">
+              Tick the investigation being requested. If it is not listed, record it on the consultation first.
+            </p>
+          )}
           <button type="button" disabled={!ready} onClick={generate}
             className="min-h-[var(--cp-touch)] rounded-lg bg-[var(--cp-primary-deep)] px-3 text-[13px] font-bold text-white disabled:opacity-40">
             {busy ? cfg.working : cfg.submit}

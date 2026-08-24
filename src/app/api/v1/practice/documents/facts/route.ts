@@ -14,9 +14,13 @@ export async function GET(req: NextRequest) {
 
   const patientId = req.nextUrl.searchParams.get("patientId");
   const encounterId = req.nextUrl.searchParams.get("encounterId");
+  // CPR-DOC-AUTO-001 s13's date range, for the clinical summary. Practice days, resolved through the
+  // practice's timezone by selectableFacts -- not interpreted here.
+  const from = req.nextUrl.searchParams.get("from");
+  const to = req.nextUrl.searchParams.get("to");
   if (!patientId) return NextResponse.json({ error: "patientId is required" }, { status: 400 });
 
-  const offered = await selectableFacts(auth.caller.admin, auth.ctx, { patientId, encounterId });
+  const offered = await selectableFacts(auth.caller.admin, auth.ctx, { patientId, encounterId, from, to });
   if (!offered) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 });
 
   return NextResponse.json({

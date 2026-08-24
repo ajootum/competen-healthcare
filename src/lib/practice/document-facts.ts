@@ -1,6 +1,6 @@
 import type { WorkspaceContext } from "@/lib/practice/access";
 import { getConfiguration } from "@/lib/practice/configuration";
-import { practiceDayOf } from "@/lib/practice/practice-time";
+import { practiceDayOf, zonedDayRange } from "@/lib/practice/practice-time";
 
 // CPR-DOC-AUTO-001 sections 2, 9 and 15 -- THE FACT IS THE UNIT.
 //
@@ -86,25 +86,74 @@ const joinDetail = (parts: (string | null | undefined)[]): string | null => {
 };
 
 /**
- * SECTION 9'S DISCLOSURE DEFAULT, and it is one rule with no exceptions on purpose.
- *
- * Facts recorded at the consultation being documented are offered pre-selected. Everything else is
- * offered unselected. The tempting exception -- "but an ACTIVE medication is current, surely that should
- * default on" -- is exactly the reasoning that widens disclosure by degrees, and a practitioner who
- * wants it ticks one box. A default that is one sentence long is a default that can be audited.
+ * SECTION 9'S BASE DISCLOSURE DEFAULT. Facts recorded at the consultation being documented are offered
+ * pre-selected. Everything else is offered unselected.
  */
 const defaultFor = (scope: FactScope): boolean => scope === "current_encounter";
+
+/**
+ * ⚠ CATEGORIES WHOSE FACTS DESCRIBE A CURRENT STATE RATHER THAN A PAST EVENT.
+ *
+ * PHASE 1 WROTE HERE THAT THE SCOPE RULE HAD NO EXCEPTIONS, AND NAMED ACTIVE MEDICATION AS THE
+ * TEMPTATION TO REFUSE. Phase 3 changes that deliberately, because section 5's priority 7 is a
+ * MEDICATION LIST and under the unamended rule it would generate empty: a drug started at last
+ * month's consultation is historical by scope, so every line of the document would default off and
+ * the one-click output would be a page with no medication on it.
+ *
+ * The distinction that actually matters is not old-versus-new, it is EVENT versus STATE. A diagnosis
+ * made in March is an event that happened once; disclosing it in an unrelated letter widens what that
+ * letter says about a patient's past, which is what section 9 guards. An active prescription is not a
+ * past event -- it is what the patient is taking now, and a document whose SUBJECT is the current
+ * medication is not broadening disclosure by containing it. It is the document.
+ *
+ * TWO THINGS KEEP THIS HONEST AND BOTH ARE LOAD-BEARING:
+ *
+ *   1. Only the registry's already-filtered categories qualify. Medication is offered only when
+ *      active or paused, follow-ups only when OPEN or SCHEDULED. "Every offered medication fact" and
+ *      "the current medication" are therefore the same set. Widening the status filters would
+ *      silently widen this too -- see the read() calls.
+ *   2. A purpose must ASK for a category by name, and only its own subject. The medication list asks
+ *      for medication. Nothing asks for diagnosis, and a purpose that did would be widening
+ *      historical disclosure in exactly the way section 9 forbids.
+ */
+export const CURRENT_STATE_CATEGORIES: FactCategory[] = ["medication", "follow_up"];
 
 const scopeOf = (rowEncounterId: string | null | undefined, encounterId: string | null): FactScope =>
   encounterId && rowEncounterId === encounterId ? "current_encounter" : "historical";
 
 type Loaded = { rows: any[]; truncated: boolean; unreadable: string | null };
 
+type ReadOptions = {
+  /**
+   * ⚠ FILTERED IN THE QUERY, NOT AFTER IT, AND THE DIFFERENCE IS NOT STYLISTIC.
+   *
+   * CATEGORY_LIMIT is applied by the database. Discarding rows in JavaScript afterwards means the
+   * limit counted rows the practitioner will never see: a patient whose twenty-five most recent
+   * medication rows are all discontinued would be offered an EMPTY medication list with truncated
+   * false -- the registry stating, wrongly and confidently, that there is no current medication.
+   */
+  statusIn?: string[];
+  /** Inclusive lower bound, already resolved from a practice day by the caller. */
+  fromIso?: string | null;
+  /**
+   * ⚠ EXCLUSIVE UPPER BOUND, because zonedDayRange returns one.
+   *
+   * Its endIso is the NEXT midnight, deliberately: that function's own comment says a half-open range
+   * "cannot drop the last millisecond of the day the way 23:59:59.999 does". Comparing with lte against
+   * a next-midnight bound would reach one instant into the following day, so this is lt.
+   */
+  beforeIso?: string | null;
+};
+
 async function read(admin: any, table: string, columns: string, workspaceId: string,
-                    patientId: string, orderBy: string): Promise<Loaded> {
-  const { data, error } = await admin.from(table).select(columns)
-    .eq("workspace_id", workspaceId).eq("patient_id", patientId)
-    .order(orderBy, { ascending: false }).limit(CATEGORY_LIMIT + 1);
+                    patientId: string, orderBy: string, opts: ReadOptions = {}): Promise<Loaded> {
+  let query = admin.from(table).select(columns)
+    .eq("workspace_id", workspaceId).eq("patient_id", patientId);
+  if (opts.statusIn) query = query.in("status", opts.statusIn);
+  if (opts.fromIso) query = query.gte(orderBy, opts.fromIso);
+  if (opts.beforeIso) query = query.lt(orderBy, opts.beforeIso);
+
+  const { data, error } = await query.order(orderBy, { ascending: false }).limit(CATEGORY_LIMIT + 1);
   if (error) return { rows: [], truncated: false, unreadable: error.message };
   const rows = (data ?? []) as any[];
   return { rows: rows.slice(0, CATEGORY_LIMIT), truncated: rows.length > CATEGORY_LIMIT, unreadable: null };
@@ -122,6 +171,17 @@ async function read(admin: any, table: string, columns: string, workspaceId: str
  */
 export async function selectableFacts(admin: any, ctx: WorkspaceContext, args: {
   patientId: string; encounterId?: string | null;
+  /**
+   * Section 13's date range, for the longitudinal clinical summary. Practice days (YYYY-MM-DD),
+   * inclusive at both ends.
+   *
+   * ⚠ RESOLVED THROUGH THE PRACTICE'S TIMEZONE, NOT THE SERVER'S. Comparing a date against a
+   * timestamptz directly takes the UTC day, so "everything up to the 31st" would silently drop a
+   * consultation held on the evening of the 31st in Kampala. zonedDayRange exists for this and this
+   * codebase has already fixed the same bug once, one merge field at a time, in buildMergeContext.
+   */
+  from?: string | null;
+  to?: string | null;
 }): Promise<{ groups: FactGroup[]; encounterId: string | null } | null> {
   const { data: patient } = await admin.from("practice_patient")
     .select("id").eq("id", args.patientId).eq("workspace_id", ctx.workspaceId).maybeSingle();
@@ -138,21 +198,36 @@ export async function selectableFacts(admin: any, ctx: WorkspaceContext, args: {
     if (enc && enc.patient_id === args.patientId) { encounterId = enc.id; encounterRow = enc; }
   }
 
-  const [config, dx, tx, proc, inv, med, fu, planNote] = await Promise.all([
-    getConfiguration(admin, ctx.workspaceId),
-    read(admin, "practice_diagnosis", "id, label, certainty, is_primary, encounter_id, created_at", ctx.workspaceId, args.patientId, "created_at"),
-    read(admin, "practice_treatment", "id, label, treatment_type, dose, route, frequency, duration, encounter_id, created_at", ctx.workspaceId, args.patientId, "created_at"),
-    read(admin, "practice_procedure", "id, label, site, laterality, indication, encounter_id, created_at", ctx.workspaceId, args.patientId, "created_at"),
-    read(admin, "practice_encounter_investigation", "id, label, status, summary, encounter_id, requested_at", ctx.workspaceId, args.patientId, "requested_at"),
-    read(admin, "practice_medication", "id, generic_name, brand_name, dose_text, route, frequency, status, encounter_id, created_at", ctx.workspaceId, args.patientId, "created_at"),
-    read(admin, "practice_follow_up", "id, kind, reason, due_on, priority, origin_encounter_id, created_at", ctx.workspaceId, args.patientId, "created_at"),
+  // THE CONFIGURATION IS READ FIRST, not alongside the rest, because the date range cannot be turned
+  // into instants without the practice's timezone. One extra round trip on a path that already makes
+  // eight, in exchange for a range that means what the practitioner chose.
+  const config = await getConfiguration(admin, ctx.workspaceId);
+  const tz = (config as any)?.workspace?.timezone;
+  const fromIso = args.from ? zonedDayRange(args.from, tz).startIso : null;
+  const beforeIso = args.to ? zonedDayRange(args.to, tz).endIso : null;
+  const window: ReadOptions = { fromIso, beforeIso };
+
+  const [dx, tx, proc, inv, med, fu, planNote] = await Promise.all([
+    read(admin, "practice_diagnosis", "id, label, certainty, is_primary, encounter_id, created_at", ctx.workspaceId, args.patientId, "created_at", window),
+    read(admin, "practice_treatment", "id, label, treatment_type, dose, route, frequency, duration, encounter_id, created_at", ctx.workspaceId, args.patientId, "created_at", window),
+    read(admin, "practice_procedure", "id, label, site, laterality, indication, encounter_id, created_at", ctx.workspaceId, args.patientId, "created_at", window),
+    read(admin, "practice_encounter_investigation", "id, label, status, summary, encounter_id, requested_at", ctx.workspaceId, args.patientId, "requested_at", window),
+    // ONLY CURRENT MEDICATION IS OFFERED. Section 13 names the medication document's input as "confirm
+    // current treatment list", and a discontinued drug in a letter reads as a prescription. Widening
+    // this to stopped medication is a product decision, not a tweak -- it changes what a document
+    // discloses by default about a patient's past.
+    read(admin, "practice_medication", "id, generic_name, brand_name, dose_text, route, frequency, status, encounter_id, created_at", ctx.workspaceId, args.patientId, "created_at", { ...window, statusIn: ["active", "paused"] }),
+    // ⚠ ONLY OUTSTANDING FOLLOW-UPS, AND PHASE 1 SHIPPED WITHOUT THIS FILTER. The section heading a
+    // follow-up prints under is "Follow-up arranged" / "Next steps", and practice_follow_up carries
+    // COMPLETED, MISSED and CANCELLED alongside OPEN and SCHEDULED. A cancelled follow-up rendered
+    // under either heading tells a patient to attend something that was called off.
+    read(admin, "practice_follow_up", "id, kind, reason, due_on, priority, status, origin_encounter_id, created_at", ctx.workspaceId, args.patientId, "created_at", { ...window, statusIn: ["OPEN", "SCHEDULED"] }),
     encounterId
       ? admin.from("practice_encounter_note").select("id, body")
           .eq("workspace_id", ctx.workspaceId).eq("encounter_id", encounterId).eq("note_type", "plan").limit(1)
       : Promise.resolve({ data: [] }),
   ]);
 
-  const tz = (config as any)?.workspace?.timezone;
   const day = (v: string | null | undefined) => (v ? practiceDayOf(tz, v) : null);
 
   const build = (
@@ -211,12 +286,8 @@ export async function selectableFacts(admin: any, ctx: WorkspaceContext, args: {
       id: r.id, label: r.label, encounterId: r.encounter_id, recordedOn: day(r.requested_at),
       detail: joinDetail([r.status, r.summary]),
     })),
-    // ONLY CURRENT MEDICATION IS OFFERED. Section 13 names the medication document's input as "confirm
-    // current treatment list", and a discontinued drug in a referral letter reads as a prescription.
-    // Widening this to stopped medication is a product decision, not a tweak -- it changes what a letter
-    // discloses by default about a patient's past.
-    build("medication", "practice_medication",
-      { ...med, rows: med.rows.filter(r => r.status === "active" || r.status === "paused") },
+    // The active/paused filter is applied in the query -- see the read() call and ReadOptions.
+    build("medication", "practice_medication", med,
       r => ({
         id: r.id, label: [r.generic_name, r.brand_name ? `(${r.brand_name})` : null].filter(Boolean).join(" "),
         encounterId: r.encounter_id, recordedOn: day(r.created_at),
@@ -258,7 +329,21 @@ export function resolveSelection(groups: FactGroup[], keys: string[]): {
   return { selected, unknown: [...wanted].filter(k => !found.has(k)) };
 }
 
-/** The keys section 9 says to offer pre-selected, for a form that has not been touched yet. */
-export function defaultSelection(groups: FactGroup[]): string[] {
-  return groups.flatMap(g => g.facts.filter(f => f.defaultSelected).map(f => f.key));
+/**
+ * The keys to offer pre-selected, for a form that has not been touched yet.
+ *
+ * `alsoCurrent` names categories whose facts come in regardless of scope, because for that document
+ * they ARE the subject -- see CURRENT_STATE_CATEGORIES for why that is not a hole in section 9. A
+ * purpose passes only its own subject, never a category it merely finds useful.
+ *
+ * ⚠ THIS CAN RETURN KEYS WHOSE fact.defaultSelected IS FALSE, and that is intended rather than
+ * inconsistent. defaultSelected describes the fact -- "was this recorded at the consultation being
+ * documented" -- and stays a property of the record. What a particular document defaults to is a
+ * property of the document, and belongs to the caller asking.
+ */
+export function defaultSelection(groups: FactGroup[], opts: { alsoCurrent?: FactCategory[] } = {}): string[] {
+  const also = new Set(opts.alsoCurrent ?? []);
+  return groups.flatMap(g => g.facts
+    .filter(f => f.defaultSelected || also.has(f.category))
+    .map(f => f.key));
 }

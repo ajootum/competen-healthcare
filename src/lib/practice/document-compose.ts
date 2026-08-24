@@ -317,3 +317,185 @@ export function composePatientInstructions(input: PatientInstructionsInput): Com
     usedFactKeys: used,
   };
 }
+
+// ── PHASE 3: PRIORITIES 4 TO 7 ──────────────────────────────────────────────────────────────────────
+//
+// Two more for a clinician (clinical summary, investigation request) and two more for the patient
+// (follow-up instructions, medication list). Nothing new is invented here -- each is the same three
+// ingredients as the first three documents: a heading, what the practitioner typed, and the selected
+// facts under the heading set for their audience.
+
+export type ClinicalSummaryInput = PatientDocumentInput & {
+  recipient: Recipient;
+  /** Section 13: "Purpose/recipient; date range; disclosure selection." */
+  purpose: string;
+  /** The practice days the practitioner chose, if they chose any. */
+  periodFrom: string | null;
+  periodTo: string | null;
+};
+
+export type InvestigationRequestInput = PatientDocumentInput & {
+  /** Optional: an investigation may be requested without naming where it is being sent. */
+  recipient: Recipient | null;
+  /** Section 13: "Investigation/order; clinical indication; destination if needed." */
+  clinicalIndication: string;
+};
+
+export type FollowUpInstructionsInput = PatientDocumentInput & {
+  /** Section 13: "Timing/action/location; patient instructions." */
+  instructions: string | null;
+};
+
+export type MedicationListInput = PatientDocumentInput;
+
+/**
+ * A clinical summary, for a colleague.
+ *
+ * Section 3's mode is "Select + summarise" over the longitudinal record, so unlike every other
+ * document here the practitioner chooses a window as well as a selection.
+ *
+ * ⚠ THE PERIOD LINE IS PRINTED ONLY WHEN A PERIOD WAS CHOSEN, and never replaced with a claim of
+ * completeness. "Covering the full record" would be a false statement: the registry offers at most
+ * CATEGORY_LIMIT facts per category, so a long record is already partial before the practitioner
+ * selects anything. A summary that lists what it contains and claims nothing more is honest. One that
+ * says "full record" is not, and a colleague would rely on it.
+ */
+export function composeClinicalSummary(input: ClinicalSummaryInput): ComposedDocument {
+  const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING);
+  const parts: string[] = [];
+
+  const today = clean(input.today);
+  if (today) parts.push(today);
+
+  parts.push(addressBlock(input.recipient).join("\n"));
+  parts.push(salutation(input.recipient));
+
+  const re = patientLine(input.patient);
+  if (re) parts.push(`Re: ${re}`);
+
+  const purpose = clean(input.purpose);
+  if (purpose) parts.push(["Purpose of this summary", purpose].join("\n"));
+
+  const from = clean(input.periodFrom);
+  const to = clean(input.periodTo);
+  if (from || to) {
+    const period = from && to ? `${from} to ${to}` : from ? `from ${from}` : `up to ${to}`;
+    parts.push(`Period covered: ${period}`);
+  }
+
+  parts.push(...blocks);
+  parts.push("Yours sincerely,");
+  const signature = [clean(input.practitionerName), clean(input.practiceName)].filter(Boolean);
+  if (signature.length) parts.push(signature.join("\n"));
+
+  const name = clean(input.patient.name);
+  return {
+    title: name ? `Clinical summary - ${name}` : "Clinical summary",
+    body: parts.join("\n\n"),
+    usedFactKeys: used,
+  };
+}
+
+/**
+ * An investigation request.
+ *
+ * THE RECIPIENT IS OPTIONAL AND THE SALUTATION FOLLOWS IT. Section 13 says "destination if needed" --
+ * a request handed to the patient to take wherever they choose has no destination, and printing
+ * "Dear Colleague," at the top of a page addressed to nobody is the kind of small wrongness that makes
+ * a document look automated.
+ */
+export function composeInvestigationRequest(input: InvestigationRequestInput): ComposedDocument {
+  const { blocks, used } = factSections(input.facts, CLINICIAN_HEADING);
+  const parts: string[] = [];
+
+  const today = clean(input.today);
+  if (today) parts.push(today);
+
+  if (input.recipient) {
+    parts.push(addressBlock(input.recipient).join("\n"));
+    parts.push(salutation(input.recipient));
+  }
+
+  const re = patientLine(input.patient);
+  if (re) parts.push(`Re: ${re}`);
+
+  parts.push(...blocks);
+
+  const indication = clean(input.clinicalIndication);
+  if (indication) parts.push(["Clinical indication", indication].join("\n"));
+
+  const signature = [clean(input.practitionerName), clean(input.practiceName)].filter(Boolean);
+  if (signature.length) parts.push([`Requested by ${signature[0]}`, ...signature.slice(1)].join("\n"));
+
+  const name = clean(input.patient.name);
+  return {
+    title: name ? `Investigation request - ${name}` : "Investigation request",
+    body: parts.join("\n\n"),
+    usedFactKeys: used,
+  };
+}
+
+/**
+ * Follow-up instructions, for the patient.
+ *
+ * Section 3's mode is "One-click / review" over the follow-up plan. The typed field is optional and
+ * carries what the record cannot: where to come, who to ask for, what to bring.
+ */
+export function composeFollowUpInstructions(input: FollowUpInstructionsInput): ComposedDocument {
+  const { blocks, used } = factSections(input.facts, PATIENT_HEADING);
+  const parts: string[] = [];
+
+  const today = clean(input.today);
+  if (today) parts.push(today);
+
+  const who = patientHeading(input.patient);
+  parts.push(who ? `Follow-up for ${who}` : "Follow-up");
+
+  parts.push(...blocks);
+
+  const instructions = clean(input.instructions);
+  if (instructions) parts.push(["Please note", instructions].join("\n"));
+
+  parts.push(...signOff("Prepared by", input));
+
+  const name = clean(input.patient.name);
+  return {
+    title: name ? `Follow-up instructions - ${name}` : "Follow-up instructions",
+    body: parts.join("\n\n"),
+    usedFactKeys: used,
+  };
+}
+
+/**
+ * The current medication list, for the patient.
+ *
+ * Section 3's mode is "One-click", section 17's PASS condition is "matches authoritative current
+ * treatments", and section 13 asks only that the practitioner confirm it. So there is no typed input
+ * at all -- the document is the list.
+ *
+ * ⚠ IT STATES THE DAY IT WAS CORRECT ON, and that line is not decoration. A medication list is the
+ * document a patient hands to the next clinician, and one with no date is read as current whenever it
+ * is found. The date is the generation day, which is a fact about this document rather than a claim
+ * about the patient.
+ */
+export function composeMedicationList(input: MedicationListInput): ComposedDocument {
+  const { blocks, used } = factSections(input.facts, PATIENT_HEADING);
+  const parts: string[] = [];
+
+  const today = clean(input.today);
+  if (today) parts.push(today);
+
+  const who = patientHeading(input.patient);
+  parts.push(who ? `Medication list for ${who}` : "Medication list");
+  if (today) parts.push(`Correct as at ${today}`);
+
+  parts.push(...blocks);
+  parts.push(...signOff("Prepared by", input));
+
+  const name = clean(input.patient.name);
+  return {
+    title: name ? `Medication list - ${name}` : "Medication list",
+    body: parts.join("\n\n"),
+    usedFactKeys: used,
+  };
+}

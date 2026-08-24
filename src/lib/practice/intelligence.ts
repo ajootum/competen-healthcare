@@ -1532,11 +1532,13 @@ const DOCUMENT_STATUSES: [string, string][] = [
   ["ENTERED_IN_ERROR", "Entered in error"],
 ];
 
-/** practice_clinical_document.doc_type -- migration 195's CHECK as widened by 354, in full. */
+/** practice_clinical_document.doc_type -- migration 195's CHECK as widened by 354 and 355, in full. */
 const DOCUMENT_TYPES: [string, string][] = [
   ["consultation_summary", "Consultation summary"], ["referral_letter", "Referral letter"],
   ["sick_note", "Sick note"], ["procedure_note", "Procedure note"],
   ["discharge_summary", "Discharge summary"], ["patient_instructions", "Patient instructions"],
+  ["clinical_summary", "Clinical summary"], ["investigation_request", "Investigation request"],
+  ["follow_up_instructions", "Follow-up instructions"], ["medication_list", "Medication list"],
   ["general", "General"],
 ];
 

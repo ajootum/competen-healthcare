@@ -17,20 +17,30 @@
  * document-compose.ts imports nothing capable of reading a record, and holds no clock. If somebody has
  * to change those assertions to land a feature, that is the conversation this file exists to force.
  *
- * WHAT IS DELIBERATELY NOT HERE. The medication list is a section 17 row for Phase 3. Asserting it now
- * would mean writing a test against a composer that does not exist, and a skipped test that reads as
- * coverage is worse than an absent one. Sections 9 and 10 cover the two Phase 2 documents; section 11
- * covers the claim that all three share one pipeline, which is the claim most likely to quietly stop
- * being true as document types are added.
+ * LAYOUT. Sections 1-8 are the referral letter and the rules every document inherits; 9-10 the two
+ * Phase 2 patient documents; 11 the claim that they all share ONE pipeline, which is the claim most
+ * likely to quietly stop being true as types are added; 12-14 Phase 3's four documents, the disclosure
+ * default they forced open, and what the registry refuses to offer at all.
+ *
+ * SECTION 15 ASSERTS AN ABSENCE, and it is the one to read before extending this file. Section 5's
+ * eighth priority is the sick-leave and fitness certificate, and section 14 forbids free-generating a
+ * statutory document without an approved controlled template. There is no generator for it, and 15a-c
+ * pin that. Adding one later should mean deleting a test with section 14 written on it, in front of
+ * whoever owns that decision -- not quietly finding nothing in the way.
  */
 import fs from "node:fs";
 import path from "node:path";
 import {
-  composeReferralLetter, composeVisitSummary, composePatientInstructions, recipientLine, type Recipient,
+  composeReferralLetter, composeVisitSummary, composePatientInstructions, composeClinicalSummary,
+  composeInvestigationRequest, composeFollowUpInstructions, composeMedicationList, recipientLine,
+  type Recipient,
 } from "../src/lib/practice/document-compose";
 import { DOC_TYPES } from "../src/lib/practice/document-constants";
 import { DOC_TYPE_OPTIONS } from "../src/lib/practice/documents-workspace-constants";
-import { resolveSelection, defaultSelection, selectableFacts, type FactGroup, type SelectableFact } from "../src/lib/practice/document-facts";
+import {
+  resolveSelection, defaultSelection, selectableFacts, CURRENT_STATE_CATEGORIES,
+  type FactGroup, type SelectableFact,
+} from "../src/lib/practice/document-facts";
 
 let pass = 0;
 const fails: string[] = [];
@@ -100,24 +110,29 @@ const groupsOf = (facts: SelectableFact[]): FactGroup[] => {
 function stubAdmin(rows: Record<string, any[]>, errorOn: string | null = null) {
   return {
     from(table: string) {
+      // ⚠ THE PREDICATES ARE REALLY APPLIED, NOT SWALLOWED. A stub whose in()/gte()/lte() return the
+      // chain unchanged would let every status- and date-filter assertion below pass while the filter
+      // did nothing -- the registry could offer a CANCELLED follow-up and the test would still be
+      // green. Each predicate is recorded and evaluated in then().
+      const preds: ((r: any) => boolean)[] = [];
       const chain: any = {
-        _filters: {} as Record<string, any>,
         select() { return chain; },
-        eq(col: string, val: any) { chain._filters[col] = val; return chain; },
+        eq(col: string, val: any) { preds.push(r => r[col] === val); return chain; },
+        in(col: string, vals: any[]) { preds.push(r => vals.includes(r[col])); return chain; },
+        gte(col: string, val: string) { preds.push(r => String(r[col] ?? "") >= val); return chain; },
+        lte(col: string, val: string) { preds.push(r => String(r[col] ?? "") <= val); return chain; },
+        lt(col: string, val: string) { preds.push(r => String(r[col] ?? "") < val); return chain; },
         ilike() { return chain; },
         order() { return chain; },
-        limit() { return chain.then ? chain : chain; },
+        limit() { return chain; },
         maybeSingle() {
           if (errorOn === table) return Promise.resolve({ data: null, error: { message: "stub failure" } });
-          const all = rows[table] ?? [];
-          const hit = all.find(r => Object.entries(chain._filters).every(([k, v]) => r[k] === v));
+          const hit = (rows[table] ?? []).find(r => preds.every(p => p(r)));
           return Promise.resolve({ data: hit ?? null, error: null });
         },
         then(resolve: any) {
           if (errorOn === table) return resolve({ data: null, error: { message: "stub failure" } });
-          const all = rows[table] ?? [];
-          const kept = all.filter(r => Object.entries(chain._filters).every(([k, v]) => r[k] === v));
-          return resolve({ data: kept, error: null });
+          return resolve({ data: (rows[table] ?? []).filter(r => preds.every(p => p(r))), error: null });
         },
       };
       return chain;
@@ -384,7 +399,22 @@ async function main() {
   // still work, and would still be the "collection of one-off letter forms" s20 forbids.
   const engineSrc = strip(read("src/lib/practice/document-automation.ts"));
   const generators = [...engineSrc.matchAll(/export async function (generate\w+)/g)].map(m => m[1]);
-  ok("11a. all three generators exist", generators.length === 3, generators.join(", "));
+
+  // ⚠ THE DELIVERED SET IS NAMED, NOT COUNTED, and the first version of this counted.
+  //
+  // "generators.length === 3" was correct in Phase 2 and wrong the moment Phase 3 added four more --
+  // it failed on correct code and told me nothing about what had changed. Naming them catches the
+  // thing worth catching (a generator disappearing) and makes adding one a deliberate edit here
+  // rather than a number to bump. Everything below stays RELATIONAL to generators.length, so those
+  // assertions never need touching again.
+  const EXPECTED = [
+    "generateReferralLetter", "generateVisitSummary", "generatePatientInstructions",
+    "generateClinicalSummary", "generateInvestigationRequest", "generateFollowUpInstructions",
+    "generateMedicationList",
+  ];
+  ok("11a. every document s5 priorities 1-7 names has a generator",
+    EXPECTED.every(e => generators.includes(e)),
+    `missing: ${EXPECTED.filter(e => !generators.includes(e)).join(", ")}`);
   ok("11b. exactly one call site stores a document",
     (engineSrc.match(/createDocument\(/g) ?? []).length === 1);
   ok("11c. every generator ends at the shared store()",
@@ -397,8 +427,9 @@ async function main() {
   // documents workspace and cannot be filtered for -- the same shape as a catalogue insert shipped
   // without its backfill.
   const written = [...engineSrc.matchAll(/docType: "(\w+)"/g)].map(m => m[1]);
-  ok("11e. the engine writes the three expected document types",
-    written.length === 3 && new Set(written).size === 3, written.join(", "));
+  ok("11e. each generator writes exactly one document type, and no two share one",
+    written.length === generators.length && new Set(written).size === written.length,
+    `${written.length} types for ${generators.length} generators: ${written.join(", ")}`);
 
   const intelligenceBlock = strip(read("src/lib/practice/intelligence.ts"))
     .split("const DOCUMENT_TYPES")[1]?.split("];")[0] ?? "";
@@ -409,9 +440,166 @@ async function main() {
   ok("11f. every type the engine writes has a label in all three lists",
     missing.length === 0, `unlabelled: ${missing.join(", ")}`);
 
-  const mig354 = read("supabase/migrations/354-patient-instructions-document-type.sql");
+  // The CHECK spans several lines, so it is flattened before matching rather than matched with the
+  // dot-all flag -- this project's TS target predates it, and tsc rejects `/s`.
+  const flatten = (sql: string) => sql.replace(/\s+/g, " ");
+  const mig354 = flatten(read("supabase/migrations/354-patient-instructions-document-type.sql"));
   ok("11g. and the one type 354 added is in the CHECK it rewrites",
-    /check \(doc_type in \([^)]*'patient_instructions'/s.test(mig354));
+    /check \(doc_type in \([^)]*'patient_instructions'/.test(mig354));
+
+  // ── 12. PHASE 3: PRIORITIES 4 TO 7 ───────────────────────────────────────────────────────────────
+  const INVESTIGATION = fact({
+    key: "practice_encounter_investigation:55555555-5555-5555-5555-555555555555", label: "ZZ-INVESTIGATION",
+    category: "investigation", sourceTable: "practice_encounter_investigation", detail: "requested",
+  });
+  const FOLLOW_UP = fact({
+    key: "practice_follow_up:66666666-6666-6666-6666-666666666666", label: "ZZ-FOLLOW-UP",
+    category: "follow_up", sourceTable: "practice_follow_up", detail: "review - due 2026-09-10",
+    scope: "historical", defaultSelected: false,
+  });
+  const patientBase = {
+    today: "2026-08-24", patient: PATIENT,
+    practitionerName: "Dr Grace Aine", practiceName: "Competen Clinic",
+  };
+
+  // Clinical summary (priority 4) -- the longitudinal one, to a colleague.
+  const clinical = composeClinicalSummary({
+    ...patientBase, recipient: RECIPIENT, purpose: "ZZ-TYPED-PURPOSE",
+    periodFrom: "2026-01-01", periodTo: "2026-08-24", facts: [CURRENT_DX, HISTORIC_DX],
+  });
+  ok("12a. the clinical summary states the purpose it was written for",
+    clinical.body.includes("Purpose of this summary") && clinical.body.includes("ZZ-TYPED-PURPOSE"));
+  ok("12b. and the period it covers, when one was chosen",
+    clinical.body.includes("Period covered: 2026-01-01 to 2026-08-24"));
+  ok("12c. it carries historical facts once selected -- that is what longitudinal means",
+    clinical.body.includes("ZZ-HISTORIC-DX"));
+
+  // ⚠ NO PERIOD, NO CLAIM. A summary with no chosen range must not assert completeness -- the registry
+  // caps each category at CATEGORY_LIMIT, so "the full record" would be false on any long record.
+  const noPeriod = composeClinicalSummary({
+    ...patientBase, recipient: RECIPIENT, purpose: "ZZ-TYPED-PURPOSE",
+    periodFrom: null, periodTo: null, facts: [CURRENT_DX],
+  });
+  ok("12d. with no period chosen, no period line and no claim of completeness",
+    !noPeriod.body.includes("Period covered") && !/full record|complete record|entire record/i.test(noPeriod.body));
+
+  // Investigation request (priority 5) -- destination optional.
+  const withLab = composeInvestigationRequest({
+    ...patientBase, recipient: RECIPIENT, clinicalIndication: "ZZ-TYPED-INDICATION", facts: [INVESTIGATION],
+  });
+  ok("12e. the investigation request names the investigation and the indication",
+    withLab.body.includes("ZZ-INVESTIGATION") && withLab.body.includes("ZZ-TYPED-INDICATION"));
+  const noLab = composeInvestigationRequest({
+    ...patientBase, recipient: null, clinicalIndication: "ZZ-TYPED-INDICATION", facts: [INVESTIGATION],
+  });
+  ok("12f. with no destination it salutes nobody, rather than greeting an empty address",
+    !noLab.body.includes("Dear") && !noLab.body.includes("Dr Okello"));
+  ok("12g. and it still says who requested it", noLab.body.includes("Requested by Dr Grace Aine"));
+
+  // Follow-up instructions (priority 6) -- patient-facing.
+  const followUp = composeFollowUpInstructions({
+    ...patientBase, instructions: "ZZ-TYPED-WHERE", facts: [FOLLOW_UP],
+  });
+  ok("12h. the follow-up sheet lists what is owed, under the patient heading",
+    followUp.body.includes("Next steps") && followUp.body.includes("ZZ-FOLLOW-UP"));
+  ok("12i. and carries what the practitioner added", followUp.body.includes("ZZ-TYPED-WHERE"));
+
+  // Medication list (priority 7) -- one-click, no typed input at all.
+  const meds = composeMedicationList({ ...patientBase, facts: [HISTORIC_MED] });
+  ok("12j. the medication list carries current medication regardless of when it was started",
+    meds.body.includes("ZZ-HISTORIC-MED"));
+  ok("12k. and states the day it was correct on -- an undated list is read as current forever",
+    meds.body.includes("Correct as at 2026-08-24"));
+
+  const medsEntitled = [
+    "2026-08-24", "Medication list for Aisha Nakato - 26-000141", "Correct as at 2026-08-24",
+    "Your medication", "ZZ-HISTORIC-MED", "Prepared by Dr Grace Aine", "Competen Clinic",
+  ];
+  let mResidue = meds.body;
+  for (const piece of [...medsEntitled].sort((a, b) => b.length - a.length)) mResidue = mResidue.split(piece).join("");
+  ok("12l. GROUNDING -- nothing in the medication list is unaccounted for",
+    mResidue.replace(/[\s\-(),:]/g, "") === "", `residue: ${JSON.stringify(mResidue.slice(0, 120))}`);
+
+  // ── 13. THE DISCLOSURE DEFAULT PHASE 3 CHANGED ───────────────────────────────────────────────────
+  //
+  // Phase 1 froze the scope rule as having no exceptions. The medication list broke that, so the rule
+  // is now event-versus-state. These assertions pin the NEW rule and, more importantly, pin the limit
+  // on it: a purpose may pull in its own subject and nothing else.
+  const mixed = groupsOf([CURRENT_DX, HISTORIC_DX, HISTORIC_MED, FOLLOW_UP]);
+
+  ok("13a. without asking, the s9 scope rule is unchanged -- only this consultation",
+    JSON.stringify(defaultSelection(mixed)) === JSON.stringify([CURRENT_DX.key]));
+  ok("13b. a purpose that asks for medication gets current medication whenever it started",
+    defaultSelection(mixed, { alsoCurrent: ["medication"] }).includes(HISTORIC_MED.key));
+  ok("13c. ⚠ and asking for medication does NOT drag in a historical diagnosis",
+    !defaultSelection(mixed, { alsoCurrent: ["medication"] }).includes(HISTORIC_DX.key));
+  ok("13d. the same for follow-up, which is the only other current-state category",
+    defaultSelection(mixed, { alsoCurrent: ["follow_up"] }).includes(FOLLOW_UP.key)
+    && !defaultSelection(mixed, { alsoCurrent: ["follow_up"] }).includes(HISTORIC_MED.key));
+  ok("13e. only categories the registry status-filters may be treated as current state",
+    JSON.stringify([...CURRENT_STATE_CATEGORIES].sort()) === JSON.stringify(["follow_up", "medication"]));
+
+  // ── 14. WHAT THE REGISTRY REFUSES TO OFFER ───────────────────────────────────────────────────────
+  //
+  // The event/state rule in section 13 is only safe because "every offered medication fact" IS "the
+  // current medication". These assertions are what make that sentence true rather than hopeful.
+  const KAMPALA = "Africa/Kampala";
+  const clinicRows = {
+    practice_patient: [{ id: PAT, workspace_id: WS }],
+    practice_workspace: [{ id: WS, name: "Competen Clinic", timezone: KAMPALA }],
+    practice_configuration: [{ workspace_id: WS, is_effective: true }],
+    practice_medication: [
+      { id: "m1", workspace_id: WS, patient_id: PAT, generic_name: "ZZ-ACTIVE-MED", status: "active", dose_text: "1 tab", created_at: "2026-06-01T09:00:00Z" },
+      { id: "m2", workspace_id: WS, patient_id: PAT, generic_name: "ZZ-STOPPED-MED", status: "discontinued", dose_text: "1 tab", created_at: "2026-06-02T09:00:00Z" },
+    ],
+    practice_follow_up: [
+      { id: "f1", workspace_id: WS, patient_id: PAT, reason: "ZZ-OPEN-FU", kind: "review", status: "OPEN", due_on: "2026-09-10", priority: "routine", created_at: "2026-06-01T09:00:00Z" },
+      { id: "f2", workspace_id: WS, patient_id: PAT, reason: "ZZ-CANCELLED-FU", kind: "review", status: "CANCELLED", due_on: "2026-09-11", priority: "routine", created_at: "2026-06-02T09:00:00Z" },
+    ],
+  };
+  const offered = await selectableFacts(stubAdmin(clinicRows), ctx, { patientId: PAT });
+  const labels = JSON.stringify(offered?.groups ?? []);
+
+  ok("14a. a discontinued medication is never offered", !labels.includes("ZZ-STOPPED-MED"));
+  ok("14b. CONTROL -- an active one is", labels.includes("ZZ-ACTIVE-MED"));
+  // ⚠ PHASE 1 SHIPPED WITHOUT THIS FILTER. A cancelled follow-up printed under "Next steps" tells a
+  // patient to attend something that was called off.
+  ok("14c. a cancelled follow-up is never offered", !labels.includes("ZZ-CANCELLED-FU"));
+  ok("14d. CONTROL -- an outstanding one is", labels.includes("ZZ-OPEN-FU"));
+
+  // THE DATE RANGE IS THE PRACTICE'S DAY, NOT THE SERVER'S.
+  //
+  // Kampala is UTC+3, so a record at 18:00Z on the 31st is the evening of the 31st there and belongs
+  // in a range ending on the 31st. One at 22:00Z is already the 1st in Kampala and does not. Under a
+  // naive UTC bound the second would be included -- which is the whole bug this checks for.
+  const edgeRows = {
+    ...clinicRows,
+    practice_diagnosis: [
+      { id: "d1", workspace_id: WS, patient_id: PAT, label: "ZZ-EVENING-31ST", certainty: "confirmed", created_at: "2026-08-31T18:00:00Z" },
+      { id: "d2", workspace_id: WS, patient_id: PAT, label: "ZZ-ALREADY-1ST", certainty: "confirmed", created_at: "2026-08-31T22:00:00Z" },
+    ],
+  };
+  const ranged = await selectableFacts(stubAdmin(edgeRows), ctx, { patientId: PAT, to: "2026-08-31" });
+  const rangedLabels = JSON.stringify(ranged?.groups ?? []);
+  ok("14e. a range ending on the 31st keeps the evening of the 31st in the practice's zone",
+    rangedLabels.includes("ZZ-EVENING-31ST"));
+  ok("14f. and excludes what is already the next day there",
+    !rangedLabels.includes("ZZ-ALREADY-1ST"));
+
+  // ── 15. WHAT PHASE 3 DELIBERATELY DID NOT BUILD ──────────────────────────────────────────────────
+  //
+  // s19 requires phased implementation to be "explicitly tracked", and s14 forbids free-generating
+  // statutory documents. Priority 8 (sick leave / fitness) is therefore absent BY DECISION, not by
+  // oversight, and this asserts the decision so that adding one later is a deliberate act that has to
+  // delete a test with s14 written on it.
+  ok("15a. no generator issues a sick note or a fitness certificate",
+    !written.includes("sick_note") && !written.some(t => /fitness|incapacity/.test(t)),
+    written.join(", "));
+  ok("15b. nothing in the engine decides fitness, incapacity or duration",
+    !/\bfitness\b|\bincapacity\b|\bunfit\b/i.test(engineSrc));
+  const mig355 = flatten(read("supabase/migrations/355-phase-three-document-types.sql"));
+  ok("15c. and 355 records why priority 8 is missing rather than leaving a gap",
+    /section 14/i.test(mig355) && /controlled template/i.test(mig355));
 
   // ── CONTROL ──────────────────────────────────────────────────────────────────────────────────────
   //

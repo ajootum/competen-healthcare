@@ -665,26 +665,28 @@ export default function EncounterConsole(props: {
   };
 
   /**
-   * CPR-DOC-AUTO-001 s3, mode A -- the visit summary is one click.
+   * CPR-DOC-AUTO-001 s3, mode A -- the documents CP already holds the facts for are one click.
    *
-   * NO factKeys IN THE BODY, AND THAT IS THE WHOLE POINT. An omitted selection means the s9 default
-   * (this consultation's facts), decided server-side, so the button does not first have to ask what
-   * the default is and post it straight back. An empty array would mean "include nothing" and produce
-   * a summary of nothing.
+   * NO factKeys IN THE BODY, AND THAT IS THE WHOLE POINT. An omitted selection means the server-side
+   * default: this consultation's facts for a visit summary, the current medication for a medication
+   * list, everything outstanding for follow-up instructions. The button does not first have to ask
+   * what the default is and post it straight back. An empty array would mean "include nothing".
    */
-  const createVisitSummary = async () => {
+  const createOneClick = async (slug: string) => {
     setMakingSummary(true); setNotice(null);
     try {
-      const res = await fetch("/api/v1/practice/documents/visit-summary", {
+      const res = await fetch(`/api/v1/practice/documents/${slug}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ patientId: props.patientId, encounterId: props.encounterId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        // The refusals here are informative rather than technical -- "no current medication is
+        // recorded", "nothing is outstanding" -- so they are shown as written.
         setNotice({ kind: "err", text: data?.error?.message ?? "That did not work." });
         setMakingSummary(false); return;
       }
-      window.location.href = `/practice/documents/${data.documentId}`;
+      window.location.assign(`/practice/documents/${data.documentId}`);
     } catch {
       setNotice({ kind: "err", text: "That did not work." });
       setMakingSummary(false);
@@ -2354,24 +2356,41 @@ export default function EncounterConsole(props: {
                         Composed from what is recorded at this consultation. Each creates a draft you review
                         before anything is signed.
                       </p>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {/* s3 mode A, "one-click / review": CP already holds the facts, so this asks
-                            nothing and lands on the draft. */}
-                        <button type="button" disabled={busy || makingSummary} onClick={createVisitSummary}
-                          className={`min-h-[var(--cp-touch)] ${QUIET_BTN}`}>
-                          {makingSummary ? "Creating…" : "Visit summary"}
-                        </button>
-                        <button type="button" disabled={busy}
-                          onClick={() => setLetterFor({ purpose: "patient_instructions", referralId: null, reason: "" })}
-                          className={`min-h-[var(--cp-touch)] ${QUIET_BTN}`}>
-                          Patient instructions
-                        </button>
-                        <button type="button" disabled={busy}
-                          onClick={() => setLetterFor({ purpose: "referral_letter", referralId: null, reason: "" })}
-                          className={`min-h-[var(--cp-touch)] ${QUIET_BTN}`}>
-                          Referral letter
-                        </button>
-                      </div>
+                      {/* THE GROUPING IS s7'S OWN -- patient documents, clinical correspondence,
+                          orders. Seven entry points in one undifferentiated row is a wall of buttons;
+                          the spec already decided how a practitioner thinks about them.
+
+                          A ONE-CLICK BUTTON GENERATES AND LEAVES. Those marked mode A in s3 need no
+                          decision, so they do not open a dialog to ask for none. The rest open the
+                          composer, which asks only for what s13 says that document requires. */}
+                      {[
+                        ["Patient documents", [
+                          { label: "Visit summary", click: () => createOneClick("visit-summary") },
+                          { label: "Medication list", click: () => createOneClick("medication-list") },
+                          { label: "Follow-up instructions", click: () => createOneClick("follow-up-instructions") },
+                          { label: "Patient instructions", purpose: "patient_instructions" as ComposerPurpose },
+                        ]],
+                        ["Clinical correspondence", [
+                          { label: "Referral letter", purpose: "referral_letter" as ComposerPurpose },
+                          { label: "Clinical summary", purpose: "clinical_summary" as ComposerPurpose },
+                        ]],
+                        ["Orders", [
+                          { label: "Investigation request", purpose: "investigation_request" as ComposerPurpose },
+                        ]],
+                      ].map(([groupLabel, entries]) => (
+                        <div key={groupLabel as string} className="mt-2">
+                          <p className="text-[10.5px] font-semibold text-gray-400">{groupLabel as string}</p>
+                          <div className="mt-1 flex flex-wrap gap-1.5">
+                            {(entries as { label: string; click?: () => void; purpose?: ComposerPurpose }[]).map(e => (
+                              <button key={e.label} type="button" disabled={busy || makingSummary}
+                                onClick={e.click ?? (() => setLetterFor({ purpose: e.purpose!, referralId: null, reason: "" }))}
+                                className={`min-h-[var(--cp-touch)] ${QUIET_BTN}`}>
+                                {e.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -2847,7 +2866,7 @@ export default function EncounterConsole(props: {
           onClose={() => setLetterFor(null)}
           // Straight to the draft, which is where s18's next actions live -- read it, edit it, sign it.
           // A notice back on the console would announce a document the practitioner then has to find.
-          onGenerated={id => { window.location.href = `/practice/documents/${id}`; }}
+          onGenerated={id => { window.location.assign(`/practice/documents/${id}`); }}
         />
       )}
     </div>

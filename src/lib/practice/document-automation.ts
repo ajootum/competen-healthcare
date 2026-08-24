@@ -2,10 +2,13 @@ import { audit } from "@/lib/practice/audit";
 import { createDocument } from "@/lib/practice/documentation";
 import { buildMergeContext, practitionerNameFor, type MergeContext } from "@/lib/practice/document-generation";
 import {
-  composeReferralLetter, composeVisitSummary, composePatientInstructions, recipientLine,
+  composeReferralLetter, composeVisitSummary, composePatientInstructions, composeClinicalSummary,
+  composeInvestigationRequest, composeFollowUpInstructions, composeMedicationList, recipientLine,
   type ComposedDocument, type Recipient, type RecipientKind,
 } from "@/lib/practice/document-compose";
-import { defaultSelection, resolveSelection, selectableFacts, type SelectableFact } from "@/lib/practice/document-facts";
+import {
+  defaultSelection, resolveSelection, selectableFacts, type FactCategory, type SelectableFact,
+} from "@/lib/practice/document-facts";
 import { recordReferral } from "@/lib/practice/encounter-workspace";
 import type { EngineResult } from "@/lib/practice/encounters";
 import type { WorkspaceContext } from "@/lib/practice/access";
@@ -73,8 +76,9 @@ type ResolvedRecipient = { recipient: Recipient; destinationId: string | null };
  * Exactly one of the two. Accepting both would leave the letter and the referral record disagreeing
  * about the recipient with no rule for which wins.
  */
-async function resolveRecipient(admin: any, ctx: WorkspaceContext, args: ReferralLetterArgs, actorId: string):
-  Promise<EngineResult<ResolvedRecipient>> {
+async function resolveRecipient(admin: any, ctx: WorkspaceContext, args: {
+  destinationId?: string | null; recipient?: AdHocRecipient | null;
+}, actorId: string): Promise<EngineResult<ResolvedRecipient>> {
   const adHocName = (args.recipient?.displayName ?? "").trim();
   if (args.destinationId && adHocName)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "choose a saved destination or type a new one, not both" };
@@ -284,11 +288,29 @@ async function store(admin: any, ctx: WorkspaceContext, args: {
  * rather than silently having the default reinstated.
  */
 async function prepare(admin: any, ctx: WorkspaceContext, args: {
-  patientId: string; encounterId: string; factKeys?: string[];
+  patientId: string;
+  /**
+   * Optional from Phase 3 on. The clinical summary is longitudinal (section 3: "Select + summarise"
+   * over the record, not over a consultation) and may be written with no consultation open at all.
+   */
+  encounterId?: string | null;
+  factKeys?: string[];
+  from?: string | null; to?: string | null;
+  /** See CURRENT_STATE_CATEGORIES. A purpose names only its own subject. */
+  alsoCurrent?: FactCategory[];
 }): Promise<EngineResult<{ selected: SelectableFact[]; merge: MergeContext }>> {
-  const offered = await selectableFacts(admin, ctx, { patientId: args.patientId, encounterId: args.encounterId });
+  const offered = await selectableFacts(admin, ctx, {
+    patientId: args.patientId, encounterId: args.encounterId, from: args.from, to: args.to,
+  });
   if (!offered) return { ok: false, status: 404, code: "NOT_FOUND", message: "Not found" };
-  if (!offered.encounterId)
+
+  // ⚠ "NO CONSULTATION ASKED FOR" AND "THAT CONSULTATION IS NOT THIS PATIENT'S" BOTH ARRIVE AS NULL.
+  //
+  // selectableFacts returns encounterId null in either case, so the check has to compare against what
+  // was REQUESTED. Reading only the result would mean a caller who passed somebody else's encounter id
+  // got a document generated against no consultation instead of a refusal -- silently degrading a
+  // patient-isolation failure into a slightly different document.
+  if (args.encounterId && !offered.encounterId)
     return { ok: false, status: 422, code: "ENCOUNTER_PATIENT_MISMATCH", message: "that consultation is not this patient's" };
 
   // ⚠ AN UNRECOGNISED KEY REFUSES THE WHOLE DOCUMENT, and dropping it silently would be the worse bug.
@@ -299,7 +321,9 @@ async function prepare(admin: any, ctx: WorkspaceContext, args: {
   // composed. In the second case a practitioner is looking at a checked box for a fact that will not be
   // in the document. Generating anyway hands them something missing what they believe is in it, and
   // they will sign it. Refusing costs a reload.
-  const keys = args.factKeys === undefined ? defaultSelection(offered.groups) : args.factKeys;
+  const keys = args.factKeys === undefined
+    ? defaultSelection(offered.groups, { alsoCurrent: args.alsoCurrent })
+    : args.factKeys;
   const { selected, unknown } = resolveSelection(offered.groups, keys);
   if (unknown.length)
     return { ok: false, status: 409, code: "FACT_SELECTION_STALE",
@@ -380,5 +404,158 @@ export async function generatePatientInstructions(admin: any, ctx: WorkspaceCont
   return store(admin, ctx, {
     patientId: args.patientId, encounterId: args.encounterId, docType: "patient_instructions",
     composed, selected, purpose: "patient_instructions", correlationId: args.correlationId,
+  });
+}
+
+/**
+ * A clinical summary, for a colleague (section 5 priority 4).
+ *
+ * THE ONLY DOCUMENT HERE THAT DOES NOT REQUIRE A CONSULTATION. Section 3 sources it from the
+ * "longitudinal selected record", and a summary requested by an insurer or a new treating clinician is
+ * written between appointments, not during one. Where an encounter IS given it is honoured -- that
+ * consultation's facts arrive pre-selected as usual.
+ */
+export async function generateClinicalSummary(admin: any, ctx: WorkspaceContext, args: {
+  patientId: string; encounterId?: string | null;
+  destinationId?: string | null; recipient?: AdHocRecipient | null;
+  purpose: string; from?: string | null; to?: string | null;
+  factKeys: string[]; correlationId: string;
+}): Promise<EngineResult<{ documentId: string; disclosed: number }>> {
+  const purpose = (args.purpose ?? "").trim();
+  if (!purpose)
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "what is this summary for?" };
+
+  const prepared = await prepare(admin, ctx, args);
+  if (!prepared.ok) return prepared;
+  const { selected, merge } = prepared.data;
+
+  if (!selected.length)
+    return { ok: false, status: 422, code: "NOTHING_SELECTED",
+             message: "a summary needs something from the record -- choose what it should cover" };
+
+  const recipientResult = await resolveRecipient(admin, ctx, args, ctx.userId);
+  if (!recipientResult.ok) return recipientResult;
+  const { recipient } = recipientResult.data;
+
+  const composed = composeClinicalSummary({
+    today: merge["today"], patient: patientOf(merge), recipient, purpose,
+    periodFrom: args.from ?? null, periodTo: args.to ?? null,
+    facts: selected, practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
+  });
+
+  return store(admin, ctx, {
+    patientId: args.patientId, encounterId: args.encounterId ?? null, docType: "clinical_summary",
+    composed, selected, addressedTo: recipientLine(recipient),
+    purpose: "clinical_summary", correlationId: args.correlationId,
+  });
+}
+
+/**
+ * An investigation request (section 5 priority 5).
+ *
+ * The investigations are facts already recorded against the consultation -- this document asks for
+ * what the practitioner has already decided to order, it does not order anything. Section 6:
+ * "Generation must not mutate diagnoses, treatments, procedures, results or other source clinical
+ * records", and requesting is a clinical act belonging to the investigation workflow, not to this one.
+ */
+export async function generateInvestigationRequest(admin: any, ctx: WorkspaceContext, args: {
+  patientId: string; encounterId: string;
+  destinationId?: string | null; recipient?: AdHocRecipient | null;
+  clinicalIndication: string; factKeys: string[]; correlationId: string;
+}): Promise<EngineResult<{ documentId: string; disclosed: number }>> {
+  const indication = (args.clinicalIndication ?? "").trim();
+  if (!indication)
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "a request needs a clinical indication" };
+
+  const prepared = await prepare(admin, ctx, args);
+  if (!prepared.ok) return prepared;
+  const { selected, merge } = prepared.data;
+
+  // A request naming no investigation is a letter asking for nothing.
+  if (!selected.some(f => f.category === "investigation"))
+    return { ok: false, status: 422, code: "NO_INVESTIGATION_SELECTED",
+             message: "choose which investigation is being requested -- record it on the consultation first if it is not listed" };
+
+  // The destination is optional here, unlike a referral: a request may be handed to the patient.
+  let recipient: Recipient | null = null;
+  if (args.destinationId || args.recipient?.displayName?.trim()) {
+    const resolved = await resolveRecipient(admin, ctx, args, ctx.userId);
+    if (!resolved.ok) return resolved;
+    recipient = resolved.data.recipient;
+  }
+
+  const composed = composeInvestigationRequest({
+    today: merge["today"], patient: patientOf(merge), recipient, clinicalIndication: indication,
+    facts: selected, practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
+  });
+
+  return store(admin, ctx, {
+    patientId: args.patientId, encounterId: args.encounterId, docType: "investigation_request",
+    composed, selected, ...(recipient ? { addressedTo: recipientLine(recipient) } : {}),
+    purpose: "investigation_request", correlationId: args.correlationId,
+  });
+}
+
+/**
+ * Follow-up instructions, for the patient (section 5 priority 6).
+ *
+ * One-click over the follow-up plan. Outstanding follow-ups are the subject, so they default in
+ * regardless of which consultation raised them -- see CURRENT_STATE_CATEGORIES. The registry offers
+ * only OPEN and SCHEDULED ones, so "every offered follow-up" is "everything still owed".
+ */
+export async function generateFollowUpInstructions(admin: any, ctx: WorkspaceContext, args: {
+  patientId: string; encounterId: string; instructions?: string | null;
+  factKeys?: string[]; correlationId: string;
+}): Promise<EngineResult<{ documentId: string; disclosed: number }>> {
+  const prepared = await prepare(admin, ctx, { ...args, alsoCurrent: ["follow_up"] });
+  if (!prepared.ok) return prepared;
+  const { selected, merge } = prepared.data;
+
+  if (!selected.some(f => f.category === "follow_up"))
+    return { ok: false, status: 422, code: "NO_FOLLOW_UP_OUTSTANDING",
+             message: "nothing is outstanding for this patient, so there is nothing to come back for" };
+
+  const composed = composeFollowUpInstructions({
+    today: merge["today"], patient: patientOf(merge),
+    instructions: (args.instructions ?? "").trim() || null,
+    facts: selected, practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
+  });
+
+  return store(admin, ctx, {
+    patientId: args.patientId, encounterId: args.encounterId, docType: "follow_up_instructions",
+    composed, selected, purpose: "follow_up_instructions", correlationId: args.correlationId,
+  });
+}
+
+/**
+ * The current medication list, for the patient (section 5 priority 7).
+ *
+ * THIS IS THE DOCUMENT THAT MADE PHASE 1'S DISCLOSURE RULE UNTENABLE, and the reasoning is recorded on
+ * CURRENT_STATE_CATEGORIES rather than repeated here. In short: under the unamended scope rule every
+ * line of a medication list defaults off, because a drug started last month is historical.
+ *
+ * MEDICATION ONLY. The selection is narrowed to the medication category before composing, so a
+ * one-click list cannot quietly acquire a diagnosis from a wider default.
+ */
+export async function generateMedicationList(admin: any, ctx: WorkspaceContext, args: {
+  patientId: string; encounterId?: string | null; factKeys?: string[]; correlationId: string;
+}): Promise<EngineResult<{ documentId: string; disclosed: number }>> {
+  const prepared = await prepare(admin, ctx, { ...args, alsoCurrent: ["medication"] });
+  if (!prepared.ok) return prepared;
+  const { merge } = prepared.data;
+
+  const selected = prepared.data.selected.filter(f => f.category === "medication");
+  if (!selected.length)
+    return { ok: false, status: 422, code: "NO_CURRENT_MEDICATION",
+             message: "no current medication is recorded for this patient" };
+
+  const composed = composeMedicationList({
+    today: merge["today"], patient: patientOf(merge), facts: selected,
+    practitionerName: merge["practitioner.name"], practiceName: merge["practice.name"],
+  });
+
+  return store(admin, ctx, {
+    patientId: args.patientId, encounterId: args.encounterId ?? null, docType: "medication_list",
+    composed, selected, purpose: "medication_list", correlationId: args.correlationId,
   });
 }
