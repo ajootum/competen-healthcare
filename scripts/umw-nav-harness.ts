@@ -153,8 +153,50 @@ function main() {
     hrefs.filter(h => h.startsWith("/unit-manager/ops-command/")).length >= 10,
     "this section has no in-page tab bar, so a trimmed link would be unreachable");
   ok("the Clinical Alerts badge target survived the move", hrefs.includes("/unit-manager/patient-operations/safety"));
-  ok("sub-headings are hidden in the collapsed icon rail", /data-sb-label[^>]*>\s*\{domain\.title\}|data-sb-label[\s\S]{0,120}\{domain\.title\}/.test(layout),
+  /**
+   * ⚠ THIS ASSERTION USED TO BE RED, AND THE DEFECT IT REPORTED DOES NOT EXIST.
+   *
+   * It grepped THIS layout for `data-sb-label ... {domain.title}` and, finding none, reported that
+   * sub-headings were not hidden in the collapsed icon rail. But the layout has not rendered the
+   * heading inline since it was refactored: it passes `domain.title` as the `heading` PROP of
+   * NavGroupOrPlain, and the `data-sb-label` wrapping moved into NavGroup.tsx. The markup improved
+   * and the assertion did not follow it, so a test pinned to the old MECHANISM went red on a file
+   * that was correct -- and the exclusion record in ci-harnesses.ts then repeated that wrong
+   * diagnosis as fact for anybody who read it.
+   *
+   * VERIFIED IN A BROWSER, 2026-08-24, against the real stylesheet at 1280px: with the replica
+   * markup in an `aside[data-sidebar]`, adding `sb-collapsed` to <html> moves the heading from
+   * `display: inline` to `none`, the summary from `list-item` to `none`, and the items from `block`
+   * to `flex`. The heading is hidden twice over and the icons are force-shown.
+   *
+   * ⚠ AND THE RULES ARE DESKTOP-ONLY BY DESIGN. They live inside `@media (min-width: 768px)` -- the
+   * CPR-MOB-001 md edge -- because there is no icon rail on a phone. A first attempt at the browser
+   * check ran in a 303px preview pane, where the media query does not match and NOTHING is hidden;
+   * read carelessly that looked like proof of the very defect being investigated. The width is part
+   * of the claim, not an incidental detail of how it was measured.
+   *
+   * So the assertion now follows the mechanism across the three files that actually implement it.
+   */
+  const navGroup = readFileSync(join(ROOT, "src/components/NavGroup.tsx"), "utf8");
+  const globals = readFileSync(join(ROOT, "src/app/globals.css"), "utf8");
+  const railRules = globals.slice(globals.indexOf("@media (min-width: 768px)"));
+
+  ok("sub-headings are rendered through NavGroupOrPlain, not inlined in this layout",
+    /<NavGroupOrPlain[\s\S]{0,120}heading=\{[^}]*domain\.title/.test(layout),
+    "the layout must delegate, or the hiding rules below do not apply to it");
+  ok("NavGroup wraps its title in data-sb-label, inside a details[data-nav-group] summary",
+    /data-nav-group/.test(navGroup)
+    && /<summary[\s\S]{0,400}data-sb-label>\{title\}<\/span>/.test(navGroup),
+    "this is where the heading actually gets its hook");
+  ok("sub-headings are hidden in the collapsed icon rail",
+    /html\.sb-collapsed aside\[data-sidebar\] \[data-sb-label\] \{[^}]*display:\s*none/.test(railRules)
+    && /html\.sb-collapsed aside\[data-sidebar\] details\[data-nav-group\] > summary \{[^}]*display:\s*none/.test(railRules),
     "an unlabelled heading would leave stray text in the icon strip");
+  ok("...while the items are force-shown, so a collapsed accordion never empties the rail",
+    /html\.sb-collapsed aside\[data-sidebar\] details\[data-nav-group\] > div \{[^}]*display:\s*flex/.test(railRules));
+  ok("⚠ the rail rules are inside the md media query -- there is no icon rail on a phone",
+    globals.indexOf("html.sb-collapsed aside[data-sidebar] [data-sb-label]") > globals.indexOf("@media (min-width: 768px)"),
+    "CPR-MOB-001: the collapsed rail is a desktop affordance");
 
   console.log(`\n${fail === 0 ? "PASS" : "FAIL"}  ${pass}/${pass + fail}\n`);
   process.exit(fail === 0 ? 0 : 1);

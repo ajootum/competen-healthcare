@@ -125,6 +125,16 @@ const INCLUDED = [
   // action and six of the seven hostnames do not resolve.
   "domain-registry-harness.ts",
   "staff-host-harness.ts",
+  // ⚠ PROMOTED FROM EXCLUDED 2026-08-24, AND ITS EXCLUSION REASON WAS NEVER TRUE. The record said
+  // "RED ON A REAL DEFECT (10/11) -- sub-headings are not hidden in the collapsed icon rail". They
+  // are, twice over: [data-sb-label] is display:none and the whole details summary is too. The
+  // assertion had been pinned to markup that MOVED -- the layout stopped inlining the heading and
+  // now passes domain.title to NavGroupOrPlain, with the data-sb-label wrapping in NavGroup.tsx --
+  // so a stale test reported a defect that did not exist, and this record then repeated the wrong
+  // diagnosis as fact for anybody who read it. Verified in a browser at 1280px before repointing:
+  // collapsing moves the heading to display:none and the items to flex. Now 15/15, four controls
+  // break-tested by deleting the real CSS rules. Pure: reads three files from disk.
+  "umw-nav-harness.ts",
 ];
 
 type Exclusion = { file: string; reason: string };
@@ -137,18 +147,18 @@ type Exclusion = { file: string; reason: string };
  */
 const EXCLUDED: Exclusion[] = [
   {
-    file: "umw-nav-harness.ts",
-    reason:
-      "RED ON A REAL DEFECT (10/11). Sub-headings are not hidden in the collapsed icon rail, leaving "
-      + "stray unlabelled text in the icon strip.",
-  },
-  {
     file: "security-headers-harness.ts",
     reason:
-      "RED, AND STRUCTURALLY UNFIT ANYWAY (45 passed, 1 failed). It fetches http://localhost:3000 and "
-      + "needs `next build && next start` running first, and it reads .env.local via loadEnvConfig for "
-      + "NEXT_PUBLIC_SUPABASE_URL. Neither exists on a clean CI checkout. This belongs in a future job "
-      + "that builds and starts the app, not in the no-credential subset.",
+      "NOT RED -- 46/46 against a production server, verified 2026-08-24. It is excluded because it is "
+      + "STRUCTURALLY UNFIT for the no-credential subset, which was always the real reason: it fetches "
+      + "http://localhost:3000 and needs `next build && next start` running first, and it reads "
+      + ".env.local via loadEnvConfig for NEXT_PUBLIC_SUPABASE_URL. Neither exists on a clean CI "
+      + "checkout. This belongs in a future job that builds and starts the app. "
+      + "⚠ THIS ENTRY USED TO SAY \"RED ... (45 passed, 1 failed)\". The one failure was the "
+      + "assertion `csp: no 'unsafe-eval' in a production build`, whose own message says it must be run "
+      + "against a built app rather than `next dev` -- so the record was reporting a DEV-SERVER RUN as "
+      + "a defect, and 45/1 is exactly what a dev run still produces today. Re-measured by building to "
+      + ".next-verify and starting from it, which left the dev server's .next untouched at 257MB.",
   },
   {
     file: "practice-bundle-harness.ts",
