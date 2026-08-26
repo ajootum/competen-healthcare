@@ -33,9 +33,43 @@
  * ────────────────────────────────────────────────────────────────────────────────────────────────────
  */
 
-import { promises as dns } from "node:dns";
+import { Resolver, promises as dns } from "node:dns";
 
 const DOMAIN = process.argv[2] || "competenhealthcare.com";
+
+/**
+ * ⚠ ASK THE AUTHORITATIVE NAMESERVERS, NOT A CACHING RESOLVER.
+ *
+ * This was a real defect on 2026-08-26, and it produced a WRONG ANSWER in the one situation the file
+ * exists for. A DMARC record had just been added correctly; the system resolver still held the NXDOMAIN
+ * it had cached minutes earlier, so this script reported MISSING and the owner was told to go looking
+ * for a mistake they had not made. Negative answers are cached for the zone's SOA minimum, which means
+ * a checker built to answer "did the record I just created land?" is guaranteed to be reading stale
+ * data at exactly the moment it is run.
+ *
+ * Asking the zone's own nameservers removes the cache from the path entirely. If they cannot be
+ * discovered the script falls back to the system resolver and SAYS SO in its output, because a
+ * degraded run that looks identical to a good one is how the original mistake happened.
+ */
+async function authoritativeResolver(domain) {
+  try {
+    const ns = await dns.resolveNs(domain);
+    const ips = (await Promise.all(ns.map(n => dns.resolve4(n).catch(() => [])))).flat();
+    if (!ips.length) return { resolver: dns, authoritative: false, via: "system resolver (no NS ips)" };
+    const r = new Resolver();
+    r.setServers([...new Set(ips)]);
+    return { resolver: r.resolveTxt ? wrapCallback(r) : dns, authoritative: true, via: ns.join(", ") };
+  } catch {
+    return { resolver: dns, authoritative: false, via: "system resolver (NS lookup failed)" };
+  }
+}
+
+/** node:dns Resolver is callback-based; wrap the three lookups this file needs as promises. */
+function wrapCallback(r) {
+  const p = fn => (...args) => new Promise((res, rej) =>
+    fn.call(r, ...args, (e, v) => (e ? rej(e) : res(v))));
+  return { resolveTxt: p(r.resolveTxt), resolveMx: p(r.resolveMx), resolveCname: p(r.resolveCname) };
+}
 
 /** Measured 2026-08-26, before any sending provider was added. Inbound mail depends on this. */
 const PINNED_MX = ["0 mail.competenhealthcare.com"];
@@ -84,12 +118,20 @@ if (process.argv.includes("--self-test")) {
   process.exit(bad === 0 ? 0 : 1);
 }
 
+const { resolver, authoritative, via } = await authoritativeResolver(DOMAIN);
+
 async function txt(host) {
-  try { return (await dns.resolveTxt(host)).map(chunks => chunks.join("")); }
+  try { return (await resolver.resolveTxt(host)).map(chunks => chunks.join("")); }
   catch { return null; }
 }
 
-console.log(`\nMail authentication DNS — ${DOMAIN}\n`);
+console.log(`\nMail authentication DNS — ${DOMAIN}`);
+console.log(authoritative
+  ? `Asked authoritatively: ${via}  (no cache in the path)\n`
+  : `⚠ ${via} — results may be CACHED. A record added in the last few minutes can read as absent.\n`);
+if (!authoritative) problems.push(
+  "Could not reach the authoritative nameservers, so every result above may be a cached answer. "
+  + "Re-run before acting on a MISSING.");
 
 // ── SPF ──────────────────────────────────────────────────────────────────────────────────────────
 const apexTxt = (await txt(DOMAIN)) ?? [];
@@ -147,7 +189,7 @@ if (dmarc.length === 0) {
 // ── Inbound MX ───────────────────────────────────────────────────────────────────────────────────
 console.log("");
 let mx = [];
-try { mx = (await dns.resolveMx(DOMAIN)).map(m => `${m.priority} ${m.exchange}`).sort(); } catch { /* none */ }
+try { mx = (await resolver.resolveMx(DOMAIN)).map(m => `${m.priority} ${m.exchange}`).sort(); } catch { /* none */ }
 if (mx.length === 0) {
   line("MISSING", "MX (inbound)", "the domain cannot receive mail");
   problems.push("No MX record. Anything sent to an address at this domain will bounce.");

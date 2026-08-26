@@ -28,8 +28,37 @@
  * ────────────────────────────────────────────────────────────────────────────────────────────────────
  */
 
-import { promises as dns } from "node:dns";
+import { Resolver, promises as dns } from "node:dns";
 import { connect } from "node:tls";
+
+/**
+ * ⚠ ASK THE AUTHORITATIVE NAMESERVERS FOR THE RECORD, NOT A CACHING RESOLVER.
+ *
+ * Fixed 2026-08-26 after the sibling script (mail-dns-check.mjs) got this wrong and gave a WRONG
+ * ANSWER in the exact situation it exists for: a DMARC record had just been added correctly, the
+ * system resolver still held the NXDOMAIN it cached minutes earlier, and the owner was sent looking
+ * for a mistake they had not made. Negative answers are cached for the zone's SOA minimum, so a
+ * checker built to answer "did the record I just created land?" is reading stale data precisely when
+ * it is run.
+ *
+ * ⚠ THIS SPLITS ONE OLD STATE INTO TWO, and the distinction is the useful part. TLS and HTTP still go
+ * through the SYSTEM resolver, because that is what a browser would do. So a record can be correct in
+ * the zone while the local resolver has not caught up — which is not the same problem as a record that
+ * was never created, and has a different answer: wait, rather than go back to the DNS panel.
+ */
+async function authoritativeResolver(domain) {
+  try {
+    const ns = await dns.resolveNs(domain);
+    const ips = (await Promise.all(ns.map(n => dns.resolve4(n).catch(() => [])))).flat();
+    if (!ips.length) return { auth: null, via: "system resolver (no NS ips)" };
+    const r = new Resolver();
+    r.setServers([...new Set(ips)]);
+    const p = fn => (...a) => new Promise((res, rej) => fn.call(r, ...a, (e, v) => (e ? rej(e) : res(v))));
+    return { auth: { resolveCname: p(r.resolveCname), resolve4: p(r.resolve4) }, via: ns.join(", ") };
+  } catch {
+    return { auth: null, via: "system resolver (NS lookup failed)" };
+  }
+}
 
 const DOMAIN = "competenhealthcare.com";
 /** The six canonical product gateways (s1), plus the two that already work, as a control. */
@@ -38,11 +67,20 @@ const CONTROLS = ["www"];
 /** What Vercel requires these to CNAME to. From `vercel domains verify`, 2026-08-24. */
 const EXPECTED_CNAME = "fe965000d36362fc.vercel-dns-017.com";
 
+const { auth, via } = await authoritativeResolver(DOMAIN);
+
+/** What the ZONE says. Cache-free when the authoritative servers are reachable. */
 async function resolveHost(host) {
+  const r = auth ?? dns;
   const out = { cname: null, addresses: [] };
-  try { out.cname = (await dns.resolveCname(host))[0] ?? null; } catch { /* not a CNAME, or absent */ }
-  try { out.addresses = (await dns.resolve4(host)); } catch { /* absent */ }
+  try { out.cname = (await r.resolveCname(host))[0] ?? null; } catch { /* not a CNAME, or absent */ }
+  try { out.addresses = (await r.resolve4(host)); } catch { /* absent */ }
   return out;
+}
+
+/** What a BROWSER would see. Goes through the system resolver on purpose. */
+async function resolvedLocally(host) {
+  try { await dns.lookup(host); return true; } catch { return false; }
 }
 
 function tlsCheck(host) {
@@ -76,12 +114,21 @@ async function assess(host, isControl) {
   if (!resolved) return { host, state: "NO DNS", detail: "no A and no CNAME record", isControl };
 
   const target = rec.cname ? rec.cname.replace(/\.$/, "") : null;
+  const where = target ? `CNAME -> ${target}` : `A -> ${rec.addresses.join(", ")}`;
+
+  // ⚠ THE ZONE HAS IT, THIS MACHINE DOES NOT YET. A different problem from a missing record, and the
+  // answer is to wait rather than to go back to the DNS panel. Splitting these two apart is the whole
+  // reason this script asks the authoritative servers separately from how it connects.
+  if (auth && !(await resolvedLocally(host))) {
+    return { host, isControl, state: "PROPAGATING", detail: `${where}; correct in the zone, not yet visible to this resolver` };
+  }
+
   const tls = await tlsCheck(host);
   if (!tls.ok) {
     return {
       host, isControl,
       state: "DNS, NO TLS",
-      detail: `${target ? `CNAME -> ${target}` : `A -> ${rec.addresses.join(", ")}`}; TLS: ${tls.error}`,
+      detail: `${where}; TLS: ${tls.error}`,
     };
   }
 
