@@ -278,3 +278,67 @@ application's ordinary root — the marketing home — until step 5 is built.
 
 That is the honest sequence and it is not a defect: hostname is navigation, and §5 of the spec requires
 authorization to stay entitlement-driven regardless of host.
+
+---
+
+## 9. §9 CLOSED and §12 partially accepted — 2026-08-26
+
+### 9.1 The six gateways are live
+
+DNS records created by the owner at WebHostBox; all six CNAME to
+`fe965000d36362fc.vercel-dns-017.com`. Verified three independent ways on 2026-08-26:
+
+| Check | Result |
+|---|---|
+| Records in the zone (asked authoritatively) | 6/6 correct target |
+| Vercel domain status | 6/6 `configured-correctly`, `ok=true` |
+| TLS + HTTPS (connected by edge IP with SNI) | 6/6 **HTTP 200** |
+
+**§12's first acceptance row — "All canonical production hostnames resolve over TLS to the intended
+gateway" — now passes.** It is also the first time `staff-host.ts`'s resolver has had a live host to
+run against, a week after it shipped.
+
+Mail DNS was completed in the same pass: SPF single and valid, DKIM published, MX unchanged, and DMARC
+added in monitor mode (`p=none`).
+
+### 9.2 ⚠ A caching resolver produced a confidently wrong answer
+
+`mail-dns-check.mjs` reported DMARC `MISSING` for a record that had been created **correctly**. It used
+the system resolver, which still held the NXDOMAIN cached from before the record existed, and the owner
+was sent looking for a double-domain mistake they had not made.
+
+Negative DNS answers are cached for the zone's SOA minimum, so a checker whose only question is *"did
+the record I just created land?"* is **guaranteed** to read stale data at the moment it runs. Both
+checkers now query the zone's own nameservers and print which path they used; if the authoritative
+servers are unreachable they fall back and say so, because a degraded run that looks identical to a
+good one is how the wrong advice was produced.
+
+It also split one state in two. TLS and HTTP still go through the system resolver, because that is what
+a browser does — so a record can be right in the zone while the local machine has not caught up. That
+is **`PROPAGATING`**, not `NO DNS`, and its answer is *wait*, not *go back to the DNS panel*.
+
+### 9.3 What §12 acceptance now covers
+
+`scripts/gateway-acceptance-check.mjs` — 21 rows, all passing, run against the live hosts. It connects
+by edge IP with SNI so a propagating record cannot skew the result.
+
+- **Privileged boundaries.** `/super-admin` is refused on all six gateways, including `platform` and
+  `staff`. A hostname buys nothing.
+- **Isolation.** `/practice/home` is refused on all six.
+- **⚠ And the property, not just the per-host results.** The refusals are compared for *identical
+  shape* across all six hosts. A gateway that refused **differently** would pass every per-host check
+  while proving §5 false — that authorization is host-independent. Both comparisons collapse to one
+  shape. The comparison was proven to discriminate against synthetic differing responses, so the
+  single-shape result is a finding rather than an artefact of normalisation.
+- **Staff host rewrite**, live: root serves the staff door, `www` root is untouched (fail-open), and
+  `/login` on the staff host resolves normally — only the root is rewritten.
+
+### 9.4 What is still NOT verified
+
+- **§6/§7 authenticated routing** — one entitled destination lands directly, several render the
+  chooser, none renders the controlled no-product state. This needs a real signed-in identity.
+  `resolveProductDestinations` is unit-covered by `access-doors-harness`; **the live authenticated pass
+  is the owner's** and has never been done.
+- **§13 step 5** — five of six gateways serve the marketing root, because host-aware product context is
+  not built. Expected: hostname is navigation, and §5 keeps authorization entitlement-driven regardless.
+  Only `staff` has host-aware routing today.
