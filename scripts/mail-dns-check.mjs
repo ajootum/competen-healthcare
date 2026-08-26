@@ -168,6 +168,32 @@ for (const sel of DKIM_SELECTORS) {
 }
 if (dkimFound === 0) problems.push("No DKIM key found under any known selector.");
 
+// ── RESEND SENDING SUBDOMAIN ─────────────────────────────────────────────────────────────────────
+// ⚠ RESEND SCOPES ITS SPF AND RETURN-PATH MX TO A SUBDOMAIN (`send.<domain>`), not the apex. That is
+// why the apex SPF needed no merge and the inbound MX needed no change -- the conflict this file was
+// built to catch does not arise in this layout. Checked explicitly so "no conflict" is a measurement
+// rather than an assumption, and so a record added to the WRONG level is visible.
+console.log("");
+const sendHost = `send.${DOMAIN}`;
+const sendTxt = (await txt(sendHost)) ?? [];
+const sendSpf = sendTxt.filter(r => r.toLowerCase().startsWith("v=spf1"));
+if (sendSpf.length === 1) line("OK", "send. SPF", sendSpf[0].slice(0, 60));
+else if (sendSpf.length === 0) line("absent", "send. SPF", "Resend sending not enabled yet");
+else { line("BROKEN", "send. SPF", `${sendSpf.length} records`); problems.push("More than one SPF on the send subdomain."); }
+
+let sendMx = [];
+try { sendMx = (await resolver.resolveMx(sendHost)).map(m => `${m.priority} ${m.exchange}`); } catch { /* none */ }
+line(sendMx.length ? "OK" : "absent", "send. MX (return path)", sendMx.join(", ") || "Resend bounce handling not set up");
+
+// ⚠ THE APEX MUST NOT HAVE ACQUIRED RESEND RECORDS. Putting them at the apex instead of on send. is
+// the mistake this layout makes possible: it would collide with the existing SPF and, for MX, cut off
+// inbound mail entirely.
+const apexHasResend = spf.some(r => /resend|amazonses/i.test(r));
+line(apexHasResend ? "WRONG" : "OK", "apex kept clean", apexHasResend ? "a Resend SPF landed on the APEX" : "no Resend records at apex, as intended");
+if (apexHasResend) problems.push(
+  "A Resend SPF include is on the APEX. This layout puts it on send. -- at the apex it collides with "
+  + "the existing hosting SPF, and only one SPF record per name is valid.");
+
 // ── DMARC ────────────────────────────────────────────────────────────────────────────────────────
 console.log("");
 const dmarc = (await txt(`_dmarc.${DOMAIN}`))?.filter(r => /^v=DMARC1/i.test(r)) ?? [];
