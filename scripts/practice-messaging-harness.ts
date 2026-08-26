@@ -368,8 +368,21 @@ async function main() {
   });
   ok("13. ENABLING A CHANNEL NEEDS practice.settings.manage",
     !refused.ok && refused.code === "FORBIDDEN");
+  // ⚠ THIS PINNED A COUNT AND WENT STALE. It asserted `stillReads.length === 2`, which was the number
+  // of channels the day it was written. WhatsApp was added, channelSettings began returning three, and
+  // the harness went red on a product that had grown rather than broken -- 39/1 for weeks.
+  //
+  // What 13 and 13b together PROVE is that the refusal was about WRITING: somebody without
+  // practice.settings.manage cannot enable a channel but can still read the settings. The count was
+  // never the point. It now compares the two independently-written channel lists -- channelSettings'
+  // and messagingStatus' -- so adding a fourth channel updates both sides or fails loudly, instead of
+  // making a passing assertion into a wrong one.
   const stillReads = await channelSettings(admin, wsA);
-  ok("13b. CONTROL: reading the settings does not", stillReads.length === 2);
+  const productChannels = Object.keys(messagingStatus()).sort();
+  const readChannels = stillReads.map(r => r.kind).sort();
+  ok("13b. CONTROL: the refusal was about writing -- reading the settings still works",
+    stillReads.length > 0 && JSON.stringify(readChannels) === JSON.stringify(productChannels),
+    `read [${readChannels.join(", ")}] vs product [${productChannels.join(", ")}]`);
 
   const crossLog = await messageLog(admin, b.ctx);
   ok("13c. ANOTHER PRACTICE SEES NONE OF THIS ONE'S MESSAGES",
