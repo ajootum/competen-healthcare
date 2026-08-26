@@ -53,3 +53,4 @@ next-env.d.ts
 .vercel
 .env*
 .next-dev.log
+.test3-credential.local.txt

@@ -342,3 +342,47 @@ by edge IP with SNI so a propagating record cannot skew the result.
 - **§13 step 5** — five of six gateways serve the marketing root, because host-aware product context is
   not built. Expected: hostname is navigation, and §5 keeps authorization entitlement-driven regardless.
   Only `staff` has host-aware routing today.
+
+---
+
+## 10. §6/§7 human acceptance — 2026-08-26
+
+Run against `*.localhost:3000` (production Supabase) and `localhost:3100` (staging Supabase). Every
+result came from an in-page recorder polling every 120–200ms, not from reading the screen afterwards —
+the "one" state performs a full navigation and the first recorder attempt was destroyed by it
+(`ticks: 0`), so the second was moved to `sessionStorage`, which survives same-origin navigation.
+
+| Test | State | Evidence |
+|---|---|---|
+| 1 — one destination lands directly | **PASS** | `state:"one"` · "Taking you to Competen Platform" · `sawChooser:false` over 318 ticks |
+| 2 — several render the chooser | **PASS** | `state:"many"` · "Where would you like to go?" · Platform + Practice · `disabledCards:0` |
+| 3 — no entitlement, controlled state | **PASS** | `state:"none"` · "Your Competen account is active" · no cards · **no redirect** |
+| 4 — wrong door explains, no expansion | **PASS** | On the recruitment host: `recruitmentOffered:false`, offered set identical to test 2 |
+
+### 10.1 ⚠ The zero-destination state is structurally unreachable
+
+Test 3 needed an identity nobody could produce. Creating an auth user in staging **automatically
+created a `profiles` row** — the `on_auth_user_created` trigger running `handle_new_user()` (bootstrapped
+in the baseline, replaced by migrations 171 and then 249). A `profiles` row alone grants the Platform
+destination, so **every account that has ever signed up holds at least one**.
+
+The row had to be DELETED to produce the state at all. That is why no zero-destination identity exists
+in production: not an accident, a consequence of the trigger.
+
+So §7's controlled no-product state is correct, now proven to render, and **cannot occur for a normally
+created account**. It is reachable only by removing a profiles row or by a future product whose
+entitlement is separate from profile existence. Whether that is the intended design is a question for
+whoever owns §7 — nothing was changed.
+
+The staging identity is kept for regression: `noproduct.probe@staging.competen.invalid`
+(`77c9bdb5-ea42-43fa-83a2-3761babdbd11`), staging project `ezhvpgtcqcdsgylrxgdb`, `.invalid` domain so
+it can never receive mail. Its password was rotated into a gitignored file and that file deleted.
+
+### 10.2 Findings captured, not acted on
+
+- **Products serve under other products' hostnames.** Chooser cards use relative hrefs, so selecting
+  Practice on the Recruitment gateway lands at `recruitment.../practice/home`. No access expansion —
+  entitlement decided — but it touches §10 branding and §11 canonical URLs.
+- **`/platform`, `/dashboard` and `/super-admin` carry the generic root title.** Three routes with no
+  page-level metadata.
+- **`/login` shows the sign-in form even when a valid session exists** for that host.
