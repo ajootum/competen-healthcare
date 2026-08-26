@@ -42,7 +42,7 @@ import {
   normaliseHost,
 } from "../src/lib/identity/domains";
 import { STAFF_HOSTS, STAFF_DOOR_PATH, isStaffHost, staffEntryRewrite } from "../src/lib/identity/staff-host";
-import { gatewayEntryRewrite } from "../src/lib/identity/gateway-entry";
+import { gatewayEntryRewrite, NO_REWRITE as NO_REWRITE_KEYS } from "../src/lib/identity/gateway-entry";
 
 let pass = 0;
 const failures: string[] = [];
@@ -109,12 +109,42 @@ ok("1f. gatewayOrigin composes an https origin with no trailing slash",
 // ── 2. s2 route equivalents, and the /hq conflict pinned ─────────────────────────────────────────
 ok("2a. every gateway names a main-domain route (s2)",
   GATEWAY_KEYS.every(k => GATEWAYS[k].route.startsWith("/")));
+/**
+ * ⚠ A DIRECTORY IS NOT A ROUTE, and asserting otherwise shipped a 404 on a live gateway.
+ *
+ * This used to test `existsSync` on `src/app/<route>`. `src/app/platform` exists -- it holds the
+ * `control-plane/*` and `staff/*` families -- but has no `page.tsx`, so `/platform` is not served. The
+ * assertion passed, s13 step 5 rewrote the platform hostname's root to it, and for about twenty minutes
+ * the platform gateway answered every visitor with the 404 page, byte-identical to a nonsense URL.
+ *
+ * Next serves a route from a `page` or `route` file AT that segment, so that is what is checked now.
+ */
 const routeDir = (r: string) => join(ROOT, "src", "app", r.replace(/^\//, ""));
-const missingRoutes = GATEWAY_KEYS
+const isServed = (r: string) =>
+  ["page.tsx", "page.ts", "page.jsx", "page.js", "route.ts", "route.js"]
+    .some(f => existsSync(join(routeDir(r), f)));
+
+const unservedRoutes = GATEWAY_KEYS
   .filter(k => GATEWAYS[k].route !== "/")
-  .filter(k => !existsSync(routeDir(GATEWAYS[k].route)));
-ok("2b. ⚠ every route the registry names is SERVED -- a registry naming a route nobody serves is a lie",
-  missingRoutes.length === 0, missingRoutes.map(k => GATEWAYS[k].route).join(", "));
+  .filter(k => !isServed(GATEWAYS[k].route));
+ok("2b. ⚠ a route the registry names is SERVED by a page file, not merely a folder that exists",
+  unservedRoutes.every(k => NO_REWRITE_KEYS.has(k)),
+  unservedRoutes.length ? `unserved: ${unservedRoutes.join(", ")}` : "");
+
+/**
+ * ⚠ THE INVARIANT THAT ACTUALLY MATTERS. A route may legitimately be declared before it is built --
+ * §2's table is the spec's, not this application's inventory. What must never happen is REWRITING a
+ * live hostname to a route nobody serves, because that turns a gateway into a 404.
+ */
+const rewrittenButUnserved = GATEWAY_KEYS
+  .filter(k => gatewayEntryRewrite(GATEWAYS[k].host, "/") !== null)
+  .filter(k => !isServed(GATEWAYS[k].route));
+ok("2b-i. ⚠ NO gateway is rewritten to a route without a page -- the 404 this exact check missed",
+  rewrittenButUnserved.length === 0,
+  rewrittenButUnserved.map(k => `${GATEWAYS[k].host} -> ${GATEWAYS[k].route}`).join(", "));
+ok("2b-ii. ⚠ platform is recorded as unbuilt rather than quietly dropped -- building the page is what removes it",
+  unservedRoutes.includes("platform") && gatewayEntryRewrite(GATEWAYS.platform.host, "/") === null,
+  `unserved=${unservedRoutes.join(",")} rewrite=${gatewayEntryRewrite(GATEWAYS.platform.host, "/")}`);
 ok("2c. ⚠ the staff route is /staff, NOT s2's /hq -- COMP-HQ-ACCESS-001 s5 froze this door",
   GATEWAYS.staff.route === "/staff", GATEWAYS.staff.route);
 ok("2d. ⚠ /hq does not exist, so adopting s2's name would mean BUILDING a second privileged entrance",
@@ -146,11 +176,15 @@ ok("2i. the registry names the ADR, so a reader of the code reaches the reason",
   readFileSync(join(ROOT, "src/lib/identity/domains.ts"), "utf8").includes("ADR-014"));
 
 // ── 2j. s13 step 5 — the gateway entry rule ──────────────────────────────────────────────────────
-ok("2j. every product gateway's root rewrites to that product's route",
-  GATEWAY_KEYS.filter(k => k !== "public")
-    .every(k => gatewayEntryRewrite(GATEWAYS[k].host, "/") === GATEWAYS[k].route),
-  GATEWAY_KEYS.filter(k => k !== "public")
-    .filter(k => gatewayEntryRewrite(GATEWAYS[k].host, "/") !== GATEWAYS[k].route).join(", "));
+// Every gateway that IS rewritten lands on its own registered route. `public` never is (the marketing
+// home lives at its root) and `platform` is excluded until /platform has a page -- 2b-i and 2b-ii hold
+// that pair together, so this cannot be satisfied by quietly excluding a gateway that should work.
+const rewritable = GATEWAY_KEYS.filter(k => !NO_REWRITE_KEYS.has(k));
+ok("2j. every rewritten gateway's root lands on that product's own route",
+  rewritable.length >= 4
+  && rewritable.every(k => gatewayEntryRewrite(GATEWAYS[k].host, "/") === GATEWAYS[k].route),
+  rewritable.filter(k => gatewayEntryRewrite(GATEWAYS[k].host, "/") !== GATEWAYS[k].route).join(", ")
+  || `rewritten: ${rewritable.join(", ")}`);
 ok("2k. ⚠ the PUBLIC host's root is untouched — the marketing home is what lives there",
   gatewayEntryRewrite(`www.${COMPETEN_DOMAIN}`, "/") === null
   && gatewayEntryRewrite("localhost", "/") === null);

@@ -39,7 +39,31 @@ import { GATEWAYS, gatewayForHost, type GatewayKey } from "./domains";
  * Keeping this as a named set rather than an inline `key !== "public"` means a future gateway that
  * should also stay untouched is added HERE, with a reason, rather than by widening a condition.
  */
-const NO_REWRITE: ReadonlySet<GatewayKey> = new Set<GatewayKey>(["public"]);
+export const NO_REWRITE: ReadonlySet<GatewayKey> = new Set<GatewayKey>([
+  "public",
+  // ⚠ `platform` IS EXCLUDED BECAUSE /platform HAS NO PAGE, AND REWRITING TO IT SERVED A 404.
+  //
+  // This was shipped and live for roughly twenty minutes on 2026-08-26. `src/app/platform/` exists as
+  // a DIRECTORY -- it holds the `control-plane/*` and `staff/*` families -- but there is no
+  // `platform/page.tsx`, so `/platform` itself is not a route. Before the rewrite, the platform
+  // hostname answered with the marketing home: wrong, but a page. After it, the hostname answered with
+  // the 404, byte-identical to what a nonsense URL returns. A gateway that 404s is worse than one that
+  // shows the wrong page, and it was the FIRST thing a visitor to that address would ever have seen.
+  //
+  // ⚠ THE CHECK THAT SHOULD HAVE CAUGHT IT DID NOT, and that is the more useful half of the lesson.
+  // domain-registry-harness 2b asserted "every route the registry names is SERVED" by testing
+  // `existsSync` on the directory. A folder of subdirectories satisfies that while serving nothing. The
+  // assertion now requires a page file at the route, and additionally that no gateway is rewritten to a
+  // route without one -- which is the invariant that actually matters.
+  //
+  // WHAT IT IS NOT: a decision about where the platform gateway should land. §1 calls it the
+  // "landlord/platform governance and product oversight gateway", and the candidates -- a new
+  // `/platform` landing page, `/platform/staff`, or `/super-admin` per ADR-014 -- are a product and
+  // security question, not a tidy-up. Sending the bare root of a public hostname straight into a
+  // privileged surface is exactly the sort of change that gets decided, not inferred. Until that is
+  // ruled on, this host behaves as it did before step 5.
+  "platform",
+]);
 
 /**
  * The whole rule: on a product gateway host, the bare root is that product's door.
