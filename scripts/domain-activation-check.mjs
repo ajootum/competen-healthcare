@@ -150,7 +150,11 @@ for (const s of [...SUBS, ...CONTROLS]) {
 }
 rows.push(await assess(DOMAIN, true));
 
-console.log(`\nCOMP-ACCESS-URL-001 s9 -- domain activation\nExpected CNAME target: ${EXPECTED_CNAME}\n`);
+console.log(`\nCOMP-ACCESS-URL-001 s9 -- domain activation`);
+console.log(auth
+  ? `Zone asked authoritatively: ${via}  (no cache in the path)`
+  : `WARNING: ${via} -- a record added minutes ago may read as absent`);
+console.log(`Expected CNAME target: ${EXPECTED_CNAME}\n`);
 const pad = Math.max(...rows.map(r => r.host.length));
 for (const r of rows) {
   const mark = r.state === "LIVE" ? "OK  " : "    ";
