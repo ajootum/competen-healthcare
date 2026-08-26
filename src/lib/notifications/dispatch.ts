@@ -29,6 +29,44 @@ export function smsFrom(): string | null {
   return process.env.TWILIO_FROM_NUMBER ?? process.env.TWILIO_FROM ?? null;
 }
 
+/**
+ * Where a reply goes. Null means "wherever `from` goes", which is the provider default.
+ *
+ * ⚠ WHY THIS EXISTS. Neither send path set reply_to, so the FROM address was the reply target by
+ * default. That is fine for a monitored mailbox and silently wrong for a no-reply one: a patient
+ * answering a booking confirmation -- "can I move this to Thursday?" -- reached nobody, and nothing
+ * anywhere reported a failure, because there was none. The message was delivered; the answer was not.
+ *
+ * Accepts either stack's variable name for the same reason emailFrom() does: one value configures both.
+ */
+export function replyTo(): string | null {
+  return process.env.NOTIFY_REPLY_TO ?? process.env.RESEND_REPLY_TO ?? null;
+}
+
+/**
+ * The Resend request body, built in ONE place and exported so it can be tested by being run.
+ *
+ * ⚠ BOTH SEND PATHS COMPOSE THIS PAYLOAD, and until now each wrote its own object literal -- which is
+ * how they came to differ over sender variable names in the first place. A second spelling of the same
+ * payload is a second thing to keep correct.
+ *
+ * `reply_to` is OMITTED rather than sent as null when unset. Resend treats an explicit null as a value
+ * and rejects it, so an absent reply-to must be an absent key.
+ */
+export function resendEmailBody(args: {
+  from: string; to: string | string[]; subject: string; text: string; replyTo?: string | null;
+}): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    from: args.from,
+    to: Array.isArray(args.to) ? args.to : [args.to],
+    subject: args.subject,
+    text: args.text,
+  };
+  const reply = args.replyTo ?? replyTo();
+  if (reply) body.reply_to = reply;
+  return body;
+}
+
 // Which channels can actually deliver, given configured provider env vars.
 export function channelProviders(): Record<Channel, { ready: boolean; provider: string | null }> {
   const email = !!(process.env.RESEND_API_KEY && emailFrom());
@@ -48,7 +86,7 @@ async function sendEmail(to: string, subject: string, text: string) {
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: emailFrom(), to, subject, text }),
+    body: JSON.stringify(resendEmailBody({ from: emailFrom()!, to, subject, text })),
   });
   if (!r.ok) throw new Error(`Resend ${r.status}`);
 }

@@ -6,7 +6,7 @@ import { formatDateTime } from "@/lib/datetime";
 // The sender resolvers live with the platform dispatcher because that is where the older of the two
 // variable names was introduced. Importing them rather than restating the fallback chain is the point:
 // a second copy is how the two stacks drifted apart in the first place.
-import { emailFrom, smsFrom } from "@/lib/notifications/dispatch";
+import { emailFrom, smsFrom, resendEmailBody } from "@/lib/notifications/dispatch";
 
 // THE DELIVERY CHANNEL -- PIS-000 s11/s14, IAM-000 s3/s7, CPR-PRM-001 s10.
 //
@@ -641,13 +641,17 @@ async function handOver(
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST", signal: controller.signal,
         headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          // No no-reply@example.invalid fallback. Sending from a deliberately invalid domain produces a
-          // provider rejection that reads like an outage rather than a missing setting -- and the gate
-          // above now refuses before we get here, so there is nothing left for a fallback to rescue.
-          from: emailFrom(),
-          to: [destination], subject: subject ?? "Message", text: body,
-        }),
+        // No no-reply@example.invalid fallback. Sending from a deliberately invalid domain produces a
+        // provider rejection that reads like an outage rather than a missing setting -- and the gate
+        // above now refuses before we get here, so there is nothing left for a fallback to rescue.
+        //
+        // ⚠ ONE BUILDER FOR BOTH STACKS. This payload used to be written here AND in dispatch.ts, which
+        // is how the two came to disagree about sender variable names. resendEmailBody also carries
+        // reply_to, so a patient answering a booking confirmation reaches somebody rather than an
+        // unattended from-address.
+        body: JSON.stringify(resendEmailBody({
+          from: emailFrom()!, to: destination, subject: subject ?? "Message", text: body,
+        })),
       });
       const text = await res.text();
       return { ok: res.ok, providerMessageId: safeJson(text)?.id, response: text.slice(0, 2000) };

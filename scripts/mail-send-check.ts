@@ -31,7 +31,7 @@ const { loadEnvConfig } = require2("@next/env");
 loadEnvConfig(process.cwd());
 
 import { messagingStatus } from "../src/lib/practice/messaging";
-import { channelProviders, emailFrom } from "../src/lib/notifications/dispatch";
+import { channelProviders, emailFrom, replyTo } from "../src/lib/notifications/dispatch";
 
 const line = (state: string, label: string, detail = "") =>
   console.log(`  ${state.padEnd(11)} ${label.padEnd(34)} ${detail}`);
@@ -72,6 +72,12 @@ if (from) {
       + "booking confirmation reaches nobody. Either use a monitored address or add reply_to support.");
   }
 }
+
+// ── 2b. Reply handling ───────────────────────────────────────────────────────────────────────────
+const reply = replyTo();
+line(reply ? "OK" : "NONE", "reply-to", reply ?? "unset — replies go to the from-address");
+if (!reply && from && /^no-?reply@/i.test(from)) problems.push(
+  "A no-reply sender with no NOTIFY_REPLY_TO. A patient answering a booking confirmation reaches nobody.");
 
 // ── 3. What the product itself believes ──────────────────────────────────────────────────────────
 const ms = messagingStatus();
