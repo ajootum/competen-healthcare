@@ -1,5 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { admitToEstate } from "../platform-membership";
+import { estateRolesOf, type AppRole } from "../roles";
+
 // COMP-ID-ROUTE-001 -- NEUTRAL SIGN-IN PRODUCT RESOLUTION (2026-08-17).
 //
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -45,7 +48,7 @@ export type ProductResolution =
 
 export async function resolveProductDestinations(admin: any, userId: string): Promise<ProductResolution> {
   const [profileRead, practiceRead] = await Promise.all([
-    admin.from("profiles").select("id").eq("id", userId).maybeSingle(),
+    admin.from("profiles").select("id, role, roles").eq("id", userId).maybeSingle(),
     admin.from("practice_membership").select("id, workspace_id, status")
       .eq("user_id", userId).limit(5),
   ]);
@@ -55,7 +58,33 @@ export async function resolveProductDestinations(admin: any, userId: string): Pr
 
   const destinations: ProductDestination[] = [];
 
-  if (profileRead.data) {
+  // ── PLATFORM: ENTITLEMENT, NOT IDENTITY ──────────────────────────────────────────────────────────
+  //
+  // ⚠ THIS TESTED THE WRONG TABLE UNTIL 2026-08-26, AND THE FILE'S OWN HEADER SAID SO: "PRODUCTS
+  // APPEAR HERE ONLY WHEN A REAL ENTITLEMENT TABLE SAYS SO." It offered Platform whenever a `profiles`
+  // row existed -- and a `profiles` row is an IDENTITY record created for every authenticated person
+  // by the on_auth_user_created trigger. So the estate was offered to everyone who had ever signed in,
+  // while /dashboard's own layout admits on `platform_membership` via admitToEstate and redirects
+  // everyone else to NO_MEMBERSHIP_DESTINATION.
+  //
+  // The observable defect: mullen.elisha777@gmail.com holds a profiles row, NO platform_membership,
+  // and no break-glass role. The chooser offered it "Competen Platform" -- a card that bounces to
+  // /practice/home when clicked. The login page's own rule is that inaccessible products are OMITTED,
+  // never shown disabled (s12); offered-then-bounced is worse than either.
+  //
+  // ⚠ IT NOW CALLS THE SAME FUNCTION THE DESTINATION CALLS, rather than a second spelling of the
+  // question. admitToEstate carries the estate's whole posture with it, and inheriting all of it is
+  // the point: the super_admin break-glass answers before any read, and an UNREADABLE membership store
+  // ADMITS and falls back to the role gate rather than blanking the estate for everyone. That
+  // fail-open is deliberate (see platform-membership.ts) and it now applies identically on both sides
+  // of the door -- which is the property that was missing. A resolver that failed closed while the
+  // destination failed open would hide the estate from people who could in fact enter it.
+  //
+  // ⚠ AND IT MAKES THE NO-PRODUCT STATE REACHABLE, which it was not. Every account had a profiles row,
+  // so `none` could only be produced by deleting one. A newly created account now has an identity and
+  // no memberships -- exactly the state s7 describes -- until somebody grants it access.
+  const estateRoles = estateRolesOf(profileRead.data ?? null) as AppRole[];
+  if ((await admitToEstate(admin, userId, estateRoles)).admitted) {
     destinations.push({
       code: "platform", name: "Competen Platform",
       blurb: "Your personal workspace -- everything your account holds across the estate.",
