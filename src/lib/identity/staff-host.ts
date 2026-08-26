@@ -75,3 +75,15 @@ export function staffEntryRewrite(rawHost: string | null | undefined, pathname: 
   if (pathname !== "/") return null;
   return STAFF_DOOR_PATH;
 }
+
+/**
+ * ⚠ THE PROXY NO LONGER CALLS THIS -- it calls `gatewayEntryRewrite`, which applies the SAME rule to
+ * all six product gateways (COMP-ACCESS-URL-001 s13 step 5). This function is unchanged and still
+ * correct: it is the staff-specific view of the general rule, and COMP-HQ-ACCESS-001 s5's contract is
+ * stated in terms of it.
+ *
+ * It is kept rather than deleted because staff-host-harness.ts drives it directly, and because the
+ * staff door is the one gateway whose behaviour predates the registry and was proven live on its own.
+ * `gateway-entry.ts` asserts the two agree for the staff host, so this cannot quietly diverge into a
+ * second spelling of the same decision -- which is the failure the registry exists to prevent.
+ */

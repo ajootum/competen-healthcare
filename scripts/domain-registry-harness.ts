@@ -41,7 +41,8 @@ import {
   gatewayOrigin,
   normaliseHost,
 } from "../src/lib/identity/domains";
-import { STAFF_HOSTS, STAFF_DOOR_PATH, isStaffHost } from "../src/lib/identity/staff-host";
+import { STAFF_HOSTS, STAFF_DOOR_PATH, isStaffHost, staffEntryRewrite } from "../src/lib/identity/staff-host";
+import { gatewayEntryRewrite } from "../src/lib/identity/gateway-entry";
 
 let pass = 0;
 const failures: string[] = [];
@@ -144,6 +145,34 @@ ok("2h. ⚠ ...and it rules on /hq rather than merely mentioning it",
 ok("2i. the registry names the ADR, so a reader of the code reaches the reason",
   readFileSync(join(ROOT, "src/lib/identity/domains.ts"), "utf8").includes("ADR-014"));
 
+// ── 2j. s13 step 5 — the gateway entry rule ──────────────────────────────────────────────────────
+ok("2j. every product gateway's root rewrites to that product's route",
+  GATEWAY_KEYS.filter(k => k !== "public")
+    .every(k => gatewayEntryRewrite(GATEWAYS[k].host, "/") === GATEWAYS[k].route),
+  GATEWAY_KEYS.filter(k => k !== "public")
+    .filter(k => gatewayEntryRewrite(GATEWAYS[k].host, "/") !== GATEWAYS[k].route).join(", "));
+ok("2k. ⚠ the PUBLIC host's root is untouched — the marketing home is what lives there",
+  gatewayEntryRewrite(`www.${COMPETEN_DOMAIN}`, "/") === null
+  && gatewayEntryRewrite("localhost", "/") === null);
+ok("2l. ⚠ the bare apex is untouched too — it is the booking address, not a gateway (s4)",
+  gatewayEntryRewrite(COMPETEN_DOMAIN, "/") === null);
+ok("2m. ⚠ ONLY the root — every deeper path on a gateway host resolves normally",
+  gatewayEntryRewrite(GATEWAYS.practice.host, "/practice/home") === null
+  && gatewayEntryRewrite(GATEWAYS.staff.host, "/staff/workspaces") === null
+  && gatewayEntryRewrite(GATEWAYS.platform.host, "/login") === null);
+ok("2n. an unrecognised host is left alone rather than guessed",
+  gatewayEntryRewrite("example.test", "/") === null
+  && gatewayEntryRewrite(`notstaff.${COMPETEN_DOMAIN}`, "/") === null
+  && gatewayEntryRewrite(null, "/") === null);
+// ⚠ THE TWO SPELLINGS MUST AGREE. staffEntryRewrite predates the registry and COMP-HQ-ACCESS-001 s5's
+// contract is written in terms of it; the general rule now serves the proxy. If they ever disagreed
+// about the staff host there would be two answers to one question, which is the exact drift the
+// registry was built to end.
+ok("2o. ⚠ the general rule and the staff-specific one agree about the staff host",
+  gatewayEntryRewrite(GATEWAYS.staff.host, "/") === staffEntryRewrite(GATEWAYS.staff.host, "/")
+  && gatewayEntryRewrite(GATEWAYS.staff.host, "/x") === staffEntryRewrite(GATEWAYS.staff.host, "/x")
+  && gatewayEntryRewrite("staff.localhost", "/") === staffEntryRewrite("staff.localhost", "/"));
+
 // ── 3. staff-host.ts consumes the registry rather than its own copy ──────────────────────────────
 ok("3a. STAFF_HOSTS derives from the registry (step 2: one shared configuration source)",
   STAFF_HOSTS.length === 2 && STAFF_HOSTS[0] === GATEWAYS.staff.host && STAFF_HOSTS[1] === "staff.localhost",
@@ -243,6 +272,13 @@ const HOSTNAME_ALLOWLIST: Record<string, string> = {
   // rather than exempted as a class so that a fifth one fails this harness and somebody has to look:
   // "a test script whose default target is production" is exactly the shape s9 asks about, and it is
   // recorded in docs/COMP-ACCESS-URL-001-inventory.md as an open item rather than swept up here.
+  // ⚠ THE THREE OPERATIONAL DNS CHECKS. Each must NAME the domain in order to query it -- a DNS checker
+  // that cannot say which zone it is checking is not a checker. They are .mjs and cannot import the .ts
+  // registry, the same constraint the four ad-hoc scripts below hit. Listed INDIVIDUALLY rather than
+  // exempted as a class so a fourth one fails this assertion and somebody has to decide.
+  "scripts/domain-activation-check.mjs": "s9 DNS/TLS activation check. Must name the zone it queries; .mjs cannot import the registry.",
+  "scripts/gateway-acceptance-check.mjs": "s12 live acceptance against the six gateways. Must name the hosts it asserts about.",
+  "scripts/mail-dns-check.mjs": "SPF/DKIM/DMARC/MX check. Domain is argv-overridable; the default names the zone it defends.",
   "scripts/coe-test.mjs": "Ad-hoc live test. TEST_BASE defaults to production -- see 8f and the inventory doc.",
   "scripts/coe-shift-test.mjs": "Ad-hoc live test. TEST_BASE defaults to production -- see 8f and the inventory doc.",
   "scripts/interaction-test.mjs": "Ad-hoc live test. TEST_BASE defaults to production -- see 8f and the inventory doc.",

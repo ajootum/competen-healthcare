@@ -76,8 +76,15 @@ ok("5b. a forwarded list takes the first host, not the concatenation",
 
 // ── 6. The proxy itself: convention, delegation, and everything it was ALREADY doing ───────────
 const mw = stripComments(readFileSync("src/proxy.ts", "utf8"));
+// ⚠ REPOINTED 2026-08-26, WITH THE SUPERSESSION RECORDED RATHER THAN PERFORMED QUIETLY.
+// This pinned `staffEntryRewrite(` by name. The proxy now calls `gatewayEntryRewrite`, which applies
+// the SAME rule to all six product gateways (COMP-ACCESS-URL-001 s13 step 5) and reads each route from
+// the registry. What this assertion PROVES is unchanged and is the half that matters: the proxy
+// delegates to a decision that can be tested without a request object, and parses no hostnames itself.
+// Either delegate satisfies that; a hand-rolled `endsWith` or `split(".")` in the proxy still does not.
 ok("6a. the proxy delegates to the tested decision rather than parsing hosts itself",
-  mw.includes("staffEntryRewrite(") && !/endsWith\(|split\("\."\)/.test(mw));
+  /\b(staffEntryRewrite|gatewayEntryRewrite)\(/.test(mw) && !/endsWith\(|split\("\."\)/.test(mw),
+  mw.match(/\b(staff|gateway)EntryRewrite\(/)?.[0] ?? "no delegate call found");
 ok("6b. ⚠ THE MATCHER IS NOT NARROWED FOR THE STAFF ENTRANCE. It still runs for every route but"
   + " static assets -- narrowing it to the one path the entrance needs would silently disable the"
   + " trace id, x-pathname, the session refresh and the device cookie for the whole product",

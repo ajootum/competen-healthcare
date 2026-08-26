@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { DEVICE_COOKIE, DEVICE_COOKIE_OPTIONS, mintDeviceId, needsDeviceCookie } from "@/lib/practice/device-register";
-import { staffEntryRewrite } from "@/lib/identity/staff-host";
+import { gatewayEntryRewrite } from "@/lib/identity/gateway-entry";
 
 export async function proxy(request: NextRequest) {
   // ONE TRACE ID PER REQUEST (XWI P2-15).
@@ -93,26 +93,34 @@ export async function proxy(request: NextRequest) {
     pending.push({ name: DEVICE_COOKIE, value: deviceId, options: DEVICE_COOKIE_OPTIONS });
   }
 
-  // ── COMP-HQ-ACCESS-001 s5: THE STAFF HOST'S ROOT IS THE STAFF DOOR ────────────────────────────────
+  // ── A PRODUCT GATEWAY'S ROOT IS THAT PRODUCT'S DOOR ───────────────────────────────────────────────
   //
-  // The landlord entrance is `staff.competenhealthcare.com`, and the subdomain serves this same
-  // application -- so without this the address people are told to use would answer with the marketing
-  // homepage, the staff door sitting one path away.
+  // COMP-HQ-ACCESS-001 s5 established this for one host; COMP-ACCESS-URL-001 s13 step 5 generalised it
+  // to all six on 2026-08-26, the day they began resolving. Each subdomain serves this same
+  // application, so without the rule every one of them answers with the marketing homepage and the
+  // product's own door sits one path away.
   //
   // ⚠ ADDED TO THIS FILE, NEVER SUBSTITUTED FOR IT. Everything above -- the trace id, `x-pathname`,
   // the session refresh and the device cookie -- runs FIRST and rides onto the response either way;
   // only the final construction differs. Written as its own file with its own narrow matcher (the
   // first attempt at this change was), it would have silently disabled all four for every request.
   //
-  // ⚠ AND THE MATCHER BELOW IS NOT NARROWED FOR IT. The decision is per-request, not per-route: the
-  // host test returns null for every request this application serves today, so the ordinary site is
-  // byte-identical until the subdomain exists.
-  const staffTarget = staffEntryRewrite(request.headers.get("host"), request.nextUrl.pathname);
+  // ⚠ AND THE MATCHER BELOW IS NOT NARROWED FOR IT. The decision is per-request, not per-route.
+  //
+  // ⚠ THE OLD NOTE HERE SAID THE RULE WAS INERT -- "the host test returns null for every request this
+  // application serves today ... byte-identical until the subdomain exists". That stopped being true on
+  // 2026-08-26. It now fires on six live hostnames, and a comment still claiming otherwise would tell
+  // the next reader this file cannot affect production when it plainly can.
+  //
+  // IT STILL AUTHORIZES NOTHING. `gatewayEntryRewrite` reads the route from the registry and rewrites
+  // the bare root; s5's principle is that the gateway sets context, never permission. Verified against
+  // the live hosts: /super-admin and /practice/home are refused IDENTICALLY on all six.
+  const gatewayTarget = gatewayEntryRewrite(request.headers.get("host"), request.nextUrl.pathname);
   let response: NextResponse;
-  if (staffTarget) {
+  if (gatewayTarget) {
     const url = request.nextUrl.clone();
-    url.pathname = staffTarget;
-    // A rewrite, not a redirect: the staff host keeps its own address while showing its own door.
+    url.pathname = gatewayTarget;
+    // A rewrite, not a redirect: the gateway host keeps its own address while showing its own door.
     response = NextResponse.rewrite(url, { request: { headers: withTrace(request) } });
   } else {
     response = NextResponse.next({ request: { headers: withTrace(request) } });
