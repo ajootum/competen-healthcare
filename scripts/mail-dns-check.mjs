@@ -162,8 +162,22 @@ console.log("");
 let dkimFound = 0;
 for (const sel of DKIM_SELECTORS) {
   const rec = await txt(`${sel}._domainkey.${DOMAIN}`);
-  const isKey = rec?.some(r => /v=DKIM1/i.test(r));
+  // ⚠ v= IS OPTIONAL IN A DKIM RECORD, and requiring it reported a PRESENT, VALID key as absent.
+  // Resend publishes the bare public key -- "p=MIGfMA...QIDAQAB" with no v=DKIM1 prefix -- and this
+  // check demanded the prefix, so it called a correctly-configured domain unverified. RFC 6376 makes
+  // v= optional (only its POSITION is fixed when present). The public key is what makes it a key.
+  // ⚠ v= IS OPTIONAL IN A DKIM RECORD (RFC 6376 fixes only its POSITION when present). Requiring it
+  // reported a PRESENT, VALID Resend key -- published as a bare "p=..." -- as absent.
+  const isKey = rec?.some(r => /(^|;)s*p=[A-Za-z0-9+/=]{40,}/.test(r) || /v=DKIM1/i.test(r));
+  // ⚠ PRESENT-BUT-UNUSABLE IS NOT ABSENT, and calling it absent sends somebody to add a record that
+  // is already there. A DKIM value carrying a stub key -- a truncated paste, a placeholder, a cell
+  // copied with its surrounding prose -- resolves fine and signs nothing.
   if (isKey) { dkimFound++; line("OK", `DKIM ${sel}`, "key published"); }
+  else if (rec?.length) {
+    const shown = rec.join(" ").slice(0, 46);
+    line("INVALID", `DKIM ${sel}`, `record exists but carries no usable key: "${shown}"`);
+    problems.push(`DKIM ${sel} exists but its value is not a key. Re-copy it from the provider.`);
+  }
   else line("absent", `DKIM ${sel}`, "");
 }
 if (dkimFound === 0) problems.push("No DKIM key found under any known selector.");
@@ -177,7 +191,17 @@ console.log("");
 const sendHost = `send.${DOMAIN}`;
 const sendTxt = (await txt(sendHost)) ?? [];
 const sendSpf = sendTxt.filter(r => r.toLowerCase().startsWith("v=spf1"));
-if (sendSpf.length === 1) line("OK", "send. SPF", sendSpf[0].slice(0, 60));
+if (sendSpf.length === 1) {
+  // ⚠ "v=spf1 ... ~all" WITH NOTHING IN THE MIDDLE AUTHORISES NOBODY, and reporting it OK is how a
+  // mangled paste survives review. An SPF record needs at least one mechanism that grants a sender:
+  // include:, ip4:, ip6:, a or mx. Without one it parses, resolves, and permits nothing.
+  const grants = /(include:|ip4:|ip6:)|(^|s)(a|mx)(s|$)/.test(sendSpf[0].replace(/^v=spf1/, ""));
+  if (grants) line("OK", "send. SPF", sendSpf[0].slice(0, 60));
+  else {
+    line("INVALID", "send. SPF", `authorises nothing: "${sendSpf[0].slice(0, 40)}"`);
+    problems.push("The send. SPF has no include:/ip4:/a/mx mechanism, so it authorises no sender. Re-copy it from the provider.");
+  }
+}
 else if (sendSpf.length === 0) line("absent", "send. SPF", "Resend sending not enabled yet");
 else { line("BROKEN", "send. SPF", `${sendSpf.length} records`); problems.push("More than one SPF on the send subdomain."); }
 
