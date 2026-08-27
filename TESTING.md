@@ -196,20 +196,39 @@ test, and it holds for both formats. The probe reads and never writes.
 **349, 352, 353 and 357**. Measured, not assumed: none of the 161 writing harnesses reference any of them,
 so the drift does not block this — but applying those migrations is outstanding, and owner-only.
 
-**Triage so far (2026-08-27): 46 of 161 screened, 27 promoted.** The rest are UNTRIAGED and the ceiling is
-`134`. Failure classes found, none of which are defects in this runner:
+**Triage so far (2026-08-27): 46 of 161 screened, 31 promoted.** The rest are UNTRIAGED and the ceiling is
+`130`. Failure classes found, none of which are defects in this runner:
 
-- **Four genuinely hang** against staging (`practice-audit`, `practice-availability-config`,
-  `practice-billing`, `practice-booking-rules`) — 240s timeout, twice, in independent runs. ⚠ My first
-  reading blamed the 504 load-shedding above, because they clustered at the end of a 40-harness batch.
-  Re-running that slice **alone** reproduced them exactly while their neighbours passed, which is what
-  makes them trustworthy: agreement across runs, not presence in one.
-- **Missing staging seed data** — `cgr-gate` ("at least one required competency is needed"),
-  `hww-census` (a `NOT NULL` on `op_patients.hospital_id`), `learning-provenance` (null id).
+- ⚠⚠ **FOUR WERE RECORDED AS HANGS AND WERE NOT HANGING. THEY WERE WORKING.** `practice-audit`,
+  `practice-availability-config`, `practice-billing` and `practice-booking-rules` hit the screener's
+  **fixed 240s timeout**. Re-run alone with a 540s ceiling, `practice-booking-rules` finished in **473
+  seconds with 133 passed, 0 failed**.
+
+  It took two wrong explanations to get there, and both were wrong in the direction that blamed something
+  other than my own tool:
+
+  1. **"GoTrue is shedding load"** — they clustered at the end of a 40-harness batch, which is exactly the
+     504 signature above. Re-running the slice alone reproduced them, which ruled that out.
+  2. **"staging is slower than production"** — plausible, and false. Measured: staging's median round-trip
+     is **489ms against production's 449ms**, i.e. 1.1×, which explains nothing.
+
+  The actual number: a round-trip from this machine costs **~450ms to either project**, and these
+  harnesses make many hundreds of them sequentially. **Eight minutes is simply what they cost, anywhere.**
+  The ceiling is now `--timeout <seconds>`, defaulting to 600, and hitting it reports **CEILING HIT**
+  rather than a failure — because those are different claims and only one is about the harness.
+- **Missing staging fixtures — the largest real class.** `hww-evidence` and `hww-gaps` both print
+  *"No active assignment — cannot exercise the bridge"* and stop. ⚠ I first filed these as a **libuv
+  `UV_HANDLE_CLOSING` exit crash**, because that assertion is the loudest line in their output. It is
+  noise on top of the real message: they bail deliberately, and the Windows exit crash happens *after*.
+  **Neither `provision-staging-fixture.ts` nor `provision-staging-hq-fixture.ts` provisions an HWW
+  assignment** — there is a Practice fixture and an HQ fixture and no clinical one. Both harnesses fail
+  **closed** (non-zero, rather than reporting green over nothing), which is the correct behaviour and the
+  reason this was findable at all.
+
+  Same class: `cgr-gate` ("at least one required competency is needed"), `hww-census` (a `NOT NULL` on
+  `op_patients.hospital_id`), `learning-provenance` (null id).
 - **Real assertion failures worth reading** — `identity-join` 22/1, `platform-flag-gate` 19/1,
-  `hq-guard`, `governance-context`, `platform-membership`.
-- **Two die on a libuv `UV_HANDLE_CLOSING` assertion at exit** — the Windows `process.exit()`-during-flush
-  crash `mail-send-check.ts` already documents ("set the code, do not call `process.exit`").
+  `hq-guard`, `governance-context`, `platform-membership`. Not yet diagnosed.
 
 - Every harness in this codebase follows the same discipline: it proves a constraint or a boundary by
   attempting the violation and watching it fail, not just by reading a happy path. A harness that has

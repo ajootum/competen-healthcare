@@ -42,6 +42,13 @@
  *   npx tsx scripts/privileged-harnesses.ts              run the security subset (read-only)
  *   npx tsx scripts/privileged-harnesses.ts --all        also run the triaged non-security subset
  *   npx tsx scripts/privileged-harnesses.ts --staging    run the WRITING harnesses against staging
+ *   npx tsx scripts/privileged-harnesses.ts --staging --only <substr>   one harness, output streamed
+ *
+ * ⚠ `--staging` NOW TAKES ROUGHLY HALF AN HOUR, and that is not a fault. Four of its entries cost 250-475
+ * SECONDS EACH: a round-trip from here is ~450ms to either project and these harnesses make many hundreds
+ * of them sequentially. Nothing is hung. `--only` exists so one can be re-run alone with its output
+ * streamed instead of captured, which is the shape this repository's own rule requires -- "a red harness
+ * late in a sweep is not evidence until it is re-run alone."
  *   npx tsx scripts/privileged-harnesses.ts --list       print every list and exit, running nothing
  *   npx tsx scripts/privileged-harnesses.ts --untriaged  print what has not been screened yet
  */
@@ -179,6 +186,16 @@ const STAGING: Listed[] = [
   { file: "practice-ask-harness.ts", note: "Practice Ask. 23/23." },
   { file: "practice-booking-link-harness.ts", note: "public booking links. 34/34." },
   { file: "practice-booking-sections-harness.ts", note: "booking sections. 111/111." },
+
+  // ⚠ THE FOUR THAT WERE RECORDED AS HANGS AND WERE WORKING ALL ALONG. Each exceeded the screener's old
+  // fixed 240s ceiling and was written down as a hang. practice-billing beat it by NINE SECONDS. Their
+  // real cost is a few hundred sequential round-trips at ~450ms each, which is the same on either
+  // project -- staging's median is 489ms against production's 449ms. Timings recorded so a genuine hang
+  // is later distinguishable from a harness that was always this long.
+  { file: "practice-audit-harness.ts", note: "the practice audit trail. 48/48 in 297s." },
+  { file: "practice-availability-config-harness.ts", note: "availability configuration. 81/81 in 341s." },
+  { file: "practice-billing-harness.ts", note: "practice billing. 77/77 in 249s -- nine seconds over the old ceiling." },
+  { file: "practice-booking-rules-harness.ts", note: "CPR-V5-007 phase 3, the booking rules engine (migration 244). 133/133 in 473s -- the longest in the estate so far." },
 ];
 
 /**
@@ -208,7 +225,7 @@ const RAW_DML = /\b(delete\s+from|insert\s+into|update\s+[a-z_]+\s+set|truncate\
  * passed. It does NOT mean the estate is checked — it means UNTRIAGED_CEILING checks have still never
  * been run by anybody, and the number is printed on every run so that stays visible.
  */
-const UNTRIAGED_CEILING = 134;  // was 161 before the 2026-08-27 staging screening promoted 27
+const UNTRIAGED_CEILING = 130;  // 161 -> 134 -> 130 as staging screening proceeds. Lower it, never raise it.
 
 // ── The classifier is the authority on the set and on what mutates ───────────────────────────────
 type Row = { file: string; tier: string; mutates: boolean; purpose: string };
@@ -413,6 +430,23 @@ if (stagingMode && process.argv.includes("--screen")) {
   if (broken) { console.log(`\nRED  refusing to screen — the staging gate did not pass.\n`); process.exit(1); }
   const n = Number(process.argv[process.argv.indexOf("--screen") + 1]) || 20;
   const fromIdx = process.argv.includes("--from") ? Number(process.argv[process.argv.indexOf("--from") + 1]) || 0 : 0;
+  /**
+   * ⚠ 240s WAS TOO SHORT, AND IT MANUFACTURED A DEFECT THAT DID NOT EXIST.
+   *
+   * Four harnesses hit the old fixed 240s ceiling and were recorded as hangs. practice-booking-rules,
+   * re-run alone with a 540s ceiling, finished in 473 SECONDS with 133 passed, 0 failed. It was never
+   * hanging; it was working.
+   *
+   * !! AND THE FIRST EXPLANATION -- "staging is slower" -- WAS ALSO WRONG. Measured: staging's median
+   * round-trip is 489ms against production's 449ms, i.e. 1.1x, which explains nothing. The real number is
+   * that a round-trip from here costs ~450ms to EITHER project, and these harnesses make many hundreds of
+   * them sequentially. Eight minutes is simply what they cost, on any target.
+   *
+   * So the ceiling is generous by default and adjustable, and a timeout now reports itself as a CEILING
+   * HIT rather than as a failure -- because those are different claims and only one of them is about the
+   * harness.
+   */
+  const timeoutMs = (Number(process.argv[process.argv.indexOf("--timeout") + 1]) || 600) * 1000;
   const batch = untriaged.filter(f => mutatesOf.get(f)).slice(fromIdx, fromIdx + n);
   console.log(`Screening ${batch.length} writing harness(es) against staging, offset ${fromIdx} of ${untriaged.filter(f => mutatesOf.get(f)).length}\n`);
   const green: string[] = [], red: string[] = [];
@@ -421,7 +455,7 @@ if (stagingMode && process.argv.includes("--screen")) {
     try {
       const out = execFileSync("npx", ["tsx", join("scripts", file)], {
         cwd: ROOT, encoding: "utf8", stdio: "pipe", env: stagingEnv(),
-        shell: process.platform === "win32", timeout: 240_000,
+        shell: process.platform === "win32", timeout: timeoutMs,
       });
       // ⚠ THE EXTRACTION WAS NARROWER THAN THE ESTATE'S REPORTING CONVENTIONS. It missed
       // `ALL PASS — 12 pass / 0 fail` (the hww-* form: "pass", not "passed", and no digit after PASS),
@@ -432,7 +466,7 @@ if (stagingMode && process.argv.includes("--screen")) {
       green.push(file);
     } catch (err) {
       const e = err as { stdout?: string; stderr?: string; signal?: string };
-      const why = e.signal === "SIGTERM" ? "TIMED OUT (240s)"
+      const why = e.signal === "SIGTERM" ? `CEILING HIT (${timeoutMs / 1000}s) -- not a failure, re-run with --timeout`
         : ((e.stdout ?? "").split("\n").filter(l => /FAIL|failed|Error|refus/i.test(l)).pop()
           ?? (e.stderr ?? "").split("\n").filter(Boolean).pop() ?? "").trim().slice(0, 66);
       console.log(`FAIL   ${why}`);
@@ -443,6 +477,45 @@ if (stagingMode && process.argv.includes("--screen")) {
   console.log(`  ⚠ green here means EXITED 0 against staging. It is evidence for promoting a harness to`);
   console.log(`     STAGING, not the promotion itself -- read what it asserted before adding it.\n`);
   process.exit(0);
+}
+
+/**
+ * --only <substring> — run ONE harness, alone, with its output streamed rather than captured.
+ *
+ * ⚠ THIS IS THE SHAPE THIS REPOSITORY'S OWN RULE REQUIRES. TESTING.md: "a red harness late in a sweep is
+ * not evidence until it is re-run alone." Without a way to do that, the only options were to re-run a
+ * whole batch or to hand-remap the environment in a shell — and hand-remapping is how somebody eventually
+ * exports the production values because that is what makes the red go away.
+ *
+ * Output is INHERITED, not piped: a harness that hangs shows you how far it got, and a captured stream
+ * shows you nothing at all. That distinction is the entire reason the four hangs were diagnosable.
+ */
+const onlyIdx = process.argv.indexOf("--only");
+if (onlyIdx >= 0) {
+  const needle = process.argv[onlyIdx + 1] ?? "";
+  if (broken) { console.log(`\nRED  refusing — the gate did not pass.\n`); process.exit(1); }
+  const match = privileged.map(r => r.file).filter(f => f.includes(needle));
+  if (match.length !== 1) {
+    console.log(`  --only "${needle}" matched ${match.length} harness(es)${match.length ? `: ${match.join(", ")}` : ""}. Name exactly one.\n`);
+    process.exit(1);
+  }
+  const file = match[0];
+  if (mutatesOf.get(file) && !stagingMode) {
+    console.log(`  ${file} WRITES to the database and this run is pointed at ${ref}. Add --staging.\n`);
+    process.exit(1);
+  }
+  console.log(`Running ${file} alone against ${ref}, output streamed:\n`);
+  try {
+    execFileSync("npx", ["tsx", join("scripts", file)], {
+      cwd: ROOT, stdio: "inherit", shell: process.platform === "win32",
+      ...(stagingMode ? { env: stagingEnv() } : {}),
+    });
+    console.log(`\n  ${file} exited 0\n`);
+    process.exit(0);
+  } catch (err) {
+    console.log(`\n  ${file} exited non-zero (${(err as { status?: number }).status ?? "signal"})\n`);
+    process.exit(1);
+  }
 }
 
 // ── Run ──────────────────────────────────────────────────────────────────────────────────────────
