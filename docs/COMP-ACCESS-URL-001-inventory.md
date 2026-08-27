@@ -386,3 +386,62 @@ it can never receive mail. Its password was rotated into a gitignored file and t
 - **`/platform`, `/dashboard` and `/super-admin` carry the generic root title.** Three routes with no
   page-level metadata.
 - **`/login` shows the sign-in form even when a valid session exists** for that host.
+
+---
+
+## 11. §12 callback acceptance — CLOSED 2026-08-27
+
+Tests 5–8 were blocked on production email since the arc began. Resend was activated and Supabase's
+SMTP pointed at it on 2026-08-27; all four then ran against production hostnames.
+
+| Test | Gateway | Landing | Result |
+|---|---|---|---|
+| 5 | `practice` | `practice.competenhealthcare.com/reset-password` | **PASS** |
+| 6 | `enterprise` | `enterprise.competenhealthcare.com/reset-password` | **PASS** |
+| 7 | `staff` | `staff.competenhealthcare.com/reset-password` | **PASS** |
+| 8 | — | three distinct hosts, each matching its origin | **PASS** |
+
+Test 8 is the one that cannot be judged per-email: three landings on a single host would have read as
+three passes if each were only checked alone.
+
+### 11.1 Two configuration faults this uncovered, both invisible until a real link was followed
+
+**Site URL was `http://localhost:3000`.** Every auth email whose redirect was not honoured pointed at a
+machine nobody else can reach. Now `https://www.competenhealthcare.com`.
+
+**The redirect allowlist was completely EMPTY.** The dashboard showed "No Redirect URLs". All eight
+origins added.
+
+⚠ **Neither is reportable through the API.** Supabase does **not** refuse a `redirect_to` that is not
+allowlisted — it accepts the request, sends the mail, and *silently substitutes Site URL* into the link.
+Nothing errors. A wrong redirect in this product fails **successfully**, and the only observable is
+where a real link lands. `scripts/auth-mail-check.ts` records this rather than pretending its probes
+can answer it.
+
+### 11.2 ⚠ A real defect found by following a link, not by reading code
+
+Administrator-initiated resets and **every invitation** landed on "Link invalid or expired".
+
+Supabase issues two link shapes and which arrives depends on **who asked**: a browser request is PKCE
+(`?code=`), a **server-side** request has no PKCE challenge and is implicit (`#access_token=…`). The
+reset page read only the first, then fell back to `getSession()` under a comment claiming the client
+picks the hash up automatically — a PKCE-configured client does not.
+
+So `/forgot-password` always worked, while `api/super-admin/users/actions` (reset) and
+`api/super-admin/users` (`inviteUserByEmail`) did not. **Invitations are how a person is onboarded**,
+and that flow had never worked — hidden because no email could send at all until this date.
+
+Measured, not inferred: the token was **88 seconds old** and `/auth/v1/user` returned **HTTP 200** for
+it at the moment the page called it expired. Fixed in `src/lib/auth/recovery-link.ts` (pure, 12 tests,
+three break-tests); the page now shows the provider's own reason instead of always asserting expiry.
+
+### 11.3 What is still NOT proven
+
+- **§13 steps 10–11** — staging acceptance before production publish. Production went live first; the
+  staging rehearsal never happened and cannot now be run retrospectively.
+- **Test 2's precondition.** The chooser's *rendering* is proven, but the `many` state that produced it
+  was manufactured by the entitlement defect fixed the same week. Since that fix, **no production
+  account holds two real entitlements**, so a correctly-entitled multi-destination account has never
+  seen it. Reachable again the first time somebody holds both.
+- **Tests 1, 2 and 4** ran against `*.localhost:3000` (production Supabase, same code and resolver),
+  not production hostnames. Tests 5–8 did run against production.
