@@ -98,7 +98,19 @@ async function main() {
 
   if (doSend) {
     console.log("");
-    const origin = `https://${GATEWAYS.practice.host}`;
+    // ⚠ THE ORIGIN IS SELECTABLE, because §12's callback criterion is not one test but four: a reset
+    // begun on each gateway must return to THAT gateway. Three landings on one host would look like
+    // three passes if each were only checked on its own.
+    const key = (() => {
+      const i = process.argv.indexOf("--origin");
+      const named = i >= 0 ? process.argv[i + 1] : "practice";
+      if (!GATEWAY_KEYS.includes(named as never)) {
+        console.log(`\n  unknown --origin "${named}". One of: ${GATEWAY_KEYS.join(", ")}\n`);
+        process.exit(1);
+      }
+      return named as (typeof GATEWAY_KEYS)[number];
+    })();
+    const origin = `https://${GATEWAYS[key].host}`;
     const { error } = await db.auth.resetPasswordForEmail(target, { redirectTo: `${origin}/reset-password` });
     if (error) {
       line("FAILED", `reset for ${target}`, error.message.slice(0, 70));
