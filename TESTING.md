@@ -196,8 +196,8 @@ test, and it holds for both formats. The probe reads and never writes.
 **349, 352, 353 and 357**. Measured, not assumed: none of the 161 writing harnesses reference any of them,
 so the drift does not block this — but applying those migrations is outstanding, and owner-only.
 
-**Triage so far (2026-08-27): 46 of 161 screened, 32 promoted, 5 blocked on staging fixtures.** The rest
-are UNTRIAGED and the ceiling is `125`. Failure classes found, none of which are defects in this runner:
+**Triage so far (2026-08-27): 46 of 161 screened, 42 promoted, 1 blocked.** The rest are
+UNTRIAGED and the ceiling is `119`. Failure classes found, none of which are defects in this runner:
 
 - ⚠⚠ **FOUR WERE RECORDED AS HANGS AND WERE NOT HANGING. THEY WERE WORKING.** `practice-audit`,
   `practice-availability-config`, `practice-billing` and `practice-booking-rules` hit the screener's
@@ -227,8 +227,9 @@ are UNTRIAGED and the ceiling is `125`. Failure classes found, none of which are
 
   Same class: `cgr-gate` ("at least one required competency is needed"), `hww-census` (a `NOT NULL` on
   `op_patients.hospital_id`), `learning-provenance` (null id).
-- **The five "real assertion failures" — diagnosed 2026-08-27. Four were the estate being empty, one was
-  a stale pin. None was a defect in the product.**
+- **The five "real assertion failures" — diagnosed, then FIXED 2026-08-27. Four were the estate being
+  empty, one was a stale pin. None was a defect in the product, and all five now pass** — see
+  `scripts/provision-staging-estate-fixture.ts`, which unblocked nine harnesses in total.
 
   ⚠⚠ **STAGING HAS NO PEOPLE, AND THAT IS THE SINGLE ROOT CAUSE OF FOUR.** Three synthetic profiles, no
   `super_admin`, no `platform_membership`, no organisational unit. Every one of the four refused rather
