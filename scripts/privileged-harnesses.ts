@@ -148,6 +148,37 @@ const STAGING: Listed[] = [
       + "screened GREEN and, on the classifier's evidence alone, would have joined the production-pointed "
       + "security set.",
   },
+
+  // ── Screened against staging 2026-08-27, exit 0 with a real assertion count ──────────────────────
+  // 46 of the 161 writing harnesses were screened; these 27 passed. Counts are from that run, recorded
+  // so a later collapse toward zero is visible rather than merely still-green.
+  { file: "cpl-catalogue-harness.ts", note: "the CPL catalogue. 64 assertions." },
+  { file: "gov-controls-harness.ts", note: "governance controls. 20/20." },
+  { file: "gov-decisions-harness.ts", note: "governance decisions. 20/20." },
+  { file: "gov-evidence-audit-harness.ts", note: "the governance evidence audit. 20/20." },
+  { file: "gov-exceptions-harness.ts", note: "governance exceptions. 17/17." },
+  { file: "gov-hq-escalation-harness.ts", note: "HQ escalation paths. 21/21." },
+  { file: "gov-obligations-harness.ts", note: "regulatory obligations. 19/19." },
+  { file: "gov-psc-harness.ts", note: "the patient safety committee surface. 19/19." },
+  { file: "gov-reviews-harness.ts", note: "governance reviews. 17/17." },
+  { file: "gov-risk-register-harness.ts", note: "the risk register. 22/22." },
+  { file: "gov-triggers-harness.ts", note: "governance triggers. 20/20." },
+  { file: "hq-appointment-harness.ts", note: "HQ office appointments -- one live appointment decides authorization. 26/26." },
+  { file: "hww-assessments-harness.ts", note: "HWW assessments. Reports `ALL PASS -- n pass / 0 fail`." },
+  { file: "hww-assignment-harness.ts", note: "HWW assignment. Reports `ALL PASS`." },
+  { file: "hww-concerns-harness.ts", note: "HWW concerns. Reports `ALL PASS`." },
+  { file: "hww-instruments-harness.ts", note: "HWW instruments. Reports `ALL PASS`." },
+  { file: "hww-medications-harness.ts", note: "HWW medications. Reports `ALL PASS`." },
+  { file: "hww-navigation-harness.ts", note: "HWW navigation. Reports `ALL PASS`." },
+  { file: "mos-phase1-harness.ts", note: "CPR-CORE-MOS-001 phase 1. 20/20." },
+  { file: "mos-phase2-harness.ts", note: "MOS phase 2. 25/25." },
+  { file: "mos-phase3-harness.ts", note: "MOS phase 3. 73/73." },
+  { file: "mos-phase4-harness.ts", note: "MOS phase 4. 22/22." },
+  { file: "mos-support-records-harness.ts", note: "MOS support records. 29/29." },
+  { file: "practice-activity-harness.ts", note: "the practice activity spine. 91/91." },
+  { file: "practice-ask-harness.ts", note: "Practice Ask. 23/23." },
+  { file: "practice-booking-link-harness.ts", note: "public booking links. 34/34." },
+  { file: "practice-booking-sections-harness.ts", note: "booking sections. 111/111." },
 ];
 
 /**
@@ -177,7 +208,7 @@ const RAW_DML = /\b(delete\s+from|insert\s+into|update\s+[a-z_]+\s+set|truncate\
  * passed. It does NOT mean the estate is checked — it means UNTRIAGED_CEILING checks have still never
  * been run by anybody, and the number is printed on every run so that stays visible.
  */
-const UNTRIAGED_CEILING = 161;
+const UNTRIAGED_CEILING = 134;  // was 161 before the 2026-08-27 staging screening promoted 27
 
 // ── The classifier is the authority on the set and on what mutates ───────────────────────────────
 type Row = { file: string; tier: string; mutates: boolean; purpose: string };
@@ -392,7 +423,11 @@ if (stagingMode && process.argv.includes("--screen")) {
         cwd: ROOT, encoding: "utf8", stdio: "pipe", env: stagingEnv(),
         shell: process.platform === "win32", timeout: 240_000,
       });
-      const sum = out.split("\n").filter(l => /passed|PASS \d|ALL GREEN|assertion/i.test(l)).pop() ?? "";
+      // ⚠ THE EXTRACTION WAS NARROWER THAN THE ESTATE'S REPORTING CONVENTIONS. It missed
+      // `ALL PASS — 12 pass / 0 fail` (the hww-* form: "pass", not "passed", and no digit after PASS),
+      // so six harnesses that assert plenty screened with a BLANK summary and read as vacuous greens.
+      // The exit code had classified them correctly the whole time; only the line shown was missing.
+      const sum = out.split("\n").filter(l => /\d+ pass|passed|ALL PASS|ALL GREEN|assertion/i.test(l)).pop() ?? "";
       console.log(`PASS   ${sum.trim().slice(0, 66)}`);
       green.push(file);
     } catch (err) {
@@ -457,8 +492,8 @@ if (failures.length) console.log(`FAILED: ${failures.join(", ")}`);
 if (!runAll && TRIAGED.length) console.log(`  (--all would also run the ${TRIAGED.length} triaged non-security harnesses)`);
 if (untriaged.length) {
   console.log(`\n  ⚠ ${untriaged.length} privileged-live harness(es) have still never been run by anybody.`);
-  console.log(`     ${privileged.filter(r => r.mutates).length} of the ${privileged.length} write to the database. A staging project EXISTS and carries the`);
-  console.log(`     schema, so these are UNRUN rather than unrunnable -- pointing them at it is the next step.`);
+  console.log(`     They are UNRUN, not unrunnable: staging works and ${STAGING.length} write-harnesses already run there.`);
+  console.log(`     Triage the next batch with:  --staging --screen 20 --from ${182 - untriaged.length}`);
 }
 console.log("");
 process.exit(failures.length === 0 && !broken ? 0 : 1);

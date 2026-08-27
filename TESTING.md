@@ -169,9 +169,47 @@ The detector has its own inertness control (it is fed a known raw `DELETE` on ev
 gates are break-tested: a mutating harness admitted, `cascade-immutability-ratchet` admitted, one file in
 two lists, and one file dropped from every list. All four go red.
 
-**Not yet done, and named rather than implied:** the 161 mutating harnesses are *unrun*, not *unrunnable* —
-staging exists and carries the schema. Pointing them at it needs fixture ownership, cleanup, and respect
-for the 504 hazard above, and is the next thing this file should grow.
+### The writing harnesses, against staging
+
+```
+npx tsx scripts/privileged-harnesses.ts --staging                run the screened writing harnesses
+npx tsx scripts/privileged-harnesses.ts --staging --screen 20 --from 40   triage the next batch
+```
+
+`--staging` remaps the same three variables `dev-staging.mjs` and `smoke-staging.mjs` already remap, so
+the harness and the guard agree about which project is under test. The remap is **spawn-time** — no
+harness file is edited — and it rests on one fact: `loadEnvConfig` must not overwrite an already-set
+variable, or every harness would hit production while the runner printed the staging ref.
+
+⚠⚠ **THAT FACT IS CHECKED ON EVERY RUN, NOT TRUSTED.** `scripts/_staging-probe.ts` is spawned with exactly
+the environment the harnesses get, runs `loadEnvConfig` the way they do, and reports which project it
+resolved. Nothing executes unless the answer is staging. Break-tested by removing the URL remap: it names
+the production ref, says the remap did not survive, and refuses to run any writing harness.
+
+⚠ **The key is checked by USING it, not by reading it.** The first version decoded the service-role key's
+JWT for its project ref — which works for production's legacy JWT and returns nothing for staging's newer
+`sb_secret_…` key (41 chars, no dots, no payload). It reported "belongs to project unreadable" and refused:
+the guard being right for the wrong reason. Keys are project-scoped, so authenticating with it is the real
+test, and it holds for both formats. The probe reads and never writes.
+
+**Staging is real but BEHIND:** 665 of production's 671 tables. The six missing come from migrations
+**349, 352, 353 and 357**. Measured, not assumed: none of the 161 writing harnesses reference any of them,
+so the drift does not block this — but applying those migrations is outstanding, and owner-only.
+
+**Triage so far (2026-08-27): 46 of 161 screened, 27 promoted.** The rest are UNTRIAGED and the ceiling is
+`134`. Failure classes found, none of which are defects in this runner:
+
+- **Four genuinely hang** against staging (`practice-audit`, `practice-availability-config`,
+  `practice-billing`, `practice-booking-rules`) — 240s timeout, twice, in independent runs. ⚠ My first
+  reading blamed the 504 load-shedding above, because they clustered at the end of a 40-harness batch.
+  Re-running that slice **alone** reproduced them exactly while their neighbours passed, which is what
+  makes them trustworthy: agreement across runs, not presence in one.
+- **Missing staging seed data** — `cgr-gate` ("at least one required competency is needed"),
+  `hww-census` (a `NOT NULL` on `op_patients.hospital_id`), `learning-provenance` (null id).
+- **Real assertion failures worth reading** — `identity-join` 22/1, `platform-flag-gate` 19/1,
+  `hq-guard`, `governance-context`, `platform-membership`.
+- **Two die on a libuv `UV_HANDLE_CLOSING` assertion at exit** — the Windows `process.exit()`-during-flush
+  crash `mail-send-check.ts` already documents ("set the code, do not call `process.exit`").
 
 - Every harness in this codebase follows the same discipline: it proves a constraint or a boundary by
   attempting the violation and watching it fail, not just by reading a happy path. A harness that has
