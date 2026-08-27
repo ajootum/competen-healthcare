@@ -32,7 +32,7 @@ const { loadEnvConfig } = require2("@next/env");
 loadEnvConfig(process.cwd());
 
 import { createClient } from "@supabase/supabase-js";
-import { GATEWAYS, GATEWAY_KEYS } from "../src/lib/identity/domains";
+import { GATEWAYS, GATEWAY_KEYS, COMPETEN_DOMAIN } from "../src/lib/identity/domains";
 
 const target = process.argv[2];
 const doSend = process.argv.includes("--send");
@@ -58,7 +58,11 @@ async function main() {
   // permissive allowlist ("*") would read as eight successes and prove nothing.
   const origins = [
     ...GATEWAY_KEYS.map(k => ({ label: GATEWAYS[k].host, origin: `https://${GATEWAYS[k].host}` })),
-    { label: "competenhealthcare.com (apex)", origin: "https://competenhealthcare.com" },
+    // ⚠ FROM THE REGISTRY, NOT A LITERAL. domain-registry-harness 8a caught this file writing the apex
+    // by hand -- the containment rule that keeps one shared configuration source honest. The apex is a
+    // real auth origin (it serves /login and /auth/callback) even though it is deliberately NOT a
+    // gateway: it is the patient booking address, carved out by s4.
+    { label: `${COMPETEN_DOMAIN} (apex)`, origin: `https://${COMPETEN_DOMAIN}` },
   ];
 
   for (const { label, origin } of origins) {

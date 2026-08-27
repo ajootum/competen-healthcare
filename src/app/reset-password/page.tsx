@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { recoveryCredentialFromUrl } from "@/lib/auth/recovery-link";
 
 // Landing page for the password-reset email link. The link carries a one-time
 // code which is exchanged for a session; the user then sets a new password.
@@ -13,18 +14,49 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  /** What the provider said, when it said anything. Null means we simply found no credential. */
+  const [linkProblem, setLinkProblem] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
     (async () => {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (!error) { setReady("ok"); return; }
+      // ⚠ TWO LINK SHAPES, AND ONLY ONE USED TO WORK. A reset requested from the browser is PKCE
+      // (`?code=`); one requested SERVER-SIDE -- the super-admin reset action, and every
+      // inviteUserByEmail -- is implicit, with the token in the FRAGMENT. This page handled only the
+      // first, then fell back to getSession() with a comment claiming the client picks the hash up
+      // automatically. A PKCE-configured client does not. So administrator resets and all invitations
+      // landed on "Link invalid or expired" while self-service resets worked.
+      // See src/lib/auth/recovery-link.ts.
+      const cred = recoveryCredentialFromUrl(window.location.search, window.location.hash);
+
+      if (cred.kind === "provider_error") {
+        // Supabase said why. Showing its reason beats a guess -- "expired" and "already used" are
+        // different problems and the person can act on the difference.
+        setLinkProblem(cred.description ?? cred.code);
+        setReady("invalid");
+        return;
       }
-      // Older-style links land with a recovery token in the URL hash and the
-      // client picks the session up automatically — check for it.
+
+      if (cred.kind === "code") {
+        const { error } = await supabase.auth.exchangeCodeForSession(cred.code);
+        if (!error) { setReady("ok"); return; }
+        setLinkProblem(error.message);
+        setReady("invalid");
+        return;
+      }
+
+      if (cred.kind === "tokens") {
+        const { error } = await supabase.auth.setSession({
+          access_token: cred.accessToken, refresh_token: cred.refreshToken,
+        });
+        if (!error) { setReady("ok"); return; }
+        setLinkProblem(error.message);
+        setReady("invalid");
+        return;
+      }
+
+      // No credential in the URL. An existing session still makes this page usable -- somebody who is
+      // already signed in can change their password without a link at all.
       const { data } = await supabase.auth.getSession();
       setReady(data.session ? "ok" : "invalid");
     })();
@@ -62,7 +94,9 @@ export default function ResetPasswordPage() {
           <div className="bg-white rounded-2xl p-8 text-center">
             <p className="text-4xl mb-3">⌛</p>
             <h2 className="text-lg font-bold text-gray-900">Link invalid or expired</h2>
-            <p className="text-sm text-gray-500 mt-2">Password-reset links only work once and expire quickly.</p>
+            <p className="text-sm text-gray-500 mt-2">
+              {linkProblem ?? "Password-reset links only work once and expire quickly."}
+            </p>
             <Link href="/forgot-password" className="mt-5 inline-block text-sm font-semibold text-teal-600 hover:underline">
               Request a new link →
             </Link>
