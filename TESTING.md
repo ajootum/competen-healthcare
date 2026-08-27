@@ -196,8 +196,8 @@ test, and it holds for both formats. The probe reads and never writes.
 **349, 352, 353 and 357**. Measured, not assumed: none of the 161 writing harnesses reference any of them,
 so the drift does not block this — but applying those migrations is outstanding, and owner-only.
 
-**Triage so far (2026-08-27): 46 of 161 screened, 31 promoted.** The rest are UNTRIAGED and the ceiling is
-`130`. Failure classes found, none of which are defects in this runner:
+**Triage so far (2026-08-27): 46 of 161 screened, 32 promoted, 5 blocked on staging fixtures.** The rest
+are UNTRIAGED and the ceiling is `125`. Failure classes found, none of which are defects in this runner:
 
 - ⚠⚠ **FOUR WERE RECORDED AS HANGS AND WERE NOT HANGING. THEY WERE WORKING.** `practice-audit`,
   `practice-availability-config`, `practice-billing` and `practice-booking-rules` hit the screener's
@@ -227,8 +227,40 @@ so the drift does not block this — but applying those migrations is outstandin
 
   Same class: `cgr-gate` ("at least one required competency is needed"), `hww-census` (a `NOT NULL` on
   `op_patients.hospital_id`), `learning-provenance` (null id).
-- **Real assertion failures worth reading** — `identity-join` 22/1, `platform-flag-gate` 19/1,
-  `hq-guard`, `governance-context`, `platform-membership`. Not yet diagnosed.
+- **The five "real assertion failures" — diagnosed 2026-08-27. Four were the estate being empty, one was
+  a stale pin. None was a defect in the product.**
+
+  ⚠⚠ **STAGING HAS NO PEOPLE, AND THAT IS THE SINGLE ROOT CAUSE OF FOUR.** Three synthetic profiles, no
+  `super_admin`, no `platform_membership`, no organisational unit. Every one of the four refused rather
+  than passing over an empty estate — which is correct, and the only reason the cause was legible:
+
+  | harness | staging | the missing prerequisite |
+  |---|---|---|
+  | `identity-join` | 22/1 | an **organisational unit** to parent a fixture team |
+  | `platform-flag-gate` | 19/1 | a **profile carrying a tenant** to gate against |
+  | `hq-guard` | 67/1 (**68/0 on production**) | a **`super_admin` identity** — P2 is an owner control |
+  | `platform-membership` | 59/3 | **owner accounts and `platform_membership` rows** |
+
+  `provision-staging-fixture.ts` builds a practitioner and `provision-staging-hq-fixture.ts` builds an HQ
+  operator. **Nothing builds an owner, a membership, a unit, or an HWW assignment.** One provisioner
+  unblocks all four, plus the two `hww-*` harnesses above. All six are in `EXCLUDED` with the exact
+  prerequisite named — tracked, not disappeared.
+
+  **`governance-context` was the only code-level finding, and the code was right.** `S2` pinned the
+  `/super-admin` door's capability line character-for-character:
+
+  ```ts
+  const hqCapabilities = isOwner ? [] : (await resolveHqPositions(admin, user.id)).capabilities;
+  ```
+
+  The layout now resolves into a named binding first, so it can reuse `positions` and `positionNames`
+  from the **same** call — this layout runs on all 205 HQ pages, so a second resolution is a real cost.
+  The door still asks for the full set; only the spelling moved. ⚠ **The exactness was not a mistake** —
+  it replaced a prefix match that let a `.slice(0, 0)` break through, which is the actual lockout risk.
+  So `S2` now asserts the *property* as a conjunction over the resolve-and-derive region (real call, real
+  arguments, capabilities from it, nothing narrowing, owner branch empty), with `S2-control` feeding it
+  the `.slice(0, 0)` break. Break-tested against the real layout: narrowing the door turns `S2` red.
+  Now 20/0.
 
 - Every harness in this codebase follows the same discipline: it proves a constraint or a boundary by
   attempting the violation and watching it fail, not just by reading a happy path. A harness that has

@@ -43,14 +43,14 @@
  *   npx tsx scripts/privileged-harnesses.ts --all        also run the triaged non-security subset
  *   npx tsx scripts/privileged-harnesses.ts --staging    run the WRITING harnesses against staging
  *   npx tsx scripts/privileged-harnesses.ts --staging --only <substr>   one harness, output streamed
+ *   npx tsx scripts/privileged-harnesses.ts --list       print every list and exit, running nothing
+ *   npx tsx scripts/privileged-harnesses.ts --untriaged  print what has not been screened yet
  *
  * ⚠ `--staging` NOW TAKES ROUGHLY HALF AN HOUR, and that is not a fault. Four of its entries cost 250-475
  * SECONDS EACH: a round-trip from here is ~450ms to either project and these harnesses make many hundreds
  * of them sequentially. Nothing is hung. `--only` exists so one can be re-run alone with its output
  * streamed instead of captured, which is the shape this repository's own rule requires -- "a red harness
  * late in a sweep is not evidence until it is re-run alone."
- *   npx tsx scripts/privileged-harnesses.ts --list       print every list and exit, running nothing
- *   npx tsx scripts/privileged-harnesses.ts --untriaged  print what has not been screened yet
  */
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -119,6 +119,41 @@ const TRIAGED: Listed[] = [
  * wrote. Remove an entry the moment its reason stops being true.
  */
 const EXCLUDED: Listed[] = [
+  /**
+   * ⚠ BLOCKED ON A STAGING FIXTURE, NOT BROKEN. All four were screened against staging on 2026-08-27 and
+   * every one failed on a MISSING PREREQUISITE rather than on the thing it checks. Each refuses rather
+   * than passing over an empty estate, which is the correct behaviour and the only reason the cause was
+   * legible -- a harness that quietly passed with no data would have read as coverage.
+   *
+   * !! THE COMMON ROOT IS THAT STAGING HAS NO PEOPLE. Three synthetic profiles, no super_admin, no
+   * platform_membership, no organisational unit. `provision-staging-fixture.ts` builds a practitioner and
+   * `provision-staging-hq-fixture.ts` builds an HQ operator; nothing builds an owner, a membership, a
+   * unit, or an HWW assignment. Fixing that is one provisioner, and it unblocks these four plus the two
+   * hww-* harnesses -- moving each into STAGING is the intended end state.
+   */
+  {
+    file: "identity-join-harness.ts",
+    note: "22/1 on staging. The one failure: `team membership -- no unit exists on this estate to parent a "
+      + "fixture team`. NEEDS an organisational unit on staging.",
+  },
+  {
+    file: "platform-flag-gate-harness.ts",
+    note: "19/1 on staging. The one failure is a fixture-presence CONTROL: `a live profile with a tenant "
+      + "exists to gate against -- []`. NEEDS a profile carrying a tenant on staging.",
+  },
+  {
+    file: "hq-guard-harness.ts",
+    note: "67/1 on staging, and 68/0 against PRODUCTION the same day. The one staging failure is P2, an "
+      + "owner control: `0 super_admin account(s) exist`. NEEDS a super_admin identity on staging. "
+      + "⚠ The production run is not a substitute -- this harness WRITES (a fixture appointment), so it "
+      + "must not be run from the production-pointed default.",
+  },
+  {
+    file: "platform-membership-harness.ts",
+    note: "59/3 on staging. All three failures are the same absence: D2b and D4 report the three estate "
+      + "identities hold no active membership, D3a reports `both owner accounts are present in the "
+      + "directory (0)`. NEEDS owner accounts and platform_membership rows on staging.",
+  },
   {
     file: "cgr-suggest-harness.ts",
     note:
@@ -196,6 +231,17 @@ const STAGING: Listed[] = [
   { file: "practice-availability-config-harness.ts", note: "availability configuration. 81/81 in 341s." },
   { file: "practice-billing-harness.ts", note: "practice billing. 77/77 in 249s -- nine seconds over the old ceiling." },
   { file: "practice-booking-rules-harness.ts", note: "CPR-V5-007 phase 3, the booking rules engine (migration 244). 133/133 in 473s -- the longest in the estate so far." },
+  {
+    file: "governance-context-harness.ts",
+    note:
+      "PLAT-GOV-001 -- exactly one active appointment decides authorization. 20/20, 1 skipped. "
+      + "⚠ IT WAS RED ON A PIN, NOT A DEFECT: S2 required the /super-admin door's capability line "
+      + "character-for-character, and the layout had been refactored to resolve into a named binding so "
+      + "it could reuse positions and positionNames from the SAME call (205 HQ pages, one resolution). "
+      + "Repointed to the property -- the call is made with real arguments, capabilities come from it, "
+      + "nothing narrows them, the owner branch is empty -- plus S2-control, because the exactness was "
+      + "guarding a real `.slice(0, 0)` break that a prefix match once let through.",
+  },
 ];
 
 /**
@@ -225,7 +271,7 @@ const RAW_DML = /\b(delete\s+from|insert\s+into|update\s+[a-z_]+\s+set|truncate\
  * passed. It does NOT mean the estate is checked — it means UNTRIAGED_CEILING checks have still never
  * been run by anybody, and the number is printed on every run so that stays visible.
  */
-const UNTRIAGED_CEILING = 130;  // 161 -> 134 -> 130 as staging screening proceeds. Lower it, never raise it.
+const UNTRIAGED_CEILING = 125;  // 161 -> 134 -> 130 -> 125 as staging screening proceeds. Lower it, never raise it.
 
 // ── The classifier is the authority on the set and on what mutates ───────────────────────────────
 type Row = { file: string; tier: string; mutates: boolean; purpose: string };

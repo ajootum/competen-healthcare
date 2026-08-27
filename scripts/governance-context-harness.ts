@@ -58,8 +58,47 @@ const strip = (s: string) =>
   //
   // ⚠ ANCHORED TO THE END OF THE STATEMENT. A prefix match passed a break that appended `.slice(0, 0)` --
   // the call was still there and returned nothing, which is precisely the lockout this guards against.
-  ok("S2", /const hqCapabilities = isOwner \? \[\] : \(await resolveHqPositions\(admin, user\.id\)\)\.capabilities;/.test(layoutSrc),
+  /**
+   * ⚠ THIS PINNED ONE EXACT SPELLING AND A LEGITIMATE REFACTOR BROKE IT -- 2026-08-27.
+   *
+   * It required, character for character:
+   *   const hqCapabilities = isOwner ? [] : (await resolveHqPositions(admin, user.id)).capabilities;
+   *
+   * The layout now resolves into a named binding first, because it needs `positions` and `positionNames`
+   * from the SAME call -- the resolver returns them as extra columns on a query it already makes, and
+   * this layout runs on all 205 HQ pages, so a second resolution is a real cost. The door still asks for
+   * the FULL set. Only the spelling moved, and the assertion went red against strictly better code.
+   *
+   * !! THE EXACTNESS WAS NOT A MISTAKE, WHICH IS WHY THIS IS NOT SIMPLY LOOSENED. The note it replaces
+   * records a real break that a PREFIX match let through: appending `.slice(0, 0)` to the call left the
+   * call present and returned nothing -- precisely the lockout this guards. So the property is asserted
+   * as a conjunction over the whole resolve-and-derive region: the call is made with the real arguments,
+   * the capabilities come from it, NOTHING narrows them, and the owner branch yields an empty list rather
+   * than a narrowed one. A rename or a re-spelling passes; `.slice(0, 0)` anywhere in the region does not.
+   */
+  const region = (() => {
+    const from = layoutSrc.indexOf("const hqPositions");
+    if (from < 0) return "";
+    const decl = layoutSrc.indexOf("const hqCapabilities", from);
+    if (decl < 0) return "";
+    const end = layoutSrc.indexOf(";", decl);
+    return end < 0 ? "" : layoutSrc.slice(from, end + 1);
+  })();
+  const doorIsFull = (src: string) =>
+    src.length > 0
+    && /await resolveHqPositions\(\s*admin\s*,\s*user\.id\s*\)/.test(src)   // the real call, real arguments
+    && /\.capabilities\b/.test(src)                                          // capabilities come from it
+    && !/\.(slice|filter|splice|shift|pop)\s*\(/.test(src)                   // and nothing narrows them
+    && /isOwner/.test(src) && /capabilities:\s*\[\]|\?\s*\[\]/.test(src);    // owner short-circuits to empty
+
+  ok("S2", doorIsFull(region),
     "the /super-admin door still asks resolveHqPositions for the FULL set -- getting IN is 'any live appointment', not the active one");
+
+  // ⚠ THE DETECTOR'S OWN CONTROL, feeding it the exact break the note above describes. A predicate that
+  // cannot refuse is indistinguishable from a door that is open, and this one is now four clauses long --
+  // far easier to get subtly wrong than the single literal it replaced.
+  ok("S2-control", !doorIsFull(region.replace(/\.capabilities\b/, ".capabilities.slice(0, 0)")),
+    "...and the check still REFUSES a door narrowed with .slice(0, 0) -- the break a prefix match once passed");
 
   ok("S3", /before\.available\.find\(c => c\.appointmentId === appointmentId\)/.test(switchSrc),
     "the switch route validates the submitted id against the CALLER'S OWN resolved contexts");
