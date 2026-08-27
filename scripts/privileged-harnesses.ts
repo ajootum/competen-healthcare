@@ -27,14 +27,21 @@
  * in. It reads exactly like an outage. That is why the default run is a SHORT security subset rather than
  * everything green, and why `--all` is a separate decision.
  *
- * ⚠ A STAGING PROJECT EXISTS, so the mutating 161 are UNRUN rather than UNRUNNABLE — a different problem
- * with a different fix. Verified 2026-08-27: staging answers /auth/v1/health and carries the schema
- * (hq_capability holds 50 rows there against production's 50). production-guard.ts already knows both
- * refs. Pointing the mutating harnesses at it is real work — fixture ownership, cleanup, and the 504
- * hazard above apply there too — and it is the next thing this file should grow.
+ * ⚠ THE WRITING HARNESSES RUN AGAINST STAGING, NEVER HERE. `--staging` remaps the same three variables
+ * scripts/dev-staging.mjs and scripts/smoke-staging.mjs already remap, so the harness and the guard agree
+ * about which project is under test. The remap is SPAWN-TIME — no harness file is edited — and it rests
+ * on one verified fact: `loadEnvConfig` does NOT overwrite an already-set variable. That was tested
+ * directly before any of this was built, because if it were false, every harness spawned here would run
+ * against production while this file printed the staging ref.
+ *
+ * Staging is real: it answers /auth/v1/health and carries 665 of production's 671 tables. The six it
+ * lacks are from migrations 349, 352, 353 and 357, and NONE of the 161 writing harnesses reference any of
+ * them — measured, not assumed — so the drift does not block this. It does mean staging is behind, and
+ * that is the owner's to apply.
  *
  *   npx tsx scripts/privileged-harnesses.ts              run the security subset (read-only)
  *   npx tsx scripts/privileged-harnesses.ts --all        also run the triaged non-security subset
+ *   npx tsx scripts/privileged-harnesses.ts --staging    run the WRITING harnesses against staging
  *   npx tsx scripts/privileged-harnesses.ts --list       print every list and exit, running nothing
  *   npx tsx scripts/privileged-harnesses.ts --untriaged  print what has not been screened yet
  */
@@ -42,7 +49,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadEnvConfig } from "@next/env";
-import { judgeTarget, refOf } from "./production-guard";
+import { assertSafeTarget, judgeTarget, refOf } from "./production-guard";
 
 const ROOT = join(import.meta.dirname, "..");
 loadEnvConfig(ROOT);
@@ -106,23 +113,40 @@ const TRIAGED: Listed[] = [
  */
 const EXCLUDED: Listed[] = [
   {
-    file: "cascade-immutability-ratchet-harness.ts",
-    note:
-      "⚠⚠ IT WRITES, AND THE CLASSIFIER SAYS IT DOES NOT. harness-classify tiers it privileged-live but "
-      + "reports mutates:false, because it detects `.insert(` / `.delete(` METHOD CALLS and this harness "
-      + "uses a raw `pg` connection: `await c.query(\"insert into practice_workspace ...\")` at line 113, "
-      + "a lifecycle transition at 117, then delete and update at 122-123. Eleven query calls. It creates "
-      + "a real workspace to prove the cascade-vs-immutability ratchet. "
-      + "!! IT SCREENED GREEN AND WOULD HAVE BEEN ADMITTED TO THE SECURITY SET ON THAT EVIDENCE -- the "
-      + "classifier's blind spot is the reason RAW_DML below exists and is deliberately over-sensitive. "
-      + "Run it deliberately, against staging, not from here.",
-  },
-  {
     file: "cgr-suggest-harness.ts",
     note:
       "CALLS THE SHIPPED AI ENGINE, so every run costs money and returns something slightly different. Its "
       + "own header calls it a one-off. A non-deterministic check in a routine runner trains people to "
       + "ignore the runner. Needs ANTHROPIC_API_KEY, which a green run here would silently depend on.",
+  },
+];
+
+/**
+ * STAGING — the harnesses that WRITE, run against the staging project with the environment remapped.
+ *
+ * ⚠ THESE NEVER RUN AGAINST PRODUCTION, AND THAT IS ENFORCED THREE TIMES: `--staging` is required to run
+ * any of them, the three STAGING_* variables must be present, and assertSafeTarget refuses a URL that
+ * resolves to the production ref or to no identifiable project at all.
+ *
+ * The remap is the one scripts/dev-staging.mjs and scripts/smoke-staging.mjs already use — the same three
+ * variables, so the harness, the guard and the server all agree about which project is under test. It is
+ * spawn-time only: nothing here edits a harness, and `loadEnvConfig` was verified not to overwrite an
+ * already-set variable, which is the fact the whole approach rests on.
+ */
+const STAGING: Listed[] = [
+  {
+    file: "cascade-immutability-ratchet-harness.ts",
+    note:
+      "CPR-DEL-001 s10 -- the cascade-vs-immutability ratchet, proved by creating a real workspace and "
+      + "trying to delete its append-only trail. "
+      + "⚠ IT IS ALREADY STAGING-ONLY AND ALWAYS WAS: it connects to STAGING_DB_URL over raw `pg` and "
+      + "REFUSES unless that connection's project ref matches STAGING_SUPABASE_URL, so it cannot reach "
+      + "production even if the remap were wrong. It needs no remap; it is listed here because this is "
+      + "where a writing harness belongs. "
+      + "!! IT IS ALSO WHY RAW_DML EXISTS: harness-classify reports mutates:false for it -- the flag "
+      + "detects `.insert(` METHOD CALLS and this file writes `await c.query(\"insert into ...\")` -- so it "
+      + "screened GREEN and, on the classifier's evidence alone, would have joined the production-pointed "
+      + "security set.",
   },
 ];
 
@@ -171,11 +195,34 @@ try {
 
 const privileged = rows.filter(r => r.tier === "privileged-live");
 const mutatesOf = new Map(privileged.map(r => [r.file, r.mutates]));
-const listed = [...SECURITY, ...TRIAGED, ...EXCLUDED];
+const listed = [...SECURITY, ...TRIAGED, ...STAGING, ...EXCLUDED];
 const untriaged = privileged.filter(r => !listed.some(l => l.file === r.file)).map(r => r.file).sort();
 
+// ── Staging: resolved and guarded before anything can run against it ─────────────────────────────
+const stagingMode = process.argv.includes("--staging");
+const stagingUrl = process.env.STAGING_SUPABASE_URL ?? null;
+const stagingAnon = process.env.STAGING_ANON_KEY ?? null;
+const stagingService = process.env.STAGING_SERVICE_ROLE_KEY ?? null;
+/**
+ * The same three variables scripts/dev-staging.mjs and scripts/smoke-staging.mjs remap, so the harness,
+ * the guard and anything else reading the environment all name the same project.
+ *
+ * ⚠ SPAWN-TIME ONLY, AND THAT RESTS ON A VERIFIED FACT. Harnesses call `loadEnvConfig(process.cwd())`,
+ * which re-reads .env.local -- and .env.local names PRODUCTION. If that overwrote an already-set
+ * variable, every harness spawned here would quietly run against production while this file printed the
+ * staging ref. Tested directly before building any of this: an injected value SURVIVES loadEnvConfig.
+ * If that ever stops being true, the symptom is silent and catastrophic, so STAGING_ASSERT below makes
+ * each spawned harness re-check the target it actually resolved.
+ */
+const stagingEnv = () => ({
+  ...process.env,
+  NEXT_PUBLIC_SUPABASE_URL: stagingUrl!,
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: stagingAnon!,
+  SUPABASE_SERVICE_ROLE_KEY: stagingService!,
+});
+
 // ── What are we pointed at? ──────────────────────────────────────────────────────────────────────
-const target = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null;
+const target = stagingMode ? stagingUrl : (process.env.NEXT_PUBLIC_SUPABASE_URL ?? null);
 const verdict = judgeTarget(target);
 const ref = refOf(target);
 // ⚠ judgeTarget returns a VERDICT OBJECT, not a string. Interpolating it printed "[object Object]" --
@@ -185,12 +232,63 @@ const verdictText = verdict.ok ? "not production — safe for destructive automa
   : "UNIDENTIFIABLE — refused, the guard fails closed";
 
 console.log("\n=== Privileged-live acceptance harnesses ===\n");
+console.log(`  mode           : ${stagingMode ? "STAGING — the writing harnesses" : "production — read-only only"}`);
 console.log(`  target project : ${ref ?? "(unidentifiable)"}  — ${verdictText}`);
 console.log(`  privileged-live: ${privileged.length} of ${rows.length} harnesses (${privileged.filter(r => r.mutates).length} of them WRITE to the database)`);
-console.log(`  security ${SECURITY.length} · triaged ${TRIAGED.length} · excluded ${EXCLUDED.length} · UNTRIAGED ${untriaged.length}\n`);
+console.log(`  security ${SECURITY.length} · triaged ${TRIAGED.length} · staging ${STAGING.length} · excluded ${EXCLUDED.length} · UNTRIAGED ${untriaged.length}\n`);
 
 let broken = false;
 const fail = (msg: string) => { broken = true; console.log(msg); };
+
+// ── ⚠ THE STAGING GATE. Nothing that writes runs until this passes ───────────────────────────────
+if (stagingMode) {
+  const missing = [
+    !stagingUrl && "STAGING_SUPABASE_URL",
+    !stagingAnon && "STAGING_ANON_KEY",
+    !stagingService && "STAGING_SERVICE_ROLE_KEY",
+  ].filter(Boolean) as string[];
+  if (missing.length) {
+    fail(`⚠ --staging needs ${missing.join(", ")} in .env.local (gitignored). STAGING_ANON_KEY is the PUBLIC key.`);
+  } else {
+    try {
+      // The one predicate provision-staging-fixture.ts and the smoke helper already use. It refuses the
+      // production ref AND an unidentifiable URL -- "we could not tell which project this is" is not a
+      // reason to write to it.
+      assertSafeTarget(stagingUrl, "STAGING_SUPABASE_URL");
+
+      /**
+       * ⚠ AND THEN PROVE IT IN A CHILD PROCESS, BECAUSE THAT IS WHERE THE HARNESSES LIVE.
+       *
+       * Everything above checks variables in THIS process. The harnesses run in spawned ones, and each
+       * calls loadEnvConfig, which re-reads .env.local — the file that names PRODUCTION. If that ever
+       * overwrites the injected value, every writing harness would hit the live project while this file
+       * cheerfully printed the staging ref. _staging-probe.ts resolves the target the way a harness
+       * does, in a real child, with exactly the environment a harness gets.
+       */
+      const out = execFileSync("npx", ["tsx", join("scripts", "_staging-probe.ts")], {
+        cwd: ROOT, encoding: "utf8", env: stagingEnv(), shell: process.platform === "win32",
+      });
+      const m = /RESOLVED (\S+) AUTH (\S+)/.exec(out);
+      const stagingRef = refOf(stagingUrl);
+      if (!m) {
+        fail(`⚠ the staging probe returned nothing usable, so what a spawned harness resolves is UNKNOWN. Refusing.`);
+      } else if (m[1] !== stagingRef) {
+        fail(`⚠⚠ A SPAWNED HARNESS RESOLVES ${m[1]}, NOT ${stagingRef}. The remap does not survive loadEnvConfig.`);
+        fail(`  Every writing harness would run against that project. Refusing to run any of them.`);
+      } else if (m[2] !== "ok") {
+        // The key is what writes, and keys are project-scoped -- one from another project cannot
+        // authenticate here. Checked by using it rather than by reading its shape: staging's key is one
+        // of the newer sb_secret_ kind with no decodable payload.
+        fail(`⚠ the service-role key does not authenticate against ${m[1]} (${m[2]}).`);
+        fail(`  Refusing -- a harness would fail obscurely instead. Check STAGING_SERVICE_ROLE_KEY.`);
+      } else {
+        console.log(`  staging accepted: a spawned harness resolves ${m[1]} and its service-role key authenticates there\n`);
+      }
+    } catch (err) {
+      fail(`⚠ ${(err as Error).message}`);
+    }
+  }
+}
 
 // ── ⚠ SAFETY GATE. Derived, not promised ─────────────────────────────────────────────────────────
 // A curated "these are read-only" list is a claim that decays the first time somebody adds a fixture to
@@ -241,8 +339,8 @@ if (doubled.length) fail(`⚠ ${doubled.length} harness(es) appear in more than 
 
 if (untriaged.length > UNTRIAGED_CEILING) {
   fail(`⚠ UNTRIAGED is ${untriaged.length}, above the ceiling of ${UNTRIAGED_CEILING}.`);
-  fail(`  Screen the new harness and add it to SECURITY, TRIAGED or EXCLUDED — or raise the ceiling`);
-  fail(`  deliberately and say why. A ceiling that drifts upward is not a ratchet.`);
+  fail(`  Screen the new harness and add it to SECURITY, TRIAGED, STAGING or EXCLUDED — or raise the`);
+  fail(`  ceiling deliberately and say why. A ceiling that drifts upward is not a ratchet.`);
 }
 
 // ── --list / --untriaged: report and stop ────────────────────────────────────────────────────────
@@ -256,6 +354,7 @@ const show = (title: string, items: Listed[]) => {
 if (process.argv.includes("--list")) {
   show("SECURITY — read-only, security-critical, run by default", SECURITY);
   show("TRIAGED — read-only, verified, not a security boundary", TRIAGED);
+  show("STAGING — the writing harnesses, run against staging with --staging", STAGING);
   show("EXCLUDED — screened and deliberately not run here", EXCLUDED);
   console.log(`UNTRIAGED (${untriaged.length}) — never screened, never run. Pass --untriaged to list them.\n`);
   process.exit(broken ? 1 : 0);
@@ -268,21 +367,76 @@ if (process.argv.includes("--untriaged")) {
   process.exit(broken ? 1 : 0);
 }
 
+/**
+ * --screen — triage. Run untriaged WRITING harnesses against staging and report, adding nothing to any
+ * list. Filling STAGING is a decision made from the output, not by the script that produced it: a
+ * screener that promotes whatever exited 0 would have admitted every harness whose assertions were
+ * skipped, which is the failure ci-harnesses.ts records for four of its own.
+ *
+ * ⚠ SEQUENTIAL, AND IN BOUNDED BATCHES, FOR A MEASURED REASON. TESTING.md: 68 harnesses into a full
+ * sweep, GoTrue began shedding load and every later harness failed for a reason unrelated to its code.
+ * Staging is a Supabase project like any other and has no special exemption from that. `--screen 20`
+ * takes twenty, and `--from N` starts at an offset so batches can be spread out.
+ */
+if (stagingMode && process.argv.includes("--screen")) {
+  if (broken) { console.log(`\nRED  refusing to screen — the staging gate did not pass.\n`); process.exit(1); }
+  const n = Number(process.argv[process.argv.indexOf("--screen") + 1]) || 20;
+  const fromIdx = process.argv.includes("--from") ? Number(process.argv[process.argv.indexOf("--from") + 1]) || 0 : 0;
+  const batch = untriaged.filter(f => mutatesOf.get(f)).slice(fromIdx, fromIdx + n);
+  console.log(`Screening ${batch.length} writing harness(es) against staging, offset ${fromIdx} of ${untriaged.filter(f => mutatesOf.get(f)).length}\n`);
+  const green: string[] = [], red: string[] = [];
+  for (const file of batch) {
+    process.stdout.write(`── ${file} ... `);
+    try {
+      const out = execFileSync("npx", ["tsx", join("scripts", file)], {
+        cwd: ROOT, encoding: "utf8", stdio: "pipe", env: stagingEnv(),
+        shell: process.platform === "win32", timeout: 240_000,
+      });
+      const sum = out.split("\n").filter(l => /passed|PASS \d|ALL GREEN|assertion/i.test(l)).pop() ?? "";
+      console.log(`PASS   ${sum.trim().slice(0, 66)}`);
+      green.push(file);
+    } catch (err) {
+      const e = err as { stdout?: string; stderr?: string; signal?: string };
+      const why = e.signal === "SIGTERM" ? "TIMED OUT (240s)"
+        : ((e.stdout ?? "").split("\n").filter(l => /FAIL|failed|Error|refus/i.test(l)).pop()
+          ?? (e.stderr ?? "").split("\n").filter(Boolean).pop() ?? "").trim().slice(0, 66);
+      console.log(`FAIL   ${why}`);
+      red.push(file);
+    }
+  }
+  console.log(`\n  screened ${batch.length}: ${green.length} green, ${red.length} red`);
+  console.log(`  ⚠ green here means EXITED 0 against staging. It is evidence for promoting a harness to`);
+  console.log(`     STAGING, not the promotion itself -- read what it asserted before adding it.\n`);
+  process.exit(0);
+}
+
 // ── Run ──────────────────────────────────────────────────────────────────────────────────────────
 show("EXCLUDED — printed every run so the list cannot rot unseen", EXCLUDED);
 
 const runAll = process.argv.includes("--all");
-const toRun = runAll ? [...SECURITY, ...TRIAGED] : SECURITY;
+// ⚠ THE MODES DO NOT MIX. --staging runs the writing harnesses against staging and NOTHING ELSE; the
+// default run is read-only against whatever .env.local names. Combining them would mean one command
+// writing to one project and reading another, and a reader could not tell from the output which
+// harness hit which.
+const toRun = stagingMode ? STAGING : runAll ? [...SECURITY, ...TRIAGED] : SECURITY;
 const failures: string[] = [];
 
+// ⚠ A GATE THAT FAILED IS A GATE THAT MUST STOP THE RUN. Reporting a refusal and then executing anyway
+// is the shape this repository has recorded before: a control that reports without preventing.
+if (broken && stagingMode) {
+  console.log(`\nRED  refusing to run ${STAGING.length} writing harness(es) — the staging gate did not pass.\n`);
+  process.exit(1);
+}
+
 if (!toRun.length) {
-  console.log("  nothing to run — SECURITY is empty.\n");
+  console.log(`  nothing to run — ${stagingMode ? "STAGING" : "SECURITY"} is empty.\n`);
 } else {
   for (const { file } of toRun) {
     process.stdout.write(`── ${file} ... `);
     try {
       execFileSync("npx", ["tsx", join("scripts", file)], {
         cwd: ROOT, encoding: "utf8", stdio: "pipe", shell: process.platform === "win32",
+        ...(stagingMode ? { env: stagingEnv() } : {}),
       });
       console.log("PASS");
     } catch (err) {
