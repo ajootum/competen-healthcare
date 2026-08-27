@@ -49,6 +49,27 @@ const DIRECTOR_ACTIONS = [
 /** The checker half. PD-014 build 2 asks for maker-checker on high-risk change. */
 const WITHHELD_FROM_DIRECTOR = ["hq.practice.change.approve", "hq.practice.risk.accept"];
 
+/**
+ * ⚠ REVOKED ON PURPOSE, AND THIS HARNESS WAS STILL DEMANDING IT -- 2026-08-27.
+ *
+ * 2b and 4a were RED on `hq.practice.export.execute` against a database that is CORRECT. Migration 347
+ * (CPR-PD-013 s9, finding 13) revoked that grant deliberately: it is enforced by nothing -- no route
+ * gates on it, no screen references it -- and 347's own reasoning is that an access review reading the
+ * position as holding authority to export data, when it does not, is "wrong in the direction of
+ * overstating". It closed effective_to rather than deleting the row, so the history survives.
+ *
+ * 347 also states what it deliberately did NOT do: the CODE stays, because CPR-PD-010 s19 specifies an
+ * export capability by name and only the enforcement is missing. So the capability is legitimately
+ * catalogued-and-ungranted, which is exactly the state 2b and 4a were written to forbid.
+ *
+ * !! THIS IS THE "NEVER PIN A STATE YOU ARE TRYING TO CHANGE" SHAPE. Finishing the governance work turned
+ * two assertions red, and the temptation is to read red as a defect and regrant. The rule is not weakened
+ * here -- the exception is NAMED, and REVOKED_CONTROL below asserts each entry really is ungranted, so if
+ * 347 is ever reversed (its own note says regranting is one UPDATE away) this list goes stale LOUDLY
+ * instead of quietly excusing a capability that is once again held.
+ */
+const REVOKED_BY_DESIGN = ["hq.practice.export.execute"];
+
 async function main() {
   console.log("\nCPR-PD-014 build 2 -- the capability matrix in the database\n");
 
@@ -88,9 +109,19 @@ async function main() {
   ok("2a the Director holds the view capability for all twelve modules",
     unheldViews.length === 0, `not granted: ${unheldViews.join(", ")}`);
 
-  const unheldActions = DIRECTOR_ACTIONS.filter(c => !director.has(c));
-  ok("2b the Director holds every act the position is for",
+  const unheldActions = DIRECTOR_ACTIONS.filter(c => !director.has(c) && !REVOKED_BY_DESIGN.includes(c));
+  ok("2b the Director holds every act the position is for, bar those revoked by record",
     unheldActions.length === 0, `not granted: ${unheldActions.join(", ")}`);
+
+  // ⚠ THE EXCEPTION LIST'S OWN CONTROL. Without this, REVOKED_BY_DESIGN silently excuses a capability
+  // that has since been regranted, and 2b/4a stop covering it for ever. An entry here must be genuinely
+  // ungranted -- if it is held again, the record is stale and that is the thing to say out loud.
+  const wronglyExcused = REVOKED_BY_DESIGN.filter(c => director.has(c));
+  ok("2b-control every REVOKED_BY_DESIGN entry really is ungranted",
+    wronglyExcused.length === 0,
+    wronglyExcused.length
+      ? `held again -- migration 347 has been reversed for: ${wronglyExcused.join(", ")}. Remove it from REVOKED_BY_DESIGN.`
+      : `${REVOKED_BY_DESIGN.length} recorded revocation(s), all still revoked`);
 
   // ⚠ THE POINT OF THE WHOLE ARC, STATED AS A TEST. Before build 2 the Director held three
   // capabilities and every privileged route refused them. If this number collapses back toward three,
@@ -132,8 +163,8 @@ async function main() {
    */
   const asked = [...navCaps, ...DIRECTOR_ACTIONS, ...WITHHELD_FROM_DIRECTOR];
   const grantedToSomeone = new Set(live.map((g: { capability_code: string }) => g.capability_code));
-  const ungranted = asked.filter(c => !grantedToSomeone.has(c));
-  ok("4a every capability the product asks for is granted to at least one position",
+  const ungranted = asked.filter(c => !grantedToSomeone.has(c) && !REVOKED_BY_DESIGN.includes(c));
+  ok("4a every capability the product asks for is granted to at least one position, bar those revoked by record",
     ungranted.length === 0, `granted to nobody: ${ungranted.join(", ")}`);
 
   console.log(`\n${pass} passed, ${fails.length} failed`);

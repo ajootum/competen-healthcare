@@ -73,8 +73,9 @@ config is the easy part once the list exists.
 **Full inventory, classification method, and every caveat: `docs/HARNESS-INVENTORY.md`.** Summary, not a
 substitute for reading it:
 
-- **221 scripts.** 32 need no database at all (`pure/local`). **That pass has now been done** (2026-08-18):
-  every one of the 32 was run twice with a scrubbed environment, and **22 are in CI as a blocking job**.
+- **230 scripts** (re-measured 2026-08-27; was 221). **48** need no database at all (`pure/local`). **That
+  pass has now been done** (2026-08-18): every one was run twice with a scrubbed environment, and **43 are
+  in CI as a blocking job**, 5 excluded by record.
 
   ⚠ **`pure/local` did not mean `CI-safe`, and the gap was not small.** Ten of the 32 do not belong in CI:
 
@@ -111,11 +112,67 @@ substitute for reading it:
   reason, prints them on every run, and fails if a newly added `pure/local` harness lands in neither list.
   The six red ones are tracked bugs, not disappeared ones — fixing each and moving it into `INCLUDED` is
   the intended end state.
-- **180 touch the one live Supabase project this repo has.** There is no staging project. Per this repo's
-  existing CI design (`ci.yml`'s own header: *"the database harnesses authenticate with the service-role
-  key, and that key does not belong in GitHub"*) and per COMP-ENG-001 §7 (*"never run acceptance harnesses
-  that mutate data against production as a routine CI action"*), **none of these 180 run in CI.** They run
-  locally, by a person holding the real `SUPABASE_SERVICE_ROLE_KEY`.
+- **182 are `privileged-live`** — they touch a real Supabase project. Per this repo's existing CI design
+  (`ci.yml`'s own header: *"the database harnesses authenticate with the service-role key, and that key
+  does not belong in GitHub"*) and per COMP-ENG-001 §7 (*"never run acceptance harnesses that mutate data
+  against production as a routine CI action"*), **none of these 182 run in CI.** They run locally, by a
+  person holding the real `SUPABASE_SERVICE_ROLE_KEY`.
+
+  ⚠ **THIS ENTRY USED TO SAY "There is no staging project." THAT STOPPED BEING TRUE.** A staging project
+  exists and carries the schema — verified 2026-08-27: `/auth/v1/health` answers, and `hq_capability`
+  holds 50 rows there against production's 50. `scripts/production-guard.ts` already knows both refs, and
+  `STAGING_SUPABASE_URL` / `STAGING_SERVICE_ROLE_KEY` / `STAGING_DB_URL` are configured locally. So the
+  161 mutating harnesses are no longer *unrunnable* — they are *unrun*, which is a different problem with
+  a different fix.
+
+  ⚠⚠ **AND UNTIL 2026-08-27 NOTHING TRACKED THESE 182 AT ALL.** `ci-harnesses.ts` has a coverage control,
+  but it filters `tier === "pure/local"` — so it guaranteed only that those 48 were accounted for. That is
+  the structural reason `anon-exposure-harness.ts` sat written, correct and never run while two tables
+  served a real patient's diagnosis and medication to the anon key. **"Written, correct, and unwired" was
+  not an accident that happened once; it was the default state of 79% of this estate's checks.**
+  `scripts/privileged-harnesses.ts` is the missing half — see below.
+### `scripts/privileged-harnesses.ts` — the runner and coverage control for the other 182
+
+```
+npx tsx scripts/privileged-harnesses.ts              the SECURITY subset (12, read-only)
+npx tsx scripts/privileged-harnesses.ts --all        also the 7 triaged non-security ones
+npx tsx scripts/privileged-harnesses.ts --list       every list, running nothing
+npx tsx scripts/privileged-harnesses.ts --untriaged  the 161 nobody has screened
+```
+
+Four lists — **SECURITY** (12, read-only, security-critical, run by default), **TRIAGED** (7, read-only,
+verified, not a boundary), **EXCLUDED** (2, with the reason, printed every run), and **UNTRIAGED**, which
+is *derived*: anything privileged-live in none of the other three. A harness added tomorrow lands there
+automatically and pushes the count past `UNTRIAGED_CEILING`, which goes red. **Lower the ceiling as
+harnesses are screened; never raise it.**
+
+⚠ **A green run means the screened subset passed. It does not mean the estate is checked** — it means 161
+checks have still never been run by anybody, and the run prints that number every time.
+
+⚠⚠ **THE AUTO-RUN SET IS CHECKED, NOT PROMISED — AND IT IS CHECKED TWICE.** 161 of the 182 write to the
+database and `.env.local` points at production, so a curated "these are read-only" list would be one
+fixture away from writing to the live project. Every run re-derives it:
+
+1. **The classifier's `mutates` flag.** A harness that gains a single `.insert(` leaves the auto-run set
+   by going red, not by being remembered.
+2. **A raw-SQL detector**, because the first has a known blind spot. `harness-classify.ts` looks for
+   `.insert(` / `.delete(` *method calls*; a harness holding a raw `pg` client writes
+   `await c.query("delete from …")` and matches none of them.
+   **`cascade-immutability-ratchet-harness.ts` is exactly that: it creates a real workspace over a raw
+   connection, reports `mutates:false`, and screened GREEN.** On the classifier's evidence alone it would
+   have joined the security set and begun writing to production on every run. It is now EXCLUDED with
+   that reason, and the second detector is deliberately over-sensitive — it flags prose too, and each hit
+   must carry a recorded review. A false positive costs one line; a false negative costs a production
+   write.
+
+The detector has its own inertness control (it is fed a known raw `DELETE` on every run), and all four
+gates are break-tested: a mutating harness admitted, `cascade-immutability-ratchet` admitted, one file in
+two lists, and one file dropped from every list. All four go red.
+
+**Not yet done, and named rather than implied:** the 161 mutating harnesses are *unrun*, not *unrunnable* —
+staging exists and carries the schema. Pointing them at it needs fixture ownership, cleanup, and respect
+for the 504 hazard above, and is the next thing this file should grow.
+
 - Every harness in this codebase follows the same discipline: it proves a constraint or a boundary by
   attempting the violation and watching it fail, not just by reading a happy path. A harness that has
   never been made to go red by a deliberately broken change is not yet trusted — several harnesses in
