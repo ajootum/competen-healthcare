@@ -51,12 +51,30 @@ async function main() {
 
   console.log(`  ${tables.length} table(s) in the public schema, probed with the PUBLIC anon key\n`);
 
-  const exposed: string[] = [], indeterminate: string[] = [];
+  const exposed: string[] = [];
+  // ⚠ THE ANSWER WAS ALREADY IN HAND AND WAS BEING THROWN AWAY -- 2026-08-27.
+  //
+  // Every empty table used to land in one bucket, `indeterminate`, reported as "exposure cannot be tested
+  // (NOT a pass)". That was honest about the PROBE -- anon and the service role both see zero rows whether
+  // RLS is on or off -- and it was 364 of 671 tables, by far the largest blind spot in the estate.
+  //
+  // But plat_rls_registry was ALREADY being fetched, three lines up, into `rlsOn`, and its rls_enabled
+  // column is the ground truth the probe cannot reach. It was used only to decorate an exposed table's
+  // output line. The check reported "cannot verify" 364 times while holding the verification.
+  //
+  // !! AND THE TWO HALVES OF THAT BUCKET HAVE OPPOSITE SEVERITIES. An empty table with RLS ON is
+  // protected -- deny-all to anon, service role bypassing, the posture CLAUDE.md records as load-bearing.
+  // An empty table with RLS OFF is a table whose FIRST ROW is the exposure, which is exactly the argument
+  // migration 360 made for re-asserting RLS on practice_checkout and practice_subscription: they are empty
+  // only because no payment has completed, and the first real transaction would be the discovery.
+  // Averaging those two into one word was the reporting failure.
+  const emptyProtected: string[] = [], emptyUnprotected: string[] = [], unreadable: string[] = [];
   let blocked = 0;
 
   for (const t of tables) {
     const priv = await count(admin, t);
-    if (priv.err || !priv.n) { indeterminate.push(t); continue; }   // nothing to leak, or unreadable even to us
+    if (priv.err) { unreadable.push(`${t} (${priv.err})`); continue; }  // unreadable even to us
+    if (!priv.n) { (rlsOn.get(t) ? emptyProtected : emptyUnprotected).push(t); continue; }
     const pub = await count(anon, t);
     if (pub.err == null && (pub.n ?? 0) > 0) {
       exposed.push(`${t}  ${pub.n} of ${priv.n} row(s) readable, RLS ${rlsOn.get(t) ? "on" : "OFF"}`);
@@ -74,10 +92,26 @@ async function main() {
     console.log();
   }
 
+  if (emptyUnprotected.length) {
+    console.log(`  LATENT — empty, and RLS is OFF (${emptyUnprotected.length})`);
+    console.log(`    nothing leaks today only because there is nothing in them. The first row written to`);
+    console.log(`    any of these is readable by anyone holding the anon key.\n`);
+    for (const t of emptyUnprotected) console.log(`    ${t}`);
+    console.log();
+  }
+
+  // ⚠ THE CONTROL FOR THE REGISTRY LOOKUP. If plat_rls_registry ever returned rows without rls_enabled,
+  // every table would read as unprotected -- loud, and correct to be loud. The opposite failure is the
+  // dangerous one: a lookup that returns true for everything would silently mark all 671 verified. So the
+  // counts are printed as a partition that must sum to the table total, which a broken lookup cannot fake.
+  const accounted = blocked + emptyProtected.length + emptyUnprotected.length + unreadable.length + exposed.length;
   console.log(`  ${blocked} table(s) with data are correctly closed to anon`);
-  console.log(`  ${indeterminate.length} table(s) hold no rows, so exposure cannot be tested (NOT a pass)`);
-  console.log(`  ${exposed.length} table(s) EXPOSED\n`);
-  if (exposed.length) process.exit(1);
+  console.log(`  ${emptyProtected.length} table(s) hold no rows, and RLS is ON -- protected by declaration, not by emptiness`);
+  console.log(`  ${emptyUnprotected.length} table(s) hold no rows and RLS is OFF -- LATENT EXPOSURE`);
+  if (unreadable.length) console.log(`  ${unreadable.length} table(s) unreadable even to the service role: ${unreadable.join(", ")}`);
+  console.log(`  ${exposed.length} table(s) EXPOSED`);
+  console.log(`  ${accounted} of ${tables.length} accounted for${accounted === tables.length ? "" : "  !! PARTITION DOES NOT SUM -- a table was counted twice or not at all"}\n`);
+  if (exposed.length || emptyUnprotected.length || accounted !== tables.length) process.exit(1);
 }
 
 main();
