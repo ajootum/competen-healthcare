@@ -119,40 +119,14 @@ const TRIAGED: Listed[] = [
  * wrote. Remove an entry the moment its reason stops being true.
  */
 const EXCLUDED: Listed[] = [
-  /**
-   * ⚠ BLOCKED ON A STAGING FIXTURE, NOT BROKEN. All four were screened against staging on 2026-08-27 and
-   * every one failed on a MISSING PREREQUISITE rather than on the thing it checks. Each refuses rather
-   * than passing over an empty estate, which is the correct behaviour and the only reason the cause was
-   * legible -- a harness that quietly passed with no data would have read as coverage.
-   *
-   * !! THE COMMON ROOT IS THAT STAGING HAS NO PEOPLE. Three synthetic profiles, no super_admin, no
-   * platform_membership, no organisational unit. `provision-staging-fixture.ts` builds a practitioner and
-   * `provision-staging-hq-fixture.ts` builds an HQ operator; nothing builds an owner, a membership, a
-   * unit, or an HWW assignment. Fixing that is one provisioner, and it unblocks these four plus the two
-   * hww-* harnesses -- moving each into STAGING is the intended end state.
-   */
   {
-    file: "identity-join-harness.ts",
-    note: "22/1 on staging. The one failure: `team membership -- no unit exists on this estate to parent a "
-      + "fixture team`. NEEDS an organisational unit on staging.",
-  },
-  {
-    file: "platform-flag-gate-harness.ts",
-    note: "19/1 on staging. The one failure is a fixture-presence CONTROL: `a live profile with a tenant "
-      + "exists to gate against -- []`. NEEDS a profile carrying a tenant on staging.",
-  },
-  {
-    file: "hq-guard-harness.ts",
-    note: "67/1 on staging, and 68/0 against PRODUCTION the same day. The one staging failure is P2, an "
-      + "owner control: `0 super_admin account(s) exist`. NEEDS a super_admin identity on staging. "
-      + "⚠ The production run is not a substitute -- this harness WRITES (a fixture appointment), so it "
-      + "must not be run from the production-pointed default.",
-  },
-  {
-    file: "platform-membership-harness.ts",
-    note: "59/3 on staging. All three failures are the same absence: D2b and D4 report the three estate "
-      + "identities hold no active membership, D3a reports `both owner accounts are present in the "
-      + "directory (0)`. NEEDS owner accounts and platform_membership rows on staging.",
+    file: "cgr-gate-harness.ts",
+    note:
+      "BLOCKED ON A STAGING FIXTURE, and the only one provision-staging-estate-fixture.ts does NOT "
+      + "unblock. It stops at `phase-2 create failed: at least one required competency is needed` -- the "
+      + "estate fixture builds people, a tenant chain and a clinical assignment, and no competency "
+      + "framework. Extending it there is the next step; the harness is not at fault and refuses rather "
+      + "than passing over an empty catalogue.",
   },
   {
     file: "cgr-suggest-harness.ts",
@@ -242,6 +216,26 @@ const STAGING: Listed[] = [
       + "nothing narrows them, the owner branch is empty -- plus S2-control, because the exactness was "
       + "guarding a real `.slice(0, 0)` break that a prefix match once let through.",
   },
+
+  // ── ⚠ UNBLOCKED BY scripts/provision-staging-estate-fixture.ts, 2026-08-27 ───────────────────────
+  //
+  // All nine failed on a MISSING PREREQUISITE rather than on the thing they check, and every one refused
+  // rather than passing over an empty estate -- which is the only reason the cause was legible. One root:
+  // STAGING HAD NO PEOPLE. No super_admin, no platform_membership, no organisational unit, no tenant, no
+  // patient, no assignment. One provisioner turned all nine green.
+  //
+  // !! SIX WERE THE TARGET AND THREE WERE NOT. hww-census, learning-provenance and decision-immutability
+  // were sitting in UNTRIAGED with unrelated-looking symptoms (a NOT NULL violation, a null id, an empty
+  // failure line) and turned out to share the same absence. A fixture gap does not announce itself as one.
+  { file: "identity-join-harness.ts", note: "COMP-IDENTITY-001 join layer. 29/29 (was 22/1 -- needed an organisational unit)." },
+  { file: "platform-flag-gate-harness.ts", note: "tenant/country/plan flag scoping. 26/26 (was 19/1, then 25/1 -- the tenant alone was not enough, check 8 also wants tenants.primary_country and an active plat_subscriptions row)." },
+  { file: "hq-guard-harness.ts", note: "the HQ estate guard. 68/68 on staging -- IDENTICAL to its production run, which is the strongest evidence the estate fixture is faithful. (was 67/1: P2 is an owner control and staging had no super_admin.)" },
+  { file: "platform-membership-harness.ts", note: "CP-SPLIT-002 gate 1. 62/62 (was 59/3 -- no owners, no active memberships)." },
+  { file: "hww-evidence-harness.ts", note: "the HWW evidence bridge. 14/14 (was bailing on `No active assignment`, under a libuv exit crash that hid the message)." },
+  { file: "hww-gaps-harness.ts", note: "the HWW gap batch. 13/13 (same absence, same buried message)." },
+  { file: "hww-census-harness.ts", note: "the HWW census. 24/24 (was `Seed failed: null value in column hospital_id of relation op_patients`)." },
+  { file: "learning-provenance-harness.ts", note: "learning provenance. 7 assertions (was `HARNESS ERROR: Cannot read properties of null (reading 'id')`)." },
+  { file: "decision-immutability-harness.ts", note: "decision immutability. 10 assertions (was failing with an empty reason line)." },
 ];
 
 /**
@@ -271,7 +265,7 @@ const RAW_DML = /\b(delete\s+from|insert\s+into|update\s+[a-z_]+\s+set|truncate\
  * passed. It does NOT mean the estate is checked — it means UNTRIAGED_CEILING checks have still never
  * been run by anybody, and the number is printed on every run so that stays visible.
  */
-const UNTRIAGED_CEILING = 125;  // 161 -> 134 -> 130 -> 125 as staging screening proceeds. Lower it, never raise it.
+const UNTRIAGED_CEILING = 119;  // 161 -> 134 -> 130 -> 125 -> 119 as staging screening proceeds. Lower it, never raise it.
 
 // ── The classifier is the authority on the set and on what mutates ───────────────────────────────
 type Row = { file: string; tier: string; mutates: boolean; purpose: string };
