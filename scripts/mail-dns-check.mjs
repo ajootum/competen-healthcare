@@ -195,7 +195,15 @@ if (sendSpf.length === 1) {
   // ⚠ "v=spf1 ... ~all" WITH NOTHING IN THE MIDDLE AUTHORISES NOBODY, and reporting it OK is how a
   // mangled paste survives review. An SPF record needs at least one mechanism that grants a sender:
   // include:, ip4:, ip6:, a or mx. Without one it parses, resolves, and permits nothing.
-  const grants = /(include:|ip4:|ip6:)|(^|s)(a|mx)(s|$)/.test(sendSpf[0].replace(/^v=spf1/, ""));
+  //
+  // ⚠ TOKENISED RATHER THAN PATTERN-MATCHED, DELIBERATELY. The first version used \b and \s inside a
+  // regex, was written to this file through a shell string, and arrived with \b turned into a LITERAL
+  // BACKSPACE BYTE (0x08) and the \s escapes stripped. It then matched nothing, so a perfectly good
+  // record -- "v=spf1 include:amazonses.com ~all" -- was reported INVALID. Splitting on whitespace and
+  // testing each term needs no escape a shell can eat.
+  const terms = sendSpf[0].replace(/^v=spf1/i, "").trim().split(/\s+/).filter(Boolean);
+  const grants = terms.some(t =>
+    /^[+~?-]?(include:|ip4:|ip6:|exists:|a$|a:|a\/|mx$|mx:|mx\/)/i.test(t));
   if (grants) line("OK", "send. SPF", sendSpf[0].slice(0, 60));
   else {
     line("INVALID", "send. SPF", `authorises nothing: "${sendSpf[0].slice(0, 40)}"`);
