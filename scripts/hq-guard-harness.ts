@@ -329,6 +329,40 @@ ok("I4", capabilityForRoute("/super-admin/platform-ops/practice") === "hq.practi
 ok("I5", capabilityForRoute("/super-admin-elsewhere") === null && capabilityForRoute("/practice/x") === null,
   "prefixes match on a segment boundary, so /super-admin never claims a route that merely starts like it");
 
+/**
+ * ⚠ NOTHING COMPARED THE REGISTRY TO WHAT THE PAGES ACTUALLY ENFORCE -- until 2026-08-27.
+ *
+ * I1 asks whether a route is mapped AT ALL. I3 asks whether the map names real capabilities. Neither asks
+ * the question in between: does the capability this map DECLARES for a route match the one that route's
+ * page GATES on? Two answers, two files, never compared -- so the Product Director workspace was built,
+ * shipped and gated correctly while being entirely absent from the declaration, and only I1's count moved.
+ *
+ * That absence was harmless because all 86 pages pass their capability explicitly, so context.ts never
+ * consulted the map for them. The danger is the opposite pairing: a map entry that says one capability
+ * while the page enforces another. Then the nav filter and the search catalogue -- which have only the
+ * map to go on -- show a link to people the page will refuse, or hide one from people it would admit.
+ *
+ * Measured when written: 291 pages, 291 with exactly one literal capability, 291 agreeing. So this starts
+ * at zero drift, which is the only honest moment to pin a rule like this.
+ */
+const gateCapOf = (c: (typeof classified)[number]) => {
+  const caps = (c.gate as { capabilities?: string[] }).capabilities ?? [];
+  return caps.length === 1 ? caps[0] : null;
+};
+const singleGated = classified.filter(c => gateCapOf(c) !== null);
+const drift = singleGated
+  .map(c => ({ route: c.route, page: gateCapOf(c)!, map: capabilityForRoute(c.route) }))
+  .filter(d => d.map !== null && d.map !== d.page);
+// ⚠ THE COUNT CONTROL, because every claim below is a negative and a negative over an empty list passes.
+// If classifyHqGate ever stops resolving literals, singleGated empties and I6 goes green over nothing.
+ok("I6a", singleGated.length >= 200,
+  `scan control: ${singleGated.length} of ${classified.length} pages resolve to exactly one literal capability (floor 200)`);
+ok("I6", drift.length === 0,
+  drift.length === 0
+    ? `the intent map and the page gate name the SAME capability for all ${singleGated.length} of them`
+    : `${drift.length} route(s) where the intent map and the page gate DISAGREE: `
+      + drift.map(d => `${d.route} (page ${d.page} / map ${d.map})`).join(", "));
+
 // ── 3. DDL vs TypeScript ────────────────────────────────────────────────────
 console.log("\n3. THE MIGRATION AND THE CODE AGREE");
 

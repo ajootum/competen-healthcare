@@ -171,6 +171,31 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/governance",            capability: "hq.quality.governance.view" },
   { prefix: "/super-admin/cgr",                   capability: "hq.quality.regulation.view" },
   { prefix: "/super-admin/policy-manager",        capability: "hq.quality.policy.view" },
+
+  // ── The Product Director workspace ────────────────────────────────────────────────────────────────
+  //
+  // ⚠ ALL 86 OF THESE PAGES WERE ABSENT FROM THIS MAP UNTIL 2026-08-27, and hq-guard I1 had been red
+  // about it. Nothing was reachable that should not have been: every one of the 86 passes its capability
+  // to requireHqCapability EXPLICITLY, so `capability ?? capabilityForRoute(route)` in context.ts always
+  // took the explicit value and never consulted this map. The gap was in the DECLARATION, not the gate.
+  //
+  // These eleven entries are a transcription, not a decision. Measured across all 291 /super-admin pages
+  // before they were written: 205 already agreed with this map, 86 had no entry, and ZERO disagreed --
+  // and each PD module enforces exactly one capability across every page beneath it, so each prefix has
+  // one unambiguous answer. I6 now asserts that agreement for the whole estate, so a module can never
+  // again be built without being declared here.
+  { prefix: "/super-admin/pd/adoption",           capability: "hq.practice.adoption.view" },
+  { prefix: "/super-admin/pd/commercial",         capability: "hq.practice.commercial.view" },
+  { prefix: "/super-admin/pd/configuration",      capability: "hq.practice.configuration.view" },
+  { prefix: "/super-admin/pd/governance",         capability: "hq.practice.governance.view" },
+  { prefix: "/super-admin/pd/health",             capability: "hq.practice.health.view" },
+  { prefix: "/super-admin/pd/intelligence",       capability: "hq.practice.intelligence.view" },
+  { prefix: "/super-admin/pd/operations",         capability: "hq.practice.operations.view" },
+  { prefix: "/super-admin/pd/practices",          capability: "hq.practice.practices.view" },
+  { prefix: "/super-admin/pd/practitioners",      capability: "hq.practice.practitioners.view" },
+  { prefix: "/super-admin/pd/releases",           capability: "hq.practice.releases.view" },
+  { prefix: "/super-admin/pd/support",            capability: "hq.practice.support.view" },
+
   { prefix: "/super-admin",                       capability: HQ_HOME_CAPABILITY, exact: true },
 ];
 
