@@ -236,6 +236,35 @@ const STAGING: Listed[] = [
   { file: "hww-census-harness.ts", note: "the HWW census. 24/24 (was `Seed failed: null value in column hospital_id of relation op_patients`)." },
   { file: "learning-provenance-harness.ts", note: "learning provenance. 7 assertions (was `HARNESS ERROR: Cannot read properties of null (reading 'id')`)." },
   { file: "decision-immutability-harness.ts", note: "decision immutability. 10 assertions (was failing with an empty reason line)." },
+
+  // ── Screened against staging 2026-08-27, offsets 0-29: 27 of 30 green ───────────────────────────
+  { file: "hww-sidebar-harness.ts", note: "the HWW sidebar. 24 assertions." },
+  { file: "practice-appointment-notice-harness.ts", note: "appointment notices. 32/32." },
+  { file: "practice-assistant-harness.ts", note: "the practice assistant. 51/51." },
+  { file: "practice-brief-harness.ts", note: "the practice brief. 20/20." },
+  { file: "practice-calendar-harness.ts", note: "the calendar. 31/31." },
+  { file: "practice-capability-harness.ts", note: "practice capabilities. 146/146." },
+  { file: "practice-case-memory-harness.ts", note: "case memory. 50/50." },
+  { file: "practice-checklist-harness.ts", note: "checklists. 133/133." },
+  { file: "practice-clinic-day-harness.ts", note: "the clinic day. 40/40." },
+  { file: "practice-cohort-harness.ts", note: "cohorts. 21/21." },
+  { file: "practice-command-centre-harness.ts", note: "the command centre. 50/50." },
+  { file: "practice-communication-harness.ts", note: "communication. 44/44." },
+  { file: "practice-configuration-harness.ts", note: "configuration. 40/40." },
+  { file: "practice-continuity-harness.ts", note: "continuity. 67/67." },
+  { file: "practice-current-activity-harness.ts", note: "current activity. 115/115." },
+  { file: "practice-dashboard-harness.ts", note: "the dashboard. 24/24." },
+  { file: "practice-delegation-harness.ts", note: "delegation. 48/48." },
+  { file: "practice-documentation-tools-harness.ts", note: "documentation tools. 67/67." },
+  { file: "practice-documents-phase2-harness.ts", note: "documents phase 2. 78/78." },
+  { file: "practice-documents-phase3-harness.ts", note: "documents phase 3. 121/121." },
+  { file: "practice-documents-workspace-harness.ts", note: "the documents workspace. 99/99." },
+  { file: "practice-encounter-start-harness.ts", note: "encounter start. 65/65." },
+  { file: "practice-encounter-workspace-harness.ts", note: "the encounter workspace. 135 assertions." },
+  { file: "practice-encounters-harness.ts", note: "encounters. 46 assertions." },
+  { file: "practice-events-harness.ts", note: "practice events. 55/55." },
+  { file: "practice-facilities-harness.ts", note: "facilities. 44/44." },
+  { file: "practice-followup-plans-harness.ts", note: "follow-up plans. 50/50." },
 ];
 
 /**
@@ -265,7 +294,7 @@ const RAW_DML = /\b(delete\s+from|insert\s+into|update\s+[a-z_]+\s+set|truncate\
  * passed. It does NOT mean the estate is checked — it means UNTRIAGED_CEILING checks have still never
  * been run by anybody, and the number is printed on every run so that stays visible.
  */
-const UNTRIAGED_CEILING = 119;  // 161 -> 134 -> 130 -> 125 -> 119 as staging screening proceeds. Lower it, never raise it.
+const UNTRIAGED_CEILING = 92;  // 161 -> 134 -> 130 -> 125 -> 119 -> 92 as staging screening proceeds. Lower it, never raise it.
 
 // ── The classifier is the authority on the set and on what mutates ───────────────────────────────
 type Row = { file: string; tier: string; mutates: boolean; purpose: string };
