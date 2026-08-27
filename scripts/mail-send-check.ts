@@ -138,5 +138,10 @@ console.log("    above does NOT mean a password-reset email will arrive.");
 console.log(`\n  ${problems.length === 0 ? "Application stack: nothing to fix." : `${problems.length} to fix:`}`);
 problems.forEach((p, i) => console.log(`   ${i + 1}. ${p}`));
 console.log("");
-process.exit(problems.length === 0 ? 0 : 1);
+// ⚠ SET THE CODE, DO NOT CALL process.exit(). Exiting from inside a promise chain tears the event
+// loop down while stdout may still be flushing, and on Windows that surfaced as a libuv assertion
+// printed AFTER the report -- "!(handle->flags & UV_HANDLE_CLOSING)". Harmless, and exactly the kind
+// of noise that trains somebody to ignore the end of a tool's output. Setting exitCode lets node
+// finish writing and then exit with the same status.
+process.exitCode = problems.length === 0 ? 0 : 1;
 });

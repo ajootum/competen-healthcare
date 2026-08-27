@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import type { Metadata } from "next";
 import Link from "next/link";
 import MobileSidebar from "./MobileSidebar";
 import NavLink from "@/components/NavLink";
@@ -17,6 +18,14 @@ import { loadHeaderContext } from "@/lib/platform/header";
 // dedicated Task/Calendar/Messaging/Documents/Profile/Preferences centres (PW-002..012) are progressive — those
 // items point at the nearest live surface until their own pages ship. Badges (tasks/notifications) are the user's real counts.
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+// The tab said "Competen — Healthcare. Empowered." on every authenticated screen, because nothing
+// below the root layout set a title. A layout title is the DEFAULT for its children, so any sub-route
+// that names itself still wins. Title only, deliberately: /dashboard is in robots.ts's AUTHENTICATED
+// disallow list, so the canonical URL and Open Graph tags pageMetadata() adds would be for indexing a
+// surface that must not be indexed.
+export const metadata: Metadata = { title: "Personal Workspace" };
+
 const dayAgoIso = () => new Date(Date.now() - 86400000).toISOString(); // module helper — Date.now() in render trips purity
 const SHIFT_TIMES: Record<string, string> = { day: "07:00 – 19:00", evening: "14:00 – 22:00", night: "19:00 – 07:00", long_day: "07:00 – 19:30", on_call: "On call" };
 const SHIFT_LABEL: Record<string, string> = { day: "Day Shift", evening: "Evening Shift", night: "Night Shift", long_day: "Long Day", on_call: "On Call" };

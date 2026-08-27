@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { workspaceLinksForUser } from "@/lib/workspace-links";
 import SidebarToggle from "@/components/SidebarToggle";
@@ -22,6 +23,12 @@ import { PD_SIDEBAR_COOKIE, readPdSidebarMode } from "./_components/pd-sidebar-m
 // Sidebar IA aligned to the Mission Control model (MC-001). The nav config and
 // its Clinical Knowledge Platform branch live in the WorkspaceSidebar client
 // component (it swaps to the CKP shell on /super-admin/ckp routes).
+
+// Named for what the screen itself says -- "Competen Mission Control", "Super Admin Workspace" -- so
+// the tab matches the page rather than the route segment. Title only: /super-admin is in robots.ts's
+// AUTHENTICATED disallow list, so pageMetadata()'s canonical and Open Graph tags would be describing
+// a surface that must never be indexed.
+export const metadata: Metadata = { title: "Competen Mission Control" };
 
 export default async function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
