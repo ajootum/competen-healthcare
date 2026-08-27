@@ -74,10 +74,21 @@ const MIGRATION = "supabase/migrations/264-hq-positions-and-spaces.sql";
  * ⚠ AND A DERIVED LIST HAS ITS OWN FAILURE MODE -- an empty glob passes every check below vacuously,
  * which is how a generated SURFACES list once silently stopped covering anything. S0 is the control.
  */
+// ⚠ AND THE DERIVED LIST WENT STALE TOO, ON ITS FILTER RATHER THAN ITS CONTENTS -- 2026-08-27.
+//
+// The filter read `insert into hq_capability` alone. Migration 345 seeds a POSITION and its GRANTS and
+// defines no new capability, so the whole file was invisible: the harness computed a grant set the
+// database had moved past, and D5 and B5 went red against code that was correct. Exactly the failure
+// this block's own header describes -- "a list somebody must remember to extend" -- except the list was
+// derived and the FILTER became the thing nobody remembered to extend.
+//
+// A migration is a seed migration if it touches ANY of the three seed tables. hq_position_capability is
+// matched before hq_position so the longer name wins, though `includes` makes that moot here.
+const SEED_TABLES = ["insert into hq_capability", "insert into hq_position_capability", "insert into hq_position"];
 const SEED_MIGRATIONS = readdirSync("supabase/migrations")
   .filter(f => f.endsWith(".sql"))
   .map(f => `supabase/migrations/${f}`)
-  .filter(f => readFileSync(f, "utf8").includes("insert into hq_capability"))
+  .filter(f => { const s = readFileSync(f, "utf8"); return SEED_TABLES.some(t => s.includes(t)); })
   .sort();
 const APP_ROOT = "src/app/super-admin";
 
@@ -105,8 +116,49 @@ const routeOf = (file: string) =>
 
 // Parse the seed rows straight out of the migration, so the DDL and the TypeScript catalogue can never
 // quietly disagree and so the decision tests below run against the data that will actually ship.
-const sql = SEED_MIGRATIONS.map(f => readFileSync(f, "utf8")).join("\n");
+/** `--` to end of line, outside string literals. A comment quoting an INSERT is prose, not a seed row. */
+const stripSqlComments = (s: string) =>
+  s.split(/\r?\n/)
+    .map(l => { const at = l.indexOf("--"); return at >= 0 && ((l.slice(0, at).match(/'/g) ?? []).length) % 2 === 0 ? l.slice(0, at) : l; })
+    .join("\n");
+
+const sql = stripSqlComments(SEED_MIGRATIONS.map(f => readFileSync(f, "utf8")).join("\n"));
+
+// Anything the parser meets and does not understand lands here, and P1 below turns it red. A parser that
+// shrugs at a form it cannot read is the failure this whole block is a correction for.
+const parseProblems: string[] = [];
+
+/** The `(` at `open` and its matching `)`, tracking nesting. */
+function balanced(s: string, open: number): [number, number] {
+  let depth = 0;
+  for (let i = open; i < s.length; i++) {
+    if (s[i] === "(") depth++;
+    else if (s[i] === ")") { depth--; if (depth === 0) return [open, i]; }
+  }
+  return [open, s.length - 1];
+}
+
+const unquote = (v: string) => v.trim().replace(/^'/, "").replace(/'$/, "");
+/** `('a', 'b'), ('c', 'd')` -> [["a","b"], ["c","d"]] */
+const tuples = (body: string) => [...body.matchAll(/\(([^()]*)\)/g)].map(m => m[1].split(",").map(unquote));
+
 /**
+ * ⚠ AND THERE WAS A SECOND INSERT DIALECT THE PARSER HAD NEVER BEEN TOLD ABOUT -- 2026-08-27.
+ *
+ * This read one shape, `insert into T (cols) values (…), (…)`. Migration 311 seeds FOUR of its inserts as
+ * `insert into T (cols) select p.code, c.code, 'position_default' from (values …) as p(code) cross join
+ * (values …) as c(code)` -- a cross product, which is how you grant one position twenty capabilities
+ * without writing the position out twenty times.
+ *
+ * !! IT DID NOT FAIL ON THAT. IT PRODUCED ROWS. `block.indexOf(" values")` misses `(values` (no leading
+ * space), returns -1, and `slice(-1 + 7)` quietly slices from offset 6 instead -- so the regex then
+ * harvested the INSERT's OWN COLUMN LIST as a data row, giving a grant of position `position_code` onto
+ * capability `capability_code`, plus a position called `code` from each `as p(code)` alias. D5 has been
+ * red against correct migrations, naming garbage it invented itself.
+ *
+ * The lesson is not "handle cross join". It is that a parser with no unrecognised-input branch cannot tell
+ * you it failed -- it can only hand you something shaped like an answer. Hence S4.
+ *
  * ⚠ EVERY `insert into <table>` ACROSS EVERY SEED FILE, NOT JUST THE FIRST.
  *
  * This took the first occurrence and stopped. That was correct while 264 was the only seed file, and became
@@ -114,6 +166,46 @@ const sql = SEED_MIGRATIONS.map(f => readFileSync(f, "utf8")).join("\n");
  * insert, stopped at that block's `on conflict`, and never saw 273 at all — so D1 reported "29 in the DDL,
  * 30 in code" and looked like the CODE had drifted, when the parser had simply stopped reading.
  */
+function selectRows(table: string, tail: string): string[][] {
+  const body = tail.trim();
+  const fromAt = body.search(/\bfrom\b/i);
+  if (fromAt < 0) { parseProblems.push(`${table}: a select-form INSERT with no FROM`); return []; }
+  const projection = body.slice(body.search(/\bselect\b/i) + 6, fromAt).split(",").map(s => s.trim());
+
+  // `from (values …) as p(code)`, then zero or more `cross join (values …) as c(code)`.
+  const rest = body.slice(fromAt);
+  const sources: { alias: string; cols: string[]; rows: string[][] }[] = [];
+  for (const m of rest.matchAll(/\(\s*values/gi)) {
+    const [o, c] = balanced(rest, m.index!);
+    const as = /^\s*as\s+([a-z0-9_]+)\s*\(([^)]*)\)/i.exec(rest.slice(c + 1));
+    if (!as) { parseProblems.push(`${table}: a (values …) source with no \`as alias(cols)\` -- the projection cannot be resolved`); return []; }
+    sources.push({ alias: as[1], cols: as[2].split(",").map(s => s.trim()), rows: tuples(rest.slice(o + 1, c)) });
+  }
+  if (!sources.length) { parseProblems.push(`${table}: a select-form INSERT with no (values …) source`); return []; }
+
+  // The cross product, in source order -- which is what CROSS JOIN means.
+  let combos: string[][][] = [[]];
+  for (const s of sources) combos = combos.flatMap(c => s.rows.map(r => [...c, r]));
+
+  // Projected through the SELECT list rather than by assuming position-then-capability: the select list is
+  // where the migration states which side is which, so reading it is the difference between parsing and
+  // guessing correctly.
+  const out: string[][] = [];
+  for (const combo of combos) {
+    const row: string[] = [];
+    for (const p of projection) {
+      if (p.startsWith("'")) { row.push(unquote(p)); continue; }
+      const [alias, col] = p.split(".");
+      const i = sources.findIndex(s => s.alias === alias);
+      const j = i < 0 ? -1 : sources[i].cols.indexOf(col);
+      if (i < 0 || j < 0) { parseProblems.push(`${table}: the projection names "${p}" and no source supplies it`); return []; }
+      row.push(combo[i][j]);
+    }
+    out.push(row);
+  }
+  return out;
+}
+
 const rowsOf = (table: string): string[][] => {
   const out: string[][] = [];
   const needle = `insert into ${table} (`;
@@ -121,12 +213,21 @@ const rowsOf = (table: string): string[][] => {
   for (;;) {
     const start = sql.indexOf(needle, from);
     if (start < 0) break;
-    const end = sql.indexOf("on conflict", start);
-    const block = sql.slice(start, end < 0 ? sql.length : end);
-    const body = block.slice(block.indexOf(" values") + 7);
-    for (const m of body.matchAll(/\(([^()]*)\)/g))
-      out.push(m[1].split(",").map(v => v.trim().replace(/^'/, "").replace(/'$/, "")));
-    from = end < 0 ? start + needle.length : end;
+    // An INSERT ends at `on conflict` or at its own statement terminator, whichever comes first -- without
+    // the semicolon a plain-VALUES insert with no conflict clause ran on into the NEXT statement.
+    const stops = [sql.indexOf("on conflict", start), sql.indexOf(";", start)].filter(i => i >= 0);
+    const end = stops.length ? Math.min(...stops) : sql.length;
+    const block = sql.slice(start, end);
+    from = end;
+
+    // Step over the INSERT's own column list first. It is the target's shape, never a data row.
+    const [, colsEnd] = balanced(block, block.indexOf("("));
+    const tail = block.slice(colsEnd + 1);
+    const kw = tail.trim().slice(0, 6).toLowerCase();
+
+    if (kw === "values") out.push(...tuples(tail.slice(tail.toLowerCase().indexOf("values") + 6)));
+    else if (kw === "select") out.push(...selectRows(table, tail));
+    else parseProblems.push(`${table}: an INSERT in a form this parser does not read -- starts "${tail.trim().slice(0, 40)}…"`);
   }
   return out;
 };
@@ -199,8 +300,24 @@ ok("E7", /requireHqCapability[\s\S]{0,400}?resolveHqContext\([^)]*\{\s*enforce:\
 // ── 2. The intent map, in BOTH directions ───────────────────────────────────
 console.log("\n2. THE INTENT MAP -- a new route must fail, not disappear");
 const unmapped = classified.filter(c => capabilityForRoute(c.route) === null).map(c => c.route);
+// ⚠ IT PRINTED EIGHT AND NEVER SAID EIGHT WAS A LIMIT -- 2026-08-27.
+//
+// This read `unmapped.slice(0, 8)` with no count beside it, so a reader saw eight route names and took
+// that for the finding. The real number was 86: the entire Product Director workspace, 86 of 291 pages,
+// absent from the intent map. Eight was the slice width. I quoted it into a status report as a count.
+//
+// !! A TRUNCATED LIST WITHOUT ITS COUNT IS NOT A SHORTER TRUE ANSWER, IT IS A DIFFERENT FALSE ONE. The
+// count leads now, the truncation announces itself, and the tail is grouped by module so 86 routes stay
+// readable without printing 86 lines.
+const unmappedByModule = [...unmapped.reduce((m, r) => {
+  const k = r.split("/").slice(0, 4).join("/");
+  return m.set(k, (m.get(k) ?? 0) + 1);
+}, new Map<string, number>()).entries()].sort((a, b) => b[1] - a[1]);
 ok("I1", unmapped.length === 0,
-  `every scanned /super-admin route resolves to a declared capability${unmapped.length ? ` -- unmapped: ${unmapped.slice(0, 8).join(", ")}` : ""}`);
+  unmapped.length === 0
+    ? `all ${classified.length} scanned /super-admin routes resolve to a declared capability`
+    : `${unmapped.length} of ${classified.length} scanned /super-admin routes resolve to NO declared capability`
+      + ` -- by module: ${unmappedByModule.map(([k, n]) => `${k} (${n})`).join(", ")}`);
 const deadIntents = HQ_ROUTE_INTENT.filter(i => !classified.some(c => c.route === i.prefix || c.route.startsWith(i.prefix + "/")));
 ok("I2", deadIntents.length === 0,
   `every declared intent prefix has at least one real page${deadIntents.length ? ` -- dead: ${deadIntents.map(d => d.prefix).join(", ")}` : ""}`);
@@ -218,6 +335,13 @@ console.log("\n3. THE MIGRATION AND THE CODE AGREE");
 // ⚠ THE CONTROL FOR THE DERIVED SEED LIST. A glob that matched nothing would make D1 compare 0 against
 // 0-if-empty and D2 compare two empty sets -- both green, over an estate nobody read. It also names the
 // files, so a reader can see WHICH migrations were counted rather than trusting that some were.
+// ⚠ THE PARSER MUST BE ABLE TO SAY IT FAILED. Every assertion in this section reads rows the parser
+// produced, so a parser that silently mis-reads an INSERT does not make them fail -- it makes them lie.
+// This one asserts the parser understood every seed INSERT it met, and names the ones it did not.
+ok("S4", parseProblems.length === 0,
+  parseProblems.length === 0
+    ? `parser control: every seed INSERT parsed in a known form — ${ddlCapabilities.length} capabilities, ${ddlPositions.length} positions, ${ddlGrants.length} grants`
+    : `the parser did not understand ${parseProblems.length} seed INSERT(s) — every row count below is unsound: ${parseProblems.join("; ")}`);
 ok("S0", SEED_MIGRATIONS.length >= 2 && SEED_MIGRATIONS.some(f => f.includes("264-")) && ddlCapabilities.length > 0,
   `seed-list control: ${SEED_MIGRATIONS.length} migration(s) seed hq_capability and yield ${ddlCapabilities.length} row(s) — ${SEED_MIGRATIONS.map(f => f.replace("supabase/migrations/", "").slice(0, 3)).join(", ")}`);
 ok("D1", ddlCapabilities.length === HQ_CAPABILITIES.length,
