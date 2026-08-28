@@ -586,7 +586,14 @@ async function main() {
   //
   // On TODAY, because startActivity refuses an activity planned for another day, and outside the week
   // above so none of section 4's arithmetic moves.
-  const live = await plan(ctxA, "outpatient_clinic", "Today Clinic", today, 540, 780, null);
+  //
+  // ⚠ PLANNED AT A LOCATION, BECAUSE STARTING WITHOUT ONE IS NOW REFUSED -- 2026-08-28. activity.ts
+  // gained the rule that a practice WITH locations must record one before a session RUNS (planning
+  // without one stays legitimate; every encounter the running session creates inherits the location and
+  // a blank cannot be reconstructed later). This fixture predated the rule, passed null, and the four
+  // REFUSES checks below failed as a cascade behind a 422 LOCATION_REQUIRED that never let the activity
+  // start. L2 rather than L1, so 6ad's relocate-to-L1 attempt stays a genuine change of location.
+  const live = await plan(ctxA, "outpatient_clinic", "Today Clinic", today, 540, 780, L2);
   const started = await startActivity(admin, ctxA, live, { source: "system" });
   ok("6ab-setup. an activity is running", started.ok, JSON.stringify(started));
   const moveRunning = await moveActivity(admin, ctxA, live, { plannedStartMinute: 600 },

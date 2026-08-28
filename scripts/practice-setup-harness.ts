@@ -172,7 +172,9 @@ async function main() {
   // Repointed 2026-08-16 (was 19, then quietly 21): module 20 Investigations and 21 Treatment Lists
   // (migration 275's configuration arc) and 22 Procedure Catalogue (migration 297's settings screen)
   // each arrived holding a document.
-  ok("2f twenty-two modules", first.modules.length === 22, String(first.modules.length));
+  // Repointed 2026-08-28: module 23 Document Design (the migration 357/358 style-profiles arc),
+  // registered in the foundation domain "rather than only existing at its URL" per setup.ts's own note.
+  ok("2f twenty-three modules", first.modules.length === 23, String(first.modules.length));
   ok("2c no percentage anywhere in the payload",
     !/percent|"\d+%"/i.test(JSON.stringify({ ...first, modules: [], checklist: first.checklist })),
     "found a percentage");

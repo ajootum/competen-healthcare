@@ -145,20 +145,8 @@ const EXCLUDED: Listed[] = [
     file: "practice-patient-access-harness.ts",
     note: "solo-confirmed, and INVERTED: its 2a-control asserts the deployment has NO gateway configured, but staging now carries Resend after the 2026-08-27 email activation, so section 2 tests a different world than the one that ships. The HARNESS assumption is stale. Repoint the control, then rescreen.",
   },
-  {
-    file: "practice-planner-harness.ts",
-    note: "solo-confirmed. Root: starting a session now answers 422 LOCATION_REQUIRED and the harness fixture passes no location, so the activity never starts and four REFUSES-moving-a-started-activity checks fail as a cascade. Reads as a stale harness fixture against a deliberate product change -- fix the fixture, not the product.",
-  },
-  {
-    file: "practice-setup-domains-harness.ts",
-    note: "solo-confirmed 58/4. Spec drift: the s3 Practice Foundation now holds FIVE modules (identifiers joined profile/locations/letterhead/document_design) and the harness pins four. The never-pin-a-count class -- update the harness to the spec, or the spec ruling, whichever is authoritative.",
-  },
 
   // -- The final 11 solo verdicts, closing the sweep 2026-08-28. Screening of all 161 is COMPLETE. --
-  {
-    file: "practice-setup-harness.ts",
-    note: "solo-confirmed 53/1: `2f twenty-two modules -- 23`. The never-pin-a-count class again, beside practice-setup-domains: the setup catalogue grew a module and the harness pins the old total. Update the harness to the spec ruling.",
-  },
   {
     file: "practice-adoption-harness.ts",
     note: "solo-confirmed 66/2: the fixture workspace holds 0 appointments, so H4b/H4c-control are vacuous and the control that proves the hook emits fails at zero. Staging-data: give the fixture workspace an appointment.",
@@ -397,6 +385,12 @@ const STAGING: Listed[] = [
   { file: "umw-communications-harness.ts", note: "UMW communications. 53/53 (same cohort; its old libuv exit crash was noise after the data gate)." },
   { file: "umw-wellbeing-harness.ts", note: "UMW wellbeing. 53/53, self-cleaning (same cohort)." },
   { file: "xw-sweep-harness.ts", note: "the cross-workspace sweep. 54/54 -- matching its recorded historical count exactly (same cohort)." },
+
+  // -- The three stale pins, fixed 2026-08-28: in each the PRODUCT was right and the fixture or pin
+  // predated a deliberate hardening (location-at-start; module 23 registering itself). --
+  { file: "practice-planner-harness.ts", note: "the activity planner. 93/93 (its fixture predated activity.ts's rule that a practice WITH locations must record one before a session RUNS; planned at L2, the four REFUSES checks breathe again)." },
+  { file: "practice-setup-harness.ts", note: "practice setup. 54/54 (2f repointed 22 -> 23: module 23 Document Design, the mig-357/358 style arc, per the harness's own named-repoint trail)." },
+  { file: "practice-setup-domains-harness.ts", note: "the setup domains. 62/62 (Foundation holds FIVE named modules now -- document_design joined -- and 3d's fixture publishes a style, because setup.ts counts status published only)." },
 ];
 
 /**

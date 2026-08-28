@@ -140,8 +140,11 @@ async function main() {
   ok("1a there are exactly three domains, in CPR-V5-008's order",
     first.domains.map(d => d.key).join(",") === "foundation,operations,administration",
     first.domains.map(d => d.key).join(","));
-  ok("1b s3's Practice Foundation holds exactly the four modules it names",
-    dom(first, "foundation").moduleKeys.slice().sort().join(",") === "identifiers,letterhead,locations,profile",
+  // ⚠ FOUNDATION GAINED A FIFTH MODULE AND IT IS NAMED, NOT ABSORBED -- 2026-08-28. Module 23 Document
+  // Design (the migration 357/358 style-profiles arc) registered itself in the foundation domain; the
+  // assertion stays exact so the NEXT arrival also has to be written down here rather than slipping in.
+  ok("1b s3's Practice Foundation holds exactly the five modules it names",
+    dom(first, "foundation").moduleKeys.slice().sort().join(",") === "document_design,identifiers,letterhead,locations,profile",
     dom(first, "foundation").moduleKeys.join(","));
   // ⚠ EACH DOMAIN HAS GAINED ONE MODULE SINCE CPR-V5-008, AND THE ADDITIONS ARE NAMED RATHER THAN THE
   // ASSERTION BEING LOOSENED. Module 18 Clinical Parameters (CPR-LCP-001 s10.1) is operations; module 19
@@ -217,8 +220,12 @@ async function main() {
     .eq("workspace_id", wsA).eq("is_effective", true);
   await admin.from("practice_facility")
     .insert({ workspace_id: wsA, name: "Mulago Hospital", facility_type: "hospital", active: true });
+  // Module 23 Document Design counts done on a PUBLISHED style (setup.ts filters status: "published" --
+  // a draft leaves the practice on the Competen default, which its own note says is not-done, not broken).
+  await admin.from("practice_document_style")
+    .insert({ workspace_id: wsA, name: "Harness Style", version: 1, status: "published" });
   const foundationDone = await practiceSetup(admin, A);
-  ok("3d with a letterhead and an institution, Foundation is COMPLETE",
+  ok("3d with a letterhead, an institution and a published style, Foundation is COMPLETE",
     dom(foundationDone, "foundation").state === "complete"
     && dom(foundationDone, "foundation").progress.done === dom(foundationDone, "foundation").progress.of,
     `${dom(foundationDone, "foundation").state} ${JSON.stringify(dom(foundationDone, "foundation").progress)}`);
