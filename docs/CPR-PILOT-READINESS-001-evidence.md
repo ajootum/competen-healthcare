@@ -192,7 +192,15 @@ P2/P3 → optimisation backlog; P0/P1 may not enter the backlog.
 
 ## J. Defect register (this acceptance pass)
 
-No open P0. No open P1. Found-and-fixed during the pass (not open): the fixture-A membership mis-model
+No open P0. No open P1.
+
+**H1 findings (owner-run, 2026-08-28 afternoon):**
+
+| # | Finding | Severity | Disposition |
+|---|---|---|---|
+| H1-1 | A phone-required template refused a MINOR: the template check read the patient's raw phone and never consulted the guardian, while the minimum-dataset rule always had. Owner ruling: phone is the guardian's requirement, not the minor's | P1 | **FIXED same day** (registration.ts, one shared guardian lookup for both checks) + 3 executable regression cases, practice-registration-harness 69/69 on staging. Reaches production on next deploy |
+| H1-2 | Owner expected to SEARCH for a registered patient in the Planner's quick-book panel; it is name-only by design (its footnote says so) and the patient-linked path is Patients -> record -> book. Reachable, not discoverable at the moment of need | P2 | Logged for the optimisation backlog: patient search/autocomplete in the quick-book, or stronger signposting. Script H1 step 4 clarified |
+| H1-3 | The 30-minute-notice refusal fired on a past-time booking attempt and named the rule and the location in plain words | — | Not a defect: the booking rule working, observed live | Found-and-fixed during the pass (not open): the fixture-A membership mis-model
 (fixed same day, harness reshaped); the stale apex `/signup` copy (fixed + deployed 2026-08-28). P3
 backlog: signup-harness `probe-*` debris identities on staging (cosmetic, exempted by pattern).
 
