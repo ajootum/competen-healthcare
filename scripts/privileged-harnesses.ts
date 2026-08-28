@@ -705,7 +705,21 @@ const runAll = process.argv.includes("--all");
 // default run is read-only against whatever .env.local names. Combining them would mean one command
 // writing to one project and reading another, and a reader could not tell from the output which
 // harness hit which.
-const toRun = stagingMode ? STAGING : runAll ? [...SECURITY, ...TRIAGED] : SECURITY;
+/**
+ * ⚠ THE STAGING RUN CAN BE CHUNKED, because the full list is 161 harnesses and hours of wall clock, and
+ * a run that long has been killed mid-flight before (the 2026-08-28 sweep lost two batches that way).
+ * `--from N --limit M` runs a slice of the STAGING list in its declared order; a full-estate confirm is
+ * several slices back to back, each short enough to finish inside the kill window, results concatenated
+ * by the caller. Slicing is display-honest: the summary names the slice so a partial run can never be
+ * quoted as the estate.
+ */
+const runFromIdx = process.argv.includes("--from") ? Number(process.argv[process.argv.indexOf("--from") + 1]) || 0 : 0;
+const runLimit = process.argv.includes("--limit") ? Number(process.argv[process.argv.indexOf("--limit") + 1]) || Infinity : Infinity;
+const fullList = stagingMode ? STAGING : runAll ? [...SECURITY, ...TRIAGED] : SECURITY;
+const toRun = stagingMode ? fullList.slice(runFromIdx, runFromIdx + runLimit) : fullList;
+if (stagingMode && toRun.length < fullList.length) {
+  console.log(`  SLICE: entries ${runFromIdx}..${runFromIdx + toRun.length - 1} of ${fullList.length} — this run alone is not the estate\n`);
+}
 const failures: string[] = [];
 
 // ⚠ A GATE THAT FAILED IS A GATE THAT MUST STOP THE RUN. Reporting a refusal and then executing anyway
@@ -721,8 +735,11 @@ if (!toRun.length) {
   for (const { file } of toRun) {
     process.stdout.write(`── ${file} ... `);
     try {
+      // ⚠ 900s CEILING, generous by measurement: the longest harness in the estate is 473s. Without one,
+      // a genuinely hung harness would hang the whole confirm run silently.
       execFileSync("npx", ["tsx", join("scripts", file)], {
         cwd: ROOT, encoding: "utf8", stdio: "pipe", shell: process.platform === "win32",
+        timeout: 900_000,
         ...(stagingMode ? { env: stagingEnv() } : {}),
       });
       console.log("PASS");
