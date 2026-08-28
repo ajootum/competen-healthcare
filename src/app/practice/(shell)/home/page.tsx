@@ -11,6 +11,8 @@ import StartYourDay from "./StartYourDay";
 import LiveRefresh from "../LiveRefresh";
 import OfflineCacheWriter from "../OfflineCacheWriter";
 import { offlineCacheGate } from "@/lib/practice/offline-gate";
+import { bookingLinkSummary } from "@/lib/practice/identity-service";
+import BookingLinkCard from "./BookingLinkCard";
 import { BILLING_CAPTURE_CAPABILITIES } from "@/lib/practice/billing-constants";
 import { primaryNav } from "@/lib/practice/navigation";
 import { countLed } from "@/lib/practice/operations-home";
@@ -96,9 +98,12 @@ export default async function PracticeCommandCentre() {
   // ⚠ The offline gate rides alongside, resolved on the SERVER (CP-OFFLINE-SURVEY-001 s3.7) and handed to
   // the writer as plain JSON. No client-side flag evaluation exists in this repository and this does not
   // add the first one.
-  const [dash, offline] = await Promise.all([
+  const [dash, offline, bookingLink] = await Promise.all([
     dashboardReadModel(admin, ctx, { at }),
     offlineCacheGate(admin, ctx, ctx.userId),
+    // The booking link, answered by identity-service's own resolver -- never a second construction
+    // of the address, and never a share affordance for an address that does not open.
+    bookingLinkSummary(admin, ctx.userId),
   ]);
   // followUps/alerts/timeline stay in the PAYLOAD (Current Session reads the same read model);
   // this page stopped rendering them under HFE-001 s4.2 -- their canonical homes have them.
@@ -398,6 +403,11 @@ export default async function PracticeCommandCentre() {
             is a claim about your practice — it is a claim that the read failed.
           </p>
         )}
+
+        {/* ── THE BOOKING LINK, WHERE EVERYBODY STARTS THE DAY (owner ask, 2026-08-28). One slim card,
+            both breakpoints: the live address with copy/open/share, or the honest state that stands in
+            for it. The address itself comes from identity-service's one constructor. */}
+        <BookingLinkCard summary={bookingLink} />
 
         {/* ── s6 row 2, idle ordering: when nothing is running, row 1 is absent and Needs Attention
                LEADS the story -- above the hero, whose StartYourDay is then row 3's What's Next. DOM

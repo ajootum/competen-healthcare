@@ -889,6 +889,10 @@ export default async function AvailabilityBookingPage({ searchParams }: {
                       </li>
                     </ul>
                   )}
+                  <Link href="/practice/setup/identity"
+                    className="mt-2 inline-block text-[11px] font-semibold text-[var(--cp-primary)] hover:underline">
+                    Booking link, QR code &amp; share tools →
+                  </Link>
                   <p className="mt-2 border-t border-gray-100 pt-2 text-[10px] leading-relaxed text-gray-500">
                     A published page needs a claimed handle, the one-time code switched on and a mode
                     that admits patients. Those three are refused by the database, not by this screen —

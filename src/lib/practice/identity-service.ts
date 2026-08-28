@@ -802,6 +802,42 @@ export async function identitySharing(displayName: string, handle: string): Prom
 /** How many name candidates are worth offering. Enough to choose from, few enough to read. */
 const SUGGESTION_LIMIT = 5;
 
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// THE BOOKING LINK, WHERE A PRACTITIONER ACTUALLY IS. (Owner, 2026-08-28: "Where do we find the
+// booking link? Can we make it very easy to find.")
+//
+// A light summary for surfaces that are not the identity console -- the Command Centre, the publish
+// checklist's neighbourhood. It reuses this file's ONE url constructor and asks resolveHandle itself
+// whether the address opens, because the sharing defect this file's history records is precisely a
+// screen offering an address a patient cannot open. `live` is the only state that carries a URL a
+// screen may offer to copy or share; `claimed_not_open` carries it for RECOGNITION ONLY, and the
+// screen must say the address does not open yet rather than offer share affordances for it.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+export type BookingLinkSummary =
+  | { state: "unreadable"; reason: string }
+  | { state: "none" }
+  | { state: "claimed_not_open"; handle: string; url: string }
+  | { state: "live"; handle: string; url: string };
+
+export async function bookingLinkSummary(admin: any, userId: string): Promise<BookingLinkSummary> {
+  try {
+    const { data: row, error } = await admin.from("practice_practitioner_identity")
+      .select("handle, discovery, status")
+      .eq("user_id", userId).maybeSingle();
+    if (error) return { state: "unreadable", reason: error.message };
+    if (!row?.handle) return { state: "none" };
+    const address = addressState(await resolveHandle(admin, row.handle), row);
+    if (address.state === "unreadable")
+      return { state: "unreadable", reason: address.reason ?? "whether your address opens could not be checked" };
+    return address.state === "resolves"
+      ? { state: "live", handle: row.handle, url: bookingUrl(row.handle) }
+      : { state: "claimed_not_open", handle: row.handle, url: bookingUrl(row.handle) };
+  } catch (e) {
+    return { state: "unreadable", reason: e instanceof Error ? e.message : "the read failed" };
+  }
+}
+
 /**
  * Turn the resolver's answer into something a screen can act on, WITHOUT SECOND-GUESSING IT.
  *

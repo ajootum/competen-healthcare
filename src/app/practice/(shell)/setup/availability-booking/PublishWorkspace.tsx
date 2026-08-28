@@ -106,7 +106,7 @@ export default function PublishWorkspace({ readiness, locations, mayPublish }: {
         <div className="min-w-0">
           <h3 className="text-[14px] font-bold text-gray-900">Preview &amp; publish</h3>
           <p className="text-[11px] text-gray-500">
-            s10.2&apos;s publish checks, run against this practice. {readiness.checks.length} of them.
+            The publish checks, run against this practice. {readiness.checks.length} of them.
           </p>
         </div>
         <span className="ml-auto rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-600">
@@ -126,6 +126,20 @@ export default function PublishWorkspace({ readiness, locations, mayPublish }: {
           {readiness.warningsFailing.length === 1 ? "" : "s"}
         </p>
       </div>
+
+      {/* The moment somebody publishes is the moment they want the link (owner ask, 2026-08-28) --
+          so the live state points straight at the address, its QR and the share tools. The address
+          itself is only ever printed by the identity console and the Command Centre card, both fed by
+          the one server-side constructor. */}
+      {live && (
+        <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-[11.5px] leading-relaxed text-emerald-900">
+          <span className="font-bold">Your booking page is live.</span> Your link is on the Command
+          Centre, and the full kit is in one place:{" "}
+          <a href="/practice/setup/identity" className="font-semibold text-[var(--cp-primary)] hover:underline">
+            booking link, QR code &amp; share tools →
+          </a>
+        </p>
+      )}
 
       {readiness.profileUnreadable && (
         <p className="mt-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-600">
