@@ -49,8 +49,12 @@ The following are settled decisions, not defaults waiting to be improved:
 - **The CPR-HFE-001 sidebar and screen doctrine** (`docs/CPR-PD-SCREEN-DOCTRINE.md`,
   `scripts/pd-screen-doctrine-harness.ts`). Eleven items, five sections. The harness passing IS the freeze
   — do not hand-edit the nav and assume it's fine because it looks right.
-- **Signup stays closed.** Supabase's "allow new users to sign up" is OFF by explicit owner decision.
-  Never flip it, never build a path that assumes it's on.
+- **Practice self-serve signup is OPEN — by explicit owner decision, 2026-08-28.** The owner enabled
+  Supabase's "allow new users to sign up" and set `practice_public_signup` ON in production, after the
+  full path was proven on staging (practice-signup-harness, 27/27 over HTTP). Confirm-email stays ON in
+  production. The ESTATE-level `/signup` flag (`estate_public_signup`) remains unwritten and therefore
+  closed — opening it is a separate owner decision, not a drive-by. Do not close, reopen, or widen any
+  signup surface without the owner saying so.
 
 Do not redesign frozen product, governance, tenancy, routing, HFE, or commercial architecture merely
 because a plugin, a model, or a new spec's phrasing suggests an alternative would be cleaner. Propose the
