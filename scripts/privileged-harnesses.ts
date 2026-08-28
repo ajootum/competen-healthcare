@@ -174,6 +174,44 @@ const EXCLUDED: Listed[] = [
     file: "practice-setup-domains-harness.ts",
     note: "solo-confirmed 58/4. Spec drift: the s3 Practice Foundation now holds FIVE modules (identifiers joined profile/locations/letterhead/document_design) and the harness pins four. The never-pin-a-count class -- update the harness to the spec, or the spec ruling, whichever is authoritative.",
   },
+
+  // -- The final 11 solo verdicts, closing the sweep 2026-08-28. Screening of all 161 is COMPLETE. --
+  {
+    file: "practice-setup-harness.ts",
+    note: "solo-confirmed 53/1: `2f twenty-two modules -- 23`. The never-pin-a-count class again, beside practice-setup-domains: the setup catalogue grew a module and the harness pins the old total. Update the harness to the spec ruling.",
+  },
+  {
+    file: "practice-documentation-harness.ts",
+    note: "!! THE MOST SERIOUS FINDING OF THE SWEEP, solo-confirmed 58/6. The amendment lifecycle is broken in three ways: the successor does not carry the amendment reason, the original does not move to AMENDED, and -- worst -- `THE ORIGINAL'S TEXT IS UNCHANGED (a copy of it is out in the world) -- the signed body was modified`. A SIGNED clinical document's body changing during amendment is an integrity defect candidate, not a fixture problem. Needs product engineering eyes before anything else. (Note: --only practice-documentation is ambiguous with practice-documentation-tools; use practice-documentation-harness.)",
+  },
+  {
+    file: "practice-adoption-harness.ts",
+    note: "solo-confirmed 66/2: the fixture workspace holds 0 appointments, so H4b/H4c-control are vacuous and the control that proves the hook emits fails at zero. Staging-data: give the fixture workspace an appointment.",
+  },
+  {
+    file: "ssw-attendance-harness.ts",
+    note: "solo-confirmed: `No hospital has 5+ profiles to test against.` PROFILE-COHORT FAMILY: one seeded hospital cohort (5+ profiles in the fixture hospital) clears all five in this family.",
+  },
+  {
+    file: "ssw-mdt-harness.ts",
+    note: "solo-confirmed: needs 2+ profiles in one hospital. Same profile-cohort family.",
+  },
+  {
+    file: "umw-communications-harness.ts",
+    note: "solo-confirmed: needs two profiles in one hospital; the libuv UV_HANDLE_CLOSING crash at exit is SECONDARY noise after the data-gate refusal, the same mis-filing this arc already made once. Same profile-cohort family.",
+  },
+  {
+    file: "umw-wellbeing-harness.ts",
+    note: "solo-confirmed: `No hospital with 2+ profiles.` Same profile-cohort family.",
+  },
+  {
+    file: "xw-sweep-harness.ts",
+    note: "solo-confirmed: needs 3+ profiles in one hospital. Same profile-cohort family.",
+  },
+  {
+    file: "xw-uplift-harness.ts",
+    note: "solo-confirmed: `both layers report an occupancy number -- UMW 0% (live) vs HEX null% (snapshot)`. The HEX snapshot side is empty on staging -- staging-data, distinct from the profile-cohort family.",
+  },
   {
     file: "cgr-suggest-harness.ts",
     note:
@@ -384,6 +422,8 @@ const STAGING: Listed[] = [
   { file: "xw-competency-harness.ts", note: "cross-workspace competency. Exit 0; summary not captured (extraction gap)." },
   { file: "practice-followups-harness.ts", note: "follow-ups. Exit 0 solo (batch run showed 78/1 and did NOT reproduce alone -- possible fixture interference with a batch neighbour; worth remembering if it flakes again)." },
   { file: "practice-forms-harness.ts", note: "forms. Exit 0 solo (the batch FAIL line was a screener extraction artifact, not a harness result)." },
+  { file: "umw-permissions-harness.ts", note: "UMW permissions. Exit 0 solo (batch showed 66/67 and did NOT reproduce alone -- batch-only flake, same class as practice-followups)." },
+  { file: "practice-encounters-landing-harness.ts", note: "the encounters landing. Exit 0 solo (the batch run CRASHED with a stack trace and the crash did not reproduce alone -- batch-only, not evidence)." },
 ];
 
 /**
@@ -413,7 +453,7 @@ const RAW_DML = /\b(delete\s+from|insert\s+into|update\s+[a-z_]+\s+set|truncate\
  * passed. It does NOT mean the estate is checked — it means UNTRIAGED_CEILING checks have still never
  * been run by anybody, and the number is printed on every run so that stays visible.
  */
-const UNTRIAGED_CEILING = 11;  // 161 -> 134 -> 130 -> 125 -> 119 -> 92 -> 11. The last 11 are the pending solo re-runs. Lower it, never raise it.
+const UNTRIAGED_CEILING = 0;  // 161 -> ... -> 11 -> 0. SCREENING COMPLETE 2026-08-28: every privileged-live harness is in a list. A new harness lands here and goes red until it is screened.
 
 // ── The classifier is the authority on the set and on what mutates ───────────────────────────────
 type Row = { file: string; tier: string; mutates: boolean; purpose: string };
