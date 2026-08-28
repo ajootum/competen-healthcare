@@ -311,19 +311,35 @@ async function main() {
   // ══ 2. THE DELIVERY CHANNEL'S ABSENCE IS READ, NOT ASSUMED ════════════════════════════════════
   section("2. Delivery");
 
-  const envSnapshot: Record<string, string | undefined> = {
-    TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
-    TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
-    RESEND_API_KEY: process.env.RESEND_API_KEY,
-    // ⚠ A KEY ALONE STOPPED BEING A CONFIGURED PROVIDER, AND THIS FIXTURE DID NOT NOTICE.
-    //
-    // messagingStatus() now asks for `RESEND_API_KEY && emailFrom()`, because a deployment with a key and
-    // no from-address sends from no-reply@example.invalid and Resend rejects it. This harness pretended a
-    // provider into existence by setting the key alone, so every section that needs one silently ran in a
-    // world where nothing could send -- which is exactly the failure mode the comment below this one was
-    // written about, in the other direction. Both halves are snapshotted, set and restored.
-    RESEND_FROM: process.env.RESEND_FROM,
-  };
+  /**
+   * ⚠ THE NO-GATEWAY WORLD IS CREATED, NOT DEMANDED -- 2026-08-28.
+   *
+   * 2a-control used to assert that the DEPLOYMENT carried no provider key, and the whole section rested
+   * on that. It was true for every environment this harness had ever run in -- and stopped being true on
+   * 2026-08-27, when production email was activated and RESEND_API_KEY entered .env.local, which the
+   * staging remap passes straight through. The harness then failed while both the product and the
+   * deployment were correct: it was testing "a different world than the one that ships" precisely
+   * because it had outsourced the construction of its own test world to the deployment's configuration.
+   *
+   * So the section now SCRUBS every provider variable the engines actually read (the list is taken from
+   * grepping patient-access.ts and messaging.ts for process.env, plus the two sender-address names
+   * emailFrom() accepts) and asserts the scrub took, which is a control on the mechanism this file owns
+   * rather than on a deployment it does not.
+   *
+   * ⚠ A KEY ALONE STOPPED BEING A CONFIGURED PROVIDER (messagingStatus asks for the key AND a
+   * from-address), which is why the sender-address variables are scrubbed too -- a surviving
+   * NOTIFY_FROM_EMAIL would leave half a provider behind.
+   */
+  const PROVIDER_VARS = [
+    "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN",
+    "RESEND_API_KEY", "RESEND_FROM", "NOTIFY_FROM_EMAIL",
+    "AFRICASTALKING_API_KEY", "AFRICASTALKING_USERNAME", "AFRICASTALKING_FROM",
+    "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_TOKEN", "WHATSAPP_TEMPLATE_LOCALE",
+  ] as const;
+  const envSnapshot: Record<string, string | undefined> =
+    Object.fromEntries(PROVIDER_VARS.map(k => [k, process.env[k]]));
+  /** Absent means DELETED: `process.env.X = undefined` sets the STRING "undefined", which is truthy. */
+  const scrubProviders = () => { for (const k of PROVIDER_VARS) delete process.env[k]; };
   /**
    * ⚠ `process.env.X = undefined` SETS THE STRING "undefined", WHICH IS TRUTHY.
    *
@@ -338,9 +354,10 @@ async function main() {
       else process.env[k] = v;
     }
   };
-  ok("2a-control. this deployment genuinely has no gateway configured -- everything below rests on it",
-    !envSnapshot.TWILIO_ACCOUNT_SID && !envSnapshot.RESEND_API_KEY,
-    "a provider is configured, so section 2 is testing a different world than the one that ships");
+  scrubProviders();
+  ok("2a-control. the section CREATED the no-gateway world -- every provider variable is scrubbed, and everything below rests on that",
+    PROVIDER_VARS.every(k => process.env[k] === undefined),
+    PROVIDER_VARS.filter(k => process.env[k] !== undefined).join(", ") + " survived the scrub");
 
   const dNoWs = await deliveryReadiness(admin, null);
   ok("2b. asked without a practice, delivery is not possible and the deployment is named",
@@ -481,7 +498,13 @@ async function main() {
   });
 
   // Put the world back before anything else reads it.
-  restoreEnv();
+  //
+  // ⚠ "BACK" MEANS THE SCRUBBED WORLD, NOT THE DEPLOYMENT'S -- 2026-08-28. This called restoreEnv(),
+  // which was right while the deployment carried no provider key: restoring and scrubbing were the same
+  // act. Once .env.local gained RESEND_API_KEY, restoring here quietly handed every later section a
+  // configured provider, and 3g-control-4 -- written to catch a LEAKED PRETEND key -- caught the
+  // deployment's real one instead. The true environment comes back exactly once, at the end of the run.
+  scrubProviders();
   await admin.from("practice_platform_flags").delete().eq("flag", PATIENT_BOOKING_FLAG);
   await admin.from("practice_message_channel").delete().eq("workspace_id", wsA);
   const gateRestored = await patientAccessGate(admin, { workspaceId: wsA });
@@ -819,6 +842,14 @@ async function main() {
 
   // ══ 7. THE PAYLOAD THE PAGE RENDERS ═══════════════════════════════════════════════════════════
   section("7. The patient-facing payload");
+
+  // ⚠ SECTION 5'S PRETENDED PROVIDER LEAKED ALL THE WAY HERE -- 2026-08-28. The OTP block sets a fake
+  // RESEND key so a code can actually issue, and nothing scrubbed it afterwards, so this section's
+  // "shut because there is no delivery channel" surface was computed in a world that HAD one -- the
+  // exact leak 3g-control-4 exists to catch on its own pretend, missing on this one. Verified by
+  // calling patientBookingSurface in a genuinely scrubbed process: the headline names the confirmation
+  // code, exactly as 7a expects.
+  scrubProviders();
 
   const surface = await patientBookingSurface(admin);
   ok("7a. the surface is shut and says the delivery channel is why, in its first sentence",

@@ -431,6 +431,74 @@ async function main() {
     else bad(`after attaching ${attached}, the hospital reads back ${n} profile(s) -- below the floor of 5`);
   }
 
+  // ── 7. STANDING DATA THE OBSERVATORY HARNESSES ANCHOR ON ───────────────────────────────────────
+  //
+  // Two harnesses read AMBIENT data rather than provisioning their own, by design:
+  //
+  //   practice-adoption anchors on the oldest practice_appointment ("an unordered limit(1) is not a
+  //   fixture" -- its own header) and proves its counting hook against the workspace that owns it. On
+  //   production there is real traffic; on staging every booking harness cleans up after itself, so the
+  //   moment adoption runs there may be NOTHING to anchor on and its H2-control goes red by design.
+  //
+  //   xw-uplift's HEX side reads the latest DAILY op_ops_snapshots row for occupancy -- its own comment:
+  //   the two dashboards "will legitimately differ until a snapshot is written". No snapshot writer runs
+  //   on staging, so the HEX number stays null for ever.
+  //
+  // ⚠ THE APPOINTMENT IS PAST-DATED AND THE SNAPSHOT'S PERIOD IS A CONSTANT. A standing appointment
+  // scheduled today would occupy a slot the booking journeys count; yesterday's is inert for capacity
+  // and still a row for the counting hook. A period of new Date() would create one row per run day --
+  // fixture debris -- where a constant date is idempotent.
+  console.log("\n7. STANDING OBSERVATORY DATA — practice-adoption, xw-uplift");
+  const smokeUser = await findUser("smoke.practitioner@staging.competen.invalid");
+  if (!smokeUser) bad("the Practice smoke fixture does not exist -- run provision-staging-fixture.ts first");
+  else {
+    const { data: smokeWs } = await admin.from("practice_workspace")
+      .select("id").eq("owner_person_id", smokeUser.id).limit(1).maybeSingle();
+    if (!smokeWs) bad("the smoke practitioner has no workspace -- run provision-staging-fixture.ts first");
+    else {
+      const wsId = (smokeWs as any).id;
+      const patientId = await ensureRow("practice_patient",
+        { workspace_id: wsId, display_name: "Estate Standing Patient (synthetic)" },
+        { workspace_id: wsId, display_name: "Estate Standing Patient (synthetic)" }, "standing patient");
+      if (patientId) {
+        const { data: appt } = await admin.from("practice_appointment")
+          .select("id").eq("workspace_id", wsId).eq("patient_name", "Estate Standing Patient (synthetic)").limit(1).maybeSingle();
+        if (appt) ok("the standing appointment already exists");
+        else if (VERIFY_ONLY) bad("no standing appointment -- practice-adoption has nothing to anchor on");
+        else {
+          const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+          yesterday.setUTCHours(6, 0, 0, 0); // 09:00 Kampala, safely in the past
+          const { error } = await admin.from("practice_appointment").insert({
+            workspace_id: wsId, patient_id: patientId,
+            patient_name: "Estate Standing Patient (synthetic)", scheduled_at: yesterday.toISOString(),
+          });
+          const { data: back } = await admin.from("practice_appointment")
+            .select("id").eq("workspace_id", wsId).eq("patient_name", "Estate Standing Patient (synthetic)").limit(1).maybeSingle();
+          if (error || !back) bad(`could not create the standing appointment: ${error?.message.slice(0, 80) ?? "no row came back"}`);
+          else ok("created the standing appointment (yesterday 09:00 Kampala -- inert for today's capacity)");
+        }
+      }
+    }
+  }
+
+  if (!hospitalId) bad("no hospital, so no ops snapshot can be written");
+  else {
+    const { data: snap } = await admin.from("op_ops_snapshots")
+      .select("id").eq("hospital_id", hospitalId).eq("period", "2026-08-27").eq("period_type", "day").limit(1).maybeSingle();
+    if (snap) ok("the daily ops snapshot already exists");
+    else if (VERIFY_ONLY) bad("no daily ops snapshot -- xw-uplift's HEX occupancy stays null");
+    else {
+      const { error } = await admin.from("op_ops_snapshots").insert({
+        hospital_id: hospitalId, period: "2026-08-27", period_type: "day",
+        occupancy_pct: 62.5, admissions: 4, discharges: 3, capacity_score: 70,
+      });
+      const { data: back } = await admin.from("op_ops_snapshots")
+        .select("id, occupancy_pct").eq("hospital_id", hospitalId).eq("period", "2026-08-27").eq("period_type", "day").limit(1).maybeSingle();
+      if (error || !back) bad(`could not write the ops snapshot: ${error?.message.slice(0, 80) ?? "no row came back"}`);
+      else ok(`wrote the daily ops snapshot (occupancy ${(back as any).occupancy_pct}%)`);
+    }
+  }
+
   report();
 }
 

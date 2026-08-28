@@ -137,24 +137,8 @@ const EXCLUDED: Listed[] = [
     file: "practice-signup-harness.ts",
     note: "A NEAR-VACUOUS GREEN, NOT A RED. Exit 0 with only 3 assertions run before its own gate: signup is CLOSED by explicit owner decision, so the harness skips its substance on every environment. Promoting it would read as coverage of a path that is deliberately shut. Revisit only if the front-door decision changes.",
   },
-  {
-    file: "practice-messaging-harness.ts",
-    note: "solo-confirmed 38/2: handed_to_provider_at never set and the provider response not kept verbatim -- the staging deployment has no provider handoff configured. Staging-config work, not a product defect.",
-  },
-  {
-    file: "practice-patient-access-harness.ts",
-    note: "solo-confirmed, and INVERTED: its 2a-control asserts the deployment has NO gateway configured, but staging now carries Resend after the 2026-08-27 email activation, so section 2 tests a different world than the one that ships. The HARNESS assumption is stale. Repoint the control, then rescreen.",
-  },
 
   // -- The final 11 solo verdicts, closing the sweep 2026-08-28. Screening of all 161 is COMPLETE. --
-  {
-    file: "practice-adoption-harness.ts",
-    note: "solo-confirmed 66/2: the fixture workspace holds 0 appointments, so H4b/H4c-control are vacuous and the control that proves the hook emits fails at zero. Staging-data: give the fixture workspace an appointment.",
-  },
-  {
-    file: "xw-uplift-harness.ts",
-    note: "solo-confirmed: `both layers report an occupancy number -- UMW 0% (live) vs HEX null% (snapshot)`. The HEX snapshot side is empty on staging -- staging-data, distinct from the profile-cohort family.",
-  },
   {
     file: "cgr-suggest-harness.ts",
     note:
@@ -391,6 +375,14 @@ const STAGING: Listed[] = [
   { file: "practice-planner-harness.ts", note: "the activity planner. 93/93 (its fixture predated activity.ts's rule that a practice WITH locations must record one before a session RUNS; planned at L2, the four REFUSES checks breathe again)." },
   { file: "practice-setup-harness.ts", note: "practice setup. 54/54 (2f repointed 22 -> 23: module 23 Document Design, the mig-357/358 style arc, per the harness's own named-repoint trail)." },
   { file: "practice-setup-domains-harness.ts", note: "the setup domains. 62/62 (Foundation holds FIVE named modules now -- document_design joined -- and 3d's fixture publishes a style, because setup.ts counts status published only)." },
+
+  // -- The four config/data singletons, cleared 2026-08-28. One had already evaporated with schema
+  // parity; one was a harness that outsourced its test world to the deployment; two were ambient-data
+  // reads now anchored by estate-fixture standing rows. --
+  { file: "practice-messaging-harness.ts", note: "practice messaging, handed-over-is-not-delivered included. 40/40 -- its red predated the schema catch-up and evaporated with it; no code change was needed." },
+  { file: "practice-patient-access-harness.ts", note: "the patient access boundary. 77/77. Its sections now CREATE the no-gateway world they test (scrubbing every provider variable the engines read) instead of demanding a bare deployment -- an assumption the 2026-08-27 email activation broke. Also fixed: section 5's pretended RESEND key leaked into section 7, the exact leak 3g-control-4 catches on its own pretend." },
+  { file: "practice-adoption-harness.ts", note: "adoption and activation. 68/68 -- anchors on ambient appointments by design, so the estate fixture holds a standing past-dated one (real traffic on production; self-cleaning harnesses leave none on staging)." },
+  { file: "xw-uplift-harness.ts", note: "the UMW-to-HEX uplift. 31/31 -- the estate fixture writes one daily op_ops_snapshots row, since HEX occupancy is snapshot-derived by design and no snapshot writer runs on staging." },
 ];
 
 /**
