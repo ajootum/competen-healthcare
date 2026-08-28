@@ -34,10 +34,13 @@
  * directly before any of this was built, because if it were false, every harness spawned here would run
  * against production while this file printed the staging ref.
  *
- * Staging is real: it answers /auth/v1/health and carries 665 of production's 671 tables. The six it
- * lacks are from migrations 349, 352, 353 and 357, and NONE of the 161 writing harnesses reference any of
- * them — measured, not assumed — so the drift does not block this. It does mean staging is behind, and
- * that is the owner's to apply.
+ * Staging is real: it answers /auth/v1/health and carries 665 of production's 671 tables. ⚠ THE FULL GAP
+ * IS EIGHT MIGRATIONS, NOT FOUR (re-measured 2026-08-28 with a fixed migration-verify --staging): 349,
+ * 350, 352, 353, 356, 357, 358 and 360 all carry unapplied claims — six tables plus COLUMNS on
+ * practice_plans, practice_message, practice_referral and practice_clinical_document. The earlier "none
+ * of the writing harnesses reference the six tables" held for TABLES and was quietly false for COLUMNS:
+ * both document harnesses broke on getDocument selecting mig-357 columns. Applying the eight, in numeric
+ * order, is the owner's.
  *
  *   npx tsx scripts/privileged-harnesses.ts              run the security subset (read-only)
  *   npx tsx scripts/privileged-harnesses.ts --all        also run the triaged non-security subset

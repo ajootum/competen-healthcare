@@ -36,10 +36,29 @@ import { createClient } from "@supabase/supabase-js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const svc = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+/**
+ * ⚠ --staging POINTS EVERY CHECK AT THE STAGING PROJECT, using the same STAGING_* variables the rest of
+ * the estate's staging tooling reads. Added 2026-08-28, when staging turned out to be four migrations
+ * behind and the gap had been masquerading as two separate product defects (both document harnesses were
+ * reading through a select that names mig-357 columns staging lacks). This flag is both the measurement
+ * that scoped that gap and the owner's post-apply verification once the files are run.
+ *
+ * ⚠ NO SILENT FALLBACK. If the staging variables are absent the run dies rather than quietly verifying
+ * production while claiming to verify staging -- the same rule every staging-pointed script here follows.
+ */
+const STAGING_MODE = process.argv.includes("--staging");
+const targetUrl = STAGING_MODE ? process.env.STAGING_SUPABASE_URL : process.env.NEXT_PUBLIC_SUPABASE_URL;
+const targetSvcKey = STAGING_MODE ? process.env.STAGING_SERVICE_ROLE_KEY : process.env.SUPABASE_SERVICE_ROLE_KEY;
+const targetAnonKey = STAGING_MODE ? process.env.STAGING_ANON_KEY : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+if (!targetUrl || !targetSvcKey || !targetAnonKey) {
+  console.error(`\n  ${STAGING_MODE ? "STAGING_SUPABASE_URL, STAGING_SERVICE_ROLE_KEY and STAGING_ANON_KEY" : "the Supabase variables"} must be set. Refusing to fall back.\n`);
+  process.exit(1);
+}
+
+const svc = createClient(targetUrl, targetSvcKey, {
   auth: { persistSession: false },
 });
-const anon = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+const anon = createClient(targetUrl, targetAnonKey, {
   auth: { persistSession: false },
 });
 
@@ -72,7 +91,19 @@ const line = (state: string, what: string, detail = "") =>
 
 async function check(c: Claim) {
   if (c.kind === "table") {
-    const { error } = await svc.from(c.table).select("*", { count: "exact", head: true });
+    /**
+     * ⚠ NEVER TEST EXISTENCE WITH head:true -- IT VERIFIED SIX MISSING TABLES (2026-08-28).
+     *
+     * An HTTP HEAD response carries no body, so when PostgREST refuses a request for a table that does
+     * not exist, supabase-js has no error payload to parse and returns { count: null, error: null }.
+     * This check read "no error" as "table exists" and reported `verified table practice_document_fact`
+     * against a staging project whose own pg_catalog registry does not contain the table -- then the
+     * RLS check below saw count null, called the table "empty", and printed CANNOT VERIFY for all six.
+     * A verification tool inventing the very confidence it exists to test.
+     *
+     * A ranged select with limit(0) costs the same and carries a real error body.
+     */
+    const { error } = await svc.from(c.table).select("*").limit(0);
     if (error) { line("NOT APPLIED", `table ${c.table}`, error.message.slice(0, 40)); failed++; problems.push(`table ${c.table} does not exist`); }
     else { line("verified", `table ${c.table}`); verified++; }
     return;
@@ -87,6 +118,10 @@ async function check(c: Claim) {
 
   // RLS. The only observable through PostgREST is whether the anon key can read rows the service role
   // can see. That is a real test when rows exist and no test at all when they do not.
+  // ⚠ Existence FIRST, with a body-carrying request -- the head-only version called six missing tables
+  // "empty" (see the table check above). head:true is only trusted once the table is known to exist.
+  const exists = await svc.from(c.table).select("*").limit(0);
+  if (exists.error) { line("NOT APPLIED", `RLS on ${c.table}`, "table missing"); failed++; problems.push(`${c.table} does not exist`); return; }
   const s = await svc.from(c.table).select("*", { count: "exact", head: true });
   if (s.error) { line("NOT APPLIED", `RLS on ${c.table}`, "table missing"); failed++; problems.push(`${c.table} does not exist`); return; }
   if (!s.count) { line("CANNOT VERIFY", `RLS on ${c.table}`, "table is empty -- on and off look identical"); unknown++; return; }
@@ -114,7 +149,9 @@ async function main() {
     process.exitCode = 1; return;
   }
 
-  console.log(`\nMigration verification -- what the DATABASE did, not what the file says\n`);
+  // The banner names the target, because a verification that does not say WHICH database it asked is a
+  // verification of whichever one the reader assumes.
+  console.log(`\nMigration verification against ${STAGING_MODE ? "STAGING" : "the DEFAULT (production)"} project ${new URL(targetUrl!).host.split(".")[0]}\n`);
   for (const f of files) {
     const claims = claimsOf(readFileSync(f, "utf8"));
     console.log(`  ${f.split(/[\\/]/).pop()}  (${claims.length} checkable claim${claims.length === 1 ? "" : "s"})`);
