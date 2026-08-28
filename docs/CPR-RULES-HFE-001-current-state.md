@@ -62,12 +62,27 @@ scope, review); priority visible only under Advanced. Booking-information: compa
 (radio columns; segmented control below md). Language: §10 pass over this screen — no migration numbers,
 schema names or build history in practitioner-facing copy; a source-scan pin enforces it (HFE-11).
 
-## Increment 2 (documented, not yet built)
+## Increment 2 — BUILT 2026-08-28 (same day, second commit)
 
-Clinic-first composed view (§6): per-session panel rendering `resolveBookingRule`'s effective values
-with per-field source (inherited vs overridden), Override → prefilled session-scoped rule, Restore →
-deactivate the override. Plain-language pre-activation preview (§11.5). Both are projections over
-existing calls; no persistence change. Human acceptance (§17) runs after increment 2.
+Clinics & sessions as first-class targets (§6): one panel per active session — identity line, an
+inherited/overridden/no-rule badge, the governing rule's composed behaviour in §6's rows, the
+qualified rules that also apply ("24–26 Dec only", "new patients only"), Override and Restore.
+
+**The §18-documented semantic seam, and how it was resolved:** this engine is winner-takes-all per
+booking — a session rule that covers a booking decides EVERYTHING about it, and a blank field in it
+means "unconstrained under this rule", never "the practice value". Per-FIELD inheritance display as
+§6/§8 words it would therefore be a fiction. The composed view projects at the level the engine
+composes: WHICH rule governs, in the engine's own order (`specificity` from `specificityOf`, then
+priority — the same two sort keys, via `clinicRuleChain`/`clinicGoverningRule` in the constants
+file). **Override copies the governing rule** into a session-scoped draft so every untouched field
+keeps deciding exactly what it decides today (an empty session rule would silently strip every
+practice-wide constraint from the bookings it wins). **Restore archives the clinic's rule** — archived
+stays readable and recoverable, matching §15.
+
+Layer 3 now LEADS with the Rules Centre; the old four-tile dashboard shrank to the two figures the
+centre does not already say (coverage, decided bookings), placed after it.
+
+Remaining: §17 human acceptance (owner task run), and any copy corrections it surfaces.
 
 ## The §18 stop-clause check
 

@@ -69,7 +69,11 @@ const rules: BookingRuleCard[] = [
   { ...base, id: "r-legacy", name: null, status: "paused", legacy: true, priority: 5 },
 ];
 
-const sessions = [{ id: "s-fri", weekday: 5, name: "Friday Specialist Clinic" }];
+// s-fri carries its own session-scoped rule (r-clinic); s-wed inherits the practice-wide one.
+const sessions = [
+  { id: "s-fri", weekday: 5, name: "Friday Specialist Clinic", startsMinute: 510, endsMinute: 780, locationId: "l-tmr", capacity: 20, bookingMode: "public" },
+  { id: "s-wed", weekday: 3, name: "Wednesday Clinic", startsMinute: 510, endsMinute: 720, locationId: null, capacity: null, bookingMode: "internal" },
+];
 const locations = [{ id: "l-tmr", name: "TMR International Hospital" }];
 const conflicts = [{
   a: { id: "r-practice", name: "Standard booking window" },
@@ -164,5 +168,47 @@ describe("the Rules Centre landing (CPR-RULES-HFE-001)", () => {
     const out = render({ rulesUnreadable: "The rules table did not answer." });
     expect(out).toContain("Your rules could not be read.");
     expect(out).not.toContain("+ Create rule");
+  });
+});
+
+describe("clinics as first-class rule targets (s6/s8)", () => {
+  const html = render();
+
+  it("renders a panel per session with its identity line", () => {
+    expect(html).toContain("Clinics &amp; sessions");
+    expect(html).toContain("Wednesday Clinic");
+    expect(html).toContain("08:30–13:00");
+  });
+
+  it("says which clinic is overridden and which inherits, with the source rule named", () => {
+    expect(html).toContain("Set for this clinic");
+    expect(html).toContain("Restore inherited behaviour");
+    expect(html).toContain("Inherited");
+    expect(html).toContain("Behaviour here is inherited from");
+    expect(html).toContain("Override for this clinic");
+  });
+
+  it("the read-only account sees the composed view but no override or restore actions", () => {
+    const readonly = render({ mayAuthor: false });
+    expect(readonly).toContain("Clinics &amp; sessions");
+    expect(readonly).not.toContain("Override for this clinic");
+    expect(readonly).not.toContain("Restore inherited behaviour");
+  });
+});
+
+describe("the clinic rule chain composes the way the engine decides", () => {
+  it("orders by the engine's own keys, excludes rules that cannot meet a booking here, and skips paused ones", async () => {
+    const { clinicRuleChain, clinicGoverningRule } = await import("@/lib/practice/booking-rule-constants");
+    const chain = clinicRuleChain({ id: "s-fri", locationId: "l-tmr" }, rules as never, { appointmentType: () => "x" });
+    // r-legacy is paused -> out. Order: dated holiday (32) above the session rule (24) above practice (0).
+    expect(chain.map(e => e.rule.id)).toEqual(["r-holiday", "r-clinic", "r-practice"]);
+    // The dated head is QUALIFIED -- it cannot caption the panel -- so the session rule governs.
+    expect(chain[0].unqualified).toBe(false);
+    expect(chain[0].qualifiers.join(" ")).toContain("2026-12-24 to 2026-12-26 only");
+    expect(clinicGoverningRule(chain)?.id).toBe("r-clinic");
+    // A session at another location without a session rule of its own inherits the practice rule.
+    const wed = clinicRuleChain({ id: "s-wed", locationId: null }, rules as never);
+    expect(wed.map(e => e.rule.id)).toEqual(["r-holiday", "r-practice"]);
+    expect(clinicGoverningRule(wed)?.id).toBe("r-practice");
   });
 });

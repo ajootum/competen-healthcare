@@ -1348,6 +1348,79 @@ export const RULE_FILTER_CHIPS = [
   { key: "exceptions", label: "Exceptions" },
 ] as const;
 
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-RULES-HFE-001 s6 -- CLINICS AND SESSIONS AS FIRST-CLASS RULE TARGETS. The composed projection.
+//
+// ⚠ THE ENGINE IS WINNER-TAKES-ALL, AND THIS PROJECTION SAYS SO RATHER THAN DRAWING PER-FIELD
+// INHERITANCE THAT DOES NOT EXIST. When a session-scoped rule covers a booking it decides EVERYTHING
+// about that booking -- a blank capacity in it means "no limit under this rule", never "the practice
+// rule's capacity". So the clinic view composes at the level the engine actually composes at: WHICH
+// RULE governs, in precedence order, with that rule's own values as the effective behaviour. This is
+// also why "Override for this clinic" starts from a COPY of the governing rule -- a session rule
+// created empty would silently strip every practice-wide constraint from the bookings it wins.
+//
+// The ordering below is the ENGINE's, not a restatement: cards carry `specificity` computed by
+// specificityOf server-side, and the tie-break is priority -- the same two keys the evaluator sorts by.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** The card fields the clinic chain needs. Structural, so a BookingRuleCard satisfies it. */
+export type ClinicChainRule = RuleCategoryShape & {
+  id: string; name: string | null; status: string;
+  specificity: number; priority: number; appointmentType: string | null;
+};
+
+export type ClinicChainEntry<R extends ClinicChainRule> = {
+  rule: R;
+  /** True when nothing narrows it beyond place and session: it decides every booking it outranks. */
+  unqualified: boolean;
+  /** The narrowings, in the practitioner's words -- "new patients only", "24-26 Dec only". */
+  qualifiers: string[];
+};
+
+/**
+ * The ACTIVE rules that can decide bookings in one session, most decisive first.
+ *
+ * A rule covers the session when it names this session or no session, AND this location or no
+ * location. Rules for other sessions or other locations can never meet a booking here and are not in
+ * the chain at all.
+ */
+export function clinicRuleChain<R extends ClinicChainRule>(
+  session: { id: string; locationId: string | null }, rules: R[],
+  labels?: { appointmentType?: (code: string) => string; channel?: (code: string) => string },
+): ClinicChainEntry<R>[] {
+  return rules
+    .filter(r => r.status === "active")
+    .filter(r => r.sessionTemplateId === null || r.sessionTemplateId === session.id)
+    .filter(r => r.locationId === null || r.locationId === session.locationId)
+    .sort((a, b) => b.specificity - a.specificity || b.priority - a.priority)
+    .map(r => {
+      const qualifiers: string[] = [];
+      if (r.effectiveFrom !== null && r.effectiveTo !== null)
+        qualifiers.push(`${r.effectiveFrom} to ${r.effectiveTo} only`);
+      if (r.appointmentType !== null)
+        qualifiers.push(`${(labels?.appointmentType ?? ((c: string) => c.replace(/_/g, " ")))(r.appointmentType)} bookings only`);
+      if (r.channel !== null)
+        qualifiers.push(`${(labels?.channel ?? bookingChannelLabel)(r.channel)} only`);
+      if ((r.patientEligibility !== null && r.patientEligibility !== "any")
+        || r.minAgeYears !== null || r.maxAgeYears !== null) {
+        const el = r.patientEligibility !== null && r.patientEligibility !== "any"
+          ? PATIENT_ELIGIBILITY.find(e => e.code === r.patientEligibility)?.label ?? r.patientEligibility
+          : `${r.minAgeYears ?? 0} to ${r.maxAgeYears ?? 130} years`;
+        qualifiers.push(`${el.toLowerCase()} only`);
+      }
+      return { rule: r, unqualified: qualifiers.length === 0, qualifiers };
+    });
+}
+
+/**
+ * The rule the clinic panel's rows are read from: the most decisive rule with NO qualifier, because a
+ * qualified rule only meets some bookings and cannot honestly caption the whole panel. Null when the
+ * chain has no unqualified rule -- the platform-safe default governs, and the panel says so.
+ */
+export function clinicGoverningRule<R extends ClinicChainRule>(chain: ClinicChainEntry<R>[]): R | null {
+  return chain.find(e => e.unqualified)?.rule ?? null;
+}
+
 export function ruleCategoryKeys(r: RuleCategoryShape): string[] {
   const out: string[] = [];
   if (r.sessionTemplateId !== null) out.push("clinics");

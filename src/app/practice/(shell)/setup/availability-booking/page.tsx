@@ -577,26 +577,38 @@ export default async function AvailabilityBookingPage({ searchParams }: {
             {/* ══ LAYER 3 ═══════════════════════════════════════════════════════════════════════ */}
             {active === 3 && (
               <>
-                {/* s6.2's layer dashboard. Tinted badge, AND THE FIGURE IN THE TILE'S OWN HUE.
-                    ⚠ THE CONFLICT TILE IS NOT A GOOD-NEWS TILE. s11 blocks activation until a conflict
-                    is resolved, so a figure above nought is work, not a note. */}
-                <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+                {/* ── CPR-RULES-HFE-001 s4: THE RULES CENTRE LEADS THE LAYER. The categorized landing
+                    carries its own summary of active rules, drafts, exceptions and conflicts, so the
+                    old four-tile dashboard would say the same numbers twice; the two figures it alone
+                    could say (coverage, decided bookings) follow it as a quieter row. */}
+                {uncoveredSessions.length > 0 && (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50/60 px-3.5 py-2.5 text-[11.5px] leading-relaxed text-amber-900">
+                    <span className="font-bold">{uncoveredSessions.length}</span> session
+                    {uncoveredSessions.length === 1 ? "" : "s"} anybody may book
+                    ({uncoveredSessions.map(u => u.name).join(", ")}) {uncoveredSessions.length === 1 ? "is" : "are"}{" "}
+                    covered by no rule in force, so nothing limits how far ahead or how full they get.
+                  </p>
+                )}
+
+                <RuleWorkspace
+                  rules={JSON.parse(JSON.stringify(ruleCards))}
+                  conflicts={JSON.parse(JSON.stringify(ruleConflicts))}
+                  locations={JSON.parse(JSON.stringify(r.locations))}
+                  sessions={JSON.parse(JSON.stringify(r.sessions))}
+                  mayAuthor={r.mayAuthor}
+                  mayBook={r.mayBook}
+                  rulesUnreadable={rulesUnreadable}
+                  today={r.today}
+                />
+
+                <div className="grid gap-2.5 sm:grid-cols-2">
                   {[
-                    {
-                      key: "rules", n: rulesUnreadable ? null : activeRules.length,
-                      label: rulesUnreadable ? "Rules in force — could not be read"
-                        : `Rules in force, of ${ruleCards.length} written`,
-                    },
                     {
                       key: "covered",
                       n: rulesUnreadable || r.uncovered.state !== "ok" ? null
                         : bookableSessions.length - uncoveredSessions.length,
                       label: r.uncovered.state !== "ok" ? "Sessions covered — could not be read"
                         : `Bookable sessions a rule covers, of ${bookableSessions.length}`,
-                    },
-                    {
-                      key: "conflicts", n: rulesUnreadable ? null : ruleConflicts.length,
-                      label: "Pairs of rules nothing can choose between",
                     },
                     {
                       key: "decided",
@@ -631,26 +643,6 @@ export default async function AvailabilityBookingPage({ searchParams }: {
                     that does not consult one. Nothing here will attribute them to a rule after the fact.
                   </p>
                 )}
-
-                {uncoveredSessions.length > 0 && (
-                  <p className="rounded-lg border border-amber-200 bg-amber-50/60 px-3.5 py-2.5 text-[11.5px] leading-relaxed text-amber-900">
-                    <span className="font-bold">{uncoveredSessions.length}</span> session
-                    {uncoveredSessions.length === 1 ? "" : "s"} anybody may book
-                    ({uncoveredSessions.map(u => u.name).join(", ")}) {uncoveredSessions.length === 1 ? "is" : "are"}{" "}
-                    covered by no rule in force, so nothing limits how far ahead or how full they get.
-                  </p>
-                )}
-
-                <RuleWorkspace
-                  rules={JSON.parse(JSON.stringify(ruleCards))}
-                  conflicts={JSON.parse(JSON.stringify(ruleConflicts))}
-                  locations={JSON.parse(JSON.stringify(r.locations))}
-                  sessions={JSON.parse(JSON.stringify(r.sessions))}
-                  mayAuthor={r.mayAuthor}
-                  mayBook={r.mayBook}
-                  rulesUnreadable={rulesUnreadable}
-                  today={r.today}
-                />
 
                 <div className="rounded-xl border border-gray-200 bg-white p-4">
                   <p className="text-[12.5px] font-bold text-gray-900">

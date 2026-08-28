@@ -12,6 +12,7 @@ import {
   WAITING_LIST_NO_SCREEN_NOTE, QUEUE_PRIORITY_NO_SCREEN_NOTE,
   RULE_CATEGORIES, ruleCategory, RULE_FILTER_CHIPS, ruleCategoryKeys,
   RULE_COMPOSER_SECTIONS, type RuleComposerSection,
+  clinicRuleChain, clinicGoverningRule, minuteOfDayAsClock,
   plainWindow, plainCapacity, plainWalkIn, plainCancellation, plainRequiredInformation,
   type RequiredInformation, type RequirementLevel,
 } from "@/lib/practice/booking-rule-constants";
@@ -255,6 +256,31 @@ export default function RuleWorkspace({
     setCategory(null);
     setShowAll(false);
     setTemporary(Boolean(r.effectiveFrom && r.effectiveTo));
+    setChooser(false);
+    setNotice(null);
+  }
+
+  /**
+   * s6/s8's OVERRIDE, under a winner-takes-all engine: the new clinic rule starts as a COPY of the
+   * rule currently governing this clinic, scoped to the session. Every field the practitioner does not
+   * touch therefore keeps deciding exactly what it decides today -- a session rule created EMPTY would
+   * instead strip every practice-wide constraint from the bookings it wins, silently.
+   */
+  function openOverride(s: any, governor: any | null) {
+    const d = governor ? draftFrom(governor) : blankDraft();
+    d.sessionTemplateId = s.id;
+    d.locationId = s.locationId ?? "";
+    d.name = s.name;
+    d.description = "";
+    d.status = "draft";
+    d.priority = 0;
+    d.effectiveFrom = ""; d.effectiveTo = "";
+    d.reason = "";
+    setDraft(d);
+    setEditingId(null);
+    setCategory("clinic_session");
+    setShowAll(false);
+    setTemporary(false);
     setChooser(false);
     setNotice(null);
   }
@@ -667,6 +693,175 @@ export default function RuleWorkspace({
           </div>
         )}
       </section>
+
+      {/* ── s6: CLINICS & SESSIONS AS FIRST-CLASS RULE TARGETS ───────────────────────────────────
+          The composed projection, at the level the engine actually composes: which rule governs this
+          clinic, what it says, and who would decide instead. Override copies the governing rule so an
+          untouched setting keeps deciding exactly what it decides today; Restore archives the clinic's
+          own rule so the inherited one governs again. */}
+      {sessions.length > 0 && (
+        <section className={card}>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-[14px] text-violet-700">▦</span>
+            <div className="min-w-0">
+              <h3 className="text-[14px] font-bold text-gray-900">Clinics &amp; sessions</h3>
+              <p className="text-[11px] text-gray-500">
+                What each of your recurring clinics inherits, and what is set for it alone. What a
+                clinic IS — its day, time, place and capacity — lives on{" "}
+                <Link href="/practice/setup/availability-booking?layer=1"
+                  className="font-semibold text-[var(--cp-primary)] hover:underline">
+                  My Regular Practice
+                </Link>; this is how it behaves.
+              </p>
+            </div>
+          </div>
+          <ul className="space-y-2">
+            {sessions.map((s: any) => {
+              const chain = clinicRuleChain(
+                { id: s.id, locationId: s.locationId ?? null }, rules as never,
+                { appointmentType: appointmentTypeLabel },
+              );
+              const governor: any = clinicGoverningRule(chain);
+              const overridden = governor !== null && governor.sessionTemplateId === s.id;
+              const qualified = chain.filter(e => !e.unqualified);
+              return (
+                <li key={s.id} className="rounded-xl border border-gray-200">
+                  <details>
+                    <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-3.5 py-2.5">
+                      <span className="text-[12.5px] font-bold text-gray-900">{s.name}</span>
+                      <span className="text-[10.5px] text-gray-500">
+                        {WEEKDAY_SHORT[s.weekday]} · {minuteOfDayAsClock(s.startsMinute)}–{minuteOfDayAsClock(s.endsMinute)}
+                      </span>
+                      {overridden ? (
+                        <span className="ml-auto rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-700">
+                          Set for this clinic
+                        </span>
+                      ) : governor ? (
+                        <span className="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-500">
+                          Inherited
+                        </span>
+                      ) : (
+                        <span className="ml-auto rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800">
+                          No rule covers it
+                        </span>
+                      )}
+                    </summary>
+                    <div className="border-t border-gray-100 px-3.5 py-2.5">
+                      {/* s8's source sentence: the effective value first, its origin with it. */}
+                      <p className="text-[11px] leading-relaxed text-gray-600">
+                        {overridden ? (
+                          <>Behaviour here is set by{" "}
+                            <span className="font-semibold text-violet-700">{governor.name ?? "an unnamed rule"}</span>,
+                            written for this clinic. Restoring inherited behaviour retires it so your wider
+                            rules govern again.</>
+                        ) : governor ? (
+                          <>Behaviour here is inherited from{" "}
+                            <span className="font-semibold text-gray-800">{governor.name ?? "an unnamed rule"}</span>
+                            {" "}({governor.locationId ? governor.locationName ?? "a location rule" : "practice-wide"}).
+                            Overriding writes this clinic its own rule, starting from those values.</>
+                        ) : (
+                          <>No rule in force covers this clinic, so nothing limits how far ahead or how
+                            full it gets — every internal booking is allowed by the platform-safe
+                            default.</>
+                        )}
+                      </p>
+
+                      {governor && (
+                        <dl className="mt-2 grid gap-x-3 gap-y-1 text-[11px] sm:grid-cols-[86px_minmax(0,1fr)]">
+                          <dt className="font-semibold text-gray-500">Booking</dt>
+                          <dd className="text-gray-800">
+                            {governor.windowLine}{" "}
+                            {governor.visibility === "public" ? "Listed on your booking page."
+                              : governor.visibility === "link_only" ? "Offered to anyone with the link."
+                                : "Internal only — never offered to patients."}
+                          </dd>
+                          <dt className="font-semibold text-gray-500">Capacity</dt>
+                          <dd className="text-gray-800">{governor.capacityLine}</dd>
+                          <dt className="font-semibold text-gray-500">Confirm</dt>
+                          <dd className="text-gray-800">
+                            {CONFIRMATION_MODES.find(c => c.code === governor.confirmationMode)?.label ?? governor.confirmationMode}
+                          </dd>
+                          <dt className="font-semibold text-gray-500">Patients</dt>
+                          <dd className="text-gray-800">
+                            {PATIENT_ELIGIBILITY.find(e => e.code === governor.patientEligibility)?.label ?? governor.patientEligibility}
+                            {governor.minAgeYears !== null || governor.maxAgeYears !== null
+                              ? ` · ${governor.minAgeYears ?? 0} to ${governor.maxAgeYears ?? 130} years` : ""}
+                          </dd>
+                          {governor.sectionsConfigurable && (
+                            <>
+                              <dt className="font-semibold text-gray-500">Walk-ins</dt>
+                              <dd className="text-gray-800">{governor.walkInLine}</dd>
+                              <dt className="font-semibold text-gray-500">Changes</dt>
+                              <dd className="text-gray-800">{governor.cancellationLine}</dd>
+                              <dt className="font-semibold text-gray-500">Asks for</dt>
+                              <dd className="text-gray-800">{governor.requiredInformationLine}</dd>
+                            </>
+                          )}
+                        </dl>
+                      )}
+
+                      {s.capacity !== null && (
+                        <p className="mt-1.5 text-[10px] leading-relaxed text-gray-500">
+                          The session itself holds {s.capacity} place{s.capacity === 1 ? "" : "s"} — set
+                          where the session is, on My Regular Practice. The stricter of the session and
+                          the rule applies.
+                        </p>
+                      )}
+
+                      {qualified.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                            Also applies here
+                          </p>
+                          <ul className="mt-0.5 space-y-0.5 text-[10.5px] text-gray-600">
+                            {qualified.map(e => (
+                              <li key={e.rule.id}>
+                                · <span className="font-semibold">{e.rule.name ?? "An unnamed rule"}</span>
+                                {" "}— {e.qualifiers.join(", ")}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {mayAuthor && (
+                        <div className="mt-2.5 flex flex-wrap gap-1.5">
+                          {overridden ? (
+                            <>
+                              <button type="button" disabled={busy} onClick={() => openEdit(governor)}
+                                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                                Edit this clinic&apos;s rule
+                              </button>
+                              <button type="button" disabled={busy}
+                                onClick={() => status(governor.id, "archived")}
+                                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                                Restore inherited behaviour
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button type="button" disabled={busy} onClick={() => openOverride(s, governor)}
+                                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                                Override for this clinic
+                              </button>
+                              {governor && (
+                                <button type="button" disabled={busy} onClick={() => openEdit(governor)}
+                                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                                  Edit the inherited rule
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       {/* ── s5's CREATE-RULE CHOOSER: what do you want to control? ───────────────────────────────── */}
       {chooser && (
