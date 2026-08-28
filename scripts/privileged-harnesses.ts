@@ -122,15 +122,6 @@ const TRIAGED: Listed[] = [
  * wrote. Remove an entry the moment its reason stops being true.
  */
 const EXCLUDED: Listed[] = [
-  {
-    file: "cgr-gate-harness.ts",
-    note:
-      "BLOCKED ON A STAGING FIXTURE, and the only one provision-staging-estate-fixture.ts does NOT "
-      + "unblock. It stops at `phase-2 create failed: at least one required competency is needed` -- the "
-      + "estate fixture builds people, a tenant chain and a clinical assignment, and no competency "
-      + "framework. Extending it there is the next step; the harness is not at fault and refuses rather "
-      + "than passing over an empty catalogue.",
-  },
 
   // -- The 2026-08-28 sweep's solo-confirmed reds, each with its verdict. Every one reproduced ALONE. --
   {
@@ -383,6 +374,7 @@ const STAGING: Listed[] = [
   { file: "practice-patient-access-harness.ts", note: "the patient access boundary. 77/77. Its sections now CREATE the no-gateway world they test (scrubbing every provider variable the engines read) instead of demanding a bare deployment -- an assumption the 2026-08-27 email activation broke. Also fixed: section 5's pretended RESEND key leaked into section 7, the exact leak 3g-control-4 catches on its own pretend." },
   { file: "practice-adoption-harness.ts", note: "adoption and activation. 68/68 -- anchors on ambient appointments by design, so the estate fixture holds a standing past-dated one (real traffic on production; self-cleaning harnesses leave none on staging)." },
   { file: "xw-uplift-harness.ts", note: "the UMW-to-HEX uplift. 31/31 -- the estate fixture writes one daily op_ops_snapshots row, since HEX occupancy is snapshot-derived by design and no snapshot writer runs on staging." },
+  { file: "cgr-gate-harness.ts", note: "the CGR activation gate. All checks pass, the decisive one being the MET path: AMU meets requirements it actually holds, verdict ready 4/4 -- proven against estate-fixture section 8, which seeds the six NAMED competencies the harness picks by regex (staging's 271-row library was a different catalogue from production's), an AMU department, and decisions written to activation.ts's own outcome/maturity rule. CAVEAT worth keeping: this harness sets its exit code only on create-failure, not on its printed FAIL lines -- READ its output when it matters, do not trust exit 0 alone." },
 ];
 
 /**

@@ -499,6 +499,98 @@ async function main() {
     }
   }
 
+  // ── 8. THE COMPETENCY COHORT — cgr-gate ────────────────────────────────────────────────────────
+  //
+  // cgr-gate picks competencies BY NAME from framework_competencies (gait ×2, communication,
+  // monitor-oxygen, assess-oxygen, administer-oxygen) and proves the MET path against a department
+  // matching /AMU/i whose staff genuinely hold them. Staging's library holds 271 competencies and SIX of
+  // the seven names are absent -- it is a different catalogue from production's, where the AMU cohort is
+  // real. Phase 2 has no fallback (deliberately: the MET path is only provable against named holdings),
+  // so its create refused with "at least one required competency is needed".
+  //
+  // The decision rows follow src/lib/cgr/activation.ts's own rule, read before writing: outcome in
+  // (competent, competent_with_conditions), unexpired, and maturity NULL counts as competent -- so the
+  // one proficient-level requirement gets an explicit maturity, and nothing else needs one.
+  console.log("\n8. COMPETENCY COHORT — cgr-gate");
+  if (!hospitalId) bad("no hospital, so no AMU department can be created");
+  else {
+    const amuId = await ensureRow("departments", { name: "AMU (synthetic)" },
+      { name: "AMU (synthetic)", hospital_id: hospitalId }, "AMU department");
+
+    // Two staff move into AMU (department only -- they stay in the hospital, so every profile-cohort
+    // floor still holds; unit_id is cleared because the fixture unit belongs to the Medical department).
+    const amuStaff: string[] = [];
+    if (amuId && !VERIFY_ONLY) {
+      for (const i of [4, 5]) {
+        const u = await findUser(`estate.staff.${i}@staging.competen.invalid`);
+        if (!u) { bad(`estate.staff.${i} does not exist -- run section 6 first`); continue; }
+        const { error } = await admin.from("profiles").update({ department_id: amuId, unit_id: null }).eq("id", u.id);
+        if (error) bad(`could not move estate.staff.${i} into AMU: ${error.message.slice(0, 60)}`);
+        else amuStaff.push(u.id);
+      }
+      if (amuStaff.length === 2) ok("estate.staff.4 and .5 sit in AMU");
+    }
+
+    // The six named competencies, each matching one of the harness's regexes exactly. The domain is
+    // REUSED from an existing library row -- inventing a domain would put a synthetic branch in a real
+    // framework tree.
+    const { data: anyComp } = await admin.from("framework_competencies").select("domain_id").limit(1).maybeSingle();
+    const domainId = (anyComp as any)?.domain_id ?? null;
+    const NAMES = [
+      "Technical Performance of Gait Assessment (synthetic)",
+      "Gait and Balance Physiology (synthetic)",
+      "Communication and Patient Partnership (synthetic)",
+      "Monitors Oxygen Therapy and Escalates (synthetic)",
+      "Assess Oxygen Requirement (synthetic)",
+      "Administer Oxygen via Delivery Devices (synthetic)",
+    ];
+    const compIds: Record<string, string> = {};
+    if (!domainId) bad("framework_competencies is empty -- no domain to attach the synthetic competencies to");
+    else {
+      for (const name of NAMES) {
+        const id = await ensureRow("framework_competencies", { name }, { name, domain_id: domainId }, `competency "${name.slice(0, 30)}…"`);
+        if (id) compIds[name] = id;
+      }
+    }
+
+    // Holdings: both AMU staff hold both gaits and assess-oxygen (the two min_staff:2 requirements);
+    // staff.4 additionally holds communication, administer-oxygen, and monitor-oxygen AT PROFICIENT --
+    // which makes phase 2's four requirements fully met (verdict READY) and phase 1's criticals met.
+    // "Performs Comprehensive Patient Assessment" already exists in the library and stays deliberately
+    // unheld: it is the harness's expect-unmet requirement.
+    if (!VERIFY_ONLY && amuStaff.length === 2 && Object.keys(compIds).length === NAMES.length) {
+      const hold = async (nurse: string, name: string, maturity: string | null) => {
+        const cid = compIds[name];
+        const { data: prior } = await admin.from("competency_decisions")
+          .select("id").eq("nurse_id", nurse).eq("competency_id", cid).limit(1).maybeSingle();
+        if (prior) return true;
+        const { error } = await admin.from("competency_decisions")
+          .insert({ nurse_id: nurse, competency_id: cid, outcome: "competent", maturity });
+        if (error) { bad(`decision for ${name.slice(0, 28)}…: ${error.message.slice(0, 60)}`); return false; }
+        return true;
+      };
+      let wrote = true;
+      for (const nurse of amuStaff) {
+        wrote = (await hold(nurse, NAMES[0], null)) && wrote;
+        wrote = (await hold(nurse, NAMES[1], null)) && wrote;
+        wrote = (await hold(nurse, NAMES[4], null)) && wrote;
+      }
+      wrote = (await hold(amuStaff[0], NAMES[2], null)) && wrote;
+      wrote = (await hold(amuStaff[0], NAMES[5], null)) && wrote;
+      wrote = (await hold(amuStaff[0], NAMES[3], "proficient")) && wrote;
+      if (wrote) {
+        // ⚠ Read back through the ENGINE'S OWN FILTER, not by counting rows: an outcome outside the
+        // engine's vocabulary would sit in the table and hold nothing.
+        const { data: held } = await admin.from("competency_decisions")
+          .select("id, outcome").in("nurse_id", amuStaff).in("outcome", ["competent", "competent_with_conditions"]);
+        ok(`${(held ?? []).length} decision(s) held by the AMU pair under the engine's own outcome filter`);
+      }
+    } else if (VERIFY_ONLY) {
+      const { data: held } = await admin.from("competency_decisions").select("id").limit(1).maybeSingle();
+      if (!held) bad("no competency decisions -- cgr-gate's MET path has nothing to prove");
+    }
+  }
+
   report();
 }
 
