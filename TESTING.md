@@ -196,7 +196,7 @@ test, and it holds for both formats. The probe reads and never writes.
 **349, 352, 353 and 357**. Measured, not assumed: none of the 161 writing harnesses reference any of them,
 so the drift does not block this — but applying those migrations is outstanding, and owner-only.
 
-**Triage COMPLETE (2026-08-28): all 161 writing harnesses screened. 160 in STAGING, 3 excluded with
+**Triage COMPLETE (2026-08-28): all 161 writing harnesses screened. 161 in STAGING, 2 excluded with
 verdicts, ceiling `0`** -- a new harness lands in UNTRIAGED and goes red until screened. Of every red
 found, FOUR were batch-only flakes that passed alone (the batch red was not evidence), 14 are
 missing-staging-data in three families (the `EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED` publish blocker
