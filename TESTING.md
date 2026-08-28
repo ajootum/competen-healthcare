@@ -196,11 +196,15 @@ test, and it holds for both formats. The probe reads and never writes.
 **349, 352, 353 and 357**. Measured, not assumed: none of the 161 writing harnesses reference any of them,
 so the drift does not block this — but applying those migrations is outstanding, and owner-only.
 
-**Triage (2026-08-28): 150 of 161 screened, 112 promoted to STAGING, 13 excluded with verdicts.**
-The last 11 are pending solo re-runs; the ceiling is `11`. Of the sweep's 20 batch reds, TWO passed
-their solo re-run (the batch red was not evidence), FIVE share one cause (the
-`EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED` publish blocker on the staging fixture -- one fix clears
-five harnesses), and only ONE is a real product-facing failure (`practice-generation`, 48/8). Failure classes found, none of which are defects in this runner:
+**Triage COMPLETE (2026-08-28): all 161 writing harnesses screened. 141 in STAGING, 22 excluded with
+verdicts, ceiling `0`** -- a new harness lands in UNTRIAGED and goes red until screened. Of every red
+found, FOUR were batch-only flakes that passed alone (the batch red was not evidence), 14 are
+missing-staging-data in three families (the `EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED` publish blocker
+x5, the no-hospital-with-N-profiles cohort x5, plus singletons), and FIVE are real assertion failures:
+`practice-generation` 48/8 (letter merge/markers), **`practice-documentation` 58/6 -- the amendment
+lifecycle, including a SIGNED BODY MODIFIED under amendment: an integrity defect candidate**,
+`practice-planner` (LOCATION_REQUIRED fixture drift), and `practice-setup` + `practice-setup-domains`
+(module-count pins against a catalogue that grew). Failure classes found, none of which are defects in this runner:
 
 - ⚠⚠ **FOUR WERE RECORDED AS HANGS AND WERE NOT HANGING. THEY WERE WORKING.** `practice-audit`,
   `practice-availability-config`, `practice-billing` and `practice-booking-rules` hit the screener's
