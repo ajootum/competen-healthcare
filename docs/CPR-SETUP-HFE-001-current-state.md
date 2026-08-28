@@ -74,7 +74,38 @@ own arc — it never displaces this one mid-flight.
    owns it), pinned by a vitest test asserting the redirect digests. LayerNav deleted. Refusal
    harness 8a/8d extended over the three new/rebuilt pages (59 checks green).
 
-The RecallWorkspace (follow-up recall + walk-in policy) mounts on Patient Booking → Clinics; the
-recall queue's operational home remains `/practice/follow-ups`, which already renders it.
+## CPR-BOOK-HFE-002 reconciliation — 2026-08-28, after the full spec arrived
 
-Remaining (owner-side): the §22 human-factors acceptance tasks, run untrained.
+The referenced spec turned out to prescribe more than §9's summary. Aligned same day:
+
+- **§4 Overview**: the standing card became the prescribed setup summary (✓ page live / ✓ N clinics
+  accepting online bookings / conflicts / steps-to-publish / ⚠ no sending channel), with the coverage
+  figure computed by the same `clinicRuleChain` the panels project.
+- **§5 Booking page tab** now mounts the REAL editor: `PublishWorkspace view="page"` (the settings
+  always open — mode, brand name, OTP/guest/consent, unverified requests, visible locations/types,
+  intro text, nothing-free contacts) with a slim address header. One source of truth kept — it is the
+  same component, not a copy.
+- **§10 Review & publish**: `PublishWorkspace view="publish"` — blockers first, then warnings, each
+  with a **Fix →** link straight to its correction (`FIX_HREF` by check code); the raw checks
+  (including the database-authority badge) collapsed under "Technical checks".
+- **§6/§13 clinic cards**: each clinic now carries **Online booking ON / OFF / Needs setup** read from
+  the governing rule's own visibility, its **next available time** (computed from the same
+  `bookingPreview` the diary reads — entries now carry `templateId`), and guide language: an
+  uncovered clinic says what to choose and offers **Set up booking for this clinic →**; an
+  internal-only one offers **Let patients book this clinic →** (the composer opens prefilled with
+  visibility public — reviewed and saved by the practitioner, never auto-activated).
+- **§11 moves**: RecallWorkspace unmounted from setup (waiting walk-ins → Current Session; unbooked
+  follow-ups → Follow-ups, which already renders the recall queue); a pointer line preserves
+  findability. The component FILE stays because `practice-v5007-phase56-harness` pins its source —
+  retiring file+harness together is a queued follow-up.
+- Stale engine sentence fixed: the fortnight preview's note said "self-booking is not built" — false
+  since the publish flow shipped.
+
+**NOT yet built from BOOK-HFE-002** (queued, in order of value):
+1. §8/§14 the five-stage first-time wizard with resume-at-first-incomplete (drafts already persist —
+   rules as status=draft, page settings as unpublished — so this is sequencing UI, not persistence).
+2. §16/§17 structured public-page failure reasons (per-cause patient sentence + practitioner action,
+   instead of one generic refusal).
+3. §20 human acceptance: the single task "make Wednesday morning at Nsambya bookable", run untrained.
+
+Remaining (owner-side): the §22 setup acceptance tasks + BOOK-HFE-002 §20's task, run untrained.

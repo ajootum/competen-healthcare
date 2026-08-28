@@ -1513,6 +1513,9 @@ export async function bookingPreview(admin: any, ctx: WorkspaceContext, args: {
       locationName: slot.location_id ? locName.get(slot.location_id) ?? null : null,
       from: slot.starts_at, to: slot.ends_at, kind: slot.slot_kind,
       generated: !!slot.generated_from_template_id,
+      // CPR-BOOK-HFE-002 s6: which clinic this time belongs to, so a clinic card can say its own
+      // next available time. Null for a hand-placed slot no template generated.
+      templateId: (slot.generated_from_template_id as string | null) ?? null,
       // WHY it is not offerable, not merely that it is not. A preview that says "unavailable" with no
       // reason is a preview a practitioner cannot act on.
       offerable: !taken && !tooSoon && !tooFar,
@@ -1533,6 +1536,8 @@ export async function bookingPreview(admin: any, ctx: WorkspaceContext, args: {
     })),
     /** Stated on the preview: nobody outside the practice can see any of this. */
     patientFacing: false,
-    note: "This is what the booking engine would offer. No patient can reach it — self-booking is not built.",
+    // ⚠ REWRITTEN 2026-08-28. The old sentence ended "self-booking is not built", which stopped being
+    // true when the publish flow shipped -- the stale-refusal class, understating the product.
+    note: "This is what the booking engine would offer. It is your practice-side preview — patients see only what your published booking page shows them.",
   };
 }

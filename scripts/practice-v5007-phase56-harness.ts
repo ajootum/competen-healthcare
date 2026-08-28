@@ -826,8 +826,12 @@ async function main() {
     .filter(i => engineModules.some(e => i === `@/lib/${e}`));
   ok("8a. ⚠ neither client component imports an engine module -- constants only",
     badImports.length === 0, badImports.join(", "));
+  // ⚠ THE SERVER PAGE MOVED. CPR-SETUP-HFE-001 turned the old three-layer page into a redirect shim
+  // with no imports at all, and the engine reads now live on the Patient Booking destination -- so the
+  // control reads THAT page. The point is unchanged: prove the scanner can find engine imports where
+  // they legitimately belong, or 8a's clean result proves nothing.
   ok("8a-control. ⚠ and the same scanner DOES find those imports where they belong, on the server page",
-    importsIn(readFileSync(join(uiDir, "page.tsx"), "utf8"))
+    importsIn(readFileSync(join(uiDir, "..", "patient-booking", "page.tsx"), "utf8"))
       .filter(i => engineModules.some(e => i === `@/lib/${e}`)).length >= 3,
     "the scanner finds nothing anywhere, so 8a proves nothing");
   ok("8a-control-2. ⚠ and it does NOT confuse a constants file for the engine whose name it starts with",

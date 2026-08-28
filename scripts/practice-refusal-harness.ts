@@ -213,6 +213,7 @@ const PROSE_SCREENS = [
   "src/app/practice/(shell)/setup/patient-booking/page.tsx",
   "src/app/practice/(shell)/setup/availability-changes/page.tsx",
   "src/app/practice/(shell)/setup/page.tsx",
+  "src/app/practice/(shell)/setup/availability-booking/PublishWorkspace.tsx",
 ];
 /** A build-plan phase is as meaningless to a doctor as a spec id, and dates the product besides. */
 const BUILD_PHASE_RE = /\bPhase [0-9]\b/;
@@ -248,7 +249,7 @@ ok("8c. NotBuilt no longer renders a build phase to a practitioner",
 //      they are never rendered, so the check runs over exactly the fields that are.
 const MIGRATION_NUMBER_RE = /\bmigrations?\s+[0-9]{2,}\b/i;
 const BUILD_ARCHAEOLOGY_RE = /\b(card model|not built|used to say)\b/i;
-for (const rel of [PROSE_SCREENS[0], PROSE_SCREENS[1], PROSE_SCREENS[4], PROSE_SCREENS[5], PROSE_SCREENS[6]]) {
+for (const rel of [PROSE_SCREENS[0], PROSE_SCREENS[1], PROSE_SCREENS[4], PROSE_SCREENS[5], PROSE_SCREENS[6], PROSE_SCREENS[7]]) {
   const name = rel.split("/").pop();
   const src = stripComments(readFileSync(join(process.cwd(), rel), "utf8"));
   ok(`8d[${name}]. no migration number or build archaeology outside comments`,

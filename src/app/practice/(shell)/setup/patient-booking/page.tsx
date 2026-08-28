@@ -7,12 +7,11 @@ import { bookingRulesWorkspace, ruleReadingValue, type BookingRuleCard, type Rul
 import { publishReadiness } from "@/lib/practice/patient-access";
 import { bookingLinkSummary } from "@/lib/practice/identity-service";
 import { messagingStatus } from "@/lib/practice/messaging";
-import { recallQueue } from "@/lib/practice/follow-ups";
-import { walkInPolicy } from "@/lib/practice/practice-sessions";
+import { bookingPreview } from "@/lib/practice/availability-config";
+import { clinicRuleChain, clinicGoverningRule } from "@/lib/practice/booking-rule-constants";
 import { onSetupReadinessEvaluated } from "@/lib/practice/activation-hooks";
 import RuleWorkspace from "../availability-booking/RuleWorkspace";
 import PublishWorkspace from "../availability-booking/PublishWorkspace";
-import RecallWorkspace from "../availability-booking/RecallWorkspace";
 import BookingLinkCard from "../../home/BookingLinkCard";
 import type { Metadata } from "next";
 
@@ -54,12 +53,10 @@ export default async function PatientBookingPage({ searchParams }: {
     redirect("/practice/setup");
 
   const admin = createAdminClient();
-  const [r, readiness, bookingLink, recall, walkIns] = await Promise.all([
+  const [r, readiness, bookingLink] = await Promise.all([
     bookingRulesWorkspace(admin, ctx),
     publishReadiness(admin, ctx),
     bookingLinkSummary(admin, ctx.userId),
-    recallQueue(admin, ctx.workspaceId),
-    walkInPolicy(admin, ctx),
   ]);
   const channels = messagingStatus();
 
@@ -70,11 +67,38 @@ export default async function PatientBookingPage({ searchParams }: {
   const { tab } = await searchParams;
   const active = TABS.some(t => t.key === tab) ? (tab as string) : "overview";
 
+  // s6: each clinic's next patient-bookable time, from the same preview the diary reads. Computed
+  // only for the tab that shows it -- the preview walks a fortnight of slots.
+  let nextAvailable: Record<string, string> | null = null;
+  let previewTimezone: string | null = null;
+  if (active === "clinics") {
+    const today = r.today as string;
+    const fortnightEnd = new Date(Date.parse(today + "T12:00:00Z") + 13 * 86400000).toISOString().slice(0, 10);
+    const preview = await bookingPreview(admin, ctx, { fromDate: today, toDate: fortnightEnd });
+    previewTimezone = preview.timezone ?? null;
+    const map: Record<string, string> = {};
+    for (const day of preview.days as any[]) {
+      for (const e of day.entries as any[]) {
+        if (!e.offerable || !e.templateId) continue;
+        if (!map[e.templateId] || Date.parse(e.from) < Date.parse(map[e.templateId])) map[e.templateId] = e.from;
+      }
+    }
+    nextAvailable = map;
+  }
+
   const ruleCards = ruleReadingValue(r.rules, [] as BookingRuleCard[]);
   const ruleConflicts = ruleReadingValue(r.conflicts, [] as RuleConflict[]);
   const rulesUnreadable = r.rules.state === "unreadable" ? r.rules.reason : null;
   const activeRules = ruleCards.filter(c => c.status === "active");
   const anySender = channels.email.configured || channels.sms.configured || channels.whatsapp.configured;
+
+  // s4's coverage figure, from the same chain the clinic panels project: a clinic is "accepting
+  // online bookings" when the rule governing it offers its times beyond internal.
+  const onlineClinicCount = rulesUnreadable ? null : (r.sessions as any[]).filter((sess: any) => {
+    const gov: any = clinicGoverningRule(clinicRuleChain(
+      { id: sess.id, locationId: sess.locationId ?? null }, ruleCards as never));
+    return gov !== null && (gov.visibility ?? "internal") !== "internal";
+  }).length;
 
   const ruleWorkspaceProps = {
     rules: JSON.parse(JSON.stringify(ruleCards)),
@@ -132,22 +156,49 @@ export default async function PatientBookingPage({ searchParams }: {
               <section className={card}>
                 <h2 className="text-[13px] font-bold text-gray-900">Where this stands</h2>
                 <ul className="mt-2 space-y-1.5 text-[12px]">
-                  <li className="flex items-baseline gap-2">
-                    <span className="text-gray-600">Rules in force</span>
-                    <span className="ml-auto font-bold text-violet-700">{rulesUnreadable ? "—" : activeRules.length}</span>
-                  </li>
-                  <li className="flex items-baseline gap-2">
-                    <span className="text-gray-600">Conflicts to resolve</span>
-                    <span className={`ml-auto font-bold ${ruleConflicts.length > 0 ? "text-rose-700" : "text-gray-800"}`}>
-                      {rulesUnreadable ? "—" : ruleConflicts.length}
+                  <li className="flex items-start gap-2">
+                    <span aria-hidden className={bookingLink.state === "live" ? "text-emerald-600 font-bold" : "text-amber-600 font-bold"}>
+                      {bookingLink.state === "live" ? "✓" : "○"}
+                    </span>
+                    <span className="text-gray-700">
+                      {bookingLink.state === "live" ? "Booking page is live." : "Booking page is not open to patients yet."}
                     </span>
                   </li>
-                  <li className="flex items-baseline gap-2">
-                    <span className="text-gray-600">Blocking publish checks</span>
-                    <span className={`ml-auto font-bold ${readiness.blockersFailing.length > 0 ? "text-amber-700" : "text-emerald-700"}`}>
-                      {readiness.verdict === "cannot_say" ? "—" : readiness.blockersFailing.length}
+                  <li className="flex items-start gap-2">
+                    <span aria-hidden className={(onlineClinicCount ?? 0) > 0 ? "text-emerald-600 font-bold" : "text-amber-600 font-bold"}>
+                      {(onlineClinicCount ?? 0) > 0 ? "✓" : "○"}
+                    </span>
+                    <span className="text-gray-700">
+                      {onlineClinicCount === null ? "Clinics could not be read."
+                        : onlineClinicCount > 0
+                          ? `${onlineClinicCount} clinic${onlineClinicCount === 1 ? "" : "s"} accepting online bookings.`
+                          : "No clinic accepts online bookings yet."}
                     </span>
                   </li>
+                  {ruleConflicts.length > 0 && (
+                    <li className="flex items-start gap-2">
+                      <span aria-hidden className="font-bold text-rose-700">!</span>
+                      <span className="text-gray-700">
+                        {ruleConflicts.length} booking-setting conflict{ruleConflicts.length === 1 ? "" : "s"} to resolve.
+                      </span>
+                    </li>
+                  )}
+                  {readiness.verdict !== "cannot_say" && readiness.blockersFailing.length > 0 && (
+                    <li className="flex items-start gap-2">
+                      <span aria-hidden className="font-bold text-amber-700">○</span>
+                      <span className="text-gray-700">
+                        {readiness.blockersFailing.length} step{readiness.blockersFailing.length === 1 ? "" : "s"} before publishing.
+                      </span>
+                    </li>
+                  )}
+                  {!anySender && (
+                    <li className="flex items-start gap-2">
+                      <span aria-hidden className="font-bold text-amber-700">⚠</span>
+                      <span className="text-gray-700">
+                        No sending channel — patients cannot receive booking codes.
+                      </span>
+                    </li>
+                  )}
                 </ul>
                 <p className="mt-2 border-t border-gray-100 pt-2 text-[11px] leading-relaxed text-gray-600">
                   {bookingLink.state === "live"
@@ -183,29 +234,33 @@ export default async function PatientBookingPage({ searchParams }: {
           </>
         )}
 
-        {/* ══ BOOKING PAGE ══════════════════════════════════════════════════════════════════════ */}
+        {/* ══ BOOKING PAGE — the page's own settings, open (s5). ════════════════════════════════ */}
         {active === "page" && (
-          <section className={card}>
-            <h2 className="text-[13px] font-bold text-gray-900">Your public booking page</h2>
-            <dl className="mt-2 grid gap-x-3 gap-y-1.5 text-[12px] sm:grid-cols-[140px_minmax(0,1fr)]">
-              <dt className="font-semibold text-gray-500">Address</dt>
-              <dd className="break-all font-mono text-gray-800">
-                {bookingLink.state === "live" || bookingLink.state === "claimed_not_open"
-                  ? bookingLink.url : "Not claimed yet"}
-              </dd>
-              <dt className="font-semibold text-gray-500">State</dt>
-              <dd className="text-gray-800">{readiness.publishStateLabel}</dd>
-            </dl>
-            <p className="mt-2.5 text-[11.5px] leading-relaxed text-gray-600">
-              Who can find the page, what it says, which locations and visit types it shows, and what a
-              patient sees when nothing is available are all part of your booking identity — edited in
-              one place so the page and its address can never disagree.
-            </p>
-            <Link href="/practice/setup/identity"
-              className="mt-2 inline-block rounded-lg bg-[var(--cp-primary)] px-3.5 py-2 text-[12px] font-semibold text-white hover:opacity-90">
-              Edit booking page &amp; identity →
-            </Link>
-          </section>
+          <>
+            <section className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Address</p>
+                <p className="break-all font-mono text-[12px] font-semibold text-gray-800">
+                  {bookingLink.state === "live" || bookingLink.state === "claimed_not_open"
+                    ? bookingLink.url : "Not claimed yet"}
+                </p>
+              </div>
+              <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-600">
+                {readiness.publishStateLabel}
+              </span>
+              <Link href="/practice/setup/identity"
+                className="text-[11px] font-semibold text-[var(--cp-primary)] hover:underline">
+                Handle, discovery, QR &amp; share tools →
+              </Link>
+            </section>
+            <PublishWorkspace
+              view="page"
+              readiness={JSON.parse(JSON.stringify(readiness))}
+              locations={JSON.parse(JSON.stringify(
+                (r.locations as any[]).map((l: any) => ({ id: l.id, name: l.name, active: l.active }))))}
+              mayPublish={hasCapability(ctx, "practice.settings.manage")}
+            />
+          </>
         )}
 
         {/* ══ CLINICS & AVAILABILITY — routine setup, no Rules Centre required (s9) ═════════════ */}
@@ -219,12 +274,15 @@ export default async function PatientBookingPage({ searchParams }: {
               </Link>{" "}
               for that.
             </p>
-            <RuleWorkspace {...ruleWorkspaceProps} view="clinics" />
-            <RecallWorkspace
-              recall={JSON.parse(JSON.stringify(recall))}
-              walkIns={JSON.parse(JSON.stringify(walkIns))}
-              mayManage={hasCapability(ctx, "followup.manage")}
-            />
+            <RuleWorkspace {...ruleWorkspaceProps} view="clinics"
+              nextAvailable={nextAvailable} timezone={previewTimezone} />
+            <p className="rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-[11px] leading-relaxed text-gray-500">
+              Looking for today&apos;s operations? Waiting walk-ins live in{" "}
+              <Link href="/practice/today" className="font-semibold text-[var(--cp-primary)] hover:underline">Current Session</Link>,
+              and follow-ups that still need booking live in{" "}
+              <Link href="/practice/follow-ups" className="font-semibold text-[var(--cp-primary)] hover:underline">Follow-ups</Link>.
+              This tab is how clinics BEHAVE, not who is in the waiting room.
+            </p>
           </>
         )}
 
@@ -270,6 +328,7 @@ export default async function PatientBookingPage({ searchParams }: {
         {/* ══ REVIEW & PUBLISH ══════════════════════════════════════════════════════════════════ */}
         {active === "publish" && (
           <PublishWorkspace
+            view="publish"
             readiness={JSON.parse(JSON.stringify(readiness))}
             locations={JSON.parse(JSON.stringify(
               (r.locations as any[]).map((l: any) => ({ id: l.id, name: l.name, active: l.active }))))}

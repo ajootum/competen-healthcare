@@ -146,7 +146,7 @@ function StoreAbsent({ note }: { note: string }) {
 
 export default function RuleWorkspace({
   rules, conflicts, locations, sessions, mayAuthor, mayBook, rulesUnreadable, today,
-  view = "full",
+  view = "full", nextAvailable = null, timezone = null,
 }: {
   rules: any[]; conflicts: any[]; locations: any[]; sessions: any[];
   mayAuthor: boolean; mayBook: boolean; rulesUnreadable: string | null; today: string;
@@ -157,6 +157,12 @@ export default function RuleWorkspace({
    * clinic panel opens it -- one component, one save path, whichever door it was reached through.
    */
   view?: "full" | "clinics" | "advanced";
+  /**
+   * CPR-BOOK-HFE-002 s6: each clinic's next patient-bookable time, keyed by session id, computed
+   * server-side from the same preview the diary reads. Null when the page did not compute it.
+   */
+  nextAvailable?: Record<string, string> | null;
+  timezone?: string | null;
 }) {
   const showClinics = view !== "advanced";
   const showCentre = view !== "clinics";
@@ -276,7 +282,7 @@ export default function RuleWorkspace({
    * touch therefore keeps deciding exactly what it decides today -- a session rule created EMPTY would
    * instead strip every practice-wide constraint from the bookings it wins, silently.
    */
-  function openOverride(s: any, governor: any | null) {
+  function openOverride(s: any, governor: any | null, prefill?: Record<string, any>) {
     const d = governor ? draftFrom(governor) : blankDraft();
     d.sessionTemplateId = s.id;
     d.locationId = s.locationId ?? "";
@@ -286,6 +292,7 @@ export default function RuleWorkspace({
     d.priority = 0;
     d.effectiveFrom = ""; d.effectiveTo = "";
     d.reason = "";
+    Object.assign(d, prefill ?? {});
     setDraft(d);
     setEditingId(null);
     setCategory("clinic_session");
@@ -736,6 +743,8 @@ export default function RuleWorkspace({
               );
               const governor: any = clinicGoverningRule(chain);
               const overridden = governor !== null && governor.sessionTemplateId === s.id;
+              const online = governor !== null && (governor.visibility ?? "internal") !== "internal";
+              const nextAt = online ? nextAvailable?.[s.id] ?? null : null;
               const qualified = chain.filter(e => !e.unqualified);
               return (
                 <li key={s.id} className="rounded-xl border border-gray-200">
@@ -745,19 +754,27 @@ export default function RuleWorkspace({
                       <span className="text-[10.5px] text-gray-500">
                         {WEEKDAY_SHORT[s.weekday]} · {minuteOfDayAsClock(s.startsMinute)}–{minuteOfDayAsClock(s.endsMinute)}
                       </span>
-                      {overridden ? (
-                        <span className="ml-auto rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-700">
-                          Set for this clinic
-                        </span>
-                      ) : governor ? (
-                        <span className="ml-auto rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-500">
-                          Inherited
-                        </span>
-                      ) : (
-                        <span className="ml-auto rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800">
-                          No rule covers it
-                        </span>
-                      )}
+                      <span className="ml-auto flex flex-wrap items-center gap-1">
+                        {governor ? (
+                          <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                            online ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
+                            {online ? "Online booking ON" : "Online booking OFF"}
+                          </span>
+                        ) : (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800">
+                            Needs setup
+                          </span>
+                        )}
+                        {overridden ? (
+                          <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-700">
+                            Set for this clinic
+                          </span>
+                        ) : governor ? (
+                          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-500">
+                            Inherited
+                          </span>
+                        ) : null}
+                      </span>
                     </summary>
                     <div className="border-t border-gray-100 px-3.5 py-2.5">
                       {/* s8's source sentence: the effective value first, its origin with it. */}
@@ -773,9 +790,9 @@ export default function RuleWorkspace({
                             {" "}({governor.locationId ? governor.locationName ?? "a location rule" : "practice-wide"}).
                             Overriding writes this clinic its own rule, starting from those values.</>
                         ) : (
-                          <>No rule in force covers this clinic, so nothing limits how far ahead or how
-                            full it gets — every internal booking is allowed by the platform-safe
-                            default.</>
+                          <>Patients cannot book this clinic online yet, and nothing limits internal
+                            booking here. Choose how far ahead patients may book, whether it has a
+                            capacity limit, and whether it is offered online.</>
                         )}
                       </p>
 
@@ -811,6 +828,18 @@ export default function RuleWorkspace({
                             </>
                           )}
                         </dl>
+                      )}
+
+                      {online && nextAvailable && (
+                        <p className="mt-1.5 text-[11px] font-semibold text-gray-800">
+                          {nextAt
+                            ? `Next available: ${new Date(nextAt).toLocaleString("en-GB", {
+                              weekday: "short", day: "numeric", month: "short",
+                              hour: "2-digit", minute: "2-digit",
+                              ...(timezone ? { timeZone: timezone } : {}),
+                            })}`
+                            : "No time is offerable in the next fortnight."}
+                        </p>
                       )}
 
                       {s.capacity !== null && (
@@ -851,19 +880,29 @@ export default function RuleWorkspace({
                                 Restore inherited behaviour
                               </button>
                             </>
-                          ) : (
+                          ) : governor ? (
                             <>
+                              {!online && (
+                                <button type="button" disabled={busy}
+                                  onClick={() => openOverride(s, governor, { visibility: "public" })}
+                                  className="rounded-lg bg-[var(--cp-primary)] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
+                                  Let patients book this clinic →
+                                </button>
+                              )}
                               <button type="button" disabled={busy} onClick={() => openOverride(s, governor)}
                                 className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                                 Override for this clinic
                               </button>
-                              {governor && (
-                                <button type="button" disabled={busy} onClick={() => openEdit(governor)}
-                                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                                  Edit the inherited rule
-                                </button>
-                              )}
+                              <button type="button" disabled={busy} onClick={() => openEdit(governor)}
+                                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                                Edit the inherited rule
+                              </button>
                             </>
+                          ) : (
+                            <button type="button" disabled={busy} onClick={() => openOverride(s, null)}
+                              className="rounded-lg bg-[var(--cp-primary)] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
+                              Set up booking for this clinic →
+                            </button>
                           )}
                         </div>
                       )}

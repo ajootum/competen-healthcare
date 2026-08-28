@@ -194,6 +194,37 @@ describe("clinics as first-class rule targets (s6/s8)", () => {
     expect(readonly).not.toContain("Override for this clinic");
     expect(readonly).not.toContain("Restore inherited behaviour");
   });
+
+  it("says whether each clinic takes online bookings, from the governing rule's own visibility", () => {
+    // Both fixture governors carry visibility "public", so both clinics are ON.
+    expect(html).toContain("Online booking ON");
+    expect(html).not.toContain("Online booking OFF");
+    // An internal-only governor flips the badge and offers the one labelled task.
+    const internal = render({
+      rules: rules.map(r => ({ ...r, visibility: "internal" })) as never,
+    });
+    expect(internal).toContain("Online booking OFF");
+    expect(internal).toContain("Let patients book this clinic");
+  });
+
+  it("a clinic no rule covers reads Needs setup and guides, never merely warns", () => {
+    // Only the dated (qualified) rule stays active: no unqualified governor exists.
+    const uncovered = render({
+      rules: rules.filter(r => r.id === "r-holiday") as never,
+    });
+    expect(uncovered).toContain("Needs setup");
+    expect(uncovered).toContain("Set up booking for this clinic");
+    expect(uncovered).toContain("Choose how far ahead patients may book");
+    expect(uncovered).not.toContain("platform-safe default");
+  });
+
+  it("shows each online clinic's next available time when the page computed one", () => {
+    const withNext = render({
+      nextAvailable: { "s-fri": "2026-09-02T05:30:00.000Z" }, timezone: "Africa/Kampala",
+    } as never);
+    expect(withNext).toContain("Next available:");
+    expect(withNext).toContain("No time is offerable in the next fortnight.");
+  });
 });
 
 describe("the two s9 destinations rendered from one workspace", () => {

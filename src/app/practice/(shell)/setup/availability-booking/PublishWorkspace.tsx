@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PATIENT_ACCESS_MODES, BOOKING_FALLBACK_EMAIL } from "@/lib/practice/patient-access-constants";
 import {
@@ -50,15 +51,45 @@ const VERDICT: Record<string, { label: string; blurb: string; box: string; text:
   },
 };
 
-export default function PublishWorkspace({ readiness, locations, mayPublish }: {
+/**
+ * CPR-BOOK-HFE-002 s10: where a failing check sends the practitioner. The correction, not a
+ * description of the problem -- every practitioner-fixable row links straight to its fix.
+ */
+const FIX_HREF: Record<string, string | null> = {
+  LOCATION_ACTIVE: "/practice/settings?tab=practice#locations",
+  SESSION_BOOKABLE: "/practice/setup/availability-changes",
+  APPOINTMENT_TYPE_LINKED: "/practice/setup/availability-changes",
+  EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED: "/practice/setup/patient-booking?tab=clinics",
+  RULE_CONFLICTS_RESOLVED: "/practice/setup/patient-booking?tab=advanced",
+  RESERVED_WITHIN_CAPACITY: "/practice/setup/patient-booking?tab=clinics",
+  ACCESS_MODE_SELECTED: "/practice/setup/patient-booking?tab=page",
+  MODE_ADMITS_PATIENTS: "/practice/setup/patient-booking?tab=page",
+  HANDLE_CLAIMED: "/practice/setup/identity",
+  OTP_REQUIRED: "/practice/setup/patient-booking?tab=page",
+  REGISTRATION_FIELDS_VALID: "/practice/settings/registration-form",
+  // No console exists for a delivery channel, and intake is a statement of fact -- no link to nowhere.
+  NOTIFICATION_CHANNEL: null,
+  INTAKE_BUILT: null,
+};
+
+export default function PublishWorkspace({ readiness, locations, mayPublish, view = "full" }: {
   readiness: any;
   locations: { id: string; name: string; active: boolean }[];
   mayPublish: boolean;
+  /**
+   * CPR-BOOK-HFE-002 s3: one component, two destinations. "page" is the Booking page tab (the
+   * settings, open, with Save); "publish" is Review & publish (translated readiness, raw checks
+   * collapsed under Technical checks, and the publish/pause acts). "full" renders both, as the
+   * screen always did.
+   */
+  view?: "full" | "page" | "publish";
 }) {
+  const showChecks = view !== "page";
+  const showSettings = view !== "publish";
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "bad"; text: string } | null>(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(view === "page");
 
   const p = readiness.profile;
   const [draft, setDraft] = useState({
@@ -104,9 +135,13 @@ export default function PublishWorkspace({ readiness, locations, mayPublish }: {
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-[14px] text-violet-700">◈</span>
         <div className="min-w-0">
-          <h3 className="text-[14px] font-bold text-gray-900">Preview &amp; publish</h3>
+          <h3 className="text-[14px] font-bold text-gray-900">
+            {view === "page" ? "Your booking page" : "Review & publish"}
+          </h3>
           <p className="text-[11px] text-gray-500">
-            The publish checks, run against this practice. {readiness.checks.length} of them.
+            {view === "page"
+              ? "What the page says, who can reach it, and what it shows."
+              : `The publish checks, run against this practice. ${readiness.checks.length} of them.`}
           </p>
         </div>
         <span className="ml-auto rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-gray-600">
@@ -114,6 +149,8 @@ export default function PublishWorkspace({ readiness, locations, mayPublish }: {
         </span>
       </div>
 
+      {showChecks && (
+      <>
       {/* ── THE VERDICT, FROM THE SERVER ──────────────────────────────────────────────────────── */}
       <div className={`rounded-lg border p-3 ${verdict.box}`}>
         <p className={`text-[12.5px] font-bold ${verdict.text}`}>{verdict.label}</p>
@@ -149,8 +186,48 @@ export default function PublishWorkspace({ readiness, locations, mayPublish }: {
         </p>
       )}
 
-      {/* ── THE CHECKLIST ─────────────────────────────────────────────────────────────────────── */}
-      <ul className="mt-3 space-y-1.5">
+      {/* ── s10: WHAT TO DO, FIRST. Blockers, then warnings, each linking to its correction. ──── */}
+      {(() => {
+        const actionable = (readiness.checks as any[]).filter(c => c.state !== "pass");
+        const blockers = actionable.filter(c => c.severity === "blocker");
+        const warnings = actionable.filter(c => c.severity !== "blocker");
+        const row = (c: any) => (
+          <li key={c.code} className={`flex items-start gap-2 rounded-lg border px-3 py-2 ${
+            c.severity === "blocker" ? "border-rose-200 bg-rose-50/60" : "border-amber-200 bg-amber-50/60"}`}>
+            <span aria-hidden className={`mt-px text-[12px] font-bold ${
+              c.severity === "blocker" ? "text-rose-700" : "text-amber-700"}`}>
+              {c.severity === "blocker" ? "!" : "⚠"}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-semibold text-gray-900">{c.requirement}</p>
+              <p className="text-[10.5px] leading-relaxed text-gray-600">{c.because ?? c.detail}</p>
+            </div>
+            {FIX_HREF[c.code] && (
+              <Link href={FIX_HREF[c.code]!} className={`shrink-0 text-[11px] font-bold underline ${
+                c.severity === "blocker" ? "text-rose-800" : "text-amber-800"}`}>
+                Fix →
+              </Link>
+            )}
+          </li>
+        );
+        return actionable.length > 0 ? (
+          <ul className="mt-3 space-y-1.5">
+            {blockers.map(row)}
+            {warnings.map(row)}
+          </ul>
+        ) : (
+          <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-[12px] text-emerald-800">
+            Every check passed. Nothing needs your attention before publishing.
+          </p>
+        );
+      })()}
+
+      {/* ── The raw checks, one open away. Provenance for the careful reader, not the front page. ── */}
+      <details className="mt-2">
+        <summary className="cursor-pointer text-[11.5px] font-semibold text-[var(--cp-primary)]">
+          Technical checks ({readiness.checks.length})
+        </summary>
+      <ul className="mt-2 space-y-1.5">
         {readiness.checks.map((c: any) => {
           const sw = PUBLISH_STATE_SWATCH[c.state];
           return (
@@ -192,13 +269,19 @@ export default function PublishWorkspace({ readiness, locations, mayPublish }: {
           );
         })}
       </ul>
+      </details>
+      </>
+      )}
 
       {/* ── s8.1's ACCESS CONFIGURATION. Only the fields that have a column. ───────────────────── */}
-      <div className="mt-3 border-t border-gray-100 pt-3">
+      {showSettings && (
+      <div className={showChecks ? "mt-3 border-t border-gray-100 pt-3" : "mt-1"}>
+        {view !== "page" && (
         <button type="button" onClick={() => setOpen(o => !o)}
           className="text-[11.5px] font-semibold text-[var(--cp-primary)] hover:underline">
           {open ? "Hide booking page settings" : "Booking page settings →"}
         </button>
+        )}
 
         {open && (
           <div className="mt-2.5 space-y-3">
@@ -372,7 +455,7 @@ export default function PublishWorkspace({ readiness, locations, mayPublish }: {
 
               {/* ⚠ PUBLISHING IS ITS OWN ACT, and it is only offered when there is a row to publish.
                   A button that would always be refused is a control that does nothing. */}
-              {p && (
+              {p && showChecks && (
                 <>
                   <button type="button" disabled={busy || !mayPublish}
                     onClick={() => send("PATCH", { to: "published", acceptWarnings: readiness.verdict === "ready_with_warnings" })}
@@ -385,6 +468,12 @@ export default function PublishWorkspace({ readiness, locations, mayPublish }: {
                     {live ? "Pause the page" : "Mark ready"}
                   </button>
                 </>
+              )}
+              {p && !showChecks && (
+                <Link href="/practice/setup/patient-booking?tab=publish"
+                  className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[12px] font-semibold text-gray-700 hover:bg-gray-50">
+                  Review &amp; publish →
+                </Link>
               )}
             </div>
 
@@ -409,6 +498,7 @@ export default function PublishWorkspace({ readiness, locations, mayPublish }: {
           </div>
         )}
       </div>
+      )}
     </section>
   );
 }
