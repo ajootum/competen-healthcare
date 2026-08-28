@@ -23,7 +23,7 @@ import { useCallback, useState } from "react";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] outline-none focus:border-[var(--cp-primary)]";
+const input = "w-full rounded-lg border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-2.5 py-1.5 text-[12px] outline-none focus:border-[var(--cp-primary)]";
 
 export default function FormEditor({ canManage, initialTemplates, coreFields, fieldTypes }: {
   canManage: boolean;

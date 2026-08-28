@@ -47,7 +47,7 @@ import Dictation from "@/components/practice/Dictation";
 // The max-md tail is s4's 44px floor and nothing else. 16px text below md is also what stops iOS Safari
 // zooming the viewport the moment a field takes focus -- a zoom the practitioner then has to undo by
 // hand, mid-sentence, on a form they are trying to finish.
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
+const input = "w-full rounded-lg border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 
 type MergeValue = { field: string; description: string; value: string | null; state: "resolved" | "empty" };
 type MergeReading =

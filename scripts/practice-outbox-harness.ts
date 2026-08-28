@@ -213,12 +213,19 @@ function main() {
     walk(dir);
     return out;
   });
-  const SANCTIONED = "src/lib/practice/offline-capture.ts";
-  const unsanctioned = callers.filter(c => !c.replace(/\\/g, "/").endsWith(SANCTIONED));
-  ok("8a. ⚠ outboxAccept has exactly ONE sanctioned caller -- no unreasoned write path",
+  // ⚠ TWO sanctioned callers since 2026-08-28: the one PRODUCT write path, and the executable test
+  // suite CPR-PILOT-READINESS-001 s4 demanded ("text assertions alone are insufficient for pilot
+  // authorization"). A test calling outboxAccept is not an unreasoned write path -- it is the reasoned
+  // proof the write path works. Each is named; anything else is still a finding.
+  const SANCTIONED = [
+    "src/lib/practice/offline-capture.ts",
+    "src/lib/practice/outbox-sync.test.ts",
+  ];
+  const unsanctioned = callers.filter(c => !SANCTIONED.some(s => c.replace(/\\/g, "/").endsWith(s)));
+  ok("8a. ⚠ outboxAccept has exactly the SANCTIONED callers -- no unreasoned write path",
     unsanctioned.length === 0, `also called from: ${unsanctioned.join(", ")}`);
   ok("8a-control. and that caller EXISTS, so 8a is not passing over a list of none",
-    callers.some(c => c.replace(/\\/g, "/").endsWith(SANCTIONED)),
+    callers.some(c => c.replace(/\\/g, "/").endsWith(SANCTIONED[0])),
     "capture is unwired -- if that is intended, this assertion is the record of it");
 
   report();

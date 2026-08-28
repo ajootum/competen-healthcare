@@ -93,7 +93,7 @@ const chip = "rounded-lg border px-2.5 py-1.5 text-[12px] font-semibold transiti
 const chipIdle = "border-gray-200 bg-white text-gray-700 hover:border-[var(--cp-primary)] hover:bg-[var(--cp-primary)]/5";
 const chipOn = "border-[var(--cp-primary)] bg-[var(--cp-primary)] text-white";
 const label = "block text-[12px] font-semibold text-gray-600";
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[14px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+const input = "w-full rounded-lg border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-2.5 py-2 text-[14px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 
 /** The three-state row a section draws while it does not yet have an answer of its own. */
 function State({ loading, problem, empty, emptyText }: {

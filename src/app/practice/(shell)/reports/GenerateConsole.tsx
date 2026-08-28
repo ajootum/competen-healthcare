@@ -12,7 +12,7 @@ import { TEMPLATE_KINDS } from "@/lib/practice/document-constants";
 // be filled and names the fields; "Generate anyway" produces the draft with visible [[markers]] to fill
 // by hand. Neither path can produce a letter with a silent hole in it.
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+const input = "w-full rounded-lg border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 
 type Template = { id: string; title: string; kind: string; mergeable: boolean };
 type Patient = { id: string; displayName?: string; display_name?: string };

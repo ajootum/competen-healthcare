@@ -199,7 +199,7 @@ export default function DiagnosisWorkspace(props: {
     } finally { setBusy(false); }
   };
 
-  const input = "w-full rounded-lg border border-gray-200 px-2 py-1 text-[12.5px]";
+  const input = "w-full rounded-lg border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-2 py-1 text-[12.5px]";
 
   return (
     <section className={PANEL}>

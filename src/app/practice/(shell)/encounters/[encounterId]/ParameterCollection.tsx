@@ -39,7 +39,7 @@ const CARD = "rounded-xl border border-gray-200 bg-white p-4";
 // 16px field size that stops iOS zooming the page on focus; every suffix is `max-md:` and therefore
 // inert at md and up, so the desktop panel is unchanged and the carry-forward prohibition (LCP s10.3,
 // which is about what a field is BOUND to) is untouched by a class edit.
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
+const input = "w-full rounded-lg border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-2.5 py-1.5 text-[12px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 const BTN = "rounded-lg bg-[var(--cp-primary)] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-[var(--cp-primary-deep)] disabled:opacity-50 max-md:inline-flex max-md:min-h-[var(--cp-touch-primary)] max-md:items-center max-md:justify-center max-md:px-4 max-md:text-[14px]";
 const QUIET = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 max-md:inline-flex max-md:min-h-[var(--cp-touch)] max-md:items-center max-md:justify-center max-md:px-3.5 max-md:text-[12.5px]";
 

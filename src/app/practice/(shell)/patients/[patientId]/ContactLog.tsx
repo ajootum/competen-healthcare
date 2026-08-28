@@ -10,7 +10,7 @@ import { CONTACT_CHANNELS, CONTACT_DIRECTIONS, CONTACT_OUTCOMES } from "@/lib/pr
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // max-md:min-h is CPR-MOB-001 s4's 44px floor for touch, a no-op at md and up.
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)]";
+const input = "w-full rounded-lg border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)]";
 
 export default function ContactLog({ patientId, contacts, followUps, canRecord }: {
   patientId: string; contacts: any[]; followUps: any[]; canRecord: boolean;

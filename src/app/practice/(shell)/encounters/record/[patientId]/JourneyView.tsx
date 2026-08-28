@@ -21,7 +21,7 @@ import { formatDate } from "@/lib/datetime";
 // practitioner made. This is the same refusal as the "Stable / Improving / Monitor" chip that was
 // rejected on the Patients screen.
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+const input = "w-full rounded-lg border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 
 /** Each stream in its own hue, so a journey can be read as a pattern of colour before any text is read. */
 const KIND_SWATCH: Record<string, { badge: string; rail: string }> = {

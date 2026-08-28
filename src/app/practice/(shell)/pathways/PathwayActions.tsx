@@ -23,7 +23,7 @@ import type { PatientPathwayView } from "@/lib/practice/pathways";
 // an explanation.
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[12.5px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+const input = "w-full rounded-lg border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-2.5 py-1.5 text-[12.5px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 
 export default function PathwayActions({ pathway, canAssign }: {
   pathway: PatientPathwayView; canAssign: boolean;

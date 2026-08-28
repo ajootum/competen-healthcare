@@ -48,7 +48,7 @@ const STATUS_TONE: Record<string, string> = {
 
 // CPR-MOB-001 s16: thumb-height and 16px below md -- under 16px iOS zooms the page on focus. The
 // max-md:* additions are no-ops at md and up; the desktop form is byte-identical there.
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
+const input = "w-full rounded-lg border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 
 export default function CalendarConsole({ date, timezone, canManage, initial, locations = [] }: {
   date: string;

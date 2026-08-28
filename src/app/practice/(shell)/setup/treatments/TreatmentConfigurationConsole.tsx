@@ -18,7 +18,7 @@ import type { Panel } from "@/lib/practice/investigations";
 // gap is 'other', which is seeded active and keeps the practitioner's exact words.
 
 const CARD = "rounded-xl border border-gray-200 bg-white p-4";
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
+const input = "w-full rounded-lg border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10";
 const QUIET = "rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50";
 const ON = "rounded-lg border border-[var(--cp-primary)] bg-[var(--cp-primary)]/10 px-2.5 py-1.5 text-[11.5px] font-semibold text-[var(--cp-primary-deep)]";
 

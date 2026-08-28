@@ -209,7 +209,7 @@ import ProcedureWorkspace from "./ProcedureWorkspace";
 // but the 24-hour TEXT time input stays text with inputMode="numeric" (walkthrough #19: the native time
 // picker follows the OS locale and drew "11:00 AM" on this very panel). No native time input, anywhere.
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
+const input = "w-full rounded-lg border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 const CARD = "rounded-xl border border-gray-200 bg-white p-4";
 const FU_LABEL = "text-[10.5px] font-semibold uppercase tracking-wide text-gray-600";
 
@@ -1977,12 +1977,28 @@ export default function EncounterConsole(props: {
                             is below the fold, and an option nobody can see is an option that does not
                             exist (walkthrough 2026-08-16 #6). */}
                         <select id="fu-when" aria-label="When" value={fu.intervalCode}
-                          onChange={e => setFu(p => ({ ...p, intervalCode: e.target.value }))} className={`${input} mt-1`}>
+                          onChange={e => {
+                            const v = e.target.value;
+                            setFu(p => ({ ...p, intervalCode: v }));
+                            /* ⚠ CHOOSING "On a date…" OPENS THE CALENDAR, not merely a second empty
+                               field — 2026-08-28, found by the owner on a phone during the pilot
+                               acceptance's H2 run: the reveal left an amber box needing ANOTHER tap,
+                               and on mobile that read as "no calendar appears". The person has already
+                               said they want a date; asking again is the composer being coy.
+                               showPicker() rides the select change's user activation (rAF, so the
+                               input exists post-render); where a browser refuses it, focus() still
+                               lands the caret so the picker is one tap away instead of invisible. */
+                            if (v === "custom") requestAnimationFrame(() => {
+                              const el = document.getElementById("fu-due-date") as HTMLInputElement | null;
+                              el?.focus();
+                              try { el?.showPicker?.(); } catch { /* focus alone is the fallback */ }
+                            });
+                          }} className={`${input} mt-1`}>
                           <option value="custom">On a date…</option>
                           {props.intervals.map(i => <option key={i.code} value={i.code}>{i.label}</option>)}
                         </select>
                         {fu.intervalCode === "custom" ? (
-                          <input type="date" aria-label="Follow-up date" value={fu.dueDate}
+                          <input type="date" id="fu-due-date" aria-label="Follow-up date" value={fu.dueDate}
                             onChange={e => setFu(p => ({ ...p, dueDate: e.target.value }))}
                             className={`${input} mt-1 ${fu.dueDate ? "" : "border-amber-300 bg-[var(--cmp-surface-warning)]"}`} />
                         ) : (() => {

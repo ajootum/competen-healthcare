@@ -46,7 +46,7 @@ type Mode = "reschedule" | "defer" | "complete" | "cancel" | "missed" | null;
 
 // max-md:text-[16px] is not styling: under 16px iOS zooms the page the moment the field takes focus,
 // and a zoomed page is the horizontal scroll s4 forbids (s16).
-const input = "w-full rounded-lg border border-gray-200 px-2 py-1.5 text-[12.5px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
+const input = "w-full rounded-lg border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 px-2 py-1.5 text-[12.5px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)] max-md:text-[16px]";
 
 export default function RowActions({ followUp: f, canManage, today }: {
   followUp: any; canManage: boolean; today: string;

@@ -20,7 +20,12 @@ import { TimeInput } from "@/components/ui/wall-clock";
 
 // max-md:min-h is CPR-MOB-001 s4's 44px floor, a no-op at md and up. The TIME field stays the
 // text-pattern 24-hour idiom regardless of size -- never type="time".
-const input = "w-full rounded-lg border border-gray-200 px-2.5 py-2 text-[13px] outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)]";
+// ⚠ THE VALUE COLOUR IS EXPLICIT, NOT INHERITED — 2026-08-28, found by the owner on a real phone during
+// the pilot acceptance's H2 run: with no colour of its own, every control inherited a muted tone and a
+// FILLED date/time/select was indistinguishable from an empty one ("data is difficult to read"). Mobile
+// browsers render unstyled date and select controls dimmer still. Values are gray-900 on white;
+// placeholders alone stay muted, because the distinction between typed and not-typed IS the information.
+const input = "w-full rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] text-gray-900 placeholder:text-gray-400 outline-none focus:border-[var(--cp-primary)] focus:ring-2 focus:ring-[var(--cp-primary)]/10 max-md:min-h-[var(--cp-touch)]";
 
 export default function PatientActions(props: {
   patientId: string; displayName: string; sex: string; birthDate: string | null;
