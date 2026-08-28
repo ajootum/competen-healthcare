@@ -23,9 +23,17 @@
 // @next/env is CommonJS, so a named import fails under .mjs — default-import and destructure.
 import nextEnv from "@next/env";
 import { spawn } from "node:child_process";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const { loadEnvConfig } = nextEnv;
+
+// ⚠ ANCHOR ON THE FILE, NOT THE CALLER'S CWD — 2026-08-28. The preview launcher resolves launch.json
+// from the PARENT workspace and starts this script with the parent as cwd, where there is no .env.local
+// and the STAGING_* variables are absent, so the run refused with a message about missing variables
+// that were sitting one directory down the whole time. The repo root is this file's parent directory,
+// wherever the process was started from.
+process.chdir(join(dirname(fileURLToPath(import.meta.url)), ".."));
 
 loadEnvConfig(process.cwd());
 

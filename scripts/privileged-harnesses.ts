@@ -124,10 +124,6 @@ const TRIAGED: Listed[] = [
 const EXCLUDED: Listed[] = [
 
   // -- The 2026-08-28 sweep's solo-confirmed reds, each with its verdict. Every one reproduced ALONE. --
-  {
-    file: "practice-signup-harness.ts",
-    note: "A NEAR-VACUOUS GREEN, NOT A RED. Exit 0 with only 3 assertions run before its own gate: signup is CLOSED by explicit owner decision, so the harness skips its substance on every environment. Promoting it would read as coverage of a path that is deliberately shut. Revisit only if the front-door decision changes.",
-  },
 
   // -- The final 11 solo verdicts, closing the sweep 2026-08-28. Screening of all 161 is COMPLETE. --
   {
@@ -375,6 +371,7 @@ const STAGING: Listed[] = [
   { file: "practice-adoption-harness.ts", note: "adoption and activation. 68/68 -- anchors on ambient appointments by design, so the estate fixture holds a standing past-dated one (real traffic on production; self-cleaning harnesses leave none on staging)." },
   { file: "xw-uplift-harness.ts", note: "the UMW-to-HEX uplift. 31/31 -- the estate fixture writes one daily op_ops_snapshots row, since HEX occupancy is snapshot-derived by design and no snapshot writer runs on staging." },
   { file: "cgr-gate-harness.ts", note: "the CGR activation gate. All checks pass, the decisive one being the MET path: AMU meets requirements it actually holds, verdict ready 4/4 -- proven against estate-fixture section 8, which seeds the six NAMED competencies the harness picks by regex (staging's 271-row library was a different catalogue from production's), an AMU department, and decisions written to activation.ts's own outcome/maturity rule. CAVEAT worth keeping: this harness sets its exit code only on create-failure, not on its printed FAIL lines -- READ its output when it matters, do not trust exit 0 alone." },
+  { file: "practice-signup-harness.ts", note: "self-service signup, end to end over HTTP. 27/27 on staging 2026-08-28, the day the owner opened the front door: flag gate, eight validation refusals, a clean signup provisioning workspace + both memberships + capabilities + entitlement, duplicate-email refusal pointed at sign-in, the session-hijack refusal (ALREADY_AUTHENTICATED), server-side legal versions, and the launch flag restored to its pre-run value. ⚠ IT NEEDS A RUNNING STAGING SERVER: start competen-dev-staging (port 3100) and pass BASE_URL=http://localhost:3100, or it SKIPS with exit 0 -- a sweep that shows it green without a server has proven nothing about signup." },
 ];
 
 /**

@@ -7,6 +7,13 @@
       "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
       "runtimeArgs": ["--require", "C:\\Users\\elish\\Documents\\Competen\\competen-healthcare\\scripts\\dev-ca-preload.cjs", "node_modules/next/dist/bin/next", "dev"],
       "port": 3000
+    },
+    {
+      "// note": "STAGING-pointed dev server on 3100. dev-staging.mjs remaps the three Supabase variables to STAGING_* and refuses if they resolve to production; it spawns the next binary itself, so the CA preload rides via --require on THIS node process and NODE_OPTIONS inside the script.",
+      "name": "competen-dev-staging",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["--require", "C:\\Users\\elish\\Documents\\Competen\\competen-healthcare\\scripts\\dev-ca-preload.cjs", "scripts/dev-staging.mjs"],
+      "port": 3100
     }
   ]
 }
