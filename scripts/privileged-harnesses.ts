@@ -128,6 +128,52 @@ const EXCLUDED: Listed[] = [
       + "framework. Extending it there is the next step; the harness is not at fault and refuses rather "
       + "than passing over an empty catalogue.",
   },
+
+  // -- The 2026-08-28 sweep's solo-confirmed reds, each with its verdict. Every one reproduced ALONE. --
+  {
+    file: "practice-signup-harness.ts",
+    note: "A NEAR-VACUOUS GREEN, NOT A RED. Exit 0 with only 3 assertions run before its own gate: signup is CLOSED by explicit owner decision, so the harness skips its substance on every environment. Promoting it would read as coverage of a path that is deliberately shut. Revisit only if the front-door decision changes.",
+  },
+  {
+    file: "practice-generation-harness.ts",
+    note: "REAL FAILURE, solo-confirmed: 48/8. The stored letter body loses its missing-DOB marker, the signature does not carry the practitioner name, and a generated letter is not landing as an ordinary DRAFT practice_clinical_document. Needs investigation against CPR-DOC-AUTO -- not a staging-data absence.",
+  },
+  {
+    file: "practice-messaging-harness.ts",
+    note: "solo-confirmed 38/2: handed_to_provider_at never set and the provider response not kept verbatim -- the staging deployment has no provider handoff configured. Staging-config work, not a product defect.",
+  },
+  {
+    file: "practice-patient-access-harness.ts",
+    note: "solo-confirmed, and INVERTED: its 2a-control asserts the deployment has NO gateway configured, but staging now carries Resend after the 2026-08-27 email activation, so section 2 tests a different world than the one that ships. The HARNESS assumption is stale. Repoint the control, then rescreen.",
+  },
+  {
+    file: "practice-patient-booking-screens-harness.ts",
+    note: "solo-confirmed 18/3. BLOCKER FAMILY: publish refused, EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED not ready on the staging practice fixture. One fixture fix likely clears all five harnesses in this family.",
+  },
+  {
+    file: "practice-patient-intake-harness.ts",
+    note: "solo-confirmed. Same EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED blocker family.",
+  },
+  {
+    file: "practice-patient-manage-harness.ts",
+    note: "solo-confirmed 6/1. Same blocker family.",
+  },
+  {
+    file: "practice-registration-scheduling-harness.ts",
+    note: "solo-confirmed 28/2. Same blocker family.",
+  },
+  {
+    file: "practice-session-booking-mode-harness.ts",
+    note: "solo-confirmed 7/1. Same blocker family.",
+  },
+  {
+    file: "practice-planner-harness.ts",
+    note: "solo-confirmed. Root: starting a session now answers 422 LOCATION_REQUIRED and the harness fixture passes no location, so the activity never starts and four REFUSES-moving-a-started-activity checks fail as a cascade. Reads as a stale harness fixture against a deliberate product change -- fix the fixture, not the product.",
+  },
+  {
+    file: "practice-setup-domains-harness.ts",
+    note: "solo-confirmed 58/4. Spec drift: the s3 Practice Foundation now holds FIVE modules (identifiers joined profile/locations/letterhead/document_design) and the harness pins four. The never-pin-a-count class -- update the harness to the spec, or the spec ruling, whichever is authoritative.",
+  },
   {
     file: "cgr-suggest-harness.ts",
     note:
@@ -265,6 +311,79 @@ const STAGING: Listed[] = [
   { file: "practice-events-harness.ts", note: "practice events. 55/55." },
   { file: "practice-facilities-harness.ts", note: "facilities. 44/44." },
   { file: "practice-followup-plans-harness.ts", note: "follow-up plans. 50/50." },
+
+  // -- Screened against staging 2026-08-27/28 (delegated sweep over the 92-list): 69 green of 89,
+  // plus two batch reds that passed their solo re-run. Solo-confirmed reds are in EXCLUDED. --
+  { file: "practice-handle-reachability-harness.ts", note: "handle reachability. 48/48." },
+  { file: "practice-hfe-harness.ts", note: "CPR-HFE-001 conformance. 25/25." },
+  { file: "practice-hospital-booking-harness.ts", note: "hospital booking. 30/30." },
+  { file: "practice-identity-claim-harness.ts", note: "identity claims. 53/53." },
+  { file: "practice-identity-publication-harness.ts", note: "identity publication. 49/49." },
+  { file: "practice-identity-service-harness.ts", note: "the identity service. 84/84." },
+  { file: "practice-import-harness.ts", note: "imports. 39 assertions." },
+  { file: "practice-intelligence-harness.ts", note: "practice intelligence. 31/31." },
+  { file: "practice-intelligence-pie-harness.ts", note: "intelligence PIE. 93/93." },
+  { file: "practice-intelligence-suite-harness.ts", note: "the intelligence suite. 76/76." },
+  { file: "practice-interruption-harness.ts", note: "interruptions. 29/29." },
+  { file: "practice-knowledge-harness.ts", note: "knowledge. 88/88." },
+  { file: "practice-library-harness.ts", note: "the library. 38/38." },
+  { file: "practice-lifecycle-harness.ts", note: "the practice lifecycle. 80/80." },
+  { file: "practice-longitudinal-harness.ts", note: "longitudinal views. 72 assertions." },
+  { file: "practice-medication-harness.ts", note: "medication. 100/100." },
+  { file: "practice-medication-weight-decision-harness.ts", note: "weight-based dosing decisions. 57/57." },
+  { file: "practice-offline-cache-harness.ts", note: "the offline cache. 113/113." },
+  { file: "practice-offline-clinical-harness.ts", note: "offline clinical capture. 71/71." },
+  { file: "practice-offline-filing-harness.ts", note: "offline filing. 18/18." },
+  { file: "practice-offline-guidance-harness.ts", note: "offline guidance. 71/71." },
+  { file: "practice-operations-harness.ts", note: "practice operations. 50/50." },
+  { file: "practice-parameters-harness.ts", note: "parameters. 180 assertions." },
+  { file: "practice-pathways-harness.ts", note: "pathways. 85/85." },
+  { file: "practice-patient-workspace-harness.ts", note: "the patient workspace. 133/133." },
+  { file: "practice-patients-harness.ts", note: "patients. 31 assertions." },
+  { file: "practice-pay-docs-harness.ts", note: "payment documents. 13/13." },
+  { file: "practice-period-harness.ts", note: "periods. 86/86." },
+  { file: "practice-personalisation-harness.ts", note: "personalisation. 48/48." },
+  { file: "practice-pi-v2-harness.ts", note: "PI v2. 36/36." },
+  { file: "practice-pid-harness.ts", note: "PID. 18 assertions." },
+  { file: "practice-planner-navigation-harness.ts", note: "planner navigation. 130/130." },
+  { file: "practice-portfolio-harness.ts", note: "the portfolio. 96/96." },
+  { file: "practice-privacy-harness.ts", note: "privacy. 37/37." },
+  { file: "practice-procedures-harness.ts", note: "procedures. 72/72." },
+  { file: "practice-provisioning-harness.ts", note: "provisioning. 25 assertions." },
+  { file: "practice-recurrence-harness.ts", note: "recurrence. ALL GREEN (no count printed)." },
+  { file: "practice-reflection-harness.ts", note: "reflection. 55/55." },
+  { file: "practice-registration-conditional-harness.ts", note: "conditional registration. 27/27." },
+  { file: "practice-registration-config-harness.ts", note: "registration config. 51/51." },
+  { file: "practice-registration-harness.ts", note: "registration. 66/66." },
+  { file: "practice-relationships-harness.ts", note: "relationships. 48/48." },
+  { file: "practice-reports-harness.ts", note: "reports. 37/37." },
+  { file: "practice-reports-v2-harness.ts", note: "reports v2. 39/39." },
+  { file: "practice-reschedule-harness.ts", note: "reschedules. 30/30." },
+  { file: "practice-saved-search-harness.ts", note: "saved search. 30/30." },
+  { file: "practice-schedule-exception-harness.ts", note: "schedule exceptions. 90/90." },
+  { file: "practice-scheduling-harness.ts", note: "scheduling. 24 assertions." },
+  { file: "practice-search-harness.ts", note: "search. 46/46." },
+  { file: "practice-security-harness.ts", note: "practice security. 149/149." },
+  { file: "practice-session-engine-harness.ts", note: "the session engine. 76/76." },
+  { file: "practice-session-harness.ts", note: "sessions. 60/60." },
+  { file: "practice-session-lifecycle-harness.ts", note: "session lifecycle. 78/78." },
+  { file: "practice-solo-approval-harness.ts", note: "solo approval. 19/19." },
+  { file: "practice-stream-harness.ts", note: "the stream. 18/18." },
+  { file: "practice-sync-harness.ts", note: "sync. 97/97." },
+  { file: "practice-task-orchestration-harness.ts", note: "task orchestration. 36/36." },
+  { file: "practice-tasks-harness.ts", note: "tasks. 44/44." },
+  { file: "practice-team-harness.ts", note: "teams. 53/53." },
+  { file: "practice-timeline-harness.ts", note: "the timeline. 18/18." },
+  { file: "practice-treatment-investigation-harness.ts", note: "treatment and investigation. 238/238." },
+  { file: "practice-v5007-phase56-harness.ts", note: "CPR-V5-007 phases 5-6. 104/104." },
+  { file: "pui-notifications-harness.ts", note: "PUI notifications. 67/67." },
+  { file: "qie-loop-harness.ts", note: "the QIE loop. Exit 0; summary line not captured by the screener (a known extraction gap, same class as the hww-* forms)." },
+  { file: "ssw-navigation-harness.ts", note: "SSW navigation. 26/26." },
+  { file: "umw-personalisation-harness.ts", note: "UMW personalisation. Exit 0; summary not captured (extraction gap)." },
+  { file: "umw-resources-harness.ts", note: "UMW resources. Exit 0; summary not captured (extraction gap)." },
+  { file: "xw-competency-harness.ts", note: "cross-workspace competency. Exit 0; summary not captured (extraction gap)." },
+  { file: "practice-followups-harness.ts", note: "follow-ups. Exit 0 solo (batch run showed 78/1 and did NOT reproduce alone -- possible fixture interference with a batch neighbour; worth remembering if it flakes again)." },
+  { file: "practice-forms-harness.ts", note: "forms. Exit 0 solo (the batch FAIL line was a screener extraction artifact, not a harness result)." },
 ];
 
 /**
@@ -294,7 +413,7 @@ const RAW_DML = /\b(delete\s+from|insert\s+into|update\s+[a-z_]+\s+set|truncate\
  * passed. It does NOT mean the estate is checked — it means UNTRIAGED_CEILING checks have still never
  * been run by anybody, and the number is printed on every run so that stays visible.
  */
-const UNTRIAGED_CEILING = 92;  // 161 -> 134 -> 130 -> 125 -> 119 -> 92 as staging screening proceeds. Lower it, never raise it.
+const UNTRIAGED_CEILING = 11;  // 161 -> 134 -> 130 -> 125 -> 119 -> 92 -> 11. The last 11 are the pending solo re-runs. Lower it, never raise it.
 
 // ── The classifier is the authority on the set and on what mutates ───────────────────────────────
 type Row = { file: string; tier: string; mutates: boolean; purpose: string };
