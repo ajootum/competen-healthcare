@@ -157,7 +157,11 @@ Mobile booking journey: human, §H2.
 1. Sign in at `practice.competenhealthcare.com` → land directly on Practice home (no chooser).
 2. Register a new adult patient (real-shaped synthetic data). Confirm it appears in Patients.
 3. Register a minor with a guardian. Confirm the guardian details persist on reopening.
-4. Create an appointment for today from the Planner.
+4. Book an appointment for ZZTEST Amina **from her patient record** (Patients → Amina → book), so the
+   appointment carries her clinical record into step 5. The Planner's quick-book panel is name-only by
+   design — fine for walk-in slots, not for this journey. Pick a time at least 30 minutes ahead inside
+   the practice's open window; if today's window is spent, tomorrow is fine — the journey matters, not
+   the date.
 5. Start the encounter from Current Session. Record: one diagnosis, one treatment, one investigation.
 6. **Leave mid-encounter** (navigate away), return, confirm nothing is lost, complete the encounter.
 7. Create a follow-up. Confirm it appears in the Planner/timeline.
