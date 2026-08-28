@@ -19,7 +19,7 @@ provisioned without billing.
 |---|---|
 | 1 Clinical safety & data integrity | **PASS** (one line CONDITIONAL: guardian workflow, see §A) |
 | Outbox / sync arc (§4) | **PASS — executed** (new, this arc) |
-| 2 Practitioner day-in-the-life | **NOT TESTED** — human; script in §H1/§H2 |
+| 2 Practitioner day-in-the-life | **desktop PASS** (owner-run 2026-08-28, findings dispositioned — see §H1 results) · **mobile NOT TESTED** (§H2) |
 | 3 Identity, access & topology | **PASS — executed** (fixtures A–D, this arc) |
 | 4 Communications | **PASS** (human-verified 2026-08-27 + executed checks) |
 | 5 Patient self-booking | **CONDITIONAL** (enabled; one named gap: true in-flight race) |
@@ -35,7 +35,7 @@ All evidence below is **executed** (staging unless marked CI/prod), from runs on
 |---|---|
 | Patient identity / isolation | `practice-patients` 31 · `practice-security` 149/149 · `practice-patient-workspace` 133/133 |
 | Adult registration persists | `practice-registration` 66/66 |
-| Minor/guardian | `practice-registration-conditional` 27/27 (conditional-field machinery). ⚠ An explicitly named guardian-journey assertion was not separately identified — **CONDITIONAL**: covered by the human registration step in §H1 until confirmed |
+| Minor/guardian | **PASS** — H1-1 found the template check blind to guardians (P1); fixed, deployed, and HUMAN-VERIFIED live the same day (guardian details survived reopening: YES). Executable regression: `practice-registration` cases 10/10b/10c, 69/69 |
 | Encounter persistence, leave/re-enter | `practice-encounter-start` 65/65 · `practice-encounter-workspace` 135 · `practice-encounters` 46 · `practice-continuity` 67/67 |
 | Diagnoses | `practice-diagnosis-capture` (CI, blocking) · `practice-case-memory` 50/50 |
 | Treatments | `practice-treatment-investigation` 238/238 |
@@ -169,6 +169,24 @@ Mobile booking journey: human, §H2.
 9. Sign out. Sign back in. Find the patient; review the longitudinal record; confirm every item from 2–8 is present.
 10. Record: total time, every point you needed to think twice, every wrong turn, every error seen.
 
+
+### H1 — PERFORMED 2026-08-28 (owner), results
+
+| Measure | Recorded |
+|---|---|
+| Total time | 20 minutes |
+| Completed without developer intervention | **NO on first attempt** — both causes dispositioned: H1-1 (P1, fixed + deployed + human-verified within the run) and H1-2 (the SCRIPT mis-directed booking to the Planner quick-book; script corrected) |
+| Steps needing thought | Booking flow (script-induced; see H1-2) |
+| Wrong turns / backtracks | None |
+| Errors seen | The two reported findings only |
+| Typed work lost | **None** |
+| Guardian details survived reopening | **YES** (post-fix, live) |
+| Longitudinal record complete (step 9) | **YES** |
+
+Disposition: **Gate 2 desktop PASS.** The journey completed end to end with no data loss, no wrong
+turns, and full continuity; the interventions trace to a since-fixed P1 and a since-corrected script
+line, and no P0/P1 remains open — which is the Pre-Stage-1 item 4 criterion.
+
 ### H2 — Mobile critical subset (Gate 2/5), real device
 1. Repeat H1 steps 1–2 and 5–7 at real mobile width.
 2. Self-booking: from a phone browser (not signed in), open the practice's public booking page, book a
@@ -210,7 +228,7 @@ backlog: signup-harness `probe-*` debris identities on staging (cosmetic, exempt
 
 ## K. The smallest remaining blocker list for Stage 1
 
-1. **H1 desktop day-in-the-life** — owner-performed, no P0/P1 found (Pre-Stage-1 item 4).
+1. ~~H1 desktop day-in-the-life~~ — **DONE 2026-08-28**, PASS (item 4 closed; results in §H1).
 2. **H2 mobile critical journey** incl. the booking double-tap — owner-performed (items 5, 6).
 3. **§G names filled in** — pilot owner, escalation, support channel, cohort, daily review (item 8).
 4. **Backups confirmation** — owner confirms the Supabase backup schedule and who restores (§F line).
