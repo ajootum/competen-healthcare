@@ -196,7 +196,7 @@ test, and it holds for both formats. The probe reads and never writes.
 **349, 352, 353 and 357**. Measured, not assumed: none of the 161 writing harnesses reference any of them,
 so the drift does not block this — but applying those migrations is outstanding, and owner-only.
 
-**Triage COMPLETE (2026-08-28): all 161 writing harnesses screened. 141 in STAGING, 22 excluded with
+**Triage COMPLETE (2026-08-28): all 161 writing harnesses screened. 143 in STAGING, 20 excluded with
 verdicts, ceiling `0`** -- a new harness lands in UNTRIAGED and goes red until screened. Of every red
 found, FOUR were batch-only flakes that passed alone (the batch red was not evidence), 14 are
 missing-staging-data in three families (the `EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED` publish blocker
@@ -211,8 +211,11 @@ column-does-not-exist, getDocument fail-softs to null, and every downstream asse
 Proven by running the exact select against staging. **The "SIGNED BODY MODIFIED" line was an INVENTED
 MEASUREMENT**: the assertion's failure detail was a hard-coded string, printed over a comparison in
 which the body was never read. The signed-document protections themselves PASS (the trigger refuses raw
-edits and covered rewrites). The detail string is fixed to report what was observed; both harnesses
-unblock when the owner applies migrations 349/352/353/357 to staging. Failure classes found, none of which are defects in this runner:
+edits and covered rewrites). The detail string is fixed to report what was observed. ✔ RESOLVED 2026-08-28: the owner applied the
+eight catch-up migrations (the full gap, re-measured: 349/350/352/353/356/357/358/360), staging reached
+FULL SCHEMA PARITY (671 of 671 tables, RLS on everywhere), and both harnesses rescreened GREEN --
+documentation 65/65 including "THE ORIGINAL'S TEXT IS UNCHANGED" passing on a real read, generation
+56/56. The amendment lifecycle is proven correct. Failure classes found, none of which are defects in this runner:
 
 - ⚠⚠ **FOUR WERE RECORDED AS HANGS AND WERE NOT HANGING. THEY WERE WORKING.** `practice-audit`,
   `practice-availability-config`, `practice-billing` and `practice-booking-rules` hit the screener's

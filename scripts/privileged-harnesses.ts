@@ -34,13 +34,13 @@
  * directly before any of this was built, because if it were false, every harness spawned here would run
  * against production while this file printed the staging ref.
  *
- * Staging is real: it answers /auth/v1/health and carries 665 of production's 671 tables. ⚠ THE FULL GAP
- * IS EIGHT MIGRATIONS, NOT FOUR (re-measured 2026-08-28 with a fixed migration-verify --staging): 349,
- * 350, 352, 353, 356, 357, 358 and 360 all carry unapplied claims — six tables plus COLUMNS on
- * practice_plans, practice_message, practice_referral and practice_clinical_document. The earlier "none
- * of the writing harnesses reference the six tables" held for TABLES and was quietly false for COLUMNS:
- * both document harnesses broke on getDocument selecting mig-357 columns. Applying the eight, in numeric
- * order, is the owner's.
+ * ✔ STAGING IS AT FULL SCHEMA PARITY since 2026-08-28: the owner applied the eight catch-up migrations
+ * (349, 350, 352, 353, 356, 357, 358, 360 — measured with migration-verify --staging, whose own head:true
+ * defect had to be fixed first), and the paged registry now reads 671 of 671 tables, RLS on everywhere.
+ * The gap's history matters because it masqueraded as product defects: both document harnesses broke on
+ * getDocument selecting mig-357 COLUMNS, and one of those breaks printed a hard-coded detail string that
+ * read as a clinical-integrity breach. After parity, both run green (65/65 and 56/56) — the amendment
+ * protections pass on a real read.
  *
  *   npx tsx scripts/privileged-harnesses.ts              run the security subset (read-only)
  *   npx tsx scripts/privileged-harnesses.ts --all        also run the triaged non-security subset
@@ -138,13 +138,6 @@ const EXCLUDED: Listed[] = [
     note: "A NEAR-VACUOUS GREEN, NOT A RED. Exit 0 with only 3 assertions run before its own gate: signup is CLOSED by explicit owner decision, so the harness skips its substance on every environment. Promoting it would read as coverage of a path that is deliberately shut. Revisit only if the front-door decision changes.",
   },
   {
-    file: "practice-generation-harness.ts",
-    note: "RECLASSIFIED 2026-08-28: same single cause as practice-documentation. Its three headline failures "
-      + "all read through getDocument (lines 191/238/250), whose select names the mig-357 columns staging "
-      + "lacks, so the reads return null/{} and the assertions fail on empty data. Not a letter-merge defect. "
-      + "UNBLOCKS when the owner applies migrations 349/352/353/357 to staging.",
-  },
-  {
     file: "practice-messaging-harness.ts",
     note: "solo-confirmed 38/2: handed_to_provider_at never set and the provider response not kept verbatim -- the staging deployment has no provider handoff configured. Staging-config work, not a product defect.",
   },
@@ -185,17 +178,6 @@ const EXCLUDED: Listed[] = [
   {
     file: "practice-setup-harness.ts",
     note: "solo-confirmed 53/1: `2f twenty-two modules -- 23`. The never-pin-a-count class again, beside practice-setup-domains: the setup catalogue grew a module and the harness pins the old total. Update the harness to the spec ruling.",
-  },
-  {
-    file: "practice-documentation-harness.ts",
-    note: "RECLASSIFIED 2026-08-28 after investigation: NOT a product defect, and the alarming line was an "
-      + "INVENTED MEASUREMENT. All failures cascade from one cause: getDocument selects content_model and "
-      + "style_id, added by migration 357, which staging lacks -- PostgREST answers column-does-not-exist, "
-      + "getDocument fail-softs to null, and six assertions read nothing. Proven by running the exact select "
-      + "against staging (errors) and the same select minus the two columns (ok). The signed-document "
-      + "protections themselves PASS: the trigger refuses raw edits and covered rewrites. The scary detail "
-      + "string was a hard-coded constant, now fixed to report what was actually observed. UNBLOCKS when the "
-      + "owner applies migrations 349/352/353/357 to staging.",
   },
   {
     file: "practice-adoption-harness.ts",
@@ -437,6 +419,8 @@ const STAGING: Listed[] = [
   { file: "practice-forms-harness.ts", note: "forms. Exit 0 solo (the batch FAIL line was a screener extraction artifact, not a harness result)." },
   { file: "umw-permissions-harness.ts", note: "UMW permissions. Exit 0 solo (batch showed 66/67 and did NOT reproduce alone -- batch-only flake, same class as practice-followups)." },
   { file: "practice-encounters-landing-harness.ts", note: "the encounters landing. Exit 0 solo (the batch run CRASHED with a stack trace and the crash did not reproduce alone -- batch-only, not evidence)." },
+  { file: "practice-documentation-harness.ts", note: "the documentation lifecycle, amendment chain included. 65/65 after the 2026-08-28 staging catch-up. Its earlier red was a getDocument null over missing mig-357 columns, and its scariest line was a hard-coded detail string -- both are fixed, and the amendment protections now PASS on a real read: signed body unchanged, original AMENDED, chain linked both ways." },
+  { file: "practice-generation-harness.ts", note: "document generation. 56/56 after the staging catch-up (was 48/8 on the same getDocument null)." },
 ];
 
 /**
