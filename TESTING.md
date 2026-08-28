@@ -200,11 +200,19 @@ so the drift does not block this — but applying those migrations is outstandin
 verdicts, ceiling `0`** -- a new harness lands in UNTRIAGED and goes red until screened. Of every red
 found, FOUR were batch-only flakes that passed alone (the batch red was not evidence), 14 are
 missing-staging-data in three families (the `EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED` publish blocker
-x5, the no-hospital-with-N-profiles cohort x5, plus singletons), and FIVE are real assertion failures:
-`practice-generation` 48/8 (letter merge/markers), **`practice-documentation` 58/6 -- the amendment
-lifecycle, including a SIGNED BODY MODIFIED under amendment: an integrity defect candidate**,
-`practice-planner` (LOCATION_REQUIRED fixture drift), and `practice-setup` + `practice-setup-domains`
-(module-count pins against a catalogue that grew). Failure classes found, none of which are defects in this runner:
+x5, the no-hospital-with-N-profiles cohort x5, plus singletons), and THREE are real assertion failures:
+`practice-planner` (LOCATION_REQUIRED fixture drift) and `practice-setup` + `practice-setup-domains`
+(module-count pins against a catalogue that grew).
+
+⚠⚠ **CORRECTION (2026-08-28): the two document harnesses were RECLASSIFIED after investigation.**
+`practice-documentation` 58/6 and `practice-generation` 48/8 share ONE cause: `getDocument` selects
+`content_model` and `style_id`, added by **migration 357, which staging lacks** -- PostgREST answers
+column-does-not-exist, getDocument fail-softs to null, and every downstream assertion reads nothing.
+Proven by running the exact select against staging. **The "SIGNED BODY MODIFIED" line was an INVENTED
+MEASUREMENT**: the assertion's failure detail was a hard-coded string, printed over a comparison in
+which the body was never read. The signed-document protections themselves PASS (the trigger refuses raw
+edits and covered rewrites). The detail string is fixed to report what was observed; both harnesses
+unblock when the owner applies migrations 349/352/353/357 to staging. Failure classes found, none of which are defects in this runner:
 
 - ⚠⚠ **FOUR WERE RECORDED AS HANGS AND WERE NOT HANGING. THEY WERE WORKING.** `practice-audit`,
   `practice-availability-config`, `practice-billing` and `practice-booking-rules` hit the screener's

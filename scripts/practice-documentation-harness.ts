@@ -360,9 +360,33 @@ async function main() {
     chain?.document.amendment_reason === "wrong clinic named in the address", String(chain?.document.amendment_reason));
 
   const original = await getDocument(admin, wsA, docId);
-  ok("the original moved to AMENDED", original?.document.status === "AMENDED", String(original?.document.status));
+
+  /**
+   * ⚠ A HARD-CODED FAILURE DETAIL IS AN INVENTED MEASUREMENT -- 2026-08-28.
+   *
+   * The body assertion below used to carry the constant detail string "the signed body was modified",
+   * printed whenever the comparison failed -- INCLUDING when getDocument returned null and no body was
+   * ever read. That is exactly what happened on staging: getDocument's select names content_model and
+   * style_id, both added by migration 357, which staging lacks. PostgREST answered "column ... does not
+   * exist", getDocument fail-softed to null, and six assertions cascaded -- one of them announcing that
+   * a SIGNED CLINICAL DOCUMENT'S BODY HAD BEEN MODIFIED, on a database where nothing was read at all.
+   * That sentence was escalated as an integrity defect before anyone noticed it was a string literal.
+   *
+   * So: the null case is now its own named assertion, and every detail string below reports what was
+   * actually observed rather than asserting the scariest interpretation of a false comparison.
+   */
+  ok("getDocument can read both ends of the chain (its select matches this database's schema)",
+    !!chain && !!original,
+    `chain ${chain ? "read" : "NULL"}, original ${original ? "read" : "NULL"} -- getDocument fail-softs to `
+    + `null when its select names a column this database lacks (content_model/style_id arrived in migration 357)`);
+
+  ok("the original moved to AMENDED", original?.document.status === "AMENDED",
+    original ? String(original.document.status) : "unknown -- getDocument returned null");
   ok("THE ORIGINAL'S TEXT IS UNCHANGED (a copy of it is out in the world)",
-    original?.document.body === signedBody, "the signed body was modified");
+    original?.document.body === signedBody,
+    original
+      ? (original.document.body === signedBody ? "" : "the stored body DIFFERS from the signed text")
+      : "unknown -- getDocument returned null, the body was never read, and this failure says nothing about the text");
   ok("the original points forward to its successor", original?.successor?.id === amended.data.id, JSON.stringify(original?.successor));
 
   const secondAmend = await amendDocument(admin, { workspaceId: wsA, documentId: docId, reason: "again", ...base });

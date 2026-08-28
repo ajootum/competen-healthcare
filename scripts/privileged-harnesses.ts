@@ -136,7 +136,10 @@ const EXCLUDED: Listed[] = [
   },
   {
     file: "practice-generation-harness.ts",
-    note: "REAL FAILURE, solo-confirmed: 48/8. The stored letter body loses its missing-DOB marker, the signature does not carry the practitioner name, and a generated letter is not landing as an ordinary DRAFT practice_clinical_document. Needs investigation against CPR-DOC-AUTO -- not a staging-data absence.",
+    note: "RECLASSIFIED 2026-08-28: same single cause as practice-documentation. Its three headline failures "
+      + "all read through getDocument (lines 191/238/250), whose select names the mig-357 columns staging "
+      + "lacks, so the reads return null/{} and the assertions fail on empty data. Not a letter-merge defect. "
+      + "UNBLOCKS when the owner applies migrations 349/352/353/357 to staging.",
   },
   {
     file: "practice-messaging-harness.ts",
@@ -182,7 +185,14 @@ const EXCLUDED: Listed[] = [
   },
   {
     file: "practice-documentation-harness.ts",
-    note: "!! THE MOST SERIOUS FINDING OF THE SWEEP, solo-confirmed 58/6. The amendment lifecycle is broken in three ways: the successor does not carry the amendment reason, the original does not move to AMENDED, and -- worst -- `THE ORIGINAL'S TEXT IS UNCHANGED (a copy of it is out in the world) -- the signed body was modified`. A SIGNED clinical document's body changing during amendment is an integrity defect candidate, not a fixture problem. Needs product engineering eyes before anything else. (Note: --only practice-documentation is ambiguous with practice-documentation-tools; use practice-documentation-harness.)",
+    note: "RECLASSIFIED 2026-08-28 after investigation: NOT a product defect, and the alarming line was an "
+      + "INVENTED MEASUREMENT. All failures cascade from one cause: getDocument selects content_model and "
+      + "style_id, added by migration 357, which staging lacks -- PostgREST answers column-does-not-exist, "
+      + "getDocument fail-softs to null, and six assertions read nothing. Proven by running the exact select "
+      + "against staging (errors) and the same select minus the two columns (ok). The signed-document "
+      + "protections themselves PASS: the trigger refuses raw edits and covered rewrites. The scary detail "
+      + "string was a hard-coded constant, now fixed to report what was actually observed. UNBLOCKS when the "
+      + "owner applies migrations 349/352/353/357 to staging.",
   },
   {
     file: "practice-adoption-harness.ts",
