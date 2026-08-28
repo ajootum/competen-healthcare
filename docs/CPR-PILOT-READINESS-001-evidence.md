@@ -17,7 +17,7 @@ provisioned without billing.
 
 | Gate | Disposition |
 |---|---|
-| 1 Clinical safety & data integrity | **PASS** (one line CONDITIONAL: guardian workflow, see §A) |
+| 1 Clinical safety & data integrity | **PASS** (guardian line closed by H1: fixed, deployed, human-verified live) |
 | Outbox / sync arc (§4) | **PASS — executed** (new, this arc) |
 | 2 Practitioner day-in-the-life | **desktop PASS** (owner-run 2026-08-28, findings dispositioned — see §H1 results) · **mobile NOT TESTED** (§H2) |
 | 3 Identity, access & topology | **PASS — executed** (fixtures A–D, this arc) |
