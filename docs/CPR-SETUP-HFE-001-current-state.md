@@ -55,17 +55,26 @@ own arc — it never displaces this one mid-flight.
    "developer acceptance evidence" class. Removed from the UI (the disagreement data stays available
    to engineering in the payload).
 
-## Increment plan
+## Increments — ALL BUILT 2026-08-28
 
-1. **Setup Home (§2/§3/§4/§16/§17)** — rebuild `/practice/setup` as the grouped control centre:
+1. **Setup Home (§2/§3/§4/§16/§17)** — BUILT. `/practice/setup` is the grouped control centre:
    recommended next action, purpose-specific readiness (operational / public booking / communications
-   as warning-only), grouped destination cards each carrying live state and linking to the existing
-   surface that owns the control. No routes move; no redirects needed yet.
-2. **Patient Booking destination (§9)** — `/practice/setup/patient-booking`, six tabs mounting the
-   existing consoles (Overview, Booking page, Clinics & availability, Patient information,
-   Review & publish, Advanced = Rules Centre). `?layer=3` redirects here.
-3. **Availability & Changes (§8)** — `/practice/setup/availability-changes` with Regular week /
-   Changes & exceptions tabs (Sessions + Exceptions workspaces); `?layer=1|2` redirect; recall/walk-in
-   operational widgets move to their owning Follow-ups workspace per §20.
-4. Language purge (§17/§18) across the moved surfaces + acceptance harness updates + SET-HFE-10
-   redirect checks.
+   as warning-only), grouped destination cards with live state. `practiceSetup()` untouched.
+2. **Patient Booking destination (§9)** — BUILT. `/practice/setup/patient-booking`, six tabs:
+   Overview (link card + standing + next action), Booking page (summary + one-source-of-truth link to
+   the identity console), Clinics & availability (`RuleWorkspace view="clinics"` — routine setup with
+   no Rules Centre — plus the recall/walk-in board), Patient information (what each active rule asks,
+   with the two source-of-truth links), Review & publish (PublishWorkspace), Advanced
+   (`RuleWorkspace view="advanced"` — the Rules Centre, chooser and explainability). The
+   CPR-GROWTH "practice configured" milestone moved here with the readiness evaluation.
+3. **Availability & Changes (§8)** — BUILT. `/practice/setup/availability-changes`: Regular week
+   (sessions, locations-as-records, week summary, next available) and Changes & exceptions
+   (exceptions workspace + impact honesty). "Session" reads as "clinic" in the §18 places.
+4. **SET-HFE-10** — the old `?layer=1..3` route is a redirect shim (each layer to the surface that
+   owns it), pinned by a vitest test asserting the redirect digests. LayerNav deleted. Refusal
+   harness 8a/8d extended over the three new/rebuilt pages (59 checks green).
+
+The RecallWorkspace (follow-up recall + walk-in policy) mounts on Patient Booking → Clinics; the
+recall queue's operational home remains `/practice/follow-ups`, which already renders it.
+
+Remaining (owner-side): the §22 human-factors acceptance tasks, run untrained.

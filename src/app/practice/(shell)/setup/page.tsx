@@ -287,7 +287,7 @@ export default async function PracticeSetupHome() {
                 <Destination title="Availability & Changes"
                   answers="When am I normally available, and what one-off changes affect that pattern?"
                   state={m("availability")?.state ?? null}
-                  href="/practice/setup/availability-booking" hrefLabel="Manage availability">
+                  href="/practice/setup/availability-changes" hrefLabel="Manage availability">
                   <ul className="mt-1.5 space-y-0.5">
                     {availabilityParts.map((p: any) => (
                       <li key={p.key} className="text-[10px] leading-tight">
@@ -344,9 +344,9 @@ export default async function PracticeSetupHome() {
                   <p className="mt-1 text-[10.5px]">
                     <Link href="/practice/setup/identity" className="font-semibold text-[var(--cp-primary)] hover:underline">Address, QR &amp; share tools</Link>
                     <span className="text-gray-300"> · </span>
-                    <Link href="/practice/setup/availability-booking?layer=3" className="font-semibold text-[var(--cp-primary)] hover:underline">Rules &amp; publish</Link>
+                    <Link href="/practice/setup/patient-booking?tab=advanced" className="font-semibold text-[var(--cp-primary)] hover:underline">Rules &amp; publish</Link>
                   </p>
-                  <Link href={bookingLink.state === "live" ? "/practice/setup/availability-booking?layer=3" : "/practice/setup/identity"}
+                  <Link href="/practice/setup/patient-booking"
                     className="mt-2 inline-block text-[11px] font-semibold text-[var(--cp-primary)] hover:underline">
                     Manage booking →
                   </Link>

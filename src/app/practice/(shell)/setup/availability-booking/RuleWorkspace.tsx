@@ -146,10 +146,20 @@ function StoreAbsent({ note }: { note: string }) {
 
 export default function RuleWorkspace({
   rules, conflicts, locations, sessions, mayAuthor, mayBook, rulesUnreadable, today,
+  view = "full",
 }: {
   rules: any[]; conflicts: any[]; locations: any[]; sessions: any[];
   mayAuthor: boolean; mayBook: boolean; rulesUnreadable: string | null; today: string;
+  /**
+   * CPR-SETUP-HFE-001 s9: the same workspace serves two destinations. "clinics" renders the
+   * clinic-first panels (routine booking setup, no Rules Centre required); "advanced" renders the
+   * Rules Centre, chooser and explainability. The COMPOSER renders in both, because Override on a
+   * clinic panel opens it -- one component, one save path, whichever door it was reached through.
+   */
+  view?: "full" | "clinics" | "advanced";
 }) {
+  const showClinics = view !== "advanced";
+  const showCentre = view !== "clinics";
   const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -457,7 +467,7 @@ export default function RuleWorkspace({
       )}
 
       {/* ── CONFLICTS. Not a warning: a thing that blocks activation until it is resolved. ───────── */}
-      {conflicts.length > 0 && (
+      {showCentre && conflicts.length > 0 && (
         <section className="rounded-xl border border-rose-200 bg-rose-50/60 p-4">
           <h3 className="text-[13px] font-bold text-rose-900">
             {conflicts.length} pair{conflicts.length === 1 ? "" : "s"} of rules nothing can choose between
@@ -484,6 +494,7 @@ export default function RuleWorkspace({
       )}
 
       {/* ── s4's RULES CENTRE LANDING ─────────────────────────────────────────────────────────────── */}
+      {showCentre && (
       <section className={card}>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-[14px] text-violet-700">⚌</span>
@@ -694,12 +705,14 @@ export default function RuleWorkspace({
         )}
       </section>
 
+      )}
+
       {/* ── s6: CLINICS & SESSIONS AS FIRST-CLASS RULE TARGETS ───────────────────────────────────
           The composed projection, at the level the engine actually composes: which rule governs this
           clinic, what it says, and who would decide instead. Override copies the governing rule so an
           untouched setting keeps deciding exactly what it decides today; Restore archives the clinic's
           own rule so the inherited one governs again. */}
-      {sessions.length > 0 && (
+      {showClinics && sessions.length > 0 && (
         <section className={card}>
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-[14px] text-violet-700">▦</span>
@@ -708,7 +721,7 @@ export default function RuleWorkspace({
               <p className="text-[11px] text-gray-500">
                 What each of your recurring clinics inherits, and what is set for it alone. What a
                 clinic IS — its day, time, place and capacity — lives on{" "}
-                <Link href="/practice/setup/availability-booking?layer=1"
+                <Link href="/practice/setup/availability-changes"
                   className="font-semibold text-[var(--cp-primary)] hover:underline">
                   My Regular Practice
                 </Link>; this is how it behaves.
@@ -864,7 +877,7 @@ export default function RuleWorkspace({
       )}
 
       {/* ── s5's CREATE-RULE CHOOSER: what do you want to control? ───────────────────────────────── */}
-      {chooser && (
+      {showCentre && chooser && (
         <section className={card}>
           <h3 className="text-[14px] font-bold text-gray-900">What do you want to control?</h3>
           <p className="mt-0.5 text-[11px] text-gray-500">
@@ -1306,7 +1319,7 @@ export default function RuleWorkspace({
                     <p className="mt-1 text-[10px] leading-relaxed text-gray-500">
                       Whether a session takes walk-ins at all, and how many it takes, is set on the
                       session itself — that is what the session IS, and it lives with the session.{" "}
-                      <Link href="/practice/setup/availability-booking?layer=1"
+                      <Link href="/practice/setup/availability-changes"
                         className="font-semibold text-[var(--cp-primary)] hover:underline">
                         Open My Regular Practice →
                       </Link>{" "}
@@ -1441,6 +1454,7 @@ export default function RuleWorkspace({
       )}
 
       {/* ── EXPLAINABILITY: "USERS MUST BE ABLE TO SEE WHY A RULE WON" ──────────────────────────── */}
+      {showCentre && (
       <section className={card}>
         <h3 className="text-[14px] font-bold text-gray-900">Which rule would decide this?</h3>
         <p className="mt-0.5 text-[11px] leading-relaxed text-gray-500">
@@ -1531,6 +1545,7 @@ export default function RuleWorkspace({
           </div>
         )}
       </section>
+      )}
     </div>
   );
 }

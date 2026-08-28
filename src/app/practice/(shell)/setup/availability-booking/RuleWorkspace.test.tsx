@@ -196,6 +196,43 @@ describe("clinics as first-class rule targets (s6/s8)", () => {
   });
 });
 
+describe("the two s9 destinations rendered from one workspace", () => {
+  it("clinics view: clinic panels without the Rules Centre — routine setup needs no rules screen", () => {
+    const html = render({ view: "clinics" } as never);
+    expect(html).toContain("Clinics &amp; sessions");
+    expect(html).toContain("Override for this clinic");
+    expect(html).not.toContain("+ Create rule");
+    expect(html).not.toContain("Which rule would decide this?");
+  });
+
+  it("advanced view: the Rules Centre and explainability without the clinic panels", () => {
+    const html = render({ view: "advanced" } as never);
+    expect(html).toContain("+ Create rule");
+    expect(html).toContain("Which rule would decide this?");
+    expect(html).not.toContain("Clinics &amp; sessions");
+  });
+});
+
+describe("the old three-layer route redirects (SET-HFE-10)", () => {
+  it("forwards each layer to the destination that owns it", async () => {
+    const { default: Legacy } = await import("./page");
+    for (const [layer, dest] of [
+      ["3", "/practice/setup/patient-booking"],
+      ["2", "/practice/setup/availability-changes?tab=changes"],
+      ["1", "/practice/setup/availability-changes"],
+      [undefined, "/practice/setup/availability-changes"],
+    ] as const) {
+      try {
+        await Legacy({ searchParams: Promise.resolve({ layer }) });
+        expect.unreachable("redirect() must throw");
+      } catch (e: unknown) {
+        // next/navigation encodes the destination in the error digest: NEXT_REDIRECT;<type>;<url>;...
+        expect(String((e as { digest?: string }).digest)).toContain(dest);
+      }
+    }
+  });
+});
+
 describe("the clinic rule chain composes the way the engine decides", () => {
   it("orders by the engine's own keys, excludes rules that cannot meet a booking here, and skips paused ones", async () => {
     const { clinicRuleChain, clinicGoverningRule } = await import("@/lib/practice/booking-rule-constants");
