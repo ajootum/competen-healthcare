@@ -146,26 +146,6 @@ const EXCLUDED: Listed[] = [
     note: "solo-confirmed, and INVERTED: its 2a-control asserts the deployment has NO gateway configured, but staging now carries Resend after the 2026-08-27 email activation, so section 2 tests a different world than the one that ships. The HARNESS assumption is stale. Repoint the control, then rescreen.",
   },
   {
-    file: "practice-patient-booking-screens-harness.ts",
-    note: "solo-confirmed 18/3. BLOCKER FAMILY: publish refused, EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED not ready on the staging practice fixture. One fixture fix likely clears all five harnesses in this family.",
-  },
-  {
-    file: "practice-patient-intake-harness.ts",
-    note: "solo-confirmed. Same EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED blocker family.",
-  },
-  {
-    file: "practice-patient-manage-harness.ts",
-    note: "solo-confirmed 6/1. Same blocker family.",
-  },
-  {
-    file: "practice-registration-scheduling-harness.ts",
-    note: "solo-confirmed 28/2. Same blocker family.",
-  },
-  {
-    file: "practice-session-booking-mode-harness.ts",
-    note: "solo-confirmed 7/1. Same blocker family.",
-  },
-  {
     file: "practice-planner-harness.ts",
     note: "solo-confirmed. Root: starting a session now answers 422 LOCATION_REQUIRED and the harness fixture passes no location, so the activity never starts and four REFUSES-moving-a-started-activity checks fail as a cascade. Reads as a stale harness fixture against a deliberate product change -- fix the fixture, not the product.",
   },
@@ -182,26 +162,6 @@ const EXCLUDED: Listed[] = [
   {
     file: "practice-adoption-harness.ts",
     note: "solo-confirmed 66/2: the fixture workspace holds 0 appointments, so H4b/H4c-control are vacuous and the control that proves the hook emits fails at zero. Staging-data: give the fixture workspace an appointment.",
-  },
-  {
-    file: "ssw-attendance-harness.ts",
-    note: "solo-confirmed: `No hospital has 5+ profiles to test against.` PROFILE-COHORT FAMILY: one seeded hospital cohort (5+ profiles in the fixture hospital) clears all five in this family.",
-  },
-  {
-    file: "ssw-mdt-harness.ts",
-    note: "solo-confirmed: needs 2+ profiles in one hospital. Same profile-cohort family.",
-  },
-  {
-    file: "umw-communications-harness.ts",
-    note: "solo-confirmed: needs two profiles in one hospital; the libuv UV_HANDLE_CLOSING crash at exit is SECONDARY noise after the data-gate refusal, the same mis-filing this arc already made once. Same profile-cohort family.",
-  },
-  {
-    file: "umw-wellbeing-harness.ts",
-    note: "solo-confirmed: `No hospital with 2+ profiles.` Same profile-cohort family.",
-  },
-  {
-    file: "xw-sweep-harness.ts",
-    note: "solo-confirmed: needs 3+ profiles in one hospital. Same profile-cohort family.",
   },
   {
     file: "xw-uplift-harness.ts",
@@ -421,6 +381,22 @@ const STAGING: Listed[] = [
   { file: "practice-encounters-landing-harness.ts", note: "the encounters landing. Exit 0 solo (the batch run CRASHED with a stack trace and the crash did not reproduce alone -- batch-only, not evidence)." },
   { file: "practice-documentation-harness.ts", note: "the documentation lifecycle, amendment chain included. 65/65 after the 2026-08-28 staging catch-up. Its earlier red was a getDocument null over missing mig-357 columns, and its scariest line was a hard-coded detail string -- both are fixed, and the amendment protections now PASS on a real read: signed body unchanged, original AMENDED, chain linked both ways." },
   { file: "practice-generation-harness.ts", note: "document generation. 56/56 after the staging catch-up (was 48/8 on the same getDocument null)." },
+
+  // -- The two fixture-family extensions, 2026-08-28: ten harnesses cleared by two causes. Family A
+  // (booking-constraints x5): the harness rules predated CPR-BOOK-READY-001 s3 and set no visibility,
+  // so publish refused with EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED; visibility: "public" added to each
+  // fixture rule. Family B (hospital-profile cohort x5): provision-staging-estate-fixture section 6
+  // seeds five staff identities on the fixture hospital, memberships included (D2b). --
+  { file: "practice-patient-booking-screens-harness.ts", note: "the patient booking screens. 68/68 (was 18/3 on the visibility-less rule -- the fixture predated CPR-BOOK-READY-001 s3)." },
+  { file: "practice-patient-intake-harness.ts", note: "patient intake. 44/44 (same family fix: visibility on the fixture rules)." },
+  { file: "practice-patient-manage-harness.ts", note: "patient self-management. 46/46 (was 6/1 -- the publish gate had been hiding the rest of the harness)." },
+  { file: "practice-registration-scheduling-harness.ts", note: "registration scheduling. 76/76 (same family fix)." },
+  { file: "practice-session-booking-mode-harness.ts", note: "session booking modes. 34/34 (was 7/1, same family fix)." },
+  { file: "ssw-attendance-harness.ts", note: "SSW shift attendance. 30/30, cleans up its own 29 rows (unblocked by the estate fixture's staff cohort)." },
+  { file: "ssw-mdt-harness.ts", note: "SSW MDT. 44/44, self-cleaning (same cohort)." },
+  { file: "umw-communications-harness.ts", note: "UMW communications. 53/53 (same cohort; its old libuv exit crash was noise after the data gate)." },
+  { file: "umw-wellbeing-harness.ts", note: "UMW wellbeing. 53/53, self-cleaning (same cohort)." },
+  { file: "xw-sweep-harness.ts", note: "the cross-workspace sweep. 54/54 -- matching its recorded historical count exactly (same cohort)." },
 ];
 
 /**

@@ -384,6 +384,53 @@ async function main() {
     }
   }
 
+  // ── 6. THE HOSPITAL STAFF COHORT ───────────────────────────────────────────────────────────────
+  //
+  // Five harnesses (ssw-attendance, ssw-mdt, umw-communications, umw-wellbeing, xw-sweep) open with the
+  // same gate, read verbatim from their source before writing this: enumerate hospitals, keep the first
+  // whose `profiles.hospital_id` count reaches their floor (5, 2, 2, 2 and 3 respectively), refuse
+  // otherwise. No role filter, no other field -- the gate is purely "a hospital with people in it".
+  // Five dedicated staff identities clear all five floors at once.
+  //
+  // ⚠ DEDICATED IDENTITIES, NOT THE PRACTICE FIXTURES. smoke.practitioner and retry.proof belong to the
+  // Practice-product smoke fixtures; attaching a hospital to them would quietly change what OTHER
+  // harnesses observe about accounts they treat as theirs.
+  //
+  // ⚠ EACH STAFF MEMBER ALSO GETS AN ACTIVE MEMBERSHIP, because platform-membership D2b asserts EVERY
+  // estate identity holds one. Seeding five profiles without memberships would clear five harnesses by
+  // reddening a sixth.
+  console.log("\n6. HOSPITAL STAFF COHORT — ssw-attendance, ssw-mdt, umw-communications, umw-wellbeing, xw-sweep");
+  if (!hospitalId) bad("no hospital, so no cohort can be attached");
+  else {
+    let attached = 0;
+    for (let i = 1; i <= 5; i++) {
+      const email = `estate.staff.${i}@staging.competen.invalid`;
+      const id = await identity(email, `Estate Staff ${i} (synthetic)`);
+      if (!id) continue;
+      const { data: prof } = await admin.from("profiles").select("id, hospital_id").eq("id", id).maybeSingle();
+      if (!prof) { bad(`no profiles row for ${email}`); continue; }
+      if ((prof as any).hospital_id !== hospitalId && !VERIFY_ONLY) {
+        const { error } = await admin.from("profiles")
+          .update({ hospital_id: hospitalId, department_id: departmentId, unit_id: unitId }).eq("id", id);
+        if (error) { bad(`could not attach ${email} to the hospital: ${error.message.slice(0, 70)}`); continue; }
+      }
+      const { data: mem } = await admin.from("platform_membership")
+        .select("id").eq("user_id", id).eq("status", "active").limit(1).maybeSingle();
+      if (!mem && !VERIFY_ONLY) {
+        const { error } = await admin.from("platform_membership")
+          .insert({ user_id: id, status: "active", source: "admin_grant" });
+        if (error) { bad(`could not grant membership to ${email}: ${error.message.slice(0, 70)}`); continue; }
+      }
+      attached++;
+    }
+    // ⚠ READ BACK THROUGH THE GATES' OWN QUERY, floor included -- five harnesses trust this count.
+    const { data: cohort } = await admin.from("profiles").select("id").eq("hospital_id", hospitalId).limit(8);
+    const n = (cohort ?? []).length;
+    if (n >= 5) ok(`the fixture hospital holds ${n} profiles -- every gate's floor (5/3/2) is met`);
+    else if (VERIFY_ONLY) bad(`the fixture hospital holds ${n} profile(s); the highest gate needs 5`);
+    else bad(`after attaching ${attached}, the hospital reads back ${n} profile(s) -- below the floor of 5`);
+  }
+
   report();
 }
 

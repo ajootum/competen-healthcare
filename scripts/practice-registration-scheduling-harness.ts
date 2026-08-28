@@ -315,6 +315,9 @@ async function main() {
   for (const channel of ["patient_self", "staff"]) {
     const rule = await saveBookingRule(admin, ctx, {
       name: `Open diary (${channel})`, status: "active", priority: 10,
+      // CPR-BOOK-READY-001 s3: the publish blocker resolves visibility per session, and a rule without one
+      // leaves it visibility_unknown -- the check hardened after this fixture was written (2026-08-28).
+      visibility: "public",
       channel, leadTimeMinutes: 0, bookingHorizonDays: 365,
       actorId: OWNER, correlationId: CORR,
     });

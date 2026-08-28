@@ -249,6 +249,9 @@ async function main() {
   const allowRule = await saveBookingRule(admin, ctx, {
     name: "Patients may book", status: "active", priority: 10,
     channel: "patient_self", leadTimeMinutes: 0, bookingHorizonDays: 365,
+      // CPR-BOOK-READY-001 s3: the publish blocker resolves visibility per session, and a rule without one
+      // leaves it visibility_unknown -- the check hardened after this fixture was written (2026-08-28).
+      visibility: "public",
     cancellationNoticeMinutes: 0,
     actorId: OWNER, correlationId: CORR,
   });

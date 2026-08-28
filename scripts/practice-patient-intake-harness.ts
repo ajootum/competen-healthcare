@@ -219,6 +219,9 @@ async function main() {
   const allowRule = await saveBookingRule(admin, ctx, {
     name: "Patients may book", status: "active", priority: 10,
     channel: "patient_self", leadTimeMinutes: 0, bookingHorizonDays: 365,
+      // CPR-BOOK-READY-001 s3: the publish blocker resolves visibility per session, and a rule without one
+      // leaves it visibility_unknown -- the check hardened after this fixture was written (2026-08-28).
+      visibility: "public",
     actorId: OWNER, correlationId: CORR,
   });
   ok("0d-control. a rule in force covers the patient channel", allowRule.ok, allowRule.ok ? "" : (allowRule as any).message);
@@ -338,6 +341,9 @@ async function main() {
     // ⚠ HORIZON 1, NOT 0. migration 230 checks booking_horizon_days between 1 and 730, so 0 is refused
     // by the database rather than being a rule. One day, against a slot three days out.
     channel: "patient_self", locationId: locId, leadTimeMinutes: 0, bookingHorizonDays: 1,
+      // CPR-BOOK-READY-001 s3: the publish blocker resolves visibility per session, and a rule without one
+      // leaves it visibility_unknown -- the check hardened after this fixture was written (2026-08-28).
+      visibility: "public",
     actorId: OWNER, correlationId: CORR,
   });
   ok("3-control. a stricter patient-channel rule was activated for this location",
@@ -389,6 +395,9 @@ async function main() {
   const eligibilityRule = await saveBookingRule(admin, ctx, {
     name: "Existing patients only", status: "active", priority: 95,
     channel: "patient_self", locationId: locId, patientEligibility: "existing_only",
+      // CPR-BOOK-READY-001 s3: the publish blocker resolves visibility per session, and a rule without one
+      // leaves it visibility_unknown -- the check hardened after this fixture was written (2026-08-28).
+      visibility: "public",
     leadTimeMinutes: 0, bookingHorizonDays: 365,
     actorId: OWNER, correlationId: CORR,
   });
@@ -514,6 +523,9 @@ async function main() {
   const reclose = await saveBookingRule(admin, ctx, {
     name: "Patients may not book this location", status: "active", priority: 90,
     channel: "patient_self", locationId: locId, leadTimeMinutes: 0, bookingHorizonDays: 1,
+      // CPR-BOOK-READY-001 s3: the publish blocker resolves visibility per session, and a rule without one
+      // leaves it visibility_unknown -- the check hardened after this fixture was written (2026-08-28).
+      visibility: "public",
     actorId: OWNER, correlationId: CORR,
   });
   ok("5c-control. a refusal exists for an override to try to lift, so 5c is not passing because there was nothing to override",
