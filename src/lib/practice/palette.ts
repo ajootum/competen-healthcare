@@ -758,6 +758,49 @@ export const SETUP_DOMAIN_SWATCH: Record<string, CardSwatch> = {
 };
 
 /**
+ * CPR-SETUP-HFE-001's Setup Home destinations, one hue each -- because three coloured cards are FOUND
+ * where three grey ones are READ, and this file records that lesson four times already.
+ *
+ * The hues are this file's own, for the meanings this file already gives them:
+ *
+ *   locations/registration/data  emerald -- places, records, the practice's settled substance.
+ *   profile                      sky     -- identity and presentation.
+ *   visits/team/personal         violet  -- the organisational: kinds of work, people, preferences.
+ *   availability/notifications/
+ *   activity                     amber   -- time and attention: the schedule, what is sent, what happened.
+ *   clinical/security            rose    -- the careful ground: clinical vocabulary and protection.
+ *   booking                      cyan    -- the patient-facing door (LAYER3_STAT_SWATCH's decided hue).
+ *   integrations                 slate   -- muted, because nothing can be connected yet.
+ *
+ * A destination's TINT is orientation; its STATE stays in the semantic chips (MODULE_STATE_CHIP,
+ * the LIVE chip), which never change hue to match the card they sit on.
+ */
+export const SETUP_HOME_SWATCH: Record<string, { box: string; badge: string; icon: string }> = {
+  profile: { box: "border-sky-200/80 bg-sky-50/60", badge: "bg-sky-100 text-sky-700", icon: "▣" },
+  locations: { box: "border-emerald-200/80 bg-emerald-50/60", badge: "bg-emerald-100 text-emerald-700", icon: "◎" },
+  visits: { box: "border-violet-200/80 bg-violet-50/60", badge: "bg-violet-100 text-violet-700", icon: "◷" },
+  availability: { box: "border-amber-200/80 bg-amber-50/60", badge: "bg-amber-100 text-amber-700", icon: "▤" },
+  clinical: { box: "border-rose-200/80 bg-rose-50/60", badge: "bg-rose-100 text-rose-700", icon: "⚕" },
+  booking: { box: "border-cyan-200/80 bg-cyan-50/60", badge: "bg-cyan-100 text-cyan-700", icon: "⚭" },
+  registration: { box: "border-emerald-200/80 bg-emerald-50/60", badge: "bg-emerald-100 text-emerald-700", icon: "▦" },
+  notifications: { box: "border-amber-200/80 bg-amber-50/60", badge: "bg-amber-100 text-amber-700", icon: "◐" },
+  team: { box: "border-violet-200/80 bg-violet-50/60", badge: "bg-violet-100 text-violet-700", icon: "⚇" },
+  integrations: { box: "border-slate-200 bg-slate-50/60", badge: "bg-slate-100 text-slate-500", icon: "⚯" },
+  security: { box: "border-rose-200/80 bg-rose-50/60", badge: "bg-rose-100 text-rose-700", icon: "⛨" },
+  activity: { box: "border-amber-200/80 bg-amber-50/60", badge: "bg-amber-100 text-amber-700", icon: "≡" },
+  data: { box: "border-emerald-200/80 bg-emerald-50/60", badge: "bg-emerald-100 text-emerald-700", icon: "↧" },
+  personal: { box: "border-violet-200/80 bg-violet-50/60", badge: "bg-violet-100 text-violet-700", icon: "✧" },
+};
+
+/** The four readiness questions, each with its own badge, per the comp: found, not read. */
+export const SETUP_READINESS_BADGE: Record<string, { badge: string; icon: string }> = {
+  foundation_complete: { badge: "bg-sky-100 text-sky-700", icon: "▣" },
+  operations_ready: { badge: "bg-emerald-100 text-emerald-700", icon: "✓" },
+  public_booking: { badge: "bg-violet-100 text-violet-700", icon: "⚭" },
+  communications: { badge: "bg-amber-100 text-amber-700", icon: "◐" },
+};
+
+/**
  * s7's four progress states, plus the two this build needs and s7 does not have.
  *
  * ⚠ `unreadable` IS NOT A DESIGN ADDITION, IT IS THE FIRST DOCTRINE. A domain whose configuration could

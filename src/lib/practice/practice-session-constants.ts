@@ -212,6 +212,8 @@ export function suggestSessionName(args: {
 // re-declared, so consumers keep their import and there is exactly ONE definition of each colour.
 export {
   SETUP_DOMAIN_SWATCH,
+  SETUP_HOME_SWATCH,
+  SETUP_READINESS_BADGE,
   DOMAIN_STATE_CHIP,
   MODULE_STATE_CHIP,
   READINESS_SWATCH,

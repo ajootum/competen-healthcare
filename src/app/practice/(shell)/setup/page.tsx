@@ -6,7 +6,7 @@ import { practiceSetup } from "@/lib/practice/setup";
 import { publishReadiness } from "@/lib/practice/patient-access";
 import { bookingLinkSummary } from "@/lib/practice/identity-service";
 import { messagingStatus } from "@/lib/practice/messaging";
-import { MODULE_STATE_CHIP, READINESS_SWATCH } from "@/lib/practice/practice-session-constants";
+import { MODULE_STATE_CHIP, READINESS_SWATCH, SETUP_HOME_SWATCH, SETUP_READINESS_BADGE } from "@/lib/practice/practice-session-constants";
 import type { Metadata } from "next";
 
 /** The tab name, so a practitioner with several open can tell which is which. */
@@ -56,18 +56,23 @@ function StateMark({ state }: { state: string | null }) {
   );
 }
 
-/** One destination card: the question it answers, its live state, and the link that manages it. */
-function Destination({ title, answers, detail, href, hrefLabel, state, children }: {
+/** One destination card: its hue for FINDING it, the question it answers, its live state, its link. */
+function Destination({ title, answers, detail, href, hrefLabel, state, hue, children }: {
   title: string; answers: string; detail?: string | null;
   href?: string | null; hrefLabel?: string; state?: string | null;
+  hue: string;
   children?: React.ReactNode;
 }) {
+  const sw = SETUP_HOME_SWATCH[hue] ?? SETUP_HOME_SWATCH.profile;
   return (
-    <div className={`${card} !p-3.5 flex flex-col`}>
+    <div className={`rounded-xl border p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] flex flex-col ${sw.box}`}>
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[12.5px] font-bold text-gray-900">{title}</p>
+        <span aria-hidden className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[15px] ${sw.badge}`}>
+          {sw.icon}
+        </span>
         <StateMark state={state ?? null} />
       </div>
+      <p className="mt-2 text-[12.5px] font-bold text-gray-900">{title}</p>
       <p className="mt-0.5 text-[10.5px] leading-relaxed text-gray-500">{answers}</p>
       {detail && <p className="mt-1.5 text-[11px] font-semibold text-gray-700">{detail}</p>}
       {children}
@@ -229,8 +234,12 @@ export default async function PracticeSetupHome() {
             {readinessRows.map((r: any) => {
               const sw = r.indeterminate ? READINESS_SWATCH.unreadable
                 : r.met ? READINESS_SWATCH.met : READINESS_SWATCH.unmet;
+              const badge = SETUP_READINESS_BADGE[r.key] ?? SETUP_READINESS_BADGE.foundation_complete;
               return (
-                <li key={r.key} className="flex items-start gap-2">
+                <li key={r.key} className="flex items-start gap-2.5">
+                  <span aria-hidden className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[15px] ${r.indeterminate ? "bg-slate-100 text-slate-400" : badge.badge}`}>
+                    {badge.icon}
+                  </span>
                   <span aria-hidden className={`mt-px text-[13px] font-bold ${sw.ring}`}>{sw.mark}</span>
                   <div className="min-w-0">
                     <p className={`text-[12px] font-semibold ${sw.label}`}>{r.label}</p>
@@ -255,7 +264,7 @@ export default async function PracticeSetupHome() {
             <section>
               <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">Practice</h2>
               <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-                <Destination title="Practice Profile"
+                <Destination hue="profile" title="Practice Profile"
                   answers="What is this practice called and how is it presented?"
                   detail={m("profile")?.detail ?? null} state={m("profile")?.state ?? null}
                   href="/practice/settings?tab=practice#practice-profile">
@@ -266,7 +275,7 @@ export default async function PracticeSetupHome() {
                   </p>
                 </Destination>
 
-                <Destination title="Locations & Clinics"
+                <Destination hue="locations" title="Locations & Clinics"
                   answers="Where do I work, and what clinics make up my regular week?"
                   detail={m("locations")?.detail ?? null} state={m("locations")?.state ?? null}
                   href="/practice/settings?tab=practice#locations">
@@ -275,7 +284,7 @@ export default async function PracticeSetupHome() {
                   </p>
                 </Destination>
 
-                <Destination title="Visit Types & Modes"
+                <Destination hue="visits" title="Visit Types & Modes"
                   answers="What kinds of visits do I offer and how are they delivered?"
                   detail={m("appointment_types")?.detail ?? null} state={m("appointment_types")?.state ?? null}
                   href={m("appointment_types")?.href ?? "/practice/settings?tab=practice#practice-profile"}>
@@ -284,7 +293,7 @@ export default async function PracticeSetupHome() {
                   </p>
                 </Destination>
 
-                <Destination title="Availability & Changes"
+                <Destination hue="availability" title="Availability & Changes"
                   answers="When am I normally available, and what one-off changes affect that pattern?"
                   state={m("availability")?.state ?? null}
                   href="/practice/setup/availability-changes" hrefLabel="Manage availability">
@@ -306,7 +315,7 @@ export default async function PracticeSetupHome() {
                   </ul>
                 </Destination>
 
-                <Destination title="Clinical catalogues"
+                <Destination hue="clinical" title="Clinical catalogues"
                   answers="The clinical vocabulary this practice works with.">
                   <ul className="mt-1 space-y-0.5 text-[10.5px]">
                     {[
@@ -328,13 +337,16 @@ export default async function PracticeSetupHome() {
             <section>
               <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">Patient access</h2>
               <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-                <div className={`${card} !p-3.5 flex flex-col`}>
+                <div className={`rounded-xl border p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] flex flex-col ${SETUP_HOME_SWATCH.booking.box}`}>
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-[12.5px] font-bold text-gray-900">Patient Booking</p>
+                    <span aria-hidden className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[15px] ${SETUP_HOME_SWATCH.booking.badge}`}>
+                      {SETUP_HOME_SWATCH.booking.icon}
+                    </span>
                     <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${bookingState.cls}`}>
                       {bookingState.chip}
                     </span>
                   </div>
+                  <p className="mt-2 text-[12.5px] font-bold text-gray-900">Patient Booking</p>
                   <p className="mt-0.5 text-[10.5px] leading-relaxed text-gray-500">
                     How can patients book me online?
                   </p>
@@ -352,7 +364,7 @@ export default async function PracticeSetupHome() {
                   </Link>
                 </div>
 
-                <Destination title="Registration & Intake"
+                <Destination hue="registration" title="Registration & Intake"
                   answers="What information and consent do patients provide?"
                   detail={m("registration")?.detail ?? null} state={m("registration")?.state ?? null}
                   href="/practice/settings/registration-form" hrefLabel="Manage intake" />
@@ -360,8 +372,11 @@ export default async function PracticeSetupHome() {
                 {/* §11: channel readiness is a statement of what is true. There is no notifications
                     console yet, so there is no Manage link -- a link to nowhere would be a control
                     that does nothing. */}
-                <div className={`${card} !p-3.5`}>
-                  <p className="text-[12.5px] font-bold text-gray-900">Notifications</p>
+                <div className={`rounded-xl border p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${SETUP_HOME_SWATCH.notifications.box}`}>
+                  <span aria-hidden className={`flex h-8 w-8 items-center justify-center rounded-lg text-[15px] ${SETUP_HOME_SWATCH.notifications.badge}`}>
+                    {SETUP_HOME_SWATCH.notifications.icon}
+                  </span>
+                  <p className="mt-2 text-[12.5px] font-bold text-gray-900">Notifications</p>
                   <p className="mt-0.5 text-[10.5px] leading-relaxed text-gray-500">
                     How are booking communications sent?
                   </p>
@@ -393,13 +408,16 @@ export default async function PracticeSetupHome() {
             <section>
               <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">People &amp; connections</h2>
               <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-                <Destination title="Team & Permissions"
+                <Destination hue="team" title="Team & Permissions"
                   answers="Who can work in this practice and what may they do?"
                   detail={m("team")?.detail ?? null}
                   href="/practice/people" hrefLabel="Manage team" />
                 {/* Nothing to connect exists yet; a concise statement, not a dead card. */}
-                <div className={`${card} !p-3.5`}>
-                  <p className="text-[12.5px] font-bold text-gray-900">Integrations &amp; Synchronisation</p>
+                <div className={`rounded-xl border p-3.5 ${SETUP_HOME_SWATCH.integrations.box}`}>
+                  <span aria-hidden className={`flex h-8 w-8 items-center justify-center rounded-lg text-[15px] ${SETUP_HOME_SWATCH.integrations.badge}`}>
+                    {SETUP_HOME_SWATCH.integrations.icon}
+                  </span>
+                  <p className="mt-2 text-[12.5px] font-bold text-gray-900">Integrations &amp; Synchronisation</p>
                   <p className="mt-0.5 text-[10.5px] leading-relaxed text-gray-500">
                     What external calendars or services are connected?
                   </p>
@@ -415,13 +433,13 @@ export default async function PracticeSetupHome() {
             <section>
               <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">Practice control &amp; personal</h2>
               <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-                <Destination title="Security"
+                <Destination hue="security" title="Security"
                   answers="How is this practice protected?"
                   href="/practice/privacy/security" hrefLabel="Review security" />
-                <Destination title="Activity Log"
+                <Destination hue="activity" title="Activity Log"
                   answers="What important actions have occurred?"
                   href="/practice/privacy" hrefLabel="Open the log" />
-                <Destination title="Import, Export & Lifecycle"
+                <Destination hue="data" title="Import, Export & Lifecycle"
                   answers="Your data, in and out — and the practice's own lifecycle."
                   state={m("import_export")?.state ?? null}
                   href="/practice/privacy" hrefLabel="Import & export">
@@ -429,7 +447,7 @@ export default async function PracticeSetupHome() {
                     <Link href="/practice/setup/lifecycle" className="font-semibold text-[var(--cp-primary)] hover:underline">Practice lifecycle</Link>
                   </p>
                 </Destination>
-                <Destination title="Personal Settings"
+                <Destination hue="personal" title="Personal Settings"
                   answers="How does this product behave for me personally?"
                   href="/practice/settings" hrefLabel="Open personal settings" />
               </div>
