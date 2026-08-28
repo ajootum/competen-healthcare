@@ -101,11 +101,17 @@ The referenced spec turned out to prescribe more than §9's summary. Aligned sam
 - Stale engine sentence fixed: the fortnight preview's note said "self-booking is not built" — false
   since the publish flow shipped.
 
-**NOT yet built from BOOK-HFE-002** (queued, in order of value):
-1. §8/§14 the five-stage first-time wizard with resume-at-first-incomplete (drafts already persist —
-   rules as status=draft, page settings as unpublished — so this is sequencing UI, not persistence).
-2. §16/§17 structured public-page failure reasons (per-cause patient sentence + practitioner action,
+**§14 wizard — BUILT** (same day): a five-stage stepper over the Patient Booking tabs, computed by
+`computeSetupWizard` (patient-booking/wizard.ts) from the SAME readiness checks that refuse a real
+publish — never a second copy of the arithmetic. Resume = the first incomplete stage carries
+Continue; unreadable evidence counts as incomplete with the reason said; the strip disappears
+forever at first publication (published / published_with_warnings / paused). No new persistence —
+rule drafts and unpublished page settings already ARE the saved progress. Pinned by 9 vitest tests
+(SetupWizard.test.tsx), including the never-outlives-publication and resume-order rules.
+
+**NOT yet built from BOOK-HFE-002** (queued):
+1. §16/§17 structured public-page failure reasons (per-cause patient sentence + practitioner action,
    instead of one generic refusal).
-3. §20 human acceptance: the single task "make Wednesday morning at Nsambya bookable", run untrained.
+2. §20 human acceptance: the single task "make Wednesday morning at Nsambya bookable", run untrained.
 
 Remaining (owner-side): the §22 setup acceptance tasks + BOOK-HFE-002 §20's task, run untrained.

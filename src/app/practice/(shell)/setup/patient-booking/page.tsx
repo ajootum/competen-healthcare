@@ -11,6 +11,8 @@ import { bookingPreview } from "@/lib/practice/availability-config";
 import { clinicRuleChain, clinicGoverningRule } from "@/lib/practice/booking-rule-constants";
 import { onSetupReadinessEvaluated } from "@/lib/practice/activation-hooks";
 import RuleWorkspace from "../availability-booking/RuleWorkspace";
+import SetupWizard from "./SetupWizard";
+import { computeSetupWizard } from "./wizard";
 import PublishWorkspace from "../availability-booking/PublishWorkspace";
 import BookingLinkCard from "../../home/BookingLinkCard";
 import type { Metadata } from "next";
@@ -100,6 +102,15 @@ export default async function PatientBookingPage({ searchParams }: {
     return gov !== null && (gov.visibility ?? "internal") !== "internal";
   }).length;
 
+  // s14: the first-time wizard, computed from the same checks that refuse a real publish. It
+  // disappears forever at first publication.
+  const wizard = computeSetupWizard({
+    publishState: readiness.profile?.publishState ?? null,
+    verdict: readiness.verdict,
+    checks: (readiness.checks as any[]).map((c: any) => ({ code: c.code, state: c.state })),
+    onlineClinicCount,
+  });
+
   const ruleWorkspaceProps = {
     rules: JSON.parse(JSON.stringify(ruleCards)),
     conflicts: JSON.parse(JSON.stringify(ruleConflicts)),
@@ -147,6 +158,8 @@ export default async function PatientBookingPage({ searchParams }: {
             </Link>
           ))}
         </nav>
+
+        <SetupWizard view={wizard} />
 
         {/* ══ OVERVIEW ══════════════════════════════════════════════════════════════════════════ */}
         {active === "overview" && (
