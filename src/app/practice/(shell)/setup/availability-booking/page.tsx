@@ -332,13 +332,19 @@ export default async function AvailabilityBookingPage({ searchParams }: {
           </div>
         </div>
 
-        {/* ── THE PHASE BANNER. Stated once, at the top, in the practitioner's words. ───────────── */}
+        {/* ── THE PHASE BANNER. Stated once, at the top, in the practitioner's words. ─────────────
+            ⚠ REWRITTEN 2026-08-28, found by the owner mid-pilot-acceptance: the old closing sentence
+            said the patient-facing intake "does not [exist], so nobody outside this practice can
+            complete a booking" — true when written, false since the intake screens shipped (proven
+            68/68 and 44/44 in the acceptance pass). A stale refusal that UNDERSTATES the product is
+            the CPR-HFE-REF-001 class, and this one told every practice their publish button led
+            nowhere. The missing step now named is the one that is actually theirs: publishing. */}
         <section className="flex flex-wrap items-start gap-3 rounded-xl border border-[var(--cp-primary)]/20 bg-[var(--cp-primary)]/[0.05] p-3.5">
           <span aria-hidden className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--cp-primary)]/12 text-[15px] text-[var(--cp-primary-deep)]">③</span>
           <div className="min-w-0 flex-1">
             <p className="text-[12.5px] font-bold text-gray-900">
-              Everything here is set up and working. The one thing still missing is the screen a
-              patient would type into.
+              Everything here is set up and working. Patients can book online once you publish your
+              booking page.
             </p>
             <p className="text-[11px] leading-relaxed text-gray-600">
               Layer 1 is complete — locations, named recurring sessions, activity types, appointment
@@ -351,10 +357,10 @@ export default async function AvailabilityBookingPage({ searchParams }: {
               records which rule and which version allowed it. Follow-ups nobody booked, and the ones
               whose booking has died, are worked out here rather than stored. The publish checklist runs
               for real — and where it cannot answer a question it says &ldquo;not checked&rdquo; rather
-              than showing you a tick. What is still missing is the patient-facing intake: the handle,
-              the stores and the one-time code exist, and the screen a patient would fill in does not,
-              so nobody outside this practice can complete a booking. Nothing below is a control that
-              does nothing.
+              than showing you a tick. The patient-facing screens exist end to end — the handle, the
+              one-time code and the intake a patient fills in — and stay private until you choose to
+              publish, which is the &ldquo;Publish readiness&rdquo; button above. Nothing below is a
+              control that does nothing.
             </p>
           </div>
         </section>
