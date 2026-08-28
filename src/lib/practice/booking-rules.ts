@@ -515,6 +515,13 @@ export type BookingRuleCard = {
   selfCancelAllowed: boolean;
   selfRescheduleAllowed: boolean;
   rescheduleNoticeMinutes: number | null;
+  /**
+   * ⚠ ON THE CARD BECAUSE ITS ABSENCE WAS A SILENT RESET. The editor builds its draft from this card,
+   * and while the notice lived only inside cancellationLine the draft opened at 0 and the first save
+   * wrote 0 over whatever the rule really held -- CPR-RULES-HFE-001 s15's exact data-loss class, found
+   * by the s18 inspection rather than by a user who lost a notice period.
+   */
+  cancellationNoticeMinutes: number;
   dnaThreshold: number | null;
   dnaAction: string;
   waitingListEnabled: boolean;
@@ -611,6 +618,7 @@ function toCard(
     requiredFieldLabels,
     walkInCutoffMinutes, walkInQueuePolicy,
     selfCancelAllowed, selfRescheduleAllowed, rescheduleNoticeMinutes,
+    cancellationNoticeMinutes: (r.cancellation_notice_minutes as number) ?? 0,
     dnaThreshold, dnaAction, waitingListEnabled,
     walkInLine: plainWalkIn({
       dailyLimit: (r.walk_in_daily_limit as number | null) ?? null,

@@ -659,11 +659,10 @@ export default async function AvailabilityBookingPage({ searchParams }: {
                   <p className="mt-1 text-[11px] leading-relaxed text-gray-600">
                     A rule written here decides bookings made through the rules engine, and every such
                     booking records which rule and which version decided it. The calendar&apos;s own
-                    quick-book still applies the single-row rules from before the card model:
-                    migration 230 put a unique index across location and appointment type on the rows the
-                    old check reads, so a card rule cannot occupy that slot without making a second
-                    Friday rule impossible. The two are kept apart deliberately rather than one silently
-                    overriding the other, and closing the gap needs a migration this build did not write.
+                    quick-book still applies the simpler per-location settings it has always read, from
+                    the editor below. The two are kept apart deliberately rather than one silently
+                    overriding the other, so a booking is never governed by a rule the person making it
+                    could not see.
                   </p>
                   <Link href="/practice/setup/availability?step=4"
                     className="mt-2 inline-block text-[11px] font-semibold text-[var(--cp-primary)] hover:underline">
@@ -689,11 +688,15 @@ export default async function AvailabilityBookingPage({ searchParams }: {
                 <NotBuilt
                   title="Scenario preview"
                   phase={null}
-                  what={"You can see what the booking engine would offer from your real sessions and rules over the next fortnight. Walking a new patient or a follow-up through the booking page as they would see it needs the patient-facing intake, which is not built yet."}
+                  what={"You can see what the booking engine would offer from your real sessions and rules over the next fortnight. A guided walkthrough of the booking page as a patient would experience it is not available yet — your booking page itself, once published, is the real thing."}
                   // ⚠ CPR-HFE-REF-001: the practitioner reads `what`; this provenance is not rendered.
-                  reasonCode="NO_PATIENT_INTAKE_PATH"
+                  // ⚠ REWRITTEN 2026-08-28 (CPR-RULES-HFE-001 s10 pass): the old sentence said the
+                  // patient-facing intake "is not built yet", which stopped being true when the intake
+                  // screens shipped -- the stale-refusal class, understating the product. What is
+                  // genuinely absent is only the guided SIMULATOR of that page.
+                  reasonCode="NO_SCENARIO_WALKTHROUGH"
                   specReference="CPR-AVB-001 s10.1"
-                  technicalDetail={"s10.1's eight testable scenarios. The panel beside this shows what the booking engine would offer from real slots and real rules over the next fortnight, which is the honest half of a preview. The other half — walking a NEW PATIENT, a follow-up, a staff booking and a walk-in through the page as they would experience it — needs the patient-facing intake, which is Phase 4's remainder and is not built. The publish checklist above says so as a blocker rather than leaving it to be discovered."} />
+                  technicalDetail={"s10.1's eight testable scenarios. The panel beside this shows what the booking engine would offer from real slots and real rules over the next fortnight, which is the honest half of a preview. The other half — a guided walkthrough as a new patient, a follow-up, a staff booking and a walk-in would experience it — has no simulator surface. The intake itself shipped; a preview that drew its own copy of that page could drift from the real one, which would be worse than no preview, so the refusal stands until a walkthrough renders the real page."} />
               </>
             )}
           </div>

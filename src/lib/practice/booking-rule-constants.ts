@@ -415,13 +415,13 @@ export const BUILDER_SECTIONS = [
     key: "window", title: "Booking window", built: true, phase: null,
     alreadyBuilt: null,
     responsibility: "Opening horizon, closing notice, same-day and late booking behaviour",
-    note: "The horizon and the notice period are enforced. Separate same-day and late-booking behaviours are not a column on this table, so they are not offered.",
+    note: "The horizon and the notice period are enforced. A separate same-day or late-booking behaviour cannot be stored yet, so it is not offered.",
   },
   {
     key: "capacity", title: "Capacity", built: true, phase: null,
     alreadyBuilt: null,
     responsibility: "Total, by appointment type, reserves, walk-ins, urgent additions and overbooking",
-    note: "Total, new, follow-up, urgent reserve and overbooking are counted per session and enforced. The walk-in limit is the practice-wide daily one from before the card model.",
+    note: "Total, new, follow-up, urgent reserve and overbooking are counted per session and enforced. The walk-in limit here is the practice-wide daily one.",
   },
   {
     key: "eligibility", title: "Eligibility", built: true, phase: null,
@@ -475,7 +475,7 @@ export const BUILDER_SECTIONS = [
       + "section is about the booking intake, which is a shorter list on purpose -- s9 permits only what "
       + "is needed to identify the patient and organise the encounter.",
     responsibility: "Booking fields, documents, referral information and patient-reported context",
-    note: "Every question the booking intake can ask is listed, and each is off, optional or required under this rule. A required answer that is missing refuses the booking on the server, not merely on the form. A question set to off is not asked, and an answer that arrives for it anyway is discarded rather than stored. Documents are the one item with nowhere to go -- there is no document service on the patient path, so none is offered.",
+    note: "Every question the booking intake can ask is listed, and each is off, optional or required under this rule. A required answer that is missing refuses the booking on the server, not merely on the form. A question set to off is not asked, and an answer that arrives for it anyway is discarded rather than stored. A referral letter or other supporting document cannot be added during booking, so it is not asked for.",
   },
   {
     key: "notifications", title: "Notifications", built: false, phase: null,
@@ -602,7 +602,7 @@ export const BOOKING_INTAKE_FIELDS: BookingIntakeField[] = [
   },
   {
     field_key: "sex", label: "Sex", field_type: "select", column: "sex",
-    help: "Migration 254's own list. 'Unspecified' is what is stored when nobody answers.",
+    help: "A fixed list of answers. 'Prefer not to say' is what is recorded when nobody answers.",
     alwaysRequired: false, group: "identity",
     options: [
       { value: "female", label: "Female" }, { value: "male", label: "Male" },
@@ -629,7 +629,7 @@ export const BOOKING_INTAKE_FIELDS: BookingIntakeField[] = [
   {
     field_key: "representative_relationship", label: "Their relationship to the patient",
     field_type: "select", column: "representative_relationship",
-    help: "Migration 221's vocabulary, not a second list -- three spellings of 'mother' is how a report starts disagreeing with itself.",
+    help: "One shared list of relationships, the same one used everywhere else -- three spellings of 'mother' is how a report starts disagreeing with itself.",
     alwaysRequired: false, group: "contact",
     options: REPRESENTATIVE_RELATIONSHIPS.map(v => ({ value: v, label: v.replace(/_/g, " ") })),
   },
@@ -654,7 +654,7 @@ export const BOOKING_INTAKE_FIELDS: BookingIntakeField[] = [
   {
     field_key: "stated_diagnosis", label: "Diagnosis, as the patient states it",
     field_type: "long_text", column: "stated_diagnosis",
-    help: "⚠ NOT A DIAGNOSIS. A patient saying they have diabetes is a patient saying so. The column is called stated_diagnosis so nothing can be copied into a clinical field without somebody typing a different name.",
+    help: "⚠ NOT A DIAGNOSIS. A patient saying they have diabetes is a patient saying so. It is recorded as the patient's own statement and is never a clinician-confirmed diagnosis.",
     alwaysRequired: false, group: "stated", rules: { maxLength: 1000 },
   },
   {
@@ -707,6 +707,9 @@ export const INTAKE_NOT_CONFIGURABLE = [
       + "out rather than leave a nullable document id sitting as evidence of a feature. Nothing can "
       + "receive an upload from a stranger, so a control asking for one would take a file nowhere.",
     wouldNeed: "A document service reachable without an account, and a column on practice_booking_request pointing at it.",
+    // ⚠ CPR-RULES-HFE-001 s10: `whyNot` is provenance for Product Director and Engineering and is NOT
+    // rendered. `plain` is the sentence a practitioner reads -- capability language, no archaeology.
+    plain: "Patients cannot attach a referral letter or document while booking yet, so it is not asked for.",
   },
   {
     what: "Agreement to the practice keeping these answers",
@@ -715,6 +718,7 @@ export const INTAKE_NOT_CONFIGURABLE = [
       + "booking PAGE (practice_booking_access.consent_required and consent_text) because they are the "
       + "same for every rule that page's bookings pass through. It is configured in Patient Access.",
     wouldNeed: "Nothing. It is built, in the right place, and is listed here so nobody looks for it twice.",
+    plain: "Whether patients must agree to you keeping these answers is set once for your whole booking page, in Patient Access -- not per rule.",
   },
 ] as const;
 
@@ -1231,3 +1235,134 @@ export const RULE_STATUS_CHIP: Record<string, { label: string; chip: string; dot
   archived: { label: "Archived", chip: "bg-slate-100 text-slate-500 ring-1 ring-slate-200", dot: "bg-slate-300" },
   unreadable: { label: "Could not be read", chip: "bg-slate-100 text-slate-500 ring-1 ring-slate-300", dot: "bg-slate-300" },
 };
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+// CPR-RULES-HFE-001 -- THE AUTHORING CATEGORIES, AND THE RULE THAT NONE OF THEM IS A SECOND ENGINE.
+//
+// s5 replaces immediate entry into the full form with "What do you want to control?". A category is a
+// PRESENTATION of the one rule row: it decides which composer sections open, and nothing else. Every
+// category writes the same shape through the same save, so a rule authored under "Walk-ins" and a rule
+// authored under "Advanced" are the same kind of row -- there is exactly one evaluator and one store.
+//
+// ⚠ `sections` NAMES COMPOSER SECTIONS, NOT STORED FIELDS. The draft always carries every field and the
+// save always submits the whole draft (s15's no-data-loss rule), so a hidden section's values ride
+// through an edit untouched. Hiding is scoping the ASK, never truncating the WRITE.
+//
+// ⚠ ONLY `advanced` SHOWS NUMERIC PRIORITY (s8). The one other place priority may appear is a rule that
+// already carries a non-zero one -- hiding a load-bearing value from its own editor would make an edit
+// silently unexplainable.
+// ════════════════════════════════════════════════════════════════════════════════════════════════════
+
+export const RULE_COMPOSER_SECTIONS =
+  ["window", "capacity", "eligibility", "confirmation", "required_information", "walk_ins", "cancellations"] as const;
+export type RuleComposerSection = (typeof RULE_COMPOSER_SECTIONS)[number];
+
+export const RULE_CATEGORIES: {
+  key: string; title: string; blurb: string;
+  sections: readonly RuleComposerSection[];
+  /** "session": the target step leads with the named session. "dates": both effective dates expected. */
+  focus: "session" | "dates" | null;
+  advanced: boolean;
+}[] = [
+  {
+    key: "clinic_session", title: "Clinic or session",
+    blurb: "Control how a particular clinic or recurring session works.",
+    sections: ["window", "capacity", "confirmation"], focus: "session", advanced: false,
+  },
+  {
+    key: "booking", title: "Booking",
+    blurb: "Control when and how patients can book.",
+    sections: ["window", "confirmation"], focus: null, advanced: false,
+  },
+  {
+    key: "capacity", title: "Capacity",
+    blurb: "Set limits, allocations, reserves and overbooking.",
+    sections: ["capacity"], focus: null, advanced: false,
+  },
+  {
+    key: "eligibility", title: "Patient eligibility",
+    blurb: "Control which patients a rule applies to.",
+    sections: ["eligibility"], focus: null, advanced: false,
+  },
+  {
+    key: "cancellation", title: "Cancellation & rescheduling",
+    blurb: "Control patient changes, notice and no-show behaviour.",
+    sections: ["cancellations"], focus: null, advanced: false,
+  },
+  {
+    key: "walk_ins", title: "Walk-ins",
+    blurb: "Control whether and how walk-ins are accepted.",
+    sections: ["walk_ins"], focus: null, advanced: false,
+  },
+  {
+    key: "information", title: "Information required",
+    blurb: "Choose what patients need to provide when booking.",
+    sections: ["required_information"], focus: null, advanced: false,
+  },
+  {
+    key: "exception", title: "Temporary exception",
+    blurb: "Override normal rules for particular dates.",
+    sections: ["window", "capacity"], focus: "dates", advanced: false,
+  },
+  {
+    key: "advanced", title: "Advanced rule",
+    blurb: "Combine unusual conditions or resolve a genuine equal-scope conflict.",
+    sections: RULE_COMPOSER_SECTIONS, focus: null, advanced: true,
+  },
+];
+
+export const ruleCategory = (key: string) => RULE_CATEGORIES.find(c => c.key === key) ?? null;
+
+/**
+ * s4's FILTER CHIPS, and which of them a stored rule belongs under.
+ *
+ * ⚠ A CATEGORY IS DERIVED, NEVER STORED. A rule belongs under a chip because of what it actually sets,
+ * so a rule that constrains capacity AND cancellations appears under both -- which is the honest
+ * rendering of what the row is. Deriving it also means every rule written before this taxonomy existed
+ * lands in the right groups without being migrated into a different meaning (s14).
+ */
+export type RuleCategoryShape = {
+  effectiveFrom: string | null; effectiveTo: string | null;
+  sessionTemplateId: string | null; locationId: string | null;
+  channel: string | null; visibility: string | null;
+  bookingHorizonDays: number | null; leadTimeMinutes: number | null;
+  confirmationMode: string | null;
+  capacityTotal: number | null; capacityNew: number | null; capacityFollowUp: number | null;
+  capacityUrgentReserve: number | null; overbookingAllowed: number | null;
+  patientEligibility: string | null; minAgeYears: number | null; maxAgeYears: number | null;
+  walkInDailyLimit: number | null; walkInCutoffMinutes: number | null; walkInQueuePolicy: string | null;
+  selfCancelAllowed: boolean | null; selfRescheduleAllowed: boolean | null;
+  rescheduleNoticeMinutes: number | null; cancellationNoticeMinutes: number | null;
+  dnaThreshold: number | null; waitingListEnabled: boolean | null;
+  requiredInformation?: { fields?: Record<string, unknown> } | null;
+};
+
+export const RULE_FILTER_CHIPS = [
+  { key: "all", label: "All" },
+  { key: "clinics", label: "Clinics" },
+  { key: "booking", label: "Booking" },
+  { key: "capacity", label: "Capacity" },
+  { key: "patients", label: "Patients" },
+  { key: "walk_ins", label: "Walk-ins" },
+  { key: "changes", label: "Changes" },
+  { key: "exceptions", label: "Exceptions" },
+] as const;
+
+export function ruleCategoryKeys(r: RuleCategoryShape): string[] {
+  const out: string[] = [];
+  if (r.sessionTemplateId !== null) out.push("clinics");
+  if (r.bookingHorizonDays !== null || (r.leadTimeMinutes ?? 0) > 0
+    || (r.visibility !== null && r.visibility !== "internal") || r.channel !== null
+    || (r.confirmationMode !== null && r.confirmationMode !== "instant")) out.push("booking");
+  if (r.capacityTotal !== null || r.capacityNew !== null || r.capacityFollowUp !== null
+    || (r.capacityUrgentReserve ?? 0) > 0 || (r.overbookingAllowed ?? 0) > 0) out.push("capacity");
+  if ((r.patientEligibility !== null && r.patientEligibility !== "any")
+    || r.minAgeYears !== null || r.maxAgeYears !== null) out.push("patients");
+  if (r.walkInDailyLimit !== null || r.walkInCutoffMinutes !== null
+    || (r.walkInQueuePolicy !== null && r.walkInQueuePolicy !== "first_come")) out.push("walk_ins");
+  if (r.selfCancelAllowed === false || r.selfRescheduleAllowed === false
+    || r.rescheduleNoticeMinutes !== null || (r.cancellationNoticeMinutes ?? 0) > 0
+    || r.dnaThreshold !== null || r.waitingListEnabled === true) out.push("changes");
+  if (r.effectiveFrom !== null && r.effectiveTo !== null) out.push("exceptions");
+  return out;
+}

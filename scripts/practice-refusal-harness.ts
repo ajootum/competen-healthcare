@@ -27,6 +27,10 @@ import {
   REFUSAL_STATE_COPY, EMPTY_STATE_LOOKALIKES, INTERNAL_IDENTIFIER_RE, IMPLEMENTATION_JARGON_RE,
   practitionerView, refusalTitle, type Refusal, type RefusalState,
 } from "../src/lib/practice/refusal-presentation";
+// CPR-RULES-HFE-001 HFE-11 (checks 8d/8e): the rule vocabulary is checked the way the screen consumes
+// it -- by importing the rendered fields -- because the same file deliberately keeps unrendered
+// provenance (`alreadyBuilt`, `whyNot`) that a source scan would wrongly condemn.
+import * as brc from "../src/lib/practice/booking-rule-constants";
 import { SCREEN_REFUSES, UNSUPPLIED_CARD, UNSUPPLIED_COLUMN_REFUSALS } from "../src/app/practice/(shell)/patients/refusals";
 import { REFUSES } from "../src/lib/practice/patient-workspace-constants";
 
@@ -224,6 +228,57 @@ ok("8b-control. the section-number and build-phase detectors match real ones",
 ok("8c. NotBuilt no longer renders a build phase to a practitioner",
   !/\{phase\}\s*—\s*not built/.test(
     stripComments(readFileSync(join(process.cwd(), PROSE_SCREENS[0]), "utf8"))));
+
+// ══ 8d/8e. CPR-RULES-HFE-001 HFE-11 -- no migration numbers or build archaeology on the Rules screen ══
+//
+// s10 of that spec names the class exactly: "Remove implementation history and migration commentary
+// from practitioner-facing UI." Two instruments, because the copy lives in two places:
+//
+//   8d scans the two SCREEN files' comment-stripped source. A migration number in code (not comments)
+//      on this screen can only be on its way to a reader -- the engine references live in
+//      booking-rules.ts, which is deliberately not in this list.
+//   8e checks the constants file THE WAY THE SCREEN CONSUMES IT: by importing the rendered fields.
+//      A source scan there would condemn `alreadyBuilt` and `whyNot`, which are PROVENANCE kept for
+//      Product Director and Engineering and pinned by the sections harness -- the boundary is that
+//      they are never rendered, so the check runs over exactly the fields that are.
+const MIGRATION_NUMBER_RE = /\bmigrations?\s+[0-9]{2,}\b/i;
+const BUILD_ARCHAEOLOGY_RE = /\b(card model|not built|used to say)\b/i;
+for (const rel of [PROSE_SCREENS[0], PROSE_SCREENS[1]]) {
+  const name = rel.split("/").pop();
+  const src = stripComments(readFileSync(join(process.cwd(), rel), "utf8"));
+  ok(`8d[${name}]. no migration number or build archaeology outside comments`,
+    !MIGRATION_NUMBER_RE.test(src) && !BUILD_ARCHAEOLOGY_RE.test(src),
+    (src.match(MIGRATION_NUMBER_RE) ?? src.match(BUILD_ARCHAEOLOGY_RE) ?? []).join(", "));
+}
+ok("8d-control. the migration detector matches a real one",
+  MIGRATION_NUMBER_RE.test("set on the session itself since migration 240") &&
+  BUILD_ARCHAEOLOGY_RE.test("a row written before the card model"));
+{
+  // Imported the way RuleWorkspace imports them, so this asserts what a practitioner can be shown.
+  const rendered: string[] = [
+    ...brc.BUILDER_SECTIONS.flatMap(s => [s.title, s.responsibility, s.note]),
+    ...brc.BOOKING_INTAKE_FIELDS.flatMap(f => [f.label, f.help]),
+    ...brc.REQUIREMENT_LEVELS.flatMap(l => [l.label, l.blurb]),
+    ...brc.RULE_STATUSES.flatMap(s => [s.label, s.blurb]),
+    ...brc.CONFIRMATION_MODES.flatMap(c => [c.label, c.blurb]),
+    ...brc.PATIENT_ELIGIBILITY.flatMap(e => [e.label, e.blurb]),
+    ...brc.WALK_IN_QUEUE_POLICIES.flatMap(p => [p.label, p.blurb]),
+    ...brc.DNA_ACTIONS.flatMap(a => [a.label, a.blurb]),
+    ...brc.RULE_CATEGORIES.flatMap(c => [c.title, c.blurb]),
+    ...brc.INTAKE_NOT_CONFIGURABLE.map(n => n.plain),
+    ...brc.BOOKING_CHANNELS.flatMap(c => [c.label, c.definition, c.permission]),
+    brc.WAITING_LIST_CONTACT_NOTE, brc.WAITING_LIST_NO_SCREEN_NOTE, brc.QUEUE_PRIORITY_NO_SCREEN_NOTE,
+  ];
+  const leaks = rendered.filter(t =>
+    MIGRATION_NUMBER_RE.test(t) || BUILD_ARCHAEOLOGY_RE.test(t)
+    || TABLE_RE.test(t) || /\b(schema|jsonb|nullable|foreign key)\b/i.test(t));
+  ok("8e. every rendered rule-vocabulary sentence is production language",
+    rendered.length > 60 && leaks.length === 0,
+    leaks.slice(0, 2).map(l => l.slice(0, 80)).join(" | "));
+  ok("8e-control. the provenance fields the boundary protects still exist unrendered",
+    brc.BUILDER_SECTIONS.some(s => MIGRATION_NUMBER_RE.test(s.alreadyBuilt ?? ""))
+    && brc.INTAKE_NOT_CONFIGURABLE.some(n => MIGRATION_NUMBER_RE.test(n.whyNot)));
+}
 
 // ══ 9. METRIC PROVENANCE IS THE SAME BOUNDARY ═════════════════════════════════════════════════
 //
