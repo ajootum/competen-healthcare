@@ -135,12 +135,34 @@ async function prepareRegistration(admin: any, ctx: WorkspaceContext, input: Reg
   const today = practiceToday(timezone);
   const age = ageFrom(input.birthDate ?? null, today);
 
+  /**
+   * ⚠ THE GUARDIAN'S CONTACT STANDS IN HERE TOO — 2026-08-28, found by the owner running the pilot
+   * acceptance's H1 script on a real minor registration.
+   *
+   * The minimum-dataset rule below has always accepted a guardian's contact in the patient's place —
+   * its own comment says a six-month-old has no phone, and demanding one is how the mother's number
+   * ends up recorded in the baby's field. But THIS check ran first, fed the template the patient's raw
+   * `input.phone`, and a practice whose template marks phone REQUIRED refused the minor with "Phone is
+   * required on this practice's form" before the guardian machinery ever got a say. Same rule, two
+   * checks, one of them blind — the exact split the header above this function forbids between the two
+   * WRITERS, recreated between two VALIDATORS.
+   *
+   * So the template sees the same substitution: the patient's own contact when they have one, otherwise
+   * the guardian's. The lookup is computed ONCE, here, and reused by the minimum-dataset rule below so
+   * the two checks cannot drift apart again.
+   */
+  const guardianContact = (input.relationships ?? [])
+    .find(r => (r.isLegalGuardian || r.isPrimary) && (r.phone?.trim() || r.email?.trim()))
+    ?? (input.relationships ?? []).find(r => r.phone?.trim() || r.email?.trim());
+
   // ── THE TEMPLATE'S OWN RULES, CHECKED BEFORE ANYTHING IS WRITTEN ─────────────────────────────────
   const resolved = await resolveTemplate(admin, ctx, {});
   if (resolved) {
     const values: Record<string, unknown> = {
       display_name: displayName, sex: input.sex, birth_date: input.birthDate,
-      age_estimate_years: input.ageEstimateYears, phone: input.phone, email: input.email,
+      age_estimate_years: input.ageEstimateYears,
+      phone: input.phone?.trim() || guardianContact?.phone?.trim() || undefined,
+      email: input.email?.trim() || guardianContact?.email?.trim() || undefined,
       ...(input.custom ?? {}),
     };
     const check = validateSubmission(resolved.fields, values);
@@ -179,10 +201,7 @@ async function prepareRegistration(admin: any, ctx: WorkspaceContext, input: Reg
   //
   // So the guardian's contact SATISFIES the requirement and is recorded against the guardian, where it
   // belongs. The patient's own contact fields stay empty, because they are.
-  const guardianContact = (input.relationships ?? [])
-    .find(r => (r.isLegalGuardian || r.isPrimary) && (r.phone?.trim() || r.email?.trim()))
-    ?? (input.relationships ?? []).find(r => r.phone?.trim() || r.email?.trim());
-
+  // (guardianContact is computed once, above the template check, which now shares this substitution.)
   const contactPhone = input.phone?.trim() || undefined;
   const contactEmail = input.email?.trim() || undefined;
   const satisfiedByGuardian = !contactPhone && !contactEmail && !!guardianContact;

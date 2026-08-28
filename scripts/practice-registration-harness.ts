@@ -316,6 +316,47 @@ async function main() {
       formWithTemplate.template?.name === "With insurance" &&
       formWithTemplate.fields.some((f: any) => f.field_key === "insurer_name"),
       formWithTemplate.template?.name);
+
+    // ── 10. A REQUIRED PHONE IS THE GUARDIAN'S, NOT THE MINOR'S ───────────────────────────────────
+    //
+    // ⚠ FOUND BY THE OWNER, 2026-08-28, running CPR-PILOT-READINESS-001's H1 script on a real minor
+    // registration: the template check read the patient's raw phone, so a phone-required practice
+    // refused every child with "Phone is required on this practice's form" -- while the minimum-dataset
+    // rule two blocks later has always accepted the guardian's contact in the child's place. Same rule,
+    // two checks, one blind. The desk-level workaround was typing the mother's number into the baby's
+    // field, which is the exact mis-record the engine's own comment warns about.
+    const minorViaGuardian = await register(admin, a.ctx, {
+      givenName: "Junior", familyName: "Kirabo", birthDate: born(6), sex: "male",
+      custom: { insurer_name: "AAR" },
+      relationships: [{
+        relationshipType: "mother", fullName: "Joan Kirabo", phone: "+256772000006",
+        isLegalGuardian: true, mayReceiveInformation: true, isPrimary: true,
+      }],
+      correlationId: "harness-reg",
+    });
+    ok("10. A MINOR WITH A GUARDIAN'S PHONE REGISTERS -- the template requirement is satisfied by the guardian",
+      minorViaGuardian.ok, minorViaGuardian.ok ? "" : minorViaGuardian.message);
+
+    const adultNoPhone = await register(admin, a.ctx, {
+      givenName: "Solo", familyName: "Adult", birthDate: born(41),
+      custom: { insurer_name: "AAR" }, correlationId: "harness-reg",
+    });
+    ok("10b. CONTROL: an ADULT with no phone and no guardian is still refused -- the rule moved, it did not loosen",
+      !adultNoPhone.ok && adultNoPhone.code === "TEMPLATE_INCOMPLETE" && /phone/i.test(adultNoPhone.message),
+      adultNoPhone.ok ? "it registered" : adultNoPhone.message);
+
+    const guardianNoContact = await register(admin, a.ctx, {
+      givenName: "Second", familyName: "Kirabo", birthDate: born(4),
+      custom: { insurer_name: "AAR" },
+      relationships: [{
+        relationshipType: "father", fullName: "Contactless Guardian",
+        isLegalGuardian: true, mayReceiveInformation: true, isPrimary: true,
+      }],
+      correlationId: "harness-reg",
+    });
+    ok("10c. CONTROL: a guardian with NO contact satisfies nothing -- somebody must be reachable about a child",
+      !guardianNoContact.ok && /phone/i.test(guardianNoContact.message ?? ""),
+      guardianNoContact.ok ? "it registered" : guardianNoContact.message);
   } else ok("a template is created", false, t.message);
 
   // ── The workspace: the panel, the queue and drafts (CPR-REG-002) ───────────
