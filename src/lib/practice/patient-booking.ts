@@ -683,6 +683,49 @@ export type PublicReadiness =
         | "capacity_none";
     };
 
+/**
+ * CPR-BOOK-HFE-002 s16/s17 -- IS ANYTHING PUBLICLY OFFERABLE HERE, BY CONFIGURATION?
+ *
+ * ⚠ ASKED OF THE OFFERING ENGINE, NOT THE CARD CHAIN. What a patient is OFFERED is governed by
+ * resolveBookingRule (the per-location window the slot generator reads) gated by
+ * publicBookingReadiness -- the card-rule chain governs booking-time evaluation, and the first
+ * version of this gate read the wrong engine and called a genuinely bookable practice closed. The
+ * screens harness (6.5) is what caught it. Deliberately independent of session templates: a practice
+ * booking hand-placed slots with no template at all is still offered.
+ *
+ * "nothing_public" is a CONFIGURATION verdict: no visible location x offered type resolves to a
+ * public-ready window, so the diary a patient reaches is empty whatever the slots say. A failed read
+ * is never a verdict: any pair that could not be resolved makes the answer "unknown".
+ */
+export type PublicOfferingGateResult = {
+  state: "unknown" | "offered" | "nothing_public";
+  /** Location keys (a null location spelled "practice") with a public-ready window for some offered type. */
+  readyLocationKeys: string[];
+};
+
+export async function publicOfferingGate(admin: any, workspaceId: string, args: {
+  locationIds: (string | null)[]; appointmentTypes: string[];
+}): Promise<PublicOfferingGateResult> {
+  const locations = args.locationIds.length > 0 ? args.locationIds : [null];
+  const types = args.appointmentTypes.length > 0 ? args.appointmentTypes : ["new_consultation"];
+  const ready = new Set<string>();
+  let sawFailure = false;
+  for (const loc of locations) {
+    for (const t of types) {
+      const rule = await resolveBookingRule(admin, workspaceId, loc, t);
+      if (rule.readFailed) { sawFailure = true; continue; }
+      // Session capacity is a per-session fact this configuration-level gate has no session for --
+      // null resolves (an unconstrained ceiling), exactly as publicBookingReadiness documents.
+      if (publicBookingReadiness({ bookingHorizonDays: rule.bookingHorizonDays, visibility: rule.visibility, sessionCapacity: null }).ready) {
+        ready.add(loc ?? "practice");
+        break;
+      }
+    }
+  }
+  if (ready.size > 0) return { state: "offered", readyLocationKeys: [...ready] };
+  return { state: sawFailure ? "unknown" : "nothing_public", readyLocationKeys: [] };
+}
+
 export function publicBookingReadiness(rule: {
   bookingHorizonDays: number | null;
   visibility?: string | null;
@@ -1918,7 +1961,20 @@ export type PublicBookingEntry = {
    * Which of the three is missing, as codes, so a screen never re-derives the arithmetic and a harness
    * can name what it is testing. Empty when a booking could be completed.
    */
-  blockers: ("PAGE_NOT_PUBLISHED" | "NOTHING_OFFERED" | "NO_WAY_TO_SEND_A_CODE" | "NO_PATIENT_SCREEN" | "COULD_NOT_CHECK")[];
+  blockers: ("PAGE_NOT_PUBLISHED" | "PAGE_PAUSED" | "NOTHING_OFFERED" | "NO_WAY_TO_SEND_A_CODE" | "NO_PATIENT_SCREEN" | "COULD_NOT_CHECK")[];
+  /**
+   * CPR-BOOK-HFE-002 s16/s17: WHY a closed page is closed. "paused" is a practice that published and
+   * deliberately stepped back -- a different sentence from one that never opened. Null when open or
+   * unreadable.
+   */
+  closedBecause: "never_published" | "paused" | null;
+  /**
+   * s17's soft state: the page is open and booking works, but no clinic's governing rule offers times
+   * beyond internal -- so the diary a patient reaches is empty by CONFIGURATION, not by being full.
+   * Computed from the same clinic chain the setup workspace projects. "unknown" when the reads that
+   * answer it failed -- the page renders without the note rather than guessing.
+   */
+  availability: { state: "unknown" | "has_public_clinic" | "no_public_clinic"; patientNote: string | null };
   /** What the PAGE calls this practice, where the practice chose a name for it. */
   displayName: string | null;
   instructions: string | null;
@@ -1953,6 +2009,8 @@ export async function publicBookingEntry(admin: any, handle: string): Promise<Pu
     privacyNotice: null as string | null,
     locations: [] as { id: string; name: string }[], appointmentTypes: [] as string[],
     referenceNote: BOOKING_REFERENCE_NOTE,
+    closedBecause: null as PublicBookingEntry["closedBecause"],
+    availability: { state: "unknown", patientNote: null } as PublicBookingEntry["availability"],
   };
 
   const page = await resolveBookingPage(admin, clean);
@@ -1961,11 +2019,27 @@ export async function publicBookingEntry(admin: any, handle: string): Promise<Pu
       ...base, state: "unreadable", reason: page.reason, blockers: ["COULD_NOT_CHECK"],
       whyNot: "Whether this practice is taking online bookings could not be checked just now.",
     };
-  if (!page.value)
+  if (!page.value) {
+    // ⚠ s17's PAUSED ROW, AND THE ENUMERATION LINE IT DELIBERATELY DRAWS. resolveBookingPage keeps
+    // "exists but unpublished" indistinguishable from "no such practice" -- that decision stands
+    // untouched. PAUSED is different in kind: it is only reachable AFTER a practice chose to publish
+    // and be findable, its meaning is "existing bookings remain", and patients holding the link need
+    // "not right now" rather than "no such thing". A practice that wants to vanish unpublishes; one
+    // that pauses stays findable, and that is what pausing means. The extra read fails soft: on any
+    // error the generic closed sentence stands.
+    const { data: pausedRow } = await admin.from("practice_booking_access")
+      .select("publish_state").eq("handle", clean).eq("publish_state", "paused").maybeSingle();
+    if (pausedRow) {
+      return {
+        ...base, state: "closed", blockers: ["PAGE_PAUSED"], closedBecause: "paused",
+        whyNot: "This practice is not accepting online bookings right now. Contact them the way you normally would.",
+      };
+    }
     return {
-      ...base, state: "closed", blockers: ["PAGE_NOT_PUBLISHED"],
+      ...base, state: "closed", blockers: ["PAGE_NOT_PUBLISHED"], closedBecause: "never_published",
       whyNot: "This practice does not take online bookings. Contact them the way you normally would.",
     };
+  }
   const p = page.value;
 
   // ⚠ IMPORTED WHERE IT IS USED so the public page does not pull the whole publish-readiness module into
@@ -2031,8 +2105,24 @@ export async function publicBookingEntry(admin: any, handle: string): Promise<Pu
   const canRequestWithoutCode =
     policy.value.allowed && !blockers.includes("NOTHING_OFFERED") && !blockers.includes("NO_PATIENT_SCREEN");
 
+  // ── s17: IS THE DIARY A PATIENT REACHES EMPTY BY CONFIGURATION? Asked of the offering engine
+  //    itself (publicOfferingGate), over exactly what this page shows: its visible locations and its
+  //    offered types. Fails soft to "unknown" -- this question must never take the page down.
+  const gate = await publicOfferingGate(admin, p.workspaceId, {
+    locationIds: p.locations.map(l => l.id),
+    appointmentTypes: p.appointmentTypes,
+  });
+  const availability: PublicBookingEntry["availability"] =
+    gate.state === "offered" ? { state: "has_public_clinic", patientNote: null }
+      : gate.state === "nothing_public"
+        ? {
+          state: "no_public_clinic",
+          patientNote: "No online appointments are currently available. Contact the practice directly.",
+        }
+        : { state: "unknown", patientNote: null };
+
   return {
-    ...shared, blockers: ordered as PublicBookingEntry["blockers"],
+    ...shared, availability, blockers: ordered as PublicBookingEntry["blockers"],
     canBook: ordered.length === 0, canManage: ordered.length === 0,
     canRequestWithoutCode,
     requestNote: canRequestWithoutCode ? UNVERIFIED_REQUEST_NOTE : null,

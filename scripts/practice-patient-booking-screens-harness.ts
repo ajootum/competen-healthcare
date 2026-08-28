@@ -756,6 +756,58 @@ async function main() {
   ok("6c. ⚠ AND NOTHING ON THE RECEIPT CLAIMS A CONFIRMATION WAS SENT, OR THAT A TIME IS HELD",
     accepted.data.confirmationSent === false && accepted.data.holdsSlot === false);
 
+  // ══ 6.5 CPR-BOOK-HFE-002 s16/s17 -- THE STRUCTURED FAILURE REASONS ═══════════════════════════
+  section("6.5. The public page's failure reasons are specific, and true");
+
+  ok("6.5a. an open practice with a public clinic reports the availability state, not unknown",
+    entry.availability.state === "has_public_clinic" && entry.availability.patientNote === null,
+    JSON.stringify(entry.availability));
+  ok("6.5b. and an open page carries no closed-reason",
+    entry.closedBecause === null);
+
+  // ── PAUSED IS A DIFFERENT SENTENCE FROM NEVER-PUBLISHED (s17 row 1). The fixture page is paused,
+  //    the entry is asked again, and the state is restored whatever happens.
+  {
+    const { data: pageRow } = await admin.from("practice_booking_access")
+      .select("publish_state").eq("workspace_id", ws).maybeSingle();
+    const priorState = pageRow?.publish_state ?? null;
+    await admin.from("practice_booking_access")
+      .update({ publish_state: "paused" }).eq("workspace_id", ws);
+    const paused = await publicBookingEntry(admin, HANDLE);
+    ok("6.5c. ⚠ a PAUSED page says 'not right now', names PAGE_PAUSED, and offers no booking",
+      paused.state === "closed" && paused.closedBecause === "paused"
+      && paused.blockers.includes("PAGE_PAUSED") && paused.canBook === false
+      && /not accepting online bookings right now/i.test(paused.whyNot ?? ""),
+      JSON.stringify({ state: paused.state, closedBecause: paused.closedBecause, whyNot: paused.whyNot }));
+    ok("6.5d. ⚠ and the paused sentence is NOT the never-published sentence -- the two remain distinguishable",
+      !/does not take online bookings/i.test(paused.whyNot ?? ""), paused.whyNot ?? "");
+    await admin.from("practice_booking_access")
+      .update({ publish_state: priorState }).eq("workspace_id", ws);
+    const restored = await publicBookingEntry(admin, HANDLE);
+    ok("6.5e. CONTROL: restoring the publish state reopens the page exactly as it was",
+      restored.state === "open" && restored.canBook === true);
+  }
+
+  // ── EVERY CLINIC INTERNAL-ONLY IS s17's SOFT STATE: the page stays open, the diary is empty by
+  //    configuration, and the patient is told so in the prescribed sentence. Rules restored after.
+  {
+    const { data: priorRules } = await admin.from("practice_booking_rule")
+      .select("id, visibility").eq("workspace_id", ws);
+    await admin.from("practice_booking_rule")
+      .update({ visibility: "internal" }).eq("workspace_id", ws);
+    const dark = await publicBookingEntry(admin, HANDLE);
+    ok("6.5f. ⚠ with every governing rule internal, the entry says no_public_clinic WITHOUT shutting the page",
+      dark.state === "open" && dark.availability.state === "no_public_clinic"
+      && /no online appointments are currently available/i.test(dark.availability.patientNote ?? ""),
+      JSON.stringify(dark.availability));
+    for (const r of (priorRules ?? []) as { id: string; visibility: string | null }[]) {
+      await admin.from("practice_booking_rule").update({ visibility: r.visibility }).eq("id", r.id);
+    }
+    const relit = await publicBookingEntry(admin, HANDLE);
+    ok("6.5g. CONTROL: restoring the rules restores the public clinic",
+      relit.availability.state === "has_public_clinic");
+  }
+
   // ⚠ THE QUEUE IS A PERMISSION, NOT A PAGE. The screen is behind appointment.manage and so is the read.
   section("7. The practice-facing queue");
   const noCap = await requestQueue(admin, { ...ctx, capabilities: [] }, {});

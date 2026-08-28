@@ -170,6 +170,14 @@ export default async function PractitionerPage({ params }: {
             ⚠ AND THEY ARE TWO DIFFERENT OFFERS WITH TWO DIFFERENT WORDS. A request is not a booking: it
             makes no appointment and holds no time, and a button that said "Book" and produced a message
             would be the worst sentence on this page. */}
+        {/* CPR-BOOK-HFE-002 s17: an open page whose clinics are all internal-only is empty by
+            CONFIGURATION, and a patient told so up front does not walk into a bare diary and wonder
+            whether it is full. The sentence comes from the entry itself, never composed here. */}
+        {entry?.canBook && entry.availability?.state === "no_public_clinic" && entry.availability.patientNote && (
+          <p className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50/60 p-3 text-[12px] leading-relaxed text-gray-600">
+            {entry.availability.patientNote}
+          </p>
+        )}
         {entry?.canBook && (
           <Link href={`/practice/book/@${p.handle}/appointment`}
             className="mt-3 inline-block rounded-lg bg-[var(--cp-primary)] px-4 py-2 text-[12.5px] font-semibold text-white">

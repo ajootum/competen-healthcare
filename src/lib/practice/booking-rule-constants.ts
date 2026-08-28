@@ -1363,10 +1363,19 @@ export const RULE_FILTER_CHIPS = [
 // specificityOf server-side, and the tie-break is priority -- the same two keys the evaluator sorts by.
 // ════════════════════════════════════════════════════════════════════════════════════════════════════
 
-/** The card fields the clinic chain needs. Structural, so a BookingRuleCard satisfies it. */
-export type ClinicChainRule = RuleCategoryShape & {
+/**
+ * The fields the clinic chain actually reads -- and ONLY those, so the server can compose the same
+ * projection from a minimal select (the public page asks "does any clinic take online bookings?")
+ * without fabricating the dozens of card fields it does not need. A BookingRuleCard satisfies this
+ * structurally, exactly as before.
+ */
+export type ClinicChainRule = {
   id: string; name: string | null; status: string;
-  specificity: number; priority: number; appointmentType: string | null;
+  specificity: number; priority: number;
+  sessionTemplateId: string | null; locationId: string | null;
+  effectiveFrom: string | null; effectiveTo: string | null;
+  appointmentType: string | null; channel: string | null;
+  patientEligibility: string | null; minAgeYears: number | null; maxAgeYears: number | null;
 };
 
 export type ClinicChainEntry<R extends ClinicChainRule> = {

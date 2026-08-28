@@ -109,9 +109,28 @@ forever at first publication (published / published_with_warnings / paused). No 
 rule drafts and unpublished page settings already ARE the saved progress. Pinned by 9 vitest tests
 (SetupWizard.test.tsx), including the never-outlives-publication and resume-order rules.
 
-**NOT yet built from BOOK-HFE-002** (queued):
-1. §16/§17 structured public-page failure reasons (per-cause patient sentence + practitioner action,
-   instead of one generic refusal).
-2. §20 human acceptance: the single task "make Wednesday morning at Nsambya bookable", run untrained.
+**§16/§17 failure reasons — BUILT 2026-08-29.** publicBookingEntry now distinguishes: PAGE_PAUSED
+(closed with s17s not-right-now sentence — a deliberate, commented relaxation of the
+anti-enumeration line for the one state only reachable AFTER publishing; never-published stays
+indistinguishable from nonexistent), and the SOFT no_public_clinic availability state (page open,
+diary empty by configuration — computed with the same clinicRuleChain/specificityOf the setup
+workspace and engine use, failing soft to unknown). The patient page renders the entry-composed
+sentence up front; the setup Overview mirrors it VERBATIM in a What-a-patient-sees card with the
+correction one press away (public-failure-constants.ts translation map, complete-vocabulary pinned
+by vitest). Screens harness 6.5a-g drives paused and all-internal states and restores them.
+
+**The two-engine correction the harness forced (2026-08-29):** the first availability gate read the
+CARD-rule chain — and 6.5a went red against a fixture that books hand-placed slots with no card
+governor at all. What a patient is OFFERED is governed by the single-row engine
+(resolveBookingRule + publicBookingReadiness) plus the session own booking mode; the card chain
+governs booking-time evaluation. `publicOfferingGate` (patient-booking.ts) now asks the OFFERING
+engine, and every online surface reads it: the entry availability state, the clinic cards ON/OFF
+badge (omitted, never guessed, when the gate could not be computed), the Overview clinics-online
+count, and wizard stage 2. The misleading "Let patients book this clinic" card-visibility prefill
+was REPLACED by cause-true links: mode shut → the schedule editor, window not public → the
+per-location booking editor.
+
+Remaining from BOOK-HFE-002: §20 human acceptance ("make Wednesday morning at Nsambya bookable",
+run untrained) — the owner task.
 
 Remaining (owner-side): the §22 setup acceptance tasks + BOOK-HFE-002 §20's task, run untrained.

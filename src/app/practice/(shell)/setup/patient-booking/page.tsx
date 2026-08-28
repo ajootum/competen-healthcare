@@ -8,8 +8,10 @@ import { publishReadiness } from "@/lib/practice/patient-access";
 import { bookingLinkSummary } from "@/lib/practice/identity-service";
 import { messagingStatus } from "@/lib/practice/messaging";
 import { bookingPreview } from "@/lib/practice/availability-config";
-import { clinicRuleChain, clinicGoverningRule } from "@/lib/practice/booking-rule-constants";
+import { isPatientFacingMode } from "@/lib/practice/practice-session-constants";
 import { onSetupReadinessEvaluated } from "@/lib/practice/activation-hooks";
+import { publicBookingEntry, publicOfferingGate, type PublicBookingEntry } from "@/lib/practice/patient-booking";
+import { publicFailureAction } from "@/lib/practice/public-failure-constants";
 import RuleWorkspace from "../availability-booking/RuleWorkspace";
 import SetupWizard from "./SetupWizard";
 import { computeSetupWizard } from "./wizard";
@@ -94,13 +96,35 @@ export default async function PatientBookingPage({ searchParams }: {
   const activeRules = ruleCards.filter(c => c.status === "active");
   const anySender = channels.email.configured || channels.sms.configured || channels.whatsapp.configured;
 
-  // s4's coverage figure, from the same chain the clinic panels project: a clinic is "accepting
-  // online bookings" when the rule governing it offers its times beyond internal.
-  const onlineClinicCount = rulesUnreadable ? null : (r.sessions as any[]).filter((sess: any) => {
-    const gov: any = clinicGoverningRule(clinicRuleChain(
-      { id: sess.id, locationId: sess.locationId ?? null }, ruleCards as never));
-    return gov !== null && (gov.visibility ?? "internal") !== "internal";
-  }).length;
+  // s4's coverage figure, asked of the OFFERING engine (publicOfferingGate) over what the page shows.
+  // The card chain governs booking-time evaluation; what a patient is OFFERED is the per-location
+  // window plus the session's own booking mode -- the first version read the card chain and called a
+  // bookable practice closed. A clinic is "accepting online bookings" when its mode admits patients
+  // AND its location's window is public-ready.
+  let onlineSessions: string[] | null = null;
+  let readyLocationKeys: string[] | null = null;
+  {
+    const gate = await publicOfferingGate(admin, ctx.workspaceId, {
+      locationIds: ((readiness.profile?.visibleLocationIds ?? []) as string[]),
+      appointmentTypes: ((readiness.profile?.visibleAppointmentTypes ?? []) as string[]),
+    });
+    if (gate.state !== "unknown") {
+      readyLocationKeys = gate.readyLocationKeys;
+      onlineSessions = (r.sessions as any[])
+        .filter((sess: any) => isPatientFacingMode(sess.bookingMode)
+          && gate.readyLocationKeys.includes((sess.locationId as string | null) ?? "practice"))
+        .map((sess: any) => sess.id as string);
+    }
+  }
+  const onlineClinicCount = onlineSessions === null ? null : onlineSessions.length;
+
+  // s16/s17: what a patient at the public page is being told RIGHT NOW -- resolved by the same entry
+  // the page itself renders, so the quote can never drift from the truth. Overview only; the entry
+  // walks several stores.
+  let patientView: PublicBookingEntry | null = null;
+  if (active === "overview" && (bookingLink.state === "live" || bookingLink.state === "claimed_not_open")) {
+    patientView = await publicBookingEntry(admin, bookingLink.handle);
+  }
 
   // s14: the first-time wizard, computed from the same checks that refuse a real publish. It
   // disappears forever at first publication.
@@ -247,6 +271,50 @@ export default async function PatientBookingPage({ searchParams }: {
           </>
         )}
 
+        {/* ── s16/s17: THE PATIENT'S VIEW, MIRRORED. The sentence is the entry's own, verbatim. ── */}
+        {active === "overview" && patientView && (() => {
+          const soft = patientView.canBook && patientView.availability.state === "no_public_clinic";
+          const failing = patientView.state === "closed" || (!patientView.canBook && patientView.state === "open") || soft;
+          const code = patientView.state === "unreadable" ? "COULD_NOT_CHECK"
+            : soft ? "NO_PUBLIC_CLINIC" : patientView.blockers[0] ?? null;
+          const action = code ? publicFailureAction(code) : null;
+          const quoted = soft ? patientView.availability.patientNote : patientView.whyNot;
+          return (
+            <section className={`rounded-xl border p-4 ${
+              patientView.state === "unreadable" ? "border-slate-300 bg-slate-50"
+                : failing ? "border-amber-200 bg-amber-50/60" : "border-emerald-200 bg-emerald-50/50"}`}>
+              <h2 className="text-[13px] font-bold text-gray-900">What a patient sees right now</h2>
+              {patientView.state === "unreadable" ? (
+                <p className="mt-1.5 text-[12px] leading-relaxed text-slate-600">
+                  Whether patients can book could not be checked just now — the page tells them exactly
+                  that, and assumes nothing.
+                </p>
+              ) : !failing ? (
+                <p className="mt-1.5 text-[12px] leading-relaxed text-emerald-900">
+                  Your page is open and patients can complete a booking.
+                  {patientView.canRequestWithoutCode ? " Requests without a code are also on." : ""}
+                </p>
+              ) : (
+                <>
+                  {quoted && (
+                    <blockquote className="mt-1.5 border-l-2 border-amber-300 pl-2.5 text-[12px] italic leading-relaxed text-gray-700">
+                      &ldquo;{quoted}&rdquo;
+                    </blockquote>
+                  )}
+                  {action?.href ? (
+                    <Link href={action.href}
+                      className="mt-2 inline-block rounded-lg bg-[var(--cp-primary)] px-3.5 py-1.5 text-[12px] font-semibold text-white hover:opacity-90">
+                      {action.label} →
+                    </Link>
+                  ) : action?.why ? (
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-gray-600">{action.why}</p>
+                  ) : null}
+                </>
+              )}
+            </section>
+          );
+        })()}
+
         {/* ══ BOOKING PAGE — the page's own settings, open (s5). ════════════════════════════════ */}
         {active === "page" && (
           <>
@@ -288,7 +356,8 @@ export default async function PatientBookingPage({ searchParams }: {
               for that.
             </p>
             <RuleWorkspace {...ruleWorkspaceProps} view="clinics"
-              nextAvailable={nextAvailable} timezone={previewTimezone} />
+              nextAvailable={nextAvailable} timezone={previewTimezone}
+              onlineSessions={onlineSessions} readyLocationKeys={readyLocationKeys} />
             <p className="rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-[11px] leading-relaxed text-gray-500">
               Looking for today&apos;s operations? Waiting walk-ins live in{" "}
               <Link href="/practice/today" className="font-semibold text-[var(--cp-primary)] hover:underline">Current Session</Link>,

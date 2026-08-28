@@ -147,6 +147,7 @@ function StoreAbsent({ note }: { note: string }) {
 export default function RuleWorkspace({
   rules, conflicts, locations, sessions, mayAuthor, mayBook, rulesUnreadable, today,
   view = "full", nextAvailable = null, timezone = null,
+  onlineSessions = null, readyLocationKeys = null,
 }: {
   rules: any[]; conflicts: any[]; locations: any[]; sessions: any[];
   mayAuthor: boolean; mayBook: boolean; rulesUnreadable: string | null; today: string;
@@ -163,6 +164,14 @@ export default function RuleWorkspace({
    */
   nextAvailable?: Record<string, string> | null;
   timezone?: string | null;
+  /**
+   * Which sessions the OFFERING engine says patients can actually be offered (mode admits patients
+   * and the location's window is public-ready) -- computed server-side by publicOfferingGate. Null
+   * when the page did not (or could not) compute it: the ON/OFF badge is then omitted rather than
+   * guessed, because the card-rule visibility this component holds is NOT the offering truth.
+   */
+  onlineSessions?: string[] | null;
+  readyLocationKeys?: string[] | null;
 }) {
   const showClinics = view !== "advanced";
   const showCentre = view !== "clinics";
@@ -743,7 +752,11 @@ export default function RuleWorkspace({
               );
               const governor: any = clinicGoverningRule(chain);
               const overridden = governor !== null && governor.sessionTemplateId === s.id;
-              const online = governor !== null && (governor.visibility ?? "internal") !== "internal";
+              // ⚠ FROM THE OFFERING ENGINE, NEVER FROM THE CARD RULE'S visibility -- the two answer
+              // different questions, and the first version of this badge answered the wrong one.
+              const online: boolean | null = onlineSessions ? onlineSessions.includes(s.id) : null;
+              const windowReady = readyLocationKeys
+                ? readyLocationKeys.includes((s.locationId as string | null) ?? "practice") : null;
               const nextAt = online ? nextAvailable?.[s.id] ?? null : null;
               const qualified = chain.filter(e => !e.unqualified);
               return (
@@ -755,12 +768,13 @@ export default function RuleWorkspace({
                         {WEEKDAY_SHORT[s.weekday]} · {minuteOfDayAsClock(s.startsMinute)}–{minuteOfDayAsClock(s.endsMinute)}
                       </span>
                       <span className="ml-auto flex flex-wrap items-center gap-1">
-                        {governor ? (
+                        {online !== null ? (
                           <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
                             online ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600"}`}>
                             {online ? "Online booking ON" : "Online booking OFF"}
                           </span>
-                        ) : (
+                        ) : null}
+                        {!governor && (
                           <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-800">
                             Needs setup
                           </span>
@@ -790,9 +804,9 @@ export default function RuleWorkspace({
                             {" "}({governor.locationId ? governor.locationName ?? "a location rule" : "practice-wide"}).
                             Overriding writes this clinic its own rule, starting from those values.</>
                         ) : (
-                          <>Patients cannot book this clinic online yet, and nothing limits internal
-                            booking here. Choose how far ahead patients may book, whether it has a
-                            capacity limit, and whether it is offered online.</>
+                          <>No booking rule covers this clinic yet, so its behaviour is not set here.
+                            Choose how far ahead patients may book and whether it has a capacity
+                            limit.</>
                         )}
                       </p>
 
@@ -868,6 +882,23 @@ export default function RuleWorkspace({
 
                       {mayAuthor && (
                         <div className="mt-2.5 flex flex-wrap gap-1.5">
+                          {/* The cause decides the door, whatever governs the clinic's behaviour: a
+                              session whose MODE shuts patients out is fixed on the session itself; a
+                              location whose WINDOW is not public is fixed in the per-location booking
+                              editor. Both truths come from the offering engine, via props. */}
+                          {online === false && (
+                            windowReady === false ? (
+                              <Link href="/practice/setup/availability?step=4"
+                                className="rounded-lg bg-[var(--cp-primary)] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90">
+                                Open online booking for this location →
+                              </Link>
+                            ) : (
+                              <Link href="/practice/setup/availability-changes"
+                                className="rounded-lg bg-[var(--cp-primary)] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90">
+                                Allow patient booking on this clinic →
+                              </Link>
+                            )
+                          )}
                           {overridden ? (
                             <>
                               <button type="button" disabled={busy} onClick={() => openEdit(governor)}
@@ -882,13 +913,6 @@ export default function RuleWorkspace({
                             </>
                           ) : governor ? (
                             <>
-                              {!online && (
-                                <button type="button" disabled={busy}
-                                  onClick={() => openOverride(s, governor, { visibility: "public" })}
-                                  className="rounded-lg bg-[var(--cp-primary)] px-2.5 py-1 text-[11px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
-                                  Let patients book this clinic →
-                                </button>
-                              )}
                               <button type="button" disabled={busy} onClick={() => openOverride(s, governor)}
                                 className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                                 Override for this clinic

@@ -195,16 +195,23 @@ describe("clinics as first-class rule targets (s6/s8)", () => {
     expect(readonly).not.toContain("Restore inherited behaviour");
   });
 
-  it("says whether each clinic takes online bookings, from the governing rule's own visibility", () => {
-    // Both fixture governors carry visibility "public", so both clinics are ON.
-    expect(html).toContain("Online booking ON");
+  it("the ON/OFF badge comes from the OFFERING engine's verdict, never the card rule's visibility", () => {
+    // Without the offering verdict, no badge is drawn at all -- the card rules alone must not decide.
+    expect(html).not.toContain("Online booking ON");
     expect(html).not.toContain("Online booking OFF");
-    // An internal-only governor flips the badge and offers the one labelled task.
-    const internal = render({
-      rules: rules.map(r => ({ ...r, visibility: "internal" })) as never,
-    });
-    expect(internal).toContain("Online booking OFF");
-    expect(internal).toContain("Let patients book this clinic");
+    const on = render({ onlineSessions: ["s-fri", "s-wed"], readyLocationKeys: ["l-tmr", "practice"] } as never);
+    expect(on).toContain("Online booking ON");
+    expect(on).not.toContain("Online booking OFF");
+  });
+
+  it("an offline clinic's action names the true cause: the location's window, or the clinic's own mode", () => {
+    // s-fri's location has no public window -> the per-location editor. s-wed's location window is
+    // ready, so what shuts it is the clinic itself -> the schedule editor.
+    const off = render({ onlineSessions: [], readyLocationKeys: ["practice"] } as never);
+    expect(off).toContain("Online booking OFF");
+    expect(off).toContain("Open online booking for this location");
+    expect(off).toContain("Allow patient booking on this clinic");
+    expect(off).not.toContain("Let patients book this clinic");
   });
 
   it("a clinic no rule covers reads Needs setup and guides, never merely warns", () => {
@@ -216,10 +223,13 @@ describe("clinics as first-class rule targets (s6/s8)", () => {
     expect(uncovered).toContain("Set up booking for this clinic");
     expect(uncovered).toContain("Choose how far ahead patients may book");
     expect(uncovered).not.toContain("platform-safe default");
+    // And it no longer claims patients cannot book -- the offering engine owns that sentence.
+    expect(uncovered).not.toContain("Patients cannot book this clinic online");
   });
 
   it("shows each online clinic's next available time when the page computed one", () => {
     const withNext = render({
+      onlineSessions: ["s-fri", "s-wed"], readyLocationKeys: ["l-tmr", "practice"],
       nextAvailable: { "s-fri": "2026-09-02T05:30:00.000Z" }, timezone: "Africa/Kampala",
     } as never);
     expect(withNext).toContain("Next available:");
