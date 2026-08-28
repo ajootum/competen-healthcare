@@ -196,8 +196,11 @@ test, and it holds for both formats. The probe reads and never writes.
 **349, 352, 353 and 357**. Measured, not assumed: none of the 161 writing harnesses reference any of them,
 so the drift does not block this — but applying those migrations is outstanding, and owner-only.
 
-**Triage so far (2026-08-27): 46 of 161 screened, 42 promoted, 1 blocked.** The rest are
-UNTRIAGED and the ceiling is `119`. Failure classes found, none of which are defects in this runner:
+**Triage (2026-08-28): 150 of 161 screened, 112 promoted to STAGING, 13 excluded with verdicts.**
+The last 11 are pending solo re-runs; the ceiling is `11`. Of the sweep's 20 batch reds, TWO passed
+their solo re-run (the batch red was not evidence), FIVE share one cause (the
+`EFFECTIVE_BOOKING_CONSTRAINTS_SATISFIED` publish blocker on the staging fixture -- one fix clears
+five harnesses), and only ONE is a real product-facing failure (`practice-generation`, 48/8). Failure classes found, none of which are defects in this runner:
 
 - ⚠⚠ **FOUR WERE RECORDED AS HANGS AND WERE NOT HANGING. THEY WERE WORKING.** `practice-audit`,
   `practice-availability-config`, `practice-billing` and `practice-booking-rules` hit the screener's
