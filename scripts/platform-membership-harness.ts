@@ -378,11 +378,31 @@ async function main() {
       `CONTROL: the membership table was read and is non-empty (${members?.length ?? 0})`, memErr?.message);
     const activeIds = new Set((members ?? []).filter((m: any) => m.status === "active").map((m: any) => m.user_id));
 
-    // ⚠ THE COUNT, NOT A SAMPLE. Mullen is the ONE identity 280 deliberately removes, so she is the
-    // only permitted absentee and she is named rather than filtered by a rule.
-    const missing = estateProfiles.filter((p: any) => !activeIds.has(p.id) && p.email !== MULLEN_EMAIL);
+    // ⚠ THE COUNT, NOT A SAMPLE. Mullen is the ONE identity 280 deliberately removes on PRODUCTION, so
+    // she is a permitted absentee and she is named rather than filtered by a rule.
+    //
+    // ⚠ AND THE STAGING PRACTICE FIXTURES ARE NAMED ABSENTEES TOO -- 2026-08-28, learned the expensive
+    // way. This assertion once demanded a membership for smoke.practitioner, one was granted to appease
+    // it, and the Gate-3 topology work then found the smoke practitioner resolving TWO product
+    // destinations: admitToEstate's rule is "membership decides", so a platform membership handed to a
+    // Practice-product fixture turns a pure practitioner into a platform person and destroys the
+    // direct-landing shape (fixture A) that identity exists to prove. A Practice fixture holding NO
+    // platform membership is the CORRECT model -- it mirrors production's Mullen exactly -- and each is
+    // named here with that reason. The signup harness's probe identities are the one PATTERN exemption,
+    // because their addresses are generated per run and cannot be named in advance; the pattern is
+    // anchored to their reserved .invalid domain so it can never match a person.
+    const STAGING_PRACTICE_FIXTURES = [
+      "smoke.practitioner@staging.competen.invalid",   // COMP-ENG-002G smoke fixture -- Practice product only
+      "retry.proof@staging.competen.invalid",          // the retry-idempotency fixture -- Practice product only
+      "estate.twoclinics@staging.competen.invalid",    // Gate-3 fixture B -- two Practice memberships, no platform
+      "estate.nodest@staging.competen.invalid",        // Gate-3 fixture D -- ZERO destinations by definition
+    ];
+    const isSignupProbe = (email: string) => /^probe-\d+@example\.invalid$/.test(email);
+    const missing = estateProfiles.filter((p: any) =>
+      !activeIds.has(p.id) && p.email !== MULLEN_EMAIL
+      && !STAGING_PRACTICE_FIXTURES.includes(p.email) && !isSignupProbe(String(p.email ?? "")));
     ok("D2b", missing.length === 0,
-      `every one of the ${estateProfiles.length} estate identities holds an active membership`,
+      `every one of the ${estateProfiles.length} estate identities holds an active membership (named absentees aside)`,
       missing.map((p: any) => p.email).join(", "));
 
     const supers = (profiles ?? []).filter((p: any) =>
@@ -396,9 +416,13 @@ async function main() {
       const roles = (p.roles?.length ? p.roles : [p.role]).filter(Boolean) as AppRole[];
       return { email: p.email, ...(await admitToEstate(admin, p.id, roles)) };
     }));
-    const lockedOut = admissions.filter(a => !a.admitted && a.email !== MULLEN_EMAIL);
+    // ⚠ The named absentees are REFUSED here by design -- a Practice fixture being turned away from
+    // the platform door is the guard doing exactly its job, and counting that as a lockout would
+    // demand the mis-model D2b's note describes.
+    const lockedOut = admissions.filter(a => !a.admitted && a.email !== MULLEN_EMAIL
+      && !STAGING_PRACTICE_FIXTURES.includes(a.email) && !isSignupProbe(String(a.email ?? "")));
     ok("D4", lockedOut.length === 0,
-      `all ${admissions.length} existing estate identities are still admitted by the real guard`,
+      `all ${admissions.length} existing estate identities are still admitted by the real guard (named absentees aside)`,
       lockedOut.map(a => a.email).join(", "));
   }
 

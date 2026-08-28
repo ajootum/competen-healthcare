@@ -53,6 +53,12 @@
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { judgeTarget } from "./production-guard";
+// Gate-3 topology (CPR-PILOT-READINESS-001 s6): the REAL engines, never hand-inserted memberships --
+// a hand-built membership without its role assignment is the capability-backfill class by another name.
+import { runProvisioning, type IndividualRequest } from "../src/lib/practice/provisioning";
+import { createInvitation, acceptInvitation } from "../src/lib/practice/team";
+import { resolvePracticeAccess } from "../src/lib/practice/access";
+import { resolveProductDestinations } from "../src/lib/identity/product-resolution";
 
 loadEnvConfig(process.cwd());
 
@@ -220,10 +226,40 @@ async function main() {
   // src/lib/platform-membership.ts holds the table name and the read side -- so this is a table write,
   // and `source` is recorded honestly rather than borrowed from a real path.
   console.log("\n2. PLATFORM MEMBERSHIP — platform-membership D2b, D4");
-  const { data: members } = await admin.from("platform_membership").select("user_id, status").limit(1000);
+  /**
+   * ⚠ THE PRACTICE-PRODUCT FIXTURES ARE EXCLUDED FROM THE GRANT, AND STRAYS ARE REVOKED -- 2026-08-28.
+   *
+   * The first version granted a membership to EVERY profile, because platform-membership D2b demanded
+   * one. Then the Gate-3 topology work found the smoke practitioner resolving TWO product destinations:
+   * admitToEstate's rule is "membership decides", so the blanket grant had quietly turned every Practice
+   * fixture into a platform person and destroyed the direct-landing shape fixture A exists to prove.
+   * A Practice fixture holds NO platform membership -- that is production's Mullen, modelled exactly --
+   * and D2b now names these same fixtures as absentees for the same reason.
+   */
+  const PRACTICE_ONLY_FIXTURES = [
+    "smoke.practitioner@staging.competen.invalid",
+    "retry.proof@staging.competen.invalid",
+    "estate.twoclinics@staging.competen.invalid",
+    "estate.nodest@staging.competen.invalid",
+  ];
+  const practiceOnly = new Set(((allProfiles ?? []) as any[])
+    .filter(p => PRACTICE_ONLY_FIXTURES.includes(p.email) || /^probe-\d+@example\.invalid$/.test(String(p.email ?? "")))
+    .map(p => p.id));
+  const { data: members } = await admin.from("platform_membership").select("id, user_id, status").limit(1000);
   const activeIds = new Set(((members ?? []) as any[]).filter(m => m.status === "active").map(m => m.user_id));
-  const lacking = ((allProfiles ?? []) as any[]).filter(p => !activeIds.has(p.id));
-  if (lacking.length === 0) ok(`all ${(allProfiles ?? []).length} estate identities already hold an active membership`);
+  if (!VERIFY_ONLY) {
+    let revoked = 0;
+    for (const m of ((members ?? []) as any[]).filter(m => m.status === "active" && practiceOnly.has(m.user_id))) {
+      const { error } = await admin.from("platform_membership")
+        .update({ status: "revoked", note: "practice-product fixture: a platform membership mis-models it (Gate-3 fixture A)" })
+        .eq("id", m.id);
+      if (error) bad(`could not revoke the stray membership: ${error.message.slice(0, 60)}`);
+      else { revoked++; activeIds.delete(m.user_id); }
+    }
+    if (revoked) ok(`revoked ${revoked} stray membership(s) from practice-product fixtures`);
+  }
+  const lacking = ((allProfiles ?? []) as any[]).filter(p => !activeIds.has(p.id) && !practiceOnly.has(p.id));
+  if (lacking.length === 0) ok(`all platform-side estate identities already hold an active membership`);
   else if (VERIFY_ONLY) bad(`${lacking.length} identit(ies) hold no active membership`);
   else {
     for (const p of lacking) {
@@ -245,7 +281,7 @@ async function main() {
     }
     const { data: back } = await admin.from("platform_membership").select("user_id, status").limit(1000);
     const nowActive = new Set(((back ?? []) as any[]).filter(m => m.status === "active").map(m => m.user_id));
-    const still = ((allProfiles ?? []) as any[]).filter(p => !nowActive.has(p.id));
+    const still = ((allProfiles ?? []) as any[]).filter(p => !nowActive.has(p.id) && !practiceOnly.has(p.id));
     if (still.length) bad(`${still.length} identit(ies) still hold no active membership after the insert`);
     else ok(`granted active membership to ${lacking.length} identit(ies)`);
   }
@@ -589,6 +625,137 @@ async function main() {
       const { data: held } = await admin.from("competency_decisions").select("id").limit(1).maybeSingle();
       if (!held) bad("no competency decisions -- cgr-gate's MET path has nothing to prove");
     }
+  }
+
+  // ── 9. GATE-3 TOPOLOGY FIXTURES — CPR-PILOT-READINESS-001 s6 ───────────────────────────────────
+  //
+  // Four identity shapes, each proven through the REAL resolvers rather than by the rows existing:
+  //
+  //   A  one Practice destination        -> direct landing        (the smoke practitioner, pre-existing)
+  //   B  two Practice memberships        -> workspace chooser     (estate.twoclinics)
+  //   C  multiple product destinations   -> product chooser       (estate.owner.a gains a Practice)
+  //   D  valid identity, zero products   -> controlled no-product (estate.nodest)
+  //
+  // ⚠ B's SECOND MEMBERSHIP GOES THROUGH THE INVITATION ENGINE (createInvitation -> acceptInvitation),
+  // because that is how a second membership happens in the product, and a hand-inserted membership
+  // without its role assignment is the capability-backfill class by another name.
+  //
+  // ⚠ D IS THE NAMED ABSENTEE. admitToEstate's rule is "membership decides", so a zero-destination
+  // identity CANNOT hold a platform membership -- which collides with platform-membership D2b ("every
+  // estate identity holds an active membership"). That harness's own convention is the named absentee
+  // (Mullen, on production); estate.nodest is staging's, named there for the same reason.
+  console.log("\n9. GATE-3 TOPOLOGY — fixtures A-D through the real resolvers");
+  const smokeUser2 = await findUser("smoke.practitioner@staging.competen.invalid");
+  const smokeWs2 = smokeUser2
+    ? (await admin.from("practice_workspace").select("id").eq("owner_person_id", smokeUser2.id).limit(1).maybeSingle()).data
+    : null;
+
+  // ── Fixture B ──
+  const twoClinics = await identity("estate.twoclinics@staging.competen.invalid", "Estate Two-Clinics Practitioner (synthetic)");
+  if (twoClinics && !VERIFY_ONLY) {
+    const accessNow = await resolvePracticeAccess(admin, twoClinics);
+    if (accessNow.workspaces.length === 0) {
+      const { data: req } = await admin.from("provisioning_request").insert({
+        idempotency_key: "estate-fixture-twoclinics", request_type: "pilot",
+        actor_user_id: twoClinics, target_user_id: twoClinics,
+        payload_hash: "estate-fixture-twoclinics", correlation_id: "estate-fixture-topology",
+      }).select("id").maybeSingle();
+      let requestId = (req as any)?.id ?? null;
+      if (!requestId) {
+        const { data: prior } = await admin.from("provisioning_request")
+          .select("id").eq("idempotency_key", "estate-fixture-twoclinics").maybeSingle();
+        requestId = (prior as any)?.id ?? null;
+      }
+      if (!requestId) bad("could not create the two-clinics provisioning request");
+      else {
+        const payload: IndividualRequest = {
+          displayName: "Two Clinics Practice (synthetic)", countryCode: "UG", timezone: "Africa/Kampala",
+          professionCode: "medical_doctor", defaultPracticeType: "clinic", locale: "en-UG",
+          termsVersion: "t1", privacyNoticeVersion: "p1", source: "pilot",
+        };
+        const run = await runProvisioning(admin,
+          { id: requestId, target_user_id: twoClinics, correlation_id: "estate-fixture-topology", workspace_id: null }, payload);
+        if (!run.ok) bad(`two-clinics provisioning failed: ${run.errorCode ?? "?"} ${run.detail ?? ""}`.slice(0, 110));
+        else ok(`provisioned the two-clinics practitioner's own workspace through the real engine`);
+      }
+    } else ok("two-clinics practitioner already holds their own workspace");
+
+    // The SECOND membership: invited into the smoke workspace, through the engine.
+    const after1 = await resolvePracticeAccess(admin, twoClinics);
+    if (after1.workspaces.length === 1 && smokeUser2 && smokeWs2) {
+      const invite = await createInvitation(admin, {
+        workspaceId: (smokeWs2 as any).id, roleCode: "practitioner",
+        invitedName: "Estate Two-Clinics Practitioner (synthetic)",
+        invitedEmail: "estate.twoclinics@staging.competen.invalid",
+        actorId: smokeUser2.id, correlationId: "estate-fixture-topology",
+      });
+      if (!invite.ok) bad(`createInvitation refused: ${(invite as any).message}`.slice(0, 100));
+      else {
+        const accepted = await acceptInvitation(admin, { code: invite.data.code, userId: twoClinics, correlationId: "estate-fixture-topology" });
+        if (!(accepted as any).ok) bad(`acceptInvitation refused: ${(accepted as any).message ?? "?"}`.slice(0, 100));
+        else ok("second membership accepted through the invitation engine");
+      }
+    }
+    const finalB = await resolvePracticeAccess(admin, twoClinics);
+    if (finalB.workspaces.length === 2) ok("FIXTURE B PROVEN: resolvePracticeAccess returns 2 workspaces -- the shell would show the chooser");
+    else bad(`fixture B resolves ${finalB.workspaces.length} workspace(s), wanted 2`);
+  }
+
+  // ── Fixture C ──
+  const ownerA = await findUser(OWNER_A);
+  if (ownerA && !VERIFY_ONLY) {
+    const accessC = await resolvePracticeAccess(admin, ownerA.id);
+    if (accessC.workspaces.length === 0) {
+      const { data: req } = await admin.from("provisioning_request").insert({
+        idempotency_key: "estate-fixture-owner-practice", request_type: "pilot",
+        actor_user_id: ownerA.id, target_user_id: ownerA.id,
+        payload_hash: "estate-fixture-owner-practice", correlation_id: "estate-fixture-topology",
+      }).select("id").maybeSingle();
+      let requestId = (req as any)?.id ?? null;
+      if (!requestId) {
+        const { data: prior } = await admin.from("provisioning_request")
+          .select("id").eq("idempotency_key", "estate-fixture-owner-practice").maybeSingle();
+        requestId = (prior as any)?.id ?? null;
+      }
+      if (requestId) {
+        const run = await runProvisioning(admin,
+          { id: requestId, target_user_id: ownerA.id, correlation_id: "estate-fixture-topology", workspace_id: null },
+          {
+            displayName: "Owner A Practice (synthetic)", countryCode: "UG", timezone: "Africa/Kampala",
+            professionCode: "medical_doctor", defaultPracticeType: "clinic", locale: "en-UG",
+            termsVersion: "t1", privacyNoticeVersion: "p1", source: "pilot",
+          });
+        if (!run.ok) bad(`owner-A practice provisioning failed: ${run.errorCode ?? "?"}`.slice(0, 90));
+        else ok("provisioned a Practice for estate.owner.a through the real engine");
+      }
+    } else ok("estate.owner.a already holds a Practice workspace");
+    const resC = await resolveProductDestinations(admin, ownerA.id);
+    if (resC.state === "many") ok(`FIXTURE C PROVEN: resolver answers MANY (${(resC as any).destinations.map((d: any) => d.code).join(", ")}) -- the product chooser`);
+    else bad(`fixture C resolves state "${resC.state}", wanted "many"`);
+  }
+
+  // ── Fixture D ──
+  const noDest = await identity("estate.nodest@staging.competen.invalid", "Estate No-Destination Identity (synthetic)");
+  if (noDest && !VERIFY_ONLY) {
+    // ⚠ NO membership on purpose -- and if a membership sweep ever grants one, this catches it.
+    const { data: mem } = await admin.from("platform_membership")
+      .select("id, status").eq("user_id", noDest).eq("status", "active").limit(1).maybeSingle();
+    if (mem) {
+      await admin.from("platform_membership").update({ status: "revoked", note: "fixture D must hold no active membership" }).eq("id", (mem as any).id);
+      ok("revoked a stray membership on the no-destination identity");
+    }
+    const resD = await resolveProductDestinations(admin, noDest);
+    if (resD.state === "none") ok("FIXTURE D PROVEN: resolver answers NONE -- the controlled no-product state");
+    else bad(`fixture D resolves state "${resD.state}", wanted "none"`);
+  }
+
+  // ── Fixture A, re-proven rather than remembered ──
+  if (smokeUser2) {
+    const resA = await resolveProductDestinations(admin, smokeUser2.id);
+    const accA = await resolvePracticeAccess(admin, smokeUser2.id);
+    if (resA.state === "one" && (resA as any).destination.code === "practice" && accA.workspaces.length === 1)
+      ok("FIXTURE A PROVEN: the smoke practitioner resolves ONE practice destination, ONE workspace -- direct landing");
+    else bad(`fixture A resolves state "${resA.state}" with ${accA.workspaces.length} workspace(s), wanted one/1`);
   }
 
   report();
