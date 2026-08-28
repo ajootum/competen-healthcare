@@ -210,7 +210,10 @@ export default function RuleWorkspace({
         : {}),
     });
     setBusy(false);
-    if (!r.ok) { setNotice({ kind: "err", text: r.data?.error?.message ?? "The rule was not saved." }); return; }
+    // ⚠ THE CONSEQUENCE LEADS, THE REASON FOLLOWS — 2026-08-28, owner, mid-pilot-acceptance. The raw
+    // engine sentence ("a rule needs a name; …") stated the reason and never the OUTCOME, so a person
+    // scanning for "did it register?" had to infer it. "Not saved" answers that question first.
+    if (!r.ok) { setNotice({ kind: "err", text: `Not saved — ${r.data?.error?.message ?? "the rule was not saved."}` }); return; }
     setNotice({
       kind: "ok",
       text: r.data.rule.created
@@ -227,7 +230,7 @@ export default function RuleWorkspace({
     setBusy(true); setNotice(null);
     const r = await post({ action: "set_status", ruleId, status: next });
     setBusy(false);
-    if (!r.ok) { setNotice({ kind: "err", text: r.data?.error?.message ?? "The rule was not changed." }); return; }
+    if (!r.ok) { setNotice({ kind: "err", text: `Not changed — ${r.data?.error?.message ?? "the rule was not changed."}` }); return; }
     router.refresh();
   }
 
@@ -817,6 +820,18 @@ export default function RuleWorkspace({
                 onChange={e => set("reason", e.target.value)} placeholder="Too many no-shows on unconfirmed first visits" />
             </label>
 
+            {/* ⚠ THE ANSWER APPEARS WHERE THE QUESTION WAS ASKED — 2026-08-28, owner, mid-pilot-
+                acceptance: the workspace's only notice rendered at the TOP of a long page, so pressing
+                Save down here put the refusal off-screen and the editor read as a dead button. The
+                top notice still serves the card-level actions; while the editor is open, the same
+                notice ALSO renders here, beside the button that produced it. */}
+            {notice && draft && (
+              <p role="status" className={`rounded-lg px-3.5 py-2.5 text-[12px] leading-relaxed ${
+                notice.kind === "ok" ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200"
+                  : "bg-rose-50 text-rose-800 ring-1 ring-rose-200"}`}>
+                {notice.text}
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               <button type="button" disabled={busy} onClick={save}
                 className="rounded-lg bg-[var(--cp-primary)] px-3.5 py-2 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
