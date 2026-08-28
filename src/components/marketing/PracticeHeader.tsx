@@ -70,10 +70,27 @@ export default function PracticeHeader({ journeys = JOURNEYS }: { journeys?: Pra
             style={{ background: PRACTICE_ACCENT }}>{primary[0].label} →</Link>
         </div>
 
-        <button type="button" onClick={() => setOpen(true)} aria-label="Open menu" aria-expanded={open}
-          className="lg:hidden ml-auto w-10 h-10 rounded-lg flex items-center justify-center text-gray-800">
-          <span aria-hidden className="text-xl">☰</span>
-        </button>
+        {/* ⚠ SIGN IN LIVES ON THE MOBILE BAR, NOT ONLY IN THE DRAWER — 2026-08-28, found by the owner
+            running the pilot acceptance's H2 mobile script: the landing page pushed "Start free trial"
+            while the returning practitioner's DAILY action was invisible behind the hamburger. Reachable
+            is not discoverable, and on the phone — the device a practitioner reaches for between rooms —
+            the sign-in matters more than the trial CTA, not less. The journey href arrives flag-resolved,
+            so this points at the real sign-in when the door is open and at the honest explainer when not. */}
+        <div className="lg:hidden ml-auto flex items-center gap-2">
+          {(() => {
+            const login = journeys.find(j => j.key === "practice-login");
+            return login ? (
+              <Link href={login.href}
+                className="rounded-lg border border-gray-300 px-3.5 py-2 text-[13px] font-semibold text-gray-800 hover:border-gray-400 transition-colors">
+                Sign in
+              </Link>
+            ) : null;
+          })()}
+          <button type="button" onClick={() => setOpen(true)} aria-label="Open menu" aria-expanded={open}
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-gray-800">
+            <span aria-hidden className="text-xl">☰</span>
+          </button>
+        </div>
       </div>
 
       {open && (
